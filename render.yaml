@@ -1,0 +1,25 @@
+# Blueprint для Render: New → Blueprint → выбрать этот репозиторий.
+#
+# APP_ENV=staging, а не production, намеренно: DemoDataSeeder отказывается
+# наполнять боевую базу, а демо-стенду без выдуманных компаний и товаров
+# показывать нечего. Для настоящего запуска: production и SEED_DEMO=false.
+services:
+  - type: web
+    name: savdex
+    runtime: docker
+    plan: free
+    branch: claude/website-copy-new-design-xaxsr0
+    healthCheckPath: /up
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: APP_DEBUG
+        value: "false"
+      - key: SEED_DEMO
+        value: "true"
+      # Обработчика очереди на бесплатном тарифе нет — задания
+      # выполняются сразу, в том же запросе.
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: LOG_CHANNEL
+        value: stderr

@@ -25,6 +25,13 @@ return Application::configure(basePath: dirname(__DIR__))
          */
         $middleware->prepend(LocalizeUrl::class);
 
+        /*
+         * На хостинге приложение стоит за обратным прокси (Render,
+         * Cloudflare и т.п.): без доверия к X-Forwarded-* Laravel видит
+         * http и внутренний хост — ссылки и куки собираются неверно.
+         */
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
