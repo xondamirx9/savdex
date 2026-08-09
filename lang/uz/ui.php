@@ -1,0 +1,349 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * Interfeys lug‘ati — o‘zbekcha (lotin).
+ *
+ * Kalitlar ruscha faylga mos keladi: yangi ibora avval lang/ru/ui.php
+ * ga yoziladi, keyin bu yerga tarjima qilinadi.
+ *
+ * O‘zbek tilida sondan keyin ot shakli o‘zgarmaydi, shuning uchun
+ * son bilan ishlatiladigan iboralarda bitta shakl yetarli.
+ */
+
+return [
+
+    // ── Navigatsiya va sarlavha ──────────────────────────────
+
+    'common' => [
+        'skip_to_content' => 'Asosiy qismga o‘tish',
+    ],
+
+    'tabbar' => [
+        'home' => 'Bosh sahifa',
+        'listings' => 'E’lonlar',
+        'create' => 'Yaratish',
+        'contacts' => 'Kontaktlar',
+        'cabinet' => 'Kabinet',
+        'favorites' => 'Saralangan',
+    ],
+
+    'nav' => [
+        'catalog' => 'Katalog',
+        'companies' => 'Kompaniyalar',
+        'news' => 'Yangiliklar',
+        'about' => 'Kompaniya haqida',
+        'about_us' => 'Biz haqimizda',
+        'contacts' => 'Aloqa',
+        'help' => 'Yordam',
+        'guide' => 'Foydalanish qo‘llanmasi',
+        'rules' => 'Joylashtirish qoidalari',
+        'pricing' => 'Tariflar',
+        'products' => 'Mahsulotlar',
+        'rfq' => 'So‘rovlar (RFQ)',
+        'countries' => 'Davlatlar',
+        'register' => 'Ro‘yxatdan o‘tish',
+        'main' => 'Asosiy navigatsiya',
+        'mobile' => 'Mobil menyu',
+        'menu' => 'Menyu',
+        'close_menu' => 'Menyuni yopish',
+        'home_link' => 'SAVDEX, bosh sahifaga',
+        'language' => 'Interfeys tili',
+        'language_short' => 'Til:',
+        'login' => 'Kirish',
+        'post' => 'Joylashtirish',
+        'post_listing' => 'E’lon joylashtirish',
+        'cabinet' => 'Shaxsiy kabinet',
+        'logout' => 'Chiqish',
+    ],
+
+    'header' => [
+        'contacts_title' => 'Ochish mumkin bo‘lgan kontaktlar: :hint',
+        'unlimited' => 'Tarifda kontakt ochishga cheklov yo‘q',
+        'plan_left' => 'tarif bo‘yicha :count ta',
+        'plan_left_until' => ':date gacha tarif bo‘yicha :count ta',
+        'credits_bought' => 'sotib olingan :count kredit',
+        'topup' => 'kontakt — to‘ldirish',
+        'contacts_word' => 'kontakt',
+        'contacts_choice' => 'kontakt',
+        'notifications' => 'Bildirishnomalar',
+        'notifications_unread' => 'Bildirishnomalar, o‘qilmagan: :count',
+        'mark_all' => 'Barchasini belgilash',
+        'notifications_empty' => 'Hozircha bo‘sh. Bu yerda e’lonlarga javoblar va platforma yangiliklari paydo bo‘ladi.',
+        'notifications_all' => 'Barcha bildirishnomalar',
+        'user_menu' => 'Foydalanuvchi menyusi: :name',
+        'email_unverified' => 'Pochta tasdiqlanmagan',
+        'summary' => 'Umumiy ko‘rinish',
+        'my_listings' => 'Mening e’lonlarim',
+        'company' => 'Kompaniya',
+        'settings' => 'Sozlamalar',
+        'tagline' => 'B2B savdo platformasi',
+        'catalog_button' => 'Mahsulotlar katalogi',
+        'search_label' => 'Platforma bo‘ylab qidiruv',
+        'search_placeholder' => 'Mahsulot, kompaniya, toifa qidirish…',
+        'all_categories' => 'Barcha toifalar',
+        'search_button' => 'Qidirish',
+        'favorites' => 'Saralangan',
+        'messages' => 'Xabarlar',
+    ],
+
+    'footer' => [
+        'platform' => 'Platforma',
+        'documents' => 'Hujjatlar',
+        'guide' => 'Qo‘llanma',
+        'terms' => 'Ommaviy oferta',
+        'privacy' => 'Maxfiylik siyosati',
+        'refunds' => 'Pulni qaytarish siyosati',
+        'about' => 'O‘zbekiston, Markaziy Osiyo va mintaqa savdo hamkorlari uchun yetkazib beruvchilar va xaridorlarni bog‘lovchi B2B platforma.',
+        'copyright' => '© 2026 SAVDEX · «ANJIR-GROUP» MChJ, O‘zbekiston',
+        'no_commission' => 'Bitimlardan komissiya olmaymiz · Hisob-kitoblarda qatnashmaymiz',
+        'features_label' => 'Platforma afzalliklari',
+        'f1_title' => 'Tekshirilgan kompaniyalar',
+        'f1_text' => 'Kompaniyalarning hujjatlari va ma’lumotlarini tekshiramiz',
+        'f2_title' => 'Xavfsiz bitimlar',
+        'f2_text' => 'Bitimlaringiz va maxfiyligingizni himoya qilamiz',
+        'f3_title' => '24/7 qo‘llab-quvvatlash',
+        'f3_text' => 'Yordam xizmatimiz doim yordamga tayyor',
+        'f4_title' => 'Biznesingizni rivojlantiring',
+        'f4_text' => 'Har kuni yangi imkoniyatlar va hamkorlar',
+    ],
+
+    // ── Bosh sahifa ──────────────────────────────────────────
+
+    'home' => [
+        'meta_title' => 'Yetkazib beruvchilar va xaridorlar bir-birini topadi',
+        'meta_description' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi. Taklif yoki so‘rovni bepul joylashtiring, kompaniyalarning to‘g‘ridan-to‘g‘ri kontaktlarini oling.',
+
+        'eyebrow' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi',
+        'h1' => 'Yetkazib beruvchilar va xaridorlar bir-birini topadi',
+        'lead' => 'Taklif yoki so‘rovni bepul joylashtiring. Kompaniyalarning to‘g‘ridan-to‘g‘ri kontaktlarini oling — vositachilarsiz va bitimdan komissiyasiz.',
+        'search_label' => 'Nima qidiryapsiz',
+        'search_placeholder' => 'Sement, to‘qimachilik, uskunalar…',
+        'search_button' => 'Topish',
+        'tab_products' => 'Mahsulotlar',
+        'tab_companies' => 'Kompaniyalar',
+        'tab_rfq' => 'So‘rovlar (RFQ)',
+        'select_category' => 'Toifani tanlang',
+        'select_country' => 'Davlatni tanlang',
+        'popular' => 'Ommabop so‘rovlar',
+        'cta_products' => 'Mahsulot topish',
+        'cta_companies' => 'Kompaniya topish',
+        'stat_deals' => 'muvaffaqiyatli bitim',
+        'categories_title' => 'Ommabop toifalar',
+        'categories_all' => 'Barcha toifalarni ko‘rish',
+        'categories_count' => ':count mahsulot',
+        'latest_title' => 'Yangi e’lonlar',
+        'latest_all' => 'Barcha e’lonlarni ko‘rish',
+
+        'supplier_title' => 'Men yetkazib beruvchiman',
+        'supplier_text' => 'Mahsulotim bor, xaridor qidiryapman',
+        'supplier_action' => 'Mahsulot joylashtirish',
+        'buyer_title' => 'Men xarid qilaman',
+        'buyer_text' => 'Mahsulot kerak, yetkazib beruvchi qidiryapman',
+        'buyer_action' => 'Yetkazib beruvchi topish',
+
+        'stat_companies' => 'platformadagi kompaniya',
+        'stat_listings' => 'faol e’lon',
+        'stat_categories' => 'mahsulot toifasi',
+        'stat_countries' => 'mintaqa davlati',
+
+        'how_eyebrow' => 'Bu qanday ishlaydi',
+        'how_title' => 'To‘g‘ridan-to‘g‘ri suhbatgacha to‘rt qadam',
+        'how_lead' => 'Ro‘yxatdan o‘tishdan bitimgacha — vositachilarsiz va kelishuvlarsiz.',
+
+        'step1_title' => 'Ro‘yxatdan o‘ting',
+        'step1_text' => 'Pochta, parol, kompaniya ma’lumotlari. Ikki daqiqa, karta kerak emas.',
+        'step2_title' => 'Mahsulotni joylashtiring',
+        'step2_text' => 'Toifa, hajm, narx, yetkazib berish shartlari, foto va sertifikatlar.',
+        'step3_title' => 'Kiruvchi so‘rovlarni oling',
+        'step3_text' => 'Kontaktlaringizni kim, qaysi shahardan va qaysi e’lon bo‘yicha ochgani ko‘rinadi.',
+        'step4_title' => 'To‘g‘ridan-to‘g‘ri kelishing',
+        'step4_text' => 'Qo‘ng‘iroq, shartnoma, to‘lov — barchasi o‘zingiz o‘rtangizda. Platforma aralashmaydi.',
+
+        'no_commission_bold' => 'Platforma bitimlardan komissiya olmaydi va hisob-kitoblarda qatnashmaydi.',
+        'no_commission_text' => 'Bu yerda topilgan hamkorga qancha sotsangiz ham — foizini olmaymiz.',
+
+        'value_eyebrow' => 'Qiymat',
+        'value_title' => 'Nima olasiz',
+        'value_supplier' => 'Yetkazib beruvchiga',
+        'value_buyer' => 'Xaridorga',
+
+        'supplier1' => 'Reklamaga sarflamasdan kiruvchi so‘rovlar',
+        'supplier2' => 'Hujjat va sertifikatlar bilan kompaniya vitrinasi',
+        'supplier3' => 'Tahlil: kim, qayerdan va qaysi mahsulot bilan qiziqmoqda',
+        'supplier4' => 'Reklama — o‘z toifangizda birinchi bo‘lish',
+
+        'buyer1' => 'Haftalab qo‘ng‘iroq qilish o‘rniga 3–5 ta yetkazib beruvchi',
+        'buyer2' => 'Hujjat va reytingga ega tekshirilgan kompaniyalar',
+        'buyer3' => 'To‘g‘ridan-to‘g‘ri kontaktlar — vositachi va ustamasiz',
+        'buyer4' => 'Har bir yetkazib beruvchi bo‘yicha kontaktlar tarixi va eslatmalar',
+
+        'trust_eyebrow' => 'Ishonch',
+        'trust_title' => 'Va’dalar o‘rniga to‘rtta himoya mexanizmi',
+        'trust1_title' => 'Moderatsiya tekshiruvi',
+        'trust1_text' => '«Tekshirilgan» belgisi hujjatlar solishtirilgandan keyin qo‘yiladi. Uni hech bir tarifda sotib bo‘lmaydi.',
+        'trust2_title' => 'Halol sharhlar',
+        'trust2_text' => 'Sharhni faqat kompaniya kontaktini haqiqatan to‘lagan kishi qoldiradi. Soxta sharh imkonsiz.',
+        'trust3_title' => 'Bitimdan komissiya yo‘q',
+        'trust3_text' => 'Biz obunadan daromad qilamiz. Sizning tushumingiz bizga tegishli emas.',
+        'trust4_title' => 'To‘g‘ridan-to‘g‘ri kelishuvlar',
+        'trust4_text' => 'Kompaniyalar o‘rtasidagi pul sayt orqali o‘tmaydi.',
+
+        'blog_eyebrow' => 'Blog',
+        'blog_title' => 'Platforma yangiliklari',
+        'blog_all' => 'Barcha yangiliklar',
+        'blog_read' => 'O‘qish',
+
+        'cta_title' => 'Birinchi e’loningizni bepul joylashtiring',
+        'cta_lead' => 'Ro‘yxatdan o‘tish ikki daqiqa oladi. Karta kerak emas.',
+        'cta_button' => 'Ro‘yxatdan o‘tish',
+        'cta_note' => 'Bepul · 4 ta e’lon · oyiga 3 ta kontakt · kartani bog‘lamasdan',
+    ],
+
+    // ── Katalog ──────────────────────────────────────────────
+
+    'catalog' => [
+        'meta_title' => 'E’lonlar katalogi',
+        'meta_description' => 'O‘zbekiston va Markaziy Osiyo yetkazib beruvchilari va xaridorlarining takliflari va so‘rovlari.',
+        'eyebrow' => 'Katalog',
+        'h1' => 'E’lonlar',
+
+        'filters' => 'Filtrlar',
+        'filters_close' => 'Yopish',
+        'reset' => 'Tozalash',
+        'type_all' => 'Barchasi',
+        'type_supply' => 'Takliflar',
+        'type_demand' => 'So‘rovlar',
+        'category' => 'Toifa',
+        'city' => 'Shahar',
+        'city_any' => 'Har qanday',
+        'verified_only' => 'Faqat tekshirilgan kompaniyalar',
+        'with_price' => 'Narxi ko‘rsatilgan',
+
+        'search_label' => 'E’lonlar bo‘yicha qidiruv',
+        'search_placeholder' => 'Sement, to‘qimachilik, uskunalar…',
+        'sort' => 'Saralash',
+        'found' => ':count ta e’lon',
+        'pages' => 'Sahifalar',
+
+        'empty_title' => 'Hech narsa topilmadi',
+        'empty_text' => 'So‘rovni o‘zgartiring yoki filtrlarni tozalang. Kerakli mahsulot bo‘lmasa — so‘rov joylashtiring, yetkazib beruvchilar o‘zlari topadi.',
+        'empty_action' => 'So‘rov joylashtirish',
+
+        'badge_supply' => 'Taklif',
+        'badge_demand' => 'So‘rov',
+        'badge_promoted' => 'Reklamada',
+        'verified' => 'tekshirilgan',
+        'price_negotiable' => 'Narx kelishilgan holda',
+        'currency_uzs' => 'so‘m',
+        'badge_new' => 'NEW',
+        'price_from' => ':price dan',
+        'moq' => 'MOQ',
+        'sort_relevant' => 'Avval mosi',
+        'sort_fresh' => 'Avval yangilari',
+        'sort_cheap' => 'Avval arzonlari',
+        'sort_expensive' => 'Avval qimmatlari',
+    ],
+
+    'listing' => [
+        'breadcrumbs' => 'Yo‘l ko‘rsatkichi',
+        'home' => 'Bosh sahifa',
+        'catalog' => 'Katalog',
+        'published' => ':date da e’lon qilingan',
+        'terms' => 'Shartlar',
+        'min_order' => 'Eng kam partiya:',
+        'similar' => 'O‘xshash e’lonlar',
+        'company_verified' => 'Kompaniya tekshirilgan',
+        'rating' => 'Reyting :rating',
+        'reviews' => ':count ta sharh',
+        'show_contacts' => 'Kontaktlarni ko‘rsatish',
+        'contacts_hint' => 'Pochta domeni va operator kodi darhol ko‘rinadi — kontakt haqiqiy ekaniga ishonch hosil qilasiz. Bir marta ochiladi va butun kompaniya bo‘yicha abadiy amal qiladi.',
+        'already_open' => 'Bu kompaniyaning kontaktlari siz uchun ochiq.',
+        'no_commission_bold' => 'Bitimdan komissiya yo‘q.',
+        'no_commission_text' => 'To‘g‘ridan-to‘g‘ri kelishing — platforma hisob-kitoblarda qatnashmaydi va foiz olmaydi.',
+        'unlock_title' => 'Kompaniya kontaktlarini ochish',
+        'unlock_action' => 'Kontaktlarni ochish',
+        'unlock_processing' => 'Ochilmoqda…',
+        'cancel' => 'Bekor qilish',
+        'unlock_text_before' => 'Kontaktlar',
+        'unlock_text_bold' => 'butun kompaniya uchun',
+        'unlock_text_after' => 'ochiladi — bir marta va abadiy, uning barcha e’lonlari bo‘yicha. Tarifdan bitta kontakt yoki limit tugagan bo‘lsa bitta kredit yechiladi.',
+    ],
+
+    'legal' => [
+        'terms_title' => 'Ommaviy oferta',
+        'privacy_title' => 'Maxfiylik siyosati',
+        'refunds_title' => 'Pulni qaytarish siyosati',
+    ],
+
+    'seo' => [
+        'about_title' => 'SAVDEX platformasi haqida',
+        'about_description' => 'Platforma qanday ishlaydi: bepul joylashtirish, kontaktni ochish uchun to‘lov, kompaniyalarni moderatsiya tekshiruvi va faqat tasdiqlangan bitimlar bo‘yicha sharhlar.',
+        'pricing_title' => 'Tariflar va narxlar',
+        'pricing_description' => 'E’lon joylashtirish bepul. Faqat kontaktni ochish va reklama uchun to‘laysiz. Bitimlardan komissiya yo‘q.',
+        'home_title' => 'O‘zbekiston yetkazib beruvchilari va xaridorlari',
+        'home_description' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi: :companies kompaniyadan :listings e’lon. Joylashtirish bepul, bitimlardan komissiya yo‘q.',
+        'catalog_subject' => 'Ulgurji mahsulot va xizmatlar',
+        'catalog_in_country' => ' O‘zbekistonda',
+        'catalog_in_city' => ' :city shahrida',
+        'catalog_description' => ':subject:where: tekshirilgan yetkazib beruvchilardan :total ta taklif. Narxlar, yetkazib berish shartlari va kompaniya kontaktlari SAVDEX B2B platformasida.',
+        'companies_title' => 'O‘zbekiston yetkazib beruvchilari va ishlab chiqaruvchilari',
+        'companies_description' => ':total kompaniya katalogi: ishlab chiqaruvchilar, importchilar va distribyutorlar. Tekshirilgan rekvizitlar, tasdiqlangan bitimlar bo‘yicha sharhlar, to‘g‘ridan-to‘g‘ri kontaktlar.',
+        'countries_title' => 'Ishtirokchi davlatlar',
+        'countries_description' => 'Platforma geografiyasi: O‘zbekiston, Markaziy Osiyo va hamkor davlatlardagi kompaniyalar. Davlatni tanlab yetkazib beruvchilarni toping.',
+        'contacts_title' => 'Kontaktlar',
+        'contacts_description' => 'SAVDEX jamoasi bilan bog‘lanish: pochta, Telegram va qo‘llab-quvvatlash vaqti.',
+    ],
+
+    'topbar' => [
+        'title' => 'Diqqat! SavdEx sayti sinov rejimida ishlamoqda.',
+        'text' => 'Platforma hozircha sinov va takomillashtirish bosqichida. Ayrim funksiyalar beqaror ishlashi mumkin. Tushunganingiz uchun rahmat!',
+        'more' => 'Batafsil',
+        'close' => 'Ogohlantirishni yopish',
+    ],
+
+    'favorites' => [
+        'meta_title' => 'Saralangan',
+        'eyebrow' => 'Saralangan',
+        'h1' => 'Saralangan e’lonlar',
+        'count' => ':count e’lon',
+        'empty_title' => 'Saralanganlar hozircha bo‘sh',
+        'empty_text' => 'E’lon kartochkasidagi yurakchani bosing — u shu yerda paydo bo‘ladi.',
+        'empty_action' => 'Katalogga o‘tish',
+        'add' => 'Saralanganga qo‘shish',
+        'remove' => 'Saralangandan olib tashlash',
+    ],
+
+    'countries' => [
+        'meta_title' => 'Davlatlar',
+        'meta_description' => 'Platformada shu davlatlardagi kompaniyalar ishlaydi.',
+        'eyebrow' => 'Geografiya',
+        'h1' => 'Ishtirokchi davlatlar',
+        'lead' => 'Bu davlatlardagi kompaniyalar platformada allaqachon ishlamoqda. Yetkazib beruvchilar va xaridorlarni ko‘rish uchun davlatni tanlang.',
+        'empty' => 'Davlatlar ro‘yxati hozircha bo‘sh.',
+        'companies' => ':count kompaniya',
+    ],
+
+    'contacts' => [
+        'meta_title' => 'Kontaktlar',
+        'meta_description' => 'SAVDEX jamoasi bilan bog‘lanish.',
+        'eyebrow' => 'Kontaktlar',
+        'h1' => 'Biz bilan bog‘laning',
+        'lead' => 'Platforma ishi, kompaniyalarni tekshirish va tariflar bo‘yicha savollar — yozing, tez javob beramiz.',
+        'phone_title' => 'Telefon',
+        'email_title' => 'Pochta',
+        'tg_title' => 'Telegram',
+        'hours_title' => 'Qo‘llab-quvvatlash vaqti',
+        'hours_value' => 'Du–Sha, 9:00–18:00 (UTC+5)',
+        'note_bold' => 'Ish kuni davomida javob beramiz.',
+        'note_text' => 'Savol muayyan e’lon yoki kompaniyaga tegishli bo‘lsa, havolasini ham yuboring — shunda tezroq bo‘ladi.',
+    ],
+
+    'suggest' => [
+        'text' => 'Saytni boshqa tilda ochasizmi?',
+        'accept' => ':language tilida ochish',
+        'dismiss' => 'Qolish',
+    ],
+
+];
