@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { CalendarDays, FileText, Handshake, Search, Star } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { VerificationBadge } from '@/components/VerificationBadge';
+import { t, tChoice } from '@/lib/i18n';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
 
@@ -21,11 +22,15 @@ interface CompanyRow {
     initials: string;
 }
 
-/** Возраст регистрации: значения понятны в адресной строке (?age=lt1). */
-const AGE_OPTIONS: [string, string][] = [
-    ['lt1', 'До года'],
-    ['1to5', '1–5 лет'],
-    ['gt5', 'Более 5 лет'],
+/**
+ * Возраст регистрации: значения понятны в адресной строке (?age=lt1).
+ * Функция, а не константа модуля: подписи берутся из словаря,
+ * а он приходит с сервером после загрузки файла.
+ */
+const ageOptions = (): [string, string][] => [
+    ['lt1', t('companies_page.age_lt1')],
+    ['1to5', t('companies_page.age_1to5')],
+    ['gt5', t('companies_page.age_gt5')],
 ];
 
 interface Paginated<T> {
@@ -64,33 +69,33 @@ export default function CompaniesIndex({
 
     return (
         <PublicLayout
-            title="Компании"
-            description="Каталог компаний Узбекистана и Центральной Азии: производители, импортёры, дистрибьюторы. Фильтр по типу, городу и уровню проверки."
+            title={t('companies_page.title')}
+            description={t('companies_page.meta_description')}
         >
             <div className="container">
-                <nav aria-label="Хлебные крошки" style={{ padding: '20px 0 4px' }}>
+                <nav aria-label={t('companies_page.crumbs')} style={{ padding: '20px 0 4px' }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>
-                            <Link href={routes.home}>Главная</Link>
+                            <Link href={routes.home}>{t('companies_page.home')}</Link>
                         </li>
                         <li aria-hidden="true">/</li>
                         <li aria-current="page" style={{ color: 'var(--text)' }}>
-                            Компании
+                            {t('companies_page.title')}
                         </li>
                     </ol>
                 </nav>
 
                 <div style={{ padding: '8px 0 0' }}>
-                    <h1 className="t-h1">Компании</h1>
+                    <h1 className="t-h1">{t('companies_page.title')}</h1>
                     <p className="t-lead mt-8">
-                        {stats.total} компаний · {stats.verified} проверены модерацией
+                        {t('companies_page.stats', { total: stats.total, verified: stats.verified })}
                     </p>
                 </div>
 
                 <div className="catalog">
-                    <aside className="filters" aria-label="Фильтры компаний">
+                    <aside className="filters" aria-label={t('companies_page.filters_aria')}>
                         <div className="filter-group">
-                            <div className="filter-title">Тип компании</div>
+                            <div className="filter-title">{t('companies_page.type_title')}</div>
                             <div className="filter-list">
                                 {Object.entries(types).map(([value, label]) => (
                                     <label key={value} className="check">
@@ -105,13 +110,13 @@ export default function CompaniesIndex({
                                 ))}
                                 <label className="check">
                                     <input type="radio" name="type" checked={!filters.type} onChange={() => toggle('type', undefined)} />
-                                    Все типы
+                                    {t('companies_page.type_all')}
                                 </label>
                             </div>
                         </div>
 
                         <div className="filter-group">
-                            <div className="filter-title">Страна</div>
+                            <div className="filter-title">{t('companies_page.country_title')}</div>
                             <div className="filter-list">
                                 {countries.map((c) => (
                                     <label key={c.code} className="check">
@@ -131,15 +136,15 @@ export default function CompaniesIndex({
                                         checked={!filters.country}
                                         onChange={() => toggle('country', undefined)}
                                     />
-                                    Все страны
+                                    {t('companies_page.country_all')}
                                 </label>
                             </div>
                         </div>
 
                         <div className="filter-group">
-                            <div className="filter-title">Дата регистрации</div>
+                            <div className="filter-title">{t('companies_page.age_title')}</div>
                             <div className="filter-list">
-                                {AGE_OPTIONS.map(([value, label]) => (
+                                {ageOptions().map(([value, label]) => (
                                     <label key={value} className="check">
                                         <input
                                             type="radio"
@@ -152,20 +157,20 @@ export default function CompaniesIndex({
                                 ))}
                                 <label className="check">
                                     <input type="radio" name="age" checked={!filters.age} onChange={() => toggle('age', undefined)} />
-                                    Любая
+                                    {t('companies_page.age_any')}
                                 </label>
                             </div>
                         </div>
 
                         <div className="filter-group">
-                            <div className="filter-title">Надёжность</div>
+                            <div className="filter-title">{t('companies_page.trust_title')}</div>
                             <label className="check">
                                 <input
                                     type="checkbox"
                                     checked={Boolean(filters.verified)}
                                     onChange={(e) => toggle('verified', e.target.checked || undefined)}
                                 />
-                                Только проверенные
+                                {t('companies_page.trust_only')}
                             </label>
                         </div>
                     </aside>
@@ -174,13 +179,13 @@ export default function CompaniesIndex({
                         <div className="toolbar">
                             <form onSubmit={search} style={{ position: 'relative', flex: 1, minWidth: 240 }} role="search">
                                 <label htmlFor="q" className="sr-only">
-                                    Поиск компании
+                                    {t('companies_page.search_label')}
                                 </label>
                                 <input
                                     id="q"
                                     className="input"
                                     type="search"
-                                    placeholder="Название компании или ИНН"
+                                    placeholder={t('companies_page.search_placeholder')}
                                     style={{ paddingLeft: 42 }}
                                     value={q}
                                     onChange={(e) => setQ(e.target.value)}
@@ -197,10 +202,10 @@ export default function CompaniesIndex({
                                 <div className="empty-icon">
                                     <Search aria-hidden className="size-8" />
                                 </div>
-                                <h2 className="t-h3">По вашему запросу ничего нет</h2>
-                                <p>Попробуйте убрать фильтр «Только проверенные» или изменить запрос.</p>
+                                <h2 className="t-h3">{t('companies_page.empty_title')}</h2>
+                                <p>{t('companies_page.empty_text')}</p>
                                 <button className="btn btn-primary" onClick={() => router.get(routes.companies)}>
-                                    Сбросить фильтры
+                                    {t('companies_page.empty_reset')}
                                 </button>
                             </div>
                         ) : (
@@ -227,13 +232,13 @@ export default function CompaniesIndex({
 
                                         <div className="co-facts">
                                             <span className="co-fact">
-                                                <FileText aria-hidden className="size-4" /> ИНН <b>{c.tin ?? 'не указан'}</b>
+                                                <FileText aria-hidden className="size-4" /> {t('companies_page.tin')} <b>{c.tin ?? t('companies_page.tin_none')}</b>
                                             </span>
                                             <span className="co-fact">
-                                                <CalendarDays aria-hidden className="size-4" /> с <b>{c.created_at}</b>
+                                                <CalendarDays aria-hidden className="size-4" /> <b>{t('companies_page.since', { date: c.created_at ?? '—' })}</b>
                                             </span>
                                             <span className="co-fact">
-                                                <Handshake aria-hidden className="size-4" /> сделок <b>{c.completed_deals_count}</b>
+                                                <Handshake aria-hidden className="size-4" /> {t('companies_page.deals')} <b>{c.completed_deals_count}</b>
                                             </span>
                                         </div>
 
@@ -241,9 +246,9 @@ export default function CompaniesIndex({
                                             className="row-between"
                                             style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}
                                         >
-                                            <span className="t-sm muted">{c.reviews_count} отзывов</span>
+                                            <span className="t-sm muted">{tChoice('companies_page.reviews', c.reviews_count)}</span>
                                             <Link href={routes.company(c.slug)} className="btn btn-outline btn-sm">
-                                                Открыть визитку
+                                                {t('companies_page.open_card')}
                                             </Link>
                                         </div>
                                     </article>
@@ -252,7 +257,7 @@ export default function CompaniesIndex({
                         )}
 
                         {companies.links.length > 3 && (
-                            <nav className="row mt-32" style={{ justifyContent: 'center', gap: 6, flexWrap: 'wrap' }} aria-label="Страницы">
+                            <nav className="row mt-32" style={{ justifyContent: 'center', gap: 6, flexWrap: 'wrap' }} aria-label={t('companies_page.pages')}>
                                 {companies.links.map((l) =>
                                     l.url ? (
                                         <Link

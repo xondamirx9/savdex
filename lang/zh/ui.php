@@ -376,4 +376,38 @@ return [
         'none_hint' => '文件未确认',
     ],
 
+
+    // 公司目录：页面原先直接写入了俄语文本
+    'companies_page' => [
+        'title' => '公司',
+        'meta_description' => '乌兹别克斯坦及中亚公司目录：制造商、进口商、经销商。按类型、国家和认证级别筛选。',
+        'crumbs' => '面包屑导航',
+        'home' => '首页',
+        'stats' => '共 :total 家公司 · :verified 家通过审核',
+        'filters_aria' => '公司筛选',
+        'type_title' => '公司类型',
+        'type_all' => '全部类型',
+        'country_title' => '国家',
+        'country_all' => '全部国家',
+        'age_title' => '注册时间',
+        'age_lt1' => '一年以内',
+        'age_1to5' => '1–5 年',
+        'age_gt5' => '5 年以上',
+        'age_any' => '不限',
+        'trust_title' => '可靠性',
+        'trust_only' => '仅看已认证',
+        'search_label' => '搜索公司',
+        'search_placeholder' => '公司名称或税号',
+        'empty_title' => '没有符合条件的结果',
+        'empty_text' => '试试去掉“仅看已认证”筛选或修改搜索词。',
+        'empty_reset' => '重置筛选',
+        'tin' => '税号',
+        'tin_none' => '未填写',
+        'since' => '自 :date',
+        'deals' => '交易',
+        'reviews' => ':count 条评价',
+        'open_card' => '查看名片',
+        'pages' => '页码',
+    ],
+
 ];

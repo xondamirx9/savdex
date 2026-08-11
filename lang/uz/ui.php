@@ -379,4 +379,38 @@ return [
         'none_hint' => 'Hujjatlar tasdiqlanmagan',
     ],
 
+
+    // Kompaniyalar katalogi: sahifa ruscha matn bilan terilgan edi
+    'companies_page' => [
+        'title' => 'Kompaniyalar',
+        'meta_description' => 'O‘zbekiston va Markaziy Osiyo kompaniyalari katalogi: ishlab chiqaruvchilar, importchilar, distribyutorlar. Turi, davlati va tekshiruv darajasi bo‘yicha filtr.',
+        'crumbs' => 'Yo‘l ko‘rsatkichi',
+        'home' => 'Bosh sahifa',
+        'stats' => ':total kompaniya · :verified moderatsiyadan o‘tgan',
+        'filters_aria' => 'Kompaniya filtrlari',
+        'type_title' => 'Kompaniya turi',
+        'type_all' => 'Barcha turlar',
+        'country_title' => 'Davlat',
+        'country_all' => 'Barcha davlatlar',
+        'age_title' => 'Ro‘yxatdan o‘tgan sana',
+        'age_lt1' => 'Bir yilgacha',
+        'age_1to5' => '1–5 yil',
+        'age_gt5' => '5 yildan ortiq',
+        'age_any' => 'Istalgan',
+        'trust_title' => 'Ishonchlilik',
+        'trust_only' => 'Faqat tasdiqlanganlar',
+        'search_label' => 'Kompaniya qidirish',
+        'search_placeholder' => 'Kompaniya nomi yoki STIR',
+        'empty_title' => 'So‘rovingiz bo‘yicha hech narsa topilmadi',
+        'empty_text' => '«Faqat tasdiqlanganlar» filtrini olib tashlab yoki so‘rovni o‘zgartirib ko‘ring.',
+        'empty_reset' => 'Filtrlarni tozalash',
+        'tin' => 'STIR',
+        'tin_none' => 'ko‘rsatilmagan',
+        'since' => ':date dan beri',
+        'deals' => 'bitimlar',
+        'reviews' => ':count sharh',
+        'open_card' => 'Vizitkani ochish',
+        'pages' => 'Sahifalar',
+    ],
+
 ];

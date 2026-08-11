@@ -377,4 +377,38 @@ return [
         'none_hint' => 'Belgeler onaylanmadı',
     ],
 
+
+    // Şirket kataloğu: sayfa Rusça sabit metinle dizilmişti
+    'companies_page' => [
+        'title' => 'Şirketler',
+        'meta_description' => 'Özbekistan ve Orta Asya şirket kataloğu: üreticiler, ithalatçılar, distribütörler. Türe, ülkeye ve doğrulama düzeyine göre filtre.',
+        'crumbs' => 'Gezinme yolu',
+        'home' => 'Ana sayfa',
+        'stats' => ':total şirket · :verified moderasyonca doğrulandı',
+        'filters_aria' => 'Şirket filtreleri',
+        'type_title' => 'Şirket türü',
+        'type_all' => 'Tüm türler',
+        'country_title' => 'Ülke',
+        'country_all' => 'Tüm ülkeler',
+        'age_title' => 'Kayıt tarihi',
+        'age_lt1' => 'Bir yıldan az',
+        'age_1to5' => '1–5 yıl',
+        'age_gt5' => '5 yıldan fazla',
+        'age_any' => 'Fark etmez',
+        'trust_title' => 'Güvenilirlik',
+        'trust_only' => 'Yalnızca doğrulanmış',
+        'search_label' => 'Şirket arama',
+        'search_placeholder' => 'Şirket adı veya vergi numarası',
+        'empty_title' => 'Sorgunuza uyan bir şey yok',
+        'empty_text' => '«Yalnızca doğrulanmış» filtresini kaldırmayı veya sorguyu değiştirmeyi deneyin.',
+        'empty_reset' => 'Filtreleri sıfırla',
+        'tin' => 'Vergi no',
+        'tin_none' => 'belirtilmemiş',
+        'since' => ':date itibarıyla',
+        'deals' => 'anlaşma',
+        'reviews' => ':count yorum',
+        'open_card' => 'Kartviziti aç',
+        'pages' => 'Sayfalar',
+    ],
+
 ];

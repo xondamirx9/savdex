@@ -377,4 +377,38 @@ return [
         'none_hint' => 'Documents not confirmed',
     ],
 
+
+    // Companies catalog: the page used to carry hardcoded Russian text
+    'companies_page' => [
+        'title' => 'Companies',
+        'meta_description' => 'Company catalog of Uzbekistan and Central Asia: manufacturers, importers, distributors. Filter by type, country and verification level.',
+        'crumbs' => 'Breadcrumbs',
+        'home' => 'Home',
+        'stats' => ':total companies · :verified verified by moderation',
+        'filters_aria' => 'Company filters',
+        'type_title' => 'Company type',
+        'type_all' => 'All types',
+        'country_title' => 'Country',
+        'country_all' => 'All countries',
+        'age_title' => 'Registration date',
+        'age_lt1' => 'Under a year',
+        'age_1to5' => '1–5 years',
+        'age_gt5' => 'Over 5 years',
+        'age_any' => 'Any',
+        'trust_title' => 'Reliability',
+        'trust_only' => 'Verified only',
+        'search_label' => 'Company search',
+        'search_placeholder' => 'Company name or tax ID',
+        'empty_title' => 'Nothing matches your query',
+        'empty_text' => 'Try removing the “Verified only” filter or changing the query.',
+        'empty_reset' => 'Reset filters',
+        'tin' => 'Tax ID',
+        'tin_none' => 'not specified',
+        'since' => 'since :date',
+        'deals' => 'deals',
+        'reviews' => ':count review|:count reviews',
+        'open_card' => 'Open profile',
+        'pages' => 'Pages',
+    ],
+
 ];

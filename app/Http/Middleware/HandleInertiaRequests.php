@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Support\Locales;
+use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Middleware;
 
 /**
@@ -20,6 +22,26 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * Адрес страницы для Inertia — с языковым префиксом.
+     *
+     * LocalizeUrl снимает префикс до маршрутизации, поэтому штатный
+     * резолвер видел бы уже «очищенный» адрес: человек открывал
+     * /uz/companies, а Inertia при гидрации записывала /companies
+     * в строку браузера — скопированная оттуда ссылка открывалась
+     * не на том языке, а после редиректа на сохранённый язык адрес
+     * выглядел так, будто переключение не сработало.
+     */
+    public function urlResolver(): Closure
+    {
+        return function (Request $request): string {
+            $prefix = Locales::prefix(app()->getLocale());
+            $uri = Str::start(Str::after($request->fullUrl(), $request->getSchemeAndHttpHost()), '/');
+
+            return $uri === '/' && $prefix !== '' ? $prefix : $prefix.$uri;
+        };
     }
 
     /**
@@ -175,7 +197,7 @@ class HandleInertiaRequests extends Middleware
             'code' => $code,
             'label' => Locales::ALL[$code]['label'],
             'short' => Locales::ALL[$code]['short'],
-            'url' => Locales::url($path, $code),
+            'url' => Locales::switchUrl($path, $code),
         ], Locales::codes());
     }
 

@@ -86,6 +86,32 @@ class LocaleRoutingTest extends TestCase
         $this->get('/catalog')->assertRedirect(url('/uz/catalog'));
     }
 
+    /**
+     * Русская версия живёт без префикса, поэтому ссылка «Русский»
+     * несёт маркер ?hl=ru — иначе сохранённый узбекский возвращал бы
+     * человека обратно и уйти на русский было бы невозможно.
+     */
+    #[Test]
+    public function маркер_hl_переключает_на_русский_вопреки_сохранённому_выбору(): void
+    {
+        $this->get('/uz/catalog')->assertOk();
+        $this->get('/catalog')->assertRedirect(url('/uz/catalog'));
+
+        $this->get('/catalog?hl=ru')->assertRedirect(url('/catalog'));
+
+        $this->get('/catalog')->assertOk();
+        $this->assertSame('ru', session('locale'));
+    }
+
+    #[Test]
+    public function маркер_hl_сохраняет_остальные_параметры_адреса(): void
+    {
+        $this->get('/uz/catalog')->assertOk();
+
+        $this->get('/catalog?type=demand&hl=ru')
+            ->assertRedirect(url('/catalog?type=demand'));
+    }
+
     #[Test]
     public function язык_из_адреса_сохраняется_в_профиль(): void
     {

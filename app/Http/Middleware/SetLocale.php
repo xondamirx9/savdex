@@ -26,6 +26,34 @@ class SetLocale
 
     public function handle(Request $request, Closure $next): Response
     {
+        /*
+         * Явное переключение языка: ссылка «Русский» несёт ?hl=ru,
+         * потому что адрес без префикса неотличим от «язык не указан» —
+         * без маркера сохранённый выбор возвращал бы человека обратно,
+         * и уйти с узбекского на русский было бы невозможно. Выбор
+         * запоминается, маркер снимается редиректом на чистый адрес.
+         */
+        $hl = $request->query('hl');
+
+        if (is_string($hl) && Locales::supports($hl) && $request->isMethod('GET')) {
+            $request->session()->put('locale', $hl);
+
+            $user = $request->user();
+            if ($user && $user->locale !== $hl) {
+                $user->update(['locale' => $hl]);
+            }
+
+            // Адрес назначения выбран здесь и окончательно — LocalizeUrl
+            // не должен возвращать префикс страницы, с которой уходим
+            $request->attributes->set(LocalizeUrl::KEEP, true);
+
+            $query = $request->query();
+            unset($query['hl']);
+            $clean = $request->getPathInfo().($query === [] ? '' : '?'.http_build_query($query));
+
+            return redirect(Locales::url($clean, $hl), 302);
+        }
+
         $fromUrl = $request->attributes->get(LocalizeUrl::ATTRIBUTE);
 
         if (Locales::supports($fromUrl)) {
