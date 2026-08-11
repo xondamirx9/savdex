@@ -31,7 +31,7 @@ class ForcePasswordController extends Controller
         return Inertia::render('auth/ForcePassword');
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): RedirectResponse|\Symfony\Component\HttpFoundation\Response
     {
         $request->validate([
             'password' => ['required', 'string', 'confirmed', PasswordRule::defaults()],
@@ -57,10 +57,28 @@ class ForcePasswordController extends Controller
             'must_change_password' => false,
         ])->save();
 
-        // Администратора возвращаем в панель: у него может не быть
-        // компании, и кабинет встретил бы его предложением её завести
+        /*
+         * Панель хранит в сессии хеш пароля (AuthenticateSession):
+         * без обновления первый же переход в /admin сверил бы сессию
+         * со свежим хешем, разлогинил — и человек ходил бы по кругу
+         * «вход → смена пароля → снова вход».
+         */
+        $request->session()->put(
+            'password_hash_'.config('auth.defaults.guard'),
+            $user->getAuthPassword(),
+        );
+
+        /*
+         * Администратора возвращаем в панель: у него может не быть
+         * компании, и кабинет встретил бы его предложением её завести.
+         *
+         * Именно Inertia::location, а не redirect: панель — не
+         * Inertia-страница, и обычный редирект из Inertia-формы
+         * привозил бы её HTML в отладочную панель поверх экрана
+         * смены пароля вместо настоящего перехода.
+         */
         if ($user->is_admin) {
-            return redirect('/admin')->with('success', 'Пароль изменён');
+            return Inertia::location('/admin');
         }
 
         return redirect()->route('cabinet')->with('success', 'Пароль изменён');

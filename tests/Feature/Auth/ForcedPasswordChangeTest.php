@@ -76,6 +76,37 @@ class ForcedPasswordChangeTest extends TestCase
         $this->assertGuest();
     }
 
+    /**
+     * Панель хранит в сессии хеш пароля (AuthenticateSession), и
+     * контроллер обязан обновить его вместе с паролем — иначе первый
+     * же переход в /admin разлогинивает, и администратор ходит по
+     * кругу «вход → смена пароля → снова вход».
+     */
+    #[Test]
+    public function смена_пароля_не_разлогинивает_администратора_в_панели(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => User::ADMIN_SUPERADMIN,
+            'must_change_password' => true,
+            'email_verified_at' => now(),
+            'status' => 'active',
+        ]);
+        $oldHash = $admin->getAuthPassword();
+
+        $this->actingAs($admin)
+            ->withSession(['password_hash_web' => $oldHash])
+            ->post('/password/change', [
+                'password' => 'Sovsem-Novy-2026!',
+                'password_confirmation' => 'Sovsem-Novy-2026!',
+            ])
+            ->assertRedirect('/admin');
+
+        $this->assertNotSame($oldHash, session('password_hash_web'));
+
+        $this->get('/admin')->assertOk();
+    }
+
     #[Test]
     public function экран_смены_пароля_не_зацикливается(): void
     {
