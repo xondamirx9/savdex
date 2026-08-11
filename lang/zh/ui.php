@@ -71,6 +71,7 @@ return [
         'notifications_all' => '全部通知',
         'user_menu' => '用户菜单：:name',
         'email_unverified' => '邮箱未验证',
+        'admin_panel' => '管理后台',
         'summary' => '概览',
         'my_listings' => '我的信息',
         'company' => '企业',

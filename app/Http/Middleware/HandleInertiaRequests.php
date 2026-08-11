@@ -62,6 +62,8 @@ class HandleInertiaRequests extends Middleware
                     'locale' => $user->locale,
                     'email_verified' => $user->hasVerifiedEmail(),
                     'must_change_password' => $user->must_change_password,
+                    // Пункт «Управление» в меню — только администраторам
+                    'is_admin' => (bool) $user->is_admin,
                 ] : null,
 
                 'company' => $user?->company ? [

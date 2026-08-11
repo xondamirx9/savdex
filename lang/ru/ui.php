@@ -77,6 +77,7 @@ return [
         'notifications_all' => 'Все уведомления',
         'user_menu' => 'Меню пользователя: :name',
         'email_unverified' => 'Почта не подтверждена',
+        'admin_panel' => 'Управление площадкой',
         'summary' => 'Сводка',
         'my_listings' => 'Мои объявления',
         'company' => 'Компания',

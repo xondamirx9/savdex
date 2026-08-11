@@ -74,6 +74,7 @@ return [
         'notifications_all' => 'Barcha bildirishnomalar',
         'user_menu' => 'Foydalanuvchi menyusi: :name',
         'email_unverified' => 'Pochta tasdiqlanmagan',
+        'admin_panel' => 'Maydon boshqaruvi',
         'summary' => 'Umumiy ko‘rinish',
         'my_listings' => 'Mening e’lonlarim',
         'company' => 'Kompaniya',

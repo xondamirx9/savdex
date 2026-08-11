@@ -14,6 +14,7 @@ import {
     PlusCircle,
     Search,
     Settings,
+    Shield,
     Wallet,
     X,
 } from 'lucide-react';
@@ -379,7 +380,7 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
  * Появилось после того, как выяснилось, что выйти из аккаунта было
  * невозможно ни с одной страницы: кнопки выхода не существовало нигде.
  */
-function UserMenu({ name, email, verified }: { name: string; email: string; verified: boolean }) {
+function UserMenu({ name, email, verified, isAdmin }: { name: string; email: string; verified: boolean; isAdmin: boolean }) {
     const [open, setOpen] = useState(false);
     const ref = useDismiss(() => setOpen(false));
 
@@ -422,6 +423,13 @@ function UserMenu({ name, email, verified }: { name: string; email: string; veri
                     )}
                 </div>
 
+                {isAdmin && (
+                    /* Обычная ссылка, а не Inertia: панель — отдельное
+                       приложение, ей нужна полная загрузка страницы */
+                    <a href="/admin" className="dropdown-item" role="menuitem">
+                        <Shield aria-hidden className="size-4" /> {t('header.admin_panel')}
+                    </a>
+                )}
                 <Link href={routes.cabinet} className="dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
                     <LayoutDashboard aria-hidden className="size-4" /> {t('header.summary')}
                 </Link>
@@ -577,6 +585,7 @@ export function SiteHeader() {
                                 name={auth.user!.name}
                                 email={auth.user!.email}
                                 verified={auth.user!.email_verified}
+                                isAdmin={auth.user!.is_admin}
                             />
                         ) : (
                             <div className="hd-auth">

@@ -72,6 +72,7 @@ return [
         'notifications_all' => 'All notifications',
         'user_menu' => 'User menu: :name',
         'email_unverified' => 'Email not confirmed',
+        'admin_panel' => 'Admin panel',
         'summary' => 'Overview',
         'my_listings' => 'My listings',
         'company' => 'Company',

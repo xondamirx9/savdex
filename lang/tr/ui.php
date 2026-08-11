@@ -72,6 +72,7 @@ return [
         'notifications_all' => 'Tüm bildirimler',
         'user_menu' => 'Kullanıcı menüsü: :name',
         'email_unverified' => 'E-posta doğrulanmadı',
+        'admin_panel' => 'Yönetim paneli',
         'summary' => 'Özet',
         'my_listings' => 'İlanlarım',
         'company' => 'Şirket',

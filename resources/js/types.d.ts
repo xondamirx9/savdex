@@ -7,6 +7,7 @@ export interface AuthUser {
     locale: string;
     email_verified: boolean;
     must_change_password: boolean;
+    is_admin: boolean;
 }
 
 export interface AuthCompany {
