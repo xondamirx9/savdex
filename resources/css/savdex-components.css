@@ -1353,7 +1353,16 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   border-radius:var(--r-pill);background:var(--danger);color:#fff;font-size:10.5px;font-weight:700;
   line-height:17px;text-align:center;border:2px solid var(--white);box-sizing:content-box}
 .hd-badge--zero{background:var(--text-muted)}
-.hd-auth{display:flex;align-items:center;gap:8px;margin-left:6px;flex-shrink:0}
+.hd-auth{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+/*
+ * Балансировка строки: после удаления кнопки каталога и сердечка
+ * середина шапки прижалась влево. Поиск отодвигается воздухом слева,
+ * язык и «Сообщения» — уплотнением правого края; размеры элементов
+ * не меняются. Отрицательный отступ сжимает только соседние гэпы.
+ */
+.hd-main>.hd-search{margin-left:26px}
+.hd-main>.hd-actions{margin:0 -4px}
 
 /* Лента разделов под шапкой */
 .subnav{border-top:1px solid var(--border);background:var(--white)}
