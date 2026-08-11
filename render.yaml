@@ -17,6 +17,9 @@ services:
         value: "false"
       - key: SEED_DEMO
         value: "true"
+      # Почтового сервиса на стенде нет — адреса подтверждаются сразу.
+      - key: DEMO_AUTO_VERIFY
+        value: "true"
       # Обработчика очереди на бесплатном тарифе нет — задания
       # выполняются сразу, в том же запросе.
       - key: QUEUE_CONNECTION

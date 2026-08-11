@@ -6,8 +6,10 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -166,6 +168,24 @@ class RegistrationTest extends TestCase
 
         $this->assertFalse($user->hasVerifiedEmail());
         $this->assertFalse($user->canAct(), 'Публикация и раскрытие контактов должны быть заблокированы');
+    }
+
+    /**
+     * Демо-стенд без почтового сервиса: адрес подтверждается сразу,
+     * письмо не отправляется (см. demo_auto_verify в config/app.php).
+     */
+    #[Test]
+    public function демо_режим_подтверждает_почту_при_регистрации_без_письма(): void
+    {
+        config(['app.demo_auto_verify' => true]);
+        Notification::fake();
+
+        $this->post('/register', $this->validPayload());
+
+        $user = User::where('email', 'rustam@company.uz')->first();
+
+        $this->assertTrue($user->hasVerifiedEmail());
+        Notification::assertNotSentTo($user, VerifyEmail::class);
     }
 
     /**

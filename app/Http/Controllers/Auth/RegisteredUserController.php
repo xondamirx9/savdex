@@ -36,6 +36,15 @@ class RegisteredUserController extends Controller
             ]);
         });
 
+        /*
+         * Демо-стенд (см. config/app.php): почта помечается подтверждённой
+         * до события Registered — слушатель уведомлений видит это и письмо
+         * не отправляет.
+         */
+        if (config('app.demo_auto_verify')) {
+            $user->markEmailAsVerified();
+        }
+
         event(new Registered($user));
         Auth::login($user);
 
