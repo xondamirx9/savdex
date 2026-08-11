@@ -49,15 +49,34 @@ class PageController extends Controller
                 ],
             ]);
 
+        /*
+         * FAQ размечается и для поисковика: по вопросам из него Google
+         * показывает раскрывающиеся ответы прямо в выдаче. Источник
+         * один — словарь: расхождение текста на странице и в разметке
+         * поисковики наказывают.
+         */
+        app(Seo::class)->schema([
+            '@type' => 'FAQPage',
+            'mainEntity' => array_map(fn (int $i): array => [
+                '@type' => 'Question',
+                'name' => __("ui.home.faq_q{$i}"),
+                'acceptedAnswer' => ['@type' => 'Answer', 'text' => __("ui.home.faq_a{$i}")],
+            ], range(1, 6)),
+        ]);
+
         return Inertia::render('Home', [
             'stats' => $stats,
             'categories' => $this->popularCategories(),
-            // Свежие объявления — лента «Новые объявления» первого экрана
+            // Лента товаров первого экрана: только предложения —
+            // запросы живут в своём разделе каталога
             'latest' => $this->latestListings(),
+            // Витрина поставщиков: покупатель фильтруется по блокам —
+            // кто ищет товар, уходит в ленту выше, кто ищет партнёра — сюда
+            'suppliers' => $this->topSuppliers(),
             'countries' => $this->countryOptions(),
-            // Три свежих новости прямо на главной: раздел, до которого
+            // Свежие новости прямо на главной: раздел, до которого
             // нужно ещё дойти по меню, читают в разы меньше
-            'news' => $news->latest(3),
+            'news' => $news->latest(4),
         ]);
     }
 
@@ -189,6 +208,10 @@ class PageController extends Controller
                 'listings' => (int) ($counts[$c->id] ?? 0)
                     + $c->children->sum(fn (Category $child): int => (int) ($counts[$child->id] ?? 0)),
             ])
+            // Разделы без единого объявления не показываются: плитка
+            // с нулём зовёт в пустоту и продаёт площадку хуже, чем есть
+            ->filter(fn (array $c): bool => $c['listings'] > 0)
+            ->values()
             ->all();
     }
 
@@ -198,11 +221,44 @@ class PageController extends Controller
         return Listing::query()
             ->with(ListingCard::relations())
             ->where('status', Listing::STATUS_ACTIVE)
+            ->where('type', Listing::TYPE_SUPPLY)
             ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
             ->latest('published_at')
             ->limit(8)
             ->get()
             ->map(fn (Listing $l): array => ListingCard::present($l))
+            ->all();
+    }
+
+    /**
+     * Витрина поставщиков для главной: лучшие по проверке и рейтингу.
+     *
+     * Порядок тот же, что в каталоге компаний, — витрина обязана
+     * сходиться с тем, что человек увидит, нажав «Все компании».
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function topSuppliers(): array
+    {
+        return Company::query()
+            ->with(['city.translations'])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->orderByDesc('verification_level')
+            ->orderByDesc('rating')
+            ->limit(4)
+            ->get()
+            ->map(fn (Company $c): array => [
+                'slug' => $c->slug,
+                'name' => $c->name,
+                'type_label' => $c->typeLabel(),
+                'city' => $c->city?->name(),
+                'verification_level' => $c->verification_level,
+                'rating' => (float) $c->rating,
+                'reviews_count' => $c->reviews_count,
+                'completed_deals_count' => $c->completed_deals_count,
+                'initials' => $c->initials(),
+                'logo' => $c->logoUrl(),
+            ])
             ->all();
     }
 

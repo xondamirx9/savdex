@@ -1,0 +1,58 @@
+/*
+ * Дизайн-сетка: единая шкала отступов для ПК и телефона.
+ *
+ * Файл подключается ПОСЛЕ savdex-components.css и намеренно
+ * переопределяет разнобойные значения ритма одним набором токенов.
+ * Правило простое: любые новые отступы берутся из шкалы --sp-*
+ * (кратной 4px), а вертикальный ритм страницы — из трёх уровней
+ * секций. Инлайновые paddingTop у секций запрещены — если секции
+ * нужен другой ритм, ей выбирается другой уровень.
+ *
+ *   section-lg     крупная смысловая секция (как работает, новости)
+ *   section        обычная секция
+ *   section--tight плотная лента, идущая подряд (категории, товары)
+ */
+
+:root{
+  /* Шкала, кратная 4px */
+  --sp-1:4px;  --sp-2:8px;  --sp-3:12px; --sp-4:16px; --sp-5:20px;
+  --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px; --sp-14:56px;
+  --sp-16:64px; --sp-18:72px; --sp-20:80px;
+
+  /* Вертикальный ритм секций */
+  --rhythm-lg:var(--sp-18);
+  --rhythm:var(--sp-14);
+  --rhythm-sm:var(--sp-10);
+
+  /* Гэпы: карточные сетки и раскладки «контент + колонка» */
+  --gap-grid:var(--sp-4);
+  --gap-page:var(--sp-8);
+}
+
+/* ── Вертикальный ритм ── */
+.section{padding:var(--rhythm) 0}
+.section-lg{padding:var(--rhythm-lg) 0}
+.section--tight{padding:var(--rhythm-sm) 0}
+.section-head{margin-bottom:var(--sp-12)}
+.section-head-left{margin-bottom:var(--sp-10)}
+.section-bar{margin-bottom:var(--sp-6)}
+
+/* ── Горизонтальная сетка ── */
+.grid{gap:var(--gap-grid)}
+.cat-grid,.product-grid,.product-grid--6,.country-grid,.news-grid{gap:var(--gap-grid)}
+.features-grid{gap:var(--sp-6)}
+.catalog,.cabinet,.grid-sidebar,.grid-split,.grid-docs{gap:var(--gap-page)}
+
+/* ── Телефон: ритм сжимается пропорционально ── */
+@media (max-width:768px){
+  :root{
+    --rhythm-lg:var(--sp-12);
+    --rhythm:var(--sp-10);
+    --rhythm-sm:var(--sp-8);
+    --gap-grid:var(--sp-3);
+    --gap-page:var(--sp-5);
+  }
+  .section-head{margin-bottom:var(--sp-8)}
+  .section-head-left{margin-bottom:var(--sp-6)}
+  .section-bar{margin-bottom:var(--sp-5)}
+}

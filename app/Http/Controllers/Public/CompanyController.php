@@ -35,6 +35,17 @@ class CompanyController extends Controller
                 fn ($sub) => $sub->where('code', mb_strtolower($code)),
             ))
             ->when($request->boolean('verified'), fn ($q) => $q->where('verification_level', '>=', Company::VERIFICATION_COMPANY))
+            /*
+             * Возраст на площадке — по дате регистрации компании.
+             * Границы условные: до года, от года до пяти, старше пяти.
+             * Неизвестное значение из адресной строки просто игнорируется.
+             */
+            ->when($request->string('age')->toString(), fn ($q, $age) => match ($age) {
+                'lt1' => $q->where('created_at', '>=', now()->subYear()),
+                '1to5' => $q->whereBetween('created_at', [now()->subYears(5), now()->subYear()]),
+                'gt5' => $q->where('created_at', '<', now()->subYears(5)),
+                default => $q,
+            })
             ->orderByDesc('verification_level')
             ->orderByDesc('rating')
             ->paginate(12)
@@ -51,7 +62,6 @@ class CompanyController extends Controller
                 'rating' => (float) $c->rating,
                 'reviews_count' => $c->reviews_count,
                 'completed_deals_count' => $c->completed_deals_count,
-                'response_time_hours' => $c->response_time_hours,
                 'created_at' => DateHelper::monthYear($c->created_at),
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
@@ -59,12 +69,12 @@ class CompanyController extends Controller
 
         app(SeoBuilders::class)->companies(
             $companies->total(),
-            filtered: $request->hasAny(['q', 'type', 'verified', 'country']) || $companies->currentPage() > 1,
+            filtered: $request->hasAny(['q', 'type', 'verified', 'country', 'age']) || $companies->currentPage() > 1,
         );
 
         return Inertia::render('companies/Index', [
             'companies' => $companies,
-            'filters' => $request->only(['q', 'type', 'verified', 'country']),
+            'filters' => $request->only(['q', 'type', 'verified', 'country', 'age']),
             'types' => Company::typeOptions(),
             'countries' => \App\Models\Country::query()
                 ->where('is_active', true)

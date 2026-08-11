@@ -1,7 +1,8 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { CalendarDays, CheckCircle2, Clock, FileText, Handshake, Search, Shield, Star } from 'lucide-react';
+import { CalendarDays, FileText, Handshake, Search, Star } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { VerificationBadge } from '@/components/VerificationBadge';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
 
@@ -16,10 +17,16 @@ interface CompanyRow {
     rating: number;
     reviews_count: number;
     completed_deals_count: number;
-    response_time_hours: number | null;
     created_at: string | null;
     initials: string;
 }
+
+/** Возраст регистрации: значения понятны в адресной строке (?age=lt1). */
+const AGE_OPTIONS: [string, string][] = [
+    ['lt1', 'До года'],
+    ['1to5', '1–5 лет'],
+    ['gt5', 'Более 5 лет'],
+];
 
 interface Paginated<T> {
     data: T[];
@@ -27,36 +34,18 @@ interface Paginated<T> {
     total: number;
 }
 
-function VerificationBadge({ level }: { level: number }) {
-    if (level >= 3)
-        return (
-            <span className="badge badge-gold" title="Проверена расширенно">
-                <Shield aria-hidden className="size-3.5" /> Проверена+
-            </span>
-        );
-    if (level >= 2)
-        return (
-            <span className="badge badge-verified" title="Проверена модерацией">
-                <CheckCircle2 aria-hidden className="size-3.5" /> Проверена
-            </span>
-        );
-    return (
-        <span className="badge badge-neutral" title="Документы не подтверждены">
-            Не проверена
-        </span>
-    );
-}
-
 export default function CompaniesIndex({
     companies,
     filters,
     types,
+    countries,
     stats,
 }: {
     companies: Paginated<CompanyRow>;
-    filters: { q?: string; type?: string; verified?: boolean };
+    filters: { q?: string; type?: string; verified?: boolean; country?: string; age?: string };
     /** Справочник типов компаний — редактируется в админке */
     types: Record<string, string>;
+    countries: { code: string; name: string }[];
     stats: { total: number; verified: number };
 }) {
     const [q, setQ] = useState(filters.q ?? '');
@@ -117,6 +106,53 @@ export default function CompaniesIndex({
                                 <label className="check">
                                     <input type="radio" name="type" checked={!filters.type} onChange={() => toggle('type', undefined)} />
                                     Все типы
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="filter-group">
+                            <div className="filter-title">Страна</div>
+                            <div className="filter-list">
+                                {countries.map((c) => (
+                                    <label key={c.code} className="check">
+                                        <input
+                                            type="radio"
+                                            name="country"
+                                            checked={filters.country === c.code}
+                                            onChange={() => toggle('country', c.code)}
+                                        />
+                                        {c.name}
+                                    </label>
+                                ))}
+                                <label className="check">
+                                    <input
+                                        type="radio"
+                                        name="country"
+                                        checked={!filters.country}
+                                        onChange={() => toggle('country', undefined)}
+                                    />
+                                    Все страны
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="filter-group">
+                            <div className="filter-title">Дата регистрации</div>
+                            <div className="filter-list">
+                                {AGE_OPTIONS.map(([value, label]) => (
+                                    <label key={value} className="check">
+                                        <input
+                                            type="radio"
+                                            name="age"
+                                            checked={filters.age === value}
+                                            onChange={() => toggle('age', value)}
+                                        />
+                                        {label}
+                                    </label>
+                                ))}
+                                <label className="check">
+                                    <input type="radio" name="age" checked={!filters.age} onChange={() => toggle('age', undefined)} />
+                                    Любая
                                 </label>
                             </div>
                         </div>
@@ -195,10 +231,6 @@ export default function CompaniesIndex({
                                             </span>
                                             <span className="co-fact">
                                                 <CalendarDays aria-hidden className="size-4" /> с <b>{c.created_at}</b>
-                                            </span>
-                                            <span className="co-fact">
-                                                <Clock aria-hidden className="size-4" /> отвечает за{' '}
-                                                <b>{c.response_time_hours ? `${c.response_time_hours} ч` : '—'}</b>
                                             </span>
                                             <span className="co-fact">
                                                 <Handshake aria-hidden className="size-4" /> сделок <b>{c.completed_deals_count}</b>

@@ -3,6 +3,7 @@ import {
     ArrowRight,
     Box,
     Boxes,
+    ChevronDown,
     Cog,
     Cpu,
     FlaskConical,
@@ -11,9 +12,12 @@ import {
     HardHat,
     Layers,
     Package,
+    Percent,
     Search,
     Shield,
+    ShieldCheck,
     Shirt,
+    Star,
     UtensilsCrossed,
     Users,
     Wheat,
@@ -21,6 +25,7 @@ import {
 import { useState } from 'react';
 import { NewsCover } from '@/components/NewsCover';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
+import { VerificationBadge } from '@/components/VerificationBadge';
 import { formatNumber } from '@/components/cabinet';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
@@ -54,6 +59,19 @@ interface CategoryTile {
 interface CountryOption {
     code: string;
     name: string;
+}
+
+interface SupplierRow {
+    slug: string;
+    name: string;
+    type_label: string | null;
+    city: string | null;
+    verification_level: number;
+    rating: number;
+    reviews_count: number;
+    completed_deals_count: number;
+    initials: string;
+    logo: string | null;
 }
 
 interface NewsCard {
@@ -226,12 +244,14 @@ export default function Home({
     stats,
     categories,
     latest,
+    suppliers,
     countries,
     news,
 }: {
     stats: Stats;
     categories: CategoryTile[];
     latest: ProductRow[];
+    suppliers: SupplierRow[];
     countries: CountryOption[];
     news: NewsCard[];
 }) {
@@ -291,7 +311,7 @@ export default function Home({
 
             {/* ── Популярные категории ── */}
             {categories.length > 0 && (
-                <section className="section--tight" style={{ paddingTop: 44 }}>
+                <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
                             <h2>{t('home.categories_title')}</h2>
@@ -324,7 +344,7 @@ export default function Home({
 
             {/* ── Новые объявления ── */}
             {latest.length > 0 && (
-                <section className="section--tight" style={{ paddingTop: 8 }}>
+                <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
                             <h2>{t('home.latest_title')}</h2>
@@ -335,6 +355,41 @@ export default function Home({
                         <div className="product-grid" data-reveal-stagger>
                             {latest.map((row) => (
                                 <ProductCard key={row.id} row={row} />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* ── Поставщики: покупатель фильтруется по блокам — кто ищет
+                 товар, остаётся выше, кто ищет партнёра — здесь ── */}
+            {suppliers.length > 0 && (
+                <section className="section--tight">
+                    <div className="container">
+                        <div className="section-bar">
+                            <h2>{t('home.suppliers_title')}</h2>
+                            <Link href={routes.companies} className="section-bar-link">
+                                {t('home.suppliers_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                            </Link>
+                        </div>
+                        <div className="supplier-grid" data-reveal-stagger>
+                            {suppliers.map((s) => (
+                                <Link key={s.slug} href={routes.company(s.slug)} className="supplier-card">
+                                    <span className="supplier-head">
+                                        <span className="listing-logo logo-48">{s.initials}</span>
+                                        <VerificationBadge level={s.verification_level} />
+                                    </span>
+                                    <span className="supplier-name">{s.name}</span>
+                                    <span className="supplier-meta">
+                                        {[s.type_label, s.city].filter(Boolean).join(' · ')}
+                                    </span>
+                                    <span className="supplier-facts">
+                                        <span className="listing-rating">
+                                            <Star aria-hidden className="size-3.5" /> <b>{s.rating.toFixed(1)}</b>
+                                        </span>
+                                        <span>{tChoice('home.suppliers_deals', s.completed_deals_count)}</span>
+                                    </span>
+                                </Link>
                             ))}
                         </div>
                     </div>
@@ -367,6 +422,33 @@ export default function Home({
                 </div>
             </section>
 
+            {/* ── Снятие возражений: два главных сомнения новичка ── */}
+            <section className="section">
+                <div className="container">
+                    <div className="section-bar">
+                        <h2>{t('home.objections_title')}</h2>
+                    </div>
+                    <div className="objection-grid" data-reveal-stagger>
+                        {(
+                            [
+                                [ShieldCheck, 'obj1'],
+                                [Percent, 'obj2'],
+                            ] as const
+                        ).map(([Icon, key]) => (
+                            <div key={key} className="objection-card">
+                                <span className="objection-ico">
+                                    <Icon aria-hidden className="size-6" />
+                                </span>
+                                <div>
+                                    <h3 className="t-h4">{t(`home.${key}_title`)}</h3>
+                                    <p>{t(`home.${key}_text`)}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* ── Новости ── */}
             {news.length > 0 && (
                 <section className="section-lg">
@@ -380,7 +462,7 @@ export default function Home({
                                 {t('home.blog_all')} <ArrowRight aria-hidden className="size-4" />
                             </Link>
                         </div>
-                        <div className="grid grid-3" data-reveal-stagger>
+                        <div className="news-grid" data-reveal-stagger>
                             {news.map((p) => (
                                 <Link
                                     key={p.slug}
@@ -389,7 +471,7 @@ export default function Home({
                                     style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'inherit' }}
                                 >
                                     <NewsCover category={p.category} image={p.image} />
-                                    <div style={{ padding: 18, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                    <div style={{ padding: 14, display: 'flex', flexDirection: 'column', flex: 1 }}>
                                         <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
                                             <span className="badge badge-neutral">{p.category}</span>
                                             <span className="t-caption muted">{p.date}</span>
@@ -408,6 +490,28 @@ export default function Home({
                     </div>
                 </section>
             )}
+
+            {/* ── FAQ: снимает оставшиеся вопросы перед регистрацией.
+                 details/summary — раскрытие работает даже без JS ── */}
+            <section className="section-lg section--white">
+                <div className="container">
+                    <div className="section-head-left">
+                        <span className="eyebrow">{t('home.faq_eyebrow')}</span>
+                        <h2 className="t-section">{t('home.faq_title')}</h2>
+                    </div>
+                    <div className="faq" data-reveal-stagger>
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <details key={i} className="faq-item">
+                                <summary>
+                                    {t(`home.faq_q${i}`)}
+                                    <ChevronDown aria-hidden className="faq-chev size-5" />
+                                </summary>
+                                <p>{t(`home.faq_a${i}`)}</p>
+                            </details>
+                        ))}
+                    </div>
+                </div>
+            </section>
 
             {/* ── Финальный призыв ── */}
             <section className="section--tight">

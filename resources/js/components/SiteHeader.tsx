@@ -7,7 +7,6 @@ import {
     Globe,
     Heart,
     LayoutDashboard,
-    LayoutGrid,
     LogOut,
     Megaphone,
     Menu,
@@ -544,11 +543,6 @@ export function SiteHeader() {
                                 </span>
                                 <span className="hd-logo-sub">{t('header.tagline')}</span>
                             </span>
-                        </Link>
-
-                        <Link href={routes.catalog} className="btn btn-dark hd-catalog">
-                            <LayoutGrid aria-hidden className="size-4" />
-                            {t('header.catalog_button')}
                         </Link>
 
                         <HeaderSearch categories={categories} idPrefix="hd" />

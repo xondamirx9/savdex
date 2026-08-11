@@ -104,6 +104,36 @@ class CompanyPagesTest extends TestCase
     }
 
     #[Test]
+    public function фильтр_по_дате_регистрации_делит_компании_на_возрастные_группы(): void
+    {
+        $fresh = $this->company();
+        $middle = $this->company(['name' => 'Середняк', 'tin' => '333333333']);
+        $middle->forceFill(['created_at' => now()->subYears(3)])->save();
+        $old = $this->company(['name' => 'Ветеран', 'tin' => '444444444']);
+        $old->forceFill(['created_at' => now()->subYears(6)])->save();
+
+        $this->get('/companies?age=lt1')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('companies.data', 1)
+                ->where('companies.data.0.name', $fresh->name));
+
+        $this->get('/companies?age=1to5')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('companies.data', 1)
+                ->where('companies.data.0.name', 'Середняк'));
+
+        $this->get('/companies?age=gt5')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('companies.data', 1)
+                ->where('companies.data.0.name', 'Ветеран'));
+
+        // Мусор из адресной строки не фильтрует и не ломает страницу
+        $this->get('/companies?age=чепуха')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('companies.data', 3));
+    }
+
+    #[Test]
     public function пустая_выдача_не_ломает_страницу(): void
     {
         $this->company();
