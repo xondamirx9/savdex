@@ -98,7 +98,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'code' => $code,
                     'label' => \App\Support\Locales::ALL[$code]['label'],
                     'short' => \App\Support\Locales::ALL[$code]['short'],
-                    'url' => \App\Support\Locales::url($request->getRequestUri(), $code),
+                    'url' => \App\Support\Locales::switchUrl($request->getRequestUri(), $code),
                 ], \App\Support\Locales::codes()),
             ])
                 ->toResponse($request)
