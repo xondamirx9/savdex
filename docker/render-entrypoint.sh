@@ -2,9 +2,12 @@
 #
 # Запуск контейнера на Render (и любом хостинге, который передаёт PORT).
 #
-# Диск у Render эфемерный: при каждом деплое и пробуждении контейнер
-# начинается с чистого образа. Поэтому база создаётся и наполняется
-# прямо здесь — свежий SQLite-файл распознаётся по нулевому размеру.
+# База может быть двух видов:
+#  - SQLite (по умолчанию) — живёт на эфемерном диске и пересоздаётся
+#    при каждом деплое; годится только для демо-стенда;
+#  - внешний Postgres (DB_CONNECTION=pgsql + DB_URL) — данные постоянные.
+# Пустая база в обоих случаях распознаётся одинаково: до миграций
+# в ней нет таблицы users.
 set -euo pipefail
 
 # Render говорит, на каком порту слушать, через $PORT (по умолчанию 10000).
@@ -27,17 +30,20 @@ if [ -z "${APP_URL:-}" ] && [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
     export APP_URL="${RENDER_EXTERNAL_URL}"
 fi
 
-FRESH_DB=0
 if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
     DB_FILE="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
-    if [ ! -s "$DB_FILE" ]; then
-        FRESH_DB=1
-        mkdir -p "$(dirname "$DB_FILE")"
-        touch "$DB_FILE"
-    fi
+    mkdir -p "$(dirname "$DB_FILE")"
+    touch "$DB_FILE"
 fi
 
 php artisan package:discover --ansi
+
+FRESH_DB=0
+HAS_USERS=$(php artisan tinker --execute='echo Schema::hasTable("users") ? "yes" : "no";' 2>/dev/null | tail -1 || true)
+if [ "$HAS_USERS" != "yes" ]; then
+    FRESH_DB=1
+fi
+
 php artisan migrate --force
 
 # Сидируем только свежую базу, иначе каждый перезапуск плодил бы дубли.
@@ -45,6 +51,22 @@ if [ "$FRESH_DB" = "1" ]; then
     php artisan db:seed --force
     if [ "${SEED_DEMO:-false}" = "true" ]; then
         php artisan db:seed --class=DemoDataSeeder --force
+    fi
+fi
+
+# Администратор заводится из переменных окружения: на хостинге нет
+# консоли, где можно было бы выполнить savdex:admin руками. Повторные
+# запуски пропускаются — иначе каждый рестарт сбрасывал бы пароль.
+if [ -n "${ADMIN_EMAIL:-}" ]; then
+    IS_ADMIN=$(php artisan tinker \
+        --execute='echo \App\Models\User::where("email", mb_strtolower(trim((string) getenv("ADMIN_EMAIL"))))->where("is_admin", true)->exists() ? "yes" : "no";' \
+        2>/dev/null | tail -1 || true)
+    if [ "$IS_ADMIN" != "yes" ]; then
+        ADMIN_ARGS=("$ADMIN_EMAIL")
+        if [ -n "${ADMIN_PASSWORD:-}" ]; then
+            ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+        fi
+        php artisan savdex:admin "${ADMIN_ARGS[@]}"
     fi
 fi
 

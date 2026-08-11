@@ -29,9 +29,9 @@ RUN mkdir -p storage/framework/views && npm run build
 FROM php:8.3-apache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev \
+        libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev libpq-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache \
+    && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache pdo_pgsql \
     && a2enmod rewrite headers \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm -rf /var/lib/apt/lists/*
