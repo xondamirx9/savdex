@@ -36,7 +36,11 @@ export function MobileTabBar() {
 
     return (
         <nav className="tabbar" aria-label={t('nav.main')}>
-            {items().map(({ href, label, icon: Icon, exact }) => (
+            {items()
+                // Избранное — только вошедшим: гостю сердечко не даёт
+                // ничего, кроме лишнего шага через страницу входа
+                .filter(({ href }) => authed || href !== routes.favorites)
+                .map(({ href, label, icon: Icon, exact }) => (
                 <Link
                     key={href}
                     // Гостя ведём на вход: страница всё равно потребует

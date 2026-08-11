@@ -550,15 +550,15 @@ export function SiteHeader() {
                         <LangSwitcher locale={locale} links={localeLinks} />
 
                         <div className="hd-actions">
-                            <Link
-                                href={authed ? routes.favorites : routes.login}
-                                className="hd-action"
-                                aria-label={t('header.favorites')}
-                            >
-                                <Heart aria-hidden />
-                                {favCount > 0 && <span className="hd-badge">{favCount > 99 ? '99+' : favCount}</span>}
-                                <span>{t('header.favorites')}</span>
-                            </Link>
+                            {/* Избранное — только вошедшим: гостю сердечко
+                                ничего не даёт, кроме лишнего клика в /login */}
+                            {authed && (
+                                <Link href={routes.favorites} className="hd-action" aria-label={t('header.favorites')}>
+                                    <Heart aria-hidden />
+                                    {favCount > 0 && <span className="hd-badge">{favCount > 99 ? '99+' : favCount}</span>}
+                                    <span>{t('header.favorites')}</span>
+                                </Link>
+                            )}
 
                             {authed && bell ? (
                                 <MessagesMenu data={bell} />
@@ -637,9 +637,11 @@ export function SiteHeader() {
                         {t('nav.pricing')}
                     </Link>
 
-                    <Link href={authed ? routes.favorites : routes.login} onClick={() => setMenuOpen(false)}>
-                        {t('header.favorites')}
-                    </Link>
+                    {authed && (
+                        <Link href={routes.favorites} onClick={() => setMenuOpen(false)}>
+                            {t('header.favorites')}
+                        </Link>
+                    )}
 
                     <Link href={authed ? routes.cabinet : routes.login} onClick={() => setMenuOpen(false)}>
                         {authed ? t('nav.cabinet') : t('nav.login')}
