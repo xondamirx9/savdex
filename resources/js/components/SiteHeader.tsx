@@ -277,7 +277,7 @@ function ContactsLeft({ wallet }: { wallet: SharedProps['contactsLeft'] }) {
     return (
         <Link
             href={routes.cabinetBilling}
-            className="hd-action"
+            className="hd-action hd-action--wallet"
             title={t('header.contacts_title', { hint })}
         >
             <Wallet aria-hidden />
