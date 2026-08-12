@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SavdEx">
+  <defs>
+    <linearGradient id="lgS" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#3ea2ff"/>
+    </linearGradient>
+    <linearGradient id="lgT" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3ea2ff"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Верхняя половина S -->
+  <path fill="none" stroke="#16255e" stroke-width="66" stroke-linecap="butt"
+    d="M 372 130 C 306 74 178 80 152 152 C 134 206 186 236 250 254"/>
+
+  <!-- Нижняя половина S -->
+  <path fill="none" stroke="url(#lgS)" stroke-width="66" stroke-linecap="butt"
+    d="M 266 258 C 336 280 372 312 356 372 C 336 442 196 452 126 398"/>
+
+  <!-- Орбита-росчерк: серп, проходящий поверх нижней части -->
+  <path fill="url(#lgT)" d="M 34 322
+    C 96 424 320 448 458 320
+    C 372 478 96 478 30 346
+    C 26 337 28 328 34 322 Z"/>
+
+  <!-- Инверсионный след: белая просечка + голубая линия -->
+  <path stroke="#ffffff" stroke-width="30" stroke-linecap="butt" fill="none"
+    d="M 138 342 C 260 296 356 218 424 128"/>
+  <path stroke="url(#lgT)" stroke-width="13" stroke-linecap="round" fill="none"
+    d="M 142 336 C 262 292 354 216 420 130"/>
+
+  <!-- Самолёт (глиф «flight», повёрнут на северо-восток) -->
+  <g transform="translate(346 8) scale(5.4) rotate(45 12 12)">
+    <path fill="#16255e" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+  </g>
+</svg>

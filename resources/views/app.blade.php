@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- Знак площадки: вектор для современных браузеров, ico — запасной --}}
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('images/logo-mark.svg') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo-touch.png') }}">
+
     {{--
         Мета-теги печатает сервер, а не скрипт.
 

@@ -45,6 +45,12 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->brandName('SAVDEX · Управление')
+            ->brandLogo(fn () => new \Illuminate\Support\HtmlString(
+                '<span style="display:flex;align-items:center;gap:10px;font-weight:700">'
+                .'<img src="'.asset('images/logo-mark.svg').'" alt="" style="height:2.2rem">'
+                .'<span>SAVDEX · Управление</span></span>',
+            ))
+            ->favicon(asset('images/logo-mark.svg'))
             ->navigationGroups([
                 'Контент',
                 'Модерация',

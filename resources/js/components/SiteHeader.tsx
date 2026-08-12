@@ -542,9 +542,7 @@ export function SiteHeader() {
                 <div className="container">
                     <div className="hd-main">
                         <Link href={routes.home} className="hd-logo" aria-label={t('nav.home_link')}>
-                            <span className="logo-mark" aria-hidden>
-                                S
-                            </span>
+                            <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
                             <span className="hd-logo-word">
                                 <span className="hd-logo-name">
                                     Savd<span>Ex</span>

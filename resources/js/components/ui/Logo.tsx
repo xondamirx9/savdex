@@ -14,9 +14,7 @@ import { cn } from '@/lib/cn';
 export function Logo({ inverted = false, asContent = false }: { inverted?: boolean; asContent?: boolean }) {
     const content = (
         <>
-            <span className="logo-mark" aria-hidden="true">
-                S
-            </span>
+            <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
             <span className="logo-word">
                 Savd<span>ex</span>
             </span>
