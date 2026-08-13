@@ -138,6 +138,8 @@ return [
         'categories_count' => ':count mahsulot',
         'latest_title' => 'Yangi mahsulotlar',
         'latest_all' => 'Barcha mahsulotlar',
+        'requests_title' => 'So‘rovlar (RFQ)',
+        'requests_all' => 'Barcha so‘rovlar',
         'suppliers_title' => 'Yetkazib beruvchilar',
         'suppliers_all' => 'Barcha kompaniyalar',
         'suppliers_deals' => ':count bitim',

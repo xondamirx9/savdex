@@ -52,6 +52,7 @@ class CabinetDemoSeeder extends Seeder
             $listings = $this->listings($company, $user);
             $this->stats($listings);
             $this->unlocks($company, $listings);
+            $this->requests();
             $this->reviews($company, $listings);
             $this->promotions($company, $listings);
             $this->payments($company);
@@ -255,6 +256,74 @@ class CabinetDemoSeeder extends Seeder
                         'unlocks' => $day % 4 === 0 ? 1 : 0,
                     ],
                 );
+            }
+        }
+    }
+
+    /**
+     * Запросы на закупку (RFQ) для ленты «Запросы» на главной.
+     *
+     * Обратная сторона витрины: не «продаю», а «куплю». Раскладываются
+     * по активным компаниям — покупатель у запроса тоже компания.
+     * Идемпотентно по паре (компания, заголовок): повторный сид не плодит.
+     */
+    private function requests(): void
+    {
+        $companies = Company::query()
+            ->where('status', Company::STATUS_ACTIVE)
+            ->orderBy('id')
+            ->get();
+
+        if ($companies->isEmpty()) {
+            return;
+        }
+
+        $catId = fn (string $slug): ?int => Category::query()->where('slug', $slug)->value('id');
+
+        // [заголовок, slug категории, единица, описание]
+        $rows = [
+            ['Закупаем цемент М400, 200 т в месяц', 'cement-beton', 'т',
+                'Регулярные закупки портландцемента М400 Д20 для монолитного строительства. Нужен стабильный поставщик с паспортом качества и отгрузкой цементовозами.'],
+            ['Требуется профлист оцинкованный С8, 5 000 м²', 'metalloprokat', 'м²',
+                'Под кровлю склада в Ташкенте. Толщина оцинковки от 0,45 мм, доставка на объект. Готовы к долгосрочному сотрудничеству.'],
+            ['Ищем поставщика хлопковой пряжи 30/1', 'tekstil', 'кг',
+                'Кардная пряжа для трикотажного производства, объём от 3 тонн в месяц. Приоритет — производителям Ферганской долины.'],
+            ['Нужен щебень фракции 5–20, регулярно', 'cement-beton', 'м³',
+                'Для бетонного узла, около 500 м³ в месяц. Самовывоз или доставка по Ташкентской области.'],
+            ['Закупка муки пшеничной высшего сорта, 50 т', 'produkty', 'т',
+                'Мука в/с для пекарни, регулярные поставки мешками по 50 кг. Нужен сертификат качества.'],
+        ];
+
+        foreach ($rows as $i => [$title, $slug, $unit, $description]) {
+            $company = $companies[$i % $companies->count()];
+
+            $listing = Listing::query()->firstOrNew([
+                'company_id' => $company->id,
+                'title' => $title,
+            ]);
+
+            $listing->fill([
+                'company_id' => $company->id,
+                'type' => Listing::TYPE_DEMAND,
+                'status' => Listing::STATUS_ACTIVE,
+                'category_id' => $catId($slug),
+                'price' => null,
+                'price_negotiable' => true,
+                'unit' => $unit,
+                'currency' => 'UZS',
+                'city_id' => $company->city_id,
+                'published_at' => now()->subDays($i + 1),
+                'expires_at' => now()->addDays(50),
+                'impressions_count' => 300 + $i * 90,
+                'views_count' => 40 + $i * 12,
+                'description' => $description,
+            ]);
+
+            $listing->save();
+
+            if (blank($listing->slug)) {
+                $listing->slug = Listing::makeSlug($listing->title, $listing->id);
+                $listing->save();
             }
         }
     }

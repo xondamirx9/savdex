@@ -136,6 +136,8 @@ return [
         'categories_count' => ':count product|:count products',
         'latest_title' => 'New products',
         'latest_all' => 'All products',
+        'requests_title' => 'Requests (RFQ)',
+        'requests_all' => 'All requests',
         'suppliers_title' => 'Suppliers',
         'suppliers_all' => 'All companies',
         'suppliers_deals' => ':count deal|:count deals',

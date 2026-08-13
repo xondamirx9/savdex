@@ -70,8 +70,10 @@ class PageController extends Controller
             'stats' => $stats,
             'categories' => $this->popularCategories(),
             // Лента товаров первого экрана: только предложения —
-            // запросы живут в своём разделе каталога
+            // запросы идут отдельной лентой ниже
             'latest' => $this->latestListings(),
+            // Лента запросов на закупку (RFQ): другая сторона площадки
+            'requests' => $this->latestRequests(),
             // Витрина поставщиков: покупатель фильтруется по блокам —
             // кто ищет товар, уходит в ленту выше, кто ищет партнёра — сюда
             'suppliers' => $this->topSuppliers(),
@@ -281,6 +283,29 @@ class PageController extends Controller
             ->with(ListingCard::relations())
             ->where('status', Listing::STATUS_ACTIVE)
             ->where('type', Listing::TYPE_SUPPLY)
+            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->latest('published_at')
+            ->limit(8)
+            ->get()
+            ->map(fn (Listing $l): array => ListingCard::present($l))
+            ->all();
+    }
+
+    /**
+     * Свежие запросы на закупку (RFQ) для отдельной ленты главной.
+     *
+     * Зеркало latestListings, но по типу «спрос»: это другая сторона
+     * площадки — не «продаю», а «куплю». Своя лента, а не вперемешку
+     * с товарами: покупатель и поставщик ищут в ней разное.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function latestRequests(): array
+    {
+        return Listing::query()
+            ->with(ListingCard::relations())
+            ->where('status', Listing::STATUS_ACTIVE)
+            ->where('type', Listing::TYPE_DEMAND)
             ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
             ->latest('published_at')
             ->limit(8)

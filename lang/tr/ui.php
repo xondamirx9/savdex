@@ -136,6 +136,8 @@ return [
         'categories_count' => ':count ürün',
         'latest_title' => 'Yeni ürünler',
         'latest_all' => 'Tüm ürünler',
+        'requests_title' => 'Talepler (RFQ)',
+        'requests_all' => 'Tüm talepler',
         'suppliers_title' => 'Tedarikçiler',
         'suppliers_all' => 'Tüm şirketler',
         'suppliers_deals' => ':count anlaşma',
