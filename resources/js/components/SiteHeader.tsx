@@ -194,6 +194,80 @@ function LangSwitcher({ locale, links }: { locale: string; links: SharedProps['l
 }
 
 /**
+ * Выбор раздела в строке поиска — свой выпадающий список, а не
+ * нативный <select>.
+ *
+ * Нативный список рисует операционная система, и в фирменный стиль
+ * его не привести. Здесь та же разметка, что у переключателя языка
+ * (.dropdown-menu / .dropdown-item): скруглённое меню, ховеры,
+ * подсветка выбранного, закрытие по клику снаружи и Escape.
+ */
+function CategoryPicker({
+    categories,
+    value,
+    onChange,
+    idPrefix,
+}: {
+    categories: NonNullable<SharedProps['navCategories']>;
+    value: string;
+    onChange: (v: string) => void;
+    idPrefix: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const ref = useDismiss(() => setOpen(false));
+    const current = categories.find((c) => String(c.id) === value);
+
+    function pick(v: string) {
+        onChange(v);
+        setOpen(false);
+    }
+
+    return (
+        <div className="dropdown hd-search-cat" ref={ref}>
+            <button
+                type="button"
+                id={`${idPrefix}-cat`}
+                className="hd-cat-btn"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-label={t('catalog.category')}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen((v) => !v);
+                }}
+            >
+                <span>{current ? current.name : t('header.all_categories')}</span>
+                <ChevronDown aria-hidden className="size-4" />
+            </button>
+
+            <div className={cn('dropdown-menu', open && 'open')} role="listbox" aria-label={t('catalog.category')}>
+                <button
+                    type="button"
+                    role="option"
+                    aria-selected={value === ''}
+                    className="dropdown-item"
+                    onClick={() => pick('')}
+                >
+                    {t('header.all_categories')}
+                </button>
+                {categories.map((c) => (
+                    <button
+                        key={c.id}
+                        type="button"
+                        role="option"
+                        aria-selected={value === String(c.id)}
+                        className="dropdown-item"
+                        onClick={() => pick(String(c.id))}
+                    >
+                        {c.name}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/**
  * Поиск в шапке: запрос + раздел каталога + кнопка.
  *
  * Отправляет в каталог обычным GET через Inertia — тот же адрес
@@ -236,19 +310,12 @@ function HeaderSearch({
                 onChange={(e) => setQ(e.target.value)}
             />
 
-            <div className="hd-search-field hd-search-cat">
-                <label htmlFor={`${idPrefix}-cat`} className="sr-only">
-                    {t('catalog.category')}
-                </label>
-                <select id={`${idPrefix}-cat`} value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="">{t('header.all_categories')}</option>
-                    {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                            {c.name}
-                        </option>
-                    ))}
-                </select>
-            </div>
+            <CategoryPicker
+                categories={categories}
+                value={category}
+                onChange={setCategory}
+                idPrefix={idPrefix}
+            />
 
             <button type="submit">
                 <Search aria-hidden className="size-4" />
