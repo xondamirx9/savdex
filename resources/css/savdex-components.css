@@ -1653,20 +1653,26 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   border-top:1px solid var(--border);width:100%;font-size:13px;color:var(--text-muted)}
 .supplier-facts .listing-rating{margin:0}
 
-/* Лента запросов (RFQ) на главной: карточки в один ряд с горизонтальной
-   прокруткой. Отрицательные поля + padding уводят края карт под края
-   контейнера, чтобы прокрутка «дышала» до границы экрана на телефоне.
-   scroll-snap притягивает карточку к началу после свайпа. */
-.rfq-row{display:flex;gap:var(--gap-grid,16px);overflow-x:auto;overflow-y:hidden;
+/* Лента карточек в один ряд с горизонтальной прокруткой (товары и
+   запросы на главной). Ровно 4 карточки заполняют видимую ширину,
+   пятая выглядывает справа — сигнал, что ряд листается. scroll-snap
+   притягивает карточку к началу после свайпа. padding+отрицательный
+   margin уводят край карты под границу контейнера, чтобы прокрутка
+   «дышала» до края экрана на телефоне. */
+.card-row{display:flex;gap:var(--gap-grid,16px);overflow-x:auto;overflow-y:hidden;
   scroll-snap-type:x proximity;scroll-padding-left:2px;
-  padding:2px 2px 12px;margin-bottom:-8px;-webkit-overflow-scrolling:touch;
+  padding:2px 2px 14px;margin-bottom:-10px;-webkit-overflow-scrolling:touch;
   scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
-.rfq-row>.product-card{flex:0 0 300px;scroll-snap-align:start}
-.rfq-row::-webkit-scrollbar{height:8px}
-.rfq-row::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px}
-.rfq-row::-webkit-scrollbar-track{background:transparent}
+.card-row>.product-card{flex:0 0 calc((100% - 3 * var(--gap-grid,16px)) / 4);scroll-snap-align:start}
+.card-row::-webkit-scrollbar{height:8px}
+.card-row::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px}
+.card-row::-webkit-scrollbar-track{background:transparent}
+/* Планшет — ~2,5 карточки в ряд, телефон — одна с выглядывающей соседней */
+@media (max-width:1024px){
+  .card-row>.product-card{flex-basis:calc((100% - 2 * var(--gap-grid,16px)) / 2.4)}
+}
 @media (max-width:560px){
-  .rfq-row>.product-card{flex-basis:78%}
+  .card-row>.product-card{flex-basis:80%}
 }
 
 /* Показатели на странице «Партнёры»: три карточки над сеткой компаний */

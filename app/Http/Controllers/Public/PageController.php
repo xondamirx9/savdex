@@ -281,11 +281,15 @@ class PageController extends Controller
     {
         return Listing::query()
             ->with(ListingCard::relations())
+            // Продвинутые (ТОП/Срочно) — всегда первыми: это оплаченное
+            // место в ленте, покупатель платит именно за него
+            ->withCount(['promotions as boosted' => fn ($q) => $q->where('status', 'active')])
             ->where('status', Listing::STATUS_ACTIVE)
             ->where('type', Listing::TYPE_SUPPLY)
             ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->orderByDesc('boosted')
             ->latest('published_at')
-            ->limit(8)
+            ->limit(12)
             ->get()
             ->map(fn (Listing $l): array => ListingCard::present($l))
             ->all();
