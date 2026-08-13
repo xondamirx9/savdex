@@ -113,6 +113,48 @@ class OrderService
      */
     public function confirm(Payment $payment, User $admin, ?string $note = null): array
     {
+        return $this->settle($payment, [
+            'confirmed_by' => $admin->id,
+            'admin_note' => $note,
+        ], $admin);
+    }
+
+    /**
+     * Оплата подтверждена провайдером (Uzum и т.п.) — начисляем без
+     * участия человека.
+     *
+     * Тот же путь, что и ручное подтверждение: одна точка выдачи, один
+     * набор инвариантов. Колбэк провайдера приходит асинхронно и может
+     * повториться — поэтому идемпотентность (проверка «уже оплачен»)
+     * обязательна, иначе повторный колбэк начислит тариф дважды.
+     *
+     * $meta переносит на платёж след провайдера: сам провайдер, его id
+     * транзакции и карта, если платили привязанной.
+     *
+     * @param  array{provider?: string, external_id?: string, payment_method_id?: int}  $meta
+     * @return array{ok: bool, message: string}
+     */
+    public function markPaid(Payment $payment, array $meta = []): array
+    {
+        return $this->settle($payment, array_filter([
+            'provider' => $meta['provider'] ?? null,
+            'external_id' => $meta['external_id'] ?? null,
+            'payment_method_id' => $meta['payment_method_id'] ?? null,
+        ], fn ($v): bool => $v !== null), null);
+    }
+
+    /**
+     * Единственное место, где счёт превращается в доступ.
+     *
+     * Отметка об оплате и начисление идут одной транзакцией и только
+     * если счёт ещё не оплачен: оплаченный счёт без начисления — это
+     * претензия, а начисление без отметки — двойная выдача при повторе.
+     *
+     * @param  array<string, mixed>  $stamp  что дописать на платёж при оплате
+     * @return array{ok: bool, message: string}
+     */
+    private function settle(Payment $payment, array $stamp, ?User $admin): array
+    {
         if ($payment->status === 'paid') {
             return ['ok' => false, 'message' => 'Счёт уже оплачен — повторное начисление не выполнено.'];
         }
@@ -123,13 +165,8 @@ class OrderService
             return ['ok' => false, 'message' => 'Компания удалена, начислять некому.'];
         }
 
-        DB::transaction(function () use ($payment, $company, $admin, $note): void {
-            $payment->forceFill([
-                'status' => 'paid',
-                'paid_at' => now(),
-                'confirmed_by' => $admin->id,
-                'admin_note' => $note,
-            ])->save();
+        DB::transaction(function () use ($payment, $company, $admin, $stamp): void {
+            $payment->forceFill(['status' => 'paid', 'paid_at' => now(), ...$stamp])->save();
 
             match ($payment->purpose) {
                 'subscription' => $this->grantPlan($payment, $company, $admin),
@@ -148,7 +185,7 @@ class OrderService
         return ['ok' => true, 'message' => 'Оплата зачислена, купленное начислено.'];
     }
 
-    private function grantPlan(Payment $payment, Company $company, User $admin): void
+    private function grantPlan(Payment $payment, Company $company, ?User $admin): void
     {
         $plan = $payment->plan;
 
@@ -167,7 +204,7 @@ class OrderService
         $payment->forceFill(['subscription_id' => $subscription->id])->save();
     }
 
-    private function grantCredits(Payment $payment, Company $company, User $admin): void
+    private function grantCredits(Payment $payment, Company $company, ?User $admin): void
     {
         $pack = $payment->creditPack;
 
@@ -177,7 +214,7 @@ class OrderService
 
         $wallet = Wallet::firstOrCreate(['company_id' => $company->id]);
 
-        $wallet->grant('credits', $pack->credits, 'purchase', $payment, $admin->id);
+        $wallet->grant('credits', $pack->credits, 'purchase', $payment, $admin?->id);
     }
 
     /**

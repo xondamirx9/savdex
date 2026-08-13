@@ -255,6 +255,62 @@ class OrderFlowTest extends TestCase
         $this->assertSame($pack->credits, $this->company->fresh()->wallet->credits);
     }
 
+    // ── Оплата провайдером (markPaid) ────────────────────────
+
+    /**
+     * Колбэк провайдера начисляет так же, как ручное подтверждение,
+     * но без администратора — и помечает счёт провайдером.
+     */
+    #[Test]
+    public function оплата_провайдером_начисляет_кредиты_без_админа(): void
+    {
+        $pack = $this->pack();
+        Wallet::create(['company_id' => $this->company->id, 'credits' => 0]);
+
+        $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'credits', 'id' => $pack->id]);
+        $payment = Payment::firstOrFail();
+
+        $result = app(OrderService::class)->markPaid($payment, ['provider' => 'uzum', 'external_id' => 'UZ-777']);
+
+        $this->assertTrue($result['ok']);
+        $payment->refresh();
+        $this->assertSame('paid', $payment->status);
+        $this->assertSame('uzum', $payment->provider);
+        $this->assertSame('UZ-777', $payment->external_id);
+        $this->assertNull($payment->confirmed_by, 'у оплаты провайдером нет админа-подтвердившего');
+        $this->assertSame($pack->credits, $this->company->fresh()->wallet->credits);
+    }
+
+    #[Test]
+    public function оплата_провайдером_выдаёт_тариф(): void
+    {
+        $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'plan', 'id' => $this->paidPlan()->id]);
+
+        app(OrderService::class)->markPaid(Payment::firstOrFail(), ['provider' => 'uzum']);
+
+        $subscription = Subscription::firstOrFail();
+        $this->assertSame('active', $subscription->status);
+        $this->assertSame(Subscription::SOURCE_PAYMENT, $subscription->source);
+    }
+
+    /** Повторный колбэк (провайдер шлёт их не по одному разу) не начисляет второй раз. */
+    #[Test]
+    public function повторный_колбэк_провайдера_не_начисляет_дважды(): void
+    {
+        $pack = $this->pack();
+        Wallet::create(['company_id' => $this->company->id, 'credits' => 0]);
+
+        $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'credits', 'id' => $pack->id]);
+        $payment = Payment::firstOrFail();
+
+        $orders = app(OrderService::class);
+        $orders->markPaid($payment, ['provider' => 'uzum', 'external_id' => 'UZ-777']);
+        $second = $orders->markPaid($payment->fresh(), ['provider' => 'uzum', 'external_id' => 'UZ-777']);
+
+        $this->assertFalse($second['ok']);
+        $this->assertSame($pack->credits, $this->company->fresh()->wallet->credits);
+    }
+
     #[Test]
     public function компания_узнаёт_о_зачислении(): void
     {

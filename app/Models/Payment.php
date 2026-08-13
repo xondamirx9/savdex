@@ -58,9 +58,27 @@ class Payment extends Model
         return $this->belongsTo(User::class, 'confirmed_by');
     }
 
+    /** Транзакции провайдера по этому счёту (создание, оплата, отмена). */
+    public function transactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PaymentTransaction::class);
+    }
+
     public function isPending(): bool
     {
         return $this->status === 'pending';
+    }
+
+    /**
+     * Сумма в тийинах.
+     *
+     * Узбекские провайдеры (Uzum, Payme, Click) считают в минимальных
+     * единицах — 1 сум = 100 тийин. В базе сумма хранится в сумах,
+     * поэтому наружу отдаётся домноженной.
+     */
+    public function amountMinor(): int
+    {
+        return $this->amount * 100;
     }
 
     public function statusLabel(): string
