@@ -1326,28 +1326,33 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hd-logo-sub{font-size:10.5px;color:var(--text-muted);letter-spacing:.01em}
 
 
-/* Поиск в шапке: значок + поле + локация + категории + кнопка одним блоком.
-   Мягкая пилюля с подсветкой при фокусе — вместо жёсткой синей рамки */
-.hd-search{display:flex;align-items:center;flex:1;min-width:0;height:46px;
-  border:1.5px solid var(--border-strong);border-radius:var(--r-pill);overflow:hidden;
-  background:var(--white);transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+/* Поиск в шапке: значок + поле + категории + кнопка одной пилюлей.
+   Мягкая рамка с лёгкой тенью в покое, подсветка кольцом при фокусе. */
+.hd-search{display:flex;align-items:center;flex:1;min-width:0;height:48px;
+  border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;
+  background:var(--white);box-shadow:0 1px 2px rgba(16,24,40,.04);
+  transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.hd-search:hover{border-color:var(--border-strong)}
 .hd-search:focus-within{border-color:var(--primary-600);box-shadow:0 0 0 3px var(--primary-50)}
-.hd-search-ico{display:grid;place-items:center;padding-left:15px;color:var(--text-muted);flex-shrink:0}
-.hd-search input{flex:1;min-width:80px;border:none;padding:0 12px;font-size:14px;
+.hd-search-ico{display:grid;place-items:center;padding-left:16px;color:var(--text-muted);
+  flex-shrink:0;transition:color var(--t-fast)}
+.hd-search:focus-within .hd-search-ico{color:var(--primary-600)}
+.hd-search input{flex:1;min-width:80px;border:none;padding:0 14px;font-size:14.5px;
   background:transparent;color:var(--text)}
+.hd-search input::placeholder{color:var(--text-muted)}
 .hd-search input:focus{outline:none}
-/* Поле выбора: разделитель слева, значок, сам селект без своей рамки */
-.hd-search-field{display:flex;align-items:center;gap:5px;height:100%;padding-left:12px;
-  border-left:1px solid var(--border);color:var(--text-muted);flex-shrink:0}
-.hd-search-field>svg{flex-shrink:0}
-.hd-search-field select{border:none;background:transparent;font-size:13.5px;color:var(--text);
-  height:100%;padding:0 28px 0 2px;cursor:pointer;max-width:150px;appearance:none;
+/* Поле категории: разделитель слева, селект без своей рамки, лёгкая
+   подсветка фона при наведении — сигнал, что это кликабельно */
+.hd-search-field{display:flex;align-items:center;height:100%;border-left:1px solid var(--border);
+  flex-shrink:0;transition:background var(--t-fast)}
+.hd-search-field:hover{background:var(--bg)}
+.hd-search-field select{border:none;background:transparent;font-size:13.5px;font-weight:500;
+  color:var(--text);height:100%;padding:0 34px 0 16px;cursor:pointer;max-width:170px;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M3.5 5.25l3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 9px center}
+  background-repeat:no-repeat;background-position:right 13px center}
 .hd-search-field select:focus{outline:none}
-.hd-search-loc select{max-width:140px}
-.hd-search button{display:inline-flex;align-items:center;gap:7px;height:100%;padding:0 22px;
-  margin-left:10px;background:var(--primary-700);color:#fff;font-size:14px;font-weight:600;
+.hd-search button{display:inline-flex;align-items:center;gap:8px;height:100%;padding:0 24px;
+  background:var(--primary-700);color:#fff;font-size:14.5px;font-weight:600;
   flex-shrink:0;transition:background var(--t-fast)}
 .hd-search button:hover{background:var(--primary-600)}
 
@@ -1578,10 +1583,9 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .topbar-note,.topbar-more{display:none}
   .topbar-text{text-align:left}
   /* На узких экранах фиксированные минимумы не помещаются: поле сжимается
-     свободно, локация уходит (её выбирают в каталоге), категория ужимается */
+     свободно, селект категории ужимается, кнопка уступает место полю */
   .hd-search input{min-width:0}
-  .hd-search-loc{display:none}
-  .hd-search-field select{max-width:104px}
+  .hd-search-field select{max-width:104px;padding-left:12px}
   .hd-search button{padding:0 14px}
   .hd-actions .hd-action{min-width:44px;padding:6px 4px}
   .hd-actions .hd-action span:not(.hd-badge){display:none}

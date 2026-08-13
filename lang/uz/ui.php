@@ -85,8 +85,6 @@ return [
         'search_label' => 'Platforma bo‘ylab qidiruv',
         'search_placeholder' => 'Mahsulot, kompaniya, toifa qidirish…',
         'all_categories' => 'Barcha toifalar',
-        'location_label' => 'Joylashuv',
-        'all_locations' => 'Barcha shaharlar',
         'search_button' => 'Qidirish',
         'favorites' => 'Saralangan',
         'messages' => 'Xabarlar',

@@ -83,8 +83,6 @@ return [
         'search_label' => 'Platformda arama',
         'search_placeholder' => 'Ürün, şirket, kategori ara…',
         'all_categories' => 'Tüm kategoriler',
-        'location_label' => 'Konum',
-        'all_locations' => 'Tüm şehirler',
         'search_button' => 'Ara',
         'favorites' => 'Favoriler',
         'messages' => 'Mesajlar',

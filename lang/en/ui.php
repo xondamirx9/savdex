@@ -83,8 +83,6 @@ return [
         'search_label' => 'Site search',
         'search_placeholder' => 'Search products, companies, categories…',
         'all_categories' => 'All categories',
-        'location_label' => 'Location',
-        'all_locations' => 'All cities',
         'search_button' => 'Search',
         'favorites' => 'Favorites',
         'messages' => 'Messages',
