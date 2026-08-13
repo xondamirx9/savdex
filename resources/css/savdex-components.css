@@ -1329,7 +1329,7 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 /* Поиск в шапке: значок + поле + категории + кнопка одной пилюлей.
    Мягкая рамка с лёгкой тенью в покое, подсветка кольцом при фокусе. */
 .hd-search{display:flex;align-items:center;flex:1;min-width:0;height:48px;
-  border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;
+  border:1px solid var(--border);border-radius:var(--r-pill);
   background:var(--white);box-shadow:0 1px 2px rgba(16,24,40,.04);
   transition:border-color var(--t-fast),box-shadow var(--t-fast)}
 .hd-search:hover{border-color:var(--border-strong)}
@@ -1341,20 +1341,29 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   background:transparent;color:var(--text)}
 .hd-search input::placeholder{color:var(--text-muted)}
 .hd-search input:focus{outline:none}
-/* Поле категории: разделитель слева, селект без своей рамки, лёгкая
-   подсветка фона при наведении — сигнал, что это кликабельно */
-.hd-search-field{display:flex;align-items:center;height:100%;border-left:1px solid var(--border);
-  flex-shrink:0;transition:background var(--t-fast)}
-.hd-search-field:hover{background:var(--bg)}
-.hd-search-field select{border:none;background:transparent;font-size:13.5px;font-weight:500;
-  color:var(--text);height:100%;padding:0 34px 0 16px;cursor:pointer;max-width:170px;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M3.5 5.25l3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 13px center}
-.hd-search-field select:focus{outline:none}
-.hd-search button{display:inline-flex;align-items:center;gap:8px;height:100%;padding:0 24px;
-  background:var(--primary-700);color:#fff;font-size:14.5px;font-weight:600;
-  flex-shrink:0;transition:background var(--t-fast)}
-.hd-search button:hover{background:var(--primary-600)}
+/* Раздел каталога — свой дропдаун (см. CategoryPicker), а не <select>:
+   меню оформлено как переключатель языка. Кнопка-триггер вписана в
+   пилюлю разделителем слева и ховером фона. Скруглять правый край
+   кнопки «Поиск» приходится самой кнопке: у пилюли больше нет
+   overflow:hidden (он бы срезал выпадающее меню). */
+.hd-search-cat{position:relative;height:100%;border-left:1px solid var(--border);flex-shrink:0}
+.hd-cat-btn{display:flex;align-items:center;gap:6px;height:100%;padding:0 14px 0 16px;
+  background:transparent;border:none;cursor:pointer;font-size:13.5px;font-weight:500;color:var(--text);
+  white-space:nowrap;transition:background var(--t-fast)}
+.hd-cat-btn:hover{background:var(--bg)}
+.hd-cat-btn>span{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.hd-cat-btn>svg{color:var(--text-muted);flex-shrink:0;transition:transform var(--t-fast)}
+.hd-cat-btn[aria-expanded="true"]>svg{transform:rotate(180deg)}
+.hd-search-cat .dropdown-menu{min-width:220px;top:calc(100% + 12px)}
+/* Только прямой ребёнок формы: внутри пилюли теперь есть и другие
+   кнопки (триггер категории, пункты меню) — общий селектор красил
+   бы их синим. Кнопка «Поиск» — единственный <button> верхнего уровня. */
+.hd-search>button{display:inline-flex;align-items:center;gap:8px;height:100%;padding:0 24px;
+  background:var(--primary-700);color:#fff;font-size:14.5px;font-weight:600;flex-shrink:0;
+  border:none;cursor:pointer;
+  border-top-right-radius:var(--r-pill);border-bottom-right-radius:var(--r-pill);
+  transition:background var(--t-fast)}
+.hd-search>button:hover{background:var(--primary-600)}
 
 /* Действия: иконка с подписью снизу, счётчик-бейдж в углу */
 .hd-actions{display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0}
@@ -1583,10 +1592,11 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .topbar-note,.topbar-more{display:none}
   .topbar-text{text-align:left}
   /* На узких экранах фиксированные минимумы не помещаются: поле сжимается
-     свободно, селект категории ужимается, кнопка уступает место полю */
+     свободно, подпись категории ужимается, кнопка уступает место полю */
   .hd-search input{min-width:0}
-  .hd-search-field select{max-width:104px;padding-left:12px}
-  .hd-search button{padding:0 14px}
+  .hd-cat-btn{padding:0 10px 0 12px}
+  .hd-cat-btn>span{max-width:88px}
+  .hd-search>button{padding:0 14px}
   .hd-actions .hd-action{min-width:44px;padding:6px 4px}
   .hd-actions .hd-action span:not(.hd-badge){display:none}
   /* Кошелёк и аватар на телефоне не помещаются (шапка уезжала на +56px
