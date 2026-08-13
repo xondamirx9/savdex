@@ -141,6 +141,8 @@ return [
         'categories_count' => ':count товар|:count товара|:count товаров',
         'latest_title' => 'Новые товары',
         'latest_all' => 'Все товары',
+        'requests_title' => 'Запросы (RFQ)',
+        'requests_all' => 'Все запросы',
         'suppliers_title' => 'Поставщики',
         'suppliers_all' => 'Все компании',
         'suppliers_deals' => ':count сделка|:count сделки|:count сделок',

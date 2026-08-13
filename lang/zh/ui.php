@@ -135,6 +135,8 @@ return [
         'categories_count' => ':count 件产品',
         'latest_title' => '新品上架',
         'latest_all' => '全部商品',
+        'requests_title' => '采购需求 (RFQ)',
+        'requests_all' => '全部需求',
         'suppliers_title' => '供应商',
         'suppliers_all' => '全部公司',
         'suppliers_deals' => ':count 笔交易',

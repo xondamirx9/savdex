@@ -283,6 +283,7 @@ export default function Home({
     stats,
     categories,
     latest,
+    requests,
     suppliers,
     countries,
     cities,
@@ -292,6 +293,7 @@ export default function Home({
     stats: Stats;
     categories: CategoryTile[];
     latest: ProductRow[];
+    requests: ProductRow[];
     suppliers: SupplierRow[];
     countries: CountryOption[];
     cities: CityOption[];
@@ -397,6 +399,27 @@ export default function Home({
                         </div>
                         <div className="product-grid" data-reveal-stagger>
                             {latest.map((row) => (
+                                <ProductCard key={row.id} row={row} />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* ── Запросы (RFQ): другая сторона площадки — «куплю».
+                 Лента горизонтальной прокруткой в один ряд, чтобы
+                 не спорить с сеткой товаров выше ── */}
+            {requests.length > 0 && (
+                <section className="section--tight">
+                    <div className="container">
+                        <div className="section-bar">
+                            <h2>{t('home.requests_title')}</h2>
+                            <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
+                                {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                            </Link>
+                        </div>
+                        <div className="rfq-row" data-reveal-stagger>
+                            {requests.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
                         </div>
