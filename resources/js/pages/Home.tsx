@@ -62,6 +62,11 @@ interface CountryOption {
     name: string;
 }
 
+interface CityOption {
+    id: number;
+    name: string;
+}
+
 interface SupplierRow {
     slug: string;
     name: string;
@@ -138,14 +143,17 @@ type SearchTab = 'products' | 'companies' | 'rfq';
 function HeroSearch({
     categories,
     countries,
+    cities,
 }: {
     categories: CategoryTile[];
     countries: CountryOption[];
+    cities: CityOption[];
 }) {
     const [tab, setTab] = useState<SearchTab>('products');
     const [q, setQ] = useState('');
     const [category, setCategory] = useState('');
     const [country, setCountry] = useState('');
+    const [city, setCity] = useState('');
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
@@ -162,6 +170,7 @@ function HeroSearch({
         const params: Record<string, string | number> = {};
         if (q.trim() !== '') params.q = q.trim();
         if (category !== '') params.category = Number(category);
+        if (city !== '') params.city = Number(city);
         if (tab === 'rfq') params.type = 'demand';
         router.get(routes.catalog, params);
     }
@@ -201,7 +210,7 @@ function HeroSearch({
                     onChange={(e) => setQ(e.target.value)}
                 />
 
-                <div className="hero-panel-row">
+                <div className="hero-panel-fields">
                     {tab === 'companies' ? (
                         <select
                             className="select"
@@ -217,25 +226,43 @@ function HeroSearch({
                             ))}
                         </select>
                     ) : (
-                        <select
-                            className="select"
-                            aria-label={t('home.select_category')}
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                        >
-                            <option value="">{t('home.select_category')}</option>
-                            {categories.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
-                    )}
+                        <>
+                            <select
+                                className="select"
+                                aria-label={t('home.select_category')}
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                            >
+                                <option value="">{t('home.select_category')}</option>
+                                {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name}
+                                    </option>
+                                ))}
+                            </select>
 
-                    <button type="submit" className="btn btn-primary">
-                        <Search aria-hidden className="size-4" /> {t('home.search_button')}
-                    </button>
+                            {cities.length > 0 && (
+                                <select
+                                    className="select"
+                                    aria-label={t('home.select_city')}
+                                    value={city}
+                                    onChange={(e) => setCity(e.target.value)}
+                                >
+                                    <option value="">{t('home.select_city')}</option>
+                                    {cities.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </>
+                    )}
                 </div>
+
+                <button type="submit" className="btn btn-primary hero-panel-submit">
+                    <Search aria-hidden className="size-4" /> {t('home.search_button')}
+                </button>
 
                 {categories.length > 0 && (
                     <div className="hero-chips">
@@ -258,6 +285,7 @@ export default function Home({
     latest,
     suppliers,
     countries,
+    cities,
     news,
     reviews,
 }: {
@@ -266,6 +294,7 @@ export default function Home({
     latest: ProductRow[];
     suppliers: SupplierRow[];
     countries: CountryOption[];
+    cities: CityOption[];
     news: NewsCard[];
     reviews: ReviewRow[];
 }) {
@@ -298,7 +327,7 @@ export default function Home({
                             </div>
                         </div>
 
-                        <HeroSearch categories={categories} countries={countries} />
+                        <HeroSearch categories={categories} countries={countries} cities={cities} />
                     </div>
                 </div>
             </section>

@@ -154,6 +154,20 @@ class HandleInertiaRequests extends Middleware
                 ->map(fn ($c): array => ['id' => $c->id, 'name' => $c->name()])
                 ->values(),
 
+            /*
+             * Города для выбора локации в строке поиска. Только те, где
+             * есть живые объявления: пустой пункт в фильтре зовёт в никуда.
+             * Дёшево и лениво, как и разделы каталога рядом.
+             */
+            'navCities' => fn () => \App\Models\City::query()
+                ->where('is_active', true)
+                ->with('translations')
+                ->whereHas('listings', fn ($q) => $q->where('status', \App\Models\Listing::STATUS_ACTIVE))
+                ->get()
+                ->map(fn ($c): array => ['id' => $c->id, 'name' => $c->name()])
+                ->sortBy('name')
+                ->values(),
+
             'locale' => app()->getLocale(),
 
             /*
