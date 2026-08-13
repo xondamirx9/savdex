@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Listing;
+use App\Models\Review;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
 use App\Support\Seo;
@@ -77,6 +78,9 @@ class PageController extends Controller
             // Свежие новости прямо на главной: раздел, до которого
             // нужно ещё дойти по меню, читают в разы меньше
             'news' => $news->latest(4),
+            // Отзывы пользователей: живое социальное доказательство
+            // вместо обещаний площадки о самой себе
+            'reviews' => $this->latestReviews(),
         ]);
     }
 
@@ -258,6 +262,39 @@ class PageController extends Controller
                 'completed_deals_count' => $c->completed_deals_count,
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
+            ])
+            ->all();
+    }
+
+    /**
+     * Свежие отзывы для витрины главной.
+     *
+     * Только опубликованные и только между живыми компаниями: отзыв
+     * без автора или об исчезнувшей компании на витрине выглядел бы
+     * выдуманным. Тексты — из базы, как и счётчики: сочинённые
+     * цитаты на витрине недопустимы.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function latestReviews(): array
+    {
+        return Review::query()
+            ->with(['company:id,slug,name', 'authorCompany:id,name'])
+            ->where('status', Review::STATUS_PUBLISHED)
+            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->whereHas('authorCompany')
+            ->latest()
+            ->limit(3)
+            ->get()
+            ->map(fn (Review $r): array => [
+                'id' => $r->id,
+                'author' => $r->authorCompany->name,
+                'initials' => $r->authorCompany->initials(),
+                'rating' => (int) $r->rating,
+                'body' => $r->body,
+                'when' => $r->created_at->translatedFormat('d.m.Y'),
+                'company_name' => $r->company->name,
+                'company_slug' => $r->company->slug,
             ])
             ->all();
     }

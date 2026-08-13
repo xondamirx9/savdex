@@ -3,23 +3,24 @@ import {
     ArrowRight,
     Box,
     Boxes,
-    ChevronDown,
     Cog,
     Cpu,
     FlaskConical,
     Globe2,
     Handshake,
     HardHat,
+    Languages,
     Layers,
+    MessageSquareText,
     Package,
     Percent,
     Search,
-    Shield,
     ShieldCheck,
     Shirt,
     Star,
     UtensilsCrossed,
     Users,
+    Wallet,
     Wheat,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -81,6 +82,17 @@ interface NewsCard {
     title: string;
     excerpt: string;
     image: string | null;
+}
+
+interface ReviewRow {
+    id: number;
+    author: string;
+    initials: string;
+    rating: number;
+    body: string;
+    when: string;
+    company_name: string;
+    company_slug: string;
 }
 
 /**
@@ -247,6 +259,7 @@ export default function Home({
     suppliers,
     countries,
     news,
+    reviews,
 }: {
     stats: Stats;
     categories: CategoryTile[];
@@ -254,6 +267,7 @@ export default function Home({
     suppliers: SupplierRow[];
     countries: CountryOption[];
     news: NewsCard[];
+    reviews: ReviewRow[];
 }) {
     const statCells: [typeof Users, string, number, string][] = [
         [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies')],
@@ -413,16 +427,61 @@ export default function Home({
                             </div>
                         ))}
                     </div>
-                    <div className="alert alert-info mt-48">
-                        <Shield aria-hidden className="size-5" />
-                        <div>
-                            <b>{t('home.no_commission_bold')}</b> {t('home.no_commission_text')}
-                        </div>
-                    </div>
                 </div>
             </section>
 
-            {/* ── Снятие возражений: два главных сомнения новичка ── */}
+            {/* ── Отзывы пользователей: живые, из базы — выдуманные
+                 цитаты на витрине недопустимы, как и счётчики ── */}
+            {reviews.length > 0 && (
+                <section className="section">
+                    <div className="container">
+                        <div className="section-bar">
+                            <h2>{t('home.reviews_title')}</h2>
+                        </div>
+                        <div className="review-grid" data-reveal-stagger>
+                            {reviews.map((r) => (
+                                <article key={r.id} className="review-card">
+                                    <span className="row" style={{ gap: 2 }} aria-label={`${r.rating}/5`}>
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <Star
+                                                key={i}
+                                                aria-hidden
+                                                className="size-4"
+                                                fill={i <= r.rating ? 'var(--warning)' : 'none'}
+                                                color={i <= r.rating ? 'var(--warning)' : 'var(--border-strong)'}
+                                            />
+                                        ))}
+                                    </span>
+                                    <p className="review-body">{r.body}</p>
+                                    <div className="review-foot">
+                                        <span className="avatar-sm" aria-hidden>
+                                            {r.initials}
+                                        </span>
+                                        <span style={{ minWidth: 0 }}>
+                                            <b className="t-sm" style={{ display: 'block' }}>
+                                                {r.author}
+                                            </b>
+                                            <Link
+                                                href={routes.company(r.company_slug)}
+                                                className="review-company"
+                                            >
+                                                {t('home.reviews_about', { name: r.company_name })}
+                                            </Link>
+                                        </span>
+                                        <span className="t-xs" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                                            {r.when}
+                                        </span>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {/* ── Частые вопросы: карточки вместо аккордеона — ответ
+                 виден сразу, без клика. Нумерация вопросов совпадает
+                 с разметкой FAQPage в PageController::home ── */}
             <section className="section">
                 <div className="container">
                     <div className="section-bar">
@@ -431,17 +490,21 @@ export default function Home({
                     <div className="objection-grid" data-reveal-stagger>
                         {(
                             [
-                                [ShieldCheck, 'obj1'],
-                                [Percent, 'obj2'],
+                                [Wallet, 1],
+                                [Percent, 2],
+                                [ShieldCheck, 3],
+                                [MessageSquareText, 4],
+                                [Users, 5],
+                                [Languages, 6],
                             ] as const
-                        ).map(([Icon, key]) => (
-                            <div key={key} className="objection-card">
+                        ).map(([Icon, i]) => (
+                            <div key={i} className="objection-card">
                                 <span className="objection-ico">
                                     <Icon aria-hidden className="size-6" />
                                 </span>
                                 <div>
-                                    <h3 className="t-h4">{t(`home.${key}_title`)}</h3>
-                                    <p>{t(`home.${key}_text`)}</p>
+                                    <h3 className="t-h4">{t(`home.faq_q${i}`)}</h3>
+                                    <p>{t(`home.faq_a${i}`)}</p>
                                 </div>
                             </div>
                         ))}
@@ -472,9 +535,11 @@ export default function Home({
                                 >
                                     <NewsCover category={p.category} image={p.image} />
                                     <div style={{ padding: 14, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                                        <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
+                                        {/* Одна строка без переноса: перенос ломал бы
+                                            выравнивание заголовков между карточками */}
+                                        <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'nowrap', overflow: 'hidden' }}>
                                             <span className="badge badge-neutral">{p.category}</span>
-                                            <span className="t-caption muted">{p.date}</span>
+                                            <span className="t-caption muted" style={{ whiteSpace: 'nowrap' }}>{p.date}</span>
                                         </div>
                                         <h3 className="t-h4" style={{ marginBottom: 8 }}>{p.title}</h3>
                                         <p className="t-sm muted" style={{ flex: 1 }}>
@@ -490,28 +555,6 @@ export default function Home({
                     </div>
                 </section>
             )}
-
-            {/* ── FAQ: снимает оставшиеся вопросы перед регистрацией.
-                 details/summary — раскрытие работает даже без JS ── */}
-            <section className="section-lg section--white">
-                <div className="container">
-                    <div className="section-head-left">
-                        <span className="eyebrow">{t('home.faq_eyebrow')}</span>
-                        <h2 className="t-section">{t('home.faq_title')}</h2>
-                    </div>
-                    <div className="faq" data-reveal-stagger>
-                        {[1, 2, 3, 4, 5, 6].map((i) => (
-                            <details key={i} className="faq-item">
-                                <summary>
-                                    {t(`home.faq_q${i}`)}
-                                    <ChevronDown aria-hidden className="faq-chev size-5" />
-                                </summary>
-                                <p>{t(`home.faq_a${i}`)}</p>
-                            </details>
-                        ))}
-                    </div>
-                </div>
-            </section>
 
             {/* ── Финальный призыв ── */}
             <section className="section--tight">

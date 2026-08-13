@@ -1634,26 +1634,32 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   border-radius:12px;background:var(--primary-50);color:var(--primary-700)}
 .objection-card p{margin-top:6px;color:var(--text-muted);line-height:1.6}
 
-.faq{max-width:820px}
-.faq-item{border:1px solid var(--border);border-radius:var(--r-card);background:var(--bg);
-  padding:0 var(--sp-5,20px);margin-bottom:10px;transition:border-color var(--t-fast)}
-.faq-item[open]{border-color:var(--primary-500)}
-.faq-item summary{display:flex;align-items:center;justify-content:space-between;gap:16px;
-  padding:16px 0;font-size:15.5px;font-weight:600;color:var(--text);cursor:pointer;list-style:none}
-.faq-item summary::-webkit-details-marker{display:none}
-.faq-chev{flex-shrink:0;color:var(--text-muted);transition:transform var(--t-fast)}
-.faq-item[open] .faq-chev{transform:rotate(180deg)}
-.faq-item>p{padding:0 0 16px;color:var(--text-muted);line-height:1.65;max-width:64ch}
+/* Отзывы пользователей на главной: три последних опубликованных */
+.review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap-grid,16px)}
+.review-grid>*{min-width:0}
+.review-card{display:flex;flex-direction:column;gap:12px;padding:var(--sp-6,24px);
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
+.review-body{color:var(--text-muted);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.review-foot{display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:14px;
+  border-top:1px solid var(--border)}
+.review-company{display:block;font-size:13px;color:var(--primary-700);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Новости на главной компактнее карточки товара: ниже обложка, мельче шрифт */
 .news-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap-grid,16px)}
 .news-grid .cover-art{aspect-ratio:16/8}
-.news-grid .t-h4{font-size:15px;line-height:1.4;margin-bottom:6px}
+/* Заголовку отведено ровно две строки: без резерва описание короткой
+   карточки вставало вровень с заголовком соседней, и ряд расползался */
+.news-grid .t-h4{font-size:15px;line-height:1.4;margin-bottom:6px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:42px}
 .news-grid p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 
 @media (max-width:1024px){
   .supplier-grid,.news-grid{grid-template-columns:repeat(2,1fr)}
   .objection-grid{grid-template-columns:1fr}
+  .review-grid{grid-template-columns:1fr}
 }
 @media (max-width:560px){
   .supplier-grid,.news-grid{grid-template-columns:1fr}
