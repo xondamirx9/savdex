@@ -34,6 +34,16 @@ class ImageStore
 
     public const MAX_SIZE_KB = 8192;
 
+    /**
+     * Потолок площади в пикселях (48 Мп ≈ 8000×6000).
+     *
+     * Ограничение размера файла не спасает от «бомбы распаковки»: PNG
+     * со сплошной заливкой весит килобайты, но 25000×25000 разворачивается
+     * в пару гигабайт при декодировании. GD выделяет память до того, как
+     * мы узнаём размеры, поэтому проверяем их по заголовку — заранее.
+     */
+    public const MAX_PIXELS = 48_000_000;
+
     /** Логотип: квадрат под плашку на визитке и в списках. */
     public const LOGO = ['w' => 512, 'h' => 512, 'quality' => 85];
 
@@ -97,6 +107,20 @@ class ImageStore
      */
     private function read(UploadedFile $file)
     {
+        // Размеры читаются из заголовка (getimagesize не декодирует растр)
+        // и проверяются ДО imagecreatefromstring: иначе «бомба распаковки»
+        // выделяет гигабайты и роняет процесс фатальной ошибкой памяти,
+        // которую вызывающий код перехватить уже не может.
+        $info = @getimagesize($file->getRealPath());
+
+        if ($info === false) {
+            throw new RuntimeException('Файл не является изображением');
+        }
+
+        if (($info[0] * $info[1]) > self::MAX_PIXELS) {
+            throw new RuntimeException('Слишком большое изображение');
+        }
+
         $image = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
 
         if ($image === false) {

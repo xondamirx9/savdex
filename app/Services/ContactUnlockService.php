@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Support\Notifier;
 use App\Support\StatsRecorder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -124,38 +125,63 @@ class ContactUnlockService
          * съедал бы купленные кредиты при неиспользованном лимите,
          * за который уже заплачено подпиской.
          */
-        $unlock = DB::transaction(function () use ($user, $company, $target, $listing, $wallet, $plan) {
-            $locked = Wallet::query()->lockForUpdate()->find($wallet->id);
+        try {
+            $unlock = DB::transaction(function () use ($user, $company, $target, $listing, $wallet, $plan) {
+                $locked = Wallet::query()->lockForUpdate()->find($wallet->id);
 
-            if ($locked === null) {
-                return null;
-            }
-
-            $withinPlanLimit = $plan->contacts_limit === null
-                || $locked->contacts_used_this_period < $plan->contacts_limit;
-
-            if ($withinPlanLimit) {
-                $locked->increment('contacts_used_this_period');
-                $creditsSpent = 0;
-            } else {
-                // spend() ведёт двойную запись и блокирует ту же строку
-                // повторно — внутри нашей транзакции это уже наш замок
-                if (! $locked->spend('credits', 1, 'unlock', $target, $user->id)) {
+                if ($locked === null) {
                     return null;
                 }
 
-                $creditsSpent = 1;
+                $withinPlanLimit = $plan->contacts_limit === null
+                    || $locked->contacts_used_this_period < $plan->contacts_limit;
+
+                if ($withinPlanLimit) {
+                    $locked->increment('contacts_used_this_period');
+                    $creditsSpent = 0;
+                } else {
+                    // spend() ведёт двойную запись и блокирует ту же строку
+                    // повторно — внутри нашей транзакции это уже наш замок
+                    if (! $locked->spend('credits', 1, 'unlock', $target, $user->id)) {
+                        return null;
+                    }
+
+                    $creditsSpent = 1;
+                }
+
+                return ContactUnlock::create([
+                    'company_id' => $company->id,
+                    'target_company_id' => $target->id,
+                    'user_id' => $user->id,
+                    'listing_id' => $listing?->id,
+                    'credits_spent' => $creditsSpent,
+                    'status' => 'new',
+                ]);
+            });
+        } catch (UniqueConstraintViolationException) {
+            /*
+             * Гонка: два одновременных раскрытия одной и той же компании.
+             * Проверка «уже открыт» шла до транзакции, поэтому оба доходили
+             * сюда; блокировка кошелька сериализует списание, но второй
+             * INSERT упирается в unique(company_id, target_company_id) —
+             * транзакция откатывается целиком (списание тоже), и мы просто
+             * отдаём уже открытые контакты вместо ошибки 500.
+             */
+            $existing = ContactUnlock::query()
+                ->where('company_id', $company->id)
+                ->where('target_company_id', $target->id)
+                ->first();
+
+            if ($existing !== null) {
+                return [
+                    'ok' => true,
+                    'message' => 'Контакты этой компании у вас уже открыты.',
+                    'unlock' => $existing,
+                ];
             }
 
-            return ContactUnlock::create([
-                'company_id' => $company->id,
-                'target_company_id' => $target->id,
-                'user_id' => $user->id,
-                'listing_id' => $listing?->id,
-                'credits_spent' => $creditsSpent,
-                'status' => 'new',
-            ]);
-        });
+            throw new \RuntimeException('Не удалось открыть контакты, попробуйте ещё раз.');
+        }
 
         if ($unlock === null) {
             $resets = $wallet->period_resets_at?->translatedFormat('d.m.Y');

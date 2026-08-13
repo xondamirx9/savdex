@@ -47,6 +47,19 @@ class Invoices extends Page implements HasTable
 
     protected string $view = 'filament.pages.invoices';
 
+    /**
+     * Счета и подтверждение оплат — только суперадмин.
+     *
+     * Страница подтверждает поступление денег и активирует подписки,
+     * поэтому модератору здесь не место. Без этой проверки страница
+     * наследовала бы разрешение по умолчанию (любой в панели), и
+     * модератор по прямой ссылке подтверждал бы оплату без денег.
+     */
+    public static function canAccess(): bool
+    {
+        return Auth::user()?->isSuperadmin() ?? false;
+    }
+
     public function getTitle(): string
     {
         return 'Счета и оплаты';

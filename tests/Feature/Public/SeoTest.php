@@ -108,6 +108,31 @@ class SeoTest extends TestCase
     }
 
     /**
+     * Название компании задаёт пользователь и печатается внутри
+     * <script type="application/ld+json">. Угловые скобки обязаны
+     * шифроваться: «</script>» в названии иначе закрывает тег и
+     * исполняет чужой скрипт на каждой визитке (XSS).
+     */
+    #[Test]
+    public function разметка_не_даёт_вырваться_из_script_через_название(): void
+    {
+        $company = Company::factory()->create([
+            'name' => '</script><script>alert(1)</script>',
+        ]);
+
+        $response = $this->get("/company/{$company->slug}");
+        $response->assertOk();
+
+        // Настоящая сигнатура прорыва — закрывающий тег вплотную к
+        // открывающему — в сыром HTML не встречается ни в одном блоке:
+        // в JSON-LD скобки шифруются (JSON_HEX_TAG), в пропсах Inertia
+        // экранируется слэш (<\/script>), и тег не закрывается.
+        $response->assertDontSee('</script><script>alert(1)', false);
+        // А в самом JSON-LD название присутствует в безопасном виде
+        $response->assertSee('\\u003Cscript\\u003Ealert(1)', false);
+    }
+
+    /**
      * Рейтинг в разметке — только при отзывах.
      *
      * Звёзды в выдаче при нуле отзывов — заявка, за которой ничего
