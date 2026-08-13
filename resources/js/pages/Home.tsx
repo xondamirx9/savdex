@@ -397,7 +397,7 @@ export default function Home({
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="product-grid" data-reveal-stagger>
+                        <div className="card-row" data-reveal-stagger>
                             {latest.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
@@ -418,7 +418,7 @@ export default function Home({
                                 {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="rfq-row" data-reveal-stagger>
+                        <div className="card-row" data-reveal-stagger>
                             {requests.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
