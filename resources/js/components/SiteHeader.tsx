@@ -566,14 +566,9 @@ export function SiteHeader() {
                                 </Link>
                             )}
 
-                            {authed && bell ? (
-                                <MessagesMenu data={bell} />
-                            ) : (
-                                <Link href={routes.login} className="hd-action" aria-label={t('header.messages')}>
-                                    <MessageSquareText aria-hidden />
-                                    <span>{t('header.messages')}</span>
-                                </Link>
-                            )}
+                            {/* Сообщения — тоже только вошедшим: гостю ссылка
+                                вела в /login и ничего не сообщала */}
+                            {authed && bell && <MessagesMenu data={bell} />}
 
                             {authed && <ContactsLeft wallet={contactsLeft} />}
                         </div>
