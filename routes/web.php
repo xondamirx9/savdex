@@ -32,6 +32,7 @@ use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
+use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
@@ -68,6 +69,19 @@ Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])
 
 Route::get('/news', [NewsController::class, 'index'])->name('news');
 Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
+
+/*
+ * Колбэк платёжного провайдера.
+ *
+ * Публичный: провайдер стучится снаружи, без нашей сессии, — поэтому
+ * маршрут вне auth и исключён из CSRF (см. bootstrap/app.php). Подлинность
+ * проверяется подписью внутри шлюза. Ограничение частоты держит поток
+ * повторов в рамках. Выключенный провайдер отдаёт 404.
+ */
+Route::post('/payments/{provider}/callback', [WebhookController::class, 'handle'])
+    ->where('provider', '[a-z]+')
+    ->middleware('throttle:120,1')
+    ->name('payments.callback');
 
 /*
  * Витрина.

@@ -37,6 +37,13 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        /*
+         * Колбэк платёжного провайдера приходит снаружи и не несёт наш
+         * CSRF-токен: провайдер о нём не знает. Подлинность колбэка
+         * проверяется подписью в платёжном шлюзе, а не токеном формы.
+         */
+        $middleware->validateCsrfTokens(except: ['payments/*/callback']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
