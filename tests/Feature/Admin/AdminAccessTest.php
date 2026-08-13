@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Broadcasts\BroadcastResource;
 use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Companies\CompanyResource;
@@ -117,5 +118,56 @@ class AdminAccessTest extends TestCase
     public function суперадмин_является_и_модератором(): void
     {
         $this->assertTrue($this->admin(User::ADMIN_SUPERADMIN)->isModerator());
+    }
+
+    /**
+     * Модератор не может ни создать, ни отредактировать пользователя.
+     *
+     * canViewAny прячет раздел из меню, но страницы create/edit
+     * авторизуются через canCreate/canEdit — без этой проверки
+     * модератор по прямой ссылке /admin/users/create заводил себе
+     * суперадмина. Проверяем именно право на действие, а не видимость.
+     */
+    #[Test]
+    public function модератор_не_создаёт_и_не_правит_пользователей(): void
+    {
+        $victim = User::factory()->create();
+        $this->actingAs($this->admin(User::ADMIN_MODERATOR));
+
+        $this->assertFalse(UserResource::canCreate(), 'модератор не должен создавать пользователей');
+        $this->assertFalse(UserResource::canEdit($victim), 'модератор не должен править пользователей');
+        $this->assertFalse(UserResource::canDelete($victim), 'модератор не должен удалять пользователей');
+    }
+
+    #[Test]
+    public function суперадмин_создаёт_и_правит_пользователей(): void
+    {
+        $victim = User::factory()->create();
+        $this->actingAs($this->admin(User::ADMIN_SUPERADMIN));
+
+        $this->assertTrue(UserResource::canCreate());
+        $this->assertTrue(UserResource::canEdit($victim));
+    }
+
+    /**
+     * Счета и подтверждение оплат — только суперадмину.
+     *
+     * Страница активирует подписки и зачисляет кредиты; без гейта
+     * модератор по прямой ссылке подтверждал бы оплату без денег (NEG-26e).
+     */
+    #[Test]
+    public function модератор_не_открывает_счета_и_оплаты(): void
+    {
+        $this->actingAs($this->admin(User::ADMIN_MODERATOR));
+
+        $this->assertFalse(Invoices::canAccess());
+    }
+
+    #[Test]
+    public function суперадмин_открывает_счета_и_оплаты(): void
+    {
+        $this->actingAs($this->admin(User::ADMIN_SUPERADMIN));
+
+        $this->assertTrue(Invoices::canAccess());
     }
 }

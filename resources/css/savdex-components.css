@@ -38,7 +38,7 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
    всю страницу. Разрешаем сжатие: внутренние блоки со своим overflow скроллятся сами. */
 .grid>*,.cabinet>*,.catalog>*,
 .grid-sidebar>*,.grid-split>*,.grid-docs>*,
-.hero-grid>*,.hero-b2b-inner>*,.hero-panel-row>*,.stats-band-card>*,
+.hero-grid>*,.hero-b2b-inner>*,.hero-panel-fields>*,.stats-band-card>*,
 .cat-grid>*,.product-grid>*,.features-grid>*,.country-grid>*{min-width:0}
 .grid-2{grid-template-columns:repeat(2,1fr)}
 .grid-3{grid-template-columns:repeat(3,1fr)}
@@ -1326,20 +1326,29 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hd-logo-sub{font-size:10.5px;color:var(--text-muted);letter-spacing:.01em}
 
 
-/* Поиск в шапке: поле + категории + кнопка одним блоком */
-.hd-search{display:flex;flex:1;min-width:0;height:42px;border:2px solid var(--primary-700);
-  border-radius:var(--r-btn);overflow:hidden;background:var(--white)}
-.hd-search input{flex:1;min-width:110px;border:none;padding:0 14px;font-size:14px;background:transparent}
+/* Поиск в шапке: значок + поле + локация + категории + кнопка одним блоком.
+   Мягкая пилюля с подсветкой при фокусе — вместо жёсткой синей рамки */
+.hd-search{display:flex;align-items:center;flex:1;min-width:0;height:46px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r-pill);overflow:hidden;
+  background:var(--white);transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.hd-search:focus-within{border-color:var(--primary-600);box-shadow:0 0 0 3px var(--primary-50)}
+.hd-search-ico{display:grid;place-items:center;padding-left:15px;color:var(--text-muted);flex-shrink:0}
+.hd-search input{flex:1;min-width:80px;border:none;padding:0 12px;font-size:14px;
+  background:transparent;color:var(--text)}
 .hd-search input:focus{outline:none}
-.hd-search select{border:none;border-left:1px solid var(--border);background:var(--bg);
-  font-size:13.5px;color:var(--text);padding:0 30px 0 12px;cursor:pointer;max-width:150px;
-  appearance:none;
+/* Поле выбора: разделитель слева, значок, сам селект без своей рамки */
+.hd-search-field{display:flex;align-items:center;gap:5px;height:100%;padding-left:12px;
+  border-left:1px solid var(--border);color:var(--text-muted);flex-shrink:0}
+.hd-search-field>svg{flex-shrink:0}
+.hd-search-field select{border:none;background:transparent;font-size:13.5px;color:var(--text);
+  height:100%;padding:0 28px 0 2px;cursor:pointer;max-width:150px;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M3.5 5.25l3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center}
-.hd-search select:focus{outline:none}
-.hd-search button{display:inline-flex;align-items:center;gap:7px;padding:0 22px;
-  background:var(--primary-700);color:#fff;font-size:14px;font-weight:600;flex-shrink:0;
-  transition:background var(--t-fast)}
+  background-repeat:no-repeat;background-position:right 9px center}
+.hd-search-field select:focus{outline:none}
+.hd-search-loc select{max-width:140px}
+.hd-search button{display:inline-flex;align-items:center;gap:7px;height:100%;padding:0 22px;
+  margin-left:10px;background:var(--primary-700);color:#fff;font-size:14px;font-weight:600;
+  flex-shrink:0;transition:background var(--t-fast)}
 .hd-search button:hover{background:var(--primary-600)}
 
 /* Действия: иконка с подписью снизу, счётчик-бейдж в углу */
@@ -1404,8 +1413,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 /* Поля белые, а панель тёмная: без явного цвета текст наследовал бы
    белый от панели и пропадал на белом фоне поля */
 .hero-panel .input,.hero-panel .select{border:none;height:46px;color:var(--text)}
-.hero-panel-row{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:10px}
-.hero-panel-row .btn{height:46px}
+/* Поля селектов гибкие: один селект (Компании) занимает всю ширину,
+   два (Категория + Город) делят её пополам и переносятся на узком экране */
+.hero-panel-fields{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.hero-panel-fields>.select{flex:1 1 160px;min-width:0}
+.hero-panel-submit{width:100%;height:46px;margin-top:10px}
 .hero-chips{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;
   font-size:13px;color:rgba(255,255,255,.6)}
 .hero-chips a{display:inline-flex;align-items:center;height:28px;padding:0 12px;
@@ -1565,10 +1577,11 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .topbar-inner{gap:8px}
   .topbar-note,.topbar-more{display:none}
   .topbar-text{text-align:left}
-  /* На 320px фиксированные минимумы не помещаются: поле сжимается
-     свободно, селект категорий уступает место кнопке поиска */
+  /* На узких экранах фиксированные минимумы не помещаются: поле сжимается
+     свободно, локация уходит (её выбирают в каталоге), категория ужимается */
   .hd-search input{min-width:0}
-  .hd-search select{max-width:118px}
+  .hd-search-loc{display:none}
+  .hd-search-field select{max-width:104px}
   .hd-search button{padding:0 14px}
   .hd-actions .hd-action{min-width:44px;padding:6px 4px}
   .hd-actions .hd-action span:not(.hd-badge){display:none}
@@ -1587,7 +1600,6 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .stat-ico{width:38px;height:38px}
   .stat-cell-num{font-size:20px}
   .hero-panel{padding:14px}
-  .hero-panel-row{grid-template-columns:1fr}
   .hero-tabs{overflow-x:auto;scrollbar-width:none}
   .hscroll-btn{display:none}
   .features-grid{grid-template-columns:1fr}
@@ -1596,7 +1608,7 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
 @media (max-width:480px){
   /* Категорию на телефоне выбирают на странице каталога: селект в строке
      поиска обрезал «Все категории» до нечитаемого огрызка */
-  .hd-search select{display:none}
+  .hd-search-cat{display:none}
 }
 
 @media (max-width:400px){
@@ -1626,6 +1638,13 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
 .supplier-facts{display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:10px;
   border-top:1px solid var(--border);width:100%;font-size:13px;color:var(--text-muted)}
 .supplier-facts .listing-rating{margin:0}
+
+/* Показатели на странице «Партнёры»: три карточки над сеткой компаний */
+.partners-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--gap-grid,16px);margin-bottom:8px}
+.partners-stats>*{min-width:0}
+.partner-stat{display:flex;align-items:center;gap:14px;padding:var(--sp-4,16px);
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
+@media (max-width:640px){.partners-stats{grid-template-columns:1fr}}
 
 .objection-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-6,24px)}
 .objection-card{display:flex;gap:16px;align-items:flex-start;padding:var(--sp-6,24px);

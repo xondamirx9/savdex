@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Listing;
@@ -75,6 +76,8 @@ class PageController extends Controller
             // кто ищет товар, уходит в ленту выше, кто ищет партнёра — сюда
             'suppliers' => $this->topSuppliers(),
             'countries' => $this->countryOptions(),
+            // Города для выбора локации в поиске первого экрана
+            'cities' => $this->cityOptions(),
             // Свежие новости прямо на главной: раздел, до которого
             // нужно ещё дойти по меню, читают в разы меньше
             'news' => $news->latest(4),
@@ -140,6 +143,58 @@ class PageController extends Controller
             ->all();
 
         return Inertia::render('Countries', ['countries' => $countries]);
+    }
+
+    /**
+     * Партнёры площадки — витрина проверенных компаний.
+     *
+     * Показываем верхушку по проверке и рейтингу: страница продаёт
+     * доверие, а не полный справочник, поэтому здесь только компании
+     * с подтверждёнными документами. Полный каталог — по ссылке ниже.
+     * Порядок тот же, что в каталоге компаний, чтобы витрина сходилась
+     * с тем, что человек увидит, нажав «Все компании».
+     */
+    public function partners(): Response
+    {
+        app(Seo::class)
+            ->title(__('ui.seo.partners_title'))
+            ->description(__('ui.seo.partners_description'))
+            ->canonical(url('/partners'));
+
+        $partners = Company::query()
+            ->with(['city.translations', 'country.translations'])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
+            ->orderByDesc('verification_level')
+            ->orderByDesc('rating')
+            ->orderByDesc('completed_deals_count')
+            ->limit(24)
+            ->get()
+            ->map(fn (Company $c): array => [
+                'slug' => $c->slug,
+                'name' => $c->name,
+                'type_label' => $c->typeLabel(),
+                'city' => $c->city?->name(),
+                'country' => $c->country?->name(),
+                'verification_level' => $c->verification_level,
+                'rating' => (float) $c->rating,
+                'reviews_count' => $c->reviews_count,
+                'completed_deals_count' => $c->completed_deals_count,
+                'initials' => $c->initials(),
+                'logo' => $c->logoUrl(),
+            ])
+            ->all();
+
+        return Inertia::render('Partners', [
+            'partners' => $partners,
+            'stats' => [
+                'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
+                'verified' => Company::where('status', Company::STATUS_ACTIVE)
+                    ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
+                    ->count(),
+                'deals' => (int) Company::where('status', Company::STATUS_ACTIVE)->sum('completed_deals_count'),
+            ],
+        ]);
     }
 
     /** Контакты площадки. Реквизиты — из словаря, как и весь текст. */
@@ -312,6 +367,27 @@ class PageController extends Controller
             ->orderBy('sort')
             ->get()
             ->map(fn (Country $c): array => ['code' => $c->code, 'name' => $c->name()])
+            ->all();
+    }
+
+    /**
+     * Города для выбора локации в поиске первого экрана.
+     *
+     * Только те, где есть живые объявления: локация без единого
+     * объявления в фильтре зовёт в пустую выдачу.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function cityOptions(): array
+    {
+        return City::query()
+            ->where('is_active', true)
+            ->with('translations')
+            ->whereHas('listings', fn ($q) => $q->where('status', Listing::STATUS_ACTIVE))
+            ->get()
+            ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name()])
+            ->sortBy('name')
+            ->values()
             ->all();
     }
 }

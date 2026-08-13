@@ -68,6 +68,8 @@ export interface SharedProps extends InertiaPageProps {
     favorites?: number[];
     /** Разделы каталога для выпадающего списка поиска в шапке. */
     navCategories?: { id: number; name: string }[];
+    /** Города с живыми объявлениями — для выбора локации в поиске. */
+    navCities?: { id: number; name: string }[];
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];

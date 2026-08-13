@@ -31,6 +31,7 @@ class PublicPagesTest extends TestCase
             'тарифы' => ['/pricing', 'Pricing'],
             'каталог' => ['/catalog', 'catalog/Index'],
             'компании' => ['/companies', 'companies/Index'],
+            'партнёры' => ['/partners', 'Partners'],
         ];
     }
 

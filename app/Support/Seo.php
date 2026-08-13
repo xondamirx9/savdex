@@ -211,9 +211,18 @@ class Seo
     {
         $schemas = [$this->organization(), ...$this->schemas];
 
+        /*
+         * Блок печатается сырым внутри <script type="application/ld+json">.
+         * Название и описание компании задаёт сам пользователь, поэтому
+         * шифруем угловые скобки и амперсанд: без JSON_HEX_TAG строка
+         * «</script><script>…» в названии компании закрывала бы тег и
+         * исполняла чужой скрипт на каждой странице визитки (XSS).
+         * JSON_UNESCAPED_SLASHES убран намеренно — экранированный слэш
+         * тоже мешает собрать «</script>».
+         */
         return json_encode(
             count($schemas) === 1 ? $schemas[0] : ['@context' => 'https://schema.org', '@graph' => $schemas],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS,
         ) ?: null;
     }
 

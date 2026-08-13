@@ -21,6 +21,7 @@ export const routes = {
     about: '/about',
     pricing: '/pricing',
     countries: '/countries',
+    partners: '/partners',
     contacts: '/contact',
 
     // Избранное

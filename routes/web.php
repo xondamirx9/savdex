@@ -45,6 +45,7 @@ Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/countries', [PageController::class, 'countries'])->name('countries');
+Route::get('/partners', [PageController::class, 'partners'])->name('partners');
 Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
 
 /*

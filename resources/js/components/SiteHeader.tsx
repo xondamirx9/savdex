@@ -8,6 +8,7 @@ import {
     Heart,
     LayoutDashboard,
     LogOut,
+    MapPin,
     Megaphone,
     Menu,
     MessageSquareText,
@@ -65,10 +66,9 @@ function menu(): MenuItem[] {
             label: t('nav.rfq'),
             match: (path, search) => path.startsWith(routes.catalog) && search.includes('type=demand'),
         },
-        { href: routes.countries, label: t('nav.countries') },
+        { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
         { href: routes.about, label: t('nav.about_us') },
-        { href: routes.contacts, label: t('nav.contacts') },
     ];
 }
 
@@ -202,14 +202,17 @@ function LangSwitcher({ locale, links }: { locale: string; links: SharedProps['l
  */
 function HeaderSearch({
     categories,
+    cities,
     idPrefix,
 }: {
     categories: NonNullable<SharedProps['navCategories']>;
+    cities: NonNullable<SharedProps['navCities']>;
     /** Форма рендерится дважды (десктоп и телефон) — id обязаны различаться. */
     idPrefix: string;
 }) {
     const [q, setQ] = useState('');
     const [category, setCategory] = useState('');
+    const [city, setCity] = useState('');
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
@@ -217,12 +220,16 @@ function HeaderSearch({
         const params: Record<string, string | number> = {};
         if (q.trim() !== '') params.q = q.trim();
         if (category !== '') params.category = Number(category);
+        if (city !== '') params.city = Number(city);
 
         router.get(routes.catalog, params);
     }
 
     return (
         <form className="hd-search" role="search" onSubmit={submit}>
+            <span className="hd-search-ico" aria-hidden>
+                <Search className="size-4" />
+            </span>
             <label htmlFor={`${idPrefix}-q`} className="sr-only">
                 {t('header.search_label')}
             </label>
@@ -233,17 +240,40 @@ function HeaderSearch({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
             />
-            <label htmlFor={`${idPrefix}-cat`} className="sr-only">
-                {t('catalog.category')}
-            </label>
-            <select id={`${idPrefix}-cat`} value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="">{t('header.all_categories')}</option>
-                {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                        {c.name}
-                    </option>
-                ))}
-            </select>
+
+            {/* Локация: показываем, только когда есть города с живыми
+                объявлениями — пустой список выбора не даёт */}
+            {cities.length > 0 && (
+                <div className="hd-search-field hd-search-loc">
+                    <MapPin aria-hidden className="size-4" />
+                    <label htmlFor={`${idPrefix}-city`} className="sr-only">
+                        {t('header.location_label')}
+                    </label>
+                    <select id={`${idPrefix}-city`} value={city} onChange={(e) => setCity(e.target.value)}>
+                        <option value="">{t('header.all_locations')}</option>
+                        {cities.map((c) => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+            <div className="hd-search-field hd-search-cat">
+                <label htmlFor={`${idPrefix}-cat`} className="sr-only">
+                    {t('catalog.category')}
+                </label>
+                <select id={`${idPrefix}-cat`} value={category} onChange={(e) => setCategory(e.target.value)}>
+                    <option value="">{t('header.all_categories')}</option>
+                    {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
             <button type="submit">
                 <Search aria-hidden className="size-4" />
                 <span className="hide-mobile">{t('header.search_button')}</span>
@@ -485,7 +515,7 @@ function UserMenu({ name, email, verified, isAdmin }: { name: string; email: str
 
 export function SiteHeader() {
     const props = usePage<SharedProps>().props as SharedProps & { url?: string };
-    const { auth, bell, contactsLeft, favorites, navCategories, url } = props;
+    const { auth, bell, contactsLeft, favorites, navCategories, navCities, url } = props;
     /*
      * Страница ошибки (404, 419) рендерится без общих пропсов:
      * посредник Inertia не запускается, когда маршрут не совпал.
@@ -515,6 +545,7 @@ export function SiteHeader() {
     const authed = Boolean(auth?.user);
     const favCount = (favorites ?? []).length;
     const categories = navCategories ?? [];
+    const cities = navCities ?? [];
 
     const isActive = (item: MenuItem) =>
         item.match
@@ -551,7 +582,7 @@ export function SiteHeader() {
                             </span>
                         </Link>
 
-                        <HeaderSearch categories={categories} idPrefix="hd" />
+                        <HeaderSearch categories={categories} cities={cities} idPrefix="hd" />
 
                         <LangSwitcher locale={locale} links={localeLinks} />
 
@@ -604,7 +635,7 @@ export function SiteHeader() {
 
                     {/* Поиск на телефоне — отдельной строкой под шапкой */}
                     <div className="hd-search-mobile">
-                        <HeaderSearch categories={categories} idPrefix="hdm" />
+                        <HeaderSearch categories={categories} cities={cities} idPrefix="hdm" />
                     </div>
                 </div>
 
