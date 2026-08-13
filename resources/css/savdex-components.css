@@ -38,7 +38,7 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
    всю страницу. Разрешаем сжатие: внутренние блоки со своим overflow скроллятся сами. */
 .grid>*,.cabinet>*,.catalog>*,
 .grid-sidebar>*,.grid-split>*,.grid-docs>*,
-.hero-grid>*,.hero-b2b-inner>*,.hero-panel-row>*,.stats-band-card>*,
+.hero-grid>*,.hero-b2b-inner>*,.hero-panel-fields>*,.stats-band-card>*,
 .cat-grid>*,.product-grid>*,.features-grid>*,.country-grid>*{min-width:0}
 .grid-2{grid-template-columns:repeat(2,1fr)}
 .grid-3{grid-template-columns:repeat(3,1fr)}
