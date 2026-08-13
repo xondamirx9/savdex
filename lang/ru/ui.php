@@ -88,8 +88,6 @@ return [
         'search_label' => 'Поиск по площадке',
         'search_placeholder' => 'Поиск товаров, компаний, категорий…',
         'all_categories' => 'Все категории',
-        'location_label' => 'Локация',
-        'all_locations' => 'Все города',
         'search_button' => 'Поиск',
         'favorites' => 'Избранное',
         'messages' => 'Сообщения',

@@ -8,7 +8,6 @@ import {
     Heart,
     LayoutDashboard,
     LogOut,
-    MapPin,
     Megaphone,
     Menu,
     MessageSquareText,
@@ -202,17 +201,14 @@ function LangSwitcher({ locale, links }: { locale: string; links: SharedProps['l
  */
 function HeaderSearch({
     categories,
-    cities,
     idPrefix,
 }: {
     categories: NonNullable<SharedProps['navCategories']>;
-    cities: NonNullable<SharedProps['navCities']>;
     /** Форма рендерится дважды (десктоп и телефон) — id обязаны различаться. */
     idPrefix: string;
 }) {
     const [q, setQ] = useState('');
     const [category, setCategory] = useState('');
-    const [city, setCity] = useState('');
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
@@ -220,7 +216,6 @@ function HeaderSearch({
         const params: Record<string, string | number> = {};
         if (q.trim() !== '') params.q = q.trim();
         if (category !== '') params.category = Number(category);
-        if (city !== '') params.city = Number(city);
 
         router.get(routes.catalog, params);
     }
@@ -240,25 +235,6 @@ function HeaderSearch({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
             />
-
-            {/* Локация: показываем, только когда есть города с живыми
-                объявлениями — пустой список выбора не даёт */}
-            {cities.length > 0 && (
-                <div className="hd-search-field hd-search-loc">
-                    <MapPin aria-hidden className="size-4" />
-                    <label htmlFor={`${idPrefix}-city`} className="sr-only">
-                        {t('header.location_label')}
-                    </label>
-                    <select id={`${idPrefix}-city`} value={city} onChange={(e) => setCity(e.target.value)}>
-                        <option value="">{t('header.all_locations')}</option>
-                        {cities.map((c) => (
-                            <option key={c.id} value={c.id}>
-                                {c.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            )}
 
             <div className="hd-search-field hd-search-cat">
                 <label htmlFor={`${idPrefix}-cat`} className="sr-only">
@@ -515,7 +491,7 @@ function UserMenu({ name, email, verified, isAdmin }: { name: string; email: str
 
 export function SiteHeader() {
     const props = usePage<SharedProps>().props as SharedProps & { url?: string };
-    const { auth, bell, contactsLeft, favorites, navCategories, navCities, url } = props;
+    const { auth, bell, contactsLeft, favorites, navCategories, url } = props;
     /*
      * Страница ошибки (404, 419) рендерится без общих пропсов:
      * посредник Inertia не запускается, когда маршрут не совпал.
@@ -545,7 +521,6 @@ export function SiteHeader() {
     const authed = Boolean(auth?.user);
     const favCount = (favorites ?? []).length;
     const categories = navCategories ?? [];
-    const cities = navCities ?? [];
 
     const isActive = (item: MenuItem) =>
         item.match
@@ -582,7 +557,7 @@ export function SiteHeader() {
                             </span>
                         </Link>
 
-                        <HeaderSearch categories={categories} cities={cities} idPrefix="hd" />
+                        <HeaderSearch categories={categories} idPrefix="hd" />
 
                         <LangSwitcher locale={locale} links={localeLinks} />
 
@@ -635,7 +610,7 @@ export function SiteHeader() {
 
                     {/* Поиск на телефоне — отдельной строкой под шапкой */}
                     <div className="hd-search-mobile">
-                        <HeaderSearch categories={categories} cities={cities} idPrefix="hdm" />
+                        <HeaderSearch categories={categories} idPrefix="hdm" />
                     </div>
                 </div>
 

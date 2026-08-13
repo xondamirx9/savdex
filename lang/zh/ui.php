@@ -82,8 +82,6 @@ return [
         'search_label' => '站内搜索',
         'search_placeholder' => '搜索产品、企业、类目…',
         'all_categories' => '全部类目',
-        'location_label' => '位置',
-        'all_locations' => '全部城市',
         'search_button' => '搜索',
         'favorites' => '收藏',
         'messages' => '消息',
