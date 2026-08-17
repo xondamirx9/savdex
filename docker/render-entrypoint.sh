@@ -79,4 +79,11 @@ php artisan view:cache
 # artisan выше работал от root; веб-серверу нужны права www-data.
 chown -R www-data:www-data storage bootstrap/cache database
 
+# База может лежать вне проекта — на постоянном диске (DB_DATABASE).
+# Смонтированный диск принадлежит root, и без прав www-data сайт
+# падает на первой же записи: «attempt to write a readonly database».
+if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
+    chown -R www-data:www-data "$(dirname "$DB_FILE")"
+fi
+
 exec "$@"

@@ -7,10 +7,27 @@ services:
   - type: web
     name: savdex
     runtime: docker
-    plan: free
+    # Тариф в файле обязан совпадать с купленным в панели: Blueprint —
+    # источник истины, и plan: free здесь откатил бы оплаченный тариф
+    # при следующей синхронизации.
+    plan: standard
     branch: claude/website-copy-new-design-xaxsr0
     healthCheckPath: /up
+    # Постоянный диск под базу. Без него SQLite живёт на эфемерном
+    # диске контейнера, и каждый деплой стирает компании, счета и
+    # настройки. Для площадки, принимающей оплату, это недопустимо;
+    # диски доступны только на платных тарифах — потому появился
+    # вместе с plan: standard.
+    disk:
+      name: savdex-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
+      # База на постоянном диске (см. disk выше). Entrypoint сам
+      # создаёт файл и прогоняет миграции; сидирование происходит
+      # один раз — на уже наполненной базе оно пропускается.
+      - key: DB_DATABASE
+        value: /var/data/database.sqlite
       # Адрес сайта. Задаётся в панели Render (Environment → APP_URL)
       # после привязки домена: https://ваш-домен, без косой черты в конце.
       #
