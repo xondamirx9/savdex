@@ -310,6 +310,10 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
         ->name('cabinet.billing.order');
     Route::post('/cabinet/billing/invoice/{id}/cancel', [BillingController::class, 'cancelInvoice'])
         ->name('cabinet.billing.invoice.cancel');
+    // Онлайн-оплата выставленного счёта: увод на страницу провайдера
+    Route::post('/cabinet/billing/invoice/{id}/pay', [BillingController::class, 'pay'])
+        ->middleware(['verified', 'throttle:20,60'])
+        ->name('cabinet.billing.invoice.pay');
     // Печатная форма: браузер сам сохранит её в PDF
     Route::get('/cabinet/billing/invoice/{id}', [BillingController::class, 'invoice'])
         ->name('cabinet.billing.invoice');

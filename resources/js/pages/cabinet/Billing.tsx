@@ -32,6 +32,8 @@ interface Props {
     /** Счета, ожидающие оплаты */
     invoices: Invoice[];
     requisites: Record<string, string>;
+    /** Онлайн-касса включена: кнопки покупки ведут на страницу оплаты */
+    checkout: boolean;
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -41,7 +43,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
     refunded: { label: 'Возвращён', cls: 'badge-neutral' },
 };
 
-export default function Billing({ plan, subscription, wallet, cards, payments, plans, packs, invoices, requisites }: Props) {
+export default function Billing({ plan, subscription, wallet, cards, payments, plans, packs, invoices, requisites, checkout }: Props) {
     const { confirm, dialog } = useConfirm();
 
     if (!plan || !wallet) {
@@ -150,7 +152,7 @@ export default function Billing({ plan, subscription, wallet, cards, payments, p
             {/* Покупка стоит выше карт и истории: это то, зачем сюда
                 заходят, а карта и прошлые платежи — справочная часть */}
             <div id="store" className="mb-24">
-                <BillingStore plans={plans} packs={packs} invoices={invoices} requisites={requisites} />
+                <BillingStore plans={plans} packs={packs} invoices={invoices} requisites={requisites} checkout={checkout} />
             </div>
 
             <Panel title="Способ оплаты" className="mb-24">

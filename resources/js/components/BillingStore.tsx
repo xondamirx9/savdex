@@ -42,23 +42,28 @@ function order(kind: 'plan' | 'credits', id: number) {
 /**
  * Покупка тарифа и кредитов, неоплаченные счета и реквизиты.
  *
- * Оплата по счёту: компания заказывает, платит переводом и ждёт
- * зачисления. Поэтому здесь нет кнопки «Оплатить картой» — есть
- * «Выставить счёт», и это честнее, чем форма карты, за которой
- * ничего не стоит.
+ * Два режима, выбирает сервер флагом checkout. Пока онлайн-кассы нет —
+ * «Выставить счёт»: компания платит переводом и ждёт зачисления, и это
+ * честнее, чем форма карты, за которой ничего не стоит. С включённой
+ * кассой кнопка становится «Оплатить» и уводит на страницу провайдера;
+ * счёт при этом всё равно создаётся — переводом платить не запрещали.
  */
 export function BillingStore({
     plans,
     packs,
     invoices,
     requisites,
+    checkout,
 }: {
     plans: PlanOffer[];
     packs: PackOffer[];
     /** Счета, ожидающие оплаты: дело покупателя, а не история */
     invoices: Invoice[];
     requisites: Record<string, string>;
+    /** Онлайн-касса включена: кнопки ведут на страницу оплаты */
+    checkout: boolean;
 }) {
+    const orderLabel = checkout ? 'Оплатить' : 'Выставить счёт';
     const { confirm, dialog } = useConfirm();
 
     return (
@@ -85,6 +90,22 @@ export function BillingStore({
                                     </div>
                                     <div className="row" style={{ gap: 10, alignItems: 'center' }}>
                                         <b className="t-num">{inv.amount}</b>
+                                        {/* Онлайн-оплата уже выставленного счёта:
+                                            увод на страницу платёжного провайдера */}
+                                        {checkout && (
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() =>
+                                                    router.post(
+                                                        `/cabinet/billing/invoice/${inv.id}/pay`,
+                                                        {},
+                                                        { preserveScroll: true },
+                                                    )
+                                                }
+                                            >
+                                                Оплатить
+                                            </button>
+                                        )}
                                         {/* Печатная форма: её несут в банк или
                                             сохраняют в PDF средствами браузера */}
                                         <a
@@ -178,7 +199,7 @@ export function BillingStore({
                                                 style={{ marginTop: 8 }}
                                                 onClick={() => order('plan', p.id)}
                                             >
-                                                Выставить счёт
+                                                {orderLabel}
                                             </button>
                                         )}
                                     </div>
@@ -207,7 +228,7 @@ export function BillingStore({
                                             style={{ marginTop: 8 }}
                                             onClick={() => order('credits', p.id)}
                                         >
-                                            Выставить счёт
+                                            {orderLabel}
                                         </button>
                                     </div>
                                 </div>

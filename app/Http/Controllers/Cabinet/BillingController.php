@@ -11,12 +11,16 @@ use App\Models\PaymentMethod;
 use App\Models\Plan;
 use App\Models\Setting;
 use App\Services\OrderService;
+use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\CurrencyRate;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 /**
  * Тариф, кошелёк, карты и история платежей.
@@ -43,6 +47,7 @@ class BillingController extends Controller
                 'packs' => [],
                 'invoices' => [],
                 'requisites' => [],
+                'checkout' => false,
             ]);
         }
 
@@ -140,7 +145,18 @@ class BillingController extends Controller
                 ]),
 
             'requisites' => self::requisites(),
+
+            // Включена ли онлайн-касса: от этого зависят подписи кнопок
+            // («Оплатить» против «Выставить счёт») и кнопка оплаты на счетах
+            'checkout' => $this->checkoutEnabled(),
         ]);
+    }
+
+    /** Онлайн-оплата доступна, когда провайдер по умолчанию включён в конфиге. */
+    private function checkoutEnabled(): bool
+    {
+        return app(PaymentGatewayManager::class)
+            ->enabled((string) config('payments.default', ''));
     }
 
     /**
@@ -167,9 +183,14 @@ class BillingController extends Controller
      * Заказ тарифа или пакета кредитов.
      *
      * Счёт создаётся сразу, доступ не выдаётся: он откроется, когда
-     * деньги дойдут и администратор отметит зачисление.
+     * деньги дойдут — по колбэку онлайн-кассы или когда администратор
+     * отметит зачисление перевода.
+     *
+     * При включённой онлайн-кассе покупатель с этой же кнопки уезжает
+     * на платёжную страницу провайдера; счёт при этом остаётся — с него
+     * по-прежнему можно заплатить переводом, если карта не подошла.
      */
-    public function order(Request $request): RedirectResponse
+    public function order(Request $request): HttpResponse
     {
         $company = $request->user()->company;
 
@@ -193,6 +214,12 @@ class BillingController extends Controller
             ->first();
 
         if ($duplicate !== null) {
+            // Повторное нажатие при включённой кассе — не ошибка,
+            // а «хочу оплатить»: уводим на оплату существующего счёта
+            if ($this->checkoutEnabled()) {
+                return $this->checkout($duplicate);
+            }
+
             return back()->with('warning', "Счёт {$duplicate->number} на это уже выставлен и ждёт оплаты");
         }
 
@@ -202,7 +229,74 @@ class BillingController extends Controller
             ? $orders->orderPlan($company, Plan::findOrFail($data['id']), $request->user())
             : $orders->orderCredits($company, CreditPack::findOrFail($data['id']), $request->user());
 
+        if ($this->checkoutEnabled()) {
+            return $this->checkout($payment);
+        }
+
         return back()->with('success', "Счёт {$payment->number} на {$payment->amountLabel()} сформирован. Реквизиты — ниже, доступ откроется после зачисления.");
+    }
+
+    /**
+     * Оплата ранее выставленного счёта онлайн — кнопка «Оплатить»
+     * в списке «Счета к оплате».
+     */
+    public function pay(Request $request, int $id): HttpResponse
+    {
+        $company = $request->user()->company;
+        abort_if($company === null, 404);
+
+        $payment = $company->payments()
+            ->where('id', $id)
+            ->where('status', 'pending')
+            ->firstOrFail();
+
+        if (! $this->checkoutEnabled()) {
+            return back()->with('warning', 'Онлайн-оплата сейчас недоступна — оплатите счёт по реквизитам ниже');
+        }
+
+        return $this->checkout($payment);
+    }
+
+    /**
+     * Увод покупателя на платёжную страницу провайдера.
+     *
+     * Ссылку даёт шлюз (createCheckout), редирект внешний — через
+     * Inertia::location, иначе Inertia попыталась бы отрисовать чужую
+     * страницу как свою.
+     *
+     * Отказ шлюза не роняет покупку: счёт уже создан, покупатель видит
+     * его в «Счетах к оплате» и может заплатить переводом. Онлайн-касса
+     * здесь ускоритель, а не единственная дверь.
+     */
+    private function checkout(Payment $payment): HttpResponse
+    {
+        $gateways = app(PaymentGatewayManager::class);
+
+        try {
+            $gateway = $gateways->default();
+            $result = $gateway->createCheckout($payment);
+            $url = $result['redirect_url'] ?? null;
+
+            if ($url === null) {
+                throw new PaymentGatewayException('Шлюз не вернул ссылку на платёжную страницу');
+            }
+
+            // Провайдер запоминается сразу: колбэк должен найти счёт
+            // и понять, чьим форматом его разбирать
+            $payment->fill(['provider' => $gateway->provider()])->save();
+
+            return Inertia::location($url);
+        } catch (PaymentGatewayException $e) {
+            Log::warning('payment.checkout.failed', [
+                'payment' => $payment->number,
+                'message' => $e->getMessage(),
+            ]);
+
+            return back()->with(
+                'warning',
+                "Онлайн-оплата сейчас недоступна. Счёт {$payment->number} выставлен — оплатите по реквизитам ниже, доступ откроется после зачисления.",
+            );
+        }
     }
 
     /**
