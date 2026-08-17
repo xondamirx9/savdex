@@ -78,8 +78,16 @@ Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
  * проверяется подписью внутри шлюза. Ограничение частоты держит поток
  * повторов в рамках. Выключенный провайдер отдаёт 404.
  */
-Route::post('/payments/{provider}/callback', [WebhookController::class, 'handle'])
-    ->where('provider', '[a-z]+')
+/*
+ * Сегмент операции — для провайдеров с диалоговым протоколом.
+ * Merchant API Uzum — это не один вебхук «оплачено», а пять вызовов
+ * на нашей стороне: check, create, confirm, reverse, status. Все они
+ * приходят на подпути одной базы /payments/uzum/callback — именно
+ * база сообщается провайдеру при подключении. Провайдеру с одним
+ * вебхуком сегмент не нужен — он зовёт базу без него.
+ */
+Route::post('/payments/{provider}/callback/{operation?}', [WebhookController::class, 'handle'])
+    ->where(['provider' => '[a-z]+', 'operation' => '[a-z]+'])
     ->middleware('throttle:120,1')
     ->name('payments.callback');
 

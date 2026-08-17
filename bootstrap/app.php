@@ -51,7 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * CSRF-токен: провайдер о нём не знает. Подлинность колбэка
          * проверяется подписью в платёжном шлюзе, а не токеном формы.
          */
-        $middleware->validateCsrfTokens(except: ['payments/*/callback']);
+        $middleware->validateCsrfTokens(except: ['payments/*/callback', 'payments/*/callback/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
