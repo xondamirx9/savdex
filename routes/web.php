@@ -32,6 +32,7 @@ use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
+use App\Http\Controllers\Payment\UzumMerchantController;
 use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
@@ -79,13 +80,19 @@ Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
  * повторов в рамках. Выключенный провайдер отдаёт 404.
  */
 /*
- * Сегмент операции — для провайдеров с диалоговым протоколом.
  * Merchant API Uzum — это не один вебхук «оплачено», а пять вызовов
  * на нашей стороне: check, create, confirm, reverse, status. Все они
  * приходят на подпути одной базы /payments/uzum/callback — именно
- * база сообщается провайдеру при подключении. Провайдеру с одним
- * вебхуком сегмент не нужен — он зовёт базу без него.
+ * база сообщается Uzum при подключении. Маршрут стоит раньше общего
+ * и потому перехватывает uzum-подпути; защита — Basic auth внутри
+ * контроллера, как требует протокол.
  */
+Route::post('/payments/uzum/callback/{operation}', [UzumMerchantController::class, 'handle'])
+    ->where('operation', '[a-z]+')
+    ->middleware('throttle:120,1')
+    ->name('payments.uzum.operation');
+
+// Провайдеры с одним вебхуком зовут базу без сегмента операции
 Route::post('/payments/{provider}/callback/{operation?}', [WebhookController::class, 'handle'])
     ->where(['provider' => '[a-z]+', 'operation' => '[a-z]+'])
     ->middleware('throttle:120,1')

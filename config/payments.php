@@ -33,6 +33,31 @@ return [
         'uzum' => [
             'enabled' => (bool) env('PAYMENTS_UZUM_ENABLED', false),
 
+            /*
+             * Онлайн-касса на витрине — кнопка «Оплатить» с уводом на
+             * платёжную страницу. Отдельный флаг, а не enabled: колбэки
+             * Merchant API включаются раньше (их тестирует Uzum при
+             * подключении), чем витрине есть куда уводить покупателя.
+             */
+            'checkout' => (bool) env('PAYMENTS_UZUM_CHECKOUT_ENABLED', false),
+
+            /*
+             * Basic auth входящих вызовов Merchant API (check, create,
+             * confirm, reverse, status). Логин и пароль согласуются
+             * с Uzum при подключении; пустые значения запирают
+             * эндпойнты — без пароля не отвечает ни одна операция.
+             */
+            'callback_login' => env('PAYMENTS_UZUM_CALLBACK_LOGIN'),
+            'callback_password' => env('PAYMENTS_UZUM_CALLBACK_PASSWORD'),
+
+            // Имя поля в params, в котором Uzum передаёт номер счёта.
+            // Задаётся в их merchant-кабинете — здесь то же значение
+            'account_field' => env('PAYMENTS_UZUM_ACCOUNT_FIELD', 'invoice'),
+
+            // Созданная, но не подтверждённая транзакция сгорает
+            // через столько минут — по протоколу Merchant API
+            'confirm_timeout_minutes' => (int) env('PAYMENTS_UZUM_CONFIRM_TIMEOUT', 30),
+
             // Боевой/тестовый контур переключается флагом sandbox —
             // на тесте бьём по sandbox-URL и тестовыми ключами
             'sandbox' => (bool) env('PAYMENTS_UZUM_SANDBOX', true),

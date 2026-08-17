@@ -7,6 +7,7 @@ namespace App\Services\Payments;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -48,12 +49,16 @@ class UzumGateway implements PaymentGateway
         throw new PaymentGatewayException('Uzum createCheckout ещё не реализован: нужна документация мерчанта Uzum');
     }
 
+    /**
+     * Merchant API Uzum не шлёт вебхуков на базовый адрес — весь диалог
+     * (check, create, confirm, reverse, status) идёт на подпути и
+     * обслуживается UzumMerchantController. Запрос на базу — чужой или
+     * заблудившийся: не признаём, и WebhookController ответит отказом
+     * в формате протокола, а не ошибкой сервера.
+     */
     public function verifyCallback(Request $request): bool
     {
-        // TODO(uzum-docs §2): пересчитать подпись из тела колбэка и
-        // webhook_secret, сравнить с присланной; при наличии — проверить IP
-        // по config('payments.providers.uzum.callback_ips').
-        throw new PaymentGatewayException('Uzum verifyCallback ещё не реализован: нужна схема подписи колбэка');
+        return false;
     }
 
     public function parseCallback(Request $request): array
@@ -66,9 +71,12 @@ class UzumGateway implements PaymentGateway
 
     public function callbackResponse(bool $accepted, array $event): Response
     {
-        // TODO(uzum-docs §4): вернуть ответ в формате, который ждёт Uzum
-        // (код/тело подтверждения приёма колбэка).
-        throw new PaymentGatewayException('Uzum callbackResponse ещё не реализован: нужен ожидаемый ответ на колбэк');
+        // 99999 — «сервис недоступен» из номенклатуры ошибок Uzum:
+        // единственный честный ответ на запрос вне протокола
+        return new JsonResponse([
+            'status' => $accepted ? 'OK' : 'FAILED',
+            'errorCode' => $accepted ? null : 99999,
+        ], $accepted ? 200 : 400);
     }
 
     public function chargeSavedCard(Payment $payment, PaymentMethod $card): array

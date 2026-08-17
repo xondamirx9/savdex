@@ -94,6 +94,10 @@ class CheckoutRedirectTest extends TestCase
             }
         };
 
+        // Витрине нужны оба флага: enabled (провайдер живой)
+        // и checkout (кнопка «Оплатить» включена)
+        config(['payments.providers.uzum.checkout' => true]);
+
         $this->mock(PaymentGatewayManager::class, function ($mock) use ($gateway): void {
             $mock->shouldReceive('enabled')->andReturn(true);
             $mock->shouldReceive('default')->andReturn($gateway);
@@ -217,7 +221,10 @@ class CheckoutRedirectTest extends TestCase
     #[Test]
     public function отказ_шлюза_оставляет_счёт_и_не_роняет_страницу(): void
     {
-        config(['payments.providers.uzum.enabled' => true]);
+        config([
+            'payments.providers.uzum.enabled' => true,
+            'payments.providers.uzum.checkout' => true,
+        ]);
 
         $this->actingAs($this->user)
             ->post('/cabinet/billing/order', ['kind' => 'plan', 'id' => $this->paidPlan()->id])

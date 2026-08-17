@@ -152,11 +152,20 @@ class BillingController extends Controller
         ]);
     }
 
-    /** Онлайн-оплата доступна, когда провайдер по умолчанию включён в конфиге. */
+    /**
+     * Онлайн-оплата на витрине.
+     *
+     * Два флага, а не один: enabled включает провайдера целиком
+     * (в том числе колбэки, которые Uzum тестирует при подключении),
+     * checkout — кнопку «Оплатить» с уводом покупателя. Колбэки
+     * включаются раньше, чем витрине есть куда уводить.
+     */
     private function checkoutEnabled(): bool
     {
-        return app(PaymentGatewayManager::class)
-            ->enabled((string) config('payments.default', ''));
+        $provider = (string) config('payments.default', '');
+
+        return (bool) config("payments.providers.{$provider}.checkout", false)
+            && app(PaymentGatewayManager::class)->enabled($provider);
     }
 
     /**
