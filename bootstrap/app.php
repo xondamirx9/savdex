@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CanonicalHost;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LocalizeUrl;
 use App\Http\Middleware\SetLocale;
@@ -24,6 +25,13 @@ return Application::configure(basePath: dirname(__DIR__))
          * того, как маршрут выбран.
          */
         $middleware->prepend(LocalizeUrl::class);
+
+        /*
+         * Уводит со служебного адреса Render на свой домен. Стоит
+         * впереди LocalizeUrl: тот снимает языковой префикс с пути,
+         * и перенаправление, собранное после него, теряло бы язык.
+         */
+        $middleware->prepend(CanonicalHost::class);
 
         /*
          * На хостинге приложение стоит за обратным прокси (Render,

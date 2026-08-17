@@ -11,6 +11,19 @@ services:
     branch: claude/website-copy-new-design-xaxsr0
     healthCheckPath: /up
     envVars:
+      # Адрес сайта. Задаётся в панели Render (Environment → APP_URL)
+      # после привязки домена: https://ваш-домен, без косой черты в конце.
+      #
+      # Пока переменная пуста, приложение подставляет служебный адрес
+      # Render — и он расходится по canonical, карте сайта, OG-тегам
+      # и ссылкам в письмах, то есть домен остаётся только в адресной
+      # строке. Отсюда же CanonicalHost узнаёт, куда уводить с
+      # onrender.com.
+      #
+      # sync: false — значение спрашивается один раз при создании
+      # и не перетирается при следующих деплоях.
+      - key: APP_URL
+        sync: false
       - key: APP_ENV
         value: staging
       - key: APP_DEBUG
