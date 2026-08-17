@@ -177,7 +177,19 @@ class CmsSeeder extends Seeder
             ['contacts', 'support_email', 'Почта поддержки', 'string', 'support@savdex.uz'],
             ['contacts', 'support_phone', 'Телефон поддержки', 'string', '+998 71 200-00-00'],
             ['contacts', 'support_hours', 'Часы работы', 'string', 'Пн–Пт, 9:00–18:00 (Ташкент)'],
-            ['contacts', 'office_address', 'Адрес офиса', 'text', 'г. Ташкент, Мирзо-Улугбекский р-н'],
+            /*
+             * Адрес и координаты офиса выводятся на странице «О компании»
+             * разделом с картой. Координаты — одной строкой в том виде,
+             * в каком их отдаёт кнопка «скопировать» в Яндекс.Картах
+             * и Google Maps: найти дом на карте и вставить сюда проще,
+             * чем разбирать строку на два поля руками.
+             */
+            ['contacts', 'office_address', 'Адрес офиса', 'text', 'г. Ташкент, Мирзо-Улугбекский р-н',
+                'Показывается в разделе «Офис на карте» на странице «О компании». Пустой адрес и пустые координаты убирают раздел со страницы целиком'],
+            ['contacts', 'office_coords', 'Координаты офиса', 'string', '41.311081, 69.240562',
+                'Широта и долгота через запятую. Взять их можно так: открыть Яндекс.Карты или Google Maps, нажать на здание правой кнопкой и скопировать координаты'],
+            ['contacts', 'office_map_zoom', 'Масштаб карты', 'number', 16,
+                'От 3 до 19. 16 — дом и соседние кварталы, 12 — город целиком'],
 
             ['legal', 'legal_name', 'Юридическое лицо', 'string', 'ООО «ANJIR-GROUP»'],
             ['legal', 'legal_tin', 'ИНН', 'string', '000000000'],
@@ -207,7 +219,9 @@ class CmsSeeder extends Seeder
             ['moderation', 'reviews_premoderation', 'Проверять каждый отзыв перед публикацией', 'boolean', true],
         ];
 
-        foreach ($settings as $i => [$group, $key, $label, $type, $value]) {
+        foreach ($settings as $i => $row) {
+            [$group, $key, $label, $type, $value] = $row;
+
             Setting::updateOrCreate(
                 ['key' => $key],
                 [
@@ -215,6 +229,9 @@ class CmsSeeder extends Seeder
                     'label' => $label,
                     'type' => $type,
                     'value' => $value,
+                    // Пояснение необязательно: у настройки с говорящим
+                    // названием объяснять нечего
+                    'description' => $row[5] ?? null,
                     'sort' => $i,
                 ],
             );

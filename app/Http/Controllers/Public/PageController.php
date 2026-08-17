@@ -11,8 +11,10 @@ use App\Models\Company;
 use App\Models\Country;
 use App\Models\Listing;
 use App\Models\Review;
+use App\Models\Setting;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
+use App\Support\OfficeLocation;
 use App\Support\Seo;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -96,7 +98,38 @@ class PageController extends Controller
             ->description(__('ui.seo.about_description'))
             ->canonical(url('/about'));
 
-        return Inertia::render('About', ['stats' => $this->stats()]);
+        $office = OfficeLocation::current();
+
+        /*
+         * Адрес офиса размечается для поисковика: по нему организация
+         * попадает в карточку компании в выдаче и на карты. Разметка
+         * появляется только вместе с заполненной настройкой — пустой
+         * PostalAddress поисковики считают ошибкой разметки.
+         */
+        if ($office !== null) {
+            app(Seo::class)->organizationDetails([
+                'legalName' => (string) Setting::get('legal_name', ''),
+                'email' => (string) Setting::get('support_email', ''),
+                'telephone' => (string) Setting::get('support_phone', ''),
+                'address' => $office['address'] !== '' ? [
+                    '@type' => 'PostalAddress',
+                    'streetAddress' => $office['address'],
+                    'addressCountry' => 'UZ',
+                ] : null,
+                'geo' => $office['lat'] !== null ? [
+                    '@type' => 'GeoCoordinates',
+                    'latitude' => $office['lat'],
+                    'longitude' => $office['lng'],
+                ] : null,
+            ]);
+        }
+
+        return Inertia::render('About', [
+            'stats' => $this->stats(),
+            // Офис приходит с сервера, а не жёстко лежит в вёрстке:
+            // адрес и точку на карте меняет администратор в настройках
+            'office' => $office,
+        ]);
     }
 
     public function pricing(): Response

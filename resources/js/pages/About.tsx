@@ -1,14 +1,19 @@
 import { CheckCircle2, Handshake, Mail, Phone, Send, Shield, Star, Wallet } from 'lucide-react';
+import { OfficeMap, type Office } from '@/components/OfficeMap';
 import { PublicLayout } from '@/layouts/PublicLayout';
 
 /**
- * Страница «О компании» — пять разделов, каждый со своим якорем.
+ * Страница «О компании» — шесть разделов, каждый со своим якорем.
  * Порядок разделов задаёт порядок пунктов подменю в шапке (§6.6 ТЗ).
  * Тексты переедут в page_blocks и станут редактируемыми в спринте 13.
+ *
+ * Раздел «Офис» показывается, только когда адрес заполнен в настройках
+ * площадки, — поэтому оглавление собирается по факту, а не константой.
  */
 const SECTIONS = [
     { id: 'about', label: 'О нас' },
     { id: 'contacts', label: 'Контакты' },
+    { id: 'office', label: 'Офис на карте' },
     { id: 'help', label: 'Помощь' },
     { id: 'guide', label: 'Инструкция использования' },
     { id: 'rules', label: 'Правила размещения' },
@@ -51,7 +56,15 @@ const MUST: string[] = [
     'Снятие объявления, когда товар закончился',
 ];
 
-export default function About({ stats }: { stats: { companies: number; categories: number; countries: number } }) {
+export default function About({
+    stats,
+    office,
+}: {
+    stats: { companies: number; categories: number; countries: number };
+    office: Office | null;
+}) {
+    const sections = office !== null ? SECTIONS : SECTIONS.filter((s) => s.id !== 'office');
+
     return (
         <PublicLayout
             title="О компании"
@@ -61,11 +74,11 @@ export default function About({ stats }: { stats: { companies: number; categorie
                 <div className="grid-docs">
                     {/* Оглавление первое в разметке. На узких экранах колонка
                         схлопывается, и оно превращается в горизонтальную ленту
-                        над текстом — пять пунктов столбиком отодвинули бы
+                        над текстом — полдюжины пунктов столбиком отодвинули бы
                         содержимое за пределы экрана. */}
                     <aside>
                         <nav className="doc-nav card" style={{ padding: 10 }} aria-label="Разделы страницы">
-                            {SECTIONS.map((s) => (
+                            {sections.map((s) => (
                                 <a key={s.id} href={`#${s.id}`}>
                                     {s.label}
                                 </a>
@@ -191,6 +204,19 @@ export default function About({ stats }: { stats: { companies: number; categorie
                                 </div>
                             </div>
                         </section>
+
+                        {office !== null && (
+                            <section id="office" className="doc-section">
+                                <h2 className="t-h2" style={{ marginBottom: 12 }}>
+                                    Офис на карте
+                                </h2>
+                                <p className="t-body" style={{ marginBottom: 24 }}>
+                                    Приезжайте, если вопрос проще решить лично. Договоры и документы принимаем и
+                                    по почте — приезжать ради подписи необязательно.
+                                </p>
+                                <OfficeMap office={office} />
+                            </section>
+                        )}
 
                         <section id="help" className="doc-section">
                             <h2 className="t-h2" style={{ marginBottom: 20 }}>

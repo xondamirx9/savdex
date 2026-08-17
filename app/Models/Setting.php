@@ -38,8 +38,20 @@ class Setting extends Model
     {
         // Кэш сбрасывается при любом изменении: настройка, которая
         // применяется через сутки, воспринимается как несохранившаяся
-        static::saved(fn () => Cache::forget(self::CACHE_KEY));
-        static::deleted(fn () => Cache::forget(self::CACHE_KEY));
+        static::saved(fn () => self::flushCache());
+        static::deleted(fn () => self::flushCache());
+    }
+
+    /**
+     * Сброс кэша настроек.
+     *
+     * Модель делает это сама при сохранении. Метод нужен там, где
+     * строки правятся в обход модели и события не срабатывают, —
+     * прежде всего в миграциях, которые ходят в базу через DB::table.
+     */
+    public static function flushCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
     }
 
     /**

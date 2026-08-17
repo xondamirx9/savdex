@@ -42,6 +42,9 @@ class Seo
     /** @var list<array<string, mixed>> */
     private array $schemas = [];
 
+    /** @var array<string, mixed> */
+    private array $organizationDetails = [];
+
     public function title(string $title): self
     {
         $title = trim($title);
@@ -114,6 +117,26 @@ class Seo
     public function schema(array $schema): self
     {
         $this->schemas[] = $schema;
+
+        return $this;
+    }
+
+    /**
+     * Подробности об организации площадки: адрес офиса, телефон, почта.
+     *
+     * Дописываются в узел организации, а не кладутся вторым узлом
+     * Organization рядом: две организации в разметке одной страницы
+     * поисковик читает как две разные компании и не показывает
+     * ни одну.
+     *
+     * Знает их только страница «О компании», а узел печатается на
+     * каждой — поэтому это отдельный метод, а не поле organization().
+     *
+     * @param  array<string, mixed>  $details
+     */
+    public function organizationDetails(array $details): self
+    {
+        $this->organizationDetails = array_filter($details);
 
         return $this;
     }
@@ -236,6 +259,7 @@ class Seo
             'url' => url('/'),
             'description' => 'B2B-площадка Узбекистана и Центральной Азии: поставщики и закупщики находят друг друга',
             'areaServed' => ['UZ', 'KZ', 'KG', 'TJ'],
+            ...$this->organizationDetails,
         ];
     }
 }

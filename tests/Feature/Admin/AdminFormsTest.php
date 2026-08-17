@@ -6,10 +6,13 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Listings\Pages\EditListing;
+use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Listing;
+use App\Models\Setting;
 use App\Models\User;
+use App\Support\OfficeLocation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -141,5 +144,69 @@ class AdminFormsTest extends TestCase
 
         Livewire::test(EditListing::class, ['record' => $listing->getRouteKey()])
             ->assertSee('Стройматериалы → Кирпич');
+    }
+
+    // ── Настройки площадки ───────────────────────────────────
+
+    /** Часть настроек заводит миграция — поэтому updateOrCreate, а не create. */
+    private function setting(string $key, string $value): Setting
+    {
+        return Setting::updateOrCreate(
+            ['key' => $key],
+            ['group' => 'contacts', 'label' => $key, 'type' => 'string', 'value' => $value],
+        );
+    }
+
+    /** Координаты офиса правятся в админке — ради этого настройка и заведена. */
+    #[Test]
+    public function координаты_офиса_сохраняются_из_админки(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $setting = $this->setting(OfficeLocation::KEY_COORDS, '41.311081, 69.240562');
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->assertFormSet(['value' => '41.311081, 69.240562'])
+            ->fillForm(['value' => '39.654620, 66.959720'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([39.65462, 66.95972], OfficeLocation::coords((string) $setting->refresh()->value));
+    }
+
+    /**
+     * Опечатка в координатах ловится формой. Без проверки карта на
+     * странице «О компании» просто пропадала бы — молча и уже после
+     * сохранения, так что связать пропажу с правкой было бы некому.
+     */
+    #[Test]
+    public function испорченные_координаты_офиса_не_сохраняются(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $setting = $this->setting(OfficeLocation::KEY_COORDS, '41.311081, 69.240562');
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->fillForm(['value' => '41,31 69,24'])
+            ->call('save')
+            ->assertHasFormErrors(['value']);
+
+        $this->assertSame('41.311081, 69.240562', $setting->refresh()->value);
+    }
+
+    /** Проверка координат не должна мешать остальным строковым настройкам. */
+    #[Test]
+    public function прочие_настройки_сохраняются_свободным_текстом(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $setting = $this->setting('support_phone', '+998 71 200-00-00');
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->fillForm(['value' => '+998 71 300-00-00'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('+998 71 300-00-00', $setting->refresh()->value);
     }
 }

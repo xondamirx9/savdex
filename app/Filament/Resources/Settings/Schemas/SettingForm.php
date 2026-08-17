@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Settings\Schemas;
 
 use App\Models\Setting;
+use App\Support\OfficeLocation;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -66,7 +67,20 @@ class SettingForm
                     TextInput::make('value')
                         ->label('Значение')
                         ->visible(fn (Get $get): bool => $get('type') === 'string')
-                        ->maxLength(500),
+                        ->maxLength(500)
+                        /*
+                         * Координаты проверяются прямо в форме. Строка
+                         * «41,31 69,24» — с запятой вместо точки — не
+                         * разбирается, и карта на странице «О компании»
+                         * просто исчезает: молча и уже после сохранения,
+                         * так что связать пропажу с правкой некому.
+                         */
+                        ->rules(fn (Get $get): array => $get('key') === OfficeLocation::KEY_COORDS
+                            ? ['regex:'.OfficeLocation::COORDS_PATTERN]
+                            : [])
+                        ->validationMessages([
+                            'regex' => 'Ожидается широта и долгота через запятую, например: 41.311081, 69.240562',
+                        ]),
 
                     Textarea::make('value')
                         ->label('Значение')
