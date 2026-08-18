@@ -80,6 +80,12 @@ class PlanForm
                         ->placeholder('без ограничений')
                         ->helperText('Сверх лимита списываются кредиты'),
 
+                    TextInput::make('responses_limit')
+                        ->label('Откликов')
+                        ->numeric()
+                        ->placeholder('без ограничений')
+                        ->helperText('Пока витринный лимит: показывается в карточке тарифа'),
+
                     TextInput::make('promo_units')
                         ->label('Промо-единиц')
                         ->numeric()

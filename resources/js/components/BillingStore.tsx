@@ -10,6 +10,7 @@ export interface PlanOffer {
     price_uzs: number;
     listings_limit: number | null;
     contacts_limit: number | null;
+    responses_limit: number | null;
     current: boolean;
     orderable: boolean;
 }
@@ -31,7 +32,10 @@ export interface Invoice {
     expires_at: string | null;
 }
 
-function limit(value: number | null): string {
+/** У тарифа VIP безлимит подписан словом «VIP», у остальных — как есть. */
+function limit(value: number | null, code?: string): string {
+    if (code === 'vip') return 'VIP';
+
     return value === null ? 'без ограничений' : String(value);
 }
 
@@ -185,8 +189,9 @@ export function BillingStore({
                                             </>
                                         )}
                                         <p className="t-xs">
-                                            объявлений: {limit(p.listings_limit)} · контактов:{' '}
-                                            {limit(p.contacts_limit)}
+                                            объявлений: {limit(p.listings_limit, p.code)} · контактов:{' '}
+                                            {limit(p.contacts_limit, p.code)} · откликов:{' '}
+                                            {limit(p.responses_limit, p.code)}
                                         </p>
                                     </div>
                                     {/* Цена над кнопкой, а не в одну строку с ней:

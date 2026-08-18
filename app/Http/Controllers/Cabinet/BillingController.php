@@ -112,6 +112,7 @@ class BillingController extends Controller
                     'price_uzs' => $p->priceUzs($rate),
                     'listings_limit' => $p->listings_limit,
                     'contacts_limit' => $p->contacts_limit,
+                    'responses_limit' => $p->responses_limit,
                     'current' => $p->code === $plan->code,
                     // Бесплатный тариф не покупают: счёт на ноль сумм
                     // выглядит издевательством

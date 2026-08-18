@@ -10,6 +10,7 @@ interface PricingPlan {
     price_uzs: number;
     listings_limit: number | null;
     contacts_limit: number | null;
+    responses_limit: number | null;
     promo_units: number;
     listing_days: number;
     has_microsite: boolean;
@@ -50,6 +51,14 @@ function features(p: PricingPlan): [string, boolean][] {
                 ? 'Контакты без ограничений'
                 : `${p.contacts_limit} ${plural(p.contacts_limit, 'контакт', 'контакта', 'контактов')} в месяц`,
             true,
+        ],
+        [
+            p.responses_limit === null
+                ? 'Отклики без ограничений'
+                : p.responses_limit > 0
+                  ? `${p.responses_limit} ${plural(p.responses_limit, 'отклик', 'отклика', 'откликов')} в месяц`
+                  : 'Отклики',
+            p.responses_limit === null || p.responses_limit > 0,
         ],
         [p.promo_units > 0 ? `${p.promo_units} продвижений в месяц` : 'Продвижение', p.promo_units > 0],
         [`Срок показа ${p.listing_days} дней`, true],

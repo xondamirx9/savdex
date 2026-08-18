@@ -156,6 +156,7 @@ class PageController extends Controller
                     'price_uzs' => $p->priceUzs($rate),
                     'listings_limit' => $p->listings_limit,
                     'contacts_limit' => $p->contacts_limit,
+                    'responses_limit' => $p->responses_limit,
                     'promo_units' => $p->promo_units,
                     'listing_days' => $p->listing_days,
                     'has_microsite' => $p->has_microsite,

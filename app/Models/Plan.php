@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 #[Fillable([
     'code', 'name', 'price_usd', 'price_uzs', 'period_days', 'listing_days',
-    'listings_limit', 'contacts_limit', 'promo_units', 'verification_days',
+    'listings_limit', 'contacts_limit', 'responses_limit', 'promo_units', 'verification_days',
     'advanced_analytics', 'sees_interested_names', 'has_microsite', 'sort', 'is_active',
 ])]
 class Plan extends Model
