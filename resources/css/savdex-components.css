@@ -466,6 +466,9 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .progress-fill{height:100%;background:var(--primary-700);border-radius:var(--r-pill);transition:width var(--t-slow)}
 
 /* ---------- 19. Тарифы ---------- */
+/* Тарифов пять, и их число меняется в админке — сетка подстраивается сама,
+   а не фиксирует четыре колонки, как grid-4 */
+.plan-grid{grid-template-columns:repeat(auto-fit,minmax(216px,1fr))}
 .plan{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:28px 24px;position:relative;display:flex;flex-direction:column}
 .plan.is-hi{border:2px solid var(--primary-700);box-shadow:var(--sh-hover)}
 .plan-tag{position:absolute;top:-12px;left:50%;transform:translateX(-50%);

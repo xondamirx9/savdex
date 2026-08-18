@@ -10,8 +10,10 @@ use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Listing;
+use App\Models\Plan;
 use App\Models\Review;
 use App\Models\Setting;
+use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
 use App\Support\OfficeLocation;
@@ -139,7 +141,27 @@ class PageController extends Controller
             ->description(__('ui.seo.pricing_description'))
             ->canonical(url('/pricing'));
 
-        return Inertia::render('Pricing');
+        /*
+         * Тарифы и цены — из базы, как в кабинете (BillingController).
+         * Один источник: цену меняют в админке или сидере, и витрина
+         * с кассой не могут разойтись.
+         */
+        $rate = app(CurrencyRate::class)->usd();
+
+        return Inertia::render('Pricing', [
+            'plans' => Plan::query()->where('is_active', true)->orderBy('sort')->get()
+                ->map(fn (Plan $p): array => [
+                    'code' => $p->code,
+                    'name' => $p->name,
+                    'price_uzs' => $p->priceUzs($rate),
+                    'listings_limit' => $p->listings_limit,
+                    'contacts_limit' => $p->contacts_limit,
+                    'promo_units' => $p->promo_units,
+                    'listing_days' => $p->listing_days,
+                    'has_microsite' => $p->has_microsite,
+                    'advanced_analytics' => $p->advanced_analytics,
+                ]),
+        ]);
     }
 
     /**

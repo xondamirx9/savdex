@@ -173,8 +173,8 @@ export function BillingStore({
                                     borderColor: p.current ? 'var(--primary-100)' : undefined,
                                 }}
                             >
-                                <div className="row-between wrap" style={{ gap: 10 }}>
-                                    <div>
+                                <div className="row-between wrap" style={{ gap: 12, alignItems: 'flex-start' }}>
+                                    <div style={{ minWidth: 0 }}>
                                         <b>{p.name}</b>
                                         {p.current && (
                                             <>
@@ -189,14 +189,23 @@ export function BillingStore({
                                             {limit(p.contacts_limit)}
                                         </p>
                                     </div>
-                                    <div className="center">
-                                        <b className="t-num">
+                                    {/* Цена над кнопкой, а не в одну строку с ней:
+                                        инлайновая пара слипалась в «107 000 сум[кнопка]» */}
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'flex-end',
+                                            gap: 8,
+                                            textAlign: 'right',
+                                        }}
+                                    >
+                                        <b className="t-num nowrap">
                                             {p.price_uzs > 0 ? `${formatNumber(p.price_uzs)} сум` : 'бесплатно'}
                                         </b>
                                         {p.orderable && (
                                             <button
                                                 className="btn btn-primary btn-sm"
-                                                style={{ marginTop: 8 }}
                                                 onClick={() => order('plan', p.id)}
                                             >
                                                 {orderLabel}
@@ -216,16 +225,23 @@ export function BillingStore({
                     <div className="stack-16">
                         {packs.map((p) => (
                             <div key={p.id} className="card" style={{ background: 'var(--bg)' }}>
-                                <div className="row-between wrap" style={{ gap: 10 }}>
-                                    <div>
+                                <div className="row-between wrap" style={{ gap: 12, alignItems: 'flex-start' }}>
+                                    <div style={{ minWidth: 0 }}>
                                         <b>{p.name}</b>
                                         <p className="t-xs">{formatNumber(p.per_credit)} сум за контакт</p>
                                     </div>
-                                    <div className="center">
-                                        <b className="t-num">{formatNumber(p.price_uzs)} сум</b>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'flex-end',
+                                            gap: 8,
+                                            textAlign: 'right',
+                                        }}
+                                    >
+                                        <b className="t-num nowrap">{formatNumber(p.price_uzs)} сум</b>
                                         <button
                                             className="btn btn-secondary btn-sm"
-                                            style={{ marginTop: 8 }}
                                             onClick={() => order('credits', p.id)}
                                         >
                                             {orderLabel}
