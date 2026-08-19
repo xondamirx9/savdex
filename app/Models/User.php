@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Notifications\VerifyEmailCode;
+use App\Support\EmailVerificationCode;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -65,6 +67,25 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             'is_admin' => 'boolean',
             'must_change_password' => 'boolean',
         ];
+    }
+
+    /**
+     * Письмо подтверждения — своё, с кодом для ввода на сайте вдобавок
+     * к подписанной ссылке. Метод зовёт и слушатель события Registered,
+     * и кнопка «Отправить повторно» — код выпускается в одном месте.
+     *
+     * Ошибка отправки логируется, а не роняет запрос: регистрация уже
+     * падала с 500 после создания пользователя (см. EmailVerificationTest),
+     * и недоступный SMTP не должен повторить тот дефект — человек
+     * запросит письмо повторно с экрана подтверждения.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        try {
+            $this->notify(new VerifyEmailCode(EmailVerificationCode::issue($this)));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function company(): BelongsTo
