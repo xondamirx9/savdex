@@ -179,6 +179,11 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::get('/verify-email/{id}/{hash}', [EmailVerificationController::class, 'verify'])
         ->middleware(['signed', 'throttle:6,1'])
         ->name('verification.verify');
+    // Подтверждение кодом из того же письма — для тех, кто читает
+    // почту не в том браузере, где регистрировался
+    Route::post('/verify-email/code', [EmailVerificationController::class, 'confirm'])
+        ->middleware('throttle:6,1')
+        ->name('verification.code');
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])
         ->middleware('throttle:6,1')
         ->name('verification.send');

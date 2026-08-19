@@ -47,9 +47,37 @@ services:
         value: "false"
       - key: SEED_DEMO
         value: "true"
-      # Почтового сервиса на стенде нет — адреса подтверждаются сразу.
+      # Автоподтверждение почты. Пока SMTP не настроен, оставьте true —
+      # иначе люди упрутся в экран подтверждения без письма. Как только
+      # почта заработает (переменные MAIL_* ниже), поставьте false
+      # в панели Render — и подтверждение пойдёт кодом из письма.
+      #
+      # sync: false — значение живёт в панели и не перетирается деплоем.
       - key: DEMO_AUTO_VERIFY
-        value: "true"
+        sync: false
+      # Отправка почты: письма подтверждения с кодом, сброс пароля.
+      # Значения задаются в панели Render один раз (sync: false).
+      #
+      # Для Gmail-ящика поддержки: MAIL_MAILER=smtp, MAIL_HOST=smtp.gmail.com,
+      # MAIL_PORT=587, MAIL_SCHEME null, MAIL_USERNAME=адрес@gmail.com,
+      # MAIL_PASSWORD=пароль приложения (Google Аккаунт → Безопасность →
+      # Двухэтапная аутентификация → Пароли приложений; обычный пароль
+      # от почты не подойдёт). MAIL_FROM_ADDRESS = тот же адрес: Gmail
+      # не даёт слать от чужого имени.
+      - key: MAIL_MAILER
+        sync: false
+      - key: MAIL_HOST
+        sync: false
+      - key: MAIL_PORT
+        sync: false
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: SAVDEX
       # Обработчика очереди на бесплатном тарифе нет — задания
       # выполняются сразу, в том же запросе.
       - key: QUEUE_CONNECTION

@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Notifications\VerifyEmailCode;
+use App\Support\EmailVerificationCode;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Auth\Notifications\ResetPassword;
-use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
@@ -55,7 +56,91 @@ class EmailVerificationTest extends TestCase
 
         $user = User::where('email', 'rustam@company.uz')->firstOrFail();
 
-        Notification::assertSentTo($user, VerifyEmail::class);
+        Notification::assertSentTo($user, VerifyEmailCode::class);
+    }
+
+    // ── Подтверждение кодом из письма ────────────────────────
+
+    #[Test]
+    public function код_из_письма_подтверждает_почту(): void
+    {
+        Event::fake([Verified::class]);
+
+        $user = User::factory()->unverified()->create();
+        $code = EmailVerificationCode::issue($user);
+
+        $this->actingAs($user)
+            ->post('/verify-email/code', ['code' => $code])
+            ->assertRedirect('/cabinet')
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        Event::assertDispatched(Verified::class);
+    }
+
+    #[Test]
+    public function неверный_код_отклоняется(): void
+    {
+        $user = User::factory()->unverified()->create();
+        EmailVerificationCode::issue($user);
+
+        $this->actingAs($user)
+            ->post('/verify-email/code', ['code' => '000000'])
+            ->assertInvalid(['code']);
+
+        $this->assertFalse($user->fresh()->hasVerifiedEmail());
+    }
+
+    /** Верный код одноразов: повторный ввод уже не срабатывает. */
+    #[Test]
+    public function код_работает_один_раз(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $code = EmailVerificationCode::issue($user);
+
+        $this->assertTrue(EmailVerificationCode::check($user, $code));
+        $this->assertFalse(EmailVerificationCode::check($user, $code));
+    }
+
+    /** После пяти неверных попыток гаснет даже правильный код. */
+    #[Test]
+    public function перебор_кода_гасит_его_после_лимита_попыток(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $code = EmailVerificationCode::issue($user);
+
+        foreach (range(1, 5) as $i) {
+            $this->assertFalse(EmailVerificationCode::check($user, '000000'));
+        }
+
+        $this->assertFalse(EmailVerificationCode::check($user, $code));
+    }
+
+    /** Повторное письмо выпускает новый код — старый перестаёт работать. */
+    #[Test]
+    public function новый_код_отменяет_старый(): void
+    {
+        $user = User::factory()->unverified()->create();
+
+        $old = EmailVerificationCode::issue($user);
+        $new = EmailVerificationCode::issue($user);
+
+        $this->assertFalse(EmailVerificationCode::check($user, $old));
+        $this->assertTrue(EmailVerificationCode::check($user, $new));
+    }
+
+    /** Код уходит в письме — и именно тот, который принимает проверка. */
+    #[Test]
+    public function письмо_содержит_рабочий_код(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->unverified()->create();
+        $user->sendEmailVerificationNotification();
+
+        Notification::assertSentTo($user, VerifyEmailCode::class, function (VerifyEmailCode $n) use ($user): bool {
+            return EmailVerificationCode::check($user, $n->code);
+        });
     }
 
     #[Test]
@@ -114,7 +199,7 @@ class EmailVerificationTest extends TestCase
 
         $this->actingAs($user)->post('/email/verification-notification')->assertRedirect();
 
-        Notification::assertSentTo($user, VerifyEmail::class);
+        Notification::assertSentTo($user, VerifyEmailCode::class);
     }
 
     #[Test]

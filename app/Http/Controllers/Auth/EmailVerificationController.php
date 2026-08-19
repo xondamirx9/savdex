@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\EmailVerificationCode;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +43,38 @@ class EmailVerificationController extends Controller
         }
 
         $request->fulfill();
+
+        return redirect()->route('cabinet')->with('success', 'Почта подтверждена — теперь доступна публикация объявлений');
+    }
+
+    /**
+     * Подтверждение кодом из письма.
+     *
+     * Код нужен тем, кто читает почту не там, где регистрировался:
+     * ссылка из письма открывается в браузере телефона без сессии,
+     * а код вводится в уже открытой вкладке. Перебор закрыт дважды:
+     * ограничением частоты на маршруте и счётчиком попыток в самом коде.
+     */
+    public function confirm(Request $request): RedirectResponse
+    {
+        if ($request->user()->hasVerifiedEmail()) {
+            return redirect()->route('cabinet');
+        }
+
+        $request->validate(
+            ['code' => ['required', 'digits:6']],
+            ['code.required' => 'Введите код из письма', 'code.digits' => 'Код — шесть цифр'],
+        );
+
+        if (! EmailVerificationCode::check($request->user(), $request->string('code')->toString())) {
+            return back()->withErrors([
+                'code' => 'Код не подошёл или устарел. Отправьте письмо повторно и введите код из него.',
+            ]);
+        }
+
+        if ($request->user()->markEmailAsVerified()) {
+            event(new Verified($request->user()));
+        }
 
         return redirect()->route('cabinet')->with('success', 'Почта подтверждена — теперь доступна публикация объявлений');
     }

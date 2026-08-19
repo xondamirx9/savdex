@@ -37,6 +37,8 @@ export const routes = {
     passwordRequest: '/forgot-password',
     passwordForced: '/password/change',
     verifyNotice: '/verify-email',
+    verifyCode: '/verify-email/code',
+    verifyResend: '/email/verification-notification',
 
     // Уведомления
     notifications: '/notifications',
