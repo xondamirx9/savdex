@@ -95,8 +95,11 @@ return [
         'documents' => 'Hujjatlar',
         'guide' => 'Qo‘llanma',
         'terms' => 'Ommaviy oferta',
+        'payment' => 'To‘lov usullari',
+        'security' => 'To‘lov xavfsizligi',
         'privacy' => 'Maxfiylik siyosati',
         'refunds' => 'Pulni qaytarish siyosati',
+        'secure_note' => 'To‘lovlar 3-D Secure texnologiyasi bilan himoyalangan',
         'about' => 'O‘zbekiston, Markaziy Osiyo va mintaqa savdo hamkorlari uchun yetkazib beruvchilar va xaridorlarni bog‘lovchi B2B platforma.',
         'copyright' => '© 2026 SAVDEX · «ANJIR-GROUP» MChJ, O‘zbekiston',
         'no_commission' => 'Bitimlardan komissiya olmaymiz · Hisob-kitoblarda qatnashmaymiz',
@@ -293,6 +296,8 @@ return [
 
     'legal' => [
         'terms_title' => 'Ommaviy oferta',
+        'payment_title' => 'To‘lov usullari',
+        'security_title' => 'To‘lov xavfsizligi',
         'privacy_title' => 'Maxfiylik siyosati',
         'refunds_title' => 'Pulni qaytarish siyosati',
     ],

@@ -268,8 +268,19 @@ class SeoTest extends TestCase
             ->assertSee('<title inertia>Публичная оферта · SAVDEX</title>', false)
             ->assertSee('rel="canonical" href="'.url('/terms').'"', false);
 
+        // Способы оплаты и безопасность платежей — требование банка-эквайера
+        $this->get('/payment')
+            ->assertSee('<title inertia>Способы оплаты · SAVDEX</title>', false)
+            ->assertSee('rel="canonical" href="'.url('/payment').'"', false);
+
+        $this->get('/security')
+            ->assertSee('<title inertia>Безопасность платежей · SAVDEX</title>', false)
+            ->assertSee('rel="canonical" href="'.url('/security').'"', false);
+
         $this->get('/sitemap-static.xml')
             ->assertSee(url('/terms'), false)
+            ->assertSee(url('/payment'), false)
+            ->assertSee(url('/security'), false)
             ->assertSee(url('/privacy'), false);
     }
 

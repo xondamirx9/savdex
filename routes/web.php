@@ -355,5 +355,5 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
 Route::post('/locale/{locale}', [LocaleController::class, 'update'])->name('locale.update');
 
 Route::get('/{doc}', [LegalController::class, 'show'])
-    ->whereIn('doc', ['terms', 'privacy', 'refunds'])
+    ->whereIn('doc', ['terms', 'payment', 'security', 'privacy', 'refunds'])
     ->name('legal');

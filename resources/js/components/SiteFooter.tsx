@@ -1,4 +1,5 @@
 import { Handshake, Headphones, ShieldCheck, TrendingUp } from 'lucide-react';
+import { PaymentBadges } from '@/components/PaymentLogos';
 import { Link } from '@/components/ui/Link';
 import { Logo } from '@/components/ui';
 import { t } from '@/lib/i18n';
@@ -35,6 +36,8 @@ function columns() {
             links: [
                 { href: `${routes.about}#rules`, label: t('nav.rules') },
                 { href: routes.terms, label: t('footer.terms') },
+                { href: routes.payment, label: t('footer.payment') },
+                { href: routes.security, label: t('footer.security') },
                 { href: routes.privacy, label: t('footer.privacy') },
                 { href: routes.refunds, label: t('footer.refunds') },
             ],
@@ -81,13 +84,14 @@ export function SiteFooter() {
                                 <Logo asContent />
                             </Link>
                             <p className="t-sm muted prose">{t('footer.about')}</p>
-                            <div className="row wrap mt-16" style={{ gap: 8 }}>
-                                {['Uzcard', 'Humo', 'Visa', 'Mastercard'].map((p) => (
-                                    <span key={p} className="chip t-caption">
-                                        {p}
-                                    </span>
-                                ))}
+                            {/* Логотипы ПС и пометка о 3-D Secure — требование банка-эквайера */}
+                            <div className="mt-16">
+                                <PaymentBadges />
                             </div>
+                            <Link href={routes.security} className="pay-note">
+                                <ShieldCheck aria-hidden className="size-4" />
+                                {t('footer.secure_note')}
+                            </Link>
                         </div>
 
                         {columns().map((col) => (

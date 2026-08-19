@@ -16,6 +16,8 @@ export const routes = {
     news: '/news',
     newsPost: (slug: string) => `/news/${slug}`,
     terms: '/terms',
+    payment: '/payment',
+    security: '/security',
     privacy: '/privacy',
     refunds: '/refunds',
     about: '/about',

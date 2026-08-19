@@ -92,8 +92,11 @@ return [
         'documents' => '文件',
         'guide' => '说明',
         'terms' => '公开要约',
+        'payment' => '支付方式',
+        'security' => '支付安全',
         'privacy' => '隐私政策',
         'refunds' => '退款政策',
+        'secure_note' => '支付受 3-D Secure 技术保护',
         'about' => '面向乌兹别克斯坦、中亚及本地区贸易伙伴的供应商与采购商的 B2B 平台。',
         'copyright' => '© 2026 SAVDEX · ANJIR-GROUP 有限责任公司，乌兹别克斯坦',
         'no_commission' => '交易不收佣金 · 不参与资金结算',
@@ -290,6 +293,8 @@ return [
 
     'legal' => [
         'terms_title' => '公开要约',
+        'payment_title' => '支付方式',
+        'security_title' => '支付安全',
         'privacy_title' => '隐私政策',
         'refunds_title' => '退款政策',
     ],

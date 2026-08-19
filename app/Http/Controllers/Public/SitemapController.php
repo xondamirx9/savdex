@@ -131,6 +131,8 @@ class SitemapController extends Controller
             // Оферту и политику ищут по названию площадки перед оплатой;
             // приоритет низкий, но в индексе они быть должны
             ['loc' => url('/terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => url('/payment'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => url('/security'), 'priority' => '0.3', 'changefreq' => 'yearly'],
             ['loc' => url('/privacy'), 'priority' => '0.3', 'changefreq' => 'yearly'],
             ['loc' => url('/refunds'), 'priority' => '0.3', 'changefreq' => 'yearly'],
         ];
