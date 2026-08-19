@@ -93,8 +93,11 @@ return [
         'documents' => 'Documents',
         'guide' => 'Guide',
         'terms' => 'Terms of service',
+        'payment' => 'Payment methods',
+        'security' => 'Payment security',
         'privacy' => 'Privacy policy',
         'refunds' => 'Refund policy',
+        'secure_note' => 'Payments are protected by 3-D Secure',
         'about' => 'A B2B marketplace for suppliers and buyers in Uzbekistan, Central Asia and the region’s trading partners.',
         'copyright' => '© 2026 SAVDEX · ANJIR-GROUP LLC, Uzbekistan',
         'no_commission' => 'No commission on deals · We take no part in payments',
@@ -291,6 +294,8 @@ return [
 
     'legal' => [
         'terms_title' => 'Terms of service',
+        'payment_title' => 'Payment methods',
+        'security_title' => 'Payment security',
         'privacy_title' => 'Privacy policy',
         'refunds_title' => 'Refund policy',
     ],

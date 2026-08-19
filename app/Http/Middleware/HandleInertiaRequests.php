@@ -154,6 +154,22 @@ class HandleInertiaRequests extends Middleware
                 ->map(fn ($c): array => ['id' => $c->id, 'name' => $c->name()])
                 ->values(),
 
+            /*
+             * Контакты поддержки и реквизиты оператора — из настроек
+             * админки, а не из вёрстки: смена телефона или почты — это
+             * правка строки в панели, а не деплой. Раньше значения были
+             * зашиты в страницах, и правка настройки ни на что не влияла.
+             * Настройки читаются из суточного кэша — запросов не добавляет.
+             */
+            'support' => [
+                'email' => (string) \App\Models\Setting::get('support_email', ''),
+                'phone' => (string) \App\Models\Setting::get('support_phone', ''),
+                'hours' => (string) \App\Models\Setting::get('support_hours', ''),
+                'telegram' => (string) \App\Models\Setting::get('telegram', ''),
+                'legal_name' => (string) \App\Models\Setting::get('legal_name', ''),
+                'legal_tin' => (string) \App\Models\Setting::get('legal_tin', ''),
+            ],
+
             'locale' => app()->getLocale(),
 
             /*

@@ -93,8 +93,11 @@ return [
         'documents' => 'Belgeler',
         'guide' => 'Kılavuz',
         'terms' => 'Kullanım sözleşmesi',
+        'payment' => 'Ödeme yöntemleri',
+        'security' => 'Ödeme güvenliği',
         'privacy' => 'Gizlilik politikası',
         'refunds' => 'İade politikası',
+        'secure_note' => 'Ödemeler 3-D Secure teknolojisiyle korunur',
         'about' => 'Özbekistan, Orta Asya ve bölgenin ticaret ortakları için tedarikçi ve alıcıları buluşturan B2B platformu.',
         'copyright' => '© 2026 SAVDEX · ANJIR-GROUP LLC, Özbekistan',
         'no_commission' => 'İşlemlerden komisyon almıyoruz · Ödemelere taraf değiliz',
@@ -291,6 +294,8 @@ return [
 
     'legal' => [
         'terms_title' => 'Kullanım sözleşmesi',
+        'payment_title' => 'Ödeme yöntemleri',
+        'security_title' => 'Ödeme güvenliği',
         'privacy_title' => 'Gizlilik politikası',
         'refunds_title' => 'İade politikası',
     ],

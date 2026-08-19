@@ -1,20 +1,23 @@
 import { Clock, Mail, MessageCircle, Phone } from 'lucide-react';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t } from '@/lib/i18n';
+import { useSupport } from '@/lib/support';
 
 /**
  * Контакты площадки.
  *
  * Реквизиты те же, что в разделе «О нас», — телефон, почта и Telegram
- * поддержки. Подписи лежат в словаре и переводятся вместе с остальным
- * интерфейсом.
+ * поддержки из настроек админки. Подписи лежат в словаре и переводятся
+ * вместе с остальным интерфейсом.
  */
 export default function Contacts() {
+    const support = useSupport();
+
     const cards: [typeof Mail, string, string, string | null][] = [
-        [Phone, t('contacts.phone_title'), '+998 71 200-00-00', 'tel:+998712000000'],
-        [Mail, t('contacts.email_title'), 'support@savdex.uz', 'mailto:support@savdex.uz'],
-        [MessageCircle, t('contacts.tg_title'), '@savdex_support', 'https://t.me/savdex_support'],
-        [Clock, t('contacts.hours_title'), t('contacts.hours_value'), null],
+        [Phone, t('contacts.phone_title'), support.phone, support.telHref],
+        [Mail, t('contacts.email_title'), support.email, `mailto:${support.email}`],
+        [MessageCircle, t('contacts.tg_title'), support.tgHandle, support.telegram],
+        [Clock, t('contacts.hours_title'), support.hours || t('contacts.hours_value'), null],
     ];
 
     return (

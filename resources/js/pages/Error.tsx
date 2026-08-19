@@ -1,6 +1,7 @@
 import { Link } from '@/components/ui/Link';
 import { Ban, Clock, Compass, ServerCrash, Wrench } from 'lucide-react';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { useSupport } from '@/lib/support';
 import { routes } from '@/routes';
 
 /**
@@ -76,6 +77,7 @@ const PRESETS: Record<number, Preset> = {
 export default function ErrorPage({ status, reference }: { status: number; reference?: string }) {
     const preset = PRESETS[status] ?? PRESETS[500];
     const Icon = preset.icon;
+    const support = useSupport();
 
     return (
         <PublicLayout title={`${status} — ${preset.title}`}>
@@ -110,7 +112,7 @@ export default function ErrorPage({ status, reference }: { status: number; refer
                     )}
 
                     <p className="t-sm muted mt-16">
-                        Не помогло? Напишите на <a href="mailto:support@savdex.uz">support@savdex.uz</a>
+                        Не помогло? Напишите на <a href={`mailto:${support.email}`}>{support.email}</a>
                     </p>
                 </div>
             </div>

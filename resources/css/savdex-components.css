@@ -549,6 +549,14 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .footer li a:hover{color:#fff}
 .footer-bot{padding-top:24px;border-top:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:rgba(255,255,255,.55)}
 
+/* Логотипы платёжных систем: белые плашки читаются и на тёмном подвале,
+   и на светлых страницах оплаты */
+.pay-badges{display:flex;flex-wrap:wrap;gap:8px}
+.pay-badge{display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:56px;padding:0 10px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px}
+.pay-note{display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
+.footer .pay-note{color:rgba(255,255,255,.72)}
+.footer .pay-note:hover{color:#fff;text-decoration:none}
+
 /* Липкая мобильная кнопка действия */
 .sticky-cta{display:none}
 

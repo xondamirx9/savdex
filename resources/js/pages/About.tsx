@@ -1,6 +1,7 @@
 import { CheckCircle2, Handshake, Mail, Phone, Send, Shield, Star, Wallet } from 'lucide-react';
 import { OfficeMap, type Office } from '@/components/OfficeMap';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { useSupport } from '@/lib/support';
 
 /**
  * Страница «О компании» — шесть разделов, каждый со своим якорем.
@@ -64,6 +65,7 @@ export default function About({
     office: Office | null;
 }) {
     const sections = office !== null ? SECTIONS : SECTIONS.filter((s) => s.id !== 'office');
+    const support = useSupport();
 
     return (
         <PublicLayout
@@ -153,11 +155,11 @@ export default function About({
                                     <dl className="stack-12 t-sm">
                                         <div className="row-between">
                                             <dt className="muted">Наименование</dt>
-                                            <dd>ООО «ANJIR-GROUP»</dd>
+                                            <dd>{support.legal_name}</dd>
                                         </div>
                                         <div className="row-between">
                                             <dt className="muted">ИНН</dt>
-                                            <dd>309887421</dd>
+                                            <dd>{support.legal_tin}</dd>
                                         </div>
                                         <div className="row-between">
                                             <dt className="muted">Страна</dt>
@@ -170,32 +172,32 @@ export default function About({
                                         Как с нами связаться
                                     </h3>
                                     <div className="stack-12">
-                                        <a href="tel:+998712000000" className="row" style={{ gap: 12 }}>
+                                        <a href={support.telHref} className="row" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Phone aria-hidden className="size-4" />
                                             </span>
                                             <span>
-                                                <b>+998 71 200-00-00</b>
+                                                <b>{support.phone}</b>
                                                 <br />
-                                                <span className="t-caption muted">Пн–Пт, 9:00–18:00</span>
+                                                <span className="t-caption muted">{support.hours}</span>
                                             </span>
                                         </a>
-                                        <a href="mailto:support@savdex.uz" className="row" style={{ gap: 12 }}>
+                                        <a href={`mailto:${support.email}`} className="row" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Mail aria-hidden className="size-4" />
                                             </span>
                                             <span>
-                                                <b>support@savdex.uz</b>
+                                                <b>{support.email}</b>
                                                 <br />
                                                 <span className="t-caption muted">Поддержка, ответ за 4 часа</span>
                                             </span>
                                         </a>
-                                        <a href="https://t.me/savdex_support" className="row" style={{ gap: 12 }}>
+                                        <a href={support.telegram} className="row" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Send aria-hidden className="size-4" />
                                             </span>
                                             <span>
-                                                <b>@savdex_support</b>
+                                                <b>{support.tgHandle}</b>
                                                 <br />
                                                 <span className="t-caption muted">Телеграм, круглосуточно</span>
                                             </span>
