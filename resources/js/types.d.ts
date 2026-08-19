@@ -48,6 +48,20 @@ export interface WalletSummary {
     resets_at: string | null;
 }
 
+/**
+ * Контакты поддержки и реквизиты оператора из настроек админки.
+ * Пустая строка — настройка не заполнена: блок с ней не показывается.
+ */
+export interface SupportContacts {
+    email: string;
+    phone: string;
+    hours: string;
+    /** Полная ссылка вида https://t.me/savdex. */
+    telegram: string;
+    legal_name: string;
+    legal_tin: string;
+}
+
 export interface SharedProps extends InertiaPageProps {
     auth: { user: AuthUser | null; company: AuthCompany | null };
     flash: { success?: string; error?: string; warning?: string };
@@ -68,6 +82,8 @@ export interface SharedProps extends InertiaPageProps {
     favorites?: number[];
     /** Разделы каталога для выпадающего списка поиска в шапке. */
     navCategories?: { id: number; name: string }[];
+    /** Контакты поддержки и реквизиты — правятся в админке. */
+    support: SupportContacts;
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];

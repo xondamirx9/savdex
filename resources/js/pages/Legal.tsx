@@ -1,5 +1,6 @@
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { useSupport } from '@/lib/support';
 import { routes } from '@/routes';
 
 /**
@@ -27,6 +28,8 @@ interface Props {
 }
 
 export default function Legal({ title, intro, updatedAt, draft, blocks, siblings }: Props) {
+    const support = useSupport();
+
     return (
         <PublicLayout title={title} description={intro}>
             <div className="container" style={{ padding: '32px 0 96px' }}>
@@ -104,8 +107,8 @@ export default function Legal({ title, intro, updatedAt, draft, blocks, siblings
                         </div>
 
                         <p className="t-sm muted mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-                            Редакция от {updatedAt} · Оператор: ООО «ANJIR-GROUP», Узбекистан ·{' '}
-                            <a href="mailto:support@savdex.uz">support@savdex.uz</a>
+                            Редакция от {updatedAt} · Оператор: {support.legal_name}, Узбекистан ·{' '}
+                            <a href={`mailto:${support.email}`}>{support.email}</a>
                         </p>
                     </div>
                 </div>
