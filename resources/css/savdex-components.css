@@ -1737,3 +1737,43 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
 @media (max-width:560px){
   .supplier-grid,.news-grid{grid-template-columns:1fr}
 }
+
+/* ============================================================
+   16. Тач-устройства: зона нажатия не меньше 44×44
+
+   Правило включается по типу ввода, а не по ширине экрана:
+   планшет в 1024 px листают тем же пальцем, что и телефон,
+   а мышью на узком окне попадают и в 24 px.
+
+   Мелким элементам зона расширяется прозрачным ::after —
+   приём уже применён в проекте к .btn-sm и .listing-fav:
+   внешний вид кнопки остаётся прежним, увеличивается только
+   область, которую засчитывает касание.
+   ============================================================ */
+@media (pointer:coarse){
+  /* Основная кнопка: высота вместо min-height — у .btn задан
+     height, и min-height его бы не перекрыл */
+  .btn{height:44px}
+
+  /* Иконочные кнопки растут по-настоящему, а не прозрачной зоной:
+     они стоят в потоке вплотную к краю экрана, и зона, вылезающая
+     за половину своей ширины, добавляла документу горизонтальный
+     скролл (крестик плашки давал +7 px на 375 px) */
+  .burger,.topbar-close,.btn-icon{width:44px;height:44px}
+
+  /* Остальным зона расширяется только по вертикали: по горизонтали
+     эти элементы либо достаточно широки, либо прижаты к краю */
+  .btn-sm,.listing-fav,.section-bar-link{position:relative}
+  .btn-sm::after,.listing-fav::after,.section-bar-link::after{
+    content:'';position:absolute;left:0;right:0;top:50%;
+    transform:translateY(-50%);height:44px;
+  }
+
+  /* Ссылки-строки: 16-21 px по высоте — промах через раз.
+     Отступ между пунктами подвала убирается: его заменяет
+     сама высота ссылки */
+  .footer li{margin-bottom:0}
+  .footer li a,.contact-value,.pay-note,.topbar-more,.logo,
+  .subnav-inner a,.subnav-post{
+    display:inline-flex;align-items:center;min-height:44px}
+}
