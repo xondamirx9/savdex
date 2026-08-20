@@ -1,7 +1,9 @@
-import { router } from '@inertiajs/react';
-import { Check, FileText, X } from 'lucide-react';
+import { router, useForm } from '@inertiajs/react';
+import { Check, FileText, Ticket, X } from 'lucide-react';
+import type { FormEvent } from 'react';
 import { formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
+import { TextInput } from '@/components/ui';
 
 export interface PlanOffer {
     id: number;
@@ -44,6 +46,58 @@ function order(kind: 'plan' | 'credits', id: number) {
 }
 
 /**
+ * Ввод промокода — бесплатный период тарифа без счёта.
+ *
+ * Стоит перед списком тарифов: человек с промокодом в руках приходит
+ * сюда именно за ним, и искать поле под ценами ему незачем. Ошибка
+ * приходит с сервера на поле — причин отказа несколько (код погашен,
+ * просрочен, компания уже платила), и человек должен видеть свою.
+ */
+function PromoCodeForm() {
+    const form = useForm({ promo_code: '' });
+
+    function submit(e: FormEvent) {
+        e.preventDefault();
+        form.post('/cabinet/billing/promo', {
+            preserveScroll: true,
+            onSuccess: () => form.reset('promo_code'),
+        });
+    }
+
+    return (
+        <Panel title="Промокод">
+            <p className="t-sm muted" style={{ marginBottom: 16 }}>
+                Есть промокод? Введите его — тариф подключится сразу, без счёта и оплаты.
+            </p>
+            <form onSubmit={submit} className="row wrap" style={{ gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                    <TextInput
+                        label="Промокод"
+                        name="promo_code"
+                        placeholder="SVDX-XXXXXXXX"
+                        autoComplete="off"
+                        spellCheck={false}
+                        maxLength={32}
+                        value={form.data.promo_code}
+                        onChange={(e) => form.setData('promo_code', e.target.value.toUpperCase())}
+                        error={form.errors.promo_code}
+                    />
+                </div>
+                <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ marginTop: 26 }}
+                    disabled={form.processing || form.data.promo_code.trim() === ''}
+                >
+                    <Ticket aria-hidden className="size-4" />
+                    {form.processing ? 'Проверяем…' : 'Активировать'}
+                </button>
+            </form>
+        </Panel>
+    );
+}
+
+/**
  * Покупка тарифа и кредитов, неоплаченные счета и реквизиты.
  *
  * Два режима, выбирает сервер флагом checkout. Пока онлайн-кассы нет —
@@ -58,6 +112,7 @@ export function BillingStore({
     invoices,
     requisites,
     checkout,
+    promoAllowed = false,
 }: {
     plans: PlanOffer[];
     packs: PackOffer[];
@@ -66,6 +121,8 @@ export function BillingStore({
     requisites: Record<string, string>;
     /** Онлайн-касса включена: кнопки ведут на страницу оплаты */
     checkout: boolean;
+    /** Компания подходит под акцию: ещё не платила и не активировала код */
+    promoAllowed?: boolean;
 }) {
     const orderLabel = checkout ? 'Оплатить' : 'Выставить счёт';
     const { confirm, dialog } = useConfirm();
@@ -163,6 +220,15 @@ export function BillingStore({
                         </div>
                     )}
                 </Panel>
+            )}
+
+            {/* Промокод показывается, только пока тариф не оплачен:
+                акция для тех, кто ещё не платил, и поле у действующего
+                клиента обещало бы то, что сервер отклонит */}
+            {promoAllowed && (
+                <div className="mt-24">
+                    <PromoCodeForm />
+                </div>
             )}
 
             <div className="grid grid-2 grid-tight mt-24">

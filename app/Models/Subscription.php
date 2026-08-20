@@ -21,6 +21,15 @@ class Subscription extends Model
     /** Выдана администратором вручную: VIP, дебиторка, компенсация. */
     public const SOURCE_MANUAL = 'manual';
 
+    /**
+     * Активирована промокодом — бесплатный период тарифа.
+     *
+     * Отдельно от manual: подарок администратора и акция для новых
+     * компаний считаются по-разному, а в отчёте о выручке обе не должны
+     * выглядеть оплатой.
+     */
+    public const SOURCE_PROMO = 'promo';
+
     protected function casts(): array
     {
         return [

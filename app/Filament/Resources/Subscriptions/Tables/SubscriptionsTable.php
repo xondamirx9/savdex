@@ -118,11 +118,22 @@ class SubscriptionsTable
                 TextColumn::make('source')
                     ->label('Откуда')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => $state === Subscription::SOURCE_MANUAL ? 'Выдан вручную' : 'Оплачен')
-                    ->color(fn (string $state): string => $state === Subscription::SOURCE_MANUAL ? 'warning' : 'success')
-                    ->description(fn (Subscription $record): ?string => $record->isManual()
-                        ? ($record->grantedBy?->name ?? 'администратор').': '.($record->grant_reason ?? '—')
-                        : null)
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        Subscription::SOURCE_MANUAL => 'Выдан вручную',
+                        Subscription::SOURCE_PROMO => 'Промокод',
+                        default => 'Оплачен',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        Subscription::SOURCE_MANUAL => 'warning',
+                        Subscription::SOURCE_PROMO => 'info',
+                        default => 'success',
+                    })
+                    // Основание показывается у всех неоплаченных подписок:
+                    // у промокода это его код, и без него в списке
+                    // не отличить, по какой акции пришла компания
+                    ->description(fn (Subscription $record): ?string => $record->source === Subscription::SOURCE_PAYMENT
+                        ? null
+                        : ($record->grantedBy?->name ?? 'администратор').': '.($record->grant_reason ?? '—'))
                     ->wrap(),
 
                 TextColumn::make('status')
@@ -177,6 +188,7 @@ class SubscriptionsTable
                 SelectFilter::make('source')->label('Откуда')->options([
                     Subscription::SOURCE_PAYMENT => 'Оплачен',
                     Subscription::SOURCE_MANUAL => 'Выдан вручную',
+                    Subscription::SOURCE_PROMO => 'Промокод',
                 ]),
 
                 Filter::make('expiring')

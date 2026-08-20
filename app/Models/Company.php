@@ -187,9 +187,21 @@ class Company extends Model
         return $this->hasOne(Wallet::class);
     }
 
+    /**
+     * Действующая подписка компании.
+     *
+     * Проверяется и срок, а не только статус: в expired подписку
+     * переводит плановая команда, и пока она не отработала — а на
+     * хостинге планировщик может быть не заведён вовсе — истёкшая
+     * подписка продолжала давать доступ. Для подарочного месяца
+     * по промокоду это означало бесплатный платный тариф навсегда.
+     */
     public function subscription(): HasOne
     {
-        return $this->hasOne(Subscription::class)->where('status', 'active')->latestOfMany();
+        return $this->hasOne(Subscription::class)
+            ->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))
+            ->latestOfMany();
     }
 
     /** Контакты, которые открыла эта компания. */
