@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Settings\Schemas;
 
 use App\Models\Setting;
 use App\Support\OfficeLocation;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -53,6 +54,7 @@ class SettingForm
                             'text' => 'Текст',
                             'number' => 'Число',
                             'bool' => 'Да / нет',
+                            'image' => 'Изображение',
                         ])
                         ->default('string')
                         ->required()
@@ -95,6 +97,25 @@ class SettingForm
                     Toggle::make('value')
                         ->label('Включено')
                         ->visible(fn (Get $get): bool => $get('type') === 'bool'),
+
+                    /*
+                     * Картинка загружается сюда же, а не отдельным
+                     * разделом: тому, кто меняет фон витрины, незачем
+                     * знать, что путь к файлу лежит в той же таблице,
+                     * что телефон поддержки.
+                     */
+                    FileUpload::make('value_image')
+                        ->label('Изображение')
+                        ->visible(fn (Get $get): bool => $get('type') === 'image')
+                        ->image()
+                        ->imageEditor()
+                        // Диск указан явно: витрина строит адрес картинки
+                        // через публичный диск, а по умолчанию Filament
+                        // кладёт файл туда, где его не отдаст веб-сервер
+                        ->disk('public')
+                        ->directory('appearance')
+                        ->maxSize(8192)
+                        ->helperText('До 8 МБ. Для фона первого экрана берите широкую горизонтальную картинку от 1920 px: она обрезается по центру и затемняется, чтобы читался белый текст'),
 
                     Textarea::make('description')
                         ->label('Пояснение')
