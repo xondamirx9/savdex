@@ -99,6 +99,9 @@ return new class extends Migration
         ],
     ];
 
+    /** Пример из подсказки к настройке — не адрес офиса, а картинка «как заполнять». */
+    private const COORDS_EXAMPLE = '41.311081, 69.240562';
+
     public function up(): void
     {
         $now = now();
@@ -169,10 +172,20 @@ return new class extends Migration
             ->where('key', 'office_address')
             ->update(['value' => json_encode($actual), 'updated_at' => $now]);
 
-        DB::table('settings')
-            ->where('key', 'office_coords')
-            ->where('value', json_encode('41.311081, 69.240562'))
-            ->update(['value' => json_encode(''), 'updated_at' => $now]);
+        /*
+         * Сравнение идёт в PHP, а не условием в запросе: колонка value
+         * объявлена как json, и Postgres не умеет сравнивать её со
+         * строкой — «operator does not exist: json = text». SQLite такое
+         * сравнение проглатывает, поэтому на локальной базе промах
+         * не виден, а деплой падает на первой же миграции.
+         */
+        $coords = DB::table('settings')->where('key', 'office_coords')->value('value');
+
+        if ($coords !== null && json_decode((string) $coords, true) === self::COORDS_EXAMPLE) {
+            DB::table('settings')
+                ->where('key', 'office_coords')
+                ->update(['value' => json_encode(''), 'updated_at' => $now]);
+        }
     }
 
     /**
