@@ -13,6 +13,7 @@ use App\Models\Listing;
 use App\Models\Plan;
 use App\Models\Review;
 use App\Models\Setting;
+use App\Support\Appearance;
 use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
@@ -72,6 +73,9 @@ class PageController extends Controller
 
         return Inertia::render('Home', [
             'stats' => $stats,
+            // Фон первого экрана: меняется в админке, в разделе
+            // «Оформление». Пустая настройка даёт картинку из коробки
+            'heroImage' => Appearance::heroImage(),
             'categories' => $this->popularCategories(),
             // Лента товаров первого экрана: только предложения —
             // запросы идут отдельной лентой ниже

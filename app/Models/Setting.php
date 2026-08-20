@@ -22,6 +22,7 @@ class Setting extends Model
 
     public const GROUPS = [
         'general' => 'Общие',
+        'appearance' => 'Оформление',
         'contacts' => 'Контакты',
         'legal' => 'Реквизиты',
         'social' => 'Соцсети',

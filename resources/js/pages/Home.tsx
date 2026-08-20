@@ -289,6 +289,7 @@ export default function Home({
     cities,
     news,
     reviews,
+    heroImage,
 }: {
     stats: Stats;
     categories: CategoryTile[];
@@ -298,6 +299,8 @@ export default function Home({
     countries: CountryOption[];
     cities: CityOption[];
     news: NewsCard[];
+    /** Фон первого экрана — задаётся в админке, разделе «Оформление» */
+    heroImage: string;
     reviews: ReviewRow[];
 }) {
     const statCells: [typeof Users, string, number, string][] = [
@@ -313,7 +316,10 @@ export default function Home({
             description={t('home.meta_description')}
         >
             {/* ── Первый экран: тёмно-синий порт ── */}
-            <section className="hero-b2b">
+            {/* Фон приходит с сервера: картинку меняют в админке,
+                и пересобирать стили ради этого незачем. Затемнение
+                и цвет подложки остаются в CSS */}
+            <section className="hero-b2b" style={{ backgroundImage: `url(${heroImage})` }}>
                 <div className="container">
                     <div className="hero-b2b-inner">
                         <div data-reveal>
