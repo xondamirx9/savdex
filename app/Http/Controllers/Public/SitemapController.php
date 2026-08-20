@@ -47,7 +47,13 @@ class SitemapController extends Controller
             $parts[] = "listings-{$page}";
         }
 
-        if (NewsPost::query()->where('status', 'published')->exists()) {
+        /*
+         * Через scopePublished, а не по колонке status, которой у новостей
+         * нет: SQLite молча считает неизвестный идентификатор в кавычках
+         * строковым литералом и возвращает «ничего не нашлось», а Postgres
+         * на том же запросе отдаёт ошибку — карта сайта падала с 500.
+         */
+        if (NewsPost::query()->published()->exists()) {
             $parts[] = 'news';
         }
 
@@ -208,7 +214,7 @@ class SitemapController extends Controller
     private function news(): array
     {
         return NewsPost::query()
-            ->where('status', 'published')
+            ->published()
             ->get(['slug', 'updated_at'])
             ->map(fn (NewsPost $n): array => [
                 'loc' => url('/news/'.$n->slug),

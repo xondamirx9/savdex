@@ -7,6 +7,7 @@ namespace Tests\Feature\Public;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Listing;
+use App\Models\NewsPost;
 use App\Models\Review;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -282,6 +283,52 @@ class SeoTest extends TestCase
             ->assertSee(url('/payment'), false)
             ->assertSee(url('/security'), false)
             ->assertSee(url('/privacy'), false);
+    }
+
+    /**
+     * Раздел новостей в карте сайта.
+     *
+     * Проверка публикации шла по колонке status, которой у новостей нет:
+     * SQLite молча считает неизвестный идентификатор в кавычках строковым
+     * литералом и отвечает «ничего не нашлось», а Postgres — тот, что
+     * стоит на сервере, — отдаёт ошибку, и карта сайта падала с 500.
+     */
+    #[Test]
+    public function карта_сайта_включает_опубликованные_новости(): void
+    {
+        NewsPost::create([
+            'slug' => 'novost-o-tarifah',
+            'category' => 'Тарифы и оплата',
+            'title' => 'Новость',
+            'excerpt' => 'Короткое описание',
+            'body' => 'Текст новости',
+            'is_published' => true,
+            'published_at' => now()->subDay(),
+        ]);
+
+        $this->get('/sitemap.xml')->assertOk()->assertSee(url('/sitemap-news.xml'), false);
+
+        $this->get('/sitemap-news.xml')
+            ->assertOk()
+            ->assertSee(url('/news/novost-o-tarifah'), false);
+    }
+
+    /** Черновик и отложенная публикация роботу не показываются. */
+    #[Test]
+    public function неопубликованная_новость_в_карту_не_попадает(): void
+    {
+        NewsPost::create([
+            'slug' => 'crernovik',
+            'category' => 'Тарифы и оплата',
+            'title' => 'Черновик',
+            'excerpt' => 'Описание',
+            'body' => 'Текст',
+            'is_published' => false,
+        ]);
+
+        $this->get('/sitemap-news.xml')
+            ->assertOk()
+            ->assertDontSee(url('/news/crernovik'), false);
     }
 
     #[Test]
