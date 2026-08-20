@@ -16,6 +16,9 @@
   --border:var(--color-line); --border-strong:var(--color-line-strong);
   --text-muted:var(--color-muted); --text:var(--color-ink);
   --success:var(--color-success); --success-bg:var(--color-success-bg);
+  /* Текстовые варианты смысловых цветов: базовые не проходят AA как текст */
+  --success-text:var(--color-success-text); --gold-text:var(--color-gold-text);
+  --demand-text:var(--color-demand-text);
   --warning:var(--color-warning); --warning-bg:var(--color-warning-bg);
   --danger:var(--color-danger);   --danger-bg:var(--color-danger-bg);
   --gold:var(--color-gold);       --gold-bg:var(--color-gold-bg);
@@ -58,11 +61,15 @@ table{border-collapse:collapse;width:100%}
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
+/* Прячется тем же приёмом, что и .sr-only, а не выносом
+   на -9999px: съезжающий за экран элемент остаётся в потоке
+   документа и на узких экранах добавляет ширину */
 .skip-link{
-  position:absolute;left:-9999px;top:0;z-index:200;
+  position:absolute;left:0;top:0;z-index:200;
+  width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;
   background:var(--primary-700);color:#fff;padding:12px 20px;border-radius:0 0 var(--r-btn) 0;
 }
-.skip-link:focus{left:0}
+.skip-link:focus{width:auto;height:auto;overflow:visible;clip:auto}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}

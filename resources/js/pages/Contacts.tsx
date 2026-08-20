@@ -40,7 +40,9 @@ export default function Contacts() {
                                     {title}
                                 </h2>
                                 {href ? (
-                                    <a href={href} className="t-body" style={{ overflowWrap: 'anywhere' }}>
+                                    // contact-value: на тач-устройствах строка ссылки
+                                    // вырастает до 44 px — по телефону звонят с мобильного
+                                    <a href={href} className="t-body contact-value" style={{ overflowWrap: 'anywhere' }}>
                                         {value}
                                     </a>
                                 ) : (
