@@ -16,6 +16,9 @@
   --border:var(--color-line); --border-strong:var(--color-line-strong);
   --text-muted:var(--color-muted); --text:var(--color-ink);
   --success:var(--color-success); --success-bg:var(--color-success-bg);
+  /* Текстовые варианты смысловых цветов: базовые не проходят AA как текст */
+  --success-text:var(--color-success-text); --gold-text:var(--color-gold-text);
+  --demand-text:var(--color-demand-text);
   --warning:var(--color-warning); --warning-bg:var(--color-warning-bg);
   --danger:var(--color-danger);   --danger-bg:var(--color-danger-bg);
   --gold:var(--color-gold);       --gold-bg:var(--color-gold-bg);

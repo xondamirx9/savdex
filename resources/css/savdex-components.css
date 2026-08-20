@@ -167,9 +167,11 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
   height:24px;padding:0 10px;border-radius:var(--r-pill);
   font-size:12px;font-weight:600;line-height:1;white-space:nowrap}
 .badge-supply{background:var(--primary-100);color:var(--primary-700)}
-.badge-demand{background:var(--demand-bg);color:var(--demand)}
-.badge-verified{background:var(--success-bg);color:var(--success)}
-.badge-gold{background:var(--gold-bg);color:var(--gold)}
+/* Цвет текста — затемнённый вариант: базовый оттенок на своей
+   подложке даёт меньше 4.5:1 и на 12 px читается плохо */
+.badge-demand{background:var(--demand-bg);color:var(--demand-text)}
+.badge-verified{background:var(--success-bg);color:var(--success-text)}
+.badge-gold{background:var(--gold-bg);color:var(--gold-text)}
 .badge-urgent{background:var(--warning);color:#fff}
 .badge-top{background:var(--primary-700);color:#fff}
 .badge-neutral{background:var(--bg);color:var(--text-muted);border:1px solid var(--border)}
