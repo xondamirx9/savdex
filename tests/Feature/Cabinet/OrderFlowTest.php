@@ -385,18 +385,38 @@ class OrderFlowTest extends TestCase
             ->assertSee('В назначении платежа укажите номер счёта', false);
     }
 
+    /**
+     * Получатель в счёте — полное наименование как в банковских
+     * документах: платёж по счёту, где получатель назван короче, чем
+     * в договоре с банком, банк отклоняет.
+     */
     #[Test]
     public function счёт_показывает_реквизиты_площадки(): void
     {
-        Setting::updateOrCreate(['key' => 'legal_name'], ['group' => 'legal', 'label' => 'Юрлицо', 'type' => 'string', 'value' => 'ООО «SAVDEX»']);
+        Setting::updateOrCreate(['key' => 'legal_full_name'], ['group' => 'legal', 'label' => 'Полное наименование', 'type' => 'string', 'value' => '"SAVDEX" MCHJ']);
         Setting::updateOrCreate(['key' => 'legal_account'], ['group' => 'legal', 'label' => 'Счёт', 'type' => 'string', 'value' => '2020 8000 1234 5678 9001']);
 
         $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'credits', 'id' => $this->pack()->id]);
 
         $this->actingAs($this->user)
             ->get('/cabinet/billing/invoice/'.Payment::firstOrFail()->id)
-            ->assertSee('ООО «SAVDEX»', false)
+            // Без false: кавычки в наименовании уходят в HTML экранированными
+            ->assertSee('"SAVDEX" MCHJ')
             ->assertSee('2020 8000 1234 5678 9001');
+    }
+
+    /** Пока полное наименование не заполнено, в счёте краткое — без пустой строки. */
+    #[Test]
+    public function счёт_обходится_кратким_наименованием(): void
+    {
+        Setting::updateOrCreate(['key' => 'legal_full_name'], ['group' => 'legal', 'label' => 'Полное наименование', 'type' => 'string', 'value' => '']);
+        Setting::updateOrCreate(['key' => 'legal_name'], ['group' => 'legal', 'label' => 'Юрлицо', 'type' => 'string', 'value' => 'ООО «SAVDEX»']);
+
+        $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'credits', 'id' => $this->pack()->id]);
+
+        $this->actingAs($this->user)
+            ->get('/cabinet/billing/invoice/'.Payment::firstOrFail()->id)
+            ->assertSee('ООО «SAVDEX»', false);
     }
 
     /** Чужой счёт недоступен — и о его существовании не сообщаем. */

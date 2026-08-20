@@ -181,7 +181,12 @@ class BillingController extends Controller
     private static function requisites(): array
     {
         return array_filter([
-            'Получатель' => (string) Setting::get('legal_name', ''),
+            /*
+             * Получатель — полное наименование как в банковских
+             * документах: платёж по счёту, где получатель назван
+             * короче, чем в договоре с банком, банк отклоняет.
+             */
+            'Получатель' => (string) Setting::get('legal_full_name', '') ?: (string) Setting::get('legal_name', ''),
             'ИНН' => (string) Setting::get('legal_tin', ''),
             'Расчётный счёт' => (string) Setting::get('legal_account', ''),
             'Банк' => (string) Setting::get('legal_bank', ''),
