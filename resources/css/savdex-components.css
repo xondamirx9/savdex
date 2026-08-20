@@ -527,7 +527,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .value-col li:last-child{border-bottom:none}
 .value-col li svg{flex-shrink:0;margin-top:4px}
 
-.objection{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--primary-700);border-radius:var(--r-card);padding:22px}
+.objection{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--primary-700);border-radius:var(--r-card);padding:var(--sp-6)}
 .objection h4{margin-bottom:8px;color:var(--primary-900)}
 .objection p{font-size:14px;color:var(--text-muted);line-height:1.6}
 
@@ -546,7 +546,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .footer .logo-word span{color:#6ea1ff}
 .footer .muted{color:rgba(255,255,255,.6)}
 .footer .chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
-.footer li{margin-bottom:9px}
+.footer li{margin-bottom:var(--sp-2)}
 .footer li a{font-size:14px;color:rgba(255,255,255,.72)}
 .footer li a:hover{color:#fff}
 .footer-bot{padding-top:24px;border-top:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:rgba(255,255,255,.55)}
@@ -714,10 +714,6 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .btn-sm::after,.listing-fav::after{
     content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:44px;min-width:44px}
-  .header-inner{height:60px;gap:12px}
-  .mobile-menu{top:60px}
-  .logo{font-size:19px}
-
   .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
   .flow{grid-template-columns:1fr;gap:0}
   .flow-step{padding-left:52px;padding-bottom:24px;padding-top:0;position:relative}
@@ -1343,7 +1339,7 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hd-logo-word{display:flex;flex-direction:column;line-height:1.1}
 .hd-logo-name{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--navy-900)}
 .hd-logo-name span{color:var(--primary-700)}
-.hd-logo-sub{font-size:10.5px;color:var(--text-muted);letter-spacing:.01em}
+.hd-logo-sub{font-size:12px;color:var(--text-muted);letter-spacing:.01em}
 
 
 /* Поиск в шапке: значок + поле + категории + кнопка одной пилюлей.
@@ -1439,7 +1435,7 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hero-panel{position:relative;background:rgba(13,27,54,.78);backdrop-filter:blur(10px);
   border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:20px;box-shadow:var(--sh-modal)}
 .hero-tabs{display:flex;gap:2px;border-bottom:1px solid rgba(255,255,255,.14);margin-bottom:16px}
-.hero-tab{padding:10px 16px;font-size:14.5px;font-weight:600;color:rgba(255,255,255,.65);
+.hero-tab{padding:10px 16px;font-size:14px;font-weight:600;color:rgba(255,255,255,.65);
   border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;
   transition:color var(--t-fast),border-color var(--t-fast)}
 .hero-tab:hover{color:#fff}
@@ -1634,7 +1630,18 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .stat-ico{width:38px;height:38px}
   .stat-cell-num{font-size:20px}
   .hero-panel{padding:14px}
-  .hero-tabs{overflow-x:auto;scrollbar-width:none}
+  /* Табы уезжают за край, а полосы прокрутки на телефоне нет:
+     без подсказки третья вкладка выглядит обрезанным словом,
+     а не продолжением ряда. Маска гасит правый край — приём
+     читается как «дальше есть ещё» */
+  .hero-tabs{
+    overflow-x:auto;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right,#000 calc(100% - var(--sp-6)),transparent);
+    mask-image:linear-gradient(to right,#000 calc(100% - var(--sp-6)),transparent);
+  }
+  .hero-tabs::-webkit-scrollbar{display:none}
+  /* Плотнее padding — на 320 px в ряд помещается больше */
+  .hero-tab{padding:10px var(--sp-3)}
   .hscroll-btn{display:none}
   .features-grid{grid-template-columns:1fr}
 }
@@ -1648,7 +1655,6 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
 @media (max-width:400px){
   .cat-grid,.product-grid,.product-grid--6,.country-grid{grid-template-columns:1fr 1fr}
   .hd-main{gap:8px}
-  .hd-logo-sub{font-size:9.5px}
 }
 
 @media (max-width:360px){
