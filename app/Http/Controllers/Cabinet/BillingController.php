@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cabinet;
 
+use App\Exceptions\PromoCodeRejected;
 use App\Http\Controllers\Controller;
 use App\Models\CreditPack;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Models\Plan;
 use App\Models\Setting;
+use App\Models\Subscription;
 use App\Services\OrderService;
 use App\Services\Payments\PaymentGatewayException;
 use App\Services\Payments\PaymentGatewayManager;
+use App\Services\PromoCodeService;
 use App\Support\CurrencyRate;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -48,6 +51,8 @@ class BillingController extends Controller
                 'invoices' => [],
                 'requisites' => [],
                 'checkout' => false,
+                // Тариф выдаётся на компанию: без неё промокод активировать не на что
+                'promoAllowed' => false,
             ]);
         }
 
@@ -150,6 +155,13 @@ class BillingController extends Controller
             // Включена ли онлайн-касса: от этого зависят подписи кнопок
             // («Оплатить» против «Выставить счёт») и кнопка оплаты на счетах
             'checkout' => $this->checkoutEnabled(),
+
+            /*
+             * Подходит ли компания под акцию с промокодом. Форма ввода
+             * показывается только ей: у платившего клиента поле обещало
+             * бы то, что сервер всё равно отклонит.
+             */
+            'promoAllowed' => $company !== null && app(PromoCodeService::class)->eligible($company),
         ]);
     }
 
@@ -181,7 +193,12 @@ class BillingController extends Controller
     private static function requisites(): array
     {
         return array_filter([
-            'Получатель' => (string) Setting::get('legal_name', ''),
+            /*
+             * Получатель — полное наименование как в банковских
+             * документах: платёж по счёту, где получатель назван
+             * короче, чем в договоре с банком, банк отклоняет.
+             */
+            'Получатель' => (string) Setting::get('legal_full_name', '') ?: (string) Setting::get('legal_name', ''),
             'ИНН' => (string) Setting::get('legal_tin', ''),
             'Расчётный счёт' => (string) Setting::get('legal_account', ''),
             'Банк' => (string) Setting::get('legal_bank', ''),
@@ -244,6 +261,54 @@ class BillingController extends Controller
         }
 
         return back()->with('success', "Счёт {$payment->number} на {$payment->amountLabel()} сформирован. Реквизиты — ниже, доступ откроется после зачисления.");
+    }
+
+    /**
+     * Активация промокода: бесплатный период тарифа без счёта.
+     *
+     * Отдельным действием, а не полем в форме заказа: промокод не
+     * уменьшает сумму счёта, а сразу выдаёт тариф, и смешивать это
+     * с выставлением счёта значило бы создавать счёт на ноль сумов.
+     *
+     * Причину отказа сервис кладёт в сообщение исключения — её видит
+     * человек. Ошибка вешается на поле, а не во флеш: форма ввода
+     * промокода на странице одна, и сообщение должно остаться рядом с ней.
+     */
+    public function promo(Request $request): HttpResponse
+    {
+        $company = $request->user()->company;
+
+        if ($company === null) {
+            return back()->withErrors(['promo_code' => 'Сначала заполните данные компании — тариф выдаётся на неё']);
+        }
+
+        $data = $request->validate(
+            ['promo_code' => ['required', 'string', 'max:32']],
+            ['promo_code.required' => 'Введите промокод'],
+        );
+
+        $promos = app(PromoCodeService::class);
+
+        try {
+            $subscription = $promos->redeem($data['promo_code'], $company, $request->user());
+        } catch (PromoCodeRejected $e) {
+            /*
+             * Ошибка на поле — только пока форма остаётся на странице.
+             * Если компания перестала подходить под акцию (успела
+             * оплатить счёт, активировала код с другой вкладки), форма
+             * со следующей загрузкой исчезнет вместе с сообщением,
+             * и нажатие выглядело бы как «ничего не произошло».
+             */
+            return $promos->eligible($company)
+                ? back()->withErrors(['promo_code' => $e->getMessage()])
+                : back()->with('error', $e->getMessage());
+        }
+
+        $until = $subscription->ends_at?->translatedFormat('d.m.Y');
+
+        return back()->with('success', $until === null
+            ? "Промокод активирован: тариф «{$subscription->plan->name}» подключён."
+            : "Промокод активирован: тариф «{$subscription->plan->name}» бесплатно до {$until}.");
     }
 
     /**
@@ -375,11 +440,22 @@ class BillingController extends Controller
             : 'Автопродление отключено.');
     }
 
+    /**
+     * Включение автопродления.
+     *
+     * Только для оплаченной подписки: у подарочной — по промокоду или
+     * от администратора — продлевать нечего, а включённый флаг заставил
+     * бы площадку выставить счёт на тариф, которого никто не заказывал.
+     */
     public function resume(Request $request): RedirectResponse
     {
         $subscription = $request->user()->company?->subscription;
 
         abort_if($subscription === null, 404);
+
+        if ($subscription->source !== Subscription::SOURCE_PAYMENT) {
+            return back()->with('warning', 'Этот тариф выдан без оплаты — продлевать нечего. Оформите счёт, когда период закончится.');
+        }
 
         $subscription->forceFill(['auto_renew' => true, 'cancelled_at' => null])->save();
 

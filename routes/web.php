@@ -328,6 +328,14 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::post('/cabinet/billing/order', [BillingController::class, 'order'])
         ->middleware(['verified', 'throttle:20,60'])
         ->name('cabinet.billing.order');
+    /*
+     * Активация промокода. Ограничение частоты жёстче, чем у заказа:
+     * подобрать чужой код — это получить бесплатный месяц тарифа,
+     * и десяти попыток в час хватает тому, кто читает код с листовки.
+     */
+    Route::post('/cabinet/billing/promo', [BillingController::class, 'promo'])
+        ->middleware(['verified', 'throttle:10,60'])
+        ->name('cabinet.billing.promo');
     Route::post('/cabinet/billing/invoice/{id}/cancel', [BillingController::class, 'cancelInvoice'])
         ->name('cabinet.billing.invoice.cancel');
     // Онлайн-оплата выставленного счёта: увод на страницу провайдера

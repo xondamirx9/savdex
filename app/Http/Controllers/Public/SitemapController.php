@@ -128,6 +128,11 @@ class SitemapController extends Controller
             ['loc' => url('/pricing'), 'priority' => '0.7', 'changefreq' => 'monthly'],
             ['loc' => url('/about'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/news'), 'priority' => '0.6', 'changefreq' => 'weekly'],
+            // Разделы из подвала: индексируемые страницы, которых
+            // роботу иначе не найти иначе как по ссылкам с витрины
+            ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],
+            ['loc' => url('/partners'), 'priority' => '0.4', 'changefreq' => 'monthly'],
+            ['loc' => url('/contact'), 'priority' => '0.4', 'changefreq' => 'yearly'],
             // Оферту и политику ищут по названию площадки перед оплатой;
             // приоритет низкий, но в индексе они быть должны
             ['loc' => url('/terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],

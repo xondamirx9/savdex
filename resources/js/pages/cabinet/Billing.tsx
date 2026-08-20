@@ -34,6 +34,8 @@ interface Props {
     requisites: Record<string, string>;
     /** Онлайн-касса включена: кнопки покупки ведут на страницу оплаты */
     checkout: boolean;
+    /** Компания подходит под акцию с промокодом — показывать форму ввода */
+    promoAllowed: boolean;
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -43,7 +45,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
     refunded: { label: 'Возвращён', cls: 'badge-neutral' },
 };
 
-export default function Billing({ plan, subscription, wallet, cards, payments, plans, packs, invoices, requisites, checkout }: Props) {
+export default function Billing({ plan, subscription, wallet, cards, payments, plans, packs, invoices, requisites, checkout, promoAllowed }: Props) {
     const { confirm, dialog } = useConfirm();
 
     if (!plan || !wallet) {
@@ -152,7 +154,14 @@ export default function Billing({ plan, subscription, wallet, cards, payments, p
             {/* Покупка стоит выше карт и истории: это то, зачем сюда
                 заходят, а карта и прошлые платежи — справочная часть */}
             <div id="store" className="mb-24">
-                <BillingStore plans={plans} packs={packs} invoices={invoices} requisites={requisites} checkout={checkout} />
+                <BillingStore
+                    plans={plans}
+                    packs={packs}
+                    invoices={invoices}
+                    requisites={requisites}
+                    checkout={checkout}
+                    promoAllowed={promoAllowed}
+                />
             </div>
 
             <Panel title="Способ оплаты" className="mb-24">
@@ -202,15 +211,15 @@ export default function Billing({ plan, subscription, wallet, cards, payments, p
                     <Plus aria-hidden className="size-4" /> Привязать карту
                 </button>
                 <p className="hint">
-                    Привязка карт появится вместе с подключением Payme. Сейчас оплата идёт по счёту:
-                    выставьте его выше и оплатите переводом.
+                    Привязка карт появится позже. Сейчас счёт оплачивается картой на защищённой странице
+                    банка или переводом по реквизитам — выставьте его выше.
                 </p>
 
                 <div className="alert alert-info mt-16">
                     <Lock aria-hidden className="size-5" />
                     <div>
-                        Номер карты не хранится на площадке — сохраняется только защищённый токен платёжной системы.
-                        Автопродление отключается в один клик.
+                        Реквизиты карты вводятся на странице банка-эквайера и на площадке не хранятся. Каждый
+                        платёж подтверждается кодом 3-D Secure.
                     </div>
                 </div>
             </Panel>
