@@ -24,7 +24,7 @@ use RuntimeException;
 class ListingImageController extends Controller
 {
     /** Больше десяти фотографий никто не листает, а место они занимают. */
-    private const MAX_IMAGES = 10;
+    private const MAX_IMAGES = ImageStore::LISTING_MAX_IMAGES;
 
     public function store(Request $request, int $id): RedirectResponse
     {

@@ -7,7 +7,9 @@ namespace App\Filament\Resources\Listings\Schemas;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Listing;
+use App\Support\ImageStore;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -118,6 +120,35 @@ class ListingForm
                 ])
                 ->columnSpanFull()
                 ->columns(4),
+
+            /*
+             * Фотографии правятся и здесь, а не только в кабинете
+             * владельца: демонстрационные объявления и карточки
+             * компаний, которые ведёт сама площадка, иначе остались бы
+             * без снимков — попасть в чужой кабинет администратор
+             * не может.
+             *
+             * Порядок задаёт обложку: первая фотография показывается
+             * в каталоге. Отдельного флага нет — «сделать обложкой»
+             * и «поставить первой» одно и то же (см. ListingImage).
+             */
+            Section::make('Фотографии')
+                ->schema([
+                    FileUpload::make('gallery')
+                        ->label('Фотографии объявления')
+                        ->image()
+                        ->multiple()
+                        ->reorderable()
+                        ->appendFiles()
+                        ->openable()
+                        ->disk('public')
+                        ->directory('listings/admin')
+                        ->maxFiles(ImageStore::LISTING_MAX_IMAGES)
+                        ->maxSize(ImageStore::MAX_SIZE_KB)
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                        ->helperText('До '.ImageStore::LISTING_MAX_IMAGES.' штук, JPG, PNG или WebP до 8 МБ. Первая в ряду — обложка в каталоге, порядок меняется перетаскиванием'),
+                ])
+                ->collapsible(),
 
             Section::make('Публикация')
                 ->schema([
