@@ -57,6 +57,13 @@ export function PaymentBadges() {
                     />
                 </svg>
             </Badge>
+            <Badge label="3-D Secure">
+                <svg viewBox="0 0 66 16" height="12" aria-hidden>
+                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="12" letterSpacing=".2" fill="#C8102E">
+                        3D Secure
+                    </text>
+                </svg>
+            </Badge>
         </div>
     );
 }
