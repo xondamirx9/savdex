@@ -25,24 +25,26 @@ export function PaymentBadges() {
     return (
         <div className="pay-badges">
             <Badge label="Uzcard">
-                <svg viewBox="0 0 56 16" height="12" aria-hidden>
-                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" letterSpacing=".4" fill="#0E4C90">
+                <svg viewBox="0 0 60 16" height="12" aria-hidden>
+                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" fill="#0E4C90" textLength="21" lengthAdjust="spacingAndGlyphs">
                         UZ
-                        <tspan fill="#29AAE2">CARD</tspan>
+                    </text>
+                    <text x="22" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" fill="#29AAE2" textLength="37" lengthAdjust="spacingAndGlyphs">
+                        CARD
                     </text>
                 </svg>
             </Badge>
             <Badge label="Humo">
-                <svg viewBox="0 0 46 16" height="12" aria-hidden>
-                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" letterSpacing=".4" fill="#164194">
+                <svg viewBox="0 0 52 16" height="12" aria-hidden>
+                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="13" fill="#164194" textLength="43" lengthAdjust="spacingAndGlyphs">
                         HUMO
                     </text>
-                    <circle cx="43" cy="4" r="2.4" fill="#F58220" />
+                    <circle cx="48.5" cy="4" r="2.4" fill="#F58220" />
                 </svg>
             </Badge>
             <Badge label="Visa">
-                <svg viewBox="0 0 40 14" height="12" aria-hidden>
-                    <text x="0" y="12" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontStyle="italic" fontSize="14" letterSpacing="1" fill="#1434CB">
+                <svg viewBox="0 0 42 14" height="12" aria-hidden>
+                    <text x="0" y="12" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontStyle="italic" fontSize="14" fill="#1434CB" textLength="38" lengthAdjust="spacingAndGlyphs">
                         VISA
                     </text>
                 </svg>
@@ -58,8 +60,8 @@ export function PaymentBadges() {
                 </svg>
             </Badge>
             <Badge label="3-D Secure">
-                <svg viewBox="0 0 66 16" height="12" aria-hidden>
-                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="12" letterSpacing=".2" fill="#C8102E">
+                <svg viewBox="0 0 64 16" height="12" aria-hidden>
+                    <text x="0" y="13" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontSize="12" fill="#C8102E" textLength="60" lengthAdjust="spacingAndGlyphs">
                         3D Secure
                     </text>
                 </svg>
