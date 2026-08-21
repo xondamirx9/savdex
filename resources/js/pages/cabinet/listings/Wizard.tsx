@@ -62,10 +62,10 @@ const STEPS = ['Тип и категория', 'Товар и цена', 'Усл
 const FIELD_STEP: Record<string, number> = {
     type: 1,
     category_id: 1,
-    title: 2,
+    title: 1,
     description: 2,
-    price: 3,
-    currency: 3,
+    price: 2,
+    currency: 2,
 };
 
 const TIPS = [
