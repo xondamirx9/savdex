@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\OrderService;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentGatewayManager;
+use App\Services\SubscriptionService;
 use App\Support\CurrencyRate;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -402,6 +403,75 @@ class PromoDiscountTest extends TestCase
 
         $this->assertNotNull($promo->fresh()->used_at);
         $this->assertSame(1, $this->company->payments()->where('status', 'pending')->count());
+    }
+
+    // ── Действующий тариф ────────────────────────────────────
+
+    /**
+     * Оплата счёта перезапускает период с сегодняшнего дня: скидочный
+     * код на уже действующий тариф молча сжёг бы остаток оплаченных
+     * дней, поэтому он отклоняется до конца текущего периода.
+     */
+    #[Test]
+    public function код_на_действующий_тариф_отклоняется(): void
+    {
+        app(SubscriptionService::class)->assign(
+            $this->company,
+            $this->premium(),
+            days: 30,
+            source: Subscription::SOURCE_MANUAL,
+            reason: 'Тест',
+        );
+
+        $promo = $this->discountCode();
+
+        $this->redeem($promo->code)->assertSessionHasErrors('promo_code');
+
+        $this->assertNull($promo->fresh()->used_at);
+        $this->assertSame(0, $this->company->payments()->count());
+    }
+
+    /** Код на другой тариф — обычный апгрейд, он проходит. */
+    #[Test]
+    public function код_на_другой_тариф_при_действующем_проходит(): void
+    {
+        app(SubscriptionService::class)->assign(
+            $this->company,
+            Plan::where('code', 'business')->firstOrFail(),
+            days: 30,
+            source: Subscription::SOURCE_MANUAL,
+            reason: 'Тест',
+        );
+
+        $this->redeem($this->discountCode()->code)->assertSessionHasNoErrors();
+
+        $this->assertNotNull($this->company->payments()->where('status', 'pending')->first());
+    }
+
+    // ── Форма в кабинете ─────────────────────────────────────
+
+    /**
+     * Захваченный, но не оплаченный код форму не прячет: вернувшись
+     * с платёжной страницы, покупатель должен иметь возможность
+     * набрать код ещё раз и вернуться к оплате.
+     */
+    #[Test]
+    public function форма_остаётся_пока_скидочный_счёт_не_оплачен(): void
+    {
+        $promo = $this->discountCode();
+        $this->redeem($promo->code);
+
+        $this->actingAs($this->user)->get('/cabinet/billing')
+            ->assertInertia(fn ($page) => $page->where('promoAllowed', true));
+
+        // После оплаты код выкуплен — форма исчезает
+        app(OrderService::class)->markPaid(
+            $this->company->payments()->where('status', 'pending')->firstOrFail(),
+            ['provider' => 'uzum'],
+        );
+
+        $this->actingAs($this->user)->get('/cabinet/billing')
+            ->assertInertia(fn ($page) => $page->where('promoAllowed', false));
     }
 
     // ── Коды, выпущенные с ошибкой ───────────────────────────

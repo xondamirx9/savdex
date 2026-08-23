@@ -135,6 +135,20 @@ class PromoCodeService
             throw new PromoCodeRejected('Промокод выпущен с ошибкой: размер скидки не задан. Напишите в поддержку.');
         }
 
+        /*
+         * Код на тариф, который у компании уже действует, отклоняется:
+         * оплата такого счёта перезапустила бы период с сегодняшнего
+         * дня (assign() закрывает прежнюю подписку молча), и остаток
+         * уже оплаченных дней сгорел бы без предупреждения. Витрина
+         * по той же причине прячет кнопку заказа текущего тарифа.
+         * Код на другой тариф проходит — это обычный апгрейд.
+         */
+        $active = $company->subscription;
+
+        if ($active !== null && $active->isActive() && $active->plan_id === $promo->plan_id) {
+            throw new PromoCodeRejected('Этот тариф у вашей компании уже действует. Активируйте промокод, когда текущий период закончится.');
+        }
+
         $this->capture($promo, $company, $user);
 
         return $this->orders->orderPlanWithPromo($company, $promo->plan, $user, $promo);
@@ -224,6 +238,22 @@ class PromoCodeService
      */
     public function eligible(Company $company): bool
     {
+        /*
+         * Захваченный, но ещё не выкупленный скидочный код форму
+         * не прячет: обещанный сценарий «ушёл с платёжной страницы —
+         * набери код ещё раз» без этого недостижим, ведь захват
+         * происходит уже при выставлении счёта.
+         */
+        $resumable = PromoCode::query()
+            ->where('used_by_company_id', $company->id)
+            ->whereNotNull('discount_percent')
+            ->whereNull('subscription_id')
+            ->exists();
+
+        if ($resumable) {
+            return true;
+        }
+
         try {
             $this->assertNoRedeemedCode($company);
 

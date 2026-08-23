@@ -125,7 +125,7 @@ export function BillingStore({
     requisites: Record<string, string>;
     /** Онлайн-касса включена: кнопки ведут на страницу оплаты */
     checkout: boolean;
-    /** Компания подходит под акцию: ещё не платила и не активировала код */
+    /** Показывать форму промокода: код не активирован либо скидочный ещё не оплачен */
     promoAllowed?: boolean;
 }) {
     const orderLabel = checkout ? 'Оплатить' : 'Выставить счёт';
