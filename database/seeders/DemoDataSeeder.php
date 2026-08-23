@@ -29,6 +29,8 @@ class DemoDataSeeder extends Seeder
         $this->call([
             DemoSeeder::class,
             CabinetDemoSeeder::class,
+            // Витрина: описания компаниям и картинки объявлениям без фото
+            ShowcaseSeeder::class,
         ]);
     }
 }
