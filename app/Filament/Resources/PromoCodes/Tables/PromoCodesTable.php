@@ -12,6 +12,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -36,6 +37,16 @@ class PromoCodesTable
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->schema([
+                        Select::make('kind')
+                            ->label('Вид промокода')
+                            ->options([
+                                'free' => 'Бесплатный период — тариф выдаётся сразу, без оплаты',
+                                'discount' => 'Скидка в процентах — остаток цены оплачивается онлайн',
+                            ])
+                            ->default('free')
+                            ->required()
+                            ->live(),
+
                         TextInput::make('count')
                             ->label('Сколько кодов')
                             ->numeric()
@@ -46,8 +57,14 @@ class PromoCodesTable
 
                         Select::make('plan_id')
                             ->label('Тариф')
+                            /*
+                             * Бесплатный тариф из списка исключён для обоих
+                             * видов: дарить его нечего (он и так у всех),
+                             * а скидка от нулевой цены — счёт на ноль сумов.
+                             */
                             ->options(fn (): array => Plan::query()
                                 ->where('is_active', true)
+                                ->where('code', '!=', Plan::FREE)
                                 ->orderBy('sort')
                                 ->pluck('name', 'id')
                                 ->all())
@@ -60,8 +77,20 @@ class PromoCodesTable
                             ->default(30)
                             ->minValue(1)
                             ->maxValue(365)
-                            ->required()
+                            ->required(fn (Get $get): bool => $get('kind') === 'free')
+                            ->visible(fn (Get $get): bool => $get('kind') === 'free')
                             ->helperText('Сколько дней тарифа получит компания, активировавшая код'),
+
+                        TextInput::make('discount_percent')
+                            ->label('Скидка, %')
+                            ->numeric()
+                            ->suffix('%')
+                            ->default(30)
+                            ->minValue(1)
+                            ->maxValue(99)
+                            ->required(fn (Get $get): bool => $get('kind') === 'discount')
+                            ->visible(fn (Get $get): bool => $get('kind') === 'discount')
+                            ->helperText('Активация выставит счёт на остаток цены тарифа и уведёт покупателя на онлайн-оплату (Uzum). Срок доступа — стандартный период тарифа'),
 
                         DatePicker::make('expires_at')
                             ->label('Активировать до (включительно)')
@@ -101,8 +130,10 @@ class PromoCodesTable
                 TextColumn::make('plan.name')
                     ->label('Тариф')
                     ->badge()
-                    ->color('primary')
-                    ->description(fn (PromoCode $r): string => "на {$r->days} дн."),
+                    ->color(fn (PromoCode $r): string => $r->isDiscount() ? 'warning' : 'primary')
+                    ->description(fn (PromoCode $r): string => $r->isDiscount()
+                        ? "скидка {$r->discount_percent}%"
+                        : "на {$r->days} дн. бесплатно"),
 
                 TextColumn::make('used_at')
                     ->label('Активирован')
@@ -142,6 +173,10 @@ class PromoCodesTable
                 SelectFilter::make('plan_id')
                     ->label('Тариф')
                     ->options(fn (): array => Plan::query()->orderBy('sort')->pluck('name', 'id')->all()),
+
+                Filter::make('discount')
+                    ->label('Скидочные')
+                    ->query(fn ($query) => $query->whereNotNull('discount_percent')),
             ])
             ->recordActions([
                 Action::make('toggle')
@@ -191,6 +226,10 @@ class PromoCodesTable
             ? null
             : Carbon::parse((string) $data['expires_at'])->endOfDay();
 
+        // У скидочного кода дни не заданы: срок доступа определит
+        // стандартный период тарифа при оплате счёта
+        $discount = ($data['kind'] ?? 'free') === 'discount';
+
         for ($i = 0; $i < (int) $data['count']; $i++) {
             do {
                 $code = PromoCode::generateCode($prefix);
@@ -199,7 +238,8 @@ class PromoCodesTable
             PromoCode::create([
                 'code' => $code,
                 'plan_id' => (int) $data['plan_id'],
-                'days' => (int) $data['days'],
+                'days' => $discount ? 0 : (int) $data['days'],
+                'discount_percent' => $discount ? (int) $data['discount_percent'] : null,
                 'expires_at' => $expiresAt,
                 'is_active' => true,
                 'note' => $data['note'] ?? null,

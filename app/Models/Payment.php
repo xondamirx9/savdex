@@ -8,11 +8,12 @@ use App\Services\OrderService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /** Платёж: подписка, пакет кредитов или единицы продвижения. */
 #[Fillable([
-    'company_id', 'payment_method_id', 'subscription_id', 'plan_id', 'credit_pack_id',
+    'company_id', 'payment_method_id', 'subscription_id', 'plan_id', 'credit_pack_id', 'promo_code_id',
     'number', 'purpose', 'description',
     'amount', 'currency', 'provider', 'external_id', 'status', 'paid_at', 'invoice_path',
     'confirmed_by', 'admin_note',
@@ -52,6 +53,12 @@ class Payment extends Model
         return $this->belongsTo(CreditPack::class);
     }
 
+    /** Скидочный промокод, по которому выставлен этот счёт. */
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
+    }
+
     /** Кто подтвердил поступление денег. */
     public function confirmedBy(): BelongsTo
     {
@@ -59,7 +66,7 @@ class Payment extends Model
     }
 
     /** Транзакции провайдера по этому счёту (создание, оплата, отмена). */
-    public function transactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function transactions(): HasMany
     {
         return $this->hasMany(PaymentTransaction::class);
     }

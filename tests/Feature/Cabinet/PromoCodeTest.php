@@ -195,7 +195,9 @@ class PromoCodeTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $this->redeem($this->code()->code)->assertSessionHas('error');
+        // Ошибка на поле, а не во флеш: форма промокода у платившей
+        // компании остаётся — скидочные коды ей по-прежнему доступны
+        $this->redeem($this->code()->code)->assertSessionHasErrors('promo_code');
 
         $this->assertNull($this->company->fresh()->subscription);
     }
@@ -226,7 +228,9 @@ class PromoCodeTest extends TestCase
             reason: 'Тест',
         );
 
-        $this->redeem($this->code()->code)->assertSessionHas('error');
+        // Форма при действующем тарифе остаётся на странице,
+        // поэтому и отказ приходит на поле
+        $this->redeem($this->code()->code)->assertSessionHasErrors('promo_code');
     }
 
     #[Test]
@@ -262,7 +266,9 @@ class PromoCodeTest extends TestCase
             'status' => 'refunded',
         ]);
 
-        $this->redeem($this->code()->code)->assertSessionHas('error');
+        // Форма у такой компании остаётся (скидочные коды ей доступны),
+        // поэтому отказ приходит на поле
+        $this->redeem($this->code()->code)->assertSessionHasErrors('promo_code');
     }
 
     /** Код с нулевым сроком выдал бы бессрочный бесплатный тариф. */
