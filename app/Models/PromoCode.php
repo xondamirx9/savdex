@@ -10,7 +10,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Промокод на бесплатный период тарифа.
+ * Промокод: бесплатный период тарифа либо скидка на его оплату.
+ *
+ * Вид кода определяет discount_percent: пусто — бесплатный период на
+ * days дней, 1–99 — скидка в процентах. Скидочный код тариф сразу не
+ * выдаёт: он выставляет счёт на остаток цены, который оплачивается
+ * онлайн или переводом.
  *
  * Код одноразовый: активация проставляет used_at, и второй раз он
  * не сработает ни у кого. Кто активировал — видно в той же строке.
@@ -19,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * и набирают с листовки, и «ноль или буква О» — самая частая причина
  * обращения в поддержку по промокоду.
  */
-#[Fillable(['code', 'plan_id', 'days', 'expires_at', 'is_active', 'note', 'created_by'])]
+#[Fillable(['code', 'plan_id', 'days', 'discount_percent', 'expires_at', 'is_active', 'note', 'created_by'])]
 class PromoCode extends Model
 {
     private const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -30,6 +35,7 @@ class PromoCode extends Model
     protected function casts(): array
     {
         return [
+            'discount_percent' => 'integer',
             'expires_at' => 'datetime',
             'used_at' => 'datetime',
             'is_active' => 'boolean',
@@ -87,6 +93,12 @@ class PromoCode extends Model
         }
 
         return self::normalize($prefix === '' ? $random : "{$prefix}-{$random}");
+    }
+
+    /** Скидочный код, а не код на бесплатный период. */
+    public function isDiscount(): bool
+    {
+        return $this->discount_percent !== null;
     }
 
     public function isUsed(): bool

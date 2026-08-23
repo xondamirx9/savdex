@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Exceptions\PromoCodeRejected;
 use App\Models\Company;
 use App\Models\CreditPack;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\PromoCode;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Wallet;
@@ -48,6 +50,39 @@ class OrderService
             'description' => "Тариф «{$plan->name}» на {$plan->period_days} дн.",
             'amount' => $plan->priceUzs($this->rate->usd()),
         ]);
+    }
+
+    /**
+     * Счёт на тариф со скидкой по промокоду.
+     *
+     * Сумма — остаток цены после скидки, округлённый до целых сумов.
+     * Счёт помнит свой код (promo_code_id): по оплате код свяжется
+     * с выданной подпиской, по отмене — вернётся в оборот.
+     */
+    public function orderPlanWithPromo(Company $company, Plan $plan, User $user, PromoCode $promo): Payment
+    {
+        $percent = (int) $promo->discount_percent;
+        $amount = self::discounted($plan->priceUzs($this->rate->usd()), $percent);
+
+        // Счёт на ноль сумов не выставляется: скидка 99% от нулевой
+        // цены — признак кода, выпущенного на бесплатный тариф
+        if ($amount < 1) {
+            throw new PromoCodeRejected('Промокод выпущен с ошибкой: тариф по нему не продаётся. Напишите в поддержку.');
+        }
+
+        return $this->create($company, $user, [
+            'purpose' => 'subscription',
+            'plan_id' => $plan->id,
+            'promo_code_id' => $promo->id,
+            'description' => "Тариф «{$plan->name}» на {$plan->period_days} дн. · промокод {$promo->code}, скидка {$percent}%",
+            'amount' => $amount,
+        ]);
+    }
+
+    /** Цена после скидки, в целых сумах. */
+    public static function discounted(int $price, int $percent): int
+    {
+        return (int) round($price * (100 - $percent) / 100);
     }
 
     /** Счёт на пакет кредитов. */
@@ -202,6 +237,14 @@ class OrderService
         );
 
         $payment->forceFill(['subscription_id' => $subscription->id])->save();
+
+        // Скидочный промокод дожидался оплаты: теперь он окончательно
+        // погашен и связан с подпиской, которую помог купить
+        if ($payment->promo_code_id !== null) {
+            PromoCode::query()
+                ->where('id', $payment->promo_code_id)
+                ->update(['subscription_id' => $subscription->id, 'updated_at' => now()]);
+        }
     }
 
     private function grantCredits(Payment $payment, Company $company, ?User $admin): void
@@ -235,5 +278,25 @@ class OrderService
             'confirmed_by' => $admin?->id,
             'admin_note' => $note,
         ])->save();
+
+        /*
+         * Скидочный промокод несостоявшегося счёта возвращается
+         * в оборот: код захватывается при выставлении счёта, и без
+         * освобождения брошенная оплата сжигала бы его впустую.
+         * Условие на компанию и пустую подписку — страховка от
+         * освобождения кода, который уже успел сработать.
+         */
+        if ($payment->promo_code_id !== null) {
+            PromoCode::query()
+                ->where('id', $payment->promo_code_id)
+                ->where('used_by_company_id', $payment->company_id)
+                ->whereNull('subscription_id')
+                ->update([
+                    'used_at' => null,
+                    'used_by_company_id' => null,
+                    'used_by_user_id' => null,
+                    'updated_at' => now(),
+                ]);
+        }
     }
 }
