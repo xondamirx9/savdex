@@ -55,13 +55,17 @@ services:
       #   DEMO_AUTO_VERIFY  — true, пока SMTP не настроен (иначе люди
       #                       упрутся в экран подтверждения без письма);
       #                       false, когда почта заработала.
-      #   MAIL_MAILER=smtp, MAIL_HOST=smtp.gmail.com, MAIL_PORT=587,
-      #   MAIL_USERNAME=адрес@gmail.com,
-      #   MAIL_PASSWORD=пароль приложения (Google Аккаунт → Безопасность →
-      #                 Двухэтапная аутентификация → Пароли приложений;
-      #                 обычный пароль от почты не подойдёт),
-      #   MAIL_FROM_ADDRESS=тот же адрес (Gmail не даёт слать от чужого
-      #                 имени), MAIL_FROM_NAME=SAVDEX.
+      #
+      #   Слать через личный Gmail нельзя: письма «от gmail.com» со
+      #   ссылками на savdex.uz уходят в спам — домены расходятся,
+      #   SPF/DKIM для своего домена через Gmail не настроить. Нужен
+      #   транзакционный сервис (Brevo, Resend, SMTP2GO — у всех есть
+      #   бесплатный тариф): в нём подтверждается домен savdex.uz
+      #   (сервис выдаёт DNS-записи SPF и DKIM — добавить у регистратора,
+      #   туда же TXT _dmarc «v=DMARC1; p=quarantine»), после чего:
+      #   MAIL_MAILER=smtp, MAIL_HOST/PORT/USERNAME/PASSWORD — из панели
+      #   сервиса, MAIL_FROM_ADDRESS=no-reply@savdex.uz,
+      #   MAIL_FROM_NAME=SAVDEX.
       # Обработчика очереди на бесплатном тарифе нет — задания
       # выполняются сразу, в том же запросе.
       - key: QUEUE_CONNECTION
