@@ -8,6 +8,7 @@ use App\Exceptions\PromoCodeRejected;
 use App\Models\Company;
 use App\Models\CreditPack;
 use App\Models\Payment;
+use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\PromoCode;
 use App\Models\Subscription;
@@ -69,6 +70,20 @@ class OrderService
         if ($amount < 1) {
             throw new PromoCodeRejected('Промокод выпущен с ошибкой: тариф по нему не продаётся. Напишите в поддержку.');
         }
+
+        /*
+         * Полный счёт на тот же тариф закрывается: два оплачиваемых
+         * счёта на одно и то же — это двойное списание, если бухгалтерия
+         * оплатит оба (второй платёж перезапустил бы период, сжигая
+         * остаток первого). Скидочный счёт заменяет полный, а не
+         * добавляется к нему — как повторный заказ в order().
+         */
+        $company->payments()
+            ->where('status', 'pending')
+            ->where('purpose', 'subscription')
+            ->where('plan_id', $plan->id)
+            ->get()
+            ->each(fn (Payment $stale) => $this->cancel($stale, null, "Заменён счётом со скидкой по промокоду {$promo->code}"));
 
         return $this->create($company, $user, [
             'purpose' => 'subscription',
@@ -238,11 +253,18 @@ class OrderService
 
         $payment->forceFill(['subscription_id' => $subscription->id])->save();
 
-        // Скидочный промокод дожидался оплаты: теперь он окончательно
-        // погашен и связан с подпиской, которую помог купить
+        /*
+         * Скидочный промокод дожидался оплаты: теперь он окончательно
+         * погашен и связан с подпиской, которую помог купить. Условия
+         * на владельца и пустую подписку обязательны: код, освобождённый
+         * отменой этого счёта (и, возможно, уже захваченный другой
+         * компанией), поздний confirm провайдера трогать не должен.
+         */
         if ($payment->promo_code_id !== null) {
             PromoCode::query()
                 ->where('id', $payment->promo_code_id)
+                ->where('used_by_company_id', $payment->company_id)
+                ->whereNull('subscription_id')
                 ->update(['subscription_id' => $subscription->id, 'updated_at' => now()]);
         }
     }
@@ -269,7 +291,13 @@ class OrderService
      */
     public function cancel(Payment $payment, ?User $admin = null, ?string $note = null): void
     {
-        if ($payment->status === 'paid') {
+        /*
+         * Не только «не оплачен», а строго «ждёт оплаты»: повторная
+         * отмена уже отменённого счёта — не редкость (повтор вебхука
+         * провайдера), и без этой проверки она второй раз освобождала
+         * бы промокод, который компания успела захватить заново.
+         */
+        if ($payment->status !== 'pending') {
             return;
         }
 
@@ -285,8 +313,13 @@ class OrderService
          * освобождения брошенная оплата сжигала бы его впустую.
          * Условие на компанию и пустую подписку — страховка от
          * освобождения кода, который уже успел сработать.
+         *
+         * С живой карточной транзакцией код не освобождается: Uzum
+         * ещё может подтвердить списание по отменённому счёту (confirm
+         * принимает всё, что не оплачено), и освобождённый код успел
+         * бы дать скидку второй компании — один код, две скидки.
          */
-        if ($payment->promo_code_id !== null) {
+        if ($payment->promo_code_id !== null && ! $this->hasLiveCardTransaction($payment)) {
             PromoCode::query()
                 ->where('id', $payment->promo_code_id)
                 ->where('used_by_company_id', $payment->company_id)
@@ -298,5 +331,22 @@ class OrderService
                     'updated_at' => now(),
                 ]);
         }
+    }
+
+    /**
+     * Есть ли по счёту созданная, но не подтверждённая транзакция
+     * провайдера, которая ещё может подтвердиться.
+     *
+     * Окно — confirm_timeout провайдера: после него confirm сам гасит
+     * транзакцию как просроченную и деньги не спишутся.
+     */
+    private function hasLiveCardTransaction(Payment $payment): bool
+    {
+        $timeout = (int) config('payments.providers.uzum.confirm_timeout_minutes', 30);
+
+        return $payment->transactions()
+            ->where('state', PaymentTransaction::STATE_CREATED)
+            ->where('created_at', '>', now()->subMinutes($timeout))
+            ->exists();
     }
 }

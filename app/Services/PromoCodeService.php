@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\PromoCode;
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -70,7 +71,7 @@ class PromoCodeService
              * а не отказ «уже активирован».
              */
             if ($promo->isDiscount() && $promo->used_by_company_id === $company->id) {
-                return $this->resumeDiscount($promo, $company);
+                return $this->resumeDiscount($promo, $company, $user);
             }
 
             $this->assertCodeUsable($promo);
@@ -141,8 +142,14 @@ class PromoCodeService
 
     /**
      * Вернуть покупателя к счёту, выставленному по его же коду.
+     *
+     * Если открытого счёта нет, а скидка ещё не выкуплена (подписка
+     * к коду не привязана), счёт выставляется заново: так бывает, когда
+     * счёт отменили посреди карточной оплаты и код остался захваченным.
+     * Код принадлежит этой компании — дать ей продолжить честнее,
+     * чем отвечать «уже активирован» на её собственный код.
      */
-    private function resumeDiscount(PromoCode $promo, Company $company): Payment
+    private function resumeDiscount(PromoCode $promo, Company $company, User $user): Payment
     {
         $pending = Payment::query()
             ->where('promo_code_id', $promo->id)
@@ -155,7 +162,17 @@ class PromoCodeService
             return $pending;
         }
 
-        throw new PromoCodeRejected('Этот промокод уже активирован.');
+        if ($promo->subscription_id !== null) {
+            throw new PromoCodeRejected('Этот промокод уже активирован.');
+        }
+
+        $plan = $promo->plan;
+
+        if ($plan === null || ! $plan->is_active) {
+            throw new PromoCodeRejected('Тариф по этому промокоду больше не выдаётся. Напишите в поддержку.');
+        }
+
+        return $this->orders->orderPlanWithPromo($company, $plan, $user, $promo);
     }
 
     /**
@@ -172,15 +189,25 @@ class PromoCodeService
      */
     private function capture(PromoCode $promo, Company $company, User $user): void
     {
-        $captured = PromoCode::query()
-            ->where('id', $promo->id)
-            ->whereNull('used_at')
-            ->update([
-                'used_at' => now(),
-                'used_by_company_id' => $company->id,
-                'used_by_user_id' => $user->id,
-                'updated_at' => now(),
-            ]);
+        try {
+            $captured = PromoCode::query()
+                ->where('id', $promo->id)
+                ->whereNull('used_at')
+                ->update([
+                    'used_at' => now(),
+                    'used_by_company_id' => $company->id,
+                    'used_by_user_id' => $user->id,
+                    'updated_at' => now(),
+                ]);
+        } catch (UniqueConstraintViolationException) {
+            /*
+             * Два разных кода, введённых одной компанией одновременно:
+             * обе проверки assertNoRedeemedCode прошли до чужого
+             * коммита, и второй захват упёрся в уникальный индекс.
+             * Это отказ по правилам акции, а не ошибка сервера.
+             */
+            throw new PromoCodeRejected('Ваша компания уже активировала промокод — второй раз акция не действует.');
+        }
 
         if ($captured !== 1) {
             throw new PromoCodeRejected('Этот промокод уже активирован.');

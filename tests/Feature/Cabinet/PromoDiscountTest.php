@@ -7,6 +7,7 @@ namespace Tests\Feature\Cabinet;
 use App\Models\Company;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
+use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\PromoCode;
 use App\Models\Subscription;
@@ -259,6 +260,148 @@ class PromoDiscountTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertNotNull($other->payments()->where('status', 'pending')->first());
+    }
+
+    /**
+     * Отменить счёт можно и посреди карточной оплаты: Uzum уже завёл
+     * транзакцию и в течение получаса может подтвердить списание по
+     * отменённому счёту. Освобождённый в этот момент код успел бы дать
+     * скидку второй компании — один код, две скидки.
+     */
+    #[Test]
+    public function код_не_освобождается_пока_жива_карточная_транзакция(): void
+    {
+        $promo = $this->discountCode();
+        $this->redeem($promo->code);
+
+        $payment = $this->company->payments()->where('status', 'pending')->firstOrFail();
+
+        PaymentTransaction::create([
+            'payment_id' => $payment->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => 'UZ-LIVE-1',
+            'state' => PaymentTransaction::STATE_CREATED,
+            'amount_minor' => $payment->amountMinor(),
+            'currency' => 'UZS',
+        ]);
+
+        $this->actingAs($this->user)->post("/cabinet/billing/invoice/{$payment->id}/cancel");
+
+        // Счёт отменён, но код остаётся захваченным до исхода транзакции
+        $this->assertSame('failed', $payment->fresh()->status);
+        $this->assertNotNull($promo->fresh()->used_at);
+    }
+
+    /**
+     * Поздний confirm по отменённому счёту не должен трогать код,
+     * который уже освобождён и захвачен другой компанией.
+     */
+    #[Test]
+    public function поздний_confirm_не_портит_чужой_код(): void
+    {
+        $promo = $this->discountCode();
+        $this->redeem($promo->code);
+
+        $abandoned = $this->company->payments()->where('status', 'pending')->firstOrFail();
+
+        // Транзакций нет — отмена освобождает код
+        $this->actingAs($this->user)->post("/cabinet/billing/invoice/{$abandoned->id}/cancel");
+        $this->assertNull($promo->fresh()->used_at);
+
+        // Код захватывает вторая компания
+        $other = Company::factory()->create();
+        $otherUser = User::factory()->for($other)->create(['email_verified_at' => now()]);
+        $this->actingAs($otherUser)->post('/cabinet/billing/promo', ['promo_code' => $promo->code]);
+        $this->assertSame($other->id, $promo->fresh()->used_by_company_id);
+
+        // Поздний confirm провайдера закрывает отменённый счёт первой
+        // компании — но чужой код при этом остаётся нетронутым
+        app(OrderService::class)->markPaid($abandoned->fresh(), ['provider' => 'uzum', 'external_id' => 'UZ-LATE']);
+
+        $promo->refresh();
+        $this->assertSame($other->id, $promo->used_by_company_id);
+        $this->assertNull($promo->subscription_id);
+    }
+
+    /** Два оплачиваемых счёта на один тариф — двойное списание при оплате обоих. */
+    #[Test]
+    public function скидочный_счёт_заменяет_полный_на_тот_же_тариф(): void
+    {
+        $this->actingAs($this->user)->post('/cabinet/billing/order', [
+            'kind' => 'plan',
+            'id' => $this->premium()->id,
+        ]);
+
+        $full = $this->company->payments()->where('status', 'pending')->firstOrFail();
+
+        $this->redeem($this->discountCode()->code)->assertSessionHasNoErrors();
+
+        // Полный счёт закрыт, оплачиваемым остался только скидочный
+        $this->assertSame('failed', $full->fresh()->status);
+
+        $pending = $this->company->payments()->where('status', 'pending')->get();
+        $this->assertCount(1, $pending);
+        $this->assertNotNull($pending->first()->promo_code_id);
+    }
+
+    /**
+     * Код, оставшийся захваченным после отмены счёта (карточная оплата
+     * была в полёте), не должен сгорать для владельца: повторный ввод
+     * выставляет новый счёт и возвращает к оплате.
+     */
+    #[Test]
+    public function владелец_захваченного_кода_может_продолжить_после_отмены(): void
+    {
+        $promo = $this->discountCode();
+        $this->redeem($promo->code);
+
+        $payment = $this->company->payments()->where('status', 'pending')->firstOrFail();
+
+        PaymentTransaction::create([
+            'payment_id' => $payment->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => 'UZ-LIVE-2',
+            'state' => PaymentTransaction::STATE_CREATED,
+            'amount_minor' => $payment->amountMinor(),
+            'currency' => 'UZS',
+        ]);
+
+        $this->actingAs($this->user)->post("/cabinet/billing/invoice/{$payment->id}/cancel");
+
+        // Код захвачен, открытых счетов нет — но владелец продолжает
+        $this->redeem($promo->code)->assertSessionHasNoErrors();
+
+        $reissued = $this->company->payments()->where('status', 'pending')->first();
+
+        $this->assertNotNull($reissued);
+        $this->assertSame($promo->id, $reissued->promo_code_id);
+    }
+
+    /**
+     * Повторная отмена одного счёта (повтор вебхука провайдера) не
+     * должна второй раз освобождать код, который компания уже успела
+     * захватить под новый счёт.
+     */
+    #[Test]
+    public function повторная_отмена_счёта_не_освобождает_код_второй_раз(): void
+    {
+        $promo = $this->discountCode();
+        $this->redeem($promo->code);
+
+        $first = $this->company->payments()->where('status', 'pending')->firstOrFail();
+
+        app(OrderService::class)->cancel($first);
+        $this->assertNull($promo->fresh()->used_at);
+
+        // Код захвачен заново, под новый счёт
+        $this->redeem($promo->code)->assertSessionHasNoErrors();
+        $this->assertNotNull($promo->fresh()->used_at);
+
+        // Повторная отмена первого счёта — уже no-op
+        app(OrderService::class)->cancel($first->fresh());
+
+        $this->assertNotNull($promo->fresh()->used_at);
+        $this->assertSame(1, $this->company->payments()->where('status', 'pending')->count());
     }
 
     // ── Коды, выпущенные с ошибкой ───────────────────────────
