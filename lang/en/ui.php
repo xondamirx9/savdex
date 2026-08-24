@@ -278,6 +278,13 @@ return [
         'company_verified' => 'Company verified',
         'rating' => 'Rating :rating',
         'reviews' => ':count review|:count reviews',
+        'respond' => 'Send inquiry',
+        'respond_hint' => 'Message the company right on the platform — the conversation stays in the Chats section of your account.',
+        'respond_placeholder' => 'Hello! We are interested in this listing: please clarify volume, terms and shipping conditions…',
+        'respond_send' => 'Send inquiry',
+        'respond_sending' => 'Sending…',
+        'respond_login' => 'Sign in to send an inquiry',
+        'respond_note' => 'Phones, emails and links in messages are hidden — contacts are shared via contact unlock.',
         'show_contacts' => 'Show contacts',
         'contacts_hint' => 'The email domain and the operator code are visible right away, so you can tell the contact is real. Unlocked once and for good, for the whole company.',
         'already_open' => 'You have already unlocked this company’s contacts.',
@@ -385,7 +392,6 @@ return [
         'dismiss' => 'Stay',
     ],
 
-
     // Company verification badge — one dictionary for every page
     'verification' => [
         'gold' => 'Verified+',
@@ -395,7 +401,6 @@ return [
         'none' => 'Not verified',
         'none_hint' => 'Documents not confirmed',
     ],
-
 
     // Companies catalog: the page used to carry hardcoded Russian text
     'companies_page' => [

@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  * Кошелёк один на компанию, а не на сотрудника: лимиты тарифа считаются
  * на компанию, кредиты — общий счёт (§3 ТЗ).
  */
-#[Fillable(['company_id', 'credits', 'promo_units', 'contacts_used_this_period', 'period_resets_at'])]
+#[Fillable(['company_id', 'credits', 'promo_units', 'contacts_used_this_period', 'responses_used_this_period', 'period_resets_at'])]
 class Wallet extends Model
 {
     protected function casts(): array

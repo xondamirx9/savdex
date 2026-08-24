@@ -280,6 +280,13 @@ return [
         'company_verified' => 'Kompaniya tekshirilgan',
         'rating' => 'Reyting :rating',
         'reviews' => ':count ta sharh',
+        'respond' => 'Taklif yuborish',
+        'respond_hint' => 'Kompaniyaga platformaning oʻzida yozing — yozishmalar kabinetingizdagi «Chatlar» boʻlimida qoladi.',
+        'respond_placeholder' => 'Assalomu alaykum! Ushbu mahsulot qiziqtiradi: hajm, muddat va yuklash shartlarini aniqlashtirib bersangiz…',
+        'respond_send' => 'Taklifni yuborish',
+        'respond_sending' => 'Yuborilmoqda…',
+        'respond_login' => 'Taklif yuborish uchun tizimga kiring',
+        'respond_note' => 'Xabarlardagi telefon, pochta va havolalar yashiriladi — kontaktlar faqat kontakt ochish orqali beriladi.',
         'show_contacts' => 'Kontaktlarni ko‘rsatish',
         'contacts_hint' => 'Pochta domeni va operator kodi darhol ko‘rinadi — kontakt haqiqiy ekaniga ishonch hosil qilasiz. Bir marta ochiladi va butun kompaniya bo‘yicha abadiy amal qiladi.',
         'already_open' => 'Bu kompaniyaning kontaktlari siz uchun ochiq.',
@@ -387,7 +394,6 @@ return [
         'dismiss' => 'Qolish',
     ],
 
-
     // Kompaniya tekshiruvi belgisi — barcha sahifalar uchun bitta lug‘at
     'verification' => [
         'gold' => 'Tasdiqlangan+',
@@ -397,7 +403,6 @@ return [
         'none' => 'Tasdiqlanmagan',
         'none_hint' => 'Hujjatlar tasdiqlanmagan',
     ],
-
 
     // Kompaniyalar katalogi: sahifa ruscha matn bilan terilgan edi
     'companies_page' => [

@@ -6,6 +6,7 @@ import {
     Globe,
     Lock,
     Mail,
+    MessageSquareText,
     Package,
     Phone,
     Send,
@@ -77,6 +78,7 @@ export default function ListingShow({
     company,
     contacts,
     unlocked,
+    respond,
     similar,
 }: {
     listing: Listing;
@@ -92,6 +94,7 @@ export default function ListingShow({
     };
     contacts: Contact[];
     unlocked: boolean;
+    respond: { guest: boolean; owner: boolean };
     similar: Similar[];
 }) {
     const { auth } = usePage<SharedProps>().props;
@@ -228,6 +231,8 @@ export default function ListingShow({
                     </div>
 
                     <aside className="stack-16">
+                        <RespondCard listingId={listing.id} guest={respond.guest} owner={respond.owner} />
+
                         <div className="card">
                             <div className="row" style={{ gap: 12, marginBottom: 16 }}>
                                 <span className="listing-logo logo-48">{company.initials}</span>
@@ -341,5 +346,81 @@ export default function ListingShow({
                 </p>
             </Modal>
         </PublicLayout>
+    );
+}
+
+
+/**
+ * Отклик на объявление — начало разговора в чате площадки.
+ *
+ * Владельцу не показывается: сервер такой отклик всё равно отклонит.
+ * Гостя кнопка ведёт на вход — форма без права отправить обещала бы
+ * то, чего не будет. Отказ сервера (лимит тарифа, нет компании)
+ * приходит ошибкой на поле и остаётся рядом с формой.
+ */
+function RespondCard({ listingId, guest, owner }: { listingId: number; guest: boolean; owner: boolean }) {
+    const form = useForm({ body: '' });
+    const [open, setOpen] = useState(false);
+
+    if (owner) {
+        return null;
+    }
+
+    if (guest) {
+        return (
+            <div className="card">
+                <Link href={routes.login} className="btn btn-primary btn-block">
+                    <MessageSquareText aria-hidden className="size-4" /> {t('listing.respond')}
+                </Link>
+                <p className="t-caption muted mt-8">{t('listing.respond_login')}</p>
+            </div>
+        );
+    }
+
+    function submit(e: React.FormEvent) {
+        e.preventDefault();
+        form.post(routes.listingRespond(listingId), { preserveScroll: true });
+    }
+
+    return (
+        <div className="card">
+            {open ? (
+                <form onSubmit={submit}>
+                    <label className="label" htmlFor="respond-body">
+                        {t('listing.respond')}
+                    </label>
+                    <textarea
+                        id="respond-body"
+                        className="textarea"
+                        style={{ minHeight: 96 }}
+                        maxLength={2000}
+                        autoFocus
+                        placeholder={t('listing.respond_placeholder')}
+                        value={form.data.body}
+                        onChange={(e) => form.setData('body', e.target.value)}
+                    />
+                    {form.errors.body && (
+                        <p className="hint" style={{ color: 'var(--danger)' }}>
+                            {form.errors.body}
+                        </p>
+                    )}
+                    <button
+                        type="submit"
+                        className="btn btn-primary btn-block mt-12"
+                        disabled={form.processing || form.data.body.trim() === ''}
+                    >
+                        {form.processing ? t('listing.respond_sending') : t('listing.respond_send')}
+                    </button>
+                    <p className="t-caption muted mt-8">{t('listing.respond_note')}</p>
+                </form>
+            ) : (
+                <>
+                    <button className="btn btn-primary btn-block" onClick={() => setOpen(true)}>
+                        <MessageSquareText aria-hidden className="size-4" /> {t('listing.respond')}
+                    </button>
+                    <p className="t-caption muted mt-8">{t('listing.respond_hint')}</p>
+                </>
+            )}
+        </div>
     );
 }
