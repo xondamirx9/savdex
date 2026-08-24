@@ -278,6 +278,13 @@ return [
         'company_verified' => 'Şirket doğrulandı',
         'rating' => 'Puan :rating',
         'reviews' => ':count değerlendirme',
+        'respond' => 'Teklif gönder',
+        'respond_hint' => 'Şirkete doğrudan platform üzerinden yazın — yazışma hesabınızdaki «Sohbetler» bölümünde kalır.',
+        'respond_placeholder' => 'Merhaba! Bu ilanla ilgileniyoruz: hacim, süre ve sevkiyat koşullarını netleştirir misiniz…',
+        'respond_send' => 'Teklifi gönder',
+        'respond_sending' => 'Gönderiliyor…',
+        'respond_login' => 'Teklif göndermek için giriş yapın',
+        'respond_note' => 'Mesajlardaki telefon, e-posta ve bağlantılar gizlenir — iletişim bilgileri kişi açma üzerinden iletilir.',
         'show_contacts' => 'İletişim bilgilerini göster',
         'contacts_hint' => 'E-posta alan adı ve operatör kodu hemen görünür; böylece bilginin gerçek olduğunu anlarsınız. Bir kez açılır ve şirketin tamamı için kalıcı olur.',
         'already_open' => 'Bu şirketin iletişim bilgileri sizde açık.',
@@ -385,7 +392,6 @@ return [
         'dismiss' => 'Kal',
     ],
 
-
     // Şirket doğrulama rozeti — tüm sayfalar için tek sözlük
     'verification' => [
         'gold' => 'Doğrulandı+',
@@ -395,7 +401,6 @@ return [
         'none' => 'Doğrulanmadı',
         'none_hint' => 'Belgeler onaylanmadı',
     ],
-
 
     // Şirket kataloğu: sayfa Rusça sabit metinle dizilmişti
     'companies_page' => [

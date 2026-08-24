@@ -277,6 +277,13 @@ return [
         'company_verified' => '企业已核验',
         'rating' => '评分 :rating',
         'reviews' => ':count 条评价',
+        'respond' => '发送询价',
+        'respond_hint' => '直接在平台上给公司留言——对话将保存在您账户的“聊天”栏目中。',
+        'respond_placeholder' => '您好！我们对该商品感兴趣：请说明数量、交期和发货条件……',
+        'respond_send' => '发送询价',
+        'respond_sending' => '发送中……',
+        'respond_login' => '登录后即可发送询价',
+        'respond_note' => '消息中的电话、邮箱和链接会被隐藏——联系方式通过解锁联系人传递。',
         'show_contacts' => '查看联系方式',
         'contacts_hint' => '邮箱域名与运营商号段会立即显示，便于确认联系方式真实。解锁一次即长期有效，覆盖该企业全部信息。',
         'already_open' => '您已解锁这家企业的联系方式。',
@@ -384,7 +391,6 @@ return [
         'dismiss' => '留在当前语言',
     ],
 
-
     // 公司认证徽章——所有页面共用一份词典
     'verification' => [
         'gold' => '已认证+',
@@ -394,7 +400,6 @@ return [
         'none' => '未认证',
         'none_hint' => '文件未确认',
     ],
-
 
     // 公司目录：页面原先直接写入了俄语文本
     'companies_page' => [

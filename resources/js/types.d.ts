@@ -24,6 +24,8 @@ export interface CabinetCounts {
     contacts: number;
     incoming: number;
     reviews: number;
+    /** Разговоры с непрочитанными сообщениями */
+    chats: number;
 }
 
 export interface NotificationItem {

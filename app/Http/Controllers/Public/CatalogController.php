@@ -308,6 +308,17 @@ class CatalogController extends Controller
             ]) ?? [],
 
             'unlocked' => $unlocked,
+
+            /*
+             * Можно ли откликнуться. Гостю кнопка ведёт на вход,
+             * владельцу не показывается вовсе: отклик на собственное
+             * объявление сервер всё равно отклонит.
+             */
+            'respond' => [
+                'guest' => $request->user() === null,
+                'owner' => $viewerCompanyId !== null && $viewerCompanyId === $company?->id,
+            ],
+
             'similar' => $this->similar($listing),
         ]);
     }

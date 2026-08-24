@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\Category;
+use App\Models\Favorite;
+use App\Models\MessageThread;
+use App\Models\Setting;
 use App\Support\Locales;
 use Closure;
 use Illuminate\Http\Request;
@@ -100,7 +104,7 @@ class HandleInertiaRequests extends Middleware
              */
             'favorites' => fn () => $user === null
                 ? []
-                : \App\Models\Favorite::query()
+                : Favorite::query()
                     ->where('user_id', $user->id)
                     ->pluck('listing_id'),
 
@@ -145,7 +149,7 @@ class HandleInertiaRequests extends Middleware
              * Их шесть, и запрос дешёвый; появится нагрузка — закэшируем
              * со сбросом при записи, как и счётчики витрины.
              */
-            'navCategories' => fn () => \App\Models\Category::query()
+            'navCategories' => fn () => Category::query()
                 ->whereNull('parent_id')
                 ->where('is_active', true)
                 ->with('translations')
@@ -162,12 +166,12 @@ class HandleInertiaRequests extends Middleware
              * Настройки читаются из суточного кэша — запросов не добавляет.
              */
             'support' => [
-                'email' => (string) \App\Models\Setting::get('support_email', ''),
-                'phone' => (string) \App\Models\Setting::get('support_phone', ''),
-                'hours' => (string) \App\Models\Setting::get('support_hours', ''),
-                'telegram' => (string) \App\Models\Setting::get('telegram', ''),
-                'legal_name' => (string) \App\Models\Setting::get('legal_name', ''),
-                'legal_tin' => (string) \App\Models\Setting::get('legal_tin', ''),
+                'email' => (string) Setting::get('support_email', ''),
+                'phone' => (string) Setting::get('support_phone', ''),
+                'hours' => (string) Setting::get('support_hours', ''),
+                'telegram' => (string) Setting::get('telegram', ''),
+                'legal_name' => (string) Setting::get('legal_name', ''),
+                'legal_tin' => (string) Setting::get('legal_tin', ''),
             ],
 
             'locale' => app()->getLocale(),
@@ -276,6 +280,9 @@ class HandleInertiaRequests extends Middleware
             'contacts' => $company->unlocks()->count(),
             'incoming' => $company->unlockedBy()->count(),
             'reviews' => $company->reviews()->count(),
+            // Не все разговоры, а только с непрочитанным: цифра у пункта
+            // «Чаты» — призыв ответить, а не размер архива
+            'chats' => MessageThread::unreadThreadsFor($company),
         ];
     }
 }

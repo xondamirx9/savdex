@@ -7,6 +7,7 @@ import {
     Eye,
     LayoutDashboard,
     MailWarning,
+    MessageSquareText,
     Package,
     Plus,
     Rocket,
@@ -47,6 +48,7 @@ const GROUPS: NavGroup[] = [
     {
         title: 'Контакты',
         items: [
+            { href: routes.cabinetChats, label: 'Чаты', icon: MessageSquareText, count: 'chats' },
             { href: routes.cabinetContacts, label: 'Мои контакты', icon: Users, count: 'contacts' },
             { href: routes.cabinetIncoming, label: 'Кто мной интересуется', icon: Eye, count: 'incoming' },
         ],

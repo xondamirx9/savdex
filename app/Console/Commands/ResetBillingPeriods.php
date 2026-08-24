@@ -139,6 +139,7 @@ class ResetBillingPeriods extends Command
 
             $wallet->forceFill([
                 'contacts_used_this_period' => 0,
+                'responses_used_this_period' => 0,
                 // Единицы продвижения выдаются заново по тарифу,
                 // а не накапливаются: это месячная квота, а не кредиты
                 'promo_units' => $plan?->promo_units ?? 0,

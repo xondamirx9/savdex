@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Cabinet\AnalyticsController;
 use App\Http\Controllers\Cabinet\BillingController;
+use App\Http\Controllers\Cabinet\ChatController;
 use App\Http\Controllers\Cabinet\CompanyContactController;
 use App\Http\Controllers\Cabinet\CompanyFileController;
 use App\Http\Controllers\Cabinet\CompanyProfileController;
@@ -24,6 +25,8 @@ use App\Http\Controllers\Cabinet\ReviewController;
 use App\Http\Controllers\Cabinet\SettingsController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Payment\UzumMerchantController;
+use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Controllers\Public\CatalogController;
 use App\Http\Controllers\Public\CompanyController;
 use App\Http\Controllers\Public\ContactUnlockController;
@@ -32,8 +35,6 @@ use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
-use App\Http\Controllers\Payment\UzumMerchantController;
-use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
@@ -348,6 +349,25 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::post('/cabinet/billing/cancel', [BillingController::class, 'cancel'])->name('cabinet.billing.cancel');
     Route::post('/cabinet/billing/resume', [BillingController::class, 'resume'])->name('cabinet.billing.resume');
     Route::delete('/cabinet/billing/card/{id}', [BillingController::class, 'removeCard'])->name('cabinet.billing.card.remove');
+
+    /*
+     * Чат между компаниями: отклики на объявления и переписка по ним.
+     * Отклик и отправка сообщений требуют подтверждённой почты — это
+     * действия от имени компании, как заказ или отзыв. Частота отклика
+     * ограничена жёстче: каждый новый разговор тратит лимит тарифа.
+     */
+    Route::get('/cabinet/chats', [ChatController::class, 'index'])->name('cabinet.chats');
+    Route::get('/cabinet/chats/{id}', [ChatController::class, 'show'])
+        ->whereNumber('id')
+        ->name('cabinet.chats.show');
+    Route::post('/cabinet/chats/{id}', [ChatController::class, 'send'])
+        ->whereNumber('id')
+        ->middleware(['verified', 'throttle:60,1'])
+        ->name('cabinet.chats.send');
+    Route::post('/listing/{id}/respond', [ChatController::class, 'respond'])
+        ->whereNumber('id')
+        ->middleware(['verified', 'throttle:20,60'])
+        ->name('listing.respond');
 
     Route::get('/cabinet/settings', [SettingsController::class, 'index'])->name('cabinet.settings');
     Route::patch('/cabinet/settings/notifications', [SettingsController::class, 'notifications'])->name('cabinet.settings.notifications');

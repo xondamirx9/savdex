@@ -1785,3 +1785,20 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .subnav-inner a,.subnav-post{
     display:inline-flex;align-items:center;min-height:44px}
 }
+
+/* ---------- Чат ---------- */
+.chat-row{display:flex;gap:12px;align-items:flex-start;position:relative;text-decoration:none;color:inherit}
+.chat-row:hover{text-decoration:none}
+.chat-unread{position:static;flex-shrink:0;align-self:center}
+.chat-box{display:flex;flex-direction:column}
+.chat-scroll{max-height:55vh;min-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;
+  padding:4px 2px;margin-bottom:12px}
+.chat-msg{max-width:78%;align-self:flex-start;background:var(--bg);border:1px solid var(--border);
+  border-radius:14px 14px 14px 4px;padding:9px 13px}
+.chat-msg.is-mine{align-self:flex-end;background:var(--primary-50);border-color:var(--primary-100);
+  border-radius:14px 14px 4px 14px}
+.chat-msg-body{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-msg-at{display:block;margin-top:3px;font-size:11px;color:var(--text-muted);text-align:right}
+.chat-compose{display:flex;gap:8px;align-items:flex-end}
+.chat-compose .textarea{flex:1;min-height:44px;resize:none}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
