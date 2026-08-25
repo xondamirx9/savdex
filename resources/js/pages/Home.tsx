@@ -15,11 +15,12 @@ import {
     Package,
     Percent,
     Search,
+    Shapes,
     ShieldCheck,
     Shirt,
     Star,
-    UtensilsCrossed,
     Users,
+    UtensilsCrossed,
     Wallet,
     Wheat,
 } from 'lucide-react';
@@ -114,6 +115,7 @@ const CATEGORY_ICONS: Record<string, typeof Package> = {
     wheat: Wheat,
     box: Box,
     settings: Cog,
+    other: Shapes,
     // Запасные соответствия на случай новых разделов из админки
     textile: Shirt,
     food: UtensilsCrossed,

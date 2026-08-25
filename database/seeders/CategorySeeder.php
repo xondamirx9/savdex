@@ -19,6 +19,9 @@ class CategorySeeder extends Seeder
 {
     /**
      * Дерево категорий. Названия — [ru, uz, en, zh, tr].
+     *
+     * В каждом разделе последней стоит подкатегория «Другое», а в конце
+     * списка — одноимённый раздел: у любого товара должно быть место.
      */
     private const TREE = [
         ['stroymaterialy', 'package', ['Стройматериалы', 'Qurilish mollari', 'Construction materials', '建筑材料', 'İnşaat malzemeleri'], [
@@ -26,24 +29,39 @@ class CategorySeeder extends Seeder
             ['metalloprokat', ['Металлопрокат', 'Metall prokat', 'Rolled metal', '轧制金属', 'Haddelenmiş metal']],
             ['krovlya-fasad', ['Кровля и фасад', 'Tom va fasad', 'Roofing and facade', '屋顶和外墙', 'Çatı ve cephe']],
             ['kirpich-blok', ['Кирпич и блоки', 'Gʻisht va bloklar', 'Bricks and blocks', '砖和砌块', 'Tuğla ve blok']],
+            ['stroymaterialy-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
         ['tekstil', 'shirt', ['Текстиль и одежда', 'Toʻqimachilik va kiyim', 'Textile and clothing', '纺织品和服装', 'Tekstil ve giyim'], [
             ['pryazha-tkani', ['Пряжа и ткани', 'Ip va matolar', 'Yarn and fabrics', '纱线和织物', 'İplik ve kumaş']],
             ['gotovaya-odezhda', ['Готовая одежда', 'Tayyor kiyim', 'Ready-made clothing', '成衣', 'Hazır giyim']],
+            ['tekstil-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
         ['metally', 'layers', ['Металлы', 'Metallar', 'Metals', '金属', 'Metaller'], [
             ['chernye-metally', ['Чёрные металлы', 'Qora metallar', 'Ferrous metals', '黑色金属', 'Demir metaller']],
             ['cvetnye-metally', ['Цветные металлы', 'Rangli metallar', 'Non-ferrous metals', '有色金属', 'Demir dışı metaller']],
+            ['metally-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
         ['produkty', 'wheat', ['Продукты питания', 'Oziq-ovqat', 'Food products', '食品', 'Gıda ürünleri'], [
             ['zerno-muka', ['Зерно и мука', 'Don va un', 'Grain and flour', '谷物和面粉', 'Tahıl ve un']],
             ['sukhofrukty', ['Сухофрукты', 'Quruq mevalar', 'Dried fruits', '干果', 'Kuru meyveler']],
+            ['produkty-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
         ['upakovka', 'box', ['Упаковка', 'Qadoqlash', 'Packaging', '包装', 'Ambalaj'], [
             ['poddony-tara', ['Поддоны и тара', 'Palletlar va idishlar', 'Pallets and containers', '托盘和容器', 'Palet ve kaplar']],
+            ['upakovka-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
         ['oborudovanie', 'settings', ['Оборудование', 'Uskunalar', 'Equipment', '设备', 'Ekipman'], [
             ['stanki', ['Станки', 'Dastgohlar', 'Machine tools', '机床', 'Takım tezgahları']],
+            ['oborudovanie-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
+        ]],
+
+        /*
+         * Раздел-приют для товара, которому не нашлось рубрики: без него
+         * продавец бросает мастер на первом же шаге. Стоит последним —
+         * «Другое» выбирают, когда просмотрели остальное.
+         */
+        ['drugoe', 'other', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer'], [
+            ['raznye-tovary', ['Разные товары', 'Turli tovarlar', 'Miscellaneous goods', '其他商品', 'Çeşitli ürünler']],
         ]],
     ];
 
