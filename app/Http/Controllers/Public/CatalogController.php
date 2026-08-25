@@ -234,6 +234,7 @@ class CatalogController extends Controller
                 'company.country.translations',
                 'company.publicContacts',
                 'category.translations',
+                'category.fields',
                 'attributes',
                 'activePromotions.type',
                 'images',
@@ -271,8 +272,14 @@ class CatalogController extends Controller
                 'published' => $listing->published_at?->translatedFormat('d.m.Y'),
                 'expires' => $listing->expires_at?->translatedFormat('d.m.Y'),
                 'views' => $listing->views_count,
+                /*
+                 * Подписи характеристик — из полей категории, а не ключи
+                 * как есть: покупатель должен видеть «Марка», а не mark.
+                 * Ключ без описания в справочнике остаётся как записан.
+                 */
                 'attributes' => $listing->attributes->map(fn ($a): array => [
-                    'key' => $a->key,
+                    'key' => $listing->category?->fields
+                        ->firstWhere('key', $a->key)?->label ?? $a->key,
                     'value' => $a->value,
                 ]),
                 'badges' => $listing->activePromotions->map(fn ($p): ?string => $p->type?->badge)->filter()->values(),
