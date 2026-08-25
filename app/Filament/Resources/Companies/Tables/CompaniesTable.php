@@ -185,7 +185,13 @@ class CompaniesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    /*
+                     * Ограничение суперадмином — прямо на действии:
+                     * canDeleteAny ресурса массовые действия не прячет,
+                     * и без visible() модератор мог удалять записи пачкой.
+                     */
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
                 ]),
             ]);
     }

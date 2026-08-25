@@ -104,4 +104,14 @@ if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
     chown -R www-data:www-data "$(dirname "$DB_FILE")"
 fi
 
+# Планировщик. Системного cron на Render нет, а без schedule:run
+# объявления не истекают, продвижения не освобождают слоты и месячные
+# лимиты не сбрасываются (см. routes/console.php). Фоновый schedule:work
+# живёт рядом с веб-сервером; для одного инстанса этого достаточно.
+# От www-data, а не root — иначе журнал SQLite получит владельца root,
+# и сайт упадёт на первой же записи.
+if command -v runuser >/dev/null 2>&1; then
+    runuser -u www-data -- php artisan schedule:work >/dev/null 2>&1 &
+fi
+
 exec "$@"

@@ -39,7 +39,17 @@ class ListingsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['company', 'category.translations']))
+            /*
+             * Пустые черновики скрыты: их создаёт сам мастер объявления
+             * при каждом заходе на «Создать» и переиспользует при
+             * следующем. Удалять их из админки бессмысленно — кабинет
+             * пользователя тут же заведёт новый, и список «не чистится».
+             */
+            ->modifyQueryUsing(fn ($query) => $query
+                ->with(['company', 'category.translations'])
+                ->whereNot(fn ($q) => $q
+                    ->where('status', Listing::STATUS_DRAFT)
+                    ->where('title', '')))
             /*
              * Выгрузка и загрузка данных (§6.4 ТЗ). Файл готовится
              * в очереди: выгрузка десятков тысяч строк в запросе
@@ -167,7 +177,13 @@ class ListingsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    /*
+                     * Ограничение суперадмином — прямо на действии:
+                     * canDeleteAny ресурса массовые действия не прячет,
+                     * и без visible() модератор мог удалять записи пачкой.
+                     */
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
                 ]),
             ])
             ->emptyStateHeading('Объявлений нет')
