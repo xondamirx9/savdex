@@ -232,6 +232,7 @@ class ListingWizardController extends Controller
             ->get()
             ->map(fn (Category $parent): array => [
                 'id' => $parent->id,
+                'slug' => $parent->slug,
                 'name' => $parent->name(),
                 'children' => $parent->children->map(fn (Category $child): array => [
                     'id' => $child->id,

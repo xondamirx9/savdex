@@ -22,6 +22,7 @@ interface Child {
 
 interface Parent {
     id: number;
+    slug: string;
     name: string;
     children: Child[];
 }
@@ -98,6 +99,15 @@ export default function Wizard({ listing, categories, slots }: Props) {
 
     const parent = categories.find((c) => c.id === data.parent_id);
     const child = parent?.children.find((c) => c.id === data.category_id);
+
+    /*
+     * Раздел «Другое» устроен иначе: подкатегория в нём одна («Разные
+     * товары») и выбирать её бессмысленно — селект прячется, рубрика
+     * проставляется сама, а вместо неё продавец пишет свою категорию
+     * текстом. Хранится она как атрибут custom_category — тем же
+     * механизмом, что и поля обычных категорий.
+     */
+    const isOther = parent?.slug === 'drugoe';
 
     /*
      * Автосохранение раз в 20 секунд, как обещано в интерфейсе.
@@ -231,8 +241,9 @@ export default function Wizard({ listing, categories, slots }: Props) {
                                     className="select"
                                     value={data.parent_id ?? ''}
                                     onChange={(e) => {
-                                        setData('parent_id', e.target.value ? Number(e.target.value) : null);
-                                        setData('category_id', null);
+                                        const next = categories.find((c) => c.id === Number(e.target.value));
+                                        setData('parent_id', next?.id ?? null);
+                                        setData('category_id', next?.slug === 'drugoe' ? (next.children[0]?.id ?? null) : null);
                                     }}
                                 >
                                     <option value="">Выберите категорию</option>
@@ -244,7 +255,29 @@ export default function Wizard({ listing, categories, slots }: Props) {
                                 </select>
                             </div>
 
-                            {parent && (
+                            {parent && isOther && (
+                                <div className="field">
+                                    <label className="label" htmlFor="w-custom-cat">
+                                        Своя категория <span className="req">*</span>
+                                    </label>
+                                    <input
+                                        id="w-custom-cat"
+                                        className="input"
+                                        maxLength={80}
+                                        value={data.attributes.custom_category ?? ''}
+                                        onChange={(e) =>
+                                            setData('attributes', { ...data.attributes, custom_category: e.target.value })
+                                        }
+                                        placeholder="Например: крепёж и метизы"
+                                    />
+                                    <p className="hint">
+                                        Готовой рубрики нет — назовите категорию своими словами. Она будет видна
+                                        на карточке объявления.
+                                    </p>
+                                </div>
+                            )}
+
+                            {parent && !isOther && (
                                 <div className="field">
                                     <label className="label" htmlFor="w-sub">
                                         Подкатегория <span className="req">*</span>
@@ -288,7 +321,7 @@ export default function Wizard({ listing, categories, slots }: Props) {
 
                             {/* Поля категории появляются только после её выбора:
                                 показывать пустой блок «поля появятся позже» — шум */}
-                            {child && child.fields.length > 0 && (
+                            {!isOther && child && child.fields.length > 0 && (
                                 <div
                                     className="card card--pad-sm mt-24"
                                     style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}
