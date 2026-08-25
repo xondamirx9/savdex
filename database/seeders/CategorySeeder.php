@@ -82,6 +82,25 @@ class CategorySeeder extends Seeder
             ['key' => 'composition', 'label' => 'Состав', 'options' => ['100 % хлопок', 'Хлопок/ПЭ', 'Вискоза']],
             ['key' => 'density', 'label' => 'Плотность, г/м²', 'type' => 'number'],
         ],
+
+        /*
+         * Подкатегории «Другое» получают свободное текстовое поле:
+         * готовой рубрики для товара нет, и продавец называет её сам.
+         * Введённое видно на карточке объявления рядом с остальными
+         * характеристиками.
+         */
+        'stroymaterialy-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'tekstil-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'metally-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'produkty-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'upakovka-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'oborudovanie-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'raznye-tovary' => self::CUSTOM_CATEGORY_FIELD,
+    ];
+
+    /** Поле «назовите категорию сами» — одно на все подкатегории «Другое». */
+    private const CUSTOM_CATEGORY_FIELD = [
+        ['key' => 'custom_category', 'label' => 'Категория товара', 'type' => 'text'],
     ];
 
     public function run(): void
