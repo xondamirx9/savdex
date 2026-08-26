@@ -54,6 +54,8 @@ export const routes = {
     cabinetCompany: '/cabinet/company',
     cabinetContacts: '/cabinet/contacts',
     cabinetChats: '/cabinet/chats',
+    companyContacts: '/cabinet/company/contacts',
+    companyContact: (id: number) => `/cabinet/company/contacts/${id}`,
     cabinetChat: (id: number) => `/cabinet/chats/${id}`,
     listingRespond: (id: number) => `/listing/${id}/respond`,
     cabinetBilling: '/cabinet/billing',
