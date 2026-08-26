@@ -55,6 +55,23 @@ class CategorySeeder extends Seeder
             ['oborudovanie-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
 
+        ['mebel', 'armchair', ['Мебель', 'Mebel', 'Furniture', '家具', 'Mobilya'], [
+            ['ofisnaya-mebel', ['Офисная мебель', 'Ofis mebeli', 'Office furniture', '办公家具', 'Ofis mobilyası']],
+            ['mebel-dlya-doma', ['Мебель для дома', 'Uy mebeli', 'Home furniture', '家用家具', 'Ev mobilyası']],
+            ['mebel-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
+        ]],
+
+        ['vystavki', 'presentation', ['Выставки', 'Koʻrgazmalar', 'Exhibitions', '展会', 'Fuarlar'], [
+            ['provedenie-vystavok', ['Проведение выставок', 'Koʻrgazmalar oʻtkazish', 'Exhibition organisation', '展会举办', 'Fuar organizasyonu']],
+            ['vystavki-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
+        ]],
+
+        ['logistika', 'truck', ['Логистика', 'Logistika', 'Logistics', '物流', 'Lojistik'], [
+            ['gruzoperevozki', ['Грузоперевозки', 'Yuk tashish', 'Freight transport', '货运', 'Yük taşımacılığı']],
+            ['skladskie-uslugi', ['Складские услуги', 'Ombor xizmatlari', 'Warehousing', '仓储服务', 'Depolama hizmetleri']],
+            ['logistika-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
+        ]],
+
         ['uslugi', 'briefcase', ['Услуги', 'Xizmatlar', 'Services', '服务', 'Hizmetler'], [
             ['hr-uslugi', ['Эйчар и подбор персонала', 'HR va xodimlar tanlash', 'HR and recruiting', '人力资源与招聘', 'İK ve işe alım']],
             ['finansy-buhgalteriya', ['Финансы и бухгалтерия', 'Moliya va buxgalteriya', 'Finance and accounting', '财务与会计', 'Finans ve muhasebe']],
@@ -101,6 +118,9 @@ class CategorySeeder extends Seeder
         'produkty-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'upakovka-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'oborudovanie-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'mebel-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'vystavki-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'logistika-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'uslugi-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'raznye-tovary' => self::CUSTOM_CATEGORY_FIELD,
     ];

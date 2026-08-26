@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import {
+    Armchair,
     ArrowRight,
     Box,
     Boxes,
@@ -15,11 +16,13 @@ import {
     MessageSquareText,
     Package,
     Percent,
+    Presentation,
     Search,
     Shapes,
     ShieldCheck,
     Shirt,
     Star,
+    Truck,
     Users,
     UtensilsCrossed,
     Wallet,
@@ -117,6 +120,9 @@ const CATEGORY_ICONS: Record<string, typeof Package> = {
     box: Box,
     settings: Cog,
     briefcase: Briefcase,
+    armchair: Armchair,
+    presentation: Presentation,
+    truck: Truck,
     other: Shapes,
     // Запасные соответствия на случай новых разделов из админки
     textile: Shirt,
