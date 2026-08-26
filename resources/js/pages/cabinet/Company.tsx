@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Check, Eye, FileText, Info, Trash2, Upload, X } from 'lucide-react';
+import { Check, Eye, FileText, Info, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/useConfirm';
 import { FileUploadModal } from '@/components/cabinet/FileUploadModal';
@@ -119,6 +119,37 @@ export default function CompanyProfile({
             el.focus();
             el.setSelectionRange(a + before.length, a + before.length + selected.length);
         });
+    }
+
+    /*
+     * Контакты компании: добавление и правка одной формой. Телефон,
+     * который клиент указал при регистрации, раньше нельзя было ни
+     * сменить, ни убрать — серверные маршруты существовали, а кнопок
+     * не было.
+     */
+    const [contactEditor, setContactEditor] = useState<number | 'new' | null>(null);
+    const contactForm = useForm({ type: 'phone', value: '', label: '' });
+
+    function openContactEditor(c?: { id: number; type: string; value: string; label: string | null }) {
+        contactForm.clearErrors();
+        contactForm.setData(c ? { type: c.type, value: c.value, label: c.label ?? '' } : { type: 'phone', value: '', label: '' });
+        setContactEditor(c ? c.id : 'new');
+    }
+
+    function submitContact() {
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                setContactEditor(null);
+                contactForm.reset();
+            },
+        };
+
+        if (contactEditor === 'new') {
+            contactForm.post(routes.companyContacts, options);
+        } else if (typeof contactEditor === 'number') {
+            contactForm.patch(routes.companyContact(contactEditor), options);
+        }
     }
 
     function insertAtCursor(snippet: string) {
@@ -648,19 +679,109 @@ export default function CompanyProfile({
                 </Panel>
             )}
 
-            {company && contacts.length > 0 && tab === 'main' && (
-                <Panel title="Контакты компании" className="mt-24" >
-                    <ul className="stack-12">
-                        {contacts.map((c) => (
-                            <li key={c.id} className="row-between">
-                                <span className="t-sm">
-                                    <b>{c.value}</b>
-                                    {c.label && <span className="muted"> · {c.label}</span>}
-                                </span>
-                                <span className="badge badge-neutral">{c.is_public ? 'публичный' : 'платный'}</span>
-                            </li>
-                        ))}
-                    </ul>
+            {company && tab === 'main' && (
+                <Panel
+                    title="Контакты компании"
+                    className="mt-24"
+                    action={
+                        <button className="btn btn-secondary btn-sm" type="button" onClick={() => openContactEditor()}>
+                            <Plus aria-hidden className="size-4" /> Добавить контакт
+                        </button>
+                    }
+                >
+                    {contacts.length > 0 && (
+                        <ul className="stack-12">
+                            {contacts.map((c) => (
+                                <li key={c.id} className="row-between" style={{ gap: 10 }}>
+                                    <span className="t-sm" style={{ minWidth: 0 }}>
+                                        <b>{c.value}</b>
+                                        {c.label && <span className="muted"> · {c.label}</span>}
+                                    </span>
+                                    <span className="row" style={{ gap: 6, flexShrink: 0 }}>
+                                        <span className="badge badge-neutral hide-mobile">{c.is_public ? 'публичный' : 'платный'}</span>
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            type="button"
+                                            aria-label="Изменить контакт"
+                                            onClick={() => openContactEditor(c)}
+                                        >
+                                            <Pencil aria-hidden className="size-4" />
+                                        </button>
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            type="button"
+                                            aria-label="Удалить контакт"
+                                            onClick={() =>
+                                                confirm({
+                                                    title: 'Удалить контакт?',
+                                                    description: `${c.value} исчезнет с визитки компании.`,
+                                                    confirmLabel: 'Удалить',
+                                                    danger: true,
+                                                    onConfirm: () => router.delete(routes.companyContact(c.id), { preserveScroll: true }),
+                                                })
+                                            }
+                                        >
+                                            <Trash2 aria-hidden className="size-4" />
+                                        </button>
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
+                    {contactEditor !== null && (
+                        <div className="card card--pad-sm mt-16" style={{ background: 'var(--bg)' }}>
+                            <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
+                                <div className="field" style={{ margin: 0 }}>
+                                    <label className="label" htmlFor="ct-type">Тип</label>
+                                    <select
+                                        id="ct-type"
+                                        className="select"
+                                        value={contactForm.data.type}
+                                        onChange={(e) => contactForm.setData('type', e.target.value)}
+                                    >
+                                        <option value="phone">Телефон</option>
+                                        <option value="email">Почта</option>
+                                        <option value="telegram">Telegram</option>
+                                        <option value="whatsapp">WhatsApp</option>
+                                        <option value="website">Сайт</option>
+                                    </select>
+                                </div>
+                                <div className="field" style={{ margin: 0 }}>
+                                    <label className="label" htmlFor="ct-value">Контакт</label>
+                                    <input
+                                        id="ct-value"
+                                        className="input"
+                                        value={contactForm.data.value}
+                                        onChange={(e) => contactForm.setData('value', e.target.value)}
+                                        placeholder={contactForm.data.type === 'phone' ? '+998 90 123-45-67' : 'sales@company.uz'}
+                                    />
+                                    {contactForm.errors.value && (
+                                        <p className="hint" style={{ color: 'var(--danger)' }}>{contactForm.errors.value}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="field mt-12" style={{ margin: 0 }}>
+                                <label className="label" htmlFor="ct-label">Подпись (необязательно)</label>
+                                <input
+                                    id="ct-label"
+                                    className="input"
+                                    value={contactForm.data.label}
+                                    onChange={(e) => contactForm.setData('label', e.target.value)}
+                                    placeholder="Отдел продаж"
+                                />
+                            </div>
+                            <div className="row mt-16" style={{ gap: 8 }}>
+                                <button className="btn btn-primary btn-sm" type="button" disabled={contactForm.processing} onClick={submitContact}>
+                                    {contactEditor === 'new' ? 'Добавить' : 'Сохранить'}
+                                </button>
+                                <button className="btn btn-ghost btn-sm" type="button" onClick={() => setContactEditor(null)}>
+                                    Отмена
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <p className="t-sm muted mt-16">
                         Телефоны и почта показываются частично, пока покупатель не оплатит раскрытие. Сайт виден всем.
                     </p>
