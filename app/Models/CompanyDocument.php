@@ -60,6 +60,19 @@ class CompanyDocument extends Model
             ?? $this->type;
     }
 
+    /**
+     * Изображение: на визитке показывается галереей, а не строкой файла.
+     * По расширению, а не mime из базы: старые записи заводились без него.
+     */
+    public function isImage(): bool
+    {
+        return in_array(
+            strtolower(pathinfo((string) $this->file_path, PATHINFO_EXTENSION)),
+            ['jpg', 'jpeg', 'png', 'webp'],
+            true,
+        );
+    }
+
     /** Материал для партнёров, а не документ для модератора. */
     public function isMaterial(): bool
     {

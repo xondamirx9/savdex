@@ -10,6 +10,7 @@ import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { renderRichText } from '@/lib/richtext';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -72,6 +73,7 @@ function Fact({ icon: Icon, label, children }: { icon: typeof Phone; label: stri
 }
 
 interface CompanyFile {
+    is_image: boolean;
     id: number;
     title: string;
     type: string;
@@ -237,7 +239,9 @@ export default function CompanyShow({
                         </Fact>
                     </dl>
 
-                    {company.description && <p className="t-body muted mt-24 prose">{company.description}</p>}
+                    {company.description && (
+                        <div className="t-body muted mt-24 prose rich">{renderRichText(company.description)}</div>
+                    )}
 
                     {/* Контакты */}
                     <div className="contacts-strip mt-24">
@@ -286,16 +290,34 @@ export default function CompanyShow({
                         )}
                     </div>
 
+                    {/* Фотографии компании: производство, склад, продукция.
+                        Загружаются во вкладке «Файлы и материалы» кабинета —
+                        картинки с публикацией попадают сюда галереей */}
+                    {files.some((f) => f.is_image) && (
+                        <div className="mt-24">
+                            <h2 className="t-h4" style={{ marginBottom: 14 }}>
+                                Фотографии
+                            </h2>
+                            <div className="co-photos">
+                                {files.filter((f) => f.is_image).map((f) => (
+                                    <a key={f.id} href={`/files/${f.id}`} target="_blank" rel="noopener" title={f.title}>
+                                        <img src={`/files/${f.id}`} alt={f.title} loading="lazy" />
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Материалы компании: презентации, прайсы, документы.
                         Компания сама решает, что показывать — на визитке
                         только то, что помечено к публикации */}
-                    {files.length > 0 && (
+                    {files.some((f) => !f.is_image) && (
                         <div className="mt-24">
                             <h2 className="t-h4" style={{ marginBottom: 14 }}>
                                 Документы и материалы
                             </h2>
                             <div className="files-grid">
-                                {files.map((f) => (
+                                {files.filter((f) => !f.is_image).map((f) => (
                                     <a key={f.id} href={`/files/${f.id}`} className="file-card">
                                         <span className="ico-box ico-box-sm">
                                             <FileText aria-hidden className="size-4" />

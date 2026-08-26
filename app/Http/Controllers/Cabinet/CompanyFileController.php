@@ -127,6 +127,13 @@ class CompanyFileController extends Controller
          */
         $extension = pathinfo($document->file_path, PATHINFO_EXTENSION);
 
+        // Фотографии — inline: их смотрят на визитке, а не скачивают.
+        // Content-Disposition attachment превращал клик по галерее
+        // в загрузку файла вместо открытия
+        if ($document->isImage()) {
+            return Storage::disk('local')->response($document->file_path);
+        }
+
         $name = trim(preg_replace('#[/\\\\]+#', '-', $document->title) ?? '', ' .-');
 
         return Storage::disk('local')->download(

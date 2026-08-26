@@ -3,6 +3,7 @@ import {
     ArrowRight,
     Box,
     Boxes,
+    Briefcase,
     Cog,
     Cpu,
     FlaskConical,
@@ -115,6 +116,7 @@ const CATEGORY_ICONS: Record<string, typeof Package> = {
     wheat: Wheat,
     box: Box,
     settings: Cog,
+    briefcase: Briefcase,
     other: Shapes,
     // Запасные соответствия на случай новых разделов из админки
     textile: Shirt,

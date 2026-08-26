@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\CompanyContact;
 use App\Models\CompanyDocument;
+use App\Models\Country;
 use App\Models\Review;
 use App\Services\ReviewService;
 use App\Support\DateHelper;
@@ -76,7 +77,7 @@ class CompanyController extends Controller
             'companies' => $companies,
             'filters' => $request->only(['q', 'type', 'verified', 'country', 'age']),
             'types' => Company::typeOptions(),
-            'countries' => \App\Models\Country::query()
+            'countries' => Country::query()
                 ->where('is_active', true)
                 ->with('translations')
                 ->orderBy('sort')
@@ -180,6 +181,7 @@ class CompanyController extends Controller
                     'id' => $d->id,
                     'title' => $d->title,
                     'type' => $d->type,
+                    'is_image' => $d->isImage(),
                     'type_label' => $d->typeLabel(),
                     'size' => $d->sizeLabel(),
                     'is_material' => $d->isMaterial(),
