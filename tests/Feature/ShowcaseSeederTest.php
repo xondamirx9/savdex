@@ -119,6 +119,23 @@ class ShowcaseSeederTest extends TestCase
         $this->assertSame(0, $draft->images()->count());
     }
 
+    /** Деплой стирал файлы контейнера: запись в базе есть, файла нет. */
+    #[Test]
+    public function пропавший_файл_картинки_восстанавливается(): void
+    {
+        $listing = $this->listing();
+
+        $this->seed(ShowcaseSeeder::class);
+
+        $image = $listing->images()->firstOrFail();
+        Storage::disk('public')->delete($image->path);
+
+        $this->seed(ShowcaseSeeder::class);
+
+        Storage::disk('public')->assertExists($image->path);
+        $this->assertSame(3, $listing->images()->count());
+    }
+
     #[Test]
     public function повторный_запуск_ничего_не_дублирует(): void
     {

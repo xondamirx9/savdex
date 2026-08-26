@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Models\Company;
 use App\Models\Listing;
+use App\Models\ListingImage;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
 
@@ -55,8 +56,9 @@ class ShowcaseSeeder extends Seeder
     {
         $described = $this->describeCompanies();
         $illustrated = $this->illustrateListings();
+        $healed = $this->healShowcaseFiles();
 
-        $this->command?->info("Заполнено описаний компаний: {$described}, объявлений с картинками: {$illustrated}.");
+        $this->command?->info("Заполнено описаний компаний: {$described}, объявлений с картинками: {$illustrated}, восстановлено файлов: {$healed}.");
     }
 
     // ── Карточки компаний ────────────────────────────────────
@@ -146,6 +148,42 @@ class ShowcaseSeeder extends Seeder
             });
 
         return $filled;
+    }
+
+    /**
+     * Перерисовать сгенерированные картинки, файлы которых пропали.
+     *
+     * До переезда хранилища на постоянный диск деплой стирал файлы,
+     * а записи в базе оставались — карточки показывали битые
+     * изображения. Картинка детерминирована объявлением и номером,
+     * поэтому восстанавливается точь-в-точь той же.
+     */
+    private function healShowcaseFiles(): int
+    {
+        $healed = 0;
+
+        ListingImage::query()
+            ->where('path', 'like', 'listings/%/showcase-%')
+            ->with('listing.category')
+            ->each(function (ListingImage $image) use (&$healed): void {
+                if (Storage::disk('public')->exists($image->path)) {
+                    return;
+                }
+
+                $listing = $image->listing;
+
+                if ($listing === null) {
+                    return;
+                }
+
+                $palette = self::PALETTES[$listing->category?->slug] ?? self::FALLBACK_PALETTE;
+                $seed = $listing->id * 7 + (int) preg_replace('/\D/', '', basename($image->path));
+
+                Storage::disk('public')->put($image->path, $this->productCard($palette, $seed));
+                $healed++;
+            });
+
+        return $healed;
     }
 
     /**

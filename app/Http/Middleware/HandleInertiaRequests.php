@@ -74,6 +74,10 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->company->id,
                     'name' => $user->company->name,
                     'slug' => $user->company->slug,
+                    // Шапка показывает компанию, а не сотрудника:
+                    // на площадке действуют компании
+                    'logo' => $user->company->logoUrl(),
+                    'initials' => $user->company->initials(),
                     'verification_level' => $user->company->verification_level,
                     'profile_completeness' => $user->company->profileCompleteness(),
                 ] : null,

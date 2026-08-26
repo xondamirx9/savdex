@@ -11,6 +11,9 @@ export interface AuthUser {
 }
 
 export interface AuthCompany {
+    /** Логотип для шапки; null — показываются инициалы */
+    logo: string | null;
+    initials: string;
     id: number;
     name: string;
     slug: string;
