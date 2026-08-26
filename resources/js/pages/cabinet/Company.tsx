@@ -105,6 +105,33 @@ export default function CompanyProfile({
         primary_role: company?.primary_role ?? 'both',
     });
 
+    const descRef = useRef<HTMLTextAreaElement>(null);
+
+    /* Правки текста идут через setData, а не execCommand: форма должна
+       знать о каждом изменении, иначе кнопка «Сохранить» отправит старое */
+    function wrapSelection(before: string, after: string) {
+        const el = descRef.current;
+        if (!el) return;
+        const { selectionStart: a, selectionEnd: b, value } = el;
+        const selected = value.slice(a, b) || 'текст';
+        form.setData('description', value.slice(0, a) + before + selected + after + value.slice(b));
+        requestAnimationFrame(() => {
+            el.focus();
+            el.setSelectionRange(a + before.length, a + before.length + selected.length);
+        });
+    }
+
+    function insertAtCursor(snippet: string) {
+        const el = descRef.current;
+        if (!el) return;
+        const { selectionStart: a, value } = el;
+        form.setData('description', value.slice(0, a) + snippet + value.slice(a));
+        requestAnimationFrame(() => {
+            el.focus();
+            el.setSelectionRange(a + snippet.length, a + snippet.length);
+        });
+    }
+
     const availableCities = cities.filter((c) => c.country_id === form.data.country_id);
 
     function submit() {
@@ -368,13 +395,35 @@ export default function CompanyProfile({
                         <label className="label" htmlFor="p-desc">
                             Описание компании
                         </label>
+                        {/* Панель форматирования: жирный, галочка, список.
+                            Разметку понимает визитка (см. lib/richtext) */}
+                        <div className="row" style={{ gap: 6, marginBottom: 6 }}>
+                            <button type="button" className="btn btn-secondary btn-sm" title="Выделить жирным"
+                                onClick={() => wrapSelection('**', '**')}>
+                                <b>Ж</b>
+                            </button>
+                            <button type="button" className="btn btn-secondary btn-sm" title="Вставить галочку"
+                                onClick={() => insertAtCursor('✔ ')}>
+                                ✔
+                            </button>
+                            <button type="button" className="btn btn-secondary btn-sm" title="Пункт списка"
+                                onClick={() => insertAtCursor('\n- ')}>
+                                •&nbsp;список
+                            </button>
+                        </div>
                         <textarea
                             id="p-desc"
+                            ref={descRef}
                             className="textarea"
+                            style={{ minHeight: 140 }}
                             value={form.data.description}
                             onChange={(e) => form.setData('description', e.target.value)}
                             placeholder="Чем занимаетесь, с какого года, какие мощности и склады"
                         />
+                        <p className="hint">
+                            Выделите текст и нажмите «Ж» — на визитке он станет жирным. Строки, начатые с «- »,
+                            превратятся в список; эмодзи ✔ ★ 📦 можно вставлять прямо в текст.
+                        </p>
                     </div>
 
                     <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>

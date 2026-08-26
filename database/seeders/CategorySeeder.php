@@ -55,6 +55,12 @@ class CategorySeeder extends Seeder
             ['oborudovanie-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
         ]],
 
+        ['uslugi', 'briefcase', ['Услуги', 'Xizmatlar', 'Services', '服务', 'Hizmetler'], [
+            ['hr-uslugi', ['Эйчар и подбор персонала', 'HR va xodimlar tanlash', 'HR and recruiting', '人力资源与招聘', 'İK ve işe alım']],
+            ['finansy-buhgalteriya', ['Финансы и бухгалтерия', 'Moliya va buxgalteriya', 'Finance and accounting', '财务与会计', 'Finans ve muhasebe']],
+            ['uslugi-drugoe', ['Другое', 'Boshqa', 'Other', '其他', 'Diğer']],
+        ]],
+
         /*
          * Раздел-приют для товара, которому не нашлось рубрики: без него
          * продавец бросает мастер на первом же шаге. Стоит последним —
@@ -95,6 +101,7 @@ class CategorySeeder extends Seeder
         'produkty-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'upakovka-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'oborudovanie-drugoe' => self::CUSTOM_CATEGORY_FIELD,
+        'uslugi-drugoe' => self::CUSTOM_CATEGORY_FIELD,
         'raznye-tovary' => self::CUSTOM_CATEGORY_FIELD,
     ];
 
