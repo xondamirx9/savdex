@@ -141,14 +141,14 @@ class CompanyProfileController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'website' => ['nullable', 'string', 'max:190'],
-            'founded_year' => ['nullable', 'integer', 'between:1900,'.now()->year],
+            'founded_year' => ['nullable', 'integer', 'between:1850,'.now()->year],
             'employees_range' => ['nullable', 'string', 'max:20'],
             'type' => ['nullable', 'string', 'max:30'],
             'custom_category' => ['nullable', 'string', 'max:80'],
             'primary_role' => ['nullable', 'in:supplier,buyer,both'],
         ], [
             'name.required' => 'Укажите название компании',
-            'founded_year.between' => 'Год основания должен быть между 1900 и '.now()->year,
+            'founded_year.between' => 'Год основания должен быть между 1850 и '.now()->year,
         ]);
 
         $user = $request->user();

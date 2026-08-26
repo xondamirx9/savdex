@@ -79,7 +79,7 @@ class CompanyImporter extends Importer
                 ->label('Год основания')
                 ->exampleHeader('Год основания')
                 ->numeric()
-                ->rules(['nullable', 'integer', 'between:1900,'.date('Y')]),
+                ->rules(['nullable', 'integer', 'between:1850,'.date('Y')]),
 
             ImportColumn::make('employees_range')
                 ->label('Сотрудников')
