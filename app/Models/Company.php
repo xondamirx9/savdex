@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'slug', 'name', 'legal_name', 'tin',
     'country_id', 'city_id', 'address', 'lat', 'lng',
-    'type', 'primary_role', 'description', 'logo_path', 'cover_path', 'website',
+    'type', 'primary_role', 'custom_category', 'description', 'logo_path', 'cover_path', 'website',
     'phone', 'email', 'telegram', 'whatsapp', 'contact_person',
     'founded_year', 'employees_range', 'turnover_range',
     'verification_level', 'verified_at', 'verified_by',
@@ -297,6 +297,7 @@ class Company extends Model
             'tin' => $this->tin,
             'type' => $this->type,
             'type_label' => $this->typeLabel(),
+            'custom_category' => $this->custom_category,
             'country' => $this->country?->name(),
             'city' => $this->city?->name(),
             'address' => $this->address,

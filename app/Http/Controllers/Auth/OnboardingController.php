@@ -40,9 +40,22 @@ class OnboardingController extends Controller
 
             'categories' => Category::query()->whereNull('parent_id')->where('is_active', true)
                 ->with('translations')->orderBy('sort')->get()
-                ->map(fn (Category $c): array => ['id' => $c->id, 'name' => $c->name()]),
+                ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name' => $c->name()]),
 
             'types' => Company::typeOptions(),
+
+            /*
+             * Направления раздела «Услуги» — для блока, который
+             * появляется при выборе типа компании «Услуги»: эйчар,
+             * финансы и бухгалтерия, своё направление.
+             */
+            'serviceCategories' => Category::query()
+                ->where('parent_id', Category::query()->where('slug', 'uslugi')->value('id'))
+                ->where('is_active', true)
+                ->with('translations')
+                ->orderBy('sort')
+                ->get()
+                ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name' => $c->name()]),
         ]);
     }
 
@@ -61,6 +74,8 @@ class OnboardingController extends Controller
             'primary_role' => ['required', 'in:supplier,buyer,both'],
             'categories' => ['array', 'max:5'],
             'categories.*' => ['integer', 'exists:categories,id'],
+            // Текст для «Другого»: чем занимается компания своими словами
+            'custom_category' => ['nullable', 'string', 'max:80'],
         ], [
             'name.required' => 'Укажите название компании',
             'type.required' => 'Выберите тип компании',
@@ -76,6 +91,7 @@ class OnboardingController extends Controller
             'city_id' => $data['city_id'],
             'tin' => $data['tin'] ?? null,
             'primary_role' => $data['primary_role'],
+            'custom_category' => $data['custom_category'] ?? null,
             'status' => Company::STATUS_ACTIVE,
         ]);
 
