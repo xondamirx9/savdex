@@ -41,6 +41,7 @@ class CompanyProfileController extends Controller
                 'city_id' => $company->city_id,
                 'address' => $company->address,
                 'description' => $company->description,
+                'custom_category' => $company->custom_category,
                 'website' => $company->website,
                 'founded_year' => $company->founded_year,
                 'employees_range' => $company->employees_range,
@@ -143,6 +144,7 @@ class CompanyProfileController extends Controller
             'founded_year' => ['nullable', 'integer', 'between:1900,'.now()->year],
             'employees_range' => ['nullable', 'string', 'max:20'],
             'type' => ['nullable', 'string', 'max:30'],
+            'custom_category' => ['nullable', 'string', 'max:80'],
             'primary_role' => ['nullable', 'in:supplier,buyer,both'],
         ], [
             'name.required' => 'Укажите название компании',

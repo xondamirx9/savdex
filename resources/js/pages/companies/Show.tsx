@@ -40,6 +40,7 @@ interface BusinessCard {
     tin: string | null;
     type: string | null;
     type_label: string | null;
+    custom_category: string | null;
     country: string | null;
     city: string | null;
     address: string | null;
@@ -171,7 +172,7 @@ export default function CompanyShow({
                                 )}
                             </div>
                             <p className="t-lead">
-                                {[company.type_label, company.city, company.country]
+                                {[company.type_label, company.custom_category, company.city, company.country]
                                     .filter(Boolean)
                                     .join(' · ')}
                             </p>

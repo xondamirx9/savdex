@@ -19,6 +19,7 @@ interface Company {
     country_id: number | null;
     city_id: number | null;
     address: string | null;
+    custom_category: string | null;
     description: string | null;
     website: string | null;
     founded_year: number | null;
@@ -89,6 +90,7 @@ export default function CompanyProfile({
         founded_year: number | null;
         employees_range: string;
         type: string;
+        custom_category: string;
         primary_role: string;
     }>({
         name: company?.name ?? '',
@@ -102,6 +104,7 @@ export default function CompanyProfile({
         founded_year: company?.founded_year ?? null,
         employees_range: company?.employees_range ?? '',
         type: company?.type ?? 'distributor',
+        custom_category: company?.custom_category ?? '',
         primary_role: company?.primary_role ?? 'both',
     });
 
@@ -407,6 +410,23 @@ export default function CompanyProfile({
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    <div className="field mt-16">
+                        <label className="label" htmlFor="p-custom-cat">
+                            Своё направление деятельности
+                        </label>
+                        <input
+                            id="p-custom-cat"
+                            className="input"
+                            maxLength={80}
+                            value={form.data.custom_category}
+                            onChange={(e) => form.setData('custom_category', e.target.value)}
+                            placeholder="Например: клининг, логистика, IT-услуги"
+                        />
+                        <p className="hint">
+                            Для компаний с категорией «Другое»: текст показывается на визитке рядом с типом компании.
+                        </p>
                     </div>
 
                     <div className="field mt-16">

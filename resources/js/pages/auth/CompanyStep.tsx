@@ -8,7 +8,8 @@ import { cn } from '@/lib/cn';
 interface Props {
     countries: { id: number; name: string }[];
     cities: { id: number; name: string; country_id: number }[];
-    categories: { id: number; name: string }[];
+    categories: { id: number; slug: string; name: string }[];
+    serviceCategories: { id: number; slug: string; name: string }[];
     types: Record<string, string>;
 }
 
@@ -25,7 +26,7 @@ const ROLES: [string, string, string][] = [
  * незаполненного ИНН нельзя. Но заполнить его выгодно, и об этом
  * сказано числом, а не уговорами.
  */
-export default function CompanyStep({ countries, cities, categories, types }: Props) {
+export default function CompanyStep({ countries, cities, categories, serviceCategories, types }: Props) {
     const { data, setData, post, processing, errors } = useForm<{
         name: string;
         type: string;
@@ -34,6 +35,7 @@ export default function CompanyStep({ countries, cities, categories, types }: Pr
         tin: string;
         primary_role: string;
         categories: number[];
+        custom_category: string;
     }>({
         name: '',
         type: 'distributor',
@@ -42,7 +44,21 @@ export default function CompanyStep({ countries, cities, categories, types }: Pr
         tin: '',
         primary_role: 'both',
         categories: [],
+        custom_category: '',
     });
+
+    /*
+     * Тип «Услуги» открывает блок направлений (эйчар, финансы
+     * и бухгалтерия…). Код типа приходит из справочника админки,
+     * поэтому проверяем известные варианты, а не одно значение.
+     */
+    const isServiceType = ['service', 'services', 'uslugi'].includes(data.type);
+
+    const allCategories = [...categories, ...serviceCategories];
+
+    const needsCustomText = allCategories.some(
+        (c) => (c.slug === 'drugoe' || c.slug === 'uslugi-drugoe') && data.categories.includes(c.id),
+    );
 
     const availableCities = cities.filter((c) => c.country_id === data.country_id);
 
@@ -100,6 +116,25 @@ export default function CompanyStep({ countries, cities, categories, types }: Pr
                     </select>
                     {errors.type && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.type}</p>}
                 </div>
+
+                {isServiceType && serviceCategories.length > 0 && (
+                    <div className="field">
+                        <span className="label">Направления услуг</span>
+                        <div className="row wrap" style={{ gap: 6 }}>
+                            {serviceCategories.map((c) => (
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    className={cn('chip', data.categories.includes(c.id) && 'chip-active')}
+                                    onClick={() => toggleCategory(c.id)}
+                                >
+                                    {c.name}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="hint">Отметьте, какие услуги оказываете, — это увидят потенциальные клиенты.</p>
+                    </div>
+                )}
 
                 <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                     <div className="field" style={{ margin: 0 }}>
@@ -199,10 +234,12 @@ export default function CompanyStep({ countries, cities, categories, types }: Pr
                             ))}
                     </select>
 
-                    {data.categories.length > 0 && (
+                    {data.categories.some((id) => categories.some((c) => c.id === id)) && (
                         <div className="row wrap mt-8" style={{ gap: 6 }}>
-                            {data.categories.map((id) => {
-                                const category = categories.find((c) => c.id === id);
+                            {data.categories
+                                .filter((id) => categories.some((c) => c.id === id))
+                                .map((id) => {
+                                const category = allCategories.find((c) => c.id === id);
                                 return (
                                     <button
                                         key={id}
@@ -215,6 +252,24 @@ export default function CompanyStep({ countries, cities, categories, types }: Pr
                                     </button>
                                 );
                             })}
+                        </div>
+                    )}
+
+                    {/* «Другое» выбрано — компания называет направление сама.
+                        Текст виден на визитке рядом с типом компании */}
+                    {needsCustomText && (
+                        <div className="mt-8">
+                            <input
+                                className="input"
+                                maxLength={80}
+                                value={data.custom_category}
+                                onChange={(e) => setData('custom_category', e.target.value)}
+                                placeholder="Чем занимаетесь? Например: клининг, логистика, IT-услуги"
+                                aria-label="Своё направление деятельности"
+                            />
+                            {errors.custom_category && (
+                                <p className="hint" style={{ color: 'var(--danger)' }}>{errors.custom_category}</p>
+                            )}
                         </div>
                     )}
 
