@@ -88,6 +88,24 @@ if [ -n "${ADMIN_EMAIL:-}" ]; then
     fi
 fi
 
+# Загрузки — на постоянный диск. Контейнер пересоздаётся при каждом
+# деплое, и всё, что лежало в storage/app (логотипы компаний, фото
+# объявлений, документы), пропадало: «загрузили лого — назавтра его
+# нет». Симлинки уводят оба хранилища на смонтированный диск, где
+# уже живёт база.
+if [ -d /var/data ]; then
+    for dir in public private; do
+        mkdir -p "/var/data/storage/$dir"
+        if [ -d "storage/app/$dir" ] && [ ! -L "storage/app/$dir" ]; then
+            cp -a "storage/app/$dir/." "/var/data/storage/$dir/" 2>/dev/null || true
+            rm -rf "storage/app/$dir"
+        fi
+        ln -sfn "/var/data/storage/$dir" "storage/app/$dir"
+    done
+    # chown -R storage ниже по симлинкам не проходит — цель явно
+    chown -R www-data:www-data /var/data/storage
+fi
+
 php artisan storage:link || true
 php artisan config:cache
 php artisan view:cache

@@ -1813,3 +1813,6 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
 .rich ul{margin:0 0 10px;padding-left:20px}
 .rich li{margin-bottom:4px}
 .rich b{font-weight:650;color:var(--text)}
+
+/* Логотип компании в кнопке меню шапки */
+.user-avatar img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}

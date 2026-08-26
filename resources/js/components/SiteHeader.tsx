@@ -453,18 +453,37 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
  * Появилось после того, как выяснилось, что выйти из аккаунта было
  * невозможно ни с одной страницы: кнопки выхода не существовало нигде.
  */
-function UserMenu({ name, email, verified, isAdmin }: { name: string; email: string; verified: boolean; isAdmin: boolean }) {
+function UserMenu({
+    name,
+    email,
+    verified,
+    isAdmin,
+    company,
+}: {
+    name: string;
+    email: string;
+    verified: boolean;
+    isAdmin: boolean;
+    company: { name: string; logo: string | null; initials: string } | null;
+}) {
     const [open, setOpen] = useState(false);
     const ref = useDismiss(() => setOpen(false));
 
-    const short = name.split(' ')[0] || name;
-    const initials = name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase();
+    /*
+     * В шапке — компания, а не сотрудник: на площадке действуют
+     * компании, и «ООО Стройбаза» узнаётся, а «Анастасия» — нет.
+     * Пока компании нет, кнопка живёт на имени человека.
+     */
+    const short = (company?.name ?? name).split(' ')[0] || name;
+    const initials = company
+        ? company.initials
+        : name
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((w) => w[0])
+              .join('')
+              .toUpperCase();
 
     return (
         <div className="dropdown user-menu" ref={ref}>
@@ -479,7 +498,7 @@ function UserMenu({ name, email, verified, isAdmin }: { name: string; email: str
                 }}
             >
                 <span className="user-avatar" aria-hidden>
-                    {initials || '?'}
+                    {company?.logo ? <img src={company.logo} alt="" /> : initials || '?'}
                 </span>
                 <span className="hide-mobile">{short}</span>
                 <ChevronDown aria-hidden className="size-4 hide-mobile" />
@@ -487,7 +506,8 @@ function UserMenu({ name, email, verified, isAdmin }: { name: string; email: str
 
             <div className={cn('dropdown-menu dropdown-menu-wide', open && 'open')} role="menu">
                 <div className="dropdown-head">
-                    <b>{name}</b>
+                    <b>{company?.name ?? name}</b>
+                    {company && <span className="t-sm">{name}</span>}
                     <span className="t-caption muted">{email}</span>
                     {!verified && (
                         <span className="badge badge-warning" style={{ marginTop: 6, alignSelf: 'flex-start' }}>
@@ -652,6 +672,11 @@ export function SiteHeader() {
                                 email={auth.user!.email}
                                 verified={auth.user!.email_verified}
                                 isAdmin={auth.user!.is_admin}
+                                company={
+                                    auth.company
+                                        ? { name: auth.company.name, logo: auth.company.logo, initials: auth.company.initials }
+                                        : null
+                                }
                             />
                         ) : (
                             <div className="hd-auth">
