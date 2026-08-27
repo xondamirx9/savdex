@@ -176,7 +176,9 @@ class CompanyController extends Controller
             'files' => $company->documents()
                 ->where('is_public', true)
                 ->get()
-                ->filter(fn (CompanyDocument $d): bool => $d->isVisibleOnCard())
+                // Записи без файла (пропали до переезда на постоянный диск)
+                // на визитке не показываются: битая миниатюра — не контент
+                ->filter(fn (CompanyDocument $d): bool => $d->isVisibleOnCard() && ! $d->fileMissing())
                 ->map(fn (CompanyDocument $d): array => [
                     'id' => $d->id,
                     'title' => $d->title,

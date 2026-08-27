@@ -73,6 +73,7 @@ class CompanyProfileController extends Controller
                 'is_material' => $d->isMaterial(),
                 'is_public' => $d->is_public,
                 'valid_until' => $d->valid_until?->translatedFormat('d.m.Y'),
+                'missing' => $d->fileMissing(),
             ]) ?? [],
 
             'employees' => $company?->users()->get()->map(fn ($u): array => [

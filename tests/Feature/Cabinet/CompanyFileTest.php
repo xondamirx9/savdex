@@ -63,6 +63,38 @@ class CompanyFileTest extends TestCase
         Storage::disk('local')->assertExists($document->file_path);
     }
 
+    /**
+     * Запись, чей файл стёрт деплоем эфемерного хранилища, в кабинете
+     * помечается — владелец видит, что загрузку нужно повторить.
+     */
+    #[Test]
+    public function пропавший_файл_помечается_в_кабинете(): void
+    {
+        Storage::disk('local')->put('company-files/alive.pdf', 'pdf');
+
+        CompanyDocument::create([
+            'company_id' => $this->company->id,
+            'type' => 'price_list',
+            'title' => 'Живой файл',
+            'file_path' => 'company-files/alive.pdf',
+            'is_public' => true,
+        ])->forceFill(['created_at' => now()->subMinute()])->save();
+
+        CompanyDocument::create([
+            'company_id' => $this->company->id,
+            'type' => 'other',
+            'title' => 'Пропавший файл',
+            'file_path' => 'company-files/lost.jpg',
+            'is_public' => true,
+        ]);
+
+        $this->actingAs($this->user)->get('/cabinet/company')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('documents.0.missing', true)   // latest() — пропавший первым
+                ->where('documents.1.missing', false));
+    }
+
     #[Test]
     public function документ_уходит_на_проверку_и_до_неё_не_виден(): void
     {

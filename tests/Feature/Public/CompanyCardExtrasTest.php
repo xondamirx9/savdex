@@ -132,6 +132,45 @@ class CompanyCardExtrasTest extends TestCase
         $this->assertStringNotContainsString('attachment', $disposition);
     }
 
+    /**
+     * До переезда хранилища на постоянный диск деплой стирал файлы,
+     * оставляя записи, — визитка показывала битые миниатюры.
+     */
+    #[Test]
+    public function запись_с_пропавшим_файлом_на_визитке_не_показывается(): void
+    {
+        Storage::fake('local');
+
+        $company = Company::factory()->create();
+
+        CompanyDocument::create([
+            'company_id' => $company->id,
+            'type' => 'other',
+            'title' => 'Пропавшее фото',
+            'file_path' => 'company-files/lost.jpg',
+            'is_public' => true,
+        ]);
+
+        $this->get("/company/{$company->slug}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('files', 0));
+    }
+
+    /** Логотип без файла на диске — визитка возвращается к инициалам. */
+    #[Test]
+    public function логотип_с_пропавшим_файлом_не_отдаётся(): void
+    {
+        Storage::fake('public');
+
+        $company = Company::factory()->create(['logo_path' => 'companies/1/lost-logo.webp']);
+
+        $this->assertNull($company->logoUrl());
+
+        Storage::disk('public')->put('companies/1/lost-logo.webp', 'webp-bytes');
+
+        $this->assertNotNull($company->fresh()->logoUrl());
+    }
+
     #[Test]
     public function приватное_фото_в_галерею_не_попадает(): void
     {

@@ -36,6 +36,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm -rf /var/lib/apt/lists/*
 
+# Лимиты загрузки. Стандартный php.ini-production разрешает файлы
+# до 2 МБ — любое фото с телефона больше, и загрузка логотипа или
+# фотографий объявления умирала в PHP раньше, чем её видел Laravel.
+# Приложение принимает изображения до 8 МБ и документы до 20 МБ
+# (валидация в контроллерах), объявление шлёт до 10 фото за раз —
+# отсюда цифры. Память — под GD: декодирование снимка в 48 Мп
+# не помещается в стандартные 128 МБ.
+RUN { \
+        echo 'upload_max_filesize = 21M'; \
+        echo 'post_max_size = 90M'; \
+        echo 'memory_limit = 512M'; \
+        echo 'max_execution_time = 120'; \
+    } > "$PHP_INI_DIR/conf.d/zz-uploads.ini"
+
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
