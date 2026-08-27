@@ -46,6 +46,7 @@ interface Props {
         is_material: boolean;
         is_public: boolean;
         valid_until: string | null;
+        missing: boolean;
     }[];
     employees: { id: number; name: string; email: string; role: string; verified: boolean }[];
     countries: { id: number; name: string }[];
@@ -573,9 +574,17 @@ export default function CompanyProfile({
                                         </span>
                                     </span>
 
+                                    {/* Файл пропал при обновлении сайта: запись осталась,
+                                        содержимого нет — просим загрузить заново */}
+                                    {d.missing && (
+                                        <span className="badge badge-danger shrink-0">
+                                            Файл утерян — загрузите заново
+                                        </span>
+                                    )}
+
                                     {/* Документы проходят модерацию, материалы — нет:
                                         статус показываем только там, где он есть */}
-                                    {!d.is_material && (
+                                    {!d.is_material && !d.missing && (
                                         <span
                                             className={cn(
                                                 'badge shrink-0',

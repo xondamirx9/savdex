@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Файл компании: документ для проверки либо материал для визитки.
@@ -71,6 +72,19 @@ class CompanyDocument extends Model
             ['jpg', 'jpeg', 'png', 'webp'],
             true,
         );
+    }
+
+    /**
+     * Файл записи пропал с диска.
+     *
+     * Так случилось с загрузками, сделанными до переезда хранилища на
+     * постоянный диск: деплой стирал файлы, записи оставались. Визитка
+     * такие записи прячет, а кабинет помечает — владелец видит, что
+     * файл нужно загрузить заново.
+     */
+    public function fileMissing(): bool
+    {
+        return ! Storage::disk('local')->exists((string) $this->file_path);
     }
 
     /** Материал для партнёров, а не документ для модератора. */

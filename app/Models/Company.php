@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -316,10 +317,19 @@ class Company extends Model
 
     // ── Поведение ────────────────────────────────────────────
 
-    /** Адрес логотипа; null — компания его не загружала. */
+    /**
+     * Адрес логотипа; null — компания его не загружала.
+     *
+     * Проверяется и наличие файла: загрузки времён эфемерного хранилища
+     * пропали с диска, и битая картинка в шапке хуже, чем инициалы.
+     */
     public function logoUrl(): ?string
     {
-        return $this->logo_path === null ? null : asset('storage/'.$this->logo_path);
+        if ($this->logo_path === null || ! Storage::disk('public')->exists($this->logo_path)) {
+            return null;
+        }
+
+        return asset('storage/'.$this->logo_path);
     }
 
     /**
