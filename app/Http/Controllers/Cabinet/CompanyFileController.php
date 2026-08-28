@@ -9,6 +9,7 @@ use App\Models\CompanyDocument;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\FilesystemException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -52,7 +53,21 @@ class CompanyFileController extends Controller
 
         // Имя из хеша: оригинальное может содержать что угодно, включая
         // пути и кириллицу, а совпадение имён у разных компаний перезапишет файл
-        $path = $file->store("companies/{$company->id}/documents", 'local');
+        try {
+            $path = $file->store("companies/{$company->id}/documents", 'local');
+        } catch (FilesystemException $e) {
+            report($e);
+            $path = false;
+        }
+
+        /*
+         * Сбой записи — это ответ человеку, а не страница 500: диск
+         * может быть переполнен или недоступен, и «что-то сломалось»
+         * без объяснения оставляет его гадать, дошёл ли файл.
+         */
+        if ($path === false) {
+            return back()->with('error', 'Файл не удалось сохранить — попробуйте ещё раз. Если повторится, напишите в поддержку.');
+        }
 
         $document = CompanyDocument::create([
             'company_id' => $company->id,

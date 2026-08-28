@@ -4,6 +4,7 @@ use App\Http\Middleware\CanonicalHost;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LocalizeUrl;
 use App\Http\Middleware\SetLocale;
+use App\Support\Locales;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -98,23 +99,37 @@ return Application::configure(basePath: dirname(__DIR__))
              */
             $fromUrl = $request->attributes->get(LocalizeUrl::ATTRIBUTE);
 
-            if (\App\Support\Locales::supports($fromUrl)) {
+            if (Locales::supports($fromUrl)) {
                 app()->setLocale($fromUrl);
+            }
+
+            /*
+             * Код обращения для поддержки. Обязательно попадает и в лог —
+             * иначе код на экране есть, а найти по нему ошибку нельзя,
+             * и «Код обращения: f4bbf77d» превращается в декорацию.
+             */
+            $reference = null;
+
+            if ($status >= 500) {
+                $reference = substr(md5((string) $e->getMessage().now()->timestamp), 0, 8);
+
+                logger()->error("Код обращения {$reference}: ".$e->getMessage(), [
+                    'exception' => $e::class,
+                    'url' => $request->fullUrl(),
+                ]);
             }
 
             return inertia('Error', [
                 'status' => $status,
-                // Код обращения для поддержки: по нему в логах ищется
-                // конкретная ошибка, а не «что-то сломалось вчера»
-                'reference' => $status >= 500 ? substr(md5((string) $e->getMessage().now()->timestamp), 0, 8) : null,
+                'reference' => $reference,
                 'locale' => app()->getLocale(),
                 'translations' => trans('ui'),
                 'localeLinks' => array_map(fn (string $code): array => [
                     'code' => $code,
-                    'label' => \App\Support\Locales::ALL[$code]['label'],
-                    'short' => \App\Support\Locales::ALL[$code]['short'],
-                    'url' => \App\Support\Locales::switchUrl($request->getRequestUri(), $code),
-                ], \App\Support\Locales::codes()),
+                    'label' => Locales::ALL[$code]['label'],
+                    'short' => Locales::ALL[$code]['short'],
+                    'url' => Locales::switchUrl($request->getRequestUri(), $code),
+                ], Locales::codes()),
             ])
                 ->toResponse($request)
                 ->setStatusCode($status);
