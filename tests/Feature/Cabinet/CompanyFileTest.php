@@ -64,6 +64,28 @@ class CompanyFileTest extends TestCase
     }
 
     /**
+     * MIME файлов Office длиннее 64 символов — колонка была уже,
+     * и Postgres ронял загрузку презентаций ошибкой 500.
+     */
+    #[Test]
+    public function презентация_с_длинным_mime_загружается(): void
+    {
+        $mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+        $this->actingAs($this->user)
+            ->post('/cabinet/company/files', [
+                'type' => 'presentation',
+                'title' => 'Презентация компании',
+                'file' => UploadedFile::fake()->create('deck.pptx', 500, $mime),
+                'is_public' => true,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        $this->assertSame($mime, CompanyDocument::firstOrFail()->mime);
+    }
+
+    /**
      * Запись, чей файл стёрт деплоем эфемерного хранилища, в кабинете
      * помечается — владелец видит, что загрузку нужно повторить.
      */

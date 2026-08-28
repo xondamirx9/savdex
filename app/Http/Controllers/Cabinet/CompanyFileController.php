@@ -75,7 +75,10 @@ class CompanyFileController extends Controller
             'title' => $data['title'],
             'file_path' => $path,
             'file_size' => $file->getSize(),
-            'mime' => $file->getClientMimeType(),
+            // Тип присылает браузер, то есть это внешние данные: колонка
+            // расширена до 255, а обрезка страхует от выдуманного типа
+            // длиннее любого настоящего
+            'mime' => mb_substr($file->getClientMimeType(), 0, 255),
             'valid_until' => $data['valid_until'] ?? null,
             'is_public' => $request->boolean('is_public', true),
             // Материалам модерация не нужна: это не подтверждение статуса
