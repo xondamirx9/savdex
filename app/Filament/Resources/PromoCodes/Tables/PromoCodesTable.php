@@ -13,7 +13,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -151,7 +150,27 @@ class PromoCodesTable
                     // а не как «дата в прошлом, ну и что»
                     ->color(fn (PromoCode $r): ?string => $r->isExpired() && ! $r->isUsed() ? 'danger' : null),
 
-                IconColumn::make('is_active')->label('Действует')->boolean(),
+                /*
+                 * Статус, а не голый флажок is_active: погашенный код
+                 * с зелёной галочкой «Действует» читался как рабочий,
+                 * и его пытались отключить — а отключать нечего,
+                 * повторно активировать его всё равно нельзя.
+                 */
+                TextColumn::make('status')
+                    ->label('Статус')
+                    ->badge()
+                    ->state(fn (PromoCode $r): string => match (true) {
+                        $r->isUsed() => 'Погашен',
+                        ! $r->is_active => 'Отключён',
+                        $r->isExpired() => 'Просрочен',
+                        default => 'Действует',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'Действует' => 'success',
+                        'Просрочен' => 'warning',
+                        'Отключён' => 'danger',
+                        default => 'gray',
+                    }),
 
                 TextColumn::make('created_at')
                     ->label('Выпущен')
@@ -196,9 +215,24 @@ class PromoCodesTable
                     ->color('danger')
                     ->requiresConfirmation()
                     ->deselectRecordsAfterCompletion()
-                    ->action(fn (Collection $records) => $records
-                        ->filter(fn (PromoCode $r): bool => ! $r->isUsed())
-                        ->each(fn (PromoCode $r) => $r->forceFill(['is_active' => false])->save())),
+                    ->action(function (Collection $records): void {
+                        // Погашенные пропускаются, но не молча: раньше
+                        // «Отключить» на активированном коде просто ничего
+                        // не делало, и это выглядело как поломка
+                        [$used, $rest] = $records->partition(fn (PromoCode $r): bool => $r->isUsed());
+
+                        $rest->each(fn (PromoCode $r) => $r->forceFill(['is_active' => false])->save());
+
+                        $note = $used->isEmpty()
+                            ? null
+                            : 'Погашенных пропущено: '.$used->count().'. Активированный код отключать не нужно — повторно он не сработает.';
+
+                        Notification::make()
+                            ->title('Отключено кодов: '.$rest->count())
+                            ->body($note)
+                            ->{$rest->isEmpty() ? 'warning' : 'success'}()
+                            ->send();
+                    }),
             ]);
     }
 
