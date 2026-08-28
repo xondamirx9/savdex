@@ -7,6 +7,7 @@ namespace App\Support;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Flysystem\FilesystemException;
 use RuntimeException;
 
 /**
@@ -77,7 +78,18 @@ class ImageStore
                 imagedestroy($resized);
             }
 
-            Storage::disk('public')->put($path, $binary);
+            // Сбой записи (переполненный или недоступный диск) — та же
+            // понятная ошибка, что и нечитаемый файл, а не страница 500
+            try {
+                $written = Storage::disk('public')->put($path, $binary);
+            } catch (FilesystemException $e) {
+                report($e);
+                $written = false;
+            }
+
+            if ($written === false) {
+                throw new RuntimeException('Файл не удалось сохранить');
+            }
 
             return $path;
         } finally {

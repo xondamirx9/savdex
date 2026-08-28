@@ -38,9 +38,16 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
+            /*
+             * Рядом с веб-сервером в ту же базу пишет планировщик,
+             * и записи сталкиваются. Без busy_timeout SQLite на занятой
+             * базе мгновенно падает «database is locked» — и человек
+             * видел 500 там, где нужно было подождать долю секунды.
+             * WAL пускает читателей параллельно с писателем.
+             */
+            'busy_timeout' => 5000,
+            'journal_mode' => 'wal',
+            'synchronous' => 'normal',
             'transaction_mode' => 'DEFERRED',
         ],
 
