@@ -7,6 +7,7 @@ import {
     Eye,
     LayoutDashboard,
     MailWarning,
+    TriangleAlert,
     MessageSquareText,
     Package,
     Plus,
@@ -149,6 +150,27 @@ export function CabinetLayout({
                                 <Alert tone="danger" className="mb-5">
                                     {flash.error}
                                 </Alert>
+                            )}
+
+                            {/* Заблокированная компания невидима на витрине,
+                                хотя объявления в кабинете значатся активными.
+                                Молчать об этом — заставлять владельца искать
+                                поломку вместо причины */}
+                            {auth?.company?.blocked && (
+                                <div className="alert alert-danger" style={{ marginBottom: 20, alignItems: 'center' }}>
+                                    <TriangleAlert aria-hidden className="size-5 shrink-0" />
+                                    <div style={{ flex: 1, minWidth: 220 }}>
+                                        <b>Компания заблокирована модератором</b> — визитка и объявления скрыты
+                                        с витрины.
+                                        {auth.company.blocked_reason && (
+                                            <>
+                                                {' '}
+                                                Причина: {auth.company.blocked_reason}.
+                                            </>
+                                        )}{' '}
+                                        Напишите в поддержку, чтобы восстановить доступ.
+                                    </div>
+                                </div>
                             )}
 
                             {/* Молчать о неподтверждённой почте нельзя: человек

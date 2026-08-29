@@ -80,6 +80,11 @@ class HandleInertiaRequests extends Middleware
                     'initials' => $user->company->initials(),
                     'verification_level' => $user->company->verification_level,
                     'profile_completeness' => $user->company->profileCompleteness(),
+                    // Кабинет обязан говорить о блокировке: без этого
+                    // объявления «активны», но невидимы, и владелец
+                    // ищет поломку вместо причины
+                    'blocked' => $user->company->isBlocked(),
+                    'blocked_reason' => $user->company->blocked_reason,
                 ] : null,
             ],
 

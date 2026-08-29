@@ -32,6 +32,23 @@ class CabinetAccessTest extends TestCase
         $this->get('/cabinet')->assertRedirect('/login');
     }
 
+    /**
+     * Кабинет говорит о блокировке компании прямо: объявления при ней
+     * значатся активными, но витрина их прячет — без предупреждения
+     * владелец ищет поломку вместо причины.
+     */
+    #[Test]
+    public function кабинет_сообщает_о_блокировке_компании(): void
+    {
+        $company = Company::factory()->blocked()->create();
+        $user = User::factory()->for($company)->create(['email_verified_at' => now()]);
+
+        $this->actingAs($user)->get('/cabinet')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('auth.company.blocked', true));
+    }
+
     #[Test]
     public function неподтверждённая_почта_не_мешает_войти_в_кабинет(): void
     {
