@@ -268,6 +268,7 @@ return [
     ],
 
     'listing' => [
+        'bundle_price' => 'Takımın tamamının fiyatı',
         'tags_title' => 'Etiketler',
         'tags_hint' => 'İlan metninden otomatik belirlenir — etikete tıklayınca benzer teklifler aranır.',
         'preview_title' => 'Önizleme',

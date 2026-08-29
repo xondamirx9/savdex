@@ -38,6 +38,7 @@ interface Listing {
     type: 'supply' | 'demand';
     category: string | null;
     price: number | null;
+    bundle_price: number | null;
     currency: string;
     unit: string | null;
     negotiable: boolean;
@@ -172,6 +173,15 @@ export default function ListingShow({
                             )}
 
                             <p className="t-num mt-16" style={{ fontSize: 28 }}>{price}</p>
+
+                            {/* Цена комплекта — под ценой единицы; при
+                                «договорной» суммы скрыты обе */}
+                            {listing.bundle_price !== null && !listing.negotiable && (
+                                <p className="t-sm mt-8">
+                                    {t('listing.bundle_price')}:{' '}
+                                    <b>{formatNumber(listing.bundle_price)} {currency}</b>
+                                </p>
+                            )}
 
                             <div className="row wrap t-caption muted mt-16" style={{ gap: 16 }}>
                                 {listing.published && <span>{t('listing.published', { date: listing.published })}</span>}

@@ -268,6 +268,7 @@ return [
     ],
 
     'listing' => [
+        'bundle_price' => 'Price for the full set',
         'tags_title' => 'Tags',
         'tags_hint' => 'Generated automatically from the listing text — click a tag to search for similar offers.',
         'preview_title' => 'Preview',

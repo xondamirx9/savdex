@@ -279,6 +279,7 @@ class CatalogController extends Controller
                 'type' => $listing->type,
                 'category' => $listing->category?->name(),
                 'price' => $listing->price !== null ? (float) $listing->price : null,
+                'bundle_price' => $listing->bundle_price !== null ? (float) $listing->bundle_price : null,
                 'currency' => $listing->currency,
                 'unit' => $listing->unit,
                 'negotiable' => $listing->price_negotiable,

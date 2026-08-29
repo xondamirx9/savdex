@@ -87,6 +87,7 @@ class ListingWizardController extends Controller
                 'title' => $listing->title,
                 'description' => $listing->description,
                 'price' => $listing->price !== null ? (float) $listing->price : null,
+                'bundle_price' => $listing->bundle_price !== null ? (float) $listing->bundle_price : null,
                 'currency' => $listing->currency,
                 'unit' => $listing->unit,
                 'price_negotiable' => $listing->price_negotiable,
@@ -126,6 +127,7 @@ class ListingWizardController extends Controller
             'title' => ['nullable', 'string', 'max:90'],
             'description' => ['nullable', 'string', 'max:5000'],
             'price' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
+            'bundle_price' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
             'currency' => ['nullable', 'in:UZS,USD'],
             'unit' => ['nullable', 'string', 'max:20'],
             'price_negotiable' => ['nullable', 'boolean'],
@@ -160,6 +162,12 @@ class ListingWizardController extends Controller
         // Отдельно: false — валидное значение, array_filter его выбрасывает
         if ($request->has('price_negotiable')) {
             $listing->price_negotiable = $request->boolean('price_negotiable');
+        }
+
+        // Тоже отдельно: очистка поля должна доехать до базы,
+        // а array_filter выбрасывает null вместе с незаполненным
+        if ($request->has('bundle_price')) {
+            $listing->bundle_price = $request->input('bundle_price');
         }
 
         $listing->save();
@@ -197,6 +205,7 @@ class ListingWizardController extends Controller
             'title' => ['required', 'string', 'min:10', 'max:90'],
             'description' => ['required', 'string', 'min:30', 'max:5000'],
             'price' => ['nullable', 'numeric', 'min:0'],
+            'bundle_price' => ['nullable', 'numeric', 'min:0'],
             'price_negotiable' => ['boolean'],
         ], [
             'category_id.required' => 'Выберите категорию — без неё объявление не найдут',
@@ -221,7 +230,7 @@ class ListingWizardController extends Controller
         }
 
         $listing->fill($request->only([
-            'category_id', 'title', 'description', 'price', 'currency',
+            'category_id', 'title', 'description', 'price', 'bundle_price', 'currency',
             'unit', 'min_order', 'delivery_terms', 'payment_terms',
         ]));
 
