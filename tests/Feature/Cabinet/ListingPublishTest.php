@@ -15,12 +15,13 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Отправка объявления на модерацию.
+ * Публикация объявления.
  *
- * Кнопка «Опубликовать» стоит на последнем шаге мастера, а проверяется
- * объявление целиком. Когда описание короче тридцати знаков, сервер
- * возвращал ошибку по полю второго шага — и на четвёртом её негде было
- * показать: нажатие выглядело как «ничего не произошло».
+ * Предварительной модерации нет: «Опубликовать» сразу выводит
+ * объявление на витрину, контроль — постмодерацией. Кнопка стоит
+ * на последнем шаге мастера, а проверяется объявление целиком:
+ * когда описание короче тридцати знаков, сервер возвращал ошибку
+ * по полю второго шага — и на четвёртом её негде было показать.
  */
 class ListingPublishTest extends TestCase
 {
@@ -68,19 +69,24 @@ class ListingPublishTest extends TestCase
     }
 
     #[Test]
-    public function заполненный_черновик_уходит_на_модерацию(): void
+    public function заполненный_черновик_публикуется_сразу(): void
     {
         $draft = $this->draft();
 
         $this->actingAs($this->user)
             ->post("/cabinet/listings/{$draft->id}/publish", $this->payload())
-            ->assertRedirect('/cabinet/listings?status=moderation')
+            ->assertRedirect('/cabinet/listings')
             ->assertSessionHas('success');
 
         $draft->refresh();
 
-        $this->assertSame(Listing::STATUS_MODERATION, $draft->status);
-        $this->assertNotEmpty($draft->slug, 'адрес нужен, чтобы объявление открывалось после одобрения');
+        $this->assertSame(Listing::STATUS_ACTIVE, $draft->status);
+        $this->assertNotNull($draft->published_at);
+        $this->assertTrue($draft->expires_at->isFuture());
+        $this->assertNotEmpty($draft->slug, 'адрес нужен, чтобы объявление открывалось на витрине');
+
+        // И правда на витрине: страница отвечает без предпросмотра
+        $this->get("/listing/{$draft->slug}")->assertOk();
     }
 
     /**
@@ -128,7 +134,27 @@ class ListingPublishTest extends TestCase
             ]))
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(Listing::STATUS_MODERATION, $draft->fresh()->status);
+        $this->assertSame(Listing::STATUS_ACTIVE, $draft->fresh()->status);
+    }
+
+    /**
+     * Отклонённое объявление публикуется заново в один клик — тоже
+     * без очереди, но с проверкой лимита тарифа: иначе отклонение
+     * и повторная публикация обходили бы его.
+     */
+    #[Test]
+    public function отклонённое_публикуется_заново_сразу(): void
+    {
+        $rejected = $this->draft(['status' => Listing::STATUS_REJECTED, 'moderation_note' => 'Мало данных']);
+
+        $this->actingAs($this->user)
+            ->post("/cabinet/listings/{$rejected->id}/resubmit")
+            ->assertSessionHas('success');
+
+        $rejected->refresh();
+
+        $this->assertSame(Listing::STATUS_ACTIVE, $rejected->status);
+        $this->assertNull($rejected->moderation_note);
     }
 
     /**

@@ -540,7 +540,7 @@ export default function Wizard({ listing, categories, slots }: Props) {
                                 <div className="alert alert-danger mt-24">
                                     <TriangleAlert aria-hidden className="size-5" />
                                     <div>
-                                        <b>Объявление не отправлено на проверку</b>
+                                        <b>Объявление не опубликовано</b>
                                         <ul className="stack-8 mt-8">
                                             {problems.map((p) => (
                                                 <li key={p.field}>
@@ -564,8 +564,8 @@ export default function Wizard({ listing, categories, slots }: Props) {
                                 <div className="alert alert-info mt-24">
                                     <Check aria-hidden className="size-5" />
                                     <div>
-                                        После публикации объявление уходит на модерацию — обычно до 2 часов в рабочее
-                                        время.
+                                        Объявление появится в каталоге сразу после нажатия «Опубликовать» — вместе
+                                        с фотографиями.
                                     </div>
                                 </div>
                             )}

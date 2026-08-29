@@ -21,10 +21,15 @@ use Inertia\Response;
  */
 class ListingController extends Controller
 {
-    /** Вкладки статусов — порядок как в интерфейсе. */
+    /**
+     * Вкладки статусов — порядок как в интерфейсе.
+     *
+     * «На модерации» здесь нет: предварительная проверка отключена,
+     * объявления публикуются сразу, а контроль остался постмодерацией
+     * (модератор снимает опубликованное с указанием причины).
+     */
     private const TABS = [
         Listing::STATUS_ACTIVE => 'Активные',
-        Listing::STATUS_MODERATION => 'На модерации',
         Listing::STATUS_DRAFT => 'Черновики',
         Listing::STATUS_EXPIRED => 'Истёкшие',
         Listing::STATUS_REJECTED => 'Отклонённые',
@@ -256,24 +261,40 @@ class ListingController extends Controller
         });
     }
 
-    /** Отправить отклонённое объявление на повторную проверку. */
+    /**
+     * Опубликовать отклонённое объявление заново.
+     *
+     * Предварительной модерации нет — объявление сразу возвращается
+     * на витрину. Лимит тарифа проверяется как при публикации: иначе
+     * отклонение и повторная публикация обходили бы его.
+     */
     public function resubmit(Request $request, int $id): RedirectResponse
     {
         $listing = $this->ownedListing($request, $id);
 
+        $company = $listing->company;
+        $plan = $company->plan();
+        $active = $company->activeListings()->where('id', '!=', $listing->id)->count();
+
+        if ($plan->listings_limit !== null && $active >= $plan->listings_limit) {
+            return back()->with('error', "Достигнут лимит тарифа {$plan->name}: {$plan->listings_limit} активных объявлений.");
+        }
+
         $listing->forceFill([
-            'status' => Listing::STATUS_MODERATION,
+            'status' => Listing::STATUS_ACTIVE,
             'moderation_note' => null,
+            'published_at' => now(),
+            'expires_at' => now()->addDays(Listing::LIFETIME_DAYS),
         ])->save();
 
         app(Notifier::class)->company(
-            $listing->company,
+            $company,
             'moderation',
-            "Объявление «{$listing->title}» отправлено на повторную проверку",
-            ['url' => route('cabinet.listings', ['status' => Listing::STATUS_MODERATION])],
+            "Объявление «{$listing->title}» опубликовано заново",
+            ['tone' => 'success', 'url' => route('cabinet.listings')],
         );
 
-        return back()->with('success', 'Отправлено на проверку');
+        return back()->with('success', 'Объявление опубликовано — покупатели снова его видят');
     }
 
     /**

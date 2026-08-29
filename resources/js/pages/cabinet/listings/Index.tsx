@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Clock, Eye, Package, Pencil, Plus, Rocket, ShoppingCart, TriangleAlert } from 'lucide-react';
+import { Eye, Package, Pencil, Plus, Rocket, ShoppingCart, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Empty, Tabs, formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
@@ -180,13 +180,6 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                         </div>
                     )}
 
-                    {status === 'moderation' && (
-                        <div className="alert alert-info" style={{ marginBottom: 16 }}>
-                            <Clock aria-hidden className="size-5" />
-                            <div>Проверка обычно занимает до 2 часов в рабочее время.</div>
-                        </div>
-                    )}
-
                     <div className="table-wrap table-cards">
                         <table className="table table-listings">
                             <thead>
@@ -299,7 +292,7 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                                 router.post(`/cabinet/listings/${row.id}/resubmit`, {}, { preserveScroll: true })
                                                             }
                                                         >
-                                                            Отправить снова
+                                                            Опубликовать снова
                                                         </button>
                                                     ) : row.expiring_soon || row.status === 'expired' ? (
                                                         <button
