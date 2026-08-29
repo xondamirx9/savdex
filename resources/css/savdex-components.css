@@ -1090,12 +1090,15 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 
   /* Нижняя панель на всех страницах: верхнее меню на телефоне
      спрятано в бургер, и без неё каждое перемещение — два нажатия */
+  /* Флекс, а не сетка на пять колонок: пунктов бывает четыре
+     («Избранное» скрыто у гостя), и жёсткая сетка оставляла пустую
+     колонку справа — кнопки сбивались влево вместо центра */
   .tabbar{
-    display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:45;
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;
     background:var(--white);border-top:1px solid var(--border);
     padding-bottom:env(safe-area-inset-bottom)}
   .tabbar a{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
     padding:9px 4px;font-size:11px;font-weight:500;color:var(--text-muted);min-height:56px;text-align:center}
   .tabbar a:hover{text-decoration:none}
   .tabbar a[aria-current="page"]{color:var(--primary-700);font-weight:600}
