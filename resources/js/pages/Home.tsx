@@ -268,11 +268,13 @@ function HeroSearch({
                             )}
                         </>
                     )}
-                </div>
 
-                <button type="submit" className="btn btn-primary hero-panel-submit">
-                    <Search aria-hidden className="size-4" /> {t('home.search_button')}
-                </button>
+                    {/* Кнопка в одном ряду с селектами — третьей ячейкой,
+                        как на утверждённом макете */}
+                    <button type="submit" className="btn btn-primary hero-panel-submit">
+                        <Search aria-hidden className="size-4" /> {t('home.search_button')}
+                    </button>
+                </div>
 
                 {categories.length > 0 && (
                     <div className="hero-chips">
@@ -332,7 +334,10 @@ export default function Home({
             <section className="hero-b2b" style={{ backgroundImage: `url(${heroImage})` }}>
                 <div className="container">
                     <div className="hero-b2b-inner">
-                        <div data-reveal>
+                        {/* Текст занимает левую половину — фотография
+                            остаётся открытой справа, панель ниже на всю
+                            ширину: композиция утверждённого макета */}
+                        <div className="hero-b2b-copy" data-reveal>
                             <h1>{t('home.h1')}</h1>
                             <p className="hero-b2b-lead">{t('home.lead')}</p>
                             <div className="hero-b2b-cta">
