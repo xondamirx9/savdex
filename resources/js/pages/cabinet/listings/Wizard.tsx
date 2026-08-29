@@ -44,11 +44,14 @@ interface Props {
         payment_terms: string | null;
         status: string;
         step: number;
+        tags: string[];
         attributes: Record<string, string>;
         images: ListingPhoto[];
     };
     categories: Parent[];
     slots: { used: number; total: number | null };
+    /** Из чего владелец выбирает теги — своих он не пишет */
+    tagOptions: string[];
 }
 
 const STEPS = ['Тип и категория', 'Товар и цена', 'Условия', 'Фото и документы'];
@@ -76,9 +79,12 @@ const TIPS = [
     'Не скрывайте цену: объявления с ценой смотрят в 2,4 раза чаще',
 ];
 
-export default function Wizard({ listing, categories, slots }: Props) {
+export default function Wizard({ listing, categories, slots, tagOptions }: Props) {
     const [step, setStep] = useState(listing.step);
     const [savedAgo, setSavedAgo] = useState<string | null>(null);
+    // Список вариантов обновляется с каждым автосохранением:
+    // заголовок поменялся — предложения пересобрались
+    const [tagChoices, setTagChoices] = useState<string[]>(tagOptions);
     const { confirm, dialog } = useConfirm();
 
     const { data, setData, errors, processing, post } = useForm({
@@ -94,6 +100,7 @@ export default function Wizard({ listing, categories, slots }: Props) {
         min_order: listing.min_order,
         delivery_terms: listing.delivery_terms ?? '',
         payment_terms: listing.payment_terms ?? '',
+        tags: listing.tags ?? [],
         attributes: listing.attributes ?? {},
     });
 
@@ -130,7 +137,12 @@ export default function Wizard({ listing, categories, slots }: Props) {
             body: JSON.stringify({ ...payload.current, step }),
         });
 
-        if (res.ok) setSavedAgo(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+        if (res.ok) {
+            setSavedAgo(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+
+            const body = (await res.json()) as { tag_options?: string[] };
+            if (body.tag_options) setTagChoices(body.tag_options);
+        }
     }, [listing.id, step]);
 
     useEffect(() => {
@@ -535,6 +547,46 @@ export default function Wizard({ listing, categories, slots }: Props) {
                             </h2>
 
                             <PhotoUploader listingId={listing.id} photos={listing.images} />
+
+                            {/* Теги — только выбор из предложенного: свои слова
+                                писать нельзя, сервер их всё равно отбросит.
+                                Список собирается из заголовка, категории
+                                и характеристик и обновляется автосохранением */}
+                            {tagChoices.length > 0 && (
+                                <div className="mt-24">
+                                    <p className="label" style={{ marginBottom: 4 }}>Теги объявления</p>
+                                    <p className="t-caption muted" style={{ marginBottom: 10 }}>
+                                        Отметьте подходящие — по ним покупатели находят похожие
+                                        предложения. Не выберете ничего — подставим автоматически.
+                                    </p>
+                                    <div className="row wrap" style={{ gap: 8 }}>
+                                        {tagChoices.map((tag) => {
+                                            const active = data.tags.includes(tag);
+
+                                            return (
+                                                <button
+                                                    key={tag}
+                                                    type="button"
+                                                    className={cn('tag-pick', active && 'tag-pick--on')}
+                                                    aria-pressed={active}
+                                                    onClick={() =>
+                                                        setData(
+                                                            'tags',
+                                                            active
+                                                                ? data.tags.filter((t) => t !== tag)
+                                                                : data.tags.length < 8
+                                                                  ? [...data.tags, tag]
+                                                                  : data.tags,
+                                                        )
+                                                    }
+                                                >
+                                                    #{tag.replace(/\s+/g, '')}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
                             {problems.length > 0 ? (
                                 <div className="alert alert-danger mt-24">
