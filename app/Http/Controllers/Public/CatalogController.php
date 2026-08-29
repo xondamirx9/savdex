@@ -157,6 +157,14 @@ class CatalogController extends Controller
                 ->orderByDesc('promoted')
                 ->latest('published_at'),
         };
+
+        /*
+         * Уникальный хвост после любой сортировки: одинаковые цены
+         * и секунды публикации у пачки объявлений — норма, и без него
+         * Postgres тасует равных между страницами (дубли на соседних
+         * страницах, пропуски).
+         */
+        $query->orderByDesc('id');
     }
 
     /** @param Collection<int, Listing> $listings */

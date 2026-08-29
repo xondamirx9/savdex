@@ -130,6 +130,11 @@ fi
 # и сайт упадёт на первой же записи.
 if command -v runuser >/dev/null 2>&1; then
     runuser -u www-data -- php artisan schedule:work >/dev/null 2>&1 &
+
+    # Очередь задач: импорт и экспорт из админки уходят в неё,
+    # и без воркера «Загрузить компании» висело бы «в обработке»
+    # вечно. Живёт, пока жив контейнер; после деплоя стартует заново.
+    runuser -u www-data -- php artisan queue:work --sleep=3 --tries=3 >/dev/null 2>&1 &
 fi
 
 exec "$@"
