@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\AudienceView;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -50,3 +51,12 @@ Schedule::command('ratings:recalculate')
 // постоянный воркер, но раз в час подбираем зависшие задания
 Schedule::command('queue:prune-batches --hours=48')->daily();
 Schedule::command('queue:prune-failed --hours=336')->weekly();
+
+// «Кто смотрел» полезен свежим: кабинет показывает месяц, ещё два
+// держим про запас, старше — просто занимает место в базе
+Schedule::call(fn () => AudienceView::query()
+    ->where('created_at', '<', now()->subDays(90))
+    ->delete())
+    ->name('audience-views:prune')
+    ->dailyAt('04:00')
+    ->onOneServer();
