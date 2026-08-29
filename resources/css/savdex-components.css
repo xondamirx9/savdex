@@ -1427,6 +1427,32 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    ниже на всю ширину — панель в правой колонке закрывала картинку */
 .hero-b2b-inner{position:relative;padding:72px 0 56px}
 .hero-b2b-copy{max-width:620px}
+
+/* ── Прозрачная шапка поверх фотографии (главная) ─────────────
+   Обёртка выводит шапку из потока и кладёт на первый экран:
+   фон просвечивает, белый текст читается на затемнении hero. */
+.chrome-overlay{position:absolute;top:0;left:0;right:0;z-index:60}
+.chrome-overlay .hd{position:static;background:transparent;border-bottom:1px solid rgba(255,255,255,.14);box-shadow:none}
+.chrome-overlay .hd-logo-name{color:#fff}
+.chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
+/* Синий знак-самолёт на тёмном фоне гаснет — перекрашивается в белый */
+.chrome-overlay .logo-img{filter:brightness(0) invert(1)}
+.chrome-overlay .hd-action{color:rgba(255,255,255,.88)}
+.chrome-overlay .hd-action:hover{color:#fff}
+.chrome-overlay .btn-ghost{color:#fff}
+.chrome-overlay .user-menu-btn{color:#fff}
+.chrome-overlay .burger{color:#fff}
+.chrome-overlay .hd-auth .btn-secondary{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.32);color:#fff}
+.chrome-overlay .hd-auth .btn-secondary:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5)}
+.chrome-overlay .subnav{background:transparent;border-top-color:rgba(255,255,255,.14)}
+.chrome-overlay .subnav-inner a{color:rgba(255,255,255,.85)}
+.chrome-overlay .subnav-inner a:hover,.chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
+.chrome-overlay .subnav-post{color:#fff}
+/* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
+   важнее композиции */
+
+/* Первый экран начинается из-под шапки — запас под её высоту */
+.hero-b2b--underlay .hero-b2b-inner{padding-top:240px}
 .hero-b2b h1{color:#fff;font-size:clamp(34px,3.6vw,46px);line-height:1.15;font-weight:800;letter-spacing:-.02em}
 .hero-b2b-lead{margin-top:16px;font-size:16.5px;line-height:1.65;color:rgba(255,255,255,.82);max-width:52ch}
 .hero-b2b-cta{display:flex;gap:12px;margin-top:28px;flex-wrap:wrap}
@@ -1599,6 +1625,7 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   .hd .burger{display:flex}
   .subnav{display:none}
   .hero-b2b-inner{padding:44px 0 72px}
+  .hero-b2b--underlay .hero-b2b-inner{padding-top:230px}
   .hero-panel{margin-top:36px}
   .stats-band{margin-top:-36px}
   .stats-band-card{grid-template-columns:1fr 1fr}

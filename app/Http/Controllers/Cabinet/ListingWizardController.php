@@ -196,9 +196,17 @@ class ListingWizardController extends Controller
             'unit', 'min_order', 'delivery_terms', 'payment_terms',
         ]));
 
+        /*
+         * Сразу на витрину, без предварительной модерации: ожидание
+         * проверки отпугивало продавцов сильнее, чем редкий спам вредил
+         * покупателям. Контроль остаётся постмодерацией — модератор
+         * в любой момент снимает опубликованное с указанием причины.
+         */
         $listing->price_negotiable = $request->boolean('price_negotiable');
-        $listing->status = Listing::STATUS_MODERATION;
+        $listing->status = Listing::STATUS_ACTIVE;
         $listing->wizard_step = 4;
+        $listing->published_at = now();
+        $listing->expires_at = now()->addDays(Listing::LIFETIME_DAYS);
         $listing->save();
 
         if (blank($listing->slug)) {
@@ -209,12 +217,12 @@ class ListingWizardController extends Controller
         app(Notifier::class)->company(
             $company,
             'moderation',
-            "Объявление «{$listing->title}» отправлено на модерацию",
-            ['url' => route('cabinet.listings', ['status' => Listing::STATUS_MODERATION])],
+            "Объявление «{$listing->title}» опубликовано и видно покупателям",
+            ['tone' => 'success', 'url' => route('cabinet.listings')],
         );
 
-        return redirect()->route('cabinet.listings', ['status' => Listing::STATUS_MODERATION])
-            ->with('success', 'Объявление отправлено на проверку. Обычно занимает до 2 часов в рабочее время.');
+        return redirect()->route('cabinet.listings')
+            ->with('success', 'Объявление опубликовано — покупатели уже видят его в каталоге.');
     }
 
     /**

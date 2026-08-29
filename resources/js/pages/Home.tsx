@@ -326,12 +326,13 @@ export default function Home({
         <PublicLayout
             title={t('home.meta_title')}
             description={t('home.meta_description')}
+            overlayHeader
         >
             {/* ── Первый экран: тёмно-синий порт ── */}
             {/* Фон приходит с сервера: картинку меняют в админке,
                 и пересобирать стили ради этого незачем. Затемнение
                 и цвет подложки остаются в CSS */}
-            <section className="hero-b2b" style={{ backgroundImage: `url(${heroImage})` }}>
+            <section className="hero-b2b hero-b2b--underlay" style={{ backgroundImage: `url(${heroImage})` }}>
                 <div className="container">
                     <div className="hero-b2b-inner">
                         {/* Текст занимает левую половину — фотография
