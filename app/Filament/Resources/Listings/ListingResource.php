@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Listings;
 
 use App\Filament\Resources\Listings\Pages\EditListing;
 use App\Filament\Resources\Listings\Pages\ListListings;
+use App\Filament\Resources\Listings\RelationManagers\ImagesRelationManager;
 use App\Filament\Resources\Listings\Schemas\ListingForm;
 use App\Filament\Resources\Listings\Tables\ListingsTable;
 use App\Models\Listing;
@@ -88,7 +89,7 @@ class ListingResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ImagesRelationManager::class,
         ];
     }
 
