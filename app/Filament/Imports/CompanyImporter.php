@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Imports;
 
 use App\Models\Company;
+use App\Support\CompanyNameStyle;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -37,6 +38,8 @@ class CompanyImporter extends Importer
                 ->exampleHeader('Название')
                 ->example('ООО «Стройбаза»')
                 ->requiredMapping()
+                // Госреестр пишет капсом — на витрине это выглядит криком
+                ->castStateUsing(fn (?string $state): string => CompanyNameStyle::humanize((string) $state))
                 ->rules(['required', 'string', 'max:190']),
 
             ImportColumn::make('legal_name')
@@ -48,6 +51,8 @@ class CompanyImporter extends Importer
                 ->label('Тип компании')
                 ->exampleHeader('Тип компании')
                 ->example('distributor')
+                // «trading» и «торговая» из таблиц — это trader справочника
+                ->castStateUsing(fn (?string $state): ?string => CompanyNameStyle::typeKey($state))
                 ->rules(['nullable', 'string', 'max:30']),
 
             ImportColumn::make('address')
