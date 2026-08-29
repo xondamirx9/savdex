@@ -1453,6 +1453,20 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 
 /* Первый экран начинается из-под шапки — запас под её высоту */
 .hero-b2b--underlay .hero-b2b-inner{padding-top:240px}
+
+/*
+ * Фотография видна целиком. Кадр 16:9, и блок держит ту же пропорцию:
+ * cover при совпадении пропорций ничего не обрезает. Когда контент
+ * всё же выше кадра, привязка к правому краю жертвует пустым левым
+ * полем — грузовик и порт справа не срезаются никогда.
+ */
+.hero-b2b--underlay{background-position:right center}
+@media (min-width:1025px){
+  .hero-b2b--underlay .hero-b2b-inner{
+    display:flex;flex-direction:column;justify-content:space-between;
+    min-height:min(56vw,940px);
+  }
+}
 .hero-b2b h1{color:#fff;font-size:clamp(34px,3.6vw,46px);line-height:1.15;font-weight:800;letter-spacing:-.02em}
 .hero-b2b-lead{margin-top:16px;font-size:16.5px;line-height:1.65;color:rgba(255,255,255,.82);max-width:52ch}
 .hero-b2b-cta{display:flex;gap:12px;margin-top:28px;flex-wrap:wrap}
