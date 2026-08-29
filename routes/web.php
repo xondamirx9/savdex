@@ -364,9 +364,12 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
         ->whereNumber('id')
         ->middleware(['verified', 'throttle:60,1'])
         ->name('cabinet.chats.send');
+    // 60 в час: активный закупщик за утро обходит десятки объявлений,
+    // и 20 откликов в час он выбирал простым усердием, а не спамом.
+    // Настоящий барьер — квота откликов тарифа, она считается в базе
     Route::post('/listing/{id}/respond', [ChatController::class, 'respond'])
         ->whereNumber('id')
-        ->middleware(['verified', 'throttle:20,60'])
+        ->middleware(['verified', 'throttle:60,60'])
         ->name('listing.respond');
 
     Route::get('/cabinet/settings', [SettingsController::class, 'index'])->name('cabinet.settings');
