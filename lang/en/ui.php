@@ -268,6 +268,8 @@ return [
     ],
 
     'listing' => [
+        'tags_title' => 'Tags',
+        'tags_hint' => 'Generated automatically from the listing text — click a tag to search for similar offers.',
         'preview_title' => 'Preview',
         'preview_text' => 'This listing is not published and is visible only to you. After publication, buyers will see the page exactly like this.',
         'preview_edit' => 'Edit',

@@ -270,6 +270,8 @@ return [
     ],
 
     'listing' => [
+        'tags_title' => 'Teglar',
+        'tags_hint' => 'E’lon matnidan avtomatik aniqlanadi — teg bosilsa, o‘xshash takliflar qidiruvi ochiladi.',
         'preview_title' => 'Oldindan ko‘rish',
         'preview_text' => 'E’lon hali chop etilmagan va faqat sizga ko‘rinadi. Chop etilgach, xaridorlar sahifani aynan shunday ko‘rishadi.',
         'preview_edit' => 'Tahrirlash',

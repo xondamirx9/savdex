@@ -10,6 +10,7 @@ use App\Models\City;
 use App\Models\CompanyContact;
 use App\Models\Listing;
 use App\Support\ListingCard;
+use App\Support\ListingTags;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -234,6 +235,7 @@ class CatalogController extends Controller
                 'company.country.translations',
                 'company.publicContacts',
                 'category.translations',
+                'category.parent.translations',
                 'category.fields',
                 'attributes',
                 'activePromotions.type',
@@ -299,6 +301,10 @@ class CatalogController extends Controller
                 ]),
                 'badges' => $listing->activePromotions->map(fn ($p): ?string => $p->type?->badge)->filter()->values(),
                 'promoted' => $listing->activePromotions->isNotEmpty(),
+
+                // Теги — автоматически из заголовка, категории
+                // и характеристик; клик по тегу ведёт в поиск каталога
+                'tags' => ListingTags::for($listing),
                 'images' => $listing->images->map(fn ($i): array => [
                     'id' => $i->id,
                     'url' => $i->url(),

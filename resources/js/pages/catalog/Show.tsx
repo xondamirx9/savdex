@@ -52,6 +52,7 @@ interface Listing {
     images: { id: number; url: string; thumb: string }[];
     badges: string[];
     promoted: boolean;
+    tags: string[];
 }
 
 interface Similar {
@@ -219,6 +220,26 @@ export default function ListingShow({
                                             <Wallet aria-hidden className="inline size-4" /> {listing.payment_terms}
                                         </p>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Теги — автоматически из заголовка, категории
+                                и характеристик; клик уводит в поиск каталога */}
+                            {listing.tags.length > 0 && (
+                                <div className="mt-24" style={{ paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+                                    <h2 className="t-h4" style={{ marginBottom: 12 }}>{t('listing.tags_title')}</h2>
+                                    <div className="row wrap" style={{ gap: 8 }}>
+                                        {listing.tags.map((tag) => (
+                                            <Link
+                                                key={tag}
+                                                href={`${routes.catalog}?q=${encodeURIComponent(tag)}`}
+                                                className="listing-tag"
+                                            >
+                                                #{tag.replace(/\s+/g, '')}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                    <p className="t-caption muted mt-8">{t('listing.tags_hint')}</p>
                                 </div>
                             )}
                         </div>
