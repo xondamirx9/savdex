@@ -50,6 +50,13 @@ class CompanyController extends Controller
             })
             ->orderByDesc('verification_level')
             ->orderByDesc('rating')
+            /*
+             * Уникальный хвост сортировки обязателен: у сотни компаний
+             * без проверки и отзывов ключи выше равны, и Postgres тасует
+             * их между запросами — одна карточка выпадала на двух
+             * страницах подряд, а другая не показывалась вовсе.
+             */
+            ->orderBy('id')
             ->paginate(12)
             ->withQueryString()
             ->through(fn (Company $c) => [
