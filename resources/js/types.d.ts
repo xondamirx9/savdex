@@ -19,6 +19,9 @@ export interface AuthCompany {
     slug: string;
     verification_level: number;
     profile_completeness: number;
+    /** Компания заблокирована модератором: витрина её не показывает */
+    blocked: boolean;
+    blocked_reason: string | null;
 }
 
 /** Счётчики рядом с пунктами меню кабинета. */
