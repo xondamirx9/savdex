@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Cabinet;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Listing;
+use App\Support\ListingTags;
 use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -94,6 +95,7 @@ class ListingWizardController extends Controller
                 'payment_terms' => $listing->payment_terms,
                 'status' => $listing->status,
                 'step' => $listing->wizard_step,
+                'tags' => (array) $listing->tags,
                 'attributes' => $listing->attributes()->pluck('value', 'key'),
                 'images' => $listing->images()->orderBy('sort')->get()
                     ->map(fn ($i): array => ['id' => $i->id, 'thumb' => $i->thumbUrl()])
@@ -101,6 +103,9 @@ class ListingWizardController extends Controller
             ],
             'categories' => $this->categoryTree(),
             'slots' => $this->slots($request),
+            // Владелец только выбирает из этого списка — своих тегов
+            // не пишет; список собран из данных самого объявления
+            'tagOptions' => ListingTags::suggestions($listing),
         ]);
     }
 
@@ -129,10 +134,21 @@ class ListingWizardController extends Controller
             'payment_terms' => ['nullable', 'string', 'max:500'],
             'step' => ['nullable', 'integer', 'between:1,4'],
             'attributes' => ['nullable', 'array'],
+            'tags' => ['nullable', 'array', 'max:8'],
+            'tags.*' => ['string', 'max:40'],
         ]);
 
         $attributes = $data['attributes'] ?? [];
         unset($data['attributes']);
+
+        /*
+         * Теги — только из предложенного списка: произвольные слова
+         * молча отбрасываются, что бы ни пришло в запросе. Список
+         * пересчитывается после применения полей — выбор сверяется
+         * с актуальным заголовком, а не со вчерашним.
+         */
+        $chosenTags = $data['tags'] ?? null;
+        unset($data['tags']);
 
         if (isset($data['step'])) {
             $data['wizard_step'] = $data['step'];
@@ -152,7 +168,20 @@ class ListingWizardController extends Controller
             $listing->attributes()->updateOrCreate(['key' => $key], ['value' => (string) $value]);
         }
 
-        return response()->json(['saved_at' => now()->toIso8601String()]);
+        if ($chosenTags !== null) {
+            $listing->tags = array_values(array_intersect(
+                array_map(strval(...), $chosenTags),
+                ListingTags::suggestions($listing->fresh(['attributes', 'category.parent.translations', 'company.city.translations'])),
+            ));
+            $listing->save();
+        }
+
+        return response()->json([
+            'saved_at' => now()->toIso8601String(),
+            // Свежий список вариантов: заголовок мог измениться,
+            // и чипсы в мастере обновляются без перезагрузки
+            'tag_options' => ListingTags::suggestions($listing->fresh(['attributes', 'category.parent.translations', 'company.city.translations'])),
+        ]);
     }
 
     /**

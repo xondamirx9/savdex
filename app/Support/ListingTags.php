@@ -24,7 +24,7 @@ class ListingTags
     private const MAX_TAGS = 8;
 
     /** Сколько значащих слов берётся из заголовка. */
-    private const TITLE_WORDS = 3;
+    private const TITLE_WORDS = 5;
 
     /**
      * Служебные слова заголовков: намерение, упаковка, предлоги.
@@ -38,8 +38,39 @@ class ListingTags
         'sotib', 'olamiz', 'sotamiz', 'dona', 'uchun',
     ];
 
-    /** @return list<string> */
+    /** Сколько вариантов предлагается владельцу на выбор. */
+    private const MAX_SUGGESTIONS = 12;
+
+    /**
+     * Теги для показа на витрине.
+     *
+     * Выбор владельца в приоритете, но только та его часть, что
+     * до сих пор входит в предлагаемый список: после правки заголовка
+     * устаревший выбор отпадает сам. Без выбора — автонабор.
+     *
+     * @return list<string>
+     */
     public static function for(Listing $listing): array
+    {
+        $chosen = array_values(array_intersect(
+            array_map(strval(...), (array) $listing->tags),
+            self::suggestions($listing),
+        ));
+
+        if ($chosen !== []) {
+            return array_slice($chosen, 0, self::MAX_TAGS);
+        }
+
+        return array_slice(self::suggestions($listing), 0, self::MAX_TAGS);
+    }
+
+    /**
+     * Список, из которого владелец выбирает. Только предложенное:
+     * произвольный текст в теги не попадает ни при каком вводе.
+     *
+     * @return list<string>
+     */
+    public static function suggestions(Listing $listing): array
     {
         $tags = [];
 
@@ -80,7 +111,7 @@ class ListingTags
             ->map(fn (string $t): string => trim($t))
             ->filter(fn (string $t): bool => $t !== '')
             ->unique()
-            ->take(self::MAX_TAGS)
+            ->take(self::MAX_SUGGESTIONS)
             ->values()
             ->all();
     }
