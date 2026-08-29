@@ -16,11 +16,14 @@ export function PublicLayout({
     description,
     children,
     noFooter = false,
+    overlayHeader = false,
 }: {
     title: string;
     description?: string;
     children: ReactNode;
     noFooter?: boolean;
+    /** Прозрачная шапка поверх первого экрана — фотография фона просвечивает сквозь неё. */
+    overlayHeader?: boolean;
 }) {
     // Пересобираем наблюдатель при смене страницы: Inertia не перезагружает
     // документ, и новые блоки иначе остались бы невидимыми
@@ -36,7 +39,15 @@ export function PublicLayout({
                 {t('common.skip_to_content')}
             </a>
 
-            <SiteHeader />
+            {/* Обёртка выводит шапку из потока и кладёт поверх первого
+                экрана: фон страницы (фотография) виден сквозь неё */}
+            {overlayHeader ? (
+                <div className="chrome-overlay">
+                    <SiteHeader />
+                </div>
+            ) : (
+                <SiteHeader />
+            )}
             <main id="main">{children}</main>
             {!noFooter && <SiteFooter />}
             <MobileTabBar />
