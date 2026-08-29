@@ -1455,14 +1455,20 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hero-b2b--underlay .hero-b2b-inner{padding-top:240px}
 
 /*
- * Фотография видна целиком. Кадр 16:9, и блок держит ту же пропорцию:
- * cover при совпадении пропорций ничего не обрезает. Когда контент
- * всё же выше кадра, привязка к правому краю жертвует пустым левым
- * полем — грузовик и порт справа не срезаются никогда.
+ * Фотография видна целиком и не дозумливается. Cover подгоняет кадр
+ * под высоту блока, а блок выше кадра — объекты укрупнялись и уезжали
+ * под панель поиска. Поэтому на широких экранах кадр кладётся строго
+ * по ширине (100% auto): корабль и грузовик всегда в кадре, а нижний
+ * край фотографии растворяется градиентом в цвет подложки — стык
+ * не виден, что бы ни оказалось под ним.
  */
-.hero-b2b--underlay{background-position:right center}
 @media (min-width:1025px){
+  .hero-b2b--underlay{background-size:100% auto;background-position:right top}
+  .hero-b2b--underlay::after{content:'';position:absolute;left:0;right:0;bottom:0;height:220px;
+    background:linear-gradient(180deg,rgba(8,18,40,0) 0%,var(--navy-900) 92%);pointer-events:none}
+  /* Контент выше растворяющего градиента */
   .hero-b2b--underlay .hero-b2b-inner{
+    z-index:1;
     display:flex;flex-direction:column;justify-content:space-between;
     min-height:min(56vw,940px);
   }
