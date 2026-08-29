@@ -270,6 +270,9 @@ return [
     ],
 
     'listing' => [
+        'preview_title' => 'Oldindan ko‘rish',
+        'preview_text' => 'E’lon hali chop etilmagan va faqat sizga ko‘rinadi. Chop etilgach, xaridorlar sahifani aynan shunday ko‘rishadi.',
+        'preview_edit' => 'Tahrirlash',
         'breadcrumbs' => 'Yo‘l ko‘rsatkichi',
         'home' => 'Bosh sahifa',
         'catalog' => 'Katalog',

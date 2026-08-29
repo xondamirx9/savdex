@@ -268,6 +268,9 @@ return [
     ],
 
     'listing' => [
+        'preview_title' => 'Preview',
+        'preview_text' => 'This listing is not published and is visible only to you. After publication, buyers will see the page exactly like this.',
+        'preview_edit' => 'Edit',
         'breadcrumbs' => 'Breadcrumbs',
         'home' => 'Home',
         'catalog' => 'Catalog',

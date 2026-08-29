@@ -78,6 +78,7 @@ export default function ListingShow({
     company,
     contacts,
     unlocked,
+    preview,
     respond,
     similar,
 }: {
@@ -94,6 +95,7 @@ export default function ListingShow({
     };
     contacts: Contact[];
     unlocked: boolean;
+    preview: boolean;
     respond: { guest: boolean; owner: boolean };
     similar: Similar[];
 }) {
@@ -116,6 +118,22 @@ export default function ListingShow({
             description={(listing.description ?? '').slice(0, 160)}
         >
             <div className="container" style={{ paddingBottom: 96 }}>
+                {/* Предпросмотр: страницу в этом статусе видит только
+                    владелец — покупатели получают 404 до публикации */}
+                {preview && (
+                    <div className="alert alert-info" style={{ marginTop: 20, alignItems: 'center' }}>
+                        <Eye aria-hidden className="size-5 shrink-0" />
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                            <b>{t('listing.preview_title')}</b>
+                            <br />
+                            <span className="t-sm">{t('listing.preview_text')}</span>
+                        </div>
+                        <Link href={routes.listingEdit(listing.id)} className="btn btn-secondary btn-sm shrink-0">
+                            {t('listing.preview_edit')}
+                        </Link>
+                    </div>
+                )}
+
                 <nav aria-label={t('listing.breadcrumbs')} style={{ padding: '20px 0 16px' }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li><Link href={routes.home}>{t('listing.home')}</Link></li>

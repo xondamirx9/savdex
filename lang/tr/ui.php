@@ -268,6 +268,9 @@ return [
     ],
 
     'listing' => [
+        'preview_title' => 'Önizleme',
+        'preview_text' => 'Bu ilan yayınlanmadı ve yalnızca size görünüyor. Yayınlandıktan sonra alıcılar sayfayı tam olarak böyle görecek.',
+        'preview_edit' => 'Düzenle',
         'breadcrumbs' => 'Sayfa yolu',
         'home' => 'Ana sayfa',
         'catalog' => 'Katalog',
