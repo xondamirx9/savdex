@@ -102,6 +102,12 @@ class ListingForm
                         ->required(fn ($get): bool => ! $get('price_negotiable'))
                         ->disabled(fn ($get): bool => (bool) $get('price_negotiable')),
 
+                    TextInput::make('bundle_price')
+                        ->label('Цена за весь комплект')
+                        ->numeric()
+                        ->minValue(0)
+                        ->helperText('Необязательно: для товаров, продающихся набором'),
+
                     Select::make('currency')
                         ->label('Валюта')
                         ->options(self::CURRENCIES)

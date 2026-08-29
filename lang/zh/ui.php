@@ -267,6 +267,7 @@ return [
     ],
 
     'listing' => [
+        'bundle_price' => '整套价格',
         'tags_title' => '标签',
         'tags_hint' => '根据信息文本自动生成——点击标签可搜索类似产品。',
         'preview_title' => '预览',

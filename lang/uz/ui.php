@@ -270,6 +270,7 @@ return [
     ],
 
     'listing' => [
+        'bundle_price' => 'To‘liq to‘plam narxi',
         'tags_title' => 'Teglar',
         'tags_hint' => 'E’lon matnidan avtomatik aniqlanadi — teg bosilsa, o‘xshash takliflar qidiruvi ochiladi.',
         'preview_title' => 'Oldindan ko‘rish',

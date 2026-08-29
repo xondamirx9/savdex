@@ -36,6 +36,7 @@ interface Props {
         title: string;
         description: string | null;
         price: number | null;
+        bundle_price: number | null;
         currency: string;
         unit: string | null;
         price_negotiable: boolean;
@@ -94,6 +95,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
         title: listing.title,
         description: listing.description ?? '',
         price: listing.price,
+        bundle_price: listing.bundle_price,
         currency: listing.currency,
         unit: listing.unit ?? '',
         price_negotiable: listing.price_negotiable,
@@ -444,6 +446,28 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         <option value="USD">доллар (USD)</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            {/* Комплект: товар нередко продаётся набором, и цена
+                                единицы не отвечает, сколько стоит весь набор */}
+                            <div className="field mt-12" style={{ margin: 0 }}>
+                                <label className="label" htmlFor="w-bundle">
+                                    Цена за весь комплект <span className="muted">(необязательно)</span>
+                                </label>
+                                <input
+                                    id="w-bundle"
+                                    className="input"
+                                    type="number"
+                                    min={0}
+                                    disabled={data.price_negotiable}
+                                    value={data.bundle_price ?? ''}
+                                    onChange={(e) => setData('bundle_price', e.target.value ? Number(e.target.value) : null)}
+                                    placeholder="6000000"
+                                />
+                                <p className="hint">
+                                    Если товар продаётся комплектом — укажите цену набора целиком, она появится
+                                    на странице рядом с ценой за единицу.
+                                </p>
                             </div>
 
                             <div className="grid grid-2 grid-tight mt-12" style={{ gap: 12 }}>

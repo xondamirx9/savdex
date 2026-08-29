@@ -138,6 +138,29 @@ class ListingPublishTest extends TestCase
     }
 
     /**
+     * Цена комплекта — необязательное дополнение к цене единицы:
+     * товар набором должен показывать стоимость всего набора.
+     */
+    #[Test]
+    public function цена_комплекта_сохраняется_и_видна_на_странице(): void
+    {
+        $draft = $this->draft();
+
+        $this->actingAs($this->user)
+            ->post("/cabinet/listings/{$draft->id}/publish", $this->payload(['bundle_price' => 6000000]))
+            ->assertSessionHasNoErrors();
+
+        $draft->refresh();
+
+        $this->assertSame(6000000.0, (float) $draft->bundle_price);
+
+        $this->get("/listing/{$draft->slug}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('listing.bundle_price', 6000000));
+    }
+
+    /**
      * Отклонённое объявление публикуется заново в один клик — тоже
      * без очереди, но с проверкой лимита тарифа: иначе отклонение
      * и повторная публикация обходили бы его.

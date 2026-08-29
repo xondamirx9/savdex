@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'company_id', 'user_id', 'category_id', 'city_id', 'type', 'slug', 'title',
-    'description', 'price', 'currency', 'unit', 'price_negotiable', 'min_order',
+    'description', 'price', 'bundle_price', 'currency', 'unit', 'price_negotiable', 'min_order',
     'delivery_terms', 'payment_terms', 'status', 'wizard_step', 'published_at', 'expires_at', 'tags',
     // Заметка модерации правится из админки; без неё форма молча
     // теряла бы текст, который видит владелец объявления
@@ -58,6 +58,7 @@ class Listing extends Model
     {
         return [
             'price' => 'decimal:2',
+            'bundle_price' => 'decimal:2',
             'price_negotiable' => 'boolean',
             'published_at' => 'datetime',
             'expires_at' => 'datetime',
