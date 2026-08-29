@@ -268,6 +268,8 @@ return [
     ],
 
     'listing' => [
+        'tags_title' => 'Etiketler',
+        'tags_hint' => 'İlan metninden otomatik belirlenir — etikete tıklayınca benzer teklifler aranır.',
         'preview_title' => 'Önizleme',
         'preview_text' => 'Bu ilan yayınlanmadı ve yalnızca size görünüyor. Yayınlandıktan sonra alıcılar sayfayı tam olarak böyle görecek.',
         'preview_edit' => 'Düzenle',

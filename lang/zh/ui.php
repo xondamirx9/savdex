@@ -267,6 +267,8 @@ return [
     ],
 
     'listing' => [
+        'tags_title' => '标签',
+        'tags_hint' => '根据信息文本自动生成——点击标签可搜索类似产品。',
         'preview_title' => '预览',
         'preview_text' => '该信息尚未发布，仅您可见。发布后，买家看到的页面就是这样。',
         'preview_edit' => '编辑',
