@@ -240,10 +240,25 @@ class CatalogController extends Controller
                 'images',
             ])
             ->where('slug', $slug)
-            ->where('status', Listing::STATUS_ACTIVE)
             ->firstOrFail();
 
-        $this->stats->view($listing);
+        /*
+         * Предпросмотр: владелец открывает своё объявление в любом
+         * статусе и видит его в точности так, как увидят покупатели.
+         * Для остальных неопубликованное объявление не существует —
+         * 404, а не 403: черновик не должен подтверждать, что он есть.
+         */
+        $isOwner = $request->user()?->company_id === $listing->company_id;
+        $preview = $listing->status !== Listing::STATUS_ACTIVE;
+
+        abort_if($preview && ! $isOwner, 404);
+
+        // Просмотры предпросмотра не считаются: это взгляд владельца
+        // в зеркало, а не интерес покупателя
+        if (! $preview) {
+            $this->stats->view($listing);
+        }
+
         $this->seo->listing($listing);
 
         $company = $listing->company;
@@ -315,6 +330,10 @@ class CatalogController extends Controller
             ]) ?? [],
 
             'unlocked' => $unlocked,
+
+            // Плашка «это предпросмотр» — только владельцу
+            // неопубликованного объявления; остальные сюда не доходят
+            'preview' => $preview,
 
             /*
              * Можно ли откликнуться. Гостю кнопка ведёт на вход,

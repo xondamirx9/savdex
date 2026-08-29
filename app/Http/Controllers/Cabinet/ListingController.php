@@ -80,6 +80,9 @@ class ListingController extends Controller
     {
         return [
             'id' => $listing->id,
+            // Слаг пуст у свежего черновика до первого сохранения —
+            // тогда смотреть нечего и кабинет ведёт сразу в редактор
+            'slug' => $listing->slug,
             'title' => $listing->title,
             'type' => $listing->type,
             'category' => $listing->category?->name(),

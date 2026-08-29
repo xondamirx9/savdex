@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Clock, Package, Pencil, Plus, Rocket, ShoppingCart, TriangleAlert } from 'lucide-react';
+import { Clock, Eye, Package, Pencil, Plus, Rocket, ShoppingCart, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Empty, Tabs, formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
@@ -11,6 +11,7 @@ import { routes } from '@/routes';
 
 interface Row {
     id: number;
+    slug: string | null;
     title: string;
     type: 'supply' | 'demand';
     category: string | null;
@@ -235,10 +236,15 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                         <TypeIcon aria-hidden className="size-4" />
                                                     </span>
                                                     <span style={{ minWidth: 0 }}>
-                                                        {/* Название кликабельно: иконка карандаша — цель
-                                                            размером 20 px, а строка в таблице читается
-                                                            как основной способ открыть объявление */}
-                                                        <Link href={routes.listingEdit(row.id)} className="listing-title-link">
+                                                        {/* Название ведёт на страницу объявления — так его
+                                                            видят покупатели (для неопубликованных это
+                                                            предпросмотр). Редактирование — карандашом справа.
+                                                            У свежего черновика страницы ещё нет — тогда
+                                                            в редактор */}
+                                                        <Link
+                                                            href={row.slug ? routes.listing(row.slug) : routes.listingEdit(row.id)}
+                                                            className="listing-title-link"
+                                                        >
                                                             {row.title}
                                                         </Link>
                                                         <br />
@@ -313,6 +319,21 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                             <Rocket aria-hidden className="size-5" />
                                                         </Link>
                                                     ) : null}
+
+                                                    {row.slug && (
+                                                        <Link
+                                                            href={routes.listing(row.slug)}
+                                                            className="btn btn-ghost btn-icon"
+                                                            aria-label={
+                                                                row.status === 'active'
+                                                                    ? `Посмотреть «${row.title}» на сайте`
+                                                                    : `Предпросмотр «${row.title}»`
+                                                            }
+                                                            title={row.status === 'active' ? 'Посмотреть на сайте' : 'Предпросмотр'}
+                                                        >
+                                                            <Eye aria-hidden className="size-5" />
+                                                        </Link>
+                                                    )}
 
                                                     <Link
                                                         href={routes.listingEdit(row.id)}

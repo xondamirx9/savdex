@@ -267,6 +267,9 @@ return [
     ],
 
     'listing' => [
+        'preview_title' => '预览',
+        'preview_text' => '该信息尚未发布，仅您可见。发布后，买家看到的页面就是这样。',
+        'preview_edit' => '编辑',
         'breadcrumbs' => '导航路径',
         'home' => '首页',
         'catalog' => '目录',
