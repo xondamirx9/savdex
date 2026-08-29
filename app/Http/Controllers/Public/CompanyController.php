@@ -13,6 +13,7 @@ use App\Models\Review;
 use App\Services\ReviewService;
 use App\Support\DateHelper;
 use App\Support\SeoBuilders;
+use App\Support\StatsRecorder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -126,6 +127,10 @@ class CompanyController extends Controller
             ->with(['city.translations', 'country.translations', 'publicContacts'])
             ->where('slug', $slug)
             ->firstOrFail();
+
+        // «Кто мной интересуется»: авторизованный гость с компанией
+        // оставляет след просмотра визитки. Анонимы не записываются
+        app(StatsRecorder::class)->companyView($company);
 
         /*
          * Контакты открыты, если это своя компания либо за неё уже

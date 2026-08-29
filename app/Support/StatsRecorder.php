@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Models\AudienceView;
+use App\Models\Company;
 use App\Models\Listing;
 use App\Models\ListingStat;
 use App\Models\SearchHit;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
 
@@ -60,6 +63,72 @@ class StatsRecorder
         $listing->increment('views_count');
 
         $this->bumpDaily([$listing->id], 'views');
+
+        $this->rememberViewer($listing->company_id, $listing->id);
+    }
+
+    /**
+     * Просмотр визитки компании.
+     *
+     * Счётчика у визиток нет — записывается только «кто смотрел»,
+     * и то лишь для авторизованного зрителя с компанией. Проверка
+     * зрителя стоит первой: у гостей и краулеров сессия каждый раз
+     * новая, и кэш дедупликации без этой проверки рос бы на каждый
+     * их заход впустую. Ключ кэша отдельный от объявлений: у визитки
+     * и объявления могут совпасть числовые id.
+     */
+    public function companyView(Company $company): void
+    {
+        $viewerCompanyId = Auth::user()?->company_id;
+
+        if ($viewerCompanyId === null || $viewerCompanyId === $company->id) {
+            return;
+        }
+
+        if ($this->withoutRecent([$company->id], 'cview') === []) {
+            return;
+        }
+
+        $this->rememberViewer($company->id, null);
+    }
+
+    /**
+     * Строка «эта компания вас смотрела» для раздела
+     * «Кто мной интересуется».
+     *
+     * Свои просмотры не записываются: владелец, правящий карточку,
+     * не аудитория. Повторы отсеиваются и по базе, а не только
+     * по сессионному кэшу: кэш обходится сбросом куки, и без второй
+     * проверки зритель мог бы накрутить жертве тысячи «просмотров».
+     * Сбой записи не должен ронять публичную страницу — статистика
+     * дешевле показа.
+     */
+    private function rememberViewer(int $targetCompanyId, ?int $listingId): void
+    {
+        $viewerCompanyId = Auth::user()?->company_id;
+
+        if ($viewerCompanyId === null || $viewerCompanyId === $targetCompanyId) {
+            return;
+        }
+
+        rescue(function () use ($targetCompanyId, $viewerCompanyId, $listingId): void {
+            $countedRecently = AudienceView::query()
+                ->where('viewer_company_id', $viewerCompanyId)
+                ->where('target_company_id', $targetCompanyId)
+                ->where('listing_id', $listingId)
+                ->where('created_at', '>=', now()->subMinutes(self::DEDUP_MINUTES))
+                ->exists();
+
+            if ($countedRecently) {
+                return;
+            }
+
+            AudienceView::create([
+                'target_company_id' => $targetCompanyId,
+                'viewer_company_id' => $viewerCompanyId,
+                'listing_id' => $listingId,
+            ]);
+        });
     }
 
     public function favorite(Listing $listing): void
