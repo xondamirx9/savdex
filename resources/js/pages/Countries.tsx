@@ -17,7 +17,7 @@ interface CountryRow {
  * Каждая карточка ведёт в каталог компаний с фильтром по стране:
  * страница-справочник без действия — тупик, а не витрина.
  */
-export default function Countries({ countries }: { countries: CountryRow[] }) {
+export default function Countries({ countries, planned }: { countries: CountryRow[]; planned: CountryRow[] }) {
     return (
         <PublicLayout title={t('countries.meta_title')} description={t('countries.meta_description')}>
             <div className="container" style={{ padding: '32px 0 96px' }}>
@@ -56,6 +56,32 @@ export default function Countries({ countries }: { countries: CountryRow[] }) {
                             </Link>
                         ))}
                     </div>
+                )}
+
+                {/* Направления без компаний — отдельно и честно: это план,
+                    а не факт. Ссылки нет — вести в пустой каталог незачем */}
+                {planned.length > 0 && (
+                    <>
+                        <h2 className="t-h3" style={{ margin: '40px 0 16px' }}>{t('countries.planned_title')}</h2>
+                        <p className="t-sm muted" style={{ marginBottom: 20 }}>{t('countries.planned_lead')}</p>
+                        <div className="country-grid">
+                            {planned.map((c) => (
+                                <div key={c.code} className="country-card" style={{ opacity: 0.65 }}>
+                                    <span className="country-flag" aria-hidden>
+                                        {flag(c.code) || <Globe2 className="size-8" />}
+                                    </span>
+                                    <span style={{ minWidth: 0 }}>
+                                        <span className="country-name" style={{ display: 'block' }}>
+                                            {c.name}
+                                        </span>
+                                        <span className="country-count" style={{ display: 'block' }}>
+                                            {t('countries.planned_badge')}
+                                        </span>
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
         </PublicLayout>

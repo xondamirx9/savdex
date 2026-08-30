@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Button, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 
 interface Props {
@@ -13,10 +14,14 @@ interface Props {
     types: Record<string, string>;
 }
 
-const ROLES: [string, string, string][] = [
-    ['supplier', 'Продаю', 'Ищу покупателей на свой товар'],
-    ['buyer', 'Покупаю', 'Ищу поставщиков'],
-    ['both', 'И то, и другое', 'Продаю и закупаю'],
+/**
+ * Роли на площадке. Функция, а не константа модуля: подписи берутся
+ * из словаря, а он приходит с сервером после загрузки файла.
+ */
+const roles = (): [string, string, string][] => [
+    ['supplier', t('auth.role_supplier'), t('auth.role_supplier_desc')],
+    ['buyer', t('auth.role_buyer'), t('auth.role_buyer_desc')],
+    ['both', t('auth.role_both'), t('auth.role_both_desc')],
 ];
 
 /**
@@ -82,16 +87,16 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
     return (
         <AuthLayout
-            title="Данные компании"
-            heading="Данные компании"
-            subheading="Это увидят потенциальные партнёры. Заполненный профиль получает втрое больше обращений."
+            title={t('auth.company_title')}
+            heading={t('auth.company_title')}
+            subheading={t('auth.company_subheading')}
         >
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <TextInput
-                    label="Название компании"
+                    label={t('auth.company_name_label')}
                     name="name"
                     required
-                    placeholder="ООО «Стройбаза»"
+                    placeholder={t('auth.company_name_placeholder')}
                     value={data.name}
                     onChange={(e) => setData('name', e.target.value)}
                     error={errors.name}
@@ -100,7 +105,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                 <div className="field">
                     <label className="label" htmlFor="c-type">
-                        Тип компании <span className="req">*</span>
+                        {t('auth.company_type_label')} <span className="req">*</span>
                     </label>
                     <select
                         id="c-type"
@@ -119,7 +124,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                 {isServiceType && serviceCategories.length > 0 && (
                     <div className="field">
-                        <span className="label">Направления услуг</span>
+                        <span className="label">{t('auth.service_categories_label')}</span>
                         <div className="row wrap" style={{ gap: 6 }}>
                             {serviceCategories.map((c) => (
                                 <button
@@ -132,14 +137,14 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                                 </button>
                             ))}
                         </div>
-                        <p className="hint">Отметьте, какие услуги оказываете, — это увидят потенциальные клиенты.</p>
+                        <p className="hint">{t('auth.service_categories_hint')}</p>
                     </div>
                 )}
 
                 <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                     <div className="field" style={{ margin: 0 }}>
                         <label className="label" htmlFor="c-country">
-                            Страна <span className="req">*</span>
+                            {t('auth.country_label')} <span className="req">*</span>
                         </label>
                         <select
                             id="c-country"
@@ -162,7 +167,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                     <div className="field" style={{ margin: 0 }}>
                         <label className="label" htmlFor="c-city">
-                            Город <span className="req">*</span>
+                            {t('auth.city_label')} <span className="req">*</span>
                         </label>
                         <select
                             id="c-city"
@@ -170,7 +175,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                             value={data.city_id ?? ''}
                             onChange={(e) => setData('city_id', e.target.value ? Number(e.target.value) : null)}
                         >
-                            <option value="">Выберите…</option>
+                            <option value="">{t('auth.city_choose')}</option>
                             {availableCities.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
@@ -182,22 +187,22 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                 </div>
 
                 <TextInput
-                    label="ИНН / СТИР"
+                    label={t('auth.tin_label')}
                     name="tin"
                     inputMode="numeric"
-                    placeholder="123456789"
+                    placeholder={t('auth.tin_placeholder')}
                     value={data.tin}
                     onChange={(e) => setData('tin', e.target.value)}
                     error={errors.tin}
-                    hint="Нужен для бейджа «Проверена». Можно заполнить позже."
+                    hint={t('auth.tin_hint')}
                 />
 
                 <fieldset style={{ border: 'none' }}>
                     <legend className="label" style={{ marginBottom: 8 }}>
-                        Что вы делаете на площадке <span className="req">*</span>
+                        {t('auth.role_legend')} <span className="req">*</span>
                     </legend>
                     <div className="radio-cards">
-                        {ROLES.map(([value, title, desc]) => (
+                        {roles().map(([value, title, desc]) => (
                             <label key={value} className="radio-card">
                                 <input
                                     type="radio"
@@ -216,7 +221,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                 <div className="field">
                     <label className="label" htmlFor="c-cats">
-                        Чем занимаетесь
+                        {t('auth.categories_label')}
                     </label>
                     <select
                         id="c-cats"
@@ -224,7 +229,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                         value=""
                         onChange={(e) => e.target.value && toggleCategory(Number(e.target.value))}
                     >
-                        <option value="">Добавить категорию…</option>
+                        <option value="">{t('auth.categories_add')}</option>
                         {categories
                             .filter((c) => !data.categories.includes(c.id))
                             .map((c) => (
@@ -264,8 +269,8 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                                 maxLength={80}
                                 value={data.custom_category}
                                 onChange={(e) => setData('custom_category', e.target.value)}
-                                placeholder="Чем занимаетесь? Например: клининг, логистика, IT-услуги"
-                                aria-label="Своё направление деятельности"
+                                placeholder={t('auth.custom_category_placeholder')}
+                                aria-label={t('auth.custom_category_aria')}
                             />
                             {errors.custom_category && (
                                 <p className="hint" style={{ color: 'var(--danger)' }}>{errors.custom_category}</p>
@@ -275,8 +280,8 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                     <p className={cn('hint', data.categories.length >= 5 && 'text-warning')}>
                         {data.categories.length >= 5
-                            ? 'Выбрано пять — это предел: длинный список перестаёт что-либо говорить о компании'
-                            : 'Можно выбрать до пяти категорий'}
+                            ? t('auth.categories_limit')
+                            : t('auth.categories_hint')}
                     </p>
                     {errors.categories && (
                         <p className="hint" style={{ color: 'var(--danger)' }}>{errors.categories}</p>
@@ -284,7 +289,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                 </div>
 
                 <Button type="submit" size="lg" block loading={processing}>
-                    Продолжить
+                    {t('auth.continue')}
                 </Button>
             </form>
 
@@ -296,7 +301,7 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                     className="btn btn-ghost btn-block btn-sm"
                     onClick={() => post('/onboarding/skip')}
                 >
-                    Заполнить позже
+                    {t('auth.fill_later')}
                 </button>
             </form>
         </AuthLayout>

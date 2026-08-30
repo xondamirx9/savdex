@@ -17,7 +17,7 @@ interface CompanyRow {
     verification_level: number;
     rating: number;
     reviews_count: number;
-    completed_deals_count: number;
+    trust: number;
     created_at: string | null;
     initials: string;
     logo: string | null;
@@ -241,7 +241,7 @@ export default function CompaniesIndex({
                                                 <CalendarDays aria-hidden className="size-4" /> <b>{t('companies_page.since', { date: c.created_at ?? '—' })}</b>
                                             </span>
                                             <span className="co-fact">
-                                                <Handshake aria-hidden className="size-4" /> {t('companies_page.deals')} <b>{c.completed_deals_count}</b>
+                                                <Handshake aria-hidden className="size-4" /> {t('companies_page.trust')} <b>{c.trust}%</b>
                                             </span>
                                         </div>
 

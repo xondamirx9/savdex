@@ -3,12 +3,17 @@ import { Link } from '@/components/ui/Link';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/ui';
+import { t } from '@/lib/i18n';
 
-const BENEFITS = [
-    'Размещение объявлений бесплатно, карта не нужна',
-    '4 активных объявления и 3 контакта в месяц на старте',
-    'Комиссии со сделок нет — договариваетесь напрямую',
-    'Открытый контакт компании остаётся у вас навсегда',
+/**
+ * Аргументы левой панели. Функция, а не константа модуля: подписи
+ * берутся из словаря, а он приходит с сервером после загрузки файла.
+ */
+const benefits = (): string[] => [
+    t('auth.benefit_free'),
+    t('auth.benefit_limits'),
+    t('auth.benefit_no_fee'),
+    t('auth.benefit_contact'),
 ];
 
 /**
@@ -31,12 +36,12 @@ export function AuthLayout({
         <>
             <Head title={title} />
             <a href="#form" className="skip-link">
-                Перейти к форме
+                {t('auth.skip_to_form')}
             </a>
 
             <div className="grid min-h-screen lg:grid-cols-[1fr_460px]">
                 <aside className="bg-primary-700 hidden flex-col p-14 text-white lg:flex">
-                    <Link href="/" aria-label="На главную">
+                    <Link href="/" aria-label={t('auth.home_aria')}>
                         <Logo inverted />
                     </Link>
 
@@ -49,12 +54,12 @@ export function AuthLayout({
                             Числа тоже нет намеренно: захардкоженное «1 240 компаний»
                             разойдётся с базой в первый же день. */}
                         <p className="text-h1 mb-5 leading-tight font-bold text-white">
-                            Две минуты — и вы находите
+                            {t('auth.hero_line1')}
                             <br />
-                            поставщика напрямую
+                            {t('auth.hero_line2')}
                         </p>
                         <ul className="space-y-1">
-                            {BENEFITS.map((text) => (
+                            {benefits().map((text) => (
                                 <li key={text} className="flex items-start gap-3 py-3 text-[15px] text-white/90">
                                     <Check aria-hidden className="mt-0.5 size-5 shrink-0" />
                                     {text}
@@ -63,7 +68,7 @@ export function AuthLayout({
                         </ul>
                     </div>
 
-                    <p className="text-sm text-white/65">© 2026 SAVDEX · ООО «ANJIR-GROUP», Узбекистан</p>
+                    <p className="text-sm text-white/65">{t('auth.copyright')}</p>
                 </aside>
 
                 <main
@@ -71,7 +76,7 @@ export function AuthLayout({
                     className="bg-surface flex flex-col justify-center overflow-y-auto px-5 py-8 sm:px-10 lg:px-10 lg:py-12"
                 >
                     <div className="mx-auto w-full max-w-[380px]">
-                        <Link href="/" className="mb-7 inline-block lg:hidden" aria-label="На главную">
+                        <Link href="/" className="mb-7 inline-block lg:hidden" aria-label={t('auth.home_aria')}>
                             <Logo />
                         </Link>
 

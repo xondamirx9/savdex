@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import type { FormEvent } from 'react';
 import { Alert, Button, PasswordInput, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 export default function Login({ status }: { status?: string }) {
@@ -20,9 +21,9 @@ export default function Login({ status }: { status?: string }) {
 
     return (
         <AuthLayout
-            title="Вход"
-            heading="С возвращением"
-            subheading="Войдите, чтобы вернуться к объявлениям и контактам."
+            title={t('auth.login_title')}
+            heading={t('auth.login_heading')}
+            subheading={t('auth.login_subheading')}
         >
             {status && (
                 <Alert tone="success" className="mb-5">
@@ -32,7 +33,7 @@ export default function Login({ status }: { status?: string }) {
 
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <TextInput
-                    label="Почта"
+                    label={t('auth.email_short_label')}
                     type="email"
                     name="email"
                     autoComplete="email"
@@ -54,7 +55,7 @@ export default function Login({ status }: { status?: string }) {
                     скринридер читал поле как «звёздочка». */}
                 <div>
                     <PasswordInput
-                        label="Пароль"
+                        label={t('auth.password_label')}
                         name="password"
                         autoComplete="current-password"
                         required
@@ -64,7 +65,7 @@ export default function Login({ status }: { status?: string }) {
                     />
                     <div className="mt-1.5 text-right">
                         <Link href={routes.passwordRequest} className="text-primary-700 text-sm hover:underline">
-                            Забыли пароль?
+                            {t('auth.forgot_password')}
                         </Link>
                     </div>
                 </div>
@@ -76,18 +77,18 @@ export default function Login({ status }: { status?: string }) {
                         onChange={(e) => setData('remember', e.target.checked)}
                         className="accent-primary-700 mt-0.5 size-[18px] shrink-0 cursor-pointer"
                     />
-                    Запомнить меня на этом устройстве
+                    {t('auth.remember_me')}
                 </label>
 
                 <Button type="submit" size="lg" block loading={processing}>
-                    Войти
+                    {t('auth.login_button')}
                 </Button>
             </form>
 
             <p className="text-muted mt-6 text-center text-sm">
-                Нет аккаунта?{' '}
+                {t('auth.no_account')}{' '}
                 <Link href={routes.register} className="text-primary-700 hover:underline">
-                    Зарегистрируйтесь
+                    {t('auth.register_link')}
                 </Link>
             </p>
         </AuthLayout>

@@ -16,8 +16,146 @@ return [
 
     // ── Navigatsiya va sarlavha ──────────────────────────────
 
+    'errors' => [
+        'not_found' => 'Sahifa topilmadi',
+        'generic' => 'Xatolik :status',
+    ],
+
     'common' => [
         'skip_to_content' => 'Asosiy qismga o‘tish',
+    ],
+
+    // ── Kirish va ro‘yxatdan o‘tish ──────────────────────────
+
+    'auth' => [
+        // Kirish ekranlari maketi (AuthLayout)
+        'skip_to_form' => 'Formaga o‘tish',
+        'home_aria' => 'Bosh sahifaga',
+        'hero_line1' => 'Ikki daqiqa — va siz yetkazib beruvchini',
+        'hero_line2' => 'to‘g‘ridan-to‘g‘ri topasiz',
+        'benefit_free' => 'E’lon joylashtirish bepul, karta shart emas',
+        'benefit_limits' => 'Boshlanishiga oyiga 4 ta faol e’lon va 3 ta kontakt',
+        'benefit_no_fee' => 'Bitimlardan komissiya yo‘q — to‘g‘ridan-to‘g‘ri kelishasiz',
+        'benefit_contact' => 'Ochilgan kompaniya kontakti sizda abadiy qoladi',
+        'copyright' => '© 2026 SAVDEX · «ANJIR-GROUP» MChJ, O‘zbekiston',
+
+        // Umumiy forma maydonlari
+        'email_label' => 'Ish elektron pochtasi',
+        'email_short_label' => 'Elektron pochta',
+        'email_placeholder' => 'you@company.uz',
+        'password_label' => 'Parol',
+        'password_placeholder' => 'Kamida 10 ta belgi',
+        'password_confirm_label' => 'Parolni takrorlang',
+        'new_password_label' => 'Yangi parol',
+        'continue' => 'Davom etish',
+
+        // Ro‘yxatdan o‘tish
+        'register_title' => 'Ro‘yxatdan o‘tish',
+        'register_heading' => 'Hisob yarating',
+        'register_subheading' => 'Bepul. Karta kerak emas.',
+        'email_hint' => 'Tasdiqlash xati shu manzilga yuboriladi',
+        'name_label' => 'Ismingiz',
+        'name_placeholder' => 'Rustam Karimov',
+        'phone_label' => 'Telefon',
+        'phone_placeholder' => '+998 90 123-45-67',
+        'phone_hint' => 'Kompaniyani tasdiqlash uchun kerak bo‘ladi',
+        'strength_label' => 'Ishonchlilik:',
+        'strength_0' => 'juda oddiy',
+        'strength_1' => 'zaif',
+        'strength_2' => 'o‘rtacha',
+        'strength_3' => 'yaxshi',
+        'strength_4' => 'ishonchli',
+        'strength_add' => ':list qo‘shing',
+        'missing_length' => 'yana :count ta belgi',
+        'missing_digit' => 'raqam',
+        'missing_special' => 'maxsus belgi',
+        // Rozilik iborasi qismlardan yig‘iladi: o‘zbek va turk
+        // tillarida fe’l ibora oxirida keladi, shuning uchun
+        // prefiks va suffiks bor
+        'terms_prefix' => '',
+        'terms_offer' => 'Ofertani',
+        'terms_and' => 'va',
+        'terms_privacy' => 'maxfiylik siyosatini',
+        'terms_suffix' => ' qabul qilaman',
+        'have_account' => 'Hisobingiz bormi?',
+        'login_link' => 'Kirish',
+
+        // Kirish
+        'login_title' => 'Kirish',
+        'login_heading' => 'Xush kelibsiz',
+        'login_subheading' => 'E’lonlar va kontaktlarga qaytish uchun tizimga kiring.',
+        'forgot_password' => 'Parolni unutdingizmi?',
+        'remember_me' => 'Meni shu qurilmada eslab qolish',
+        'login_button' => 'Kirish',
+        'no_account' => 'Hisobingiz yo‘qmi?',
+        'register_link' => 'Ro‘yxatdan o‘ting',
+
+        // Parolni tiklash
+        'forgot_title' => 'Parolni tiklash',
+        'forgot_heading' => 'Parolni unutdingizmi?',
+        'forgot_subheading' => 'Hisob ro‘yxatdan o‘tgan elektron pochtani kiriting — parolni almashtirish havolasini yuboramiz.',
+        'forgot_sent_hint' => 'Havola 60 daqiqa amal qiladi. Xat bir necha daqiqada kelmasa, «Spam» papkasini tekshiring yoki yangisini so‘rang.',
+        'forgot_resend' => 'Yana yuborish',
+        'forgot_send' => 'Havola yuborish',
+        'back_to_login' => 'Kirishga qaytish',
+
+        // Havola orqali yangi parol
+        'reset_title' => 'Yangi parol',
+        'reset_heading' => 'Yangi parol o‘ylab toping',
+        'reset_subheading' => 'Havola so‘rov yuborilgan paytdan 60 daqiqa amal qiladi.',
+        'save_password' => 'Parolni saqlash',
+
+        // Administrator bergan parolni almashtirish
+        'force_title' => 'Parolni almashtirish',
+        'force_heading' => 'Parolni almashtiring',
+        'force_subheading' => 'Birinchi parolni administrator bergan — uni o‘zingiznikiga almashtirish kerak.',
+        'force_warning' => 'Parol almashtirilmaguncha boshqa bo‘limlar yopiq: qo‘lda berilgan parolni faqat siz bilmaysiz.',
+        'save_and_continue' => 'Saqlash va davom etish',
+
+        // Elektron pochtani tasdiqlash
+        'verify_title' => 'Elektron pochtani tasdiqlang',
+        'verify_subheading' => 'Bir qadam qoldi — va kabinet to‘liq ochiladi.',
+        'verify_sent_to' => 'Tasdiqlash kodi bilan xat yuborildi:',
+        'verify_enter_code' => 'Xatdagi kodni quyida kiriting yoki xat ichidagi tugmani bosing.',
+        'code_label' => 'Xatdagi kod',
+        'code_placeholder' => '000000',
+        'code_hint' => 'Olti raqam, kod 15 daqiqa amal qiladi',
+        'verify_button' => 'Pochtani tasdiqlash',
+        'verify_spam_hint' => 'Xat kelmadimi? «Spam» papkasini tekshiring — yangi jo‘natuvchilarning xatlarining deyarli yarmi o‘sha yerga tushadi.',
+        'verify_typo_hint' => 'Manzil xato yozilganmi? Uni sozlamalarda o‘zgartiring — xat qaytadan yuboriladi.',
+        'verify_resend' => 'Xatni qayta yuborish',
+        'go_to_cabinet' => 'Kabinetga o‘tish',
+        'not_your_email' => 'Bu sizning manzilingiz emasmi?',
+        'logout' => 'Chiqish',
+
+        // Kompaniya ma’lumotlari — ro‘yxatdan o‘tishning ikkinchi qadami
+        'company_title' => 'Kompaniya ma’lumotlari',
+        'company_subheading' => 'Buni potensial hamkorlar ko‘radi. To‘ldirilgan profil uch barobar ko‘p murojaat oladi.',
+        'company_name_label' => 'Kompaniya nomi',
+        'company_name_placeholder' => '«Stroybaza» MChJ',
+        'company_type_label' => 'Kompaniya turi',
+        'service_categories_label' => 'Xizmat yo‘nalishlari',
+        'service_categories_hint' => 'Qaysi xizmatlarni ko‘rsatishingizni belgilang — buni potensial mijozlar ko‘radi.',
+        'country_label' => 'Mamlakat',
+        'city_label' => 'Shahar',
+        'city_choose' => 'Tanlang…',
+        'tin_label' => 'STIR',
+        'tin_placeholder' => '123456789',
+        'tin_hint' => '«Tasdiqlangan» belgisi uchun kerak. Keyinroq to‘ldirsa ham bo‘ladi.',
+        'role_legend' => 'Platformada nima qilasiz',
+        'role_supplier' => 'Sotaman',
+        'role_supplier_desc' => 'Tovarimga xaridor izlayman',
+        'role_buyer' => 'Sotib olaman',
+        'role_buyer_desc' => 'Yetkazib beruvchilar izlayman',
+        'role_both' => 'Ikkalasi ham',
+        'role_both_desc' => 'Sotaman va sotib olaman',
+        'categories_label' => 'Nima bilan shug‘ullanasiz',
+        'categories_add' => 'Kategoriya qo‘shish…',
+        'custom_category_placeholder' => 'Nima bilan shug‘ullanasiz? Masalan: klining, logistika, IT xizmatlari',
+        'custom_category_aria' => 'O‘z faoliyat yo‘nalishingiz',
+        'categories_limit' => 'Beshta tanlandi — bu chegara: uzun ro‘yxat kompaniya haqida hech narsa aytmay qo‘yadi',
+        'categories_hint' => 'Beshtagacha kategoriya tanlash mumkin',
+        'fill_later' => 'Keyinroq to‘ldirish',
     ],
 
     'tabbar' => [
@@ -106,10 +244,10 @@ return [
         'features_label' => 'Platforma afzalliklari',
         'f1_title' => 'Tekshirilgan kompaniyalar',
         'f1_text' => 'Kompaniyalarning hujjatlari va ma’lumotlarini tekshiramiz',
-        'f2_title' => 'Xavfsiz bitimlar',
-        'f2_text' => 'Bitimlaringiz va maxfiyligingizni himoya qilamiz',
-        'f3_title' => '24/7 qo‘llab-quvvatlash',
-        'f3_text' => 'Yordam xizmatimiz doim yordamga tayyor',
+        'f2_title' => 'Tekshirilgan rekvizitlar',
+        'f2_text' => 'Kompaniya hujjatlari va STIRni reyestr bilan solishtiramiz',
+        'f3_title' => 'Telegram orqali yordam',
+        'f3_text' => 'Ish vaqtida javob beramiz, Telegram — eng tezkor yo‘l',
         'f4_title' => 'Biznesingizni rivojlantiring',
         'f4_text' => 'Har kuni yangi imkoniyatlar va hamkorlar',
     ],
@@ -135,7 +273,7 @@ return [
         'popular' => 'Ommabop so‘rovlar',
         'cta_products' => 'Sotuvchilar',
         'cta_companies' => 'Xaridorlar',
-        'stat_deals' => 'muvaffaqiyatli bitim',
+        'stat_categories' => 'mahsulot toifalari',
         'categories_title' => 'Ommabop toifalar',
         'categories_all' => 'Barcha toifalarni ko‘rish',
         'categories_count' => ':count mahsulot',
@@ -145,7 +283,7 @@ return [
         'requests_all' => 'Barcha so‘rovlar',
         'suppliers_title' => 'Yetkazib beruvchilar',
         'suppliers_all' => 'Barcha kompaniyalar',
-        'suppliers_deals' => ':count bitim',
+        'suppliers_listings' => ':count e’lon',
         'reviews_title' => 'Foydalanuvchilar fikrlari',
         'reviews_about' => ':name kompaniyasi haqida',
         'objections_title' => 'Ko‘p beriladigan savollar',
@@ -154,9 +292,9 @@ return [
         'faq_q2' => 'Bitimlardan komissiya olasizmi?',
         'faq_a2' => 'Yo‘q. Bitim siz va hamkoringiz o‘rtasida to‘g‘ridan-to‘g‘ri o‘tadi: qo‘ng‘iroq, shartnoma, to‘lov. Maydon hisob-kitoblarda qatnashmaydi va foiz olmaydi.',
         'faq_q3' => 'Kompaniyalar qanday tekshiriladi?',
-        'faq_a3' => 'Moderatsiya ta’sis hujjatlari va STIRni solishtiradi. Tekshiruvdan o‘tganlar «Tasdiqlangan» belgisini oladi, kengaytirilgan tekshiruv — «Tasdiqlangan+». Sharhlar va bitimlar faqat haqiqiy faoliyatdan yig‘iladi.',
+        'faq_a3' => 'Moderatsiya ta’sis hujjatlari va STIRni tekshiradi. Tekshiruvdan o‘tganlar «Tekshirilgan» belgisini oladi, kengaytirilgan tekshiruv — «Tekshirilgan+». Sharhlarni faqat platforma orqali kontaktlarni ochgan kompaniyalar qoldira oladi — reytingni sun’iy oshirib bo‘lmaydi.',
         'faq_q4' => 'Yetkazib beruvchi bilan qanday bog‘lansa bo‘ladi?',
-        'faq_a4' => 'Kompaniya vizitkasini oching va «Kontaktlarni ochish» tugmasini bosing — telefon va pochta darhol ko‘rinadi. Ochishlar soni tarifga bog‘liq, boshlang‘ich limit bepul tarifda ham bor.',
+        'faq_a4' => 'Kompaniya sahifasini oching va «Kontaktlarni ochish» tugmasini bosing. Bepul tarifda oyiga 3 ta ochish bor, pullik tariflarda ko‘proq. Ochilgan kontakt sizda abadiy qoladi.',
         'faq_q5' => 'Maydonda kim ro‘yxatdan o‘ta oladi?',
         'faq_a5' => 'O‘zbekiston va butun mintaqa kompaniyalari hamda tadbirkorlari: ishlab chiqaruvchilar, importchilar, distribyutorlar, savdo kompaniyalari va xizmatlar. Faqat pochta va kompaniya ma’lumotlari kerak.',
         'faq_q6' => 'Maydon qaysi tillarda ishlaydi?',
@@ -170,7 +308,7 @@ return [
         'buyer_action' => 'Yetkazib beruvchi topish',
 
         'stat_companies' => 'platformadagi kompaniya',
-        'stat_listings' => 'faol e’lon',
+        'stat_listings' => 'faol e’lonlar',
         'stat_categories' => 'mahsulot toifasi',
         'stat_countries' => 'mintaqa davlati',
 
@@ -263,7 +401,7 @@ return [
         'badge_new' => 'NEW',
         'price_from' => ':price dan',
         'moq' => 'MOQ',
-        'trust' => 'Obro‘ :percent%',
+        'trust' => 'profil to‘ldirilgan',
         'trust_hint' => 'Yetkazib beruvchi profilining to‘ldirilganligi: rekvizitlar, kontaktlar, tavsif, hujjatlar',
         'sort_relevant' => 'Avval mosi',
         'sort_fresh' => 'Avval yangilari',
@@ -306,7 +444,7 @@ return [
         'cancel' => 'Bekor qilish',
         'unlock_text_before' => 'Kontaktlar',
         'unlock_text_bold' => 'butun kompaniya uchun',
-        'unlock_text_after' => 'ochiladi — bir marta va abadiy, uning barcha e’lonlari bo‘yicha. Tarifdan bitta kontakt yoki limit tugagan bo‘lsa bitta kredit yechiladi.',
+        'unlock_text_after' => '— bir marta va abadiy, uning barcha e’lonlari bo‘yicha. Tarif limitidan bitta kontakt ochish yechiladi.',
     ],
 
     'legal' => [
@@ -323,7 +461,7 @@ return [
         'pricing_title' => 'Tariflar va narxlar',
         'pricing_description' => 'E’lon joylashtirish bepul. Faqat kontaktni ochish va reklama uchun to‘laysiz. Bitimlardan komissiya yo‘q.',
         'home_title' => 'O‘zbekiston yetkazib beruvchilari va xaridorlari',
-        'home_description' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi: :companies kompaniyadan :listings e’lon. Joylashtirish bepul, bitimlardan komissiya yo‘q.',
+        'home_description' => 'O‘zbekiston va Markaziy Osiyo B2B-platformasi. Yetkazib beruvchi va xaridorlarni vositachisiz toping. Joylashtirish bepul, bitimlardan komissiya yo‘q.',
         'catalog_subject' => 'Ulgurji mahsulot va xizmatlar',
         'catalog_in_country' => ' O‘zbekistonda',
         'catalog_in_city' => ' :city shahrida',
@@ -359,7 +497,7 @@ return [
 
     'countries' => [
         'meta_title' => 'Davlatlar',
-        'meta_description' => 'Platformada shu davlatlardagi kompaniyalar ishlaydi.',
+        'meta_description' => 'Platformadagi kompaniyalar mamlakatlar bo‘yicha. Mamlakatni tanlang va hamkor toping.',
         'eyebrow' => 'Geografiya',
         'h1' => 'Ishtirokchi davlatlar',
         'lead' => 'Bu davlatlardagi kompaniyalar platformada allaqachon ishlamoqda. Yetkazib beruvchilar va xaridorlarni ko‘rish uchun davlatni tanlang.',
@@ -369,14 +507,14 @@ return [
 
     'partners' => [
         'meta_title' => 'Hamkorlar',
-        'meta_description' => 'Maydonning tasdiqlangan kompaniyalari: tasdiqlangan hujjatlar, reyting va haqiqiy bitimlar bo‘yicha sharhlar.',
+        'meta_description' => 'Hujjatlari tasdiqlangan kompaniyalar: reyting, sharhlar va to‘g‘ridan-to‘g‘ri kontaktlar.',
         'title' => 'Hamkorlar',
         'eyebrow' => 'Tasdiqlangan kompaniyalar',
         'h1' => 'Maydon hamkorlari',
         'lead' => 'Hujjatlari tasdiqlangan kompaniyalar. «Tasdiqlangan» belgisi sotib olinmaydi — faqat moderatsiya orqali beriladi.',
         'stat_total' => 'maydondagi kompaniyalar',
         'stat_verified' => 'tasdiqlangan kompaniyalar',
-        'stat_deals' => 'muvaffaqiyatli bitimlar',
+        'stat_listings' => 'muvaffaqiyatli bitimlar',
         'all_companies' => 'Barcha kompaniyalarni ko‘rish',
         'empty' => 'Hozircha tasdiqlangan kompaniyalar yo‘q.',
     ],
@@ -439,7 +577,7 @@ return [
         'tin' => 'STIR',
         'tin_none' => 'ko‘rsatilmagan',
         'since' => ':date dan beri',
-        'deals' => 'bitimlar',
+        'trust' => 'bitimlar',
         'reviews' => ':count sharh',
         'open_card' => 'Vizitkani ochish',
         'pages' => 'Sahifalar',

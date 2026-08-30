@@ -74,6 +74,59 @@ class OnboardingTest extends TestCase
             );
     }
 
+    /**
+     * ИНН (СТИР) в Узбекистане — ровно 9 цифр, и учебные значения
+     * («123456789», повторы) не проходят: «ооо ромашка, ИНН 123456789»
+     * в боевом каталоге подрывает доверие сильнее пустого поля.
+     */
+    #[Test]
+    public function недействительный_инн_отклоняется(): void
+    {
+        [$country, $city] = $this->geo();
+        $user = User::factory()->create(['company_id' => null]);
+
+        $payload = fn (string $tin): array => [
+            'name' => 'ООО «Стройбаза»',
+            'type' => 'manufacturer',
+            'country_id' => $country->id,
+            'city_id' => $city->id,
+            'primary_role' => 'supplier',
+            'tin' => $tin,
+        ];
+
+        foreach (['123456789', '2345678', '111111111', '30456127a'] as $tin) {
+            $this->actingAs($user)
+                ->post('/onboarding/company', $payload($tin))
+                ->assertSessionHasErrors('tin');
+        }
+
+        $this->assertSame(0, Company::count());
+
+        $this->actingAs($user)
+            ->post('/onboarding/company', $payload('304561278'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('304561278', Company::firstOrFail()->tin);
+    }
+
+    #[Test]
+    public function повторный_инн_отклоняется(): void
+    {
+        [$country, $city] = $this->geo();
+        Company::factory()->create(['tin' => '304561278']);
+
+        $this->actingAs(User::factory()->create(['company_id' => null]))
+            ->post('/onboarding/company', [
+                'name' => 'ООО «Дубль»',
+                'type' => 'manufacturer',
+                'country_id' => $country->id,
+                'city_id' => $city->id,
+                'primary_role' => 'supplier',
+                'tin' => '304561278',
+            ])
+            ->assertSessionHasErrors('tin');
+    }
+
     #[Test]
     public function компания_создаётся_и_привязывается_к_пользователю(): void
     {

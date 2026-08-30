@@ -34,7 +34,14 @@ class SeoBuilders
             ->title($listing->title.($city !== null ? " — {$city}" : ''))
             ->description($listing->description ?: "{$listing->title}. {$price}. Поставщик: {$company?->name}.")
             ->canonical(url('/listing/'.$listing->slug))
-            ->image($listing->images->first()?->url())
+            /*
+             * Превью — всегда растровый JPEG через свой маршрут:
+             * боты Telegram и WhatsApp не понимают SVG-заглушки,
+             * а исходники фото хранятся в WebP, который тоже
+             * поддерживается не всеми превью-ботами.
+             */
+            ->image(url("/og/listing/{$listing->id}.jpg"))
+            ->imageMeta(1200, 630, 'image/jpeg')
             ->type('product')
             ->schema($this->productSchema($listing, $company))
             ->schema($this->breadcrumbs([

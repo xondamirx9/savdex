@@ -27,6 +27,21 @@ class SeoTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * 404 — служебная страница: без canonical и hreflang (они вели бы
+     * на несуществующие адреса), с noindex и говорящим заголовком.
+     */
+    #[Test]
+    public function страница_404_не_отдаёт_canonical_и_hreflang(): void
+    {
+        $this->get('/this-page-does-not-exist-12345')
+            ->assertNotFound()
+            ->assertDontSee('rel="canonical"', false)
+            ->assertDontSee('hreflang', false)
+            ->assertSee('noindex', false)
+            ->assertSee('Страница не найдена', false);
+    }
+
     private function listing(array $overrides = []): Listing
     {
         $category = Category::factory()->named('Стройматериалы')->create();
@@ -169,12 +184,14 @@ class SeoTest extends TestCase
      * канал распространения.
      */
     #[Test]
-    public function объявление_без_фото_получает_фирменную_заглушку(): void
+    public function объявление_указывает_растровое_превью(): void
     {
         $listing = $this->listing();
 
+        // og:image ведёт на свой JPEG-маршрут: без растрового фото он
+        // сам перенаправит бота на фирменную обложку
         $this->get("/listing/{$listing->slug}")
-            ->assertSee('property="og:image" content="'.url('/og-cover.png').'"', false)
+            ->assertSee('property="og:image" content="'.url("/og/listing/{$listing->id}.jpg").'"', false)
             ->assertSee('content="summary_large_image"', false);
     }
 

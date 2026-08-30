@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Alert, Button, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 export default function ForgotPassword({ status }: { status?: string }) {
@@ -16,9 +17,9 @@ export default function ForgotPassword({ status }: { status?: string }) {
 
     return (
         <AuthLayout
-            title="Восстановление пароля"
-            heading="Забыли пароль?"
-            subheading="Укажите почту, на которую зарегистрирован аккаунт — пришлём ссылку для смены пароля."
+            title={t('auth.forgot_title')}
+            heading={t('auth.forgot_heading')}
+            subheading={t('auth.forgot_subheading')}
         >
             {/*
              * Ответ сервера одинаков и для существующего адреса, и для
@@ -29,29 +30,28 @@ export default function ForgotPassword({ status }: { status?: string }) {
                 <div className="space-y-5">
                     <Alert tone="success">{status}</Alert>
                     <p className="text-muted text-sm leading-relaxed">
-                        Ссылка действует 60 минут. Если письмо не пришло за пару минут, проверьте папку «Спам»
-                        или запросите новое.
+                        {t('auth.forgot_sent_hint')}
                     </p>
                     <Button type="button" size="lg" block variant="secondary" onClick={() => post('/forgot-password')}>
-                        Отправить ещё раз
+                        {t('auth.forgot_resend')}
                     </Button>
                 </div>
             ) : (
                 <form onSubmit={submit} className="space-y-5" noValidate>
                     <TextInput
-                        label="Рабочая почта"
+                        label={t('auth.email_label')}
                         type="email"
                         name="email"
                         autoComplete="email"
                         required
-                        placeholder="you@company.uz"
+                        placeholder={t('auth.email_placeholder')}
                         value={data.email}
                         onChange={(e) => setData('email', e.target.value)}
                         error={errors.email}
                         autoFocus
                     />
                     <Button type="submit" size="lg" block loading={processing}>
-                        Прислать ссылку
+                        {t('auth.forgot_send')}
                     </Button>
                 </form>
             )}
@@ -59,7 +59,7 @@ export default function ForgotPassword({ status }: { status?: string }) {
             <p className="text-muted mt-6 text-center text-sm">
                 <Link href={routes.login} className="text-primary-700 inline-flex items-center gap-1.5 hover:underline">
                     <ArrowLeft aria-hidden className="size-4" />
-                    Вернуться ко входу
+                    {t('auth.back_to_login')}
                 </Link>
             </p>
         </AuthLayout>

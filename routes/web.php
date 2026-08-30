@@ -33,6 +33,7 @@ use App\Http\Controllers\Public\ContactUnlockController;
 use App\Http\Controllers\Public\FavoriteController;
 use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
+use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Middleware\RequirePasswordChange;
@@ -63,6 +64,13 @@ Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
  */
 Route::get('/robots.txt', fn () => response()->view('robots')->header('Content-Type', 'text/plain; charset=utf-8'))
     ->name('robots');
+
+// Растровое превью объявления для og:image: боты мессенджеров
+// не понимают SVG, поэтому JPEG собирается и кэшируется здесь.
+// Вне языкового префикса — картинке локаль не нужна.
+Route::get('/og/listing/{id}.jpg', OgImageController::class)
+    ->where('id', '[0-9]+')
+    ->name('og.listing');
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])

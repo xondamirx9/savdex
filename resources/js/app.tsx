@@ -1,12 +1,24 @@
 import '../css/app.css';
 
 import { createInertiaApp, router } from '@inertiajs/react';
+import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
+import twemojiFlagsFont from 'country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2?url';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { resolvePage } from '@/lib/pages';
 import { localize, setLocale } from '@/lib/locale';
 import { setTranslations } from '@/lib/i18n';
 
 const appName = import.meta.env.VITE_APP_NAME ?? 'SAVDEX';
+
+/*
+ * Флаги-эмодзи на Windows: система не рисует региональные пары
+ * (🇺🇿 показывался как «uz» на каждой карточке — а Windows это
+ * почти весь десктоп в Узбекистане). Полифилл подключает шрифт
+ * Twemoji Country Flags только там, где флаги не рендерятся;
+ * .flag в CSS ставит его первым в стеке. Шрифт — со своего домена
+ * через сборку, а не с чужого CDN (docs/DESIGN.md §3).
+ */
+polyfillCountryFlagEmojis('Twemoji Country Flags', twemojiFlagsFont);
 
 /**
  * Язык текущей страницы — из данных, которые пришли с сервером.

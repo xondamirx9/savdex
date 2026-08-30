@@ -359,19 +359,24 @@ export default function CompanyShow({
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
                                 {company.rating.toFixed(1)}
                             </div>
-                            <div className="t-sm muted">рейтинг · {company.reviews_count} отзывов</div>
+                            <div className="t-sm muted">
+                                рейтинг · {company.reviews_count}{' '}
+                                {plural(company.reviews_count, 'отзыв', 'отзыва', 'отзывов')}
+                            </div>
                         </div>
                         <div>
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
                                 <Star aria-hidden className="inline size-5" />
                             </div>
-                            <div className="t-sm muted">отзывы только по сделкам</div>
+                            <div className="t-sm muted">отзывы — от открывших контакты</div>
                         </div>
                         <div>
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
                                 {listingsCount}
                             </div>
-                            <div className="t-sm muted">активных объявлений</div>
+                            <div className="t-sm muted">
+                                {plural(listingsCount, 'активное объявление', 'активных объявления', 'активных объявлений')}
+                            </div>
                         </div>
                         <div>
                             <a href={company.url} className="t-sm row" style={{ gap: 6 }}>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -103,6 +104,12 @@ class Company extends Model
     {
         static::creating(function (self $company): void {
             $company->slug ??= static::makeSlug($company->name);
+        });
+
+        // Поисковый индекс в обеих графиках: «Sement Treyd» находится
+        // по «цемент», «Цемент Трейд» — по «sement»
+        static::saving(function (self $company): void {
+            $company->search_text = SearchText::index(trim($company->name.' '.$company->legal_name));
         });
     }
 

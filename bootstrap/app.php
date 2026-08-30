@@ -5,6 +5,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LocalizeUrl;
 use App\Http\Middleware\SetLocale;
 use App\Support\Locales;
+use App\Support\Seo;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -124,6 +125,15 @@ return Application::configure(basePath: dirname(__DIR__))
              * иначе код на экране есть, а найти по нему ошибку нельзя,
              * и «Код обращения: f4bbf77d» превращается в декорацию.
              */
+            /*
+             * Служебная страница не должна выглядеть для поисковика
+             * обычной: без canonical и hreflang (они указывали бы на
+             * несуществующие адреса), с noindex и говорящим заголовком.
+             */
+            app(Seo::class)
+                ->title($status === 404 ? __('ui.errors.not_found') : __('ui.errors.generic', ['status' => $status]))
+                ->bare();
+
             $reference = null;
 
             if ($status >= 500) {

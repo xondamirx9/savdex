@@ -36,10 +36,9 @@ class PageController extends Controller
 
         app(Seo::class)
             ->title(__('ui.seo.home_title'))
-            ->description(__('ui.seo.home_description', [
-                'listings' => $stats['listings'],
-                'companies' => $stats['companies'],
-            ]))
+            // Без живых счётчиков: «9 объявлений» в сниппете Google
+            // и в превью мессенджеров продаёт площадку хуже, чем есть
+            ->description(__('ui.seo.home_description'))
             ->canonical(url('/'))
             /*
              * Строка поиска в выдаче Google: по запросу «savdex» под
@@ -198,13 +197,18 @@ class PageController extends Controller
                 'name' => $c->name(),
                 'companies' => (int) ($companyCounts[$c->id] ?? 0),
             ])
-            // Страны с компаниями — вперёд: пустая карточка в начале
-            // списка продаёт площадку хуже, чем есть
             ->sortByDesc('companies')
-            ->values()
-            ->all();
+            ->values();
 
-        return Inertia::render('Countries', ['countries' => $countries]);
+        /*
+         * Активные и запланированные — раздельно: заголовок «уже
+         * работают» над восемью пустыми странами был неправдой
+         * (аудит, п. 2.3). Пустая страна — это план, а не факт.
+         */
+        return Inertia::render('Countries', [
+            'countries' => $countries->filter(fn (array $c): bool => $c['companies'] > 0)->values()->all(),
+            'planned' => $countries->filter(fn (array $c): bool => $c['companies'] === 0)->values()->all(),
+        ]);
     }
 
     /**
@@ -225,11 +229,12 @@ class PageController extends Controller
 
         $partners = Company::query()
             ->with(['city.translations', 'country.translations'])
+            ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
             ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
             ->orderByDesc('verification_level')
             ->orderByDesc('rating')
-            ->orderByDesc('completed_deals_count')
+            ->orderBy('id')
             ->limit(24)
             ->get()
             ->map(fn (Company $c): array => [
@@ -241,7 +246,8 @@ class PageController extends Controller
                 'verification_level' => $c->verification_level,
                 'rating' => (float) $c->rating,
                 'reviews_count' => $c->reviews_count,
-                'completed_deals_count' => $c->completed_deals_count,
+                // Объявления вместо «сделок»: измеримая величина
+                'listings_count' => (int) $c->listings_count,
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
             ])
@@ -254,7 +260,7 @@ class PageController extends Controller
                 'verified' => Company::where('status', Company::STATUS_ACTIVE)
                     ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
                     ->count(),
-                'deals' => (int) Company::where('status', Company::STATUS_ACTIVE)->sum('completed_deals_count'),
+                'listings' => Listing::where('status', Listing::STATUS_ACTIVE)->count(),
             ],
         ]);
     }
@@ -280,11 +286,10 @@ class PageController extends Controller
      * а не прежнюю цифру. COUNT по индексированным колонкам этого
      * стоят; появится нагрузка — вернём кэш вместе со сбросом при записи.
      *
-     * «Сделки» — сумма завершённых сделок по активным компаниям:
-     * поле ведётся по каждой компании и показывается на её карточке,
-     * значит и общий счётчик обязан сходиться с суммой карточек.
+     * Сделок здесь нет намеренно: площадка в расчётах не участвует
+     * и считать их нечем — любое число было бы выдумкой (аудит, п. 2.1).
      *
-     * @return array{companies: int, listings: int, categories: int, countries: int, deals: int}
+     * @return array{companies: int, listings: int, categories: int, countries: int}
      */
     private function stats(): array
     {
@@ -294,8 +299,11 @@ class PageController extends Controller
             // Считаем подкатегории: разделов верхнего уровня шесть,
             // и «6 категорий товаров» продаёт площадку хуже, чем есть
             'categories' => Category::where('is_active', true)->whereNotNull('parent_id')->count(),
-            'countries' => Country::where('is_active', true)->count(),
-            'deals' => (int) Company::where('status', Company::STATUS_ACTIVE)->sum('completed_deals_count'),
+            // Только страны, где есть хотя бы одна активная компания:
+            // «9 стран» при восьми пустых — неправда на витрине
+            'countries' => Country::where('is_active', true)
+                ->whereHas('companies', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+                ->count(),
         ];
     }
 
@@ -390,9 +398,11 @@ class PageController extends Controller
     {
         return Company::query()
             ->with(['city.translations'])
+            ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
             ->orderByDesc('verification_level')
             ->orderByDesc('rating')
+            ->orderBy('id')
             ->limit(4)
             ->get()
             ->map(fn (Company $c): array => [
@@ -403,7 +413,8 @@ class PageController extends Controller
                 'verification_level' => $c->verification_level,
                 'rating' => (float) $c->rating,
                 'reviews_count' => $c->reviews_count,
-                'completed_deals_count' => $c->completed_deals_count,
+                // Объявления вместо «сделок»: измеримая величина
+                'listings_count' => (int) $c->listings_count,
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
             ])

@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
 import { Button, PasswordInput, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 import { cn } from '@/lib/cn';
 
@@ -23,7 +24,6 @@ function scorePassword(v: string): number {
     return Math.min(s, 4);
 }
 
-const LABELS = ['слишком простой', 'слабый', 'средний', 'хороший', 'надёжный'];
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
@@ -57,9 +57,9 @@ export default function Register() {
         if (!data.password) return null;
         const score = scorePassword(data.password);
         const missing: string[] = [];
-        if (data.password.length < 10) missing.push(`ещё ${10 - data.password.length} симв.`);
-        if (!/\d/.test(data.password)) missing.push('цифру');
-        if (!/[^\w\s]/.test(data.password)) missing.push('спецсимвол');
+        if (data.password.length < 10) missing.push(t('auth.missing_length', { count: 10 - data.password.length }));
+        if (!/\d/.test(data.password)) missing.push(t('auth.missing_digit'));
+        if (!/[^\w\s]/.test(data.password)) missing.push(t('auth.missing_special'));
         return { score, missing };
     }, [data.password]);
 
@@ -71,53 +71,57 @@ export default function Register() {
     }
 
     return (
-        <AuthLayout title="Регистрация" heading="Создайте аккаунт" subheading="Бесплатно. Карта не нужна.">
+        <AuthLayout
+            title={t('auth.register_title')}
+            heading={t('auth.register_heading')}
+            subheading={t('auth.register_subheading')}
+        >
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <TextInput
-                    label="Рабочая почта"
+                    label={t('auth.email_label')}
                     type="email"
                     name="email"
                     autoComplete="email"
                     required
-                    placeholder="you@company.uz"
+                    placeholder={t('auth.email_placeholder')}
                     value={data.email}
                     onChange={(e) => update('email', e.target.value)}
                     error={errors.email}
-                    hint="На неё придёт письмо для подтверждения"
+                    hint={t('auth.email_hint')}
                     autoFocus
                 />
 
                 <TextInput
-                    label="Ваше имя"
+                    label={t('auth.name_label')}
                     name="name"
                     autoComplete="name"
                     required
-                    placeholder="Рустам Каримов"
+                    placeholder={t('auth.name_placeholder')}
                     value={data.name}
                     onChange={(e) => update('name', e.target.value)}
                     error={errors.name}
                 />
 
                 <TextInput
-                    label="Телефон"
+                    label={t('auth.phone_label')}
                     type="tel"
                     name="phone"
                     autoComplete="tel"
                     required
-                    placeholder="+998 90 123-45-67"
+                    placeholder={t('auth.phone_placeholder')}
                     value={data.phone}
                     onChange={(e) => update('phone', e.target.value)}
                     error={errors.phone}
-                    hint="Понадобится для подтверждения компании"
+                    hint={t('auth.phone_hint')}
                 />
 
                 <div>
                     <PasswordInput
-                        label="Пароль"
+                        label={t('auth.password_label')}
                         name="password"
                         autoComplete="new-password"
                         required
-                        placeholder="Минимум 10 символов"
+                        placeholder={t('auth.password_placeholder')}
                         value={data.password}
                         onChange={(e) => update('password', e.target.value)}
                         error={errors.password}
@@ -131,16 +135,17 @@ export default function Register() {
                                 />
                             </div>
                             <p className="text-muted mt-1.5 text-[13px]">
-                                Надёжность:{' '}
-                                <b className={TEXTS[strength.score]}>{LABELS[strength.score]}</b>
-                                {strength.missing.length > 0 && ` · добавьте ${strength.missing.join(', ')}`}
+                                {t('auth.strength_label')}{' '}
+                                <b className={TEXTS[strength.score]}>{t(`auth.strength_${strength.score}`)}</b>
+                                {strength.missing.length > 0 &&
+                                    ` · ${t('auth.strength_add', { list: strength.missing.join(', ') })}`}
                             </p>
                         </div>
                     )}
                 </div>
 
                 <PasswordInput
-                    label="Повторите пароль"
+                    label={t('auth.password_confirm_label')}
                     name="password_confirmation"
                     autoComplete="new-password"
                     required
@@ -166,25 +171,30 @@ export default function Register() {
                                 errors.terms && 'outline-danger rounded-xs outline-2 outline-offset-2',
                             )}
                         />
+                        {/* Порядок слов зависит от языка (в узбекском и турецком
+                            глагол стоит в конце), поэтому фраза собирается из
+                            префикса, двух ссылок, союза и суффикса */}
                         <span>
-                            Принимаю <a href="/terms" className="text-primary-700 hover:underline">оферту</a> и{' '}
+                            {t('auth.terms_prefix')} <a href="/terms" className="text-primary-700 hover:underline">{t('auth.terms_offer')}</a>{' '}
+                            {t('auth.terms_and')}{' '}
                             <a href="/privacy" className="text-primary-700 hover:underline">
-                                политику конфиденциальности
+                                {t('auth.terms_privacy')}
                             </a>
+                            {t('auth.terms_suffix')}
                         </span>
                     </label>
                     {errors.terms && <p className="text-danger mt-1.5 text-[13px]">{errors.terms}</p>}
                 </div>
 
                 <Button type="submit" size="lg" block loading={processing}>
-                    Продолжить
+                    {t('auth.continue')}
                 </Button>
             </form>
 
             <p className="text-muted mt-6 text-center text-sm">
-                Уже есть аккаунт?{' '}
+                {t('auth.have_account')}{' '}
                 <Link href={routes.login} className="text-primary-700 hover:underline">
-                    Войти
+                    {t('auth.login_link')}
                 </Link>
             </p>
         </AuthLayout>

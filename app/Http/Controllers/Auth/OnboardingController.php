@@ -9,8 +9,10 @@ use App\Models\Category;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
+use App\Rules\Tin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -70,7 +72,11 @@ class OnboardingController extends Controller
             'type' => ['required', 'string', 'max:30'],
             'country_id' => ['required', 'exists:countries,id'],
             'city_id' => ['required', 'exists:cities,id'],
-            'tin' => ['nullable', 'string', 'max:20'],
+            'tin' => [
+                'nullable', 'string', 'max:20',
+                new Tin(Country::find($request->integer('country_id'))?->code),
+                Rule::unique('companies', 'tin')->whereNull('deleted_at'),
+            ],
             'primary_role' => ['required', 'in:supplier,buyer,both'],
             'categories' => ['array', 'max:5'],
             'categories.*' => ['integer', 'exists:categories,id'],
@@ -82,6 +88,7 @@ class OnboardingController extends Controller
             'country_id.required' => 'Выберите страну',
             'city_id.required' => 'Выберите город',
             'categories.max' => 'Не больше пяти категорий — иначе профиль перестаёт что-либо говорить о компании',
+            'tin.unique' => 'Компания с таким ИНН уже зарегистрирована на площадке',
         ]);
 
         $company = Company::create([

@@ -28,14 +28,19 @@
         <meta name="description" content="{{ $seo->getDescription() }}">
     @endif
 
-    <link rel="canonical" href="{{ $seo->getCanonical() }}">
+    {{-- Служебные страницы (404 и прочие ошибки) canonical и hreflang
+         не печатают: канонический адрес несуществующей страницы —
+         приглашение её индексировать --}}
+    @unless ($seo->isBare())
+        <link rel="canonical" href="{{ $seo->getCanonical() }}">
 
-    {{-- Языковые версии страницы. Указываются на каждой из них и
-         обязательно включают саму себя — иначе поисковик считает
-         связку односторонней и игнорирует её целиком. --}}
-    @foreach ($seo->getAlternates() as $hreflang => $href)
-        <link rel="alternate" hreflang="{{ $hreflang }}" href="{{ $href }}">
-    @endforeach
+        {{-- Языковые версии страницы. Указываются на каждой из них и
+             обязательно включают саму себя — иначе поисковик считает
+             связку односторонней и игнорирует её целиком. --}}
+        @foreach ($seo->getAlternates() as $hreflang => $href)
+            <link rel="alternate" hreflang="{{ $hreflang }}" href="{{ $href }}">
+        @endforeach
+    @endunless
 
     @if ($seo->isNoindex())
         {{-- follow оставляем: страница не нужна в индексе, но ссылки
@@ -55,6 +60,11 @@
          фирменную заглушку, иначе ссылка в Telegram выглядит узкой
          строчкой, которую в переписке не замечают --}}
     <meta property="og:image" content="{{ $seo->getImage() }}">
+    @if ($meta = $seo->getImageMeta())
+        <meta property="og:image:width" content="{{ $meta['width'] }}">
+        <meta property="og:image:height" content="{{ $meta['height'] }}">
+        <meta property="og:image:type" content="{{ $meta['type'] }}">
+    @endif
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $seo->getTitle() }}">
     @if ($seo->getDescription() !== '')
