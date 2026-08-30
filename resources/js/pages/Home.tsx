@@ -466,7 +466,9 @@ export default function Home({
                             {suppliers.map((s) => (
                                 <Link key={s.slug} href={routes.company(s.slug)} className="supplier-card">
                                     <span className="supplier-head">
-                                        <span className="listing-logo logo-48">{s.initials}</span>
+                                        <span className="listing-logo logo-48">
+                                            {s.logo ? <img src={s.logo} alt="" /> : s.initials}
+                                        </span>
                                         <VerificationBadge level={s.verification_level} />
                                     </span>
                                     <span className="supplier-name">{s.name}</span>

@@ -50,6 +50,7 @@ interface BusinessCard {
     verification_level: number;
     rating: number;
     reviews_count: number;
+    logo: string | null;
     url: string;
 }
 
@@ -159,7 +160,7 @@ export default function CompanyShow({
                 <div className="cover" />
                 <div className="co-head">
                     <div className="row wrap" style={{ gap: 20, alignItems: 'flex-end' }}>
-                        <div className="co-logo">{initials}</div>
+                        <div className="co-logo">{company.logo ? <img src={company.logo} alt="" /> : initials}</div>
                         <div style={{ flex: 1, minWidth: 240, paddingTop: 16 }}>
                             <div className="row wrap" style={{ gap: 10, marginBottom: 8 }}>
                                 <h1 className="t-h1">{company.name}</h1>

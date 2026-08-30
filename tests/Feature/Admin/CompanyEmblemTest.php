@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Support\CompanyEmblem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -51,6 +52,23 @@ class CompanyEmblemTest extends TestCase
 
         // Логотип отдаётся витрине обычным путём
         $this->assertNotNull($company->logoUrl());
+    }
+
+    /** Витрина отдаёт эмблему фронту: без этого плашка так и остаётся инициалами. */
+    #[Test]
+    public function публичная_страница_компании_отдаёт_эмблему(): void
+    {
+        Storage::fake('public');
+
+        $company = Company::factory()->create(['logo_path' => null]);
+
+        CompanyEmblem::assign($company);
+
+        $this->get('/company/'.$company->slug)
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('companies/Show')
+                ->where('company.logo', $company->fresh()->logoUrl()));
     }
 
     /** Один и тот же цвет при каждой генерации — без региона тоже. */

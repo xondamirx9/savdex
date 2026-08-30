@@ -20,6 +20,7 @@ interface CompanyRow {
     completed_deals_count: number;
     created_at: string | null;
     initials: string;
+    logo: string | null;
 }
 
 /**
@@ -213,7 +214,9 @@ export default function CompaniesIndex({
                                 {companies.data.map((c) => (
                                     <article key={c.slug} className="co-card">
                                         <div className="co-card-head">
-                                            <span className="listing-logo logo-48">{c.initials}</span>
+                                            <span className="listing-logo logo-48">
+                                                {c.logo ? <img src={c.logo} alt="" /> : c.initials}
+                                            </span>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div className="row wrap" style={{ gap: 8, marginBottom: 4 }}>
                                                     <Link href={routes.company(c.slug)} className="t-h4" style={{ color: 'var(--text)' }}>
