@@ -263,6 +263,8 @@ return [
         'badge_new' => 'NEW',
         'price_from' => ':price dan',
         'moq' => 'MOQ',
+        'trust' => 'Ishonch :percent%',
+        'trust_hint' => 'Yetkazib beruvchi profilining to‘ldirilganligi: rekvizitlar, kontaktlar, tavsif, hujjatlar',
         'sort_relevant' => 'Avval mosi',
         'sort_fresh' => 'Avval yangilari',
         'sort_cheap' => 'Avval arzonlari',

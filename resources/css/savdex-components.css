@@ -1602,6 +1602,12 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .product-fav[aria-pressed="true"] svg{fill:currentColor}
 .product-body{display:flex;flex-direction:column;gap:6px;padding:12px 14px 14px;flex:1}
 .product-origin{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);min-height:18px}
+/* Процент доверия — заполненность профиля поставщика. Правый край
+   строки со страной: место из макета заказчика */
+.product-trust{margin-left:auto;font-size:11px;font-weight:600;white-space:nowrap;
+  padding:1px 7px;border-radius:999px;background:var(--bg);color:var(--text-muted)}
+.product-trust.is-high{background:var(--success-bg,#e8f6ee);color:var(--success,#1d7f4e)}
+.product-trust.is-low{opacity:.75}
 .product-origin .flag{font-size:14px;line-height:1}
 .product-title{font-size:14px;font-weight:600;line-height:1.4;color:var(--text);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:39px}

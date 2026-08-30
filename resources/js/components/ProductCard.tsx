@@ -34,7 +34,7 @@ export interface ProductRow {
     published: string | null;
     is_new: boolean;
     views: number;
-    company: { name: string | null; slug: string | null; verified: number; rating: number };
+    company: { name: string | null; slug: string | null; verified: number; rating: number; trust: number };
     badges: string[];
     promoted: boolean;
     /** false на странице избранного, если объявление снято с публикации */
@@ -127,6 +127,16 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         </span>
                     )}
                     {row.country_name ?? row.city ?? ''}
+                    <span
+                        className={cn(
+                            'product-trust',
+                            row.company.trust >= 70 && 'is-high',
+                            row.company.trust < 40 && 'is-low',
+                        )}
+                        title={t('catalog.trust_hint')}
+                    >
+                        {t('catalog.trust', { percent: String(row.company.trust) })}
+                    </span>
                 </span>
 
                 <Link href={href} className="product-title">

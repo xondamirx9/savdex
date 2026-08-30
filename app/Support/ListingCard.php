@@ -51,6 +51,9 @@ final class ListingCard
                 'slug' => $listing->company?->slug,
                 'verified' => (int) ($listing->company?->verification_level ?? 0),
                 'rating' => (float) ($listing->company?->rating ?? 0),
+                // Процент доверия — заполненность профиля поставщика:
+                // покупатель видит, насколько компания раскрыла себя
+                'trust' => $listing->company?->profileCompleteness() ?? 0,
             ],
             // Метки продвижения показываются как есть: скрывать факт
             // платного размещения площадка не будет
@@ -66,12 +69,21 @@ final class ListingCard
      * Связи, которые нужно жадно загрузить перед present():
      * без списка каждый вызывающий собирал бы его сам и что-то забывал.
      *
-     * @return list<string>
+     * @return array<int|string, mixed>
      */
     public static function relations(): array
     {
         return [
-            'company:id,name,slug,verification_level,rating,city_id,country_id',
+            // Полный набор полей для profileCompleteness(): недостающая
+            // в выборке колонка считалась бы «не заполнено». Наличие
+            // одобренных документов — подзапросом здесь же: отдельная
+            // проверка на каждую карточку была бы N+1 запросами
+            'company' => fn ($q) => $q
+                ->select([
+                    'id', 'name', 'slug', 'verification_level', 'rating', 'city_id', 'country_id',
+                    'type', 'phone', 'email', 'tin', 'address', 'description', 'logo_path',
+                ])
+                ->withExists(['documents as has_approved_documents' => fn ($d) => $d->where('moderation_status', 'approved')]),
             'company.city.translations',
             'company.country.translations',
             'category.translations',

@@ -402,12 +402,25 @@ class Company extends Model
             'address' => filled($this->address),
             'description' => mb_strlen((string) $this->description) >= 100,
             'logo' => filled($this->logo_path),
-            'documents' => $this->documents()->where('moderation_status', 'approved')->exists(),
+            'documents' => $this->hasApprovedDocuments(),
         ];
 
         $done = count(array_filter($checks));
 
         return (int) round($done / count($checks) * 100);
+    }
+
+    /**
+     * Есть ли одобренные документы. Списки подгружают ответ подзапросом
+     * (withExists в ListingCard::relations) — тогда запроса здесь нет.
+     */
+    public function hasApprovedDocuments(): bool
+    {
+        if (array_key_exists('has_approved_documents', $this->attributes)) {
+            return (bool) $this->attributes['has_approved_documents'];
+        }
+
+        return $this->documents()->where('moderation_status', 'approved')->exists();
     }
 
     /** Чего не хватает в профиле — для подсказок в кабинете. */
