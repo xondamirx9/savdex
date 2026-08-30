@@ -261,7 +261,7 @@ return [
         'badge_new' => 'NEW',
         'price_from' => 'from :price',
         'moq' => 'MOQ',
-        'trust' => 'Trust :percent%',
+        'trust' => 'Reputation :percent%',
         'trust_hint' => 'Supplier profile completeness: details, contacts, description, documents',
         'sort_relevant' => 'Most relevant first',
         'sort_fresh' => 'Newest first',

@@ -266,7 +266,7 @@ return [
         'badge_new' => 'NEW',
         'price_from' => 'от :price',
         'moq' => 'MOQ',
-        'trust' => 'Доверие :percent%',
+        'trust' => 'Репутация :percent%',
         'trust_hint' => 'Заполненность профиля поставщика: реквизиты, контакты, описание, документы',
         'sort_relevant' => 'Сначала подходящие',
         'sort_fresh' => 'Сначала новые',
