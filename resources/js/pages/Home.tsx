@@ -52,7 +52,6 @@ interface Stats {
     listings: number;
     categories: number;
     countries: number;
-    deals: number;
 }
 
 interface CategoryTile {
@@ -80,7 +79,7 @@ interface SupplierRow {
     verification_level: number;
     rating: number;
     reviews_count: number;
-    completed_deals_count: number;
+    listings_count: number;
     initials: string;
     logo: string | null;
 }
@@ -319,7 +318,7 @@ export default function Home({
         [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies')],
         [Boxes, 'stat-ico-orange', stats.listings, t('home.stat_listings')],
         [Globe2, 'stat-ico-sky', stats.countries, t('home.stat_countries')],
-        [Handshake, 'stat-ico-violet', stats.deals, t('home.stat_deals')],
+        [Handshake, 'stat-ico-violet', stats.categories, t('home.stat_categories')],
     ];
 
     return (
@@ -479,7 +478,7 @@ export default function Home({
                                         <span className="listing-rating">
                                             <Star aria-hidden className="size-3.5" /> <b>{s.rating.toFixed(1)}</b>
                                         </span>
-                                        <span>{tChoice('home.suppliers_deals', s.completed_deals_count)}</span>
+                                        <span>{tChoice('home.suppliers_listings', s.listings_count)}</span>
                                     </span>
                                 </Link>
                             ))}

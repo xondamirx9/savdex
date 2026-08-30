@@ -25,6 +25,9 @@ class CompanyController extends Controller
     {
         $companies = Company::query()
             ->with(['city.translations', 'country'])
+            // Для процента заполненности: наличие одобренных документов
+            // подзапросом, а не отдельным запросом на каждую карточку
+            ->withExists(['documents as has_approved_documents' => fn ($d) => $d->where('moderation_status', 'approved')])
             ->where('status', Company::STATUS_ACTIVE)
             ->when($request->string('q')->toString(), fn ($q, $term) => $q->where(
                 fn ($sub) => $sub->where('name', 'like', "%{$term}%")->orWhere('tin', 'like', "%{$term}%"),
@@ -70,7 +73,9 @@ class CompanyController extends Controller
                 'verification_level' => $c->verification_level,
                 'rating' => (float) $c->rating,
                 'reviews_count' => $c->reviews_count,
-                'completed_deals_count' => $c->completed_deals_count,
+                // Заполненность профиля вместо «сделок»: сделки площадка
+                // не считает, а этот процент — измеримый и честный
+                'trust' => $c->profileCompleteness(),
                 'created_at' => DateHelper::monthYear($c->created_at),
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),

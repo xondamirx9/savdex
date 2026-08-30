@@ -1,4 +1,4 @@
-import { ArrowRight, ShieldCheck, Star, Users } from 'lucide-react';
+import { ArrowRight, Boxes, ShieldCheck, Star, Users } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { formatNumber } from '@/components/cabinet';
@@ -15,7 +15,7 @@ interface PartnerRow {
     verification_level: number;
     rating: number;
     reviews_count: number;
-    completed_deals_count: number;
+    listings_count: number;
     initials: string;
     logo: string | null;
 }
@@ -31,12 +31,12 @@ export default function Partners({
     stats,
 }: {
     partners: PartnerRow[];
-    stats: { total: number; verified: number; deals: number };
+    stats: { total: number; verified: number; listings: number };
 }) {
     const cells: [typeof Users, string, number, string][] = [
         [Users, 'stat-ico-blue', stats.total, t('partners.stat_total')],
         [ShieldCheck, 'stat-ico-sky', stats.verified, t('partners.stat_verified')],
-        [Star, 'stat-ico-violet', stats.deals, t('partners.stat_deals')],
+        [Boxes, 'stat-ico-violet', stats.listings, t('partners.stat_listings')],
     ];
 
     return (
@@ -103,7 +103,7 @@ export default function Partners({
                                             <span className="listing-rating">
                                                 <Star aria-hidden className="size-3.5" /> <b>{p.rating.toFixed(1)}</b>
                                             </span>
-                                            <span>{tChoice('home.suppliers_deals', p.completed_deals_count)}</span>
+                                            <span>{tChoice('home.suppliers_listings', p.listings_count)}</span>
                                         </span>
                                     </Link>
                                 ))}

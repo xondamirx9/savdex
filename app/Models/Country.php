@@ -36,6 +36,11 @@ class Country extends Model
         return $this->hasMany(City::class);
     }
 
+    public function companies(): HasMany
+    {
+        return $this->hasMany(Company::class);
+    }
+
     public function translations(): HasMany
     {
         return $this->hasMany(CountryTranslation::class);

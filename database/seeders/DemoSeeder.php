@@ -54,108 +54,38 @@ class DemoSeeder extends Seeder
             return [$name => $city];
         });
 
+        /*
+         * Только очевидно вымышленные компании: без ИНН, без бейджей
+         * верификации, без истории сделок и отзывов. Демо-данные,
+         * похожие на реальные юрлица с «историей», — репутационный
+         * и правовой риск, даже на стенде (аудит 29.08.2026, п. 2.2).
+         */
         $companies = [
             [
-                'name' => 'ООО «Стройбаза»',
-                'legal_name' => 'Общество с ограниченной ответственностью «Стройбаза»',
-                'tin' => '304561278',
+                'name' => 'ООО «Демо-Поставщик»',
                 'city' => 'Ташкент',
                 'type' => 'distributor',
-                'address' => 'г. Ташкент, Мирзо-Улугбекский р-н, ул. Мустакиллик, 42',
-                'website' => 'stroybaza.uz',
-                'description' => 'Поставляем строительные материалы напрямую с заводов Узбекистана с 2016 года. Собственный склад 4 000 м² в Ташкенте, автопарк из 12 единиц техники.',
-                'founded_year' => 2016,
-                'employees_range' => '50-100',
-                'verification_level' => Company::VERIFICATION_COMPANY,
-                'rating' => 4.8,
-                'reviews_count' => 34,
-                'completed_deals_count' => 47,
-                'response_time_hours' => 2,
-                'contacts' => [
-                    ['phone', '+998 90 123-45-67', 'Отдел продаж', 'Рустам Каримов'],
-                    ['phone', '+998 71 200-45-80', 'Склад и отгрузка', null],
-                    ['email', 'sales@stroybaza.uz', 'Коммерческие предложения', null],
-                    ['email', 'buhgalteriya@stroybaza.uz', 'Бухгалтерия и документы', null],
-                ],
-            ],
-            [
-                'name' => '«Andijon Tekstil»',
-                'legal_name' => 'ЧП «Andijon Tekstil»',
-                'tin' => '301882940',
-                'city' => 'Фергана',
-                'type' => 'manufacturer',
-                'address' => 'Ферганская область, г. Фергана, ул. Мустакиллик, 7',
-                'website' => 'andijon-tekstil.uz',
-                'description' => 'Производство хлопковой пряжи и тканей. Экспорт в Турцию, Китай и Россию с 2019 года.',
-                'founded_year' => 2019,
-                'employees_range' => '100+',
-                'verification_level' => Company::VERIFICATION_EXTENDED,
-                'rating' => 4.9,
-                'reviews_count' => 61,
-                'completed_deals_count' => 112,
-                'response_time_hours' => 1,
-                'contacts' => [
-                    ['phone', '+998 90 555-11-22', 'Экспортный отдел', 'Азиз Ганиев'],
-                    ['email', 'export@andijon-tekstil.uz', 'Экспорт', null],
-                ],
-            ],
-            [
-                'name' => '«ТехноСтрой»',
-                'legal_name' => 'ООО «ТехноСтрой»',
-                'tin' => '309442156',
-                'city' => 'Ташкент',
-                'type' => 'trading',
-                'primary_role' => 'buyer',
-                'address' => 'г. Ташкент, Чиланзарский р-н, ул. Бунёдкор, 15',
-                'description' => 'Строительная компания. Закупаем материалы для собственных объектов.',
+                'description' => 'Демонстрационная карточка поставщика для проверки сценариев. Не является реальной компанией.',
                 'founded_year' => 2020,
                 'employees_range' => '10-50',
-                'verification_level' => Company::VERIFICATION_COMPANY,
-                'rating' => 4.6,
-                'reviews_count' => 18,
-                'completed_deals_count' => 23,
-                'response_time_hours' => 5,
-                'contacts' => [
-                    ['phone', '+998 71 244-00-11', 'Отдел снабжения', null],
-                    ['email', 'zakupki@technostroy.uz', null, null],
-                ],
-            ],
-            [
-                'name' => '«Uzmetkombinat Savdo»',
-                'legal_name' => 'АО «Uzmetkombinat Savdo»',
-                'tin' => '200145772',
-                'city' => 'Бекабад',
-                'type' => 'manufacturer',
-                'address' => 'Ташкентская область, г. Бекабад, ул. Металлургов, 1',
-                'website' => 'uzmk-savdo.uz',
-                'description' => 'Торговый дом металлургического комбината. Арматура, прокат, трубы.',
-                'founded_year' => 2012,
-                'employees_range' => '100+',
-                'verification_level' => Company::VERIFICATION_EXTENDED,
-                'rating' => 4.9,
-                'reviews_count' => 88,
-                'completed_deals_count' => 204,
-                'response_time_hours' => 3,
-                'contacts' => [
-                    ['phone', '+998 70 779-00-00', 'Сбыт', null],
-                    ['email', 'sale@uzmk-savdo.uz', null, null],
-                ],
-            ],
-            [
-                'name' => "«G'isht Konsern»",
-                'tin' => null,
-                'city' => 'Самарканд',
-                'type' => 'manufacturer',
-                'description' => 'Производство керамического кирпича.',
-                'founded_year' => 2024,
-                'employees_range' => '10-50',
                 'verification_level' => Company::VERIFICATION_NONE,
-                'rating' => 4.1,
-                'reviews_count' => 5,
-                'completed_deals_count' => 4,
-                'response_time_hours' => 18,
                 'contacts' => [
-                    ['phone', '+998 66 233-77-88', null, null],
+                    ['phone', '+998 00 000-00-01', 'Отдел продаж', 'Демо Контакт'],
+                    ['email', 'demo-supplier@example.com', 'Коммерческие предложения', null],
+                ],
+            ],
+            [
+                'name' => 'ООО «Демо-Закупщик»',
+                'city' => 'Самарканд',
+                'type' => 'trader',
+                'primary_role' => 'buyer',
+                'description' => 'Демонстрационная карточка закупщика для проверки сценариев. Не является реальной компанией.',
+                'founded_year' => 2022,
+                'employees_range' => '1-10',
+                'verification_level' => Company::VERIFICATION_NONE,
+                'contacts' => [
+                    ['phone', '+998 00 000-00-02', 'Отдел снабжения', null],
+                    ['email', 'demo-buyer@example.com', null, null],
                 ],
             ],
         ];
@@ -198,8 +128,8 @@ class DemoSeeder extends Seeder
             $demo = User::firstOrCreate(
                 ['email' => 'demo@savdex.uz'],
                 [
-                    'name' => 'Рустам Каримов',
-                    'phone' => '+998 90 123-45-67',
+                    'name' => 'Демо Пользователь',
+                    'phone' => '+998 00 000-00-01',
                     // Пароль из окружения: в репозитории его быть не должно,
                     // даже для демо — файл попадает в бэкапы и в чужие копии
                     'password' => env('DEMO_PASSWORD', 'ChangeMe-2026!'),
@@ -210,7 +140,7 @@ class DemoSeeder extends Seeder
                 ],
             );
 
-            $demo->company_id ??= Company::where('name', 'ООО «Стройбаза»')->value('id');
+            $demo->company_id ??= Company::where('name', 'ООО «Демо-Поставщик»')->value('id');
             $demo->save();
         });
 
