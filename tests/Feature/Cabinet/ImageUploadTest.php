@@ -80,6 +80,18 @@ class ImageUploadTest extends TestCase
         $this->assertLessThanOrEqual(512, $size[1]);
     }
 
+    /** Логотип — графика с мелким текстом: lossy-сжатие его смазывает. */
+    #[Test]
+    public function логотип_хранится_без_потерь(): void
+    {
+        $this->actingAs($this->user)->post('/cabinet/company/logo', ['logo' => $this->image('logo.png', 800, 800)]);
+
+        $binary = Storage::disk('public')->get($this->company->fresh()->logo_path);
+
+        // VP8L — сигнатура lossless-варианта WebP
+        $this->assertStringContainsString('VP8L', $binary);
+    }
+
     /** Замена удаляет прежний файл — иначе диск растёт от каждой правки. */
     #[Test]
     public function замена_логотипа_убирает_прежний_файл(): void
