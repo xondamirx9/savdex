@@ -100,10 +100,26 @@ class ChatTest extends TestCase
         $this->assertSame(1, (int) $this->buyer->wallet->fresh()->responses_used_this_period);
     }
 
-    /** Бесплатный тариф откликов не включает (responses_limit = 0). */
+    /**
+     * Отклики открыты и на бесплатном тарифе — с месячным лимитом.
+     * Закрытые отклики убивают ликвидность: закупщик, упёршийся
+     * в оплату, уходит (аудит 29.08.2026, п. 4.8).
+     */
     #[Test]
-    public function без_платного_тарифа_отклик_отклоняется(): void
+    public function бесплатный_тариф_откликается_в_пределах_лимита(): void
     {
+        $this->respond()->assertSessionHasNoErrors();
+
+        $this->assertSame(1, MessageThread::count());
+    }
+
+    #[Test]
+    public function исчерпанный_лимит_бесплатного_тарифа_отклоняет_отклик(): void
+    {
+        $limit = (int) Plan::where('code', 'free')->value('responses_limit');
+        Wallet::firstOrCreate(['company_id' => $this->buyer->id])
+            ->forceFill(['responses_used_this_period' => $limit])->save();
+
         $this->respond()->assertSessionHasErrors('body');
 
         $this->assertSame(0, MessageThread::count());

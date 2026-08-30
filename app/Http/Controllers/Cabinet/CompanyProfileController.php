@@ -10,9 +10,11 @@ use App\Models\Company;
 use App\Models\CompanyContact;
 use App\Models\CompanyDocument;
 use App\Models\Country;
+use App\Rules\Tin;
 use App\Support\ImageStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -137,7 +139,13 @@ class CompanyProfileController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:190'],
             'legal_name' => ['nullable', 'string', 'max:255'],
-            'tin' => ['nullable', 'string', 'max:20'],
+            'tin' => [
+                'nullable', 'string', 'max:20',
+                new Tin(Country::find($request->integer('country_id'))?->code ?? $request->user()->company?->country?->code),
+                Rule::unique('companies', 'tin')
+                    ->ignore($request->user()->company_id)
+                    ->whereNull('deleted_at'),
+            ],
             'country_id' => ['nullable', 'exists:countries,id'],
             'city_id' => ['nullable', 'exists:cities,id'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -151,6 +159,7 @@ class CompanyProfileController extends Controller
         ], [
             'name.required' => 'Укажите название компании',
             'founded_year.between' => 'Год основания должен быть между 1850 и '.now()->year,
+            'tin.unique' => 'Компания с таким ИНН уже зарегистрирована на площадке',
         ]);
 
         $user = $request->user();

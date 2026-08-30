@@ -26,7 +26,12 @@ class PlanSeeder extends Seeder
                 'price_usd' => 0,
                 'listings_limit' => 4,
                 'contacts_limit' => 3,
-                'responses_limit' => 0,
+                /*
+                 * Отклики на Free открыты с лимитом: закрытые отклики
+                 * убивают ликвидность — закупщик, упёршийся в оплату
+                 * на площадке без трафика, уходит (аудит, п. 4.8).
+                 */
+                'responses_limit' => 10,
                 'promo_units' => 0,
                 'verification_days' => 5,
                 'advanced_analytics' => false,
