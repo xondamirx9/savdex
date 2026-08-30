@@ -45,8 +45,14 @@ class ImageStore
      */
     public const MAX_PIXELS = 48_000_000;
 
-    /** Логотип: квадрат под плашку на визитке и в списках. */
-    public const LOGO = ['w' => 512, 'h' => 512, 'quality' => 85];
+    /**
+     * Логотип: квадрат под плашку на визитке и в списках.
+     *
+     * Lossless: логотип — графика с резкими краями и мелким текстом,
+     * и lossy-сжатие смазывает как раз их. Файл в 512px и без потерь
+     * весит десятки килобайт — экономить здесь не на чем.
+     */
+    public const LOGO = ['w' => 512, 'h' => 512, 'quality' => 85, 'lossless' => true];
 
     /** Обложка визитки: широкая полоса в шапке страницы компании. */
     public const COVER = ['w' => 2000, 'h' => 2000, 'quality' => 80];
@@ -60,7 +66,7 @@ class ImageStore
     /**
      * Сохранить изображение и вернуть путь на публичном диске.
      *
-     * @param  array{w: int, h: int, quality: int}  $size
+     * @param  array{w: int, h: int, quality: int, lossless?: bool}  $size
      */
     public function store(UploadedFile $file, string $directory, array $size): string
     {
@@ -74,7 +80,7 @@ class ImageStore
             $path = trim($directory, '/').'/'.Str::random(40).'.webp';
 
             ob_start();
-            imagewebp($resized, null, $size['quality']);
+            imagewebp($resized, null, ($size['lossless'] ?? false) ? IMG_WEBP_LOSSLESS : $size['quality']);
             $binary = (string) ob_get_clean();
 
             if ($resized !== $image) {

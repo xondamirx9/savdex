@@ -1291,7 +1291,9 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .gallery-strip img{width:100%;height:100%;object-fit:cover;display:block}
 
 /* Логотип компании вместо инициалов */
-.co-logo img,.listing-logo img,.avatar-sm img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+/* contain, а не cover: логотип-прямоугольник иначе увеличивается
+   до заполнения квадрата и режется — выглядит обрезанным и мыльным */
+.co-logo img,.listing-logo img,.avatar-sm img{width:100%;height:100%;object-fit:contain;border-radius:inherit}
 
 /* Обложка в строке каталога: тот же размер, что у значка типа,
    который она заменяет, — иначе строки скачут по высоте */

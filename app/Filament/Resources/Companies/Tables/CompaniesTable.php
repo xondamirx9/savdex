@@ -173,6 +173,51 @@ class CompaniesTable
                     }),
 
                 /*
+                 * Логотип из админки: перезалить смазанный или снять
+                 * неуместный. Файл обрабатывает ImageStore — тот же
+                 * путь, что при загрузке владельцем из кабинета.
+                 */
+                Action::make('logo')
+                    ->label('Логотип')
+                    ->icon('heroicon-o-identification')
+                    ->color('gray')
+                    ->schema([
+                        FileUpload::make('logo')
+                            ->label('Файл логотипа')
+                            ->image()
+                            ->storeFiles(false)
+                            ->maxSize(ImageStore::MAX_SIZE_KB)
+                            ->helperText('JPG, PNG или WebP до 8 МБ, лучше квадратный и не меньше 512px. Пустое поле — убрать логотип, вернутся инициалы.'),
+                    ])
+                    ->action(function (Company $record, array $data): void {
+                        $store = app(ImageStore::class);
+                        $file = $data['logo'] ?? null;
+
+                        if ($file === null) {
+                            $store->delete($record->logo_path);
+                            $record->forceFill(['logo_path' => null])->save();
+
+                            Notification::make()->title('Логотип снят — снова инициалы')->success()->send();
+
+                            return;
+                        }
+
+                        try {
+                            $path = $store->store($file, "companies/{$record->id}", ImageStore::LOGO);
+                        } catch (\RuntimeException) {
+                            Notification::make()->title('Файл не удалось прочитать как изображение')->danger()->send();
+
+                            return;
+                        }
+
+                        $previous = $record->logo_path;
+                        $record->forceFill(['logo_path' => $path])->save();
+                        $store->delete($previous);
+
+                        Notification::make()->title('Логотип обновлён')->success()->send();
+                    }),
+
+                /*
                  * Обложка шапки визитки. Файл обрабатывает ImageStore —
                  * тот же путь, что при загрузке владельцем из кабинета.
                  */
