@@ -7,8 +7,10 @@ namespace App\Filament\Resources\Companies\Tables;
 use App\Filament\Exports\CompanyExporter;
 use App\Filament\Imports\CompanyImporter;
 use App\Models\Company;
+use App\Support\CompanyEmblem;
 use App\Support\Notifier;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
@@ -21,6 +23,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -147,6 +150,26 @@ class CompaniesTable
                         Notification::make()->title('Уровень обновлён')->success()->send();
                     }),
 
+                /*
+                 * Эмблема вместо логотипа: настоящие знаки площадка
+                 * использовать не может (авторское право), а плашка
+                 * с инициалами в цвете региона — своя и единообразная.
+                 */
+                Action::make('emblem')
+                    ->label('Эмблема')
+                    ->icon('heroicon-o-swatch')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Сгенерировать эмблему?')
+                    ->modalDescription(fn (Company $record): string => $record->logo_path !== null
+                        ? 'У компании уже есть логотип — он будет заменён сгенерированной эмблемой.'
+                        : 'Компания получит плашку с инициалами в цвете своего региона.')
+                    ->action(function (Company $record): void {
+                        CompanyEmblem::assign($record);
+
+                        Notification::make()->title('Эмблема установлена')->success()->send();
+                    }),
+
                 Action::make('block')
                     ->label(fn (Company $record): string => $record->status === 'active' ? 'Заблокировать' : 'Разблокировать')
                     ->icon('heroicon-o-no-symbol')
@@ -184,6 +207,32 @@ class CompaniesTable
                     }),
             ])
             ->toolbarActions([
+                BulkAction::make('emblems')
+                    ->label('Сгенерировать эмблемы')
+                    ->icon('heroicon-o-swatch')
+                    ->requiresConfirmation()
+                    ->modalHeading('Сгенерировать эмблемы выбранным?')
+                    ->modalDescription('Компании без логотипа получат плашку с инициалами в цвете региона. Уже загруженные логотипы не трогаются.')
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records): void {
+                        $done = 0;
+
+                        foreach ($records as $company) {
+                            // Настоящий логотип дороже сгенерированного:
+                            // массовое действие занятые плашки обходит
+                            if ($company->logo_path === null) {
+                                CompanyEmblem::assign($company);
+                                $done++;
+                            }
+                        }
+
+                        Notification::make()
+                            ->title("Эмблем установлено: {$done}")
+                            ->body($done < $records->count() ? 'Пропущено с логотипом: '.($records->count() - $done) : null)
+                            ->success()
+                            ->send();
+                    }),
+
                 BulkActionGroup::make([
                     /*
                      * Ограничение суперадмином — прямо на действии:
