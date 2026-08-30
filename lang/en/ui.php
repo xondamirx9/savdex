@@ -14,6 +14,11 @@ return [
 
     // ── Navigation and header ────────────────────────────────
 
+    'errors' => [
+        'not_found' => 'Page not found',
+        'generic' => 'Error :status',
+    ],
+
     'common' => [
         'skip_to_content' => 'Skip to content',
     ],

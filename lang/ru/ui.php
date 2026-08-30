@@ -17,6 +17,11 @@ declare(strict_types=1);
 
 return [
 
+    'errors' => [
+        'not_found' => 'Страница не найдена',
+        'generic' => 'Ошибка :status',
+    ],
+
     'common' => [
         'skip_to_content' => 'Перейти к содержимому',
     ],

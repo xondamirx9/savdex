@@ -98,7 +98,9 @@ export function ProductCard({ row }: { row: ProductRow }) {
         <article className={cn('product-card', row.promoted && 'is-promoted', row.active === false && 'is-inactive')}>
             <Link href={href} className="product-media" tabIndex={-1} aria-hidden>
                 {row.cover ? (
-                    <img src={row.cover} alt="" loading="lazy" />
+                    /* alt с названием: трафик из Google Картинок
+                       и доступность — пустой alt терял и то, и другое */
+                    <img src={row.cover} alt={row.title} loading="lazy" />
                 ) : (
                     <span className="product-media-ph">
                         <TypeIcon aria-hidden className="size-10" />

@@ -35,9 +35,14 @@ class Seo
 
     private ?string $image = null;
 
+    /** @var array{width: int, height: int, type: string}|null */
+    private ?array $imageMeta = null;
+
     private string $type = 'website';
 
     private bool $noindex = false;
+
+    private bool $bare = false;
 
     /** @var list<array<string, mixed>> */
     private array $schemas = [];
@@ -89,6 +94,31 @@ class Seo
         $this->image = $url;
 
         return $this;
+    }
+
+    /**
+     * Размеры и формат превью — боты мессенджеров с ними показывают
+     * карточку сразу, не дожидаясь загрузки самой картинки.
+     */
+    public function imageMeta(int $width, int $height, string $type): self
+    {
+        $this->imageMeta = ['width' => $width, 'height' => $height, 'type' => $type];
+
+        return $this;
+    }
+
+    /**
+     * Служебная страница (404 и прочие ошибки): без canonical и hreflang.
+     *
+     * Канонический адрес на несуществующую страницу и hreflang на такие
+     * же несуществующие адреса поисковик читает как приглашение их
+     * индексировать.
+     */
+    public function bare(): self
+    {
+        $this->bare = true;
+
+        return $this->noindex();
     }
 
     public function type(string $type): self
@@ -212,6 +242,17 @@ class Seo
     public function getImage(): string
     {
         return $this->image ?? url('/og-cover.png');
+    }
+
+    /** @return array{width: int, height: int, type: string}|null */
+    public function getImageMeta(): ?array
+    {
+        return $this->imageMeta;
+    }
+
+    public function isBare(): bool
+    {
+        return $this->bare;
     }
 
     public function getType(): string

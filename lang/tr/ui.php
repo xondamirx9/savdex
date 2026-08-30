@@ -14,6 +14,11 @@ return [
 
     // ── Gezinme ve üst bölüm ─────────────────────────────────
 
+    'errors' => [
+        'not_found' => 'Sayfa bulunamadı',
+        'generic' => 'Hata :status',
+    ],
+
     'common' => [
         'skip_to_content' => 'İçeriğe geç',
     ],

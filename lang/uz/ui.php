@@ -16,6 +16,11 @@ return [
 
     // ── Navigatsiya va sarlavha ──────────────────────────────
 
+    'errors' => [
+        'not_found' => 'Sahifa topilmadi',
+        'generic' => 'Xatolik :status',
+    ],
+
     'common' => [
         'skip_to_content' => 'Asosiy qismga o‘tish',
     ],
