@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\SearchText;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -121,7 +122,9 @@ class Listing extends Model
          * поиск вёл бы себя по-разному в тестах и в бою.
          */
         static::saving(function (self $listing): void {
-            $listing->search_text = mb_strtolower(trim($listing->title.' '.$listing->description));
+            // Обе графики разом: узбекская аудитория ищет латиницей
+            // («sement»), а объявления пишутся кириллицей — и наоборот
+            $listing->search_text = SearchText::index($listing->title.' '.$listing->description);
         });
     }
 
@@ -138,7 +141,7 @@ class Listing extends Model
      */
     public function scopeSearch(Builder $query, string $term): void
     {
-        $needle = '%'.mb_strtolower(trim($term)).'%';
+        $needle = '%'.SearchText::normalize($term).'%';
 
         $query->where('search_text', 'like', $needle);
     }
