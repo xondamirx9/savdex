@@ -301,6 +301,7 @@ export default function Home({
     news,
     reviews,
     heroImage,
+    heroRatio,
 }: {
     stats: Stats;
     categories: CategoryTile[];
@@ -312,6 +313,8 @@ export default function Home({
     news: NewsCard[];
     /** Фон первого экрана — задаётся в админке, разделе «Оформление» */
     heroImage: string;
+    /** Пропорции кадра (ширина/высота); null — фон из коробки */
+    heroRatio: number | null;
     reviews: ReviewRow[];
 }) {
     const statCells: [typeof Users, string, number, string][] = [
@@ -330,8 +333,23 @@ export default function Home({
             {/* ── Первый экран: тёмно-синий порт ── */}
             {/* Фон приходит с сервера: картинку меняют в админке,
                 и пересобирать стили ради этого незачем. Затемнение
-                и цвет подложки остаются в CSS */}
-            <section className="hero-b2b hero-b2b--underlay" style={{ backgroundImage: `url(${heroImage})` }}>
+                и цвет подложки остаются в CSS.
+
+                Когда сервер знает пропорции кадра, первый экран
+                повторяет их (aspect-ratio): фото ложится по ширине
+                целиком — ничего не режется и нет поля под кадром */}
+            <section
+                className={cn('hero-b2b hero-b2b--underlay', heroRatio !== null && 'hero-b2b--exact')}
+                style={{
+                    backgroundImage: `url(${heroImage})`,
+                    ...(heroRatio
+                        ? ({
+                              aspectRatio: String(heroRatio),
+                              '--hero-img-h': `calc(100vw / ${heroRatio})`,
+                          } as React.CSSProperties)
+                        : {}),
+                }}
+            >
                 <div className="container">
                     <div className="hero-b2b-inner">
                         {/* Текст занимает левую половину — фотография

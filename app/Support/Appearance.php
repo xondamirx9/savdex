@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -44,5 +45,32 @@ class Appearance
         }
 
         return Storage::disk('public')->url($path);
+    }
+
+    /**
+     * Пропорции загруженного фона (ширина / высота).
+     *
+     * Первый экран подстраивает свою высоту под кадр: cover резал бы
+     * верх и низ фотографии любой другой пропорции, а раскладка
+     * по ширине оставляла бы синее поле под кадром. null — фон
+     * не загружен (или это не растровый файл), пропорцию не знаем.
+     */
+    public static function heroImageRatio(): ?float
+    {
+        $path = trim((string) Setting::get(self::KEY_HERO, ''));
+
+        if ($path === ''
+            || str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')
+            || ! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        // Кэш по имени файла: загрузка кладёт файл под новым именем,
+        // и устаревшая пропорция отвалится сама
+        return Cache::remember('hero_image_ratio:'.md5($path), now()->addDay(), function () use ($path): ?float {
+            $info = @getimagesizefromstring((string) Storage::disk('public')->get($path));
+
+            return $info !== false && $info[1] > 0 ? round($info[0] / $info[1], 4) : null;
+        });
     }
 }
