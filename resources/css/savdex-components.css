@@ -1622,7 +1622,10 @@ a.product-title:hover{color:var(--primary-700);text-decoration:none}
   border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);min-width:0}
 .product-company b{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .product-company svg{flex-shrink:0}
-.flag{display:inline-block;line-height:1}
+/* «Twemoji Country Flags» первым: Windows не рисует флаги-эмодзи,
+   и полифилл (app.tsx) подключает этот шрифт только там, где нужно */
+.flag{display:inline-block;line-height:1;
+  font-family:"Twemoji Country Flags","Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
 
 /* Лента с прокруткой на телефоне */
 .hscroll{position:relative}
