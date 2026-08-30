@@ -49,6 +49,7 @@ class CompanyProfileController extends Controller
                 'primary_role' => $company->primary_role,
                 'initials' => $company->initials(),
                 'logo' => $company->logoUrl(),
+                'cover' => $company->coverUrl(),
                 'completeness' => $company->profileCompleteness(),
                 'missing' => $company->missingProfileFields(),
                 'verification_level' => $company->verification_level,
@@ -226,5 +227,56 @@ class CompanyProfileController extends Controller
         $company->forceFill(['logo_path' => null])->save();
 
         return back()->with('success', 'Логотип удалён — на визитке снова инициалы');
+    }
+
+    /** Обложка визитки: фото вместо фирменного градиента в шапке. */
+    public function uploadCover(Request $request): RedirectResponse
+    {
+        $company = $request->user()->company;
+
+        if ($company === null) {
+            return back()->with('error', 'Сначала заполните данные компании');
+        }
+
+        $request->validate([
+            'cover' => [
+                'required', 'file',
+                'mimes:'.implode(',', ImageStore::ALLOWED_MIMES),
+                'max:'.ImageStore::MAX_SIZE_KB,
+            ],
+        ], [
+            'cover.required' => 'Выберите файл',
+            'cover.mimes' => 'Допустимы JPG, PNG и WebP',
+            'cover.max' => 'Файл больше 8 МБ. Уменьшите разрешение или сожмите',
+        ]);
+
+        $store = app(ImageStore::class);
+
+        try {
+            $path = $store->store($request->file('cover'), "companies/{$company->id}", ImageStore::COVER);
+        } catch (RuntimeException) {
+            return back()->with('error', 'Файл не удалось прочитать как изображение');
+        }
+
+        $previous = $company->cover_path;
+
+        $company->forceFill(['cover_path' => $path])->save();
+
+        $store->delete($previous);
+
+        return back()->with('success', 'Обложка обновлена');
+    }
+
+    public function removeCover(Request $request): RedirectResponse
+    {
+        $company = $request->user()->company;
+
+        abort_if($company === null, 404);
+
+        app(ImageStore::class)->delete($company->cover_path);
+
+        $company->forceFill(['cover_path' => null])->save();
+
+        return back()->with('success', 'Обложка удалена — в шапке снова фирменный градиент');
     }
 }

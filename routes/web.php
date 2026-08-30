@@ -312,6 +312,12 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::delete('/cabinet/company/logo', [CompanyProfileController::class, 'removeLogo'])
         ->name('cabinet.company.logo.remove');
 
+    Route::post('/cabinet/company/cover', [CompanyProfileController::class, 'uploadCover'])
+        ->middleware('throttle:30,60')
+        ->name('cabinet.company.cover');
+    Route::delete('/cabinet/company/cover', [CompanyProfileController::class, 'removeCover'])
+        ->name('cabinet.company.cover.remove');
+
     // 20 МБ на файл: без ограничения частоты диск заполняется за вечер
     Route::post('/cabinet/company/files', [CompanyFileController::class, 'store'])
         ->middleware('throttle:20,60')

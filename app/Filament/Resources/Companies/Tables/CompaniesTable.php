@@ -8,6 +8,7 @@ use App\Filament\Exports\CompanyExporter;
 use App\Filament\Imports\CompanyImporter;
 use App\Models\Company;
 use App\Support\CompanyEmblem;
+use App\Support\ImageStore;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -16,6 +17,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Actions\ImportAction;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -168,6 +170,50 @@ class CompaniesTable
                         CompanyEmblem::assign($record);
 
                         Notification::make()->title('Эмблема установлена')->success()->send();
+                    }),
+
+                /*
+                 * Обложка шапки визитки. Файл обрабатывает ImageStore —
+                 * тот же путь, что при загрузке владельцем из кабинета.
+                 */
+                Action::make('cover')
+                    ->label('Обложка')
+                    ->icon('heroicon-o-photo')
+                    ->color('gray')
+                    ->schema([
+                        FileUpload::make('cover')
+                            ->label('Фото обложки')
+                            ->image()
+                            ->storeFiles(false)
+                            ->maxSize(ImageStore::MAX_SIZE_KB)
+                            ->helperText('JPG, PNG или WebP до 8 МБ. Широкий кадр: полоса в шапке визитки. Пустое поле — вернуть фирменный градиент.'),
+                    ])
+                    ->action(function (Company $record, array $data): void {
+                        $store = app(ImageStore::class);
+                        $file = $data['cover'] ?? null;
+
+                        if ($file === null) {
+                            $store->delete($record->cover_path);
+                            $record->forceFill(['cover_path' => null])->save();
+
+                            Notification::make()->title('Обложка снята — снова градиент')->success()->send();
+
+                            return;
+                        }
+
+                        try {
+                            $path = $store->store($file, "companies/{$record->id}", ImageStore::COVER);
+                        } catch (\RuntimeException) {
+                            Notification::make()->title('Файл не удалось прочитать как изображение')->danger()->send();
+
+                            return;
+                        }
+
+                        $previous = $record->cover_path;
+                        $record->forceFill(['cover_path' => $path])->save();
+                        $store->delete($previous);
+
+                        Notification::make()->title('Обложка обновлена')->success()->send();
                     }),
 
                 Action::make('block')

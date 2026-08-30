@@ -310,6 +310,7 @@ class Company extends Model
             'rating' => (float) $this->rating,
             'reviews_count' => $this->reviews_count,
             'logo' => $this->logoUrl(),
+            'cover' => $this->coverUrl(),
             'slug' => $this->slug,
             'url' => $this->publicUrl(),
         ];
@@ -330,6 +331,16 @@ class Company extends Model
         }
 
         return asset('storage/'.$this->logo_path);
+    }
+
+    /** Адрес обложки визитки; null — остаётся фирменный градиент. */
+    public function coverUrl(): ?string
+    {
+        if ($this->cover_path === null || ! Storage::disk('public')->exists($this->cover_path)) {
+            return null;
+        }
+
+        return asset('storage/'.$this->cover_path);
     }
 
     /**
