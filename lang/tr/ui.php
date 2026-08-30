@@ -261,6 +261,8 @@ return [
         'badge_new' => 'YENİ',
         'price_from' => ':price’den',
         'moq' => 'MOQ',
+        'trust' => 'Güven %:percent',
+        'trust_hint' => 'Tedarikçi profilinin doluluk oranı: bilgiler, iletişim, açıklama, belgeler',
         'sort_relevant' => 'Önce en uygun',
         'sort_fresh' => 'Önce en yeni',
         'sort_cheap' => 'Önce en ucuz',

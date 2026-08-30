@@ -260,6 +260,8 @@ return [
         'badge_new' => '新品',
         'price_from' => ':price 起',
         'moq' => '起订量',
+        'trust' => '信任度 :percent%',
+        'trust_hint' => '供应商资料完整度：资质、联系方式、简介、文件',
         'sort_relevant' => '最相关优先',
         'sort_fresh' => '最新优先',
         'sort_cheap' => '价格从低到高',

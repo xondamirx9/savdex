@@ -62,6 +62,18 @@ class CatalogTest extends TestCase
         return $listing;
     }
 
+    /** Процент доверия на карточке — заполненность профиля поставщика. */
+    #[Test]
+    public function карточка_несёт_процент_доверия_компании(): void
+    {
+        $this->listing(['title' => 'Цемент М400 навалом']);
+
+        $this->get('/catalog')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('listings.data.0.company.trust', $this->company->fresh()->profileCompleteness()),
+            );
+    }
+
     #[Test]
     public function каталог_показывает_только_активные_объявления(): void
     {
