@@ -89,6 +89,7 @@ export default function ListingShow({
         name: string | null;
         slug: string | null;
         initials: string | null;
+        logo: string | null;
         verification_level: number;
         rating: number;
         reviews_count: number;
@@ -284,7 +285,9 @@ export default function ListingShow({
 
                         <div className="card">
                             <div className="row" style={{ gap: 12, marginBottom: 16 }}>
-                                <span className="listing-logo logo-48">{company.initials}</span>
+                                <span className="listing-logo logo-48">
+                                    {company.logo ? <img src={company.logo} alt="" /> : company.initials}
+                                </span>
                                 <div style={{ minWidth: 0 }}>
                                     <b>
                                         {company.slug ? (

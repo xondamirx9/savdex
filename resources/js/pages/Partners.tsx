@@ -90,7 +90,9 @@ export default function Partners({
                                 {partners.map((p) => (
                                     <Link key={p.slug} href={routes.company(p.slug)} className="supplier-card">
                                         <span className="supplier-head">
-                                            <span className="listing-logo logo-48">{p.initials}</span>
+                                            <span className="listing-logo logo-48">
+                                                {p.logo ? <img src={p.logo} alt="" /> : p.initials}
+                                            </span>
                                             <VerificationBadge level={p.verification_level} />
                                         </span>
                                         <span className="supplier-name">{p.name}</span>
