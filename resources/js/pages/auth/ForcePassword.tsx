@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
 import { Alert, Button, PasswordInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 
 /**
  * Смена пароля, выданного администратором.
@@ -29,28 +30,28 @@ export default function ForcePassword() {
 
     return (
         <AuthLayout
-            title="Смена пароля"
-            heading="Смените пароль"
-            subheading="Первый пароль выдал администратор — его нужно заменить своим."
+            title={t('auth.force_title')}
+            heading={t('auth.force_heading')}
+            subheading={t('auth.force_subheading')}
         >
             <Alert tone="warning" className="mb-5">
-                Пока пароль не изменён, остальные разделы недоступны: выданный вручную пароль знаете не только вы.
+                {t('auth.force_warning')}
             </Alert>
 
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <PasswordInput
-                    label="Новый пароль"
+                    label={t('auth.new_password_label')}
                     name="password"
                     autoComplete="new-password"
                     required
-                    placeholder="Минимум 10 символов"
+                    placeholder={t('auth.password_placeholder')}
                     value={data.password}
                     onChange={(e) => update('password', e.target.value)}
                     error={errors.password}
                     autoFocus
                 />
                 <PasswordInput
-                    label="Повторите пароль"
+                    label={t('auth.password_confirm_label')}
                     name="password_confirmation"
                     autoComplete="new-password"
                     required
@@ -59,7 +60,7 @@ export default function ForcePassword() {
                     error={errors.password_confirmation}
                 />
                 <Button type="submit" size="lg" block loading={processing}>
-                    Сохранить и продолжить
+                    {t('auth.save_and_continue')}
                 </Button>
             </form>
         </AuthLayout>

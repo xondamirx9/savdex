@@ -4,6 +4,7 @@ import { MailCheck, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Alert, Button, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -37,17 +38,16 @@ export default function VerifyEmail({ email, status }: { email: string; status?:
 
     return (
         <AuthLayout
-            title="Подтвердите почту"
-            heading="Подтвердите почту"
-            subheading="Остался один шаг — и кабинет открыт полностью."
+            title={t('auth.verify_title')}
+            heading={t('auth.verify_title')}
+            subheading={t('auth.verify_subheading')}
         >
             <div className="space-y-5">
                 <div className="bg-primary-50 rounded-card flex gap-3.5 p-4">
                     <MailCheck aria-hidden className="text-primary-700 mt-0.5 size-6 shrink-0" />
                     <div className="text-sm leading-relaxed">
-                        Письмо с кодом подтверждения отправлено на{' '}
-                        <b className="break-all">{email ?? auth?.user?.email}</b>. Введите код из письма ниже
-                        или нажмите кнопку внутри письма.
+                        {t('auth.verify_sent_to')}{' '}
+                        <b className="break-all">{email ?? auth?.user?.email}</b>. {t('auth.verify_enter_code')}
                     </div>
                 </div>
 
@@ -55,53 +55,50 @@ export default function VerifyEmail({ email, status }: { email: string; status?:
 
                 <form onSubmit={confirm} className="space-y-4" noValidate>
                     <TextInput
-                        label="Код из письма"
+                        label={t('auth.code_label')}
                         name="code"
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         maxLength={6}
-                        placeholder="000000"
+                        placeholder={t('auth.code_placeholder')}
                         required
                         value={codeForm.data.code}
                         onChange={(e) => codeForm.setData('code', e.target.value.replace(/\D/g, ''))}
                         error={codeForm.errors.code}
-                        hint="Шесть цифр, код действует 15 минут"
+                        hint={t('auth.code_hint')}
                     />
                     <Button type="submit" size="lg" block loading={codeForm.processing}>
                         <ShieldCheck aria-hidden className="size-4" />
-                        Подтвердить почту
+                        {t('auth.verify_button')}
                     </Button>
                 </form>
 
                 <div className="text-muted space-y-2 text-sm leading-relaxed">
-                    <p>
-                        Письма нет? Проверьте папку «Спам» — туда попадает почти половина писем от новых
-                        отправителей.
-                    </p>
-                    <p>Адрес указан с опечаткой? Смените его в настройках — письмо уйдёт заново.</p>
+                    <p>{t('auth.verify_spam_hint')}</p>
+                    <p>{t('auth.verify_typo_hint')}</p>
                 </div>
 
                 <form onSubmit={resend}>
                     <Button type="submit" variant="secondary" size="lg" block loading={processing}>
                         <RefreshCw aria-hidden className="size-4" />
-                        Отправить письмо повторно
+                        {t('auth.verify_resend')}
                     </Button>
                 </form>
 
                 {/* Кабинет доступен и без подтверждения — закрыта только публикация.
                     Держать человека на этом экране силой значит терять его совсем. */}
                 <Link href={routes.cabinet} className="btn btn-secondary btn-lg btn-block">
-                    Перейти в кабинет
+                    {t('auth.go_to_cabinet')}
                 </Link>
 
                 <p className="text-muted pt-1 text-center text-sm">
-                    Это не ваш адрес?{' '}
+                    {t('auth.not_your_email')}{' '}
                     <button
                         type="button"
                         className="text-primary-700 hover:underline"
                         onClick={() => logout.post(routes.logout)}
                     >
-                        Выйти
+                        {t('auth.logout')}
                     </button>
                 </p>
             </div>

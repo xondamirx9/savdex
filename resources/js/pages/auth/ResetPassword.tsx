@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
 import { Button, PasswordInput, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { t } from '@/lib/i18n';
 
 export default function ResetPassword({ token, email }: { token: string; email: string }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -19,10 +20,14 @@ export default function ResetPassword({ token, email }: { token: string; email: 
     }
 
     return (
-        <AuthLayout title="Новый пароль" heading="Придумайте новый пароль" subheading="Ссылка действует 60 минут с момента запроса.">
+        <AuthLayout
+            title={t('auth.reset_title')}
+            heading={t('auth.reset_heading')}
+            subheading={t('auth.reset_subheading')}
+        >
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <TextInput
-                    label="Почта"
+                    label={t('auth.email_short_label')}
                     type="email"
                     name="email"
                     autoComplete="email"
@@ -32,18 +37,18 @@ export default function ResetPassword({ token, email }: { token: string; email: 
                     error={errors.email}
                 />
                 <PasswordInput
-                    label="Новый пароль"
+                    label={t('auth.new_password_label')}
                     name="password"
                     autoComplete="new-password"
                     required
-                    placeholder="Минимум 10 символов"
+                    placeholder={t('auth.password_placeholder')}
                     value={data.password}
                     onChange={(e) => setData('password', e.target.value)}
                     error={errors.password}
                     autoFocus
                 />
                 <PasswordInput
-                    label="Повторите пароль"
+                    label={t('auth.password_confirm_label')}
                     name="password_confirmation"
                     autoComplete="new-password"
                     required
@@ -52,7 +57,7 @@ export default function ResetPassword({ token, email }: { token: string; email: 
                     error={errors.password_confirmation}
                 />
                 <Button type="submit" size="lg" block loading={processing}>
-                    Сохранить пароль
+                    {t('auth.save_password')}
                 </Button>
             </form>
         </AuthLayout>
