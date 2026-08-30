@@ -341,11 +341,13 @@ export default function Home({
                         <div className="hero-b2b-copy" data-reveal>
                             <h1>{t('home.h1')}</h1>
                             <p className="hero-b2b-lead">{t('home.lead')}</p>
+                            {/* «Продавцы» — предложения товаров, «Покупатели» —
+                                запросы на закупку: две стороны площадки */}
                             <div className="hero-b2b-cta">
                                 <Link href={routes.catalog} className="btn btn-primary btn-lg">
                                     {t('home.cta_products')}
                                 </Link>
-                                <Link href={routes.companies} className="btn btn-secondary btn-lg">
+                                <Link href={`${routes.catalog}?type=demand`} className="btn btn-secondary btn-lg">
                                     {t('home.cta_companies')}
                                 </Link>
                             </div>
