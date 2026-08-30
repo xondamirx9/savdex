@@ -108,6 +108,52 @@ class ImageUploadTest extends TestCase
         Storage::disk('public')->assertMissing($path);
     }
 
+    // ── Обложка визитки ──────────────────────────────────────
+
+    #[Test]
+    public function обложка_загружается_и_видна_на_визитке(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/cabinet/company/cover', ['cover' => $this->image('cover.jpg', 2600, 900)])
+            ->assertSessionHas('success');
+
+        $company = $this->company->fresh();
+
+        $this->assertNotNull($company->cover_path);
+        Storage::disk('public')->assertExists($company->cover_path);
+
+        // Визитка отдаёт обложку фронту вместо фирменного градиента
+        $this->get('/company/'.$company->slug)
+            ->assertInertia(fn ($page) => $page->where('company.cover', $company->coverUrl()));
+    }
+
+    /** Замена и удаление подчищают файлы — как у логотипа. */
+    #[Test]
+    public function обложка_заменяется_и_удаляется(): void
+    {
+        $this->actingAs($this->user)->post('/cabinet/company/cover', ['cover' => $this->image('a.jpg')]);
+        $first = $this->company->fresh()->cover_path;
+
+        $this->actingAs($this->user)->post('/cabinet/company/cover', ['cover' => $this->image('b.jpg')]);
+        $second = $this->company->fresh()->cover_path;
+
+        $this->assertNotSame($first, $second);
+        Storage::disk('public')->assertMissing($first);
+
+        $this->actingAs($this->user)->delete('/cabinet/company/cover')->assertSessionHas('success');
+
+        $this->assertNull($this->company->fresh()->cover_path);
+        Storage::disk('public')->assertMissing($second);
+    }
+
+    #[Test]
+    public function документ_вместо_обложки_отклоняется(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/cabinet/company/cover', ['cover' => UploadedFile::fake()->create('price.pdf', 100)])
+            ->assertSessionHasErrors(['cover']);
+    }
+
     /** Расширение подделывается заголовком — файл читается как изображение. */
     #[Test]
     public function подделанный_файл_не_проходит(): void

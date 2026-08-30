@@ -28,6 +28,7 @@ interface Company {
     primary_role: string | null;
     initials: string;
     logo: string | null;
+    cover: string | null;
     completeness: number;
     missing: string[];
     verification_level: number;
@@ -77,6 +78,7 @@ export default function CompanyProfile({
     /** Какой тип файла предзаполнить в форме загрузки; null — форма закрыта */
     const [uploading, setUploading] = useState<string | null>(null);
     const logoInput = useRef<HTMLInputElement>(null);
+    const coverInput = useRef<HTMLInputElement>(null);
     const { confirm, dialog } = useConfirm();
 
     const form = useForm<{
@@ -261,6 +263,68 @@ export default function CompanyProfile({
                                     на визитке показываются инициалы.
                                 </p>
                             </div>
+                        </div>
+                    )}
+
+                    {company && (
+                        <div style={{ marginBottom: 24 }}>
+                            <div
+                                style={{
+                                    height: 96,
+                                    borderRadius: 12,
+                                    marginBottom: 10,
+                                    background: company.cover
+                                        ? `url(${company.cover}) center/cover`
+                                        : 'linear-gradient(120deg,var(--primary-700),var(--primary-500))',
+                                }}
+                            />
+                            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    type="button"
+                                    onClick={() => coverInput.current?.click()}
+                                >
+                                    <Upload aria-hidden className="size-4" />
+                                    {company.cover ? 'Заменить обложку' : 'Загрузить обложку'}
+                                </button>
+                                {company.cover && (
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        type="button"
+                                        onClick={() =>
+                                            confirm({
+                                                title: 'Удалить обложку?',
+                                                description: 'В шапке визитки снова появится фирменный градиент.',
+                                                confirmLabel: 'Удалить',
+                                                danger: true,
+                                                onConfirm: () =>
+                                                    router.delete('/cabinet/company/cover', { preserveScroll: true }),
+                                            })
+                                        }
+                                    >
+                                        Удалить
+                                    </button>
+                                )}
+                            </div>
+                            <input
+                                ref={coverInput}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                hidden
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    router.post(
+                                        '/cabinet/company/cover',
+                                        { cover: file },
+                                        { preserveScroll: true, forceFormData: true },
+                                    );
+                                    e.target.value = '';
+                                }}
+                            />
+                            <p className="hint">
+                                Обложка — фото в шапке визитки. Широкий кадр, JPG, PNG или WebP до 8 МБ.
+                            </p>
                         </div>
                     )}
 

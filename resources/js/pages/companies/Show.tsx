@@ -51,6 +51,7 @@ interface BusinessCard {
     rating: number;
     reviews_count: number;
     logo: string | null;
+    cover: string | null;
     url: string;
 }
 
@@ -157,7 +158,18 @@ export default function CompanyShow({
                 </nav>
 
                 {/* ═══ ВИЗИТКА ═══ */}
-                <div className="cover" />
+                <div
+                    className="cover"
+                    style={
+                        company.cover
+                            ? {
+                                  backgroundImage: `url(${company.cover})`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                              }
+                            : undefined
+                    }
+                />
                 <div className="co-head">
                     <div className="row wrap" style={{ gap: 20, alignItems: 'flex-end' }}>
                         <div className="co-logo">{company.logo ? <img src={company.logo} alt="" /> : initials}</div>
