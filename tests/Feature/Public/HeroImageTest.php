@@ -84,6 +84,34 @@ class HeroImageTest extends TestCase
     }
 
     /**
+     * Первый экран повторяет пропорции кадра: cover резал бы верх
+     * и низ фотографии другой пропорции, а раскладка по ширине
+     * оставляла бы синее поле под кадром.
+     */
+    #[Test]
+    public function главная_отдаёт_пропорции_кадра(): void
+    {
+        Storage::fake('public');
+
+        // 3:2 — не 16:9: пропорция должна прийти с сервера, а не
+        // предполагаться вёрсткой
+        Storage::disk('public')->put('appearance/fon.jpg', (string) UploadedFile::fake()
+            ->image('fon.jpg', 1536, 1024)->getContent());
+
+        Setting::query()->where('key', Appearance::KEY_HERO)->update(['value' => json_encode('appearance/fon.jpg')]);
+        Setting::flushCache();
+
+        $this->get('/')->assertInertia(fn ($page) => $page->where('heroRatio', 1.5));
+    }
+
+    /** Без загруженного фона пропорция неизвестна — точный режим выключен. */
+    #[Test]
+    public function без_фона_пропорция_не_отдаётся(): void
+    {
+        $this->get('/')->assertInertia(fn ($page) => $page->where('heroRatio', null));
+    }
+
+    /**
      * Загрузка идёт отдельным полем формы: у остальных настроек
      * значение — строка, и общий FileUpload обнулял её.
      */
