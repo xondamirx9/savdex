@@ -14,6 +14,26 @@ return [
 
     // ── Gezinme ve üst bölüm ─────────────────────────────────
 
+    // Единицы измерения объявлений: продавец пишет по-русски,
+    // частые написания переводятся при выводе (lib/units.ts)
+    'units' => [
+        'sht' => 'adet',
+        't' => 't',
+        'kg' => 'kg',
+        'g' => 'g',
+        'l' => 'l',
+        'm' => 'm',
+        'm2' => 'm²',
+        'm3' => 'm³',
+        'pm' => 'mtül',
+        'set' => 'takım',
+        'pack' => 'paket',
+        'bag' => 'çuval',
+        'roll' => 'rulo',
+        'pallet' => 'palet',
+        'pair' => 'çift',
+    ],
+
     'errors' => [
         'not_found' => 'Sayfa bulunamadı',
         'generic' => 'Hata :status',
@@ -398,7 +418,7 @@ return [
         'badge_new' => 'YENİ',
         'price_from' => ':price’den',
         'moq' => 'MOQ',
-        'trust' => 'profil doluluk',
+        'trust' => 'İtibar %:percent',
         'trust_hint' => 'Tedarikçi profilinin doluluk oranı: bilgiler, iletişim, açıklama, belgeler',
         'sort_relevant' => 'Önce en uygun',
         'sort_fresh' => 'Önce en yeni',
@@ -574,7 +594,7 @@ return [
         'tin' => 'Vergi no',
         'tin_none' => 'belirtilmemiş',
         'since' => ':date itibarıyla',
-        'trust' => 'anlaşma',
+        'trust' => 'profil doluluk',
         'reviews' => ':count yorum',
         'open_card' => 'Kartviziti aç',
         'pages' => 'Sayfalar',
