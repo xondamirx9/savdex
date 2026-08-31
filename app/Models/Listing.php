@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Jobs\TranslateListing;
 use App\Support\SearchText;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -64,7 +65,43 @@ class Listing extends Model
             'published_at' => 'datetime',
             'expires_at' => 'datetime',
             'tags' => 'array',
+            'title_i18n' => 'array',
+            'description_i18n' => 'array',
         ];
+    }
+
+    /**
+     * Заголовок на языке посетителя.
+     *
+     * Оригинал пишется по-русски; машинный перевод появляется фоном
+     * после публикации. Пока перевода нет — показывается оригинал:
+     * русский заголовок лучше пустой карточки.
+     */
+    public function localizedTitle(?string $locale = null): string
+    {
+        $locale ??= app()->getLocale();
+
+        if ($locale === 'ru') {
+            return $this->title;
+        }
+
+        return trim((string) ($this->title_i18n[$locale] ?? '')) !== ''
+            ? $this->title_i18n[$locale]
+            : $this->title;
+    }
+
+    /** Описание на языке посетителя — по тем же правилам. */
+    public function localizedDescription(?string $locale = null): ?string
+    {
+        $locale ??= app()->getLocale();
+
+        if ($locale === 'ru') {
+            return $this->description;
+        }
+
+        return trim((string) ($this->description_i18n[$locale] ?? '')) !== ''
+            ? $this->description_i18n[$locale]
+            : $this->description;
     }
 
     public function company(): BelongsTo
@@ -123,8 +160,28 @@ class Listing extends Model
          */
         static::saving(function (self $listing): void {
             // Обе графики разом: узбекская аудитория ищет латиницей
-            // («sement»), а объявления пишутся кириллицей — и наоборот
-            $listing->search_text = SearchText::index($listing->title.' '.$listing->description);
+            // («sement»), а объявления пишутся кириллицей — и наоборот.
+            // Переводы заголовка тоже в индексе: «cement blocks»
+            // должно находить русское объявление
+            $listing->search_text = SearchText::index(implode(' ', array_filter([
+                $listing->title,
+                (string) $listing->description,
+                ...array_values($listing->title_i18n ?? []),
+            ])));
+        });
+
+        /*
+         * Перевод — фоном после публикации: четыре обращения
+         * к внешнему сервису не должны задерживать сохранение.
+         * Повторной отправки нет: после первого прохода title_i18n
+         * уже не null (пусть даже пустой), добор — по расписанию.
+         */
+        static::saved(function (self $listing): void {
+            if ($listing->status === self::STATUS_ACTIVE
+                && $listing->title_i18n === null
+                && config('services.machine_translation.enabled')) {
+                TranslateListing::dispatch($listing->id);
+            }
         });
     }
 

@@ -31,8 +31,8 @@ class SeoBuilders
             : number_format((float) $listing->price, 0, ',', ' ').' '.($listing->currency === 'UZS' ? 'сум' : $listing->currency);
 
         $this->seo
-            ->title($listing->title.($city !== null ? " — {$city}" : ''))
-            ->description($listing->description ?: "{$listing->title}. {$price}. Поставщик: {$company?->name}.")
+            ->title($listing->localizedTitle().($city !== null ? " — {$city}" : ''))
+            ->description($listing->localizedDescription() ?: "{$listing->localizedTitle()}. {$price}. Поставщик: {$company?->name}.")
             ->canonical(url('/listing/'.$listing->slug))
             /*
              * Превью — всегда растровый JPEG через свой маршрут:
