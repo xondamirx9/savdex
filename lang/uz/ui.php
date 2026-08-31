@@ -16,6 +16,26 @@ return [
 
     // ── Navigatsiya va sarlavha ──────────────────────────────
 
+    // Единицы измерения объявлений: продавец пишет по-русски,
+    // частые написания переводятся при выводе (lib/units.ts)
+    'units' => [
+        'sht' => 'dona',
+        't' => 't',
+        'kg' => 'kg',
+        'g' => 'g',
+        'l' => 'l',
+        'm' => 'm',
+        'm2' => 'm²',
+        'm3' => 'm³',
+        'pm' => 'pog. m',
+        'set' => 'to‘plam',
+        'pack' => 'o‘ram',
+        'bag' => 'qop',
+        'roll' => 'rulon',
+        'pallet' => 'pallet',
+        'pair' => 'juft',
+    ],
+
     'errors' => [
         'not_found' => 'Sahifa topilmadi',
         'generic' => 'Xatolik :status',
@@ -401,7 +421,7 @@ return [
         'badge_new' => 'NEW',
         'price_from' => ':price dan',
         'moq' => 'MOQ',
-        'trust' => 'profil to‘ldirilgan',
+        'trust' => 'Obro‘ :percent%',
         'trust_hint' => 'Yetkazib beruvchi profilining to‘ldirilganligi: rekvizitlar, kontaktlar, tavsif, hujjatlar',
         'sort_relevant' => 'Avval mosi',
         'sort_fresh' => 'Avval yangilari',
@@ -577,7 +597,7 @@ return [
         'tin' => 'STIR',
         'tin_none' => 'ko‘rsatilmagan',
         'since' => ':date dan beri',
-        'trust' => 'bitimlar',
+        'trust' => 'profil to‘ldirilgan',
         'reviews' => ':count sharh',
         'open_card' => 'Vizitkani ochish',
         'pages' => 'Sahifalar',

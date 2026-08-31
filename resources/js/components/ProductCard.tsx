@@ -5,6 +5,7 @@ import { formatNumber } from '@/components/cabinet';
 import { cn } from '@/lib/cn';
 import { flag } from '@/lib/flag';
 import { t } from '@/lib/i18n';
+import { unitLabel } from '@/lib/units';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -154,14 +155,14 @@ export function ProductCard({ row }: { row: ProductRow }) {
                                 {/* Шаблон «от :price» лежит в словаре целиком:
                                     в узбекском и китайском «от» стоит после числа */}
                                 {t('catalog.price_from', { price: money(row.price, row.currency) })}
-                                {row.unit && <small> / {row.unit}</small>}
+                                {row.unit && <small> / {unitLabel(row.unit)}</small>}
                             </>
                         )}
                     </span>
                     {row.min_order !== null && (
                         <span className="product-moq">
                             {t('catalog.moq')}: {formatNumber(row.min_order)}
-                            {row.unit ? ` ${row.unit}` : ''}
+                            {row.unit ? ` ${unitLabel(row.unit)}` : ''}
                         </span>
                     )}
                 </div>

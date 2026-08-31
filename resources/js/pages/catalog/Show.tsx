@@ -20,6 +20,7 @@ import { formatNumber } from '@/components/cabinet';
 import { Gallery } from '@/components/Gallery';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
+import { unitLabel } from '@/lib/units';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -113,7 +114,7 @@ export default function ListingShow({
 
     const price = listing.negotiable || listing.price === null
         ? t('catalog.price_negotiable')
-        : `${formatNumber(listing.price)} ${currency}${listing.unit ? `/${listing.unit}` : ''}`;
+        : `${formatNumber(listing.price)} ${currency}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
 
     return (
         <PublicLayout
@@ -218,7 +219,7 @@ export default function ListingShow({
                                     {listing.min_order && (
                                         <p className="t-sm" style={{ marginBottom: 8 }}>
                                             <b>{t('listing.min_order')}</b> {formatNumber(listing.min_order)}
-                                            {listing.unit ? ` ${listing.unit}` : ''}
+                                            {listing.unit ? ` ${unitLabel(listing.unit)}` : ''}
                                         </p>
                                     )}
                                     {listing.delivery_terms && (

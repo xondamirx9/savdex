@@ -14,6 +14,26 @@ return [
 
     // ── Navigation and header ────────────────────────────────
 
+    // Единицы измерения объявлений: продавец пишет по-русски,
+    // частые написания переводятся при выводе (lib/units.ts)
+    'units' => [
+        'sht' => 'pcs',
+        't' => 't',
+        'kg' => 'kg',
+        'g' => 'g',
+        'l' => 'l',
+        'm' => 'm',
+        'm2' => 'm²',
+        'm3' => 'm³',
+        'pm' => 'lin. m',
+        'set' => 'set',
+        'pack' => 'pack',
+        'bag' => 'bag',
+        'roll' => 'roll',
+        'pallet' => 'pallet',
+        'pair' => 'pair',
+    ],
+
     'errors' => [
         'not_found' => 'Page not found',
         'generic' => 'Error :status',
@@ -398,7 +418,7 @@ return [
         'badge_new' => 'NEW',
         'price_from' => 'from :price',
         'moq' => 'MOQ',
-        'trust' => 'profile complete',
+        'trust' => 'Reputation :percent%',
         'trust_hint' => 'Supplier profile completeness: details, contacts, description, documents',
         'sort_relevant' => 'Most relevant first',
         'sort_fresh' => 'Newest first',
@@ -574,7 +594,7 @@ return [
         'tin' => 'Tax ID',
         'tin_none' => 'not specified',
         'since' => 'since :date',
-        'trust' => 'deals',
+        'trust' => 'profile complete',
         'reviews' => ':count review|:count reviews',
         'open_card' => 'Open profile',
         'pages' => 'Pages',
