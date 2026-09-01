@@ -52,6 +52,9 @@ interface BusinessCard {
     reviews_count: number;
     logo: string | null;
     cover: string | null;
+    /** Пометка «данные из открытых источников»; null — блок скрыт */
+    source_note: string | null;
+    website: string | null;
     url: string;
 }
 
@@ -221,6 +224,29 @@ export default function CompanyShow({
                             )}
                         </div>
                     </div>
+
+                    {/* Карточка заведена площадкой из открытых источников:
+                        визитка говорит об этом честно, а кнопка ведёт на
+                        сайт компании — подтверждение, что она настоящая.
+                        Текст и сайт правятся в админке (Компании) */}
+                    {company.source_note && (
+                        <div className="alert alert-info mt-24" style={{ alignItems: 'center', gap: 14 }}>
+                            <FileText aria-hidden className="size-5 shrink-0" />
+                            <div style={{ flex: 1, minWidth: 220 }} className="t-sm">
+                                {company.source_note}
+                            </div>
+                            {company.website && (
+                                <a
+                                    href={company.website}
+                                    target="_blank"
+                                    rel="noopener nofollow"
+                                    className="btn btn-secondary btn-sm shrink-0"
+                                >
+                                    <Globe aria-hidden className="size-4" /> Сайт компании
+                                </a>
+                            )}
+                        </div>
+                    )}
 
                     <dl className="card-facts mt-24">
                         {company.legal_name && (

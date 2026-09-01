@@ -137,6 +137,12 @@ class CompanyForm
                         ->maxLength(5000)
                         ->helperText('Видно на визитке. Профиль с описанием получает заметно больше обращений'),
 
+                    Textarea::make('source_note')
+                        ->label('Пометка об источнике данных')
+                        ->rows(3)
+                        ->maxLength(500)
+                        ->helperText('Показывается плашкой на визитке — для карточек, заведённых площадкой из открытых источников. Пустое поле скрывает плашку. Рядом с ней выводится кнопка «Сайт компании», если сайт заполнен'),
+
                     Select::make('employees_range')
                         ->label('Сотрудников')
                         ->options(array_combine(self::EMPLOYEE_RANGES, self::EMPLOYEE_RANGES))
