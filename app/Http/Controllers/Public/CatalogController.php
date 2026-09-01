@@ -326,6 +326,7 @@ class CatalogController extends Controller
                 'slug' => $company?->slug,
                 'initials' => $company?->initials(),
                 'logo' => $company?->logoUrl(),
+                'website' => $company?->websiteUrl(),
                 'verification_level' => (int) ($company?->verification_level ?? 0),
                 'rating' => (float) ($company?->rating ?? 0),
                 'reviews_count' => (int) ($company?->reviews_count ?? 0),
