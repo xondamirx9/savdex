@@ -168,7 +168,9 @@ export function ProductCard({ row }: { row: ProductRow }) {
                 </div>
 
                 <span className="product-company">
-                    <b>{row.company.name}</b>
+                    {/* Имя собственное: браузерный переводчик превращал
+                        «OOO Tranquil» в «ООО Спокойствие» */}
+                    <b className="notranslate" translate="no">{row.company.name}</b>
                     {row.company.verified >= 2 && (
                         <span title={t('catalog.verified')} style={{ color: 'var(--success)', display: 'inline-flex' }}>
                             <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

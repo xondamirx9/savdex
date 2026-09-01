@@ -15,7 +15,9 @@ export function Logo({ inverted = false, asContent = false }: { inverted?: boole
     const content = (
         <>
             <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
-            <span className="logo-word">
+            {/* translate="no": браузерные переводчики превращали
+                бренд в «Сохранённый Экс» */}
+            <span className="logo-word notranslate" translate="no">
                 Savd<span>ex</span>
             </span>
         </>

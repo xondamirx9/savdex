@@ -637,7 +637,9 @@ export function SiteHeader() {
                         <Link href={routes.home} className="hd-logo" aria-label={t('nav.home_link')}>
                             <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
                             <span className="hd-logo-word">
-                                <span className="hd-logo-name">
+                                {/* translate="no": браузерные переводчики
+                                    превращали бренд в «Сохранённый Экс» */}
+                                <span className="hd-logo-name notranslate" translate="no">
                                     Savd<span>Ex</span>
                                 </span>
                                 <span className="hd-logo-sub">{t('header.tagline')}</span>
