@@ -27,7 +27,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'slug', 'name', 'legal_name', 'tin',
     'country_id', 'city_id', 'address', 'lat', 'lng',
-    'type', 'primary_role', 'custom_category', 'description', 'logo_path', 'cover_path', 'website',
+    'type', 'primary_role', 'custom_category', 'description', 'source_note', 'logo_path', 'cover_path', 'website',
     'phone', 'email', 'telegram', 'whatsapp', 'contact_person',
     'founded_year', 'employees_range', 'turnover_range',
     'verification_level', 'verified_at', 'verified_by',
@@ -311,6 +311,10 @@ class Company extends Model
             'address' => $this->address,
             'coords' => $this->lat && $this->lng ? ['lat' => (float) $this->lat, 'lng' => (float) $this->lng] : null,
             'description' => $this->description,
+            // Пометка об источнике данных: заполняется для карточек,
+            // заведённых площадкой; правится в админке
+            'source_note' => $this->source_note,
+            'website' => $this->websiteUrl(),
             'founded_year' => $this->founded_year,
             'employees_range' => $this->employees_range,
             'verification_level' => $this->verification_level,
@@ -338,6 +342,20 @@ class Company extends Model
         }
 
         return asset('storage/'.$this->logo_path);
+    }
+
+    /** Сайт компании кликабельной ссылкой; в профиле он хранится как ввели. */
+    public function websiteUrl(): ?string
+    {
+        $site = trim((string) $this->website);
+
+        if ($site === '') {
+            return null;
+        }
+
+        return str_starts_with($site, 'http://') || str_starts_with($site, 'https://')
+            ? $site
+            : 'https://'.$site;
     }
 
     /** Адрес обложки визитки; null — остаётся фирменный градиент. */

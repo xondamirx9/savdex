@@ -123,6 +123,10 @@ class CompanyImporter extends Importer
         if (! $this->record->exists) {
             $this->record->status = Company::STATUS_ACTIVE;
             $this->record->verification_level = Company::VERIFICATION_NONE;
+
+            // Карточку завела площадка, а не компания — визитка обязана
+            // говорить об этом. Текст правится в админке по компании
+            $this->record->source_note ??= 'Данные компании взяты из открытых источников. Если это ваша компания — зарегистрируйтесь и напишите в поддержку, чтобы подтвердить профиль и управлять им.';
         }
     }
 
