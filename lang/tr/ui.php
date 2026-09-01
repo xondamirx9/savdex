@@ -442,6 +442,7 @@ return [
         'similar' => 'Benzer ilanlar',
         'company_verified' => 'Şirket doğrulandı',
         'rating' => 'Puan :rating',
+        'company_website' => 'Şirket sitesi',
         'reviews' => ':count değerlendirme',
         'respond' => 'Teklif gönder',
         'respond_hint' => 'Şirkete doğrudan platform üzerinden yazın — yazışma hesabınızdaki «Sohbetler» bölümünde kalır.',
@@ -597,6 +598,7 @@ return [
         'trust' => 'profil doluluk',
         'reviews' => ':count yorum',
         'open_card' => 'Kartviziti aç',
+        'website' => 'Site',
         'pages' => 'Sayfalar',
     ],
 

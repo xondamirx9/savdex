@@ -445,6 +445,7 @@ return [
         'similar' => 'O‘xshash e’lonlar',
         'company_verified' => 'Kompaniya tekshirilgan',
         'rating' => 'Reyting :rating',
+        'company_website' => 'Kompaniya sayti',
         'reviews' => ':count ta sharh',
         'respond' => 'Taklif yuborish',
         'respond_hint' => 'Kompaniyaga platformaning oʻzida yozing — yozishmalar kabinetingizdagi «Chatlar» boʻlimida qoladi.',
@@ -600,6 +601,7 @@ return [
         'trust' => 'profil to‘ldirilgan',
         'reviews' => ':count sharh',
         'open_card' => 'Vizitkani ochish',
+        'website' => 'Sayt',
         'pages' => 'Sahifalar',
     ],
 

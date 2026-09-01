@@ -84,6 +84,7 @@ class CompanyController extends Controller
                 'created_at' => DateHelper::monthYear($c->created_at),
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
+                'website' => $c->websiteUrl(),
             ]);
 
         app(SeoBuilders::class)->companies(

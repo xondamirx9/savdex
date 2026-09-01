@@ -442,6 +442,7 @@ return [
         'similar' => 'Similar listings',
         'company_verified' => 'Company verified',
         'rating' => 'Rating :rating',
+        'company_website' => 'Company website',
         'reviews' => ':count review|:count reviews',
         'respond' => 'Send inquiry',
         'respond_hint' => 'Message the company right on the platform — the conversation stays in the Chats section of your account.',
@@ -597,6 +598,7 @@ return [
         'trust' => 'profile complete',
         'reviews' => ':count review|:count reviews',
         'open_card' => 'Open profile',
+        'website' => 'Website',
         'pages' => 'Pages',
     ],
 

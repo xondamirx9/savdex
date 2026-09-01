@@ -197,6 +197,18 @@ export default function CompanyShow({
                             {/* Раньше здесь была кнопка-иконка QR. Иконка не объясняла,
                                 что произойдёт, и мало кто её нажимал. Теперь понятная
                                 надпись, а QR-код показывается внутри вместе со ссылкой. */}
+                            {/* Кнопка сайта — всегда, когда сайт заполнен:
+                                и для карточек площадки, и для своих */}
+                            {company.website && (
+                                <a
+                                    href={company.website}
+                                    target="_blank"
+                                    rel="noopener nofollow"
+                                    className="btn btn-secondary"
+                                >
+                                    <Globe aria-hidden className="size-4" /> Сайт компании
+                                </a>
+                            )}
                             <Button variant="secondary" onClick={() => setQrOpen(true)}>
                                 <QrCode aria-hidden className="size-4" /> Сгенерировать ссылку
                             </Button>
@@ -232,19 +244,10 @@ export default function CompanyShow({
                     {company.source_note && (
                         <div className="alert alert-info mt-24" style={{ alignItems: 'center', gap: 14 }}>
                             <FileText aria-hidden className="size-5 shrink-0" />
+                            {/* Кнопка сайта — в шапке визитки, здесь только текст */}
                             <div style={{ flex: 1, minWidth: 220 }} className="t-sm">
                                 {company.source_note}
                             </div>
-                            {company.website && (
-                                <a
-                                    href={company.website}
-                                    target="_blank"
-                                    rel="noopener nofollow"
-                                    className="btn btn-secondary btn-sm shrink-0"
-                                >
-                                    <Globe aria-hidden className="size-4" /> Сайт компании
-                                </a>
-                            )}
                         </div>
                     )}
 

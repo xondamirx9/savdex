@@ -91,6 +91,7 @@ export default function ListingShow({
         slug: string | null;
         initials: string | null;
         logo: string | null;
+        website: string | null;
         verification_level: number;
         rating: number;
         reviews_count: number;
@@ -314,6 +315,18 @@ export default function ListingShow({
                                     {t('listing.rating', { rating: company.rating.toFixed(1) })} ·{' '}
                                     {tChoice('listing.reviews', company.reviews_count)}
                                 </p>
+                            )}
+
+                            {company.website && (
+                                <a
+                                    href={company.website}
+                                    target="_blank"
+                                    rel="noopener nofollow"
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ marginBottom: 16 }}
+                                >
+                                    <Globe aria-hidden className="size-4" /> {t('listing.company_website')}
+                                </a>
                             )}
 
                             <div className="contacts-grid">

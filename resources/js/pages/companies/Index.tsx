@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { CalendarDays, FileText, Handshake, Search, Star } from 'lucide-react';
+import { CalendarDays, FileText, Globe, Handshake, Search, Star } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { t, tChoice } from '@/lib/i18n';
@@ -21,6 +21,7 @@ interface CompanyRow {
     created_at: string | null;
     initials: string;
     logo: string | null;
+    website: string | null;
 }
 
 /**
@@ -250,9 +251,21 @@ export default function CompaniesIndex({
                                             style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}
                                         >
                                             <span className="t-sm muted">{tChoice('companies_page.reviews', c.reviews_count)}</span>
-                                            <Link href={routes.company(c.slug)} className="btn btn-outline btn-sm">
-                                                {t('companies_page.open_card')}
-                                            </Link>
+                                            <span className="row" style={{ gap: 8 }}>
+                                                {c.website && (
+                                                    <a
+                                                        href={c.website}
+                                                        target="_blank"
+                                                        rel="noopener nofollow"
+                                                        className="btn btn-ghost btn-sm"
+                                                    >
+                                                        <Globe aria-hidden className="size-4" /> {t('companies_page.website')}
+                                                    </a>
+                                                )}
+                                                <Link href={routes.company(c.slug)} className="btn btn-outline btn-sm">
+                                                    {t('companies_page.open_card')}
+                                                </Link>
+                                            </span>
                                         </div>
                                     </article>
                                 ))}

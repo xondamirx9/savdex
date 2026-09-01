@@ -441,6 +441,7 @@ return [
         'similar' => '相似信息',
         'company_verified' => '企业已核验',
         'rating' => '评分 :rating',
+        'company_website' => '公司网站',
         'reviews' => ':count 条评价',
         'respond' => '发送询价',
         'respond_hint' => '直接在平台上给公司留言——对话将保存在您账户的“聊天”栏目中。',
@@ -596,6 +597,7 @@ return [
         'trust' => '资料完整度',
         'reviews' => ':count 条评价',
         'open_card' => '查看名片',
+        'website' => '网站',
         'pages' => '页码',
     ],
 
