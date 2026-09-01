@@ -282,8 +282,8 @@ class CatalogController extends Controller
         return Inertia::render('catalog/Show', [
             'listing' => [
                 'id' => $listing->id,
-                'title' => $listing->title,
-                'description' => $listing->description,
+                'title' => $listing->localizedTitle(),
+                'description' => $listing->localizedDescription(),
                 'type' => $listing->type,
                 'category' => $listing->category?->name(),
                 'price' => $listing->price !== null ? (float) $listing->price : null,

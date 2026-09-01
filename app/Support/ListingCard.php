@@ -25,8 +25,10 @@ final class ListingCard
         return [
             'id' => $listing->id,
             'slug' => $listing->slug,
-            'title' => $listing->title,
-            'excerpt' => str($listing->description ?? '')->limit(140)->toString(),
+            // На языке посетителя: оригинал русский, перевод появляется
+            // фоном после публикации (TranslateListing)
+            'title' => $listing->localizedTitle(),
+            'excerpt' => str($listing->localizedDescription() ?? '')->limit(140)->toString(),
             'type' => $listing->type,
             'category' => $listing->category?->name(),
             'price' => $listing->price !== null ? (float) $listing->price : null,

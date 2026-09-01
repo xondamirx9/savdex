@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Jobs\TranslateListing;
 use App\Models\AudienceView;
+use App\Models\Listing;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -60,3 +62,24 @@ Schedule::call(fn () => AudienceView::query()
     ->name('audience-views:prune')
     ->dailyAt('04:00')
     ->onOneServer();
+
+/*
+ * Добор переводов объявлений: несложившиеся при публикации (сеть,
+ * лимиты переводчика) и опубликованные до появления функции.
+ * Небольшими порциями — переводчик внешний и бесплатный.
+ */
+Schedule::call(function (): void {
+    if (! config('services.machine_translation.enabled')) {
+        return;
+    }
+
+    Listing::query()
+        ->where('status', Listing::STATUS_ACTIVE)
+        ->where(fn ($q) => $q
+            ->whereNull('title_i18n')
+            ->orWhereIn('title_i18n', ['[]', '{}']))
+        ->orderBy('id')
+        ->limit(20)
+        ->pluck('id')
+        ->each(fn (int $id) => TranslateListing::dispatch($id));
+})->hourly()->name('listings-translate-catchup')->onOneServer();
