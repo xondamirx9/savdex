@@ -14,6 +14,7 @@ use App\Services\Payments\PaymentGatewayException;
 use App\Services\Payments\PaymentGatewayManager;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
@@ -230,6 +231,39 @@ class UzumCheckoutTest extends TestCase
         config(['payments.providers.uzum.enabled' => false]);
 
         $this->deliverCallback(['operationState' => 'SUCCESS'])->assertNotFound();
+    }
+
+    // ── Недоступность Uzum ───────────────────────────────────
+
+    #[Test]
+    public function network_failure_becomes_gateway_exception(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 6: Could not resolve host'));
+
+        $this->expectException(PaymentGatewayException::class);
+        $this->expectExceptionMessage('недоступен');
+
+        app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+    }
+
+    #[Test]
+    public function buy_button_survives_gateway_outage(): void
+    {
+        // Uzum лежит или не резолвится — покупатель получает мягкий
+        // откат на оплату по счёту, а не страницу 500
+        Http::fake(fn () => throw new ConnectionException('cURL error 28: Connection timed out'));
+
+        $user = User::factory()->for($this->company)->create(['email_verified_at' => now()]);
+        $plan = Plan::where('code', '!=', Plan::FREE)->where('is_active', true)->firstOrFail();
+
+        $this->actingAs($user)
+            ->from('/cabinet/billing')
+            ->post('/cabinet/billing/order', ['kind' => 'plan', 'id' => $plan->id])
+            ->assertRedirect('/cabinet/billing')
+            ->assertSessionHas('warning');
+
+        // Счёт при этом остаётся оплачиваемым переводом
+        $this->assertSame('pending', $this->payment->refresh()->status);
     }
 
     // ── Общее ────────────────────────────────────────────────

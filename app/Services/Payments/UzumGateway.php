@@ -6,6 +6,7 @@ namespace App\Services\Payments;
 
 use App\Models\Payment;
 use App\Models\PaymentMethod;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Http\Request;
@@ -66,7 +67,7 @@ class UzumGateway implements PaymentGateway
 
         $returnUrl = (string) ($this->config['return_url'] ?? '');
 
-        $result = $this->unwrap($this->request()->post('/api/v1/payment/register', [
+        $result = $this->post('/api/v1/payment/register', [
             'amount' => $payment->amountMinor(),
             'clientId' => (string) $payment->company_id,
             'currency' => self::CURRENCY_UZS,
@@ -80,7 +81,7 @@ class UzumGateway implements PaymentGateway
                 'operationType' => 'PAYMENT',
                 'payType' => 'ONE_STEP',
             ],
-        ]));
+        ]);
 
         $orderId = $result['orderId'] ?? null;
         $payUrl = $this->paymentPageUrl($result);
@@ -182,9 +183,9 @@ class UzumGateway implements PaymentGateway
 
         try {
             $this->require(['base_url', 'terminal_id', 'secret_key']);
-            $result = $this->unwrap($this->request()->post('/api/v1/payment/getOrderStatus', [
+            $result = $this->post('/api/v1/payment/getOrderStatus', [
                 'orderId' => $orderId,
-            ]));
+            ]);
         } catch (PaymentGatewayException $e) {
             Log::warning('payment.uzum.status_check_failed', ['order' => $orderId, 'message' => $e->getMessage()]);
 
@@ -200,6 +201,24 @@ class UzumGateway implements PaymentGateway
         }
 
         return false;
+    }
+
+    /**
+     * POST к API Uzum: сетевые сбои (DNS, таймаут, обрыв) — тоже отказ
+     * шлюза, а не ошибка сервера. ConnectionException превращается в
+     * PaymentGatewayException, и покупатель получает мягкий откат на
+     * оплату по счёту вместо страницы 500.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function post(string $path, array $body): array
+    {
+        try {
+            return $this->unwrap($this->request()->post($path, $body));
+        } catch (ConnectionException $e) {
+            throw new PaymentGatewayException("Uzum недоступен: {$e->getMessage()}");
+        }
     }
 
     private function request(): PendingRequest
