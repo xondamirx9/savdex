@@ -59,17 +59,21 @@ return [
             'confirm_timeout_minutes' => (int) env('PAYMENTS_UZUM_CONFIRM_TIMEOUT', 30),
 
             // Боевой/тестовый контур переключается флагом sandbox —
-            // на тесте бьём по sandbox-URL и тестовыми ключами
+            // на тесте бьём по sandbox-URL и тестовыми ключами.
+            // base_url — адрес API Uzum Checkout (тестовый или боевой),
+            // его выдаёт менеджер Uzum вместе с терминалом и ключом
             'sandbox' => (bool) env('PAYMENTS_UZUM_SANDBOX', true),
             'base_url' => env('PAYMENTS_UZUM_BASE_URL'),
 
-            // Идентификаторы мерчанта из кабинета Uzum
+            // Идентификаторы мерчанта из кабинета Uzum.
+            // terminal_id уходит в заголовок X-Terminal-Id запросов
+            // Checkout; service_id сверяется в колбэках Merchant API
             'merchant_id' => env('PAYMENTS_UZUM_MERCHANT_ID'),
             'service_id' => env('PAYMENTS_UZUM_SERVICE_ID'),
             'terminal_id' => env('PAYMENTS_UZUM_TERMINAL_ID'),
 
-            // Секрет для подписи исходящих запросов и проверки колбэков.
-            // В репозитории пусто — задаётся только в окружении сервера
+            // API-ключ Uzum Checkout — заголовок X-API-Key исходящих
+            // запросов. В репозитории пусто — задаётся только в окружении
             'secret_key' => env('PAYMENTS_UZUM_SECRET_KEY'),
             'webhook_secret' => env('PAYMENTS_UZUM_WEBHOOK_SECRET'),
 
