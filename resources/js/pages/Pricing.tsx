@@ -2,68 +2,64 @@ import { Link } from '@/components/ui/Link';
 import { Check, X } from 'lucide-react';
 import { formatNumber } from '@/components/cabinet';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 interface PricingPlan {
     code: string;
     name: string;
     price_uzs: number;
+    price_usd: number;
     listings_limit: number | null;
     contacts_limit: number | null;
     responses_limit: number | null;
     promo_units: number;
     listing_days: number;
+    verification_days: number;
+    sees_interested_names: boolean;
     has_microsite: boolean;
     advanced_analytics: boolean;
 }
 
 /** Кому адресован тариф — витринная подпись, в базе ей не место. */
-const NOTES: Record<string, string> = {
-    free: 'Попробовать площадку',
-    flash: 'Небольшая компания',
-    business: 'Оптовик и производитель',
-    premium: 'Максимальная видимость',
-    vip: 'Всё включено, максимум охвата',
-};
+const NOTE_CODES = ['free', 'flash', 'business', 'premium', 'vip'];
 
-/** Русское склонение: 4 объявления, 15 объявлений, 50 контактов. */
-function plural(n: number, one: string, few: string, many: string): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-
-    return many;
-}
-
-/** Пункты карточки собираются из лимитов тарифа — тех же, что в кабинете. */
+/**
+ * Пункты карточки собираются из лимитов тарифа — тех же, что в кабинете.
+ * Подписи — из словаря: страница обязана говорить на языке посетителя,
+ * как и весь каталог.
+ */
 function features(p: PricingPlan): [string, boolean][] {
     return [
         [
             p.listings_limit === null
-                ? 'Объявления без ограничений'
-                : `${p.listings_limit} активных ${plural(p.listings_limit, 'объявление', 'объявления', 'объявлений')}`,
+                ? t('pricing.listings_unlimited')
+                : tChoice('pricing.listings_count', p.listings_limit),
             true,
         ],
         [
             p.contacts_limit === null
-                ? 'Контакты без ограничений'
-                : `${p.contacts_limit} ${plural(p.contacts_limit, 'контакт', 'контакта', 'контактов')} в месяц`,
+                ? t('pricing.contacts_unlimited')
+                : tChoice('pricing.contacts_count', p.contacts_limit),
             true,
         ],
         [
             p.responses_limit === null
-                ? 'Отклики без ограничений'
+                ? t('pricing.responses_unlimited')
                 : p.responses_limit > 0
-                  ? `${p.responses_limit} ${plural(p.responses_limit, 'отклик', 'отклика', 'откликов')} в месяц`
-                  : 'Отклики',
+                  ? tChoice('pricing.responses_count', p.responses_limit)
+                  : t('pricing.responses_off'),
             p.responses_limit === null || p.responses_limit > 0,
         ],
-        [p.promo_units > 0 ? `${p.promo_units} продвижений в месяц` : 'Продвижение', p.promo_units > 0],
-        [`Срок показа ${p.listing_days} дней`, true],
         [
-            p.advanced_analytics ? 'Мини-сайт и расширенная аналитика' : 'Мини-сайт компании',
+            p.promo_units > 0 ? tChoice('pricing.promo_count', p.promo_units) : t('pricing.promo_off'),
+            p.promo_units > 0,
+        ],
+        [tChoice('pricing.listing_days', p.listing_days), true],
+        [tChoice('pricing.verification_days', p.verification_days), true],
+        [t('pricing.sees_names'), p.sees_interested_names],
+        [
+            p.advanced_analytics ? t('pricing.microsite_analytics') : t('pricing.microsite'),
             p.has_microsite,
         ],
     ];
@@ -71,19 +67,15 @@ function features(p: PricingPlan): [string, boolean][] {
 
 export default function Pricing({ plans }: { plans: PricingPlan[] }) {
     return (
-        <PublicLayout
-            title="Тарифы"
-            description="Размещение объявлений бесплатно. Тарифы Free, Flash, Business, Premium и VIP. Оплата Uzcard, Humo, Visa и Mastercard."
-        >
+        <PublicLayout title={t('seo.pricing_title')} description={t('seo.pricing_description')}>
             <section className="section--tight" style={{ background: 'var(--primary-50)' }}>
                 <div className="container center">
                     {/* Заголовок обязан сходиться с тарифами ниже: лимиты
                         на число и срок объявлений — это тоже плата
                         за размещение, отрицать её нельзя (аудит, п. 4.4) */}
-                    <h1 className="t-h1">Начните бесплатно — платите, когда нужно больше</h1>
+                    <h1 className="t-h1">{t('pricing.hero_title')}</h1>
                     <p className="t-lead mt-16" style={{ maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
-                        На бесплатном тарифе есть объявления и стартовый лимит открытий контактов.
-                        Платные тарифы добавляют объявления, открытия, отклики и продвижение в выдаче.
+                        {t('pricing.hero_lead')}
                     </p>
                 </div>
             </section>
@@ -96,13 +88,21 @@ export default function Pricing({ plans }: { plans: PricingPlan[] }) {
 
                             return (
                                 <div key={p.code} className={highlighted ? 'plan is-hi' : 'plan'}>
-                                    {highlighted && <span className="plan-tag">Выбирают чаще всего</span>}
+                                    {highlighted && <span className="plan-tag">{t('pricing.popular')}</span>}
                                     <h2 className="t-h3">{p.name}</h2>
-                                    <p className="t-sm muted">{NOTES[p.code] ?? ''}</p>
+                                    <p className="t-sm muted">
+                                        {NOTE_CODES.includes(p.code) ? t(`pricing.note_${p.code}`) : ''}
+                                    </p>
                                     <div className="plan-price">
-                                        {formatNumber(p.price_uzs)} <small>сум</small>
+                                        {formatNumber(p.price_uzs)} <small>{t('catalog.currency_uzs')}</small>
                                     </div>
-                                    <p className="t-caption muted">{p.price_uzs > 0 ? 'в месяц' : 'навсегда'}</p>
+                                    {/* Долларовый эквивалент: тариф задан в долларах,
+                                        сумовая цена пересчитана по курсу ЦБ */}
+                                    <p className="t-caption muted">
+                                        {p.price_uzs > 0
+                                            ? `${t('pricing.usd_approx', { price: formatNumber(p.price_usd) })} ${t('pricing.per_month')}`
+                                            : t('pricing.forever')}
+                                    </p>
                                     <ul>
                                         {features(p).map(([label, on]) => (
                                             <li key={label} className={on ? undefined : 'off'}>
@@ -119,15 +119,13 @@ export default function Pricing({ plans }: { plans: PricingPlan[] }) {
                                         href={routes.register}
                                         className={`btn btn-block ${highlighted ? 'btn-primary' : 'btn-secondary'}`}
                                     >
-                                        Выбрать
+                                        {t('pricing.choose')}
                                     </Link>
                                 </div>
                             );
                         })}
                     </div>
-                    <p className="center mt-24 t-sm muted">
-                        Оплата картой Uzcard, Humo, Visa и Mastercard. Отменить подписку можно в кабинете в один клик.
-                    </p>
+                    <p className="center mt-24 t-sm muted">{t('pricing.payment_note')}</p>
                 </div>
             </section>
         </PublicLayout>

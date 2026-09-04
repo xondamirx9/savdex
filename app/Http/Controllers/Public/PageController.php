@@ -160,11 +160,17 @@ class PageController extends Controller
                     'code' => $p->code,
                     'name' => $p->name,
                     'price_uzs' => $p->priceUzs($rate),
+                    // Долларовая цена — из тарифа как задана (подход
+                    // InvestIn): сумовая выводится из неё по курсу,
+                    // и витрина показывает обе
+                    'price_usd' => (float) $p->price_usd,
                     'listings_limit' => $p->listings_limit,
                     'contacts_limit' => $p->contacts_limit,
                     'responses_limit' => $p->responses_limit,
                     'promo_units' => $p->promo_units,
                     'listing_days' => $p->listing_days,
+                    'verification_days' => $p->verification_days,
+                    'sees_interested_names' => $p->sees_interested_names,
                     'has_microsite' => $p->has_microsite,
                     'advanced_analytics' => $p->advanced_analytics,
                 ]),
