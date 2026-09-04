@@ -67,6 +67,7 @@ function menu(): MenuItem[] {
         },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
+        { href: routes.pricing, label: t('nav.pricing') },
         { href: routes.about, label: t('nav.about_us') },
     ];
 }
