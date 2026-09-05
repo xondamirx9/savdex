@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Company;
 use App\Models\Listing;
 use App\Models\NewsPost;
+use App\Models\Tender;
 use App\Support\Locales;
 use Illuminate\Http\Response;
 
@@ -57,6 +58,10 @@ class SitemapController extends Controller
             $parts[] = 'news';
         }
 
+        if (Tender::query()->published()->exists()) {
+            $parts[] = 'tenders';
+        }
+
         $xml = view('sitemap.index', [
             'parts' => array_map(fn (string $p): string => url("/sitemap-{$p}.xml"), $parts),
             'lastmod' => now()->toAtomString(),
@@ -72,6 +77,7 @@ class SitemapController extends Controller
             $name === 'categories' => $this->categories(),
             $name === 'companies' => $this->companies(),
             $name === 'news' => $this->news(),
+            $name === 'tenders' => $this->tenders(),
             (bool) preg_match('/^listings-(\d+)$/', $name, $m) => $this->listings((int) $m[1]),
             default => null,
         };
@@ -134,6 +140,7 @@ class SitemapController extends Controller
             ['loc' => url('/pricing'), 'priority' => '0.7', 'changefreq' => 'monthly'],
             ['loc' => url('/about'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/news'), 'priority' => '0.6', 'changefreq' => 'weekly'],
+            ['loc' => url('/tenders'), 'priority' => '0.8', 'changefreq' => 'daily'],
             // Разделы из подвала: индексируемые страницы, которых
             // роботу иначе не найти иначе как по ссылкам с витрины
             ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],
@@ -221,6 +228,21 @@ class SitemapController extends Controller
                 'lastmod' => $n->updated_at?->toAtomString(),
                 'priority' => '0.5',
                 'changefreq' => 'monthly',
+            ])
+            ->all();
+    }
+
+    /** @return list<array<string, string|null>> */
+    private function tenders(): array
+    {
+        return Tender::query()
+            ->published()
+            ->get(['slug', 'updated_at'])
+            ->map(fn (Tender $t): array => [
+                'loc' => url('/tenders/'.$t->slug),
+                'lastmod' => $t->updated_at?->toAtomString(),
+                'priority' => '0.6',
+                'changefreq' => 'weekly',
             ])
             ->all();
     }

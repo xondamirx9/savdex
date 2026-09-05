@@ -65,6 +65,7 @@ function menu(): MenuItem[] {
             label: t('nav.rfq'),
             match: (path, search) => path.startsWith(routes.catalog) && search.includes('type=demand'),
         },
+        { href: routes.tenders, label: t('nav.tenders') },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },

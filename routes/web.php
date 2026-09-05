@@ -36,6 +36,7 @@ use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
+use App\Http\Controllers\Public\TenderController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
@@ -79,6 +80,10 @@ Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])
 
 Route::get('/news', [NewsController::class, 'index'])->name('news');
 Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
+
+// Тендеры — закупки внешних заказчиков, размещённые площадкой
+Route::get('/tenders', [TenderController::class, 'index'])->name('tenders');
+Route::get('/tenders/{slug}', [TenderController::class, 'show'])->name('tenders.show');
 
 /*
  * Колбэк платёжного провайдера.

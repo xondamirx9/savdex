@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Jobs\TranslateListing;
+use App\Jobs\TranslateTender;
 use App\Models\AudienceView;
 use App\Models\Listing;
+use App\Models\Tender;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -83,3 +85,19 @@ Schedule::call(function (): void {
         ->pluck('id')
         ->each(fn (int $id) => TranslateListing::dispatch($id));
 })->hourly()->name('listings-translate-catchup')->onOneServer();
+
+// Тендеры переводятся по той же схеме, что объявления
+Schedule::call(function (): void {
+    if (! config('services.machine_translation.enabled')) {
+        return;
+    }
+
+    Tender::query()
+        ->where('status', Tender::STATUS_PUBLISHED)
+        ->where(fn ($q) => $q->whereNull('title_i18n')
+            ->orWhereIn('title_i18n', ['[]', '{}']))
+        ->orderBy('id')
+        ->limit(20)
+        ->pluck('id')
+        ->each(fn (int $id) => TranslateTender::dispatch($id));
+})->hourly()->name('tenders-translate-catchup')->onOneServer();

@@ -28,6 +28,7 @@ class PublicPagesTest extends TestCase
             'главная' => ['/', 'Home'],
             'о компании' => ['/about', 'About'],
             'новости' => ['/news', 'news/Index'],
+            'тендеры' => ['/tenders', 'tenders/Index'],
             'тарифы' => ['/pricing', 'Pricing'],
             'каталог' => ['/catalog', 'catalog/Index'],
             'компании' => ['/companies', 'companies/Index'],
