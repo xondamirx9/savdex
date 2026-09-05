@@ -15,6 +15,8 @@ export const routes = {
     listing: (slug: string) => `/listing/${slug}`,
     news: '/news',
     newsPost: (slug: string) => `/news/${slug}`,
+    tenders: '/tenders',
+    tender: (slug: string) => `/tenders/${slug}`,
     terms: '/terms',
     payment: '/payment',
     security: '/security',
