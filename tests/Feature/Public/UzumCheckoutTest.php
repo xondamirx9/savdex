@@ -266,6 +266,58 @@ class UzumCheckoutTest extends TestCase
         $this->assertSame('pending', $this->payment->refresh()->status);
     }
 
+    // ── Прозвон без платежа ──────────────────────────────────
+
+    #[Test]
+    public function ping_reports_success_when_api_answers_order_not_found(): void
+    {
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/getOrderStatus' => Http::response([
+                'errorCode' => 3005,
+                'message' => 'Платеж с указанным paymentId не найден',
+            ]),
+        ]);
+
+        $this->artisan('savdex:uzum-ping')
+            ->expectsOutputToContain('OK: API Uzum доступен')
+            ->assertExitCode(0);
+    }
+
+    #[Test]
+    public function ping_explains_timeout(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 28: Connection timed out'));
+
+        $this->artisan('savdex:uzum-ping')
+            ->expectsOutputToContain('белом списке')
+            ->assertExitCode(1);
+    }
+
+    #[Test]
+    public function ping_explains_rejected_keys(): void
+    {
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/getOrderStatus' => Http::response([
+                'errorCode' => 1006,
+                'message' => 'Ошибка доступа',
+            ]),
+        ]);
+
+        $this->artisan('savdex:uzum-ping')
+            ->expectsOutputToContain('ключи отвергнуты')
+            ->assertExitCode(1);
+    }
+
+    #[Test]
+    public function ping_does_not_print_secrets(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+
+        $this->artisan('savdex:uzum-ping')
+            ->doesntExpectOutputToContain(self::API_KEY)
+            ->assertExitCode(1);
+    }
+
     // ── Общее ────────────────────────────────────────────────
 
     /** Счёт зарегистрирован в Checkout: orderId сохранён как external_id. */
