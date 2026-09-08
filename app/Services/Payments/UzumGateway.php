@@ -261,6 +261,8 @@ class UzumGateway implements PaymentGateway
 
     private function request(): PendingRequest
     {
+        $proxy = trim((string) ($this->config['proxy'] ?? ''));
+
         return Http::baseUrl(rtrim((string) $this->config['base_url'], '/'))
             ->withHeaders([
                 'X-Terminal-Id' => (string) $this->config['terminal_id'],
@@ -269,7 +271,9 @@ class UzumGateway implements PaymentGateway
             ])
             ->acceptJson()
             ->connectTimeout(5)
-            ->timeout(15);
+            ->timeout(15)
+            // Статический адрес для белого списка Uzum (см. config)
+            ->when($proxy !== '', fn (PendingRequest $r) => $r->withOptions(['proxy' => $proxy]));
     }
 
     /** Язык платёжной формы — из локали покупателя; форма знает три. */
