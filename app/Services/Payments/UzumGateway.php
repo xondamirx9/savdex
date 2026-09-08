@@ -12,6 +12,7 @@ use Illuminate\Http\Client\Response as HttpResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -170,6 +171,43 @@ class UzumGateway implements PaymentGateway
         // TODO(uzum-checkout): /api/v1/acquiring/refund с X-Operation-Id
         // (ключ идемпотентности) — когда возвраты понадобятся в админке.
         throw new PaymentGatewayException('Возврат через Uzum ещё не подключён — оформите возврат в кабинете Uzum');
+    }
+
+    /**
+     * Прозвон без денег: доступен ли API и принимает ли он наши ключи.
+     *
+     * Спрашивается статус заведомо несуществующего заказа. Ответ
+     * «платёж не найден» (3005/3035) означает, что сеть открыта и
+     * ключи приняты; ошибки 1xxx — сеть открыта, ключи отвергнуты;
+     * таймаут — наш адрес не в белом списке Uzum.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function probe(): array
+    {
+        try {
+            $this->require(['base_url', 'terminal_id', 'secret_key']);
+            $this->post('/api/v1/payment/getOrderStatus', ['orderId' => (string) Str::uuid()]);
+        } catch (PaymentGatewayException $e) {
+            $message = $e->getMessage();
+
+            if (preg_match('/код (3005|3035)\b/u', $message)) {
+                return ['ok' => true, 'message' => 'API Uzum доступен, терминал и ключ приняты ('.$message.')'];
+            }
+
+            if (preg_match('/код 1\d{3}\b/u', $message)) {
+                return ['ok' => false, 'message' => 'API доступен, но ключи отвергнуты — проверьте PAYMENTS_UZUM_TERMINAL_ID и PAYMENTS_UZUM_SECRET_KEY ('.$message.')'];
+            }
+
+            if (str_contains($message, 'недоступен')) {
+                return ['ok' => false, 'message' => 'До API Uzum не достучаться — наш адрес не в белом списке или неверен PAYMENTS_UZUM_BASE_URL ('.$message.')'];
+            }
+
+            return ['ok' => false, 'message' => $message];
+        }
+
+        // errorCode 0 на несуществующий заказ — странно, но доступ есть
+        return ['ok' => true, 'message' => 'API Uzum доступен, ключи приняты'];
     }
 
     // ── Внутреннее ───────────────────────────────────────────
