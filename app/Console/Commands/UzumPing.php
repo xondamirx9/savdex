@@ -35,6 +35,7 @@ class UzumPing extends Command
         $this->line('  PAYMENTS_UZUM_SECRET_KEY        = '.self::mask((string) ($config['secret_key'] ?? '')));
         $this->line('  PAYMENTS_UZUM_CALLBACK_LOGIN    = '.self::mask((string) ($config['callback_login'] ?? '')));
         $this->line('  PAYMENTS_UZUM_CALLBACK_PASSWORD = '.self::mask((string) ($config['callback_password'] ?? '')));
+        $this->line('  PAYMENTS_UZUM_PROXY             = '.self::maskProxy((string) ($config['proxy'] ?? '')));
         $this->newLine();
 
         if (! $config['enabled']) {
@@ -72,6 +73,16 @@ class UzumPing extends Command
         $this->error('СБОЙ: '.$result['message']);
 
         return self::FAILURE;
+    }
+
+    /** Адрес прокси печатается без пароля: host:port виден, пароль — нет. */
+    private static function maskProxy(string $value): string
+    {
+        if ($value === '') {
+            return '(пусто — прямое соединение)';
+        }
+
+        return (string) preg_replace('~//([^:@/]+):[^@]*@~', '//$1:***@', $value);
     }
 
     /** Секреты в выводе не печатаются целиком — только край. */

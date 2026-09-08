@@ -266,6 +266,31 @@ class UzumCheckoutTest extends TestCase
         $this->assertSame('pending', $this->payment->refresh()->status);
     }
 
+    #[Test]
+    public function requests_go_through_static_ip_proxy_when_configured(): void
+    {
+        config(['payments.providers.uzum.proxy' => 'http://savdex:secret@proxy.example:3128']);
+
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        $result = app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+
+        $this->assertSame(self::PAY_URL, $result['redirect_url']);
+        Http::assertSentCount(1);
+
+        // Пароль прокси в выводе прозвона не печатается
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+        $this->artisan('savdex:uzum-ping')
+            ->expectsOutputToContain('proxy.example:3128')
+            ->doesntExpectOutputToContain('secret')
+            ->assertExitCode(1);
+    }
+
     // ── Прозвон без платежа ──────────────────────────────────
 
     #[Test]
