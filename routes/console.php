@@ -7,6 +7,9 @@ use App\Jobs\TranslateTender;
 use App\Models\AudienceView;
 use App\Models\Listing;
 use App\Models\Tender;
+use App\Services\Payments\PaymentGatewayManager;
+use App\Services\Payments\UzumGateway;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -101,3 +104,30 @@ Schedule::call(function (): void {
         ->pluck('id')
         ->each(fn (int $id) => TranslateTender::dispatch($id));
 })->hourly()->name('tenders-translate-catchup')->onOneServer();
+
+/*
+ * Прозвон Uzum Checkout: доступен ли API с нашего адреса (прямо или
+ * через прокси со статическим IP) и приняты ли ключи. Касса при сбое
+ * молча откатывается на оплату по счёту, и без проверки об упавшем
+ * прокси или отозванном ключе узнали бы по отсутствию платежей.
+ * Запись в лог — LOG_CHANNEL=stderr, то есть видно в логах Render.
+ */
+Schedule::call(function (): void {
+    if (! config('payments.providers.uzum.enabled') || ! config('payments.providers.uzum.checkout')) {
+        return;
+    }
+
+    $gateway = app(PaymentGatewayManager::class)->for('uzum');
+
+    if (! $gateway instanceof UzumGateway) {
+        return;
+    }
+
+    $result = $gateway->probe();
+
+    if ($result['ok']) {
+        Log::info('payment.uzum.probe_ok', ['message' => $result['message']]);
+    } else {
+        Log::error('payment.uzum.probe_failed', ['message' => $result['message']]);
+    }
+})->hourly()->name('uzum-probe')->onOneServer();
