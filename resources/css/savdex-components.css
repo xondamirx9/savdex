@@ -209,7 +209,7 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .logo--inverted .logo-img,.footer .logo-img{background:#fff;border-radius:9px;padding:3px}
 .nav{display:flex;align-items:center;gap:4px;margin-left:8px}
 .nav a{padding:9px 13px;border-radius:var(--r-btn);font-size:15px;font-weight:500;color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
-.nav a:hover{background:var(--bg);color:var(--text);text-decoration:none}
+.nav a:hover{background:transparent;color:var(--primary-600);text-decoration:none}
 .nav a[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
 .header-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
 
@@ -256,7 +256,7 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .nav-sub-btn{display:flex;align-items:center;gap:5px;padding:9px 13px;border-radius:var(--r-btn);
   font-size:15px;font-weight:500;color:var(--text-muted);white-space:nowrap;
   transition:background var(--t-fast),color var(--t-fast)}
-.nav-sub-btn:hover{background:var(--bg);color:var(--text)}
+.nav-sub-btn:hover{background:transparent;color:var(--primary-600)}
 .nav-sub-btn[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
 .nav-sub-btn svg{transition:transform var(--t-mid)}
 .nav-sub-btn[aria-expanded="true"] svg{transform:rotate(180deg)}
