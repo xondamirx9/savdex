@@ -112,11 +112,16 @@ return [
          *
          * Без 'url': после переключения сайта DB_URL указывает на
          * PostgreSQL, а блок sqlite выше этот адрес читает — источник
-         * молча стал бы приёмником. Путь задаётся SOURCE_DB_DATABASE.
+         * молча стал бы приёмником.
+         *
+         * Путь по умолчанию — из DB_DATABASE: пока сайт ещё работает на
+         * SQLite, это и есть переезжающая база, и на хостинге не нужно
+         * вспоминать её путь. SOURCE_DB_DATABASE перекрывает его, когда
+         * источник лежит в другом месте (снятая копия, локальный прогон).
          */
         'sqlite_source' => [
             'driver' => 'sqlite',
-            'database' => env('SOURCE_DB_DATABASE', database_path('database.sqlite')),
+            'database' => env('SOURCE_DB_DATABASE', env('DB_DATABASE', database_path('database.sqlite'))),
             'prefix' => '',
             'foreign_key_constraints' => false,
             'busy_timeout' => 5000,
