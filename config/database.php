@@ -106,6 +106,51 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        /*
+         * Источник разового переезда: файл SQLite, который до переезда
+         * был боевой базой (на Render — /var/data/database.sqlite).
+         *
+         * Без 'url': после переключения сайта DB_URL указывает на
+         * PostgreSQL, а блок sqlite выше этот адрес читает — источник
+         * молча стал бы приёмником.
+         *
+         * Путь по умолчанию — из DB_DATABASE: пока сайт ещё работает на
+         * SQLite, это и есть переезжающая база, и на хостинге не нужно
+         * вспоминать её путь. SOURCE_DB_DATABASE перекрывает его, когда
+         * источник лежит в другом месте (снятая копия, локальный прогон).
+         */
+        'sqlite_source' => [
+            'driver' => 'sqlite',
+            'database' => env('SOURCE_DB_DATABASE', env('DB_DATABASE', database_path('database.sqlite'))),
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+            'busy_timeout' => 5000,
+            'journal_mode' => 'wal',
+            'synchronous' => 'normal',
+        ],
+
+        /*
+         * Приёмник разового переезда SQLite → PostgreSQL
+         * (`php artisan savdex:copy-database`).
+         *
+         * Отдельным подключением, а не через DB_URL: этот адрес читает и
+         * блок sqlite выше, и выставленный ради приёмника DB_URL увёл бы
+         * источник в ту же базу — команда копировала бы PostgreSQL сам
+         * в себя и отчиталась бы совпадением числа строк.
+         *
+         * После переезда сайт работает на `pgsql`, а TARGET_DB_URL
+         * снимается — подключение остаётся для следующего переноса.
+         */
+        'pgsql_target' => [
+            'driver' => 'pgsql',
+            'url' => env('TARGET_DB_URL'),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('TARGET_DB_SSLMODE', 'prefer'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),
