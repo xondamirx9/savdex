@@ -35,40 +35,47 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                     </ol>
                 </nav>
 
-                {/* Колонка текста ограничена по ширине: строка длиннее 75 символов
-                    читается заметно хуже — глаз теряет начало следующей строки */}
-                <div data-reveal style={{ maxWidth: 920, marginBottom: 32, borderRadius: "var(--r-card)", overflow: "hidden" }}>
-                    <NewsCover category={post.category} image={post.image} size={72} />
+                {/* Обложка и текст рядом: картинка занимает основную часть
+                    ширины, описание идёт боковой колонкой и начинается
+                    вровень с верхом обложки. На узком экране колонки
+                    складываются: сначала картинка, потом текст. */}
+                <div className="news-detail">
+                    <div className="news-detail-media" data-reveal>
+                        <NewsCover category={post.category} image={post.image} size={72} />
+                    </div>
+
+                    <article className="news-detail-body">
+                        <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
+                            <span className="badge badge-supply">{post.category}</span>
+                            <span className="t-caption muted row" style={{ gap: 6 }}>
+                                <CalendarDays aria-hidden className="size-3.5" /> {post.date}
+                            </span>
+                            <span className="t-caption muted row" style={{ gap: 6 }}>
+                                <Clock aria-hidden className="size-3.5" /> {post.read}
+                            </span>
+                        </div>
+
+                        <h1 className="t-h1">{post.title}</h1>
+                        <p className="t-lead mt-16">{post.excerpt}</p>
+
+                        <div className="mt-32">
+                            {/* pre-line сохраняет переносы внутри абзаца: редактор
+                                разбивает текст пустой строкой, но одиночный перенос
+                                в списке или адресе тоже осмысленный */}
+                            {post.body.map((p, i) => (
+                                <p key={i} className="t-body" style={{ marginBottom: 18, whiteSpace: 'pre-line' }}>
+                                    {p}
+                                </p>
+                            ))}
+                        </div>
+
+                        <div className="mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
+                            <Link href={routes.news} className="btn btn-secondary">
+                                <ArrowLeft aria-hidden className="size-4" /> Все новости
+                            </Link>
+                        </div>
+                    </article>
                 </div>
-
-                <article style={{ maxWidth: '72ch' }}>
-                    <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
-                        <span className="badge badge-supply">{post.category}</span>
-                        <span className="t-caption muted row" style={{ gap: 6 }}>
-                            <CalendarDays aria-hidden className="size-3.5" /> {post.date}
-                        </span>
-                        <span className="t-caption muted row" style={{ gap: 6 }}>
-                            <Clock aria-hidden className="size-3.5" /> {post.read}
-                        </span>
-                    </div>
-
-                    <h1 className="t-h1">{post.title}</h1>
-                    <p className="t-lead mt-16">{post.excerpt}</p>
-
-                    <div className="mt-32">
-                        {post.body.map((p) => (
-                            <p key={p} className="t-body" style={{ marginBottom: 18 }}>
-                                {p}
-                            </p>
-                        ))}
-                    </div>
-
-                    <div className="mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-                        <Link href={routes.news} className="btn btn-secondary">
-                            <ArrowLeft aria-hidden className="size-4" /> Все новости
-                        </Link>
-                    </div>
-                </article>
 
                 {related.length > 0 && (
                     <section className="mt-48">

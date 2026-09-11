@@ -477,6 +477,10 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   background:var(--primary-700);color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:var(--r-pill);white-space:nowrap}
 .plan-price{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em;margin:12px 0 2px}
 .plan-price small{font-size:15px;font-weight:500;color:var(--text-muted);letter-spacing:0}
+/* Вторая валюта: та же цена в сумах. Меньше и приглушённее основной —
+   считают тариф в долларах, а платят в сумах, и обе цифры нужны */
+.plan-price-alt{font-size:15px;font-weight:600;color:var(--text-muted);
+  font-variant-numeric:tabular-nums;margin:0 0 2px}
 .plan ul{margin:20px 0;display:flex;flex-direction:column;gap:11px;flex:1}
 .plan li{display:flex;gap:9px;font-size:14px;line-height:1.5;align-items:flex-start}
 .plan li svg{flex-shrink:0;margin-top:3px;color:var(--success)}
@@ -1030,6 +1034,24 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 @media(max-width:900px){
   .news-lead{grid-template-columns:1fr}
   .news-lead .cover-art{border-radius:var(--r-card) var(--r-card) 0 0;min-height:180px}
+}
+
+/* Страница новости: обложка слева, текст справа.
+   Раньше текст шёл под обложкой узкой колонкой и половина экрана
+   пустовала. Картинка — главное на странице новости, поэтому ей
+   отдана большая доля, описанию — боковая колонка. */
+.news-detail{display:grid;grid-template-columns:minmax(0,72fr) minmax(0,28fr);
+  gap:clamp(20px,2.4vw,32px);align-items:start}
+/* Рамка обложки — та же 16/10, что в ленте: кадр вписан через
+   object-fit:cover, то есть не растягивается и не искажается */
+.news-detail-media{border-radius:var(--r-card);overflow:hidden;min-width:0}
+.news-detail-media .cover-art{border-radius:var(--r-card)}
+/* Длинное слово или ссылка в узкой колонке иначе вылезают за карточку */
+.news-detail-body{min-width:0;max-width:none;overflow-wrap:break-word}
+.news-detail-body .t-h1{font-size:clamp(24px,2vw,30px);line-height:1.22}
+@media(max-width:900px){
+  .news-detail{grid-template-columns:1fr}
+  .news-detail-body .t-h1{font-size:28px;line-height:36px}
 }
 
 /* ============================================================

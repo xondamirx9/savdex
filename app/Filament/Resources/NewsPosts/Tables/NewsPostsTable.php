@@ -25,6 +25,8 @@ class NewsPostsTable
             ->columns([
                 ImageColumn::make('image_path')
                     ->label('')
+                    // Тот же диск, что и в форме загрузки
+                    ->disk('public')
                     ->height(40)
                     ->width(64)
                     ->defaultImageUrl(null)

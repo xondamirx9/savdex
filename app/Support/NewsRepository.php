@@ -106,10 +106,42 @@ class NewsRepository
                 : '',
             'sort' => $post->sort,
             'read' => $post->readTime(),
-            'image' => filled($post->image_path) ? Storage::url($post->image_path) : null,
+            'image' => $this->imageUrl($post),
             'title' => $post->title,
             'excerpt' => $post->excerpt,
             'body' => $post->paragraphs(),
         ];
+    }
+
+    /**
+     * Адрес обложки новости.
+     *
+     * Диск указан явно. Storage::url() строит адрес по диску по умолчанию,
+     * а по умолчанию в приложении стоит local — приватное хранилище вне
+     * корня сайта. Адрес получался правдоподобным, но ничего по нему не
+     * отдавалось: на странице оставалась пустая рамка. Обложку кладёт
+     * админка на публичный диск, оттуда же её и берём — как логотипы
+     * компаний и картинки из настроек.
+     */
+    private function imageUrl(NewsPost $post): ?string
+    {
+        $path = trim((string) $post->image_path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        // Готовый адрес — внешняя ссылка или файл из public/ — идёт как есть
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        // Файла может не быть: загрузки времён эфемерного хранилища пропали
+        // с диска. Градиент по рубрике лучше значка битой картинки.
+        if (! Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 }

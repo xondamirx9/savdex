@@ -39,7 +39,7 @@ class NewsController extends Controller
             ->title($post['title'] ?? 'Новость')
             ->description($post['excerpt'] ?? null)
             ->canonical(url('/news/'.$slug))
-            ->image($post['cover'] ?? null)
+            ->image($post['image'] ?? null)
             ->type('article')
             ->schema(array_filter([
                 '@type' => 'NewsArticle',
