@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Кошелёк компании: кредиты на контакты и единицы продвижения.
@@ -29,28 +30,45 @@ class Wallet extends Model
     }
 
     /**
+     * Счета кошелька. Имя счёта подставляется в SQL как имя колонки,
+     * поэтому список закрытый, а не любая строка от вызывающего.
+     *
+     * @var list<string>
+     */
+    private const KINDS = ['credits', 'promo_units', 'contacts_used_this_period', 'responses_used_this_period'];
+
+    /**
      * Списание с записью в историю.
      *
-     * Всё внутри транзакции с блокировкой строки: два одновременных
-     * раскрытия контакта с одного аккаунта иначе спишут один кредит
-     * дважды и уведут баланс в минус.
+     * Проверка остатка — условием самого UPDATE, а не отдельным чтением:
+     * «прочитать баланс, сравнить, записать» между чтением и записью
+     * пропускает второго, и два одновременных раскрытия контакта
+     * списывали один кредит дважды. Здесь выигрывает ровно один запрос,
+     * второму база возвращает ноль изменённых строк.
+     *
+     * lockForUpdate для этого не годился: на SQLite он не блокирует
+     * ничего (см. PromoCodeService::capture), а условный UPDATE
+     * одинаково верен на обеих СУБД.
      *
      * @return bool false, если средств не хватает
      */
     public function spend(string $kind, int $amount, string $reason, ?Model $subject = null, ?int $userId = null): bool
     {
-        return DB::transaction(function () use ($kind, $amount, $reason, $subject, $userId): bool {
-            $fresh = self::query()->lockForUpdate()->find($this->id);
+        $this->assertKind($kind);
 
-            if ($fresh === null || $fresh->{$kind} < $amount) {
+        return DB::transaction(function () use ($kind, $amount, $reason, $subject, $userId): bool {
+            $affected = self::query()
+                ->whereKey($this->id)
+                ->where($kind, '>=', $amount)
+                ->decrement($kind, $amount);
+
+            if ($affected === 0) {
                 return false;
             }
 
-            $fresh->decrement($kind, $amount);
-            $fresh->refresh();
-
-            $this->record($kind, -$amount, $fresh->{$kind}, $reason, $subject, $userId);
-            $this->fill($fresh->only(['credits', 'promo_units', 'contacts_used_this_period']));
+            // Строку держит наша же транзакция: перечитанное значение —
+            // результат именно нашего списания, чужое сюда не попадёт
+            $this->syncFromStorage($kind, -$amount, $reason, $subject, $userId);
 
             return true;
         });
@@ -58,14 +76,29 @@ class Wallet extends Model
 
     public function grant(string $kind, int $amount, string $reason, ?Model $subject = null, ?int $userId = null): void
     {
-        DB::transaction(function () use ($kind, $amount, $reason, $subject, $userId): void {
-            $fresh = self::query()->lockForUpdate()->find($this->id);
-            $fresh->increment($kind, $amount);
-            $fresh->refresh();
+        $this->assertKind($kind);
 
-            $this->record($kind, $amount, $fresh->{$kind}, $reason, $subject, $userId);
-            $this->fill($fresh->only(['credits', 'promo_units', 'contacts_used_this_period']));
+        DB::transaction(function () use ($kind, $amount, $reason, $subject, $userId): void {
+            self::query()->whereKey($this->id)->increment($kind, $amount);
+
+            $this->syncFromStorage($kind, $amount, $reason, $subject, $userId);
         });
+    }
+
+    /** Запись в историю по фактическому остатку и обновление модели. */
+    private function syncFromStorage(string $kind, int $amount, string $reason, ?Model $subject, ?int $userId): void
+    {
+        $fresh = self::query()->findOrFail($this->id);
+
+        $this->record($kind, $amount, (int) $fresh->{$kind}, $reason, $subject, $userId);
+        $this->fill($fresh->only(self::KINDS));
+    }
+
+    private function assertKind(string $kind): void
+    {
+        if (! in_array($kind, self::KINDS, true)) {
+            throw new InvalidArgumentException("Неизвестный счёт кошелька: {$kind}");
+        }
     }
 
     private function record(string $kind, int $amount, int $balanceAfter, string $reason, ?Model $subject, ?int $userId): void
