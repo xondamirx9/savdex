@@ -24,6 +24,9 @@ class Plan extends Model
 {
     public const FREE = 'free';
 
+    /** Высший тариф: его объявления ведут ленту главной. */
+    public const VIP = 'vip';
+
     protected function casts(): array
     {
         return [

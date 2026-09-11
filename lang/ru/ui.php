@@ -302,6 +302,8 @@ return [
         'categories_count' => ':count товар|:count товара|:count товаров',
         'latest_title' => 'Новые товары',
         'latest_all' => 'Все товары',
+        'row_prev' => 'Назад',
+        'row_next' => 'Вперёд',
         'requests_title' => 'Запросы (RFQ)',
         'requests_all' => 'Все запросы',
         'suppliers_title' => 'Поставщики',

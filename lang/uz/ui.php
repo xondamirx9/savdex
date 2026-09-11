@@ -300,6 +300,8 @@ return [
         'categories_count' => ':count mahsulot',
         'latest_title' => 'Yangi mahsulotlar',
         'latest_all' => 'Barcha mahsulotlar',
+        'row_prev' => 'Orqaga',
+        'row_next' => 'Oldinga',
         'requests_title' => 'So‘rovlar (RFQ)',
         'requests_all' => 'Barcha so‘rovlar',
         'suppliers_title' => 'Yetkazib beruvchilar',

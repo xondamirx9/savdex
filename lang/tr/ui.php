@@ -297,6 +297,8 @@ return [
         'categories_count' => ':count ürün',
         'latest_title' => 'Yeni ürünler',
         'latest_all' => 'Tüm ürünler',
+        'row_prev' => 'Geri',
+        'row_next' => 'İleri',
         'requests_title' => 'Talepler (RFQ)',
         'requests_all' => 'Tüm talepler',
         'suppliers_title' => 'Tedarikçiler',

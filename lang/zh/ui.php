@@ -296,6 +296,8 @@ return [
         'categories_count' => ':count 件产品',
         'latest_title' => '新品上架',
         'latest_all' => '全部商品',
+        'row_prev' => '上一组',
+        'row_next' => '下一组',
         'requests_title' => '采购需求 (RFQ)',
         'requests_all' => '全部需求',
         'suppliers_title' => '供应商',
