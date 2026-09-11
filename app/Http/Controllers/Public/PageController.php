@@ -353,7 +353,20 @@ class PageController extends Controller
             ->all();
     }
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * Лента товаров на главной — витрина тарифа VIP.
+     *
+     * Попадают только объявления компаний с действующей подпиской VIP:
+     * место на первом экране продаётся вместе с тарифом, и разбавлять
+     * его бесплатными объявлениями значит продавать пустоту. Компании
+     * без VIP видны в каталоге, куда ведёт ссылка «Все товары».
+     *
+     * Условия действующей подписки повторены здесь, а не взяты из
+     * связи subscription(): та построена на latestOfMany и в подзапросе
+     * whereHas ведёт себя непредсказуемо.
+     *
+     * @return list<array<string, mixed>>
+     */
     private function latestListings(): array
     {
         return Listing::query()
@@ -363,7 +376,12 @@ class PageController extends Controller
             ->withCount(['promotions as boosted' => fn ($q) => $q->where('status', 'active')])
             ->where('status', Listing::STATUS_ACTIVE)
             ->where('type', Listing::TYPE_SUPPLY)
-            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->whereHas('company', fn ($q) => $q
+                ->where('status', Company::STATUS_ACTIVE)
+                ->whereHas('subscriptions', fn ($s) => $s
+                    ->where('status', 'active')
+                    ->where(fn ($alive) => $alive->whereNull('ends_at')->orWhere('ends_at', '>', now()))
+                    ->whereRelation('plan', 'code', Plan::VIP)))
             ->orderByDesc('boosted')
             ->latest('published_at')
             ->limit(12)

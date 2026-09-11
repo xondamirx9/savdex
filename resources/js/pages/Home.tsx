@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { NewsCover } from '@/components/NewsCover';
+import { CardRow } from '@/components/CardRow';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { formatNumber } from '@/components/cabinet';
@@ -438,11 +439,11 @@ export default function Home({
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="card-row" data-reveal-stagger>
+                        <CardRow>
                             {latest.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
-                        </div>
+                        </CardRow>
                     </div>
                 </section>
             )}

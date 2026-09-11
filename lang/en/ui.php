@@ -297,6 +297,8 @@ return [
         'categories_count' => ':count product|:count products',
         'latest_title' => 'New products',
         'latest_all' => 'All products',
+        'row_prev' => 'Previous',
+        'row_next' => 'Next',
         'requests_title' => 'Requests (RFQ)',
         'requests_all' => 'All requests',
         'suppliers_title' => 'Suppliers',

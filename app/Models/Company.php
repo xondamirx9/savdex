@@ -212,6 +212,19 @@ class Company extends Model
             ->latestOfMany();
     }
 
+    /**
+     * Все подписки компании, включая истёкшие.
+     *
+     * Отношение subscription() выше отдаёт одну действующую и
+     * опирается на latestOfMany — в подзапросе whereHas такая связь
+     * ведёт себя непредсказуемо, поэтому выборки по тарифу ходят
+     * через эту связь и повторяют условия действующей подписки явно.
+     */
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
     /** Контакты, которые открыла эта компания. */
     public function unlocks(): HasMany
     {
