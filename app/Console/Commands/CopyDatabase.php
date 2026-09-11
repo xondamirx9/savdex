@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -97,7 +98,13 @@ class CopyDatabase extends Command
             return self::FAILURE;
         }
 
-        $tables = $this->tablesInDependencyOrder($from);
+        try {
+            $tables = $this->tablesInDependencyOrder($from);
+        } catch (RuntimeException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
 
         if ($tables === []) {
             $this->error('В источнике нет таблиц. Сначала прогоните миграции.');
@@ -110,6 +117,41 @@ class CopyDatabase extends Command
         if ($missing !== []) {
             $this->error('В приёмнике нет таблиц: '.implode(', ', $missing));
             $this->line('Прогоните `php artisan migrate` на приёмнике до переноса.');
+
+            return self::FAILURE;
+        }
+
+        if (! $this->option('truncate')) {
+            $occupied = $this->occupiedTables($to, $tables);
+
+            if ($occupied !== []) {
+                $this->error('В приёмнике уже есть строки: '.$this->describe($occupied));
+                $this->line('Часть миграций наполняет таблицы сама (типы компаний, наборы кредитов,');
+                $this->line('настройки), поэтому свежий приёмник не пуст. Добавьте --truncate:');
+                $this->line('перенос очистит приёмник и положит данные источника.');
+
+                return self::FAILURE;
+            }
+        }
+
+        $tooLong = $this->overlongValues($from, $to, $tables);
+
+        if ($tooLong !== []) {
+            $this->error('Значения длиннее, чем позволяет колонка приёмника:');
+            $this->table(['Таблица.колонка', 'Предел', 'Строк', 'Пример id', 'Длина'], $tooLong);
+            $this->line('SQLite длину не проверяет, PostgreSQL проверяет. Почините эти строки');
+            $this->line('в источнике (или расширьте колонку миграцией) и повторите перенос.');
+
+            return self::FAILURE;
+        }
+
+        $badJson = $this->invalidJson($from, $to, $tables);
+
+        if ($badJson !== []) {
+            $this->error('Значения, которые PostgreSQL не примет как JSON:');
+            $this->table(['Таблица.колонка', 'Строк', 'Пример id', 'Значение'], $badJson);
+            $this->line('SQLite хранит JSON как обычный текст и содержимое не проверяет.');
+            $this->line('Почините эти строки в источнике и повторите перенос.');
 
             return self::FAILURE;
         }
@@ -175,8 +217,12 @@ class CopyDatabase extends Command
         /** @var array<string, array<string, string>> $edges таблица → [колонка → таблица, на которую ссылается] */
         $edges = [];
 
+        /** @var array<string, array<string, bool>> $nullable таблица → [колонка → допускает ли NULL] */
+        $nullable = [];
+
         foreach ($all as $table) {
             $edges[$table] = [];
+            $nullable[$table] = $this->nullableColumns($from, $table);
 
             foreach (Schema::connection($from->getName())->getForeignKeys($table) as $key) {
                 $column = $key['columns'][0] ?? null;
@@ -207,9 +253,9 @@ class CopyDatabase extends Command
             ));
 
             if ($ready === []) {
-                // Кольцо: берём таблицу с наименьшим числом незакрытых
-                // связей, её ссылки вперёд заполним вторым проходом
-                $ready = [$this->leastDependent($remaining, $ordered)];
+                // Кольцо: разрываем его на таблице, чьи незакрытые ссылки
+                // допускают NULL, — их и заполнит второй проход
+                $ready = [$this->breakable($remaining, $ordered, $nullable)];
 
                 foreach ($remaining[$ready[0]] as $column => $foreign) {
                     if (! in_array($foreign, $ordered, true)) {
@@ -228,22 +274,221 @@ class CopyDatabase extends Command
     }
 
     /**
-     * Таблица кольца с наименьшим числом незакрытых связей: чем меньше
-     * колонок придётся обнулить, тем меньше работы второму проходу.
+     * Таблица, на которой можно разорвать кольцо.
+     *
+     * Годится только та, чьи незакрытые ссылки допускают NULL: разрыв —
+     * это вставка строки с пустой колонкой, и на NOT NULL она падает.
+     * Раньше выбор шёл по одному числу незакрытых связей, и первым
+     * кандидатом оказывался `activity_events` — не участник кольца
+     * `users ↔ companies`, а просто таблица с одной незакрытой ссылкой,
+     * к тому же обязательной. Перенос падал на первой же её строке.
+     *
+     * Среди пригодных берётся таблица с наименьшим числом незакрытых
+     * связей: чем меньше колонок обнулено, тем меньше работы второму
+     * проходу.
      *
      * @param  array<string, array<string, string>>  $remaining
      * @param  list<string>  $ordered
+     * @param  array<string, array<string, bool>>  $nullable
      */
-    private function leastDependent(array $remaining, array $ordered): string
+    private function breakable(array $remaining, array $ordered, array $nullable): string
     {
-        $unmet = array_map(
-            fn (array $deps): int => count(array_diff(array_values($deps), $ordered)),
-            $remaining,
-        );
+        $candidates = [];
 
-        asort($unmet);
+        foreach ($remaining as $table => $deps) {
+            $unmet = array_keys(array_filter(
+                $deps,
+                fn (string $foreign): bool => ! in_array($foreign, $ordered, true),
+            ));
 
-        return (string) array_key_first($unmet);
+            $required = array_filter(
+                $unmet,
+                fn (string $column): bool => ($nullable[$table][$column] ?? true) === false,
+            );
+
+            if ($required === []) {
+                $candidates[$table] = count($unmet);
+            }
+        }
+
+        if ($candidates === []) {
+            throw new RuntimeException(
+                'Кольцевые связи через обязательные колонки: '.implode(', ', array_keys($remaining)).
+                '. Разорвать их вставкой пустой колонки нельзя — нужен перенос вручную.'
+            );
+        }
+
+        asort($candidates);
+
+        return (string) array_key_first($candidates);
+    }
+
+    /**
+     * Колонки таблицы и допускают ли они NULL.
+     *
+     * @return array<string, bool>
+     */
+    private function nullableColumns(ConnectionInterface $connection, string $table): array
+    {
+        $nullable = [];
+
+        foreach (Schema::connection($connection->getName())->getColumns($table) as $column) {
+            $nullable[$column['name']] = (bool) $column['nullable'];
+        }
+
+        return $nullable;
+    }
+
+    /**
+     * Значения источника, не влезающие в колонку приёмника.
+     *
+     * SQLite объявленную длину не проверяет: `varchar(16)` примет строку
+     * любой длины, и в базе, наполнявшейся импортом, такие строки есть.
+     * PostgreSQL на вставке падает — на середине переноса, через минуты
+     * работы. Проверка идёт одним запросом на колонку до первой вставки,
+     * и находит сразу все такие места, а не первое.
+     *
+     * @param  list<string>  $tables
+     * @return list<array{string, int, int, mixed, int}>
+     */
+    private function overlongValues(ConnectionInterface $from, ConnectionInterface $to, array $tables): array
+    {
+        $found = [];
+
+        foreach ($tables as $table) {
+            foreach (Schema::connection($to->getName())->getColumns($table) as $column) {
+                $limit = $this->lengthLimit($column['type']);
+
+                if ($limit === null) {
+                    continue;
+                }
+
+                $name = $column['name'];
+
+                $offenders = $from->table($table)
+                    ->whereRaw('length("'.$name.'") > ?', [$limit])
+                    ->selectRaw('count(*) as total, max(length("'.$name.'")) as longest')
+                    ->first();
+
+                if ($offenders === null || (int) $offenders->total === 0) {
+                    continue;
+                }
+
+                $sample = $from->table($table)
+                    ->whereRaw('length("'.$name.'") > ?', [$limit])
+                    ->value('id');
+
+                $found[] = ["{$table}.{$name}", $limit, (int) $offenders->total, $sample ?? '—', (int) $offenders->longest];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Значения, которые PostgreSQL отвергнет как JSON.
+     *
+     * В SQLite json-колонка — обычный текст, и содержимое не проверяется:
+     * пустая строка, обрезанный при импорте объект или запись мимо кастов
+     * модели лежат там молча. PostgreSQL разбирает значение на вставке и
+     * падает. Проверка идёт в PHP по всем строкам таких колонок: их в
+     * схеме единицы, а находка до первой вставки экономит повтор переноса.
+     *
+     * @param  list<string>  $tables
+     * @return list<array{string, int, mixed, string}>
+     */
+    private function invalidJson(ConnectionInterface $from, ConnectionInterface $to, array $tables): array
+    {
+        $found = [];
+
+        foreach ($tables as $table) {
+            foreach (Schema::connection($to->getName())->getColumns($table) as $column) {
+                if (! in_array(strtolower($column['type_name']), ['json', 'jsonb'], true)) {
+                    continue;
+                }
+
+                $name = $column['name'];
+                $bad = 0;
+                $sample = null;
+
+                foreach ($from->table($table)->whereNotNull($name)->select('id', $name)->cursor() as $row) {
+                    $value = $row->{$name};
+
+                    if (is_string($value) && json_validate($value)) {
+                        continue;
+                    }
+
+                    $bad++;
+                    $sample ??= [$row->id, mb_substr((string) $value, 0, 30)];
+                }
+
+                if ($bad > 0) {
+                    $found[] = ["{$table}.{$name}", $bad, $sample[0] ?? '—', $sample[1] ?? "''"];
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Предел длины из типа колонки: «character varying(16)» → 16.
+     * Для типов без предела (text, integer) — null.
+     */
+    private function lengthLimit(string $type): ?int
+    {
+        if (! preg_match('/^(?:character varying|varchar|char|character|bpchar)\((\d+)\)$/i', $type, $m)) {
+            return null;
+        }
+
+        return (int) $m[1];
+    }
+
+    /**
+     * Непустые таблицы приёмника.
+     *
+     * Проверка до первой вставки, а не по ходу: часть миграций наполняет
+     * таблицы сама (типы компаний, наборы кредитов, настройки), и перенос
+     * без очистки падал на такой таблице с «duplicate key» — на середине,
+     * оставив приёмник заполненным наполовину. Отказ до начала работы
+     * оставляет базу в том же состоянии, в каком её застали.
+     *
+     * @param  list<string>  $tables
+     * @return array<string, int>
+     */
+    private function occupiedTables(ConnectionInterface $to, array $tables): array
+    {
+        $occupied = [];
+
+        foreach ($tables as $table) {
+            $count = $to->table($table)->count();
+
+            if ($count > 0) {
+                $occupied[$table] = $count;
+            }
+        }
+
+        return $occupied;
+    }
+
+    /**
+     * «a (3), b (5) и ещё 7» — список для сообщения об ошибке.
+     *
+     * @param  array<string, int>  $counts
+     */
+    private function describe(array $counts): string
+    {
+        $shown = array_slice($counts, 0, 5, true);
+
+        $parts = [];
+
+        foreach ($shown as $table => $count) {
+            $parts[] = "{$table} ({$count})";
+        }
+
+        $rest = count($counts) - count($shown);
+
+        return implode(', ', $parts).($rest > 0 ? " и ещё {$rest}" : '');
     }
 
     /** @return list<string> */
@@ -280,7 +525,8 @@ class CopyDatabase extends Command
             return ['source' => 0, 'copied' => 0];
         }
 
-        $chunk = max(1, (int) $this->option('chunk'));
+        $columns = count(Schema::connection($to->getName())->getColumns($table));
+        $chunk = $this->chunkFor($columns);
         $booleans = $this->booleanColumns($to, $table);
         $nulled = $this->deferred[$table] ?? [];
         $copied = 0;
@@ -305,6 +551,27 @@ class CopyDatabase extends Command
         $this->newLine();
 
         return ['source' => $total, 'copied' => $copied];
+    }
+
+    /**
+     * Размер порции с оглядкой на ширину таблицы.
+     *
+     * Одна вставка на 500 строк — это 500 × (число колонок) подставляемых
+     * значений, а PostgreSQL принимает не больше 65 535 за запрос. Самая
+     * широкая таблица площадки — companies, 40 колонок: при размере
+     * порции по умолчанию это 20 000, но увеличенный вручную --chunk
+     * упёрся бы в предел на середине переноса. Порция уменьшается до
+     * безопасной, а не обрезается запрос.
+     */
+    private function chunkFor(int $columns): int
+    {
+        $requested = max(1, (int) $this->option('chunk'));
+
+        if ($columns < 1) {
+            return $requested;
+        }
+
+        return max(1, min($requested, intdiv(60000, $columns)));
     }
 
     /**
