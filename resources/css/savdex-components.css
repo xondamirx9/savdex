@@ -1436,7 +1436,7 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .subnav-inner::-webkit-scrollbar{display:none}
 .subnav a{padding:8px 13px;border-radius:var(--r-btn);font-size:14.5px;font-weight:500;
   color:var(--text);white-space:nowrap;transition:background var(--t-fast),color var(--t-fast)}
-.subnav a:hover{background:var(--bg);color:var(--primary-700);text-decoration:none}
+.subnav a:hover{background:transparent;color:var(--primary-600);text-decoration:none}
 .subnav a[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
 .subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
   color:var(--primary-700)!important;font-weight:600!important}
@@ -1473,7 +1473,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .chrome-overlay .hd-auth .btn-secondary:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5)}
 .chrome-overlay .subnav{background:transparent;border-top-color:rgba(255,255,255,.14)}
 .chrome-overlay .subnav-inner a{color:rgba(255,255,255,.85)}
-.chrome-overlay .subnav-inner a:hover,.chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
+/* Наведение на тёмной шапке: синий, но светлее основного —
+   #2c68e8 на тёмно-синем даёт 3.4:1 и проваливается как текст,
+   primary-500 держит 5.2:1. Активный пункт остаётся белым. */
+.chrome-overlay .subnav-inner a:hover{color:var(--primary-500)}
+.chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
 .chrome-overlay .subnav-post{color:#fff}
 /* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
    важнее композиции */
