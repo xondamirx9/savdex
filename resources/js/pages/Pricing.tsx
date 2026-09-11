@@ -93,15 +93,16 @@ export default function Pricing({ plans }: { plans: PricingPlan[] }) {
                                     <p className="t-sm muted">
                                         {NOTE_CODES.includes(p.code) ? t(`pricing.note_${p.code}`) : ''}
                                     </p>
-                                    <div className="plan-price">
-                                        {formatNumber(p.price_uzs)} <small>{t('catalog.currency_uzs')}</small>
-                                    </div>
-                                    {/* Долларовый эквивалент: тариф задан в долларах,
-                                        сумовая цена пересчитана по курсу ЦБ */}
+                                    {/* Доллар — основная цена: тариф задан в долларах
+                                        и от курса не зависит. Сумовая цена —
+                                        пересчёт по курсу ЦБ — идёт второй строкой:
+                                        платят-то в сумах, и обе цифры нужны */}
+                                    <div className="plan-price">${formatNumber(p.price_usd)}</div>
+                                    <p className="plan-price-alt">
+                                        {formatNumber(p.price_uzs)} {t('catalog.currency_uzs')}
+                                    </p>
                                     <p className="t-caption muted">
-                                        {p.price_uzs > 0
-                                            ? `${t('pricing.usd_approx', { price: formatNumber(p.price_usd) })} ${t('pricing.per_month')}`
-                                            : t('pricing.forever')}
+                                        {p.price_uzs > 0 ? t('pricing.per_month') : t('pricing.forever')}
                                     </p>
                                     <ul>
                                         {features(p).map(([label, on]) => (
