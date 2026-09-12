@@ -47,7 +47,13 @@ img,svg{display:block;max-width:100%}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:none;cursor:pointer}
 a{color:var(--primary-700);text-decoration:none}
-a:hover{text-decoration:underline}
+/* Подчёркивание осталось только в длинных текстах: там ссылка внутри
+   абзаца иначе неотличима от обычного слова. В интерфейсе ссылка —
+   это карточка, кнопка или пункт списка, и подчёркивание на наведении
+   протягивалось по всему её содержимому разом: по заголовку, дате
+   и описанию новости. Цвет и тень при наведении и так показывают,
+   что элемент нажимается. */
+.prose a:hover,.rich a:hover{text-decoration:underline}
 ul,ol{list-style:none}
 table{border-collapse:collapse;width:100%}
 

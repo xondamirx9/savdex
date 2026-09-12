@@ -1239,10 +1239,10 @@ button.notif-row{cursor:pointer;transition:box-shadow var(--t-mid),border-color 
 button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500)}
 
 /* Название объявления в таблице — основная цель для открытия.
-   Подчёркивание только при наведении: в списке из двадцати строк
-   постоянное подчёркивание превращает таблицу в сплошную сетку линий */
+   Наведение меняет цвет, а не подчёркивает: в списке из двадцати
+   строк линии превращают таблицу в сплошную сетку */
 .listing-title-link{font-weight:700;color:var(--text)}
-.listing-title-link:hover{color:var(--primary-700);text-decoration:underline}
+.listing-title-link:hover{color:var(--primary-700);text-decoration:none}
 
 /* ---------- 36. Файлы компании ---------- */
 .files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
