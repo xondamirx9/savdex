@@ -460,11 +460,11 @@ export default function Home({
                                 {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="card-row" data-reveal-stagger>
+                        <CardRow>
                             {requests.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
-                        </div>
+                        </CardRow>
                     </div>
                 </section>
             )}
