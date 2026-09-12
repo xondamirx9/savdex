@@ -261,100 +261,109 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                     <p className="t-sm muted" style={{ marginTop: 6 }}>{t('it_tasks.post_hint')}</p>
                 </div>
 
-                <div className="toolbar">
-                    <TypeMenu types={types} value={filters.type} onPick={(type) => apply({ type })} />
+                <div className="it-layout">
+                    {/* Отдельная панель слева: в ней только меню видов услуг,
+                        поэтому прокручивать внутри панели нечего */}
+                    <aside className="it-panel">
+                        <span className="it-panel-title">{t('it_tasks.filters')}</span>
+                        <TypeMenu types={types} value={filters.type} onPick={(type) => apply({ type })} />
+                    </aside>
 
-                    <div className="it-search">
-                        <label htmlFor="it-q" className="sr-only">
-                            {t('it_tasks.search_label')}
-                        </label>
-                        <input
-                            id="it-q"
-                            className="input"
-                            type="search"
-                            placeholder={t('it_tasks.search_placeholder')}
-                            style={{ paddingLeft: 42 }}
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
-                        />
-                        <span aria-hidden className="it-search-ico">
-                            <Search className="size-5" />
-                        </span>
-                    </div>
+                    <div className="it-main">
+                        <div className="toolbar">
+                            <div className="it-search">
+                                <label htmlFor="it-q" className="sr-only">
+                                    {t('it_tasks.search_label')}
+                                </label>
+                                <input
+                                    id="it-q"
+                                    className="input"
+                                    type="search"
+                                    placeholder={t('it_tasks.search_placeholder')}
+                                    style={{ paddingLeft: 42 }}
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
+                                />
+                                <span aria-hidden className="it-search-ico">
+                                    <Search className="size-5" />
+                                </span>
+                            </div>
 
-                    <Link href={viewer.guest ? routes.login : routes.itTaskCreate} className="btn btn-primary">
-                        {t('it_tasks.post_task')}
-                    </Link>
-                </div>
-
-                {/* Состояние задач — под поиском: это переключатель того же
-                    списка, а не отдельный раздел, как читалось в панели */}
-                <div className="it-tabs">
-                    <button
-                        type="button"
-                        className={cn('chip', !filters.done && 'chip-active')}
-                        aria-pressed={!filters.done}
-                        onClick={() => apply({ done: false })}
-                    >
-                        {t('it_tasks.tab_open')}
-                    </button>
-                    <button
-                        type="button"
-                        className={cn('chip', filters.done && 'chip-active')}
-                        aria-pressed={filters.done}
-                        onClick={() => apply({ done: true })}
-                    >
-                        {t('it_tasks.tab_done')}
-                    </button>
-                    {filters.type !== '' && (
-                        <button type="button" className="chip" onClick={() => apply({ type: '' })}>
-                            {t('it_tasks.reset')}
-                        </button>
-                    )}
-                    <span className="t-sm muted it-count">{tChoice('it_tasks.found', total)}</span>
-                </div>
-
-                {tasks.data.length === 0 ? (
-                    <div className="card empty">
-                        <div className="empty-icon">
-                            <Code2 aria-hidden className="size-7" />
+                            <Link href={viewer.guest ? routes.login : routes.itTaskCreate} className="btn btn-primary">
+                                {t('it_tasks.post_task')}
+                            </Link>
                         </div>
-                        <p className="t-h4">{filters.done ? t('it_tasks.done_empty_title') : t('it_tasks.empty_title')}</p>
-                        <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                            {filters.done ? t('it_tasks.done_empty_text') : t('it_tasks.empty_text')}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="grid grid-3" data-reveal-stagger>
-                        {tasks.data.map((row) => (
-                            <TaskCard key={row.id} row={row} />
-                        ))}
-                    </div>
-                )}
 
-                {tasks.last_page > 1 && (
-                    <nav className="pagination mt-32" aria-label={t('it_tasks.pages')}>
-                        {tasks.links.map((link, i) =>
-                            link.url ? (
-                                <Link
-                                    key={i}
-                                    href={link.url}
-                                    className={cn('page-link', link.active && 'is-active')}
-                                    aria-current={link.active ? 'page' : undefined}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ) : (
-                                <span
-                                    key={i}
-                                    className="page-link is-disabled"
-                                    aria-disabled="true"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ),
+                        {/* Состояние задач — под поиском: это переключатель того же
+                            списка, а не отдельный раздел, как читалось в панели */}
+                        <div className="it-tabs">
+                            <button
+                                type="button"
+                                className={cn('chip', !filters.done && 'chip-active')}
+                                aria-pressed={!filters.done}
+                                onClick={() => apply({ done: false })}
+                            >
+                                {t('it_tasks.tab_open')}
+                            </button>
+                            <button
+                                type="button"
+                                className={cn('chip', filters.done && 'chip-active')}
+                                aria-pressed={filters.done}
+                                onClick={() => apply({ done: true })}
+                            >
+                                {t('it_tasks.tab_done')}
+                            </button>
+                            {filters.type !== '' && (
+                                <button type="button" className="chip" onClick={() => apply({ type: '' })}>
+                                    {t('it_tasks.reset')}
+                                </button>
+                            )}
+                            <span className="t-sm muted it-count">{tChoice('it_tasks.found', total)}</span>
+                        </div>
+
+                        {tasks.data.length === 0 ? (
+                            <div className="card empty">
+                                <div className="empty-icon">
+                                    <Code2 aria-hidden className="size-7" />
+                                </div>
+                                <p className="t-h4">{filters.done ? t('it_tasks.done_empty_title') : t('it_tasks.empty_title')}</p>
+                                <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
+                                    {filters.done ? t('it_tasks.done_empty_text') : t('it_tasks.empty_text')}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-3" data-reveal-stagger>
+                                {tasks.data.map((row) => (
+                                    <TaskCard key={row.id} row={row} />
+                                ))}
+                            </div>
                         )}
-                    </nav>
-                )}
+
+                        {tasks.last_page > 1 && (
+                            <nav className="pagination mt-32" aria-label={t('it_tasks.pages')}>
+                                {tasks.links.map((link, i) =>
+                                    link.url ? (
+                                        <Link
+                                            key={i}
+                                            href={link.url}
+                                            className={cn('page-link', link.active && 'is-active')}
+                                            aria-current={link.active ? 'page' : undefined}
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
+                                    ) : (
+                                        <span
+                                            key={i}
+                                            className="page-link is-disabled"
+                                            aria-disabled="true"
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
+                                    ),
+                                )}
+                            </nav>
+                        )}
+                    </div>
+                </div>
             </div>
         </PublicLayout>
     );
