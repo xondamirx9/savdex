@@ -198,21 +198,29 @@ class UzumGateway implements PaymentGateway
         }
 
         $amount = $payment->amountMinor();
+        $packageCode = trim((string) ($fiscal['package_code'] ?? ''));
+
+        $item = [
+            'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
+            'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
+            'quantity' => 1,
+            'price' => $amount,
+            'total' => $amount,
+            'spic' => $spic,
+            'vatPercent' => (int) ($fiscal['vat_percent'] ?? 0),
+        ];
+
+        // Код упаковки не всегда известен сразу — без него корзина
+        // уходит как есть, и ответ Uzum скажет, обязателен ли он
+        if ($packageCode !== '') {
+            $item['packageCode'] = $packageCode;
+        }
 
         return ['merchantParams' => ['cart' => [
             'cartId' => $payment->number,
             'receiptType' => 'PURCHASE',
             'total' => $amount,
-            'items' => [[
-                'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
-                'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
-                'quantity' => 1,
-                'price' => $amount,
-                'total' => $amount,
-                'spic' => $spic,
-                'packageCode' => (string) ($fiscal['package_code'] ?? ''),
-                'vatPercent' => (int) ($fiscal['vat_percent'] ?? 0),
-            ]],
+            'items' => [$item],
         ]]];
     }
 

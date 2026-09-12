@@ -205,6 +205,27 @@ class UzumCheckoutTest extends TestCase
     }
 
     #[Test]
+    public function register_omits_package_code_when_unknown(): void
+    {
+        config(['payments.providers.uzum.fiscal.spic' => '10899001001000000', 'payments.providers.uzum.fiscal.package_code' => '']);
+
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $item = $request['merchantParams']['cart']['items'][0];
+
+            return $item['spic'] === '10899001001000000' && ! array_key_exists('packageCode', $item);
+        });
+    }
+
+    #[Test]
     public function register_omits_cart_without_spic(): void
     {
         Http::fake([
