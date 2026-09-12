@@ -88,10 +88,15 @@ class UzumGateway implements PaymentGateway
         $payUrl = $this->paymentPageUrl($result);
 
         if (! is_string($orderId) || $orderId === '' || $payUrl === null) {
-            Log::warning('payment.uzum.register_unexpected', ['result_keys' => array_keys($result)]);
+            // Весь result целиком: секретов в нём нет, а имя поля со
+            // ссылкой в документации не зафиксировано — по логу видно,
+            // как его назвал Uzum
+            Log::warning('payment.uzum.register_unexpected', ['result' => $result]);
 
             throw new PaymentGatewayException('Uzum зарегистрировал платёж, но не вернул orderId или ссылку оплаты');
         }
+
+        Log::info('payment.uzum.registered', ['order' => $orderId, 'payment' => $payment->number]);
 
         // orderId — единственный надёжный мост между колбэком и счётом:
         // колбэк не подписан, и найтись счёт должен по идентификатору,
@@ -231,9 +236,29 @@ class UzumGateway implements PaymentGateway
         }
 
         // Имя поля статуса в result документация не фиксирует —
-        // принимаются очевидные варианты
-        foreach (['status', 'orderStatus', 'state', 'paymentStatus'] as $key) {
+        // принимаются очевидные варианты, в том числе вложенные
+        foreach (['status', 'orderStatus', 'state', 'paymentStatus', 'operationState'] as $key) {
             if (strtoupper((string) ($result[$key] ?? '')) === self::ORDER_COMPLETED) {
+                return true;
+            }
+        }
+
+        foreach ($result as $value) {
+            if (is_array($value) && $this->hasCompletedStatus($value)) {
+                return true;
+            }
+        }
+
+        Log::warning('payment.uzum.status_unrecognized', ['order' => $orderId, 'result' => $result]);
+
+        return false;
+    }
+
+    /** @param array<string, mixed> $node */
+    private function hasCompletedStatus(array $node): bool
+    {
+        foreach (['status', 'orderStatus', 'state', 'paymentStatus', 'operationState'] as $key) {
+            if (strtoupper((string) ($node[$key] ?? '')) === self::ORDER_COMPLETED) {
                 return true;
             }
         }
@@ -316,7 +341,13 @@ class UzumGateway implements PaymentGateway
         return is_array($result) ? $result : [];
     }
 
-    /** @param array<string, mixed> $result */
+    /**
+     * Ссылка платёжной страницы: сначала известные имена полей, затем
+     * любая строка-адрес в result (в том числе во вложенных объектах) —
+     * чтобы непредсказуемое имя поля не сорвало первый боевой платёж.
+     *
+     * @param  array<string, mixed>  $result
+     */
     private function paymentPageUrl(array $result): ?string
     {
         foreach (self::PAY_URL_KEYS as $key) {
@@ -324,6 +355,16 @@ class UzumGateway implements PaymentGateway
 
             if (is_string($value) && str_starts_with($value, 'http')) {
                 return $value;
+            }
+        }
+
+        foreach ($result as $value) {
+            if (is_string($value) && str_starts_with($value, 'https://')) {
+                return $value;
+            }
+
+            if (is_array($value) && ($nested = $this->paymentPageUrl($value)) !== null) {
+                return $nested;
             }
         }
 
