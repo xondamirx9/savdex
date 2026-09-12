@@ -452,6 +452,36 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .range{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .applied{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:20px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+
+/* ---------- IT-услуги: одна колонка ----------
+   Виды услуг переехали из боковой панели в меню у поиска. В панели
+   список прокручивался внутри себя: два вложенных скролла на одной
+   странице, а на телефоне панель занимала первый экран целиком.
+   Кнопка показывает выбранный вид, остальные открываются нажатием. */
+.it-tasks{padding:24px 0 96px}
+.it-tasks .toolbar{align-items:center}
+.it-tasks .toolbar .btn{height:44px}
+.type-menu-btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-btn);
+  font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;cursor:pointer;
+  transition:border-color var(--t-fast),color var(--t-fast)}
+.type-menu-btn:hover{border-color:var(--primary-500);color:var(--primary-600)}
+.type-menu-btn[aria-expanded="true"]{border-color:var(--primary-500);color:var(--primary-700)}
+.type-menu-btn svg{flex-shrink:0}
+.type-menu-value{max-width:190px;overflow:hidden;text-overflow:ellipsis}
+/* Меню открывается от левого края кнопки: она стоит первой в строке */
+.type-menu .dropdown-menu{left:0;right:auto;min-width:244px}
+.it-search{position:relative;flex:1;min-width:220px}
+.it-search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+/* Состояние задач под поиском, счётчик прижат к правому краю строки */
+.it-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.it-tabs .it-count{margin-left:auto}
+@media (max-width:560px){
+  .it-tasks .toolbar>*{width:100%}
+  .type-menu,.type-menu-btn{width:100%}
+  .type-menu-value{max-width:none;margin-right:auto}
+  .it-tabs .it-count{width:100%;margin-left:0}
+}
 .filter-fab{display:none}
 
 /* ---------- 18. Шаги (онбординг, форма объявления) ---------- */
