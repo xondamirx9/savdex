@@ -74,6 +74,7 @@ export const routes = {
     itTaskUpdate: (id: number) => `/cabinet/it-tasks/${id}`,
     itTaskClose: (id: number) => `/cabinet/it-tasks/${id}/close`,
     itTaskReopen: (id: number) => `/cabinet/it-tasks/${id}/reopen`,
+    itTaskComplete: (id: number) => `/cabinet/it-tasks/${id}/complete`,
     itTaskFileDelete: (id: number, fileId: number) => `/cabinet/it-tasks/${id}/files/${fileId}`,
     listingEdit: (id: number) => `/cabinet/listings/${id}/edit`,
 } as const;

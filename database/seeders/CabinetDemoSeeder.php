@@ -61,6 +61,9 @@ class CabinetDemoSeeder extends Seeder
             $this->searchHits($company);
         });
 
+        // Раздел «IT-услуги»: открытые и выполненные задачи с исполнителями
+        $this->call(ItTasksDemoSeeder::class);
+
         $this->command?->info('Кабинет наполнен: '.$company->name);
     }
 

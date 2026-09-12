@@ -1,6 +1,7 @@
-import { router } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Code2, Eye, MessageSquareText, Paperclip, Pencil, Plus } from 'lucide-react';
+import { CheckCircle2, Code2, Eye, ExternalLink, MessageSquareText, Paperclip, Pencil, Plus } from 'lucide-react';
+import { useState } from 'react';
 import { Empty } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
@@ -13,22 +14,102 @@ interface Row {
     service_type: string;
     budget: string;
     deadline: string | null;
-    status: 'active' | 'closed' | 'archived';
+    status: 'active' | 'closed' | 'completed' | 'archived';
     status_label: string;
     responses: number;
     views: number;
     files: number;
     published: string | null;
+    result_url: string | null;
+    result_summary: string | null;
+    contractor: string | null;
+    responders: { id: number; name: string }[];
 }
 
 const STATUS_BADGE: Record<Row['status'], string> = {
     active: 'badge-verified',
     closed: 'badge-neutral',
+    completed: 'badge-supply',
     archived: 'badge-neutral',
 };
 
+/**
+ * Форма «Выполнена»: ссылка на результат, что сделано и кто сделал.
+ * Исполнитель — только из откликнувшихся, так витрина не превращается
+ * в бесплатную рекламу произвольных компаний.
+ */
+function CompleteForm({ task, onDone }: { task: Row; onDone: () => void }) {
+    const form = useForm<{ result_url: string; result_summary: string; contractor_company_id: string }>({
+        result_url: '',
+        result_summary: '',
+        contractor_company_id: '',
+    });
+
+    function submit(e: React.FormEvent) {
+        e.preventDefault();
+        form.post(routes.itTaskComplete(task.id), { preserveScroll: true, onSuccess: onDone });
+    }
+
+    return (
+        <form onSubmit={submit} style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <div className="field" style={{ margin: 0 }}>
+                <label className="label" htmlFor={`r-url-${task.id}`}>Ссылка на результат</label>
+                <input
+                    id={`r-url-${task.id}`}
+                    className="input"
+                    placeholder="https://…"
+                    value={form.data.result_url}
+                    onChange={(e) => form.setData('result_url', e.target.value)}
+                />
+                {form.errors.result_url && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.result_url}</p>}
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+                <label className="label" htmlFor={`r-sum-${task.id}`}>Что сделано</label>
+                <textarea
+                    id={`r-sum-${task.id}`}
+                    className="input"
+                    rows={3}
+                    maxLength={600}
+                    placeholder="Коротко: что получилось в итоге — это увидят другие заказчики"
+                    value={form.data.result_summary}
+                    onChange={(e) => form.setData('result_summary', e.target.value)}
+                />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+                <label className="label" htmlFor={`r-who-${task.id}`}>Исполнитель</label>
+                <select
+                    id={`r-who-${task.id}`}
+                    className="select"
+                    value={form.data.contractor_company_id}
+                    onChange={(e) => form.setData('contractor_company_id', e.target.value)}
+                >
+                    <option value="">Не указывать</option>
+                    {task.responders.map((r) => (
+                        <option key={r.id} value={r.id}>
+                            {r.name}
+                        </option>
+                    ))}
+                </select>
+                {form.errors.contractor_company_id && (
+                    <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.contractor_company_id}</p>
+                )}
+                {task.responders.length === 0 && <p className="hint">Откликов пока не было — исполнителя можно не указывать.</p>}
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={form.processing}>
+                    <CheckCircle2 aria-hidden className="size-4" /> Отметить выполненной
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
+                    Отмена
+                </button>
+            </div>
+        </form>
+    );
+}
+
 export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasCompany: boolean }) {
     const { confirm, dialog } = useConfirm();
+    const [completing, setCompleting] = useState<number | null>(null);
 
     return (
         <CabinetLayout
@@ -78,6 +159,15 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
                                     <Link href={routes.itTaskEdit(t.id)} className="btn btn-secondary btn-sm">
                                         <Pencil aria-hidden className="size-4" /> Изменить
                                     </Link>
+                                    {t.status !== 'completed' && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => setCompleting(completing === t.id ? null : t.id)}
+                                        >
+                                            <CheckCircle2 aria-hidden className="size-4" /> Выполнена
+                                        </button>
+                                    )}
                                     {t.status === 'active' ? (
                                         <button
                                             type="button"
@@ -93,7 +183,7 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
                                         >
                                             Закрыть
                                         </button>
-                                    ) : (
+                                    ) : t.status !== 'completed' ? (
                                         <button
                                             type="button"
                                             className="btn btn-ghost btn-sm"
@@ -101,7 +191,7 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
                                         >
                                             Открыть снова
                                         </button>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
 
@@ -122,6 +212,22 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
                                     </span>
                                 )}
                             </div>
+
+                            {t.status === 'completed' && (
+                                <div className="t-sm" style={{ display: 'grid', gap: 4 }}>
+                                    {t.result_summary && <p>{t.result_summary}</p>}
+                                    <div className="row wrap muted" style={{ gap: 12 }}>
+                                        {t.result_url && (
+                                            <a href={t.result_url} target="_blank" rel="noopener noreferrer" className="row" style={{ gap: 4 }}>
+                                                <ExternalLink aria-hidden className="size-4" /> {t.result_url.replace(/^https?:\/\/(www\.)?/, '')}
+                                            </a>
+                                        )}
+                                        {t.contractor && <span>Исполнитель: {t.contractor}</span>}
+                                    </div>
+                                </div>
+                            )}
+
+                            {completing === t.id && <CompleteForm task={t} onDone={() => setCompleting(null)} />}
                         </div>
                     ))}
                 </div>

@@ -34,6 +34,7 @@ class ItTaskController extends Controller
             ? collect()
             : ItTask::query()
                 ->where('company_id', $company->id)
+                ->with(['contractor', 'threads.buyer'])
                 ->withCount('files')
                 ->orderByDesc('created_at')
                 ->get();
@@ -53,6 +54,13 @@ class ItTaskController extends Controller
                 'views' => $t->views_count,
                 'files' => $t->files_count,
                 'published' => DateHelper::dayMonthYear($t->published_at),
+                'result_url' => $t->result_url,
+                'result_summary' => $t->result_summary,
+                'contractor' => $t->contractor?->name,
+                'responders' => $t->threads->map(fn ($thread): array => [
+                    'id' => $thread->buyer_company_id,
+                    'name' => $thread->buyer?->name ?? 'Компания удалена',
+                ])->values()->all(),
             ])->values(),
         ]);
     }
@@ -144,6 +152,39 @@ class ItTaskController extends Controller
         }
 
         return back()->with('success', 'Задача закрыта — на витрине её больше нет, чаты остались');
+    }
+
+    /**
+     * Отметить выполненной: результат и исполнитель.
+     *
+     * Исполнителя можно выбрать только из откликнувшихся — иначе поле
+     * стало бы способом бесплатно «прикрепить» любую компанию.
+     */
+    public function complete(Request $request, int $id): RedirectResponse
+    {
+        $task = $this->owned($request, $id);
+
+        $responders = $task->threads()->pluck('buyer_company_id')->all();
+
+        $data = $request->validate([
+            'result_url' => ['nullable', 'url', 'max:255'],
+            'result_summary' => ['nullable', 'string', 'max:600'],
+            'contractor_company_id' => ['nullable', 'integer', Rule::in($responders)],
+        ], [
+            'result_url.url' => 'Ссылка должна начинаться с http:// или https://',
+            'contractor_company_id.in' => 'Исполнителем можно отметить только компанию, которая откликалась на задачу',
+        ]);
+
+        $task->forceFill([
+            'status' => ItTask::STATUS_COMPLETED,
+            'completed_at' => now(),
+            'closed_at' => $task->closed_at ?? now(),
+            'result_url' => $data['result_url'] ?? null,
+            'result_summary' => $data['result_summary'] ?? null,
+            'contractor_company_id' => $data['contractor_company_id'] ?? null,
+        ])->save();
+
+        return back()->with('success', 'Задача отмечена выполненной — она попала в «Выполненные» на витрине');
     }
 
     /** Открыть заново: снова на витрину, срок не трогаем. */

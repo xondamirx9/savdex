@@ -409,6 +409,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::get('/cabinet/it-tasks/{id}/edit', [CabinetItTaskController::class, 'edit'])->whereNumber('id')->name('cabinet.it-tasks.edit');
     Route::patch('/cabinet/it-tasks/{id}', [CabinetItTaskController::class, 'update'])->whereNumber('id')->name('cabinet.it-tasks.update');
     Route::post('/cabinet/it-tasks/{id}/close', [CabinetItTaskController::class, 'close'])->whereNumber('id')->name('cabinet.it-tasks.close');
+    Route::post('/cabinet/it-tasks/{id}/complete', [CabinetItTaskController::class, 'complete'])->whereNumber('id')->name('cabinet.it-tasks.complete');
     Route::post('/cabinet/it-tasks/{id}/reopen', [CabinetItTaskController::class, 'reopen'])->whereNumber('id')->name('cabinet.it-tasks.reopen');
     Route::delete('/cabinet/it-tasks/{id}', [CabinetItTaskController::class, 'destroy'])->whereNumber('id')->name('cabinet.it-tasks.destroy');
     Route::delete('/cabinet/it-tasks/{id}/files/{fileId}', [CabinetItTaskController::class, 'destroyFile'])

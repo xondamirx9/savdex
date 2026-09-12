@@ -1,6 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { ArrowLeft, Building2, CalendarDays, CheckCircle2, Eye, MessageSquareText, Paperclip, Wallet } from 'lucide-react';
+import { ArrowLeft, Building2, CalendarDays, CheckCircle2, Code2, ExternalLink, Eye, MessageSquareText, Paperclip, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t, tChoice } from '@/lib/i18n';
@@ -123,7 +123,13 @@ export default function ItTaskShow({ task, respond, similar }: { task: Task; res
                     <article style={{ maxWidth: '72ch' }}>
                         <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
                             <span className="badge badge-supply">{task.service_label}</span>
-                            {!task.active && <span className="badge badge-neutral">{t('it_tasks.closed')}</span>}
+                            {task.completed ? (
+                                <span className="badge badge-verified">
+                                    <CheckCircle2 aria-hidden className="size-3.5" /> {t('it_tasks.completed')}
+                                </span>
+                            ) : (
+                                !task.active && <span className="badge badge-neutral">{t('it_tasks.closed')}</span>
+                            )}
                             {task.published && (
                                 <span className="t-caption muted row" style={{ gap: 6 }}>
                                     <CalendarDays aria-hidden className="size-3.5" /> {t('it_tasks.published')}: {task.published}
@@ -142,6 +148,41 @@ export default function ItTaskShow({ task, respond, similar }: { task: Task; res
                                     <span key={s} className="chip" style={{ cursor: 'default' }}>{s}</span>
                                 ))}
                             </div>
+                        )}
+
+                        {task.completed && (
+                            <section className="card mt-24" style={{ display: 'grid', gap: 10, background: 'var(--primary-50, #eef4ff)' }}>
+                                <h2 className="t-h4 row" style={{ gap: 8 }}>
+                                    <CheckCircle2 aria-hidden className="size-5" style={{ color: 'var(--success)' }} /> {t('it_tasks.result')}
+                                    {task.completed_on && <span className="t-caption muted">· {task.completed_on}</span>}
+                                </h2>
+                                {task.result_summary && <p className="t-body">{task.result_summary}</p>}
+                                {task.result_url && (
+                                    <a
+                                        href={task.result_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer nofollow"
+                                        className="btn btn-primary"
+                                        style={{ justifySelf: 'start' }}
+                                    >
+                                        <ExternalLink aria-hidden className="size-4" /> {t('it_tasks.result_open')}
+                                        {task.result_host && <span className="muted"> · {task.result_host}</span>}
+                                    </a>
+                                )}
+                                {task.contractor && (
+                                    <Link href={routes.company(task.contractor.slug)} className="row" style={{ gap: 10, color: 'inherit' }}>
+                                        <span className="listing-logo logo-48">
+                                            {task.contractor.logo ? <img src={task.contractor.logo} alt="" /> : task.contractor.initials}
+                                        </span>
+                                        <span>
+                                            <span className="t-caption muted">{t('it_tasks.contractor')}</span>
+                                            <span className="t-body row" style={{ gap: 6 }}>
+                                                <Code2 aria-hidden className="size-4 muted" /> {task.contractor.name}
+                                            </span>
+                                        </span>
+                                    </Link>
+                                )}
+                            </section>
                         )}
 
                         <div className="mt-32">

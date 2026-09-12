@@ -270,6 +270,47 @@ class ItTaskTest extends TestCase
         $this->assertSame(0, MessageThread::count());
     }
 
+    #[Test]
+    public function заказчик_отмечает_задачу_выполненной_с_результатом_и_исполнителем(): void
+    {
+        $task = ItTask::factory()->create(['company_id' => $this->customer->id]);
+        $this->actingAs($this->providerUser)->post("/it-services/{$task->id}/respond", ['body' => 'Берём']);
+
+        $stranger = Company::factory()->create(['is_it_provider' => true]);
+
+        // Исполнитель — только из откликнувшихся
+        $this->actingAs($this->customerUser)
+            ->post("/cabinet/it-tasks/{$task->id}/complete", ['contractor_company_id' => $stranger->id])
+            ->assertSessionHasErrors('contractor_company_id');
+
+        $this->actingAs($this->customerUser)
+            ->post("/cabinet/it-tasks/{$task->id}/complete", [
+                'result_url' => 'https://shop.example.uz',
+                'result_summary' => 'Магазин запущен, заказы идут в 1С.',
+                'contractor_company_id' => $this->provider->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $task->refresh();
+        $this->assertSame(ItTask::STATUS_COMPLETED, $task->status);
+        $this->assertSame($this->provider->id, $task->contractor_company_id);
+        $this->assertNotNull($task->completed_at);
+
+        // Выполненная задача видна всем во вкладке «Выполненные» и в карточке
+        auth()->logout();
+        $this->get('/it-services?done=1')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('total', 1)
+            ->where('tasks.data.0.result_host', 'shop.example.uz')
+            ->where('tasks.data.0.contractor.name', $this->provider->name));
+        $this->get("/it-services/{$task->slug}")->assertOk();
+
+        // …но откликнуться на неё уже нельзя
+        $this->actingAs($this->providerUser)
+            ->post("/it-services/{$task->id}/respond", ['body' => 'Ещё раз'])
+            ->assertSessionHasErrors('body');
+    }
+
     // ── Файлы ────────────────────────────────────────────────
 
     #[Test]
