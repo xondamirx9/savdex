@@ -17,6 +17,7 @@ use App\Http\Controllers\Cabinet\CompanyProfileController;
 use App\Http\Controllers\Cabinet\ContactController;
 use App\Http\Controllers\Cabinet\DashboardController;
 use App\Http\Controllers\Cabinet\IncomingController;
+use App\Http\Controllers\Cabinet\ItTaskController as CabinetItTaskController;
 use App\Http\Controllers\Cabinet\ListingController;
 use App\Http\Controllers\Cabinet\ListingImageController;
 use App\Http\Controllers\Cabinet\ListingWizardController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\Public\CatalogController;
 use App\Http\Controllers\Public\CompanyController;
 use App\Http\Controllers\Public\ContactUnlockController;
 use App\Http\Controllers\Public\FavoriteController;
+use App\Http\Controllers\Public\ItTaskController;
 use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\OgImageController;
@@ -84,6 +86,10 @@ Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
 // Тендеры — закупки внешних заказчиков, размещённые площадкой
 Route::get('/tenders', [TenderController::class, 'index'])->name('tenders');
 Route::get('/tenders/{slug}', [TenderController::class, 'show'])->name('tenders.show');
+
+// IT-услуги — IT-задачи компаний; откликаются IT-исполнители
+Route::get('/it-services', [ItTaskController::class, 'index'])->name('it-tasks');
+Route::get('/it-services/{slug}', [ItTaskController::class, 'show'])->name('it-tasks.show');
 
 /*
  * Колбэк платёжного провайдера.
@@ -386,6 +392,28 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     // 60 в час: активный закупщик за утро обходит десятки объявлений,
     // и 20 откликов в час он выбирал простым усердием, а не спамом.
     // Настоящий барьер — квота откликов тарифа, она считается в базе
+    Route::post('/it-services/{id}/respond', [ChatController::class, 'respondTask'])
+        ->whereNumber('id')
+        ->middleware(['verified', 'throttle:60,60'])
+        ->name('it-tasks.respond');
+    Route::get('/it-services/files/{id}', [ItTaskController::class, 'file'])
+        ->whereNumber('id')
+        ->name('it-tasks.file');
+
+    // IT-задачи компании в кабинете
+    Route::get('/cabinet/it-tasks', [CabinetItTaskController::class, 'index'])->name('cabinet.it-tasks');
+    Route::get('/cabinet/it-tasks/create', [CabinetItTaskController::class, 'create'])->name('cabinet.it-tasks.create');
+    Route::post('/cabinet/it-tasks', [CabinetItTaskController::class, 'store'])
+        ->middleware(['verified', 'throttle:20,60'])
+        ->name('cabinet.it-tasks.store');
+    Route::get('/cabinet/it-tasks/{id}/edit', [CabinetItTaskController::class, 'edit'])->whereNumber('id')->name('cabinet.it-tasks.edit');
+    Route::patch('/cabinet/it-tasks/{id}', [CabinetItTaskController::class, 'update'])->whereNumber('id')->name('cabinet.it-tasks.update');
+    Route::post('/cabinet/it-tasks/{id}/close', [CabinetItTaskController::class, 'close'])->whereNumber('id')->name('cabinet.it-tasks.close');
+    Route::post('/cabinet/it-tasks/{id}/reopen', [CabinetItTaskController::class, 'reopen'])->whereNumber('id')->name('cabinet.it-tasks.reopen');
+    Route::delete('/cabinet/it-tasks/{id}', [CabinetItTaskController::class, 'destroy'])->whereNumber('id')->name('cabinet.it-tasks.destroy');
+    Route::delete('/cabinet/it-tasks/{id}/files/{fileId}', [CabinetItTaskController::class, 'destroyFile'])
+        ->whereNumber('id')->whereNumber('fileId')->name('cabinet.it-tasks.files.destroy');
+
     Route::post('/listing/{id}/respond', [ChatController::class, 'respond'])
         ->whereNumber('id')
         ->middleware(['verified', 'throttle:60,60'])

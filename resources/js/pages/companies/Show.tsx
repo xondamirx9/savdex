@@ -48,6 +48,8 @@ interface BusinessCard {
     founded_year: number | null;
     employees_range: string | null;
     verification_level: number;
+    is_it_provider: boolean;
+    it_specializations: string[];
     rating: number;
     reviews_count: number;
     logo: string | null;
@@ -186,7 +188,17 @@ export default function CompanyShow({
                                 ) : (
                                     <span className="badge badge-neutral">Не проверена</span>
                                 )}
+                                {company.is_it_provider && (
+                                    <span className="badge badge-supply">IT-исполнитель</span>
+                                )}
                             </div>
+                            {company.is_it_provider && company.it_specializations.length > 0 && (
+                                <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+                                    {company.it_specializations.map((s) => (
+                                        <span key={s} className="chip" style={{ cursor: 'default' }}>{s}</span>
+                                    ))}
+                                </div>
+                            )}
                             <p className="t-lead">
                                 {[company.type_label, company.custom_category, company.city, company.country]
                                     .filter(Boolean)

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Public;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\ItTask;
 use App\Models\Listing;
 use App\Models\NewsPost;
 use App\Models\Tender;
@@ -62,6 +63,10 @@ class SitemapController extends Controller
             $parts[] = 'tenders';
         }
 
+        if (ItTask::query()->active()->exists()) {
+            $parts[] = 'it-tasks';
+        }
+
         $xml = view('sitemap.index', [
             'parts' => array_map(fn (string $p): string => url("/sitemap-{$p}.xml"), $parts),
             'lastmod' => now()->toAtomString(),
@@ -78,6 +83,7 @@ class SitemapController extends Controller
             $name === 'companies' => $this->companies(),
             $name === 'news' => $this->news(),
             $name === 'tenders' => $this->tenders(),
+            $name === 'it-tasks' => $this->itTasks(),
             (bool) preg_match('/^listings-(\d+)$/', $name, $m) => $this->listings((int) $m[1]),
             default => null,
         };
@@ -141,6 +147,7 @@ class SitemapController extends Controller
             ['loc' => url('/about'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/news'), 'priority' => '0.6', 'changefreq' => 'weekly'],
             ['loc' => url('/tenders'), 'priority' => '0.8', 'changefreq' => 'daily'],
+            ['loc' => url('/it-services'), 'priority' => '0.8', 'changefreq' => 'daily'],
             // Разделы из подвала: индексируемые страницы, которых
             // роботу иначе не найти иначе как по ссылкам с витрины
             ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],
@@ -240,6 +247,21 @@ class SitemapController extends Controller
             ->get(['slug', 'updated_at'])
             ->map(fn (Tender $t): array => [
                 'loc' => url('/tenders/'.$t->slug),
+                'lastmod' => $t->updated_at?->toAtomString(),
+                'priority' => '0.6',
+                'changefreq' => 'weekly',
+            ])
+            ->all();
+    }
+
+    /** @return list<array<string, string|null>> */
+    private function itTasks(): array
+    {
+        return ItTask::query()
+            ->active()
+            ->get(['slug', 'updated_at'])
+            ->map(fn (ItTask $t): array => [
+                'loc' => url('/it-services/'.$t->slug),
                 'lastmod' => $t->updated_at?->toAtomString(),
                 'priority' => '0.6',
                 'changefreq' => 'weekly',

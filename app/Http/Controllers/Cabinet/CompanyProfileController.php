@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\CompanyContact;
 use App\Models\CompanyDocument;
 use App\Models\Country;
+use App\Models\ItTask;
 use App\Rules\Tin;
 use App\Support\ImageStore;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +50,8 @@ class CompanyProfileController extends Controller
                 'employees_range' => $company->employees_range,
                 'type' => $company->type,
                 'primary_role' => $company->primary_role,
+                'is_it_provider' => (bool) $company->is_it_provider,
+                'it_specializations' => $company->it_specializations ?? [],
                 'initials' => $company->initials(),
                 'logo' => $company->logoUrl(),
                 'cover' => $company->coverUrl(),
@@ -56,6 +59,8 @@ class CompanyProfileController extends Controller
                 'missing' => $company->missingProfileFields(),
                 'verification_level' => $company->verification_level,
             ],
+
+            'serviceTypes' => ItTask::SERVICE_TYPES,
 
             'contacts' => $company?->contacts()->get()->map(fn (CompanyContact $c): array => [
                 'id' => $c->id,
@@ -156,6 +161,9 @@ class CompanyProfileController extends Controller
             'type' => ['nullable', 'string', 'max:30'],
             'custom_category' => ['nullable', 'string', 'max:80'],
             'primary_role' => ['nullable', 'in:supplier,buyer,both'],
+            'is_it_provider' => ['nullable', 'boolean'],
+            'it_specializations' => ['nullable', 'array', 'max:'.count(ItTask::SERVICE_TYPES)],
+            'it_specializations.*' => [Rule::in(array_keys(ItTask::SERVICE_TYPES))],
         ], [
             'name.required' => 'Укажите название компании',
             'founded_year.between' => 'Год основания должен быть между 1850 и '.now()->year,

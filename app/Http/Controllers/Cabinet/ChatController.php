@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Cabinet;
 
 use App\Exceptions\ChatRejected;
 use App\Http\Controllers\Controller;
+use App\Models\ItTask;
 use App\Models\Listing;
 use App\Models\Message;
 use App\Models\MessageThread;
@@ -39,7 +40,7 @@ class ChatController extends Controller
 
         $threads = MessageThread::query()
             ->participant($company)
-            ->with(['listing', 'buyer', 'seller'])
+            ->with(['listing', 'itTask', 'buyer', 'seller'])
             ->orderByDesc('last_message_at')
             ->limit(100)
             ->get();
@@ -64,7 +65,7 @@ class ChatController extends Controller
                     'id' => $t->id,
                     'company' => $other?->name ?? 'Компания удалена',
                     'initials' => $other?->initials() ?? '—',
-                    'listing' => $t->listing?->title,
+                    'listing' => $t->listing?->title ?? $t->itTask?->title,
                     'last' => $last === null ? null : Str::limit($last->body, 80),
                     'last_mine' => $last !== null && $last->company_id === $company->id,
                     'at' => $t->last_message_at?->diffForHumans(),
@@ -80,7 +81,7 @@ class ChatController extends Controller
         abort_if($company === null, 404);
 
         $thread = MessageThread::query()
-            ->with(['listing', 'buyer', 'seller'])
+            ->with(['listing', 'itTask', 'buyer', 'seller'])
             ->findOrFail($id);
 
         // 404, а не 403: чужой разговор не должен подтверждать
@@ -101,6 +102,11 @@ class ChatController extends Controller
                     'title' => $thread->listing->title,
                     'slug' => $thread->listing->slug,
                     'active' => $thread->listing->status === Listing::STATUS_ACTIVE,
+                ],
+                'task' => $thread->itTask === null ? null : [
+                    'title' => $thread->itTask->title,
+                    'slug' => $thread->itTask->slug,
+                    'active' => $thread->itTask->isActive(),
                 ],
             ],
             'messages' => $thread->messages()
@@ -141,6 +147,34 @@ class ChatController extends Controller
     /**
      * Отклик с карточки объявления: создаёт разговор и уводит в него.
      */
+    /** Отклик IT-исполнителя на IT-задачу — тот же чат, та же квота. */
+    public function respondTask(Request $request, int $id): RedirectResponse
+    {
+        $user = $request->user();
+        $company = $user->company;
+
+        if ($company === null) {
+            return back()->withErrors(['body' => 'Сначала заполните данные компании — отклик отправляется от её имени']);
+        }
+
+        $task = ItTask::query()->with('company')->findOrFail($id);
+
+        $data = $request->validate(
+            ['body' => ['required', 'string', 'max:'.ChatService::MAX_LENGTH]],
+            ['body.required' => 'Напишите, чем можете помочь', 'body.max' => 'Сообщение слишком длинное'],
+        );
+
+        try {
+            $thread = $this->chat->respondToTask($task, $company, $user, $data['body']);
+        } catch (ChatRejected $e) {
+            return back()->withErrors(['body' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('cabinet.chats.show', $thread->id)
+            ->with('success', 'Отклик отправлен — продолжайте разговор здесь.');
+    }
+
     public function respond(Request $request, int $id): RedirectResponse
     {
         $user = $request->user();

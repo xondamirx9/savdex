@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import {
     BarChart3,
     Building2,
+    Code2,
     CreditCard,
     Eye,
     LayoutDashboard,
@@ -44,6 +45,7 @@ const GROUPS: NavGroup[] = [
             { href: routes.cabinet, label: 'Дашборд', icon: LayoutDashboard },
             { href: routes.cabinetListings, label: 'Мои объявления', icon: Package, count: 'listings' },
             { href: routes.listingCreate, label: 'Создать объявление', icon: Plus },
+            { href: routes.cabinetItTasks, label: 'IT-задачи', icon: Code2 },
         ],
     },
     {

@@ -26,6 +26,8 @@ interface Company {
     employees_range: string | null;
     type: string | null;
     primary_role: string | null;
+    is_it_provider: boolean;
+    it_specializations: string[];
     initials: string;
     logo: string | null;
     cover: string | null;
@@ -36,6 +38,7 @@ interface Company {
 
 interface Props {
     company: Company | null;
+    serviceTypes: Record<string, string>;
     contacts: { id: number; type: string; value: string; label: string | null; is_public: boolean }[];
     documents: {
         id: number;
@@ -66,6 +69,7 @@ const TYPES = [
 
 export default function CompanyProfile({
     company,
+    serviceTypes,
     contacts,
     documents,
     employees,
@@ -95,6 +99,8 @@ export default function CompanyProfile({
         type: string;
         custom_category: string;
         primary_role: string;
+        is_it_provider: boolean;
+        it_specializations: string[];
     }>({
         name: company?.name ?? '',
         legal_name: company?.legal_name ?? '',
@@ -109,6 +115,8 @@ export default function CompanyProfile({
         type: company?.type ?? 'distributor',
         custom_category: company?.custom_category ?? '',
         primary_role: company?.primary_role ?? 'both',
+        is_it_provider: company?.is_it_provider ?? false,
+        it_specializations: company?.it_specializations ?? [],
     });
 
     const descRef = useRef<HTMLTextAreaElement>(null);
@@ -540,6 +548,52 @@ export default function CompanyProfile({
                             Выделите текст и нажмите «Ж» — на визитке он станет жирным. Строки, начатые с «- »,
                             превратятся в список; эмодзи ✔ ★ 📦 можно вставлять прямо в текст.
                         </p>
+                    </div>
+
+                    {/* Роль IT-исполнителя: только с ней видна кнопка «Откликнуться»
+                        в разделе «IT-услуги». Специализации показываются на визитке
+                        и помогают заказчику понять, к кому обращаться */}
+                    <div className="field mt-24" style={{ paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+                        <label className="check">
+                            <input
+                                type="checkbox"
+                                checked={form.data.is_it_provider}
+                                onChange={(e) => form.setData('is_it_provider', e.target.checked)}
+                            />
+                            Оказываем IT-услуги — хотим откликаться на IT-задачи
+                        </label>
+                        <p className="hint">
+                            Компании с этой ролью видят кнопку «Откликнуться» в разделе «IT-услуги» и получают
+                            пометку «IT-исполнитель» на визитке. Отклик списывает лимит откликов тарифа.
+                        </p>
+                        {form.data.is_it_provider && (
+                            <div className="row wrap mt-12" style={{ gap: 8 }}>
+                                {Object.entries(serviceTypes).map(([code, label]) => {
+                                    const on = form.data.it_specializations.includes(code);
+                                    return (
+                                        <button
+                                            key={code}
+                                            type="button"
+                                            className={cn('chip', on && 'chip-active')}
+                                            aria-pressed={on}
+                                            onClick={() =>
+                                                form.setData(
+                                                    'it_specializations',
+                                                    on
+                                                        ? form.data.it_specializations.filter((c) => c !== code)
+                                                        : [...form.data.it_specializations, code],
+                                                )
+                                            }
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {form.errors.it_specializations && (
+                            <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.it_specializations}</p>
+                        )}
                     </div>
 
                     <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>

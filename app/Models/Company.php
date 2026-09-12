@@ -27,7 +27,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'slug', 'name', 'legal_name', 'tin',
     'country_id', 'city_id', 'address', 'lat', 'lng',
-    'type', 'primary_role', 'custom_category', 'description', 'source_note', 'logo_path', 'cover_path', 'website',
+    'type', 'primary_role', 'is_it_provider', 'it_specializations', 'custom_category', 'description', 'source_note', 'logo_path', 'cover_path', 'website',
     'phone', 'email', 'telegram', 'whatsapp', 'contact_person',
     'founded_year', 'employees_range', 'turnover_range',
     'verification_level', 'verified_at', 'verified_by',
@@ -88,6 +88,8 @@ class Company extends Model
     protected function casts(): array
     {
         return [
+            'is_it_provider' => 'boolean',
+            'it_specializations' => 'array',
             'verified_at' => 'datetime',
             'blocked_at' => 'datetime',
             'lat' => 'decimal:7',
@@ -331,6 +333,8 @@ class Company extends Model
             'founded_year' => $this->founded_year,
             'employees_range' => $this->employees_range,
             'verification_level' => $this->verification_level,
+            'is_it_provider' => (bool) $this->is_it_provider,
+            'it_specializations' => $this->itSpecializationLabels(),
             'rating' => (float) $this->rating,
             'reviews_count' => $this->reviews_count,
             'logo' => $this->logoUrl(),
@@ -338,6 +342,24 @@ class Company extends Model
             'slug' => $this->slug,
             'url' => $this->publicUrl(),
         ];
+    }
+
+    /**
+     * Подписи специализаций IT-исполнителя — по справочнику видов
+     * IT-услуг (ItTask::SERVICE_TYPES), неизвестные коды пропускаются.
+     *
+     * @return list<string>
+     */
+    public function itSpecializationLabels(): array
+    {
+        if (! $this->is_it_provider) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn (string $code): ?string => ItTask::SERVICE_TYPES[$code] ?? null,
+            $this->it_specializations ?? [],
+        )));
     }
 
     // ── Поведение ────────────────────────────────────────────

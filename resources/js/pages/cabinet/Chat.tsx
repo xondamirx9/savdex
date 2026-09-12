@@ -18,6 +18,7 @@ interface ThreadInfo {
     initials: string;
     company_slug: string | null;
     listing: { title: string; slug: string | null; active: boolean } | null;
+    task: { title: string; slug: string | null; active: boolean } | null;
 }
 
 /**
@@ -63,7 +64,13 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
         <CabinetLayout
             title={`Чат — ${thread.company}`}
             heading={thread.company}
-            subheading={thread.listing ? `Объявление: ${thread.listing.title}` : 'Переписка с компанией'}
+            subheading={
+                thread.listing
+                    ? `Объявление: ${thread.listing.title}`
+                    : thread.task
+                      ? `IT-задача: ${thread.task.title}`
+                      : 'Переписка с компанией'
+            }
             actions={
                 <Link href={routes.cabinetChats} className="btn btn-secondary btn-sm">
                     <ArrowLeft aria-hidden className="size-4" /> Все чаты
@@ -77,6 +84,15 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                             <Link href={routes.listing(thread.listing.slug)}>{thread.listing.title}</Link>
                         ) : (
                             <>{thread.listing.title} · снято с публикации</>
+                        )}
+                    </p>
+                )}
+                {thread.task?.slug && (
+                    <p className="t-caption muted" style={{ marginBottom: 12 }}>
+                        {thread.task.active ? (
+                            <Link href={routes.itTask(thread.task.slug)}>{thread.task.title}</Link>
+                        ) : (
+                            <>{thread.task.title} · приём откликов закрыт</>
                         )}
                     </p>
                 )}
