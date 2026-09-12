@@ -18,6 +18,7 @@ function columns() {
                 { href: routes.companies, label: t('nav.companies') },
                 { href: `${routes.catalog}?type=demand`, label: t('nav.rfq') },
                 { href: routes.tenders, label: t('nav.tenders') },
+                { href: routes.itTasks, label: t('nav.it_services') },
                 { href: routes.countries, label: t('nav.countries') },
                 { href: routes.pricing, label: t('nav.pricing') },
             ],

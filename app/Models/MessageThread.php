@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
  * Роли фиксируются при создании и не меняются: по ним считается
  * непрочитанное и определяется собеседник.
  */
-#[Fillable(['listing_id', 'buyer_company_id', 'seller_company_id', 'last_message_at'])]
+#[Fillable(['listing_id', 'it_task_id', 'buyer_company_id', 'seller_company_id', 'last_message_at'])]
 class MessageThread extends Model
 {
     protected function casts(): array
@@ -33,6 +33,11 @@ class MessageThread extends Model
     public function listing(): BelongsTo
     {
         return $this->belongsTo(Listing::class);
+    }
+
+    public function itTask(): BelongsTo
+    {
+        return $this->belongsTo(ItTask::class, 'it_task_id');
     }
 
     public function buyer(): BelongsTo

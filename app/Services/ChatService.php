@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Exceptions\ChatRejected;
 use App\Models\Company;
+use App\Models\ItTask;
 use App\Models\Listing;
 use App\Models\Message;
 use App\Models\MessageThread;
@@ -70,6 +71,59 @@ class ChatService
                     'buyer_company_id' => $company->id,
                     'seller_company_id' => $seller->id,
                 ]);
+            }
+
+            $this->send($thread, $company, $user, $text);
+
+            return $thread;
+        });
+    }
+
+    /**
+     * Отклик IT-исполнителя на IT-задачу: новый разговор или продолжение.
+     *
+     * Та же квота откликов, что и у объявлений: списывается за новый
+     * разговор. Откликаться могут только компании с ролью IT-исполнителя —
+     * иначе раздел превратился бы в ещё один канал спама заказчикам.
+     *
+     * @throws ChatRejected
+     */
+    public function respondToTask(ItTask $task, Company $company, User $user, string $text): MessageThread
+    {
+        $customer = $task->company;
+
+        if ($customer === null) {
+            throw new ChatRejected('Задача больше не доступна.');
+        }
+
+        if ($customer->id === $company->id) {
+            throw new ChatRejected('Это ваша задача — откликаться на неё не нужно.');
+        }
+
+        if (! $task->isActive()) {
+            throw new ChatRejected('Приём откликов по этой задаче закрыт.');
+        }
+
+        if (! $company->is_it_provider) {
+            throw new ChatRejected('Откликаться на IT-задачи могут компании с ролью «IT-исполнитель» — включите её в профиле компании.');
+        }
+
+        return DB::transaction(function () use ($task, $customer, $company, $user, $text): MessageThread {
+            $thread = MessageThread::query()
+                ->where('it_task_id', $task->id)
+                ->where('buyer_company_id', $company->id)
+                ->first();
+
+            if ($thread === null) {
+                $this->spendResponse($company);
+
+                $thread = MessageThread::create([
+                    'it_task_id' => $task->id,
+                    'buyer_company_id' => $company->id,
+                    'seller_company_id' => $customer->id,
+                ]);
+
+                $task->increment('responses_count');
             }
 
             $this->send($thread, $company, $user, $text);
