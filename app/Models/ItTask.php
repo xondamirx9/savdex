@@ -22,9 +22,9 @@ use Illuminate\Support\Str;
  * списывает квоту тарифа так же, как отклик на объявление.
  */
 #[Fillable([
-    'company_id', 'user_id', 'slug', 'title', 'description', 'service_type', 'stack',
+    'company_id', 'user_id', 'contractor_company_id', 'slug', 'title', 'description', 'service_type', 'stack',
     'budget_type', 'budget_from', 'budget_to', 'currency', 'deadline_at',
-    'status', 'published_at', 'closed_at',
+    'status', 'published_at', 'closed_at', 'result_url', 'result_summary', 'completed_at',
 ])]
 class ItTask extends Model
 {
@@ -34,11 +34,15 @@ class ItTask extends Model
 
     public const STATUS_CLOSED = 'closed';
 
+    /** Исполнитель найден и работа сдана — задача уходит в «Выполненные». */
+    public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_ARCHIVED = 'archived';
 
     public const STATUSES = [
         self::STATUS_ACTIVE => 'Открыта',
         self::STATUS_CLOSED => 'Закрыта',
+        self::STATUS_COMPLETED => 'Выполнена',
         self::STATUS_ARCHIVED => 'В архиве',
     ];
 
@@ -69,6 +73,7 @@ class ItTask extends Model
             'deadline_at' => 'date',
             'published_at' => 'datetime',
             'closed_at' => 'datetime',
+            'completed_at' => 'datetime',
             'responses_count' => 'integer',
             'views_count' => 'integer',
         ];
@@ -102,6 +107,12 @@ class ItTask extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** Кто выполнил задачу — IT-исполнитель из откликнувшихся. */
+    public function contractor(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'contractor_company_id');
+    }
+
     public function files(): HasMany
     {
         return $this->hasMany(ItTaskFile::class)->orderBy('id');
@@ -116,6 +127,17 @@ class ItTask extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    /** @param Builder<self> $query */
+    public function scopeCompleted(Builder $query): void
+    {
+        $query->where('status', self::STATUS_COMPLETED);
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
     }
 
     /** @param Builder<self> $query */

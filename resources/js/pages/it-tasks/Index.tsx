@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Building2, CalendarDays, Code2, MessageSquareText, Search, Wallet } from 'lucide-react';
+import { Building2, CalendarDays, CheckCircle2, Code2, ExternalLink, MessageSquareText, Search, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
@@ -24,6 +24,12 @@ export interface TaskRow {
     published: string | null;
     responses: number;
     active: boolean;
+    completed: boolean;
+    completed_on: string | null;
+    result_url: string | null;
+    result_host: string | null;
+    result_summary: string | null;
+    contractor: { name: string; slug: string; initials: string; logo: string | null } | null;
     company: {
         name: string;
         slug: string;
@@ -41,7 +47,7 @@ interface Props {
         current_page: number;
         last_page: number;
     };
-    filters: { q: string; type: string };
+    filters: { q: string; type: string; done: boolean };
     types: { code: string; label: string }[];
     total: number;
     viewer: { guest: boolean; provider: boolean };
@@ -75,15 +81,33 @@ export function TaskCard({ row }: { row: TaskRow }) {
         >
             <div className="row wrap" style={{ gap: 8 }}>
                 <span className="badge badge-supply">{row.service_label}</span>
-                {row.published && <span className="t-caption muted">{row.published}</span>}
+                {row.completed ? (
+                    <span className="badge badge-verified">
+                        <CheckCircle2 aria-hidden className="size-3.5" /> {t('it_tasks.completed')}
+                    </span>
+                ) : (
+                    row.published && <span className="t-caption muted">{row.published}</span>
+                )}
             </div>
 
             <h3 className="t-h4">{row.title}</h3>
 
-            {row.excerpt && (
-                <p className="t-sm muted" style={{ flex: 1 }}>
-                    {row.excerpt}
+            {row.completed && row.result_summary ? (
+                <p className="t-sm" style={{ flex: 1 }}>
+                    {row.result_summary}
                 </p>
+            ) : (
+                row.excerpt && (
+                    <p className="t-sm muted" style={{ flex: 1 }}>
+                        {row.excerpt}
+                    </p>
+                )
+            )}
+
+            {row.completed && row.result_host && (
+                <span className="row t-sm" style={{ gap: 6, color: 'var(--primary-700)', fontWeight: 600 }}>
+                    <ExternalLink aria-hidden className="size-4" /> {row.result_host}
+                </span>
             )}
 
             {row.stack.length > 0 && (
@@ -119,12 +143,23 @@ export function TaskCard({ row }: { row: TaskRow }) {
                         </dd>
                     </div>
                 )}
-                <div className="row" style={{ gap: 8 }}>
-                    <MessageSquareText aria-hidden className="size-4 muted" />
-                    <dd style={{ margin: 0 }} className="muted">
-                        {tChoice('it_tasks.responses', row.responses)}
-                    </dd>
-                </div>
+                {row.completed && row.contractor && (
+                    <div className="row" style={{ gap: 8 }}>
+                        <Code2 aria-hidden className="size-4 muted" />
+                        <dt className="sr-only">{t('it_tasks.contractor')}</dt>
+                        <dd style={{ margin: 0 }}>
+                            {t('it_tasks.contractor')}: {row.contractor.name}
+                        </dd>
+                    </div>
+                )}
+                {!row.completed && (
+                    <div className="row" style={{ gap: 8 }}>
+                        <MessageSquareText aria-hidden className="size-4 muted" />
+                        <dd style={{ margin: 0 }} className="muted">
+                            {tChoice('it_tasks.responses', row.responses)}
+                        </dd>
+                    </div>
+                )}
             </dl>
         </Link>
     );
@@ -136,7 +171,9 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
     function apply(next: Partial<Props['filters']>) {
         router.get(
             routes.itTasks,
-            Object.fromEntries(Object.entries({ ...filters, ...next }).filter(([, v]) => v !== '' && v !== null)),
+            Object.fromEntries(
+                Object.entries({ ...filters, ...next }).filter(([, v]) => v !== '' && v !== null && v !== false),
+            ),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     }
@@ -145,6 +182,17 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
         <PublicLayout title={t('it_tasks.meta_title')} description={t('it_tasks.meta_description')}>
             <div className="container catalog">
                 <aside className="filters">
+                    <div className="filter-group">
+                        <div className="row wrap" style={{ gap: 6 }}>
+                            <button className={cn('chip', !filters.done && 'chip-active')} onClick={() => apply({ done: false })}>
+                                {t('it_tasks.tab_open')}
+                            </button>
+                            <button className={cn('chip', filters.done && 'chip-active')} onClick={() => apply({ done: true })}>
+                                {t('it_tasks.tab_done')}
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="filter-group">
                         <div className="filter-title">
                             {t('it_tasks.filters')}
@@ -223,9 +271,9 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                             <div className="empty-icon">
                                 <Code2 aria-hidden className="size-7" />
                             </div>
-                            <p className="t-h4">{t('it_tasks.empty_title')}</p>
+                            <p className="t-h4">{filters.done ? t('it_tasks.done_empty_title') : t('it_tasks.empty_title')}</p>
                             <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                                {t('it_tasks.empty_text')}
+                                {filters.done ? t('it_tasks.done_empty_text') : t('it_tasks.empty_text')}
                             </p>
                         </div>
                     ) : (
