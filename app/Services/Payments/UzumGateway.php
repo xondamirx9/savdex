@@ -82,6 +82,7 @@ class UzumGateway implements PaymentGateway
                 'operationType' => 'PAYMENT',
                 'payType' => 'ONE_STEP',
             ],
+            ...$this->fiscalCart($payment),
         ]);
 
         $orderId = $result['orderId'] ?? null;
@@ -176,6 +177,43 @@ class UzumGateway implements PaymentGateway
         // TODO(uzum-checkout): /api/v1/acquiring/refund с X-Operation-Id
         // (ключ идемпотентности) — когда возвраты понадобятся в админке.
         throw new PaymentGatewayException('Возврат через Uzum ещё не подключён — оформите возврат в кабинете Uzum');
+    }
+
+    /**
+     * Корзина для автофискализации — одна позиция на всю сумму счёта.
+     *
+     * Uzum с включённой автофискализацией отвечает 3045 без корзины;
+     * без ИКПУ в конфиге корзина не передаётся вовсе — терминал без
+     * фискализации на лишнее поле может ответить 3058.
+     *
+     * @return array<string, mixed>
+     */
+    private function fiscalCart(Payment $payment): array
+    {
+        $fiscal = (array) ($this->config['fiscal'] ?? []);
+        $spic = trim((string) ($fiscal['spic'] ?? ''));
+
+        if ($spic === '') {
+            return [];
+        }
+
+        $amount = $payment->amountMinor();
+
+        return ['merchantParams' => ['cart' => [
+            'cartId' => $payment->number,
+            'receiptType' => 'PURCHASE',
+            'total' => $amount,
+            'items' => [[
+                'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
+                'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
+                'quantity' => 1,
+                'price' => $amount,
+                'total' => $amount,
+                'spic' => $spic,
+                'packageCode' => (string) ($fiscal['package_code'] ?? ''),
+                'vatPercent' => (int) ($fiscal['vat_percent'] ?? 0),
+            ]],
+        ]]];
     }
 
     /**

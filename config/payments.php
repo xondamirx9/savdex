@@ -90,6 +90,24 @@ return [
              */
             'proxy' => env('PAYMENTS_UZUM_PROXY'),
 
+            /*
+             * Автофискализация Uzum Checkout: при включённой на терминале
+             * услуге /payment/register требует корзину с фискальными
+             * реквизитами каждой позиции (ошибка 3045 без неё). Площадка
+             * продаёт одну услугу — доступ к тарифу или пакет контактов,
+             * поэтому коды одни на все позиции:
+             *   spic         — ИКПУ услуги (tasnif.soliq.uz);
+             *   package_code — код упаковки/единицы («услуга»);
+             *   vat_percent  — ставка НДС площадки (0, если не плательщик).
+             * Пустой spic — корзина не передаётся (терминал без
+             * автофискализации).
+             */
+            'fiscal' => [
+                'spic' => env('PAYMENTS_UZUM_SPIC'),
+                'package_code' => env('PAYMENTS_UZUM_PACKAGE_CODE'),
+                'vat_percent' => (int) env('PAYMENTS_UZUM_VAT_PERCENT', 12),
+            ],
+
             // Список IP колбэков Uzum, если провайдер их публикует —
             // дополнительная проверка сверх подписи. Пусто = не проверяем IP
             'callback_ips' => array_filter(explode(',', (string) env('PAYMENTS_UZUM_CALLBACK_IPS', ''))),
