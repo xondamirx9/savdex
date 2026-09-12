@@ -454,10 +454,10 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
 
 /* ---------- IT-услуги ----------
-   Виды услуг лежат в меню-бургере, а меню — в своей панели слева.
-   Раньше список прокручивался внутри панели: два вложенных скролла
-   на одной странице, а на телефоне панель занимала первый экран
-   целиком. Теперь в панели одна кнопка, прокручивать нечего.
+   Панель фильтров по образцу биржевых витрин: белая карточка, жирный
+   подзаголовок и рубрики обычным текстом в столбик. Список открыт
+   целиком и не прокручивается внутри себя — своей высоты у панели нет,
+   поэтому второй полосы прокрутки на странице не появляется.
 
    Вертикальные отступы задаются padding-block: сокращённая запись
    padding обнуляла боковые поля .container, и страница прилипала
@@ -465,40 +465,38 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .it-tasks{padding-block:24px 96px}
 .it-layout{display:grid;grid-template-columns:244px 1fr;gap:24px;align-items:start}
 .it-main{min-width:0}
-.it-panel{position:sticky;top:92px;display:flex;flex-direction:column;gap:10px;
-  padding:14px;background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
-.it-panel-title{font-size:13px;font-weight:600;color:var(--text-muted)}
-.it-panel .type-menu,.it-panel .type-menu-btn{width:100%}
-.it-panel .type-menu-value{max-width:none;margin-right:auto}
+.it-panel{position:sticky;top:92px;padding:16px;
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
+.it-panel-title{display:block;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px}
+.it-panel-toggle{display:none}
+.it-filter-list{display:flex;flex-direction:column}
+.it-filter{padding:5px 0;text-align:left;font-size:14px;line-height:20px;
+  color:var(--text-muted);cursor:pointer;transition:color var(--t-fast)}
+.it-filter:hover{color:var(--primary-600)}
+.it-filter.is-active{color:var(--primary-700);font-weight:600}
 .it-tasks .toolbar{align-items:center}
 .it-tasks .toolbar .btn{height:44px}
-.type-menu-btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;
-  background:var(--white);border:1px solid var(--border);border-radius:var(--r-btn);
-  font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;cursor:pointer;
-  transition:border-color var(--t-fast),color var(--t-fast)}
-.type-menu-btn:hover{border-color:var(--primary-500);color:var(--primary-600)}
-.type-menu-btn[aria-expanded="true"]{border-color:var(--primary-500);color:var(--primary-700)}
-.type-menu-btn svg{flex-shrink:0}
-.type-menu-value{max-width:190px;overflow:hidden;text-overflow:ellipsis}
-/* Меню открывается от левого края кнопки: она стоит первой в строке */
-.type-menu .dropdown-menu{left:0;right:auto;min-width:244px}
 .it-search{position:relative;flex:1;min-width:220px}
 .it-search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
 /* Состояние задач под поиском, счётчик прижат к правому краю строки */
 .it-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .it-tabs .it-count{margin-left:auto}
-/* Планшет и телефон: панель встаёт над списком обычной строкой,
-   липкое позиционирование там только отнимает высоту экрана */
+/* Планшет и телефон: панель встаёт над списком и сворачивается под
+   кнопку — развёрнутый перечень занял бы первый экран до самих задач */
 @media (max-width:1024px){
   .it-layout{grid-template-columns:1fr;gap:16px}
-  .it-panel{position:static;flex-direction:row;align-items:center;gap:12px}
-  .it-panel .type-menu{width:auto;flex:1}
+  .it-panel{position:static;padding:10px 14px}
+  .it-panel-title{display:none}
+  .it-panel-toggle{display:flex;align-items:center;gap:8px;width:100%;
+    font-size:14px;font-weight:600;color:var(--text);cursor:pointer}
+  .it-panel-toggle svg:last-child{margin-left:auto;transition:transform var(--t-mid)}
+  .it-panel-toggle[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
+  .it-filter-list{display:none;margin-top:8px}
+  .it-filter-list.is-open{display:flex}
+  .it-filter{padding:7px 0}
 }
 @media (max-width:560px){
   .it-tasks .toolbar>*{width:100%}
-  .it-panel{flex-direction:column;align-items:stretch}
-  .it-panel .type-menu{width:100%}
-  .type-menu-value{max-width:none;margin-right:auto}
   .it-tabs .it-count{width:100%;margin-left:0}
 }
 .filter-fab{display:none}

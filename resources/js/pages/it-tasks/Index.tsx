@@ -6,7 +6,6 @@ import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { getLocale } from '@/lib/locale';
-import { useDismiss } from '@/lib/useDismiss';
 import { routes } from '@/routes';
 
 export interface TaskRow {
@@ -167,14 +166,14 @@ export function TaskCard({ row }: { row: TaskRow }) {
 }
 
 /**
- * Вид услуги — меню-бургер рядом с поиском.
+ * Вид услуги — список рубрик в панели слева.
  *
- * Раньше список жил в боковой панели и прокручивался внутри себя:
- * на десяток видов услуг приходилось два вложенных скролла, а на
- * телефоне панель занимала первый экран целиком. В меню виден
- * выбранный вид, а остальные открываются по нажатию.
+ * Список открыт целиком и никуда не прокручивается: у панели нет
+ * своей высоты, поэтому второй полосы прокрутки на странице не
+ * появляется. На узком экране список сворачивается под кнопку —
+ * там развёрнутый перечень занял бы первый экран до самих задач.
  */
-function TypeMenu({
+function TypeFilter({
     types,
     value,
     onPick,
@@ -184,35 +183,28 @@ function TypeMenu({
     onPick: (code: string) => void;
 }) {
     const [open, setOpen] = useState(false);
-    const ref = useDismiss(() => setOpen(false));
-    const current = types.find((type) => type.code === value);
 
     return (
-        <div className="dropdown type-menu" ref={ref}>
+        <aside className="it-panel">
             <button
                 type="button"
-                className="type-menu-btn"
+                className="it-panel-toggle"
                 aria-expanded={open}
-                aria-haspopup="true"
-                aria-label={t('it_tasks.filters')}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setOpen((v) => !v);
-                }}
+                onClick={() => setOpen((v) => !v)}
             >
                 <Menu aria-hidden className="size-4" />
-                <span className="type-menu-value">{current?.label ?? t('it_tasks.all_types')}</span>
+                <span>{t('it_tasks.filters')}</span>
                 <ChevronDown aria-hidden className="size-4" />
             </button>
-            <div className={cn('dropdown-menu type-menu-list', open && 'open')} aria-label={t('it_tasks.filters')}>
+
+            <span className="it-panel-title">{t('it_tasks.filters')}</span>
+
+            <div className={cn('it-filter-list', open && 'is-open')}>
                 <button
                     type="button"
-                    className="dropdown-item"
-                    aria-selected={value === ''}
-                    onClick={() => {
-                        onPick('');
-                        setOpen(false);
-                    }}
+                    className={cn('it-filter', value === '' && 'is-active')}
+                    aria-pressed={value === ''}
+                    onClick={() => onPick('')}
                 >
                     {t('it_tasks.all_types')}
                 </button>
@@ -220,18 +212,15 @@ function TypeMenu({
                     <button
                         key={type.code}
                         type="button"
-                        className="dropdown-item"
-                        aria-selected={value === type.code}
-                        onClick={() => {
-                            onPick(type.code);
-                            setOpen(false);
-                        }}
+                        className={cn('it-filter', value === type.code && 'is-active')}
+                        aria-pressed={value === type.code}
+                        onClick={() => onPick(type.code)}
                     >
                         {type.label}
                     </button>
                 ))}
             </div>
-        </div>
+        </aside>
     );
 }
 
@@ -262,12 +251,7 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                 </div>
 
                 <div className="it-layout">
-                    {/* Отдельная панель слева: в ней только меню видов услуг,
-                        поэтому прокручивать внутри панели нечего */}
-                    <aside className="it-panel">
-                        <span className="it-panel-title">{t('it_tasks.filters')}</span>
-                        <TypeMenu types={types} value={filters.type} onPick={(type) => apply({ type })} />
-                    </aside>
+                    <TypeFilter types={types} value={filters.type} onPick={(type) => apply({ type })} />
 
                     <div className="it-main">
                         <div className="toolbar">
