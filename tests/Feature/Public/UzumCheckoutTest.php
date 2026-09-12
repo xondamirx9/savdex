@@ -136,6 +136,37 @@ class UzumCheckoutTest extends TestCase
         app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
     }
 
+    #[Test]
+    public function register_finds_pay_url_under_unknown_or_nested_key(): void
+    {
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'payment' => ['checkoutPageLink' => self::PAY_URL]],
+            ]),
+        ]);
+
+        $result = app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+
+        $this->assertSame(self::PAY_URL, $result['redirect_url']);
+    }
+
+    #[Test]
+    public function callback_accepts_completed_status_in_nested_result(): void
+    {
+        $this->registerOrder();
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/getOrderStatus' => Http::response([
+                'errorCode' => 0,
+                'result' => ['order' => ['orderId' => self::ORDER_ID, 'orderStatus' => 'COMPLETED']],
+            ]),
+        ]);
+
+        $this->deliverCallback(['operationState' => 'SUCCESS'])->assertOk();
+
+        $this->assertSame('paid', $this->payment->refresh()->status);
+    }
+
     // ── Колбэк об оплате ─────────────────────────────────────
 
     #[Test]
