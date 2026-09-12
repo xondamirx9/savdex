@@ -295,7 +295,7 @@ return [
         'categories_title' => '热门类目',
         'categories_all' => '查看全部类目',
         'categories_count' => ':count 件产品',
-        'latest_title' => '新品上架',
+        'vip_title' => 'VIP 精选',
         'latest_all' => '全部商品',
         'row_prev' => '上一组',
         'row_next' => '下一组',

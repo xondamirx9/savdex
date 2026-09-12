@@ -301,7 +301,7 @@ return [
         'categories_title' => 'Популярные категории',
         'categories_all' => 'Смотреть все категории',
         'categories_count' => ':count товар|:count товара|:count товаров',
-        'latest_title' => 'Новые товары',
+        'vip_title' => 'VIP-предложения',
         'latest_all' => 'Все товары',
         'row_prev' => 'Назад',
         'row_next' => 'Вперёд',

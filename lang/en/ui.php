@@ -296,7 +296,7 @@ return [
         'categories_title' => 'Popular categories',
         'categories_all' => 'View all categories',
         'categories_count' => ':count product|:count products',
-        'latest_title' => 'New products',
+        'vip_title' => 'VIP offers',
         'latest_all' => 'All products',
         'row_prev' => 'Previous',
         'row_next' => 'Next',

@@ -429,12 +429,12 @@ export default function Home({
                 </section>
             )}
 
-            {/* ── Новые объявления ── */}
+            {/* ── Витрина VIP: объявления компаний с высшим тарифом ── */}
             {latest.length > 0 && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.latest_title')}</h2>
+                            <h2>{t('home.vip_title')}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
