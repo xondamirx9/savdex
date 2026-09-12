@@ -296,7 +296,7 @@ return [
         'categories_title' => 'Popüler kategoriler',
         'categories_all' => 'Tüm kategorileri gör',
         'categories_count' => ':count ürün',
-        'latest_title' => 'Yeni ürünler',
+        'vip_title' => 'VIP teklifler',
         'latest_all' => 'Tüm ürünler',
         'row_prev' => 'Geri',
         'row_next' => 'İleri',

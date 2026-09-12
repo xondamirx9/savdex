@@ -299,7 +299,7 @@ return [
         'categories_title' => 'Ommabop toifalar',
         'categories_all' => 'Barcha toifalarni ko‘rish',
         'categories_count' => ':count mahsulot',
-        'latest_title' => 'Yangi mahsulotlar',
+        'vip_title' => 'VIP takliflar',
         'latest_all' => 'Barcha mahsulotlar',
         'row_prev' => 'Orqaga',
         'row_next' => 'Oldinga',
