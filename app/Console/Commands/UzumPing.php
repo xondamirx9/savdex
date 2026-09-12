@@ -36,6 +36,9 @@ class UzumPing extends Command
         $this->line('  PAYMENTS_UZUM_CALLBACK_LOGIN    = '.self::mask((string) ($config['callback_login'] ?? '')));
         $this->line('  PAYMENTS_UZUM_CALLBACK_PASSWORD = '.self::mask((string) ($config['callback_password'] ?? '')));
         $this->line('  PAYMENTS_UZUM_PROXY             = '.self::maskProxy((string) ($config['proxy'] ?? '')));
+        $this->line('  PAYMENTS_UZUM_SPIC              = '.((string) ($config['fiscal']['spic'] ?? '') ?: '(пусто — корзина не передаётся)'));
+        $this->line('  PAYMENTS_UZUM_PACKAGE_CODE      = '.((string) ($config['fiscal']['package_code'] ?? '') ?: '(пусто)'));
+        $this->line('  PAYMENTS_UZUM_VAT_PERCENT       = '.(string) ($config['fiscal']['vat_percent'] ?? ''));
         $this->newLine();
 
         if (! $config['enabled']) {

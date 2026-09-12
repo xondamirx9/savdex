@@ -167,6 +167,58 @@ class UzumCheckoutTest extends TestCase
         $this->assertSame('paid', $this->payment->refresh()->status);
     }
 
+    #[Test]
+    public function register_sends_fiscal_cart_when_spic_configured(): void
+    {
+        config([
+            'payments.providers.uzum.fiscal.spic' => '10899001001000000',
+            'payments.providers.uzum.fiscal.package_code' => '1495488',
+            'payments.providers.uzum.fiscal.vat_percent' => 12,
+        ]);
+
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+
+        $amount = $this->payment->amountMinor();
+
+        Http::assertSent(function (ClientRequest $request) use ($amount): bool {
+            $cart = $request['merchantParams']['cart'] ?? null;
+            $item = $cart['items'][0] ?? null;
+
+            return $cart !== null
+                && $cart['total'] === $amount
+                && count($cart['items']) === 1
+                && $item['price'] === $amount
+                && $item['total'] === $amount
+                && $item['quantity'] === 1
+                && $item['spic'] === '10899001001000000'
+                && $item['packageCode'] === '1495488'
+                && $item['vatPercent'] === 12
+                && $item['title'] !== '';
+        });
+    }
+
+    #[Test]
+    public function register_omits_cart_without_spic(): void
+    {
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
+
+        Http::assertSent(fn (ClientRequest $request): bool => ! isset($request['merchantParams']));
+    }
+
     // ── Колбэк об оплате ─────────────────────────────────────
 
     #[Test]
