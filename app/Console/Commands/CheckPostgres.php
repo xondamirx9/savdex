@@ -11,23 +11,26 @@ use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
- * Проверка новой базы PostgreSQL до того, как в неё поедут данные.
+ * Проверка базы PostgreSQL: доступна ли, та ли, и что в ней лежит.
  *
- * Базу создаёт человек в панели Render, и ошибиться там легко: не тот
- * тариф, не та переменная, случайно переключённый сайт. Ошибка вылезает
- * не сразу, а на переносе данных — когда откатываться дороже.
+ * Базу заводит человек в панели Render, и ошибиться там легко: не тот
+ * адрес, не те права, не та база. Ошибка вылезает не сразу, а в момент,
+ * когда на базу уже полагаются.
  *
- * Команда отвечает на один вопрос: можно ли переносить данные. Что
- * видно из SQL — проверяется; что видно только в панели (регион, тариф,
- * бэкапы, список доступа) — перечислено отдельным списком, потому что
- * «проверено» и «проверить нечем» человек должен различать.
+ * Отдельно сверяется, смотрят ли сайт и переменная TARGET_DB_URL в одну
+ * и ту же базу. Две базы в обороте — источник самых дорогих недоразумений:
+ * данные пишутся в одну, а смотрят и чистят другую.
+ *
+ * Что видно из SQL — проверяется; что видно только в панели (регион,
+ * тариф, бэкапы, список доступа) — перечислено отдельным списком, потому
+ * что «проверено» и «проверить нечем» человек должен различать.
  */
 class CheckPostgres extends Command
 {
     protected $signature = 'savdex:check-postgres
         {--to=pgsql_target : Подключение к новой базе}';
 
-    protected $description = 'Проверить новую базу PostgreSQL перед переносом данных';
+    protected $description = 'Проверить базу PostgreSQL: доступность, права, схему и данные';
 
     /** @var list<array{string, string, string}> */
     private array $rows = [];
@@ -65,7 +68,7 @@ class CheckPostgres extends Command
         }
 
         $this->describe($db);
-        $this->checkSiteStillOnSqlite();
+        $this->compareWithSiteDatabase($db);
         $this->checkPrivileges($db);
         $this->checkSchema($db);
 
@@ -89,24 +92,45 @@ class CheckPostgres extends Command
     }
 
     /**
-     * Сайт на этом шаге обязан остаться на SQLite.
+     * Смотрят ли сайт и проверяемое подключение в одну базу.
      *
-     * Переключение — отдельный шаг, и только после переноса данных.
-     * Переключённый раньше времени сайт показывает пустой каталог, а
-     * всё, что посетители успеют создать, потом сотрёт перенос.
+     * Две базы в обороте — самая дорогая из возможных путаниц: данные
+     * копятся в одной, а выгружают и чистят другую, и расхождение
+     * замечают, когда удалённого уже не вернуть. Поэтому здесь сверяются
+     * не настройки, а то, что реально ответил сервер на оба подключения.
      */
-    private function checkSiteStillOnSqlite(): void
+    private function compareWithSiteDatabase(ConnectionInterface $db): void
     {
-        $driver = DB::connection()->getDriverName();
+        $site = DB::connection();
+        $driver = $site->getDriverName();
 
-        if ($driver === 'pgsql') {
-            $this->problem('Сайт работает на', 'PostgreSQL',
-                'Сайт уже переключён на новую базу, а данные ещё не перенесены. Верните DB_CONNECTION к прежнему значению, пока посетители не начали писать в пустую базу.');
+        if ($driver !== 'pgsql') {
+            $this->note('Сайт работает на', $driver,
+                'Сайт читает и пишет не ту базу, которую мы проверяем. Если так и задумано, всё в порядке; если нет — проверьте DB_CONNECTION и DB_URL у сервиса.');
 
             return;
         }
 
-        $this->ok('Сайт работает на', $driver.' — как и должен на этом шаге');
+        try {
+            $siteDatabase = (string) $site->scalar('select current_database()');
+            $siteHost = (string) $site->scalar('select inet_server_addr()');
+        } catch (Throwable $e) {
+            $this->note('Сайт работает на', 'PostgreSQL', 'Имя базы сайта получить не удалось: '.$this->reason($e->getMessage()));
+
+            return;
+        }
+
+        $targetDatabase = (string) $db->scalar('select current_database()');
+        $targetHost = (string) $db->scalar('select inet_server_addr()');
+
+        if ($siteDatabase === $targetDatabase && $siteHost === $targetHost) {
+            $this->ok('Сайт и проверка', 'смотрят в одну базу — '.$siteDatabase);
+
+            return;
+        }
+
+        $this->note('Сайт и проверка', "сайт: {$siteDatabase}, проверка: {$targetDatabase}",
+            'Это две разные базы. Убедитесь, что выгружаете и чистите ту, в которую сайт пишет на самом деле.');
     }
 
     /** Прав должно хватать на создание схемы: миграции их потребуют. */
@@ -136,7 +160,7 @@ class CheckPostgres extends Command
 
         if ($tables === 0) {
             $this->note('Схема', 'таблиц нет',
-                'Это нормально. Схему создаст «php artisan migrate --database='.$db->getName().' --force», когда дойдёте до переноса.');
+                'Схему создаёт «php artisan migrate --database='.$db->getName().' --force». Для рабочей базы пустая схема — это ошибка.');
 
             return;
         }
@@ -155,14 +179,14 @@ class CheckPostgres extends Command
             : 0;
 
         if ($companies === 0 && $listings === 0) {
-            $this->ok('Данные', 'база пуста — как и задумано на этом шаге');
+            $this->note('Данные', 'база пуста',
+                'Ни компаний, ни объявлений. Для только что созданной базы это норма; для рабочей — повод разобраться, туда ли смотрит сайт.');
 
             return;
         }
 
-        $this->note('Данные', $this->plural($companies, 'компания', 'компании', 'компаний').
-            ', '.$this->plural($listings, 'объявление', 'объявления', 'объявлений'),
-            'В базе уже что-то есть. Если это демо-данные от первого запуска, перенос с --truncate их уберёт.');
+        $this->ok('Данные', $this->plural($companies, 'компания', 'компании', 'компаний').
+            ', '.$this->plural($listings, 'объявление', 'объявления', 'объявлений'));
     }
 
     // ── Отчёт ───────────────────────────────────────────────────────
@@ -234,12 +258,12 @@ class CheckPostgres extends Command
         $this->newLine();
 
         if ($this->blocked) {
-            $this->error('Переносить данные пока нельзя — сначала устраните отмеченное.');
+            $this->error('База к работе не готова — сначала устраните отмеченное.');
 
             return self::FAILURE;
         }
 
-        $this->info('База готова. Данные можно переносить, когда закончите с выгрузкой и очисткой.');
+        $this->info('База доступна, права на месте, схема и данные читаются.');
 
         return self::SUCCESS;
     }

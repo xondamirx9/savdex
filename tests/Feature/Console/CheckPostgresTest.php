@@ -10,11 +10,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Проверка новой базы перед переносом данных.
+ * Проверка базы PostgreSQL.
  *
  * Здесь проверяется не подключение к PostgreSQL — его в тестах нет, —
- * а то, ради чего команда написана: она обязана отказать, когда
- * переносить данные нельзя, и сказать человеку, что именно чинить.
+ * а то, ради чего команда написана: она обязана отказать, когда базой
+ * пользоваться нельзя, и сказать человеку, что именно чинить.
  */
 class CheckPostgresTest extends TestCase
 {
@@ -33,7 +33,7 @@ class CheckPostgresTest extends TestCase
         $output = Artisan::output();
 
         $this->assertStringContainsString('TARGET_DB_URL', $output);
-        $this->assertStringContainsString('Переносить данные пока нельзя', $output);
+        $this->assertStringContainsString('База к работе не готова', $output);
     }
 
     /**
@@ -52,6 +52,33 @@ class CheckPostgresTest extends TestCase
         $this->assertStringContainsString('Из SQL не видно', $output);
         $this->assertStringContainsString('регион', $output);
         $this->assertStringContainsString('тариф', $output);
+    }
+
+    /**
+     * Сайт на другой базе — повод предупредить, а не остановить.
+     * Раньше здесь стоял отказ, и на площадке, уже переехавшей на
+     * PostgreSQL, команда показывала ошибку там, где всё было верно.
+     */
+    #[Test]
+    public function о_чужой_базе_сайта_предупреждает_но_не_отказывает(): void
+    {
+        Config::set('database.connections.pgsql_target', [
+            'driver' => 'pgsql',
+            'url' => 'pgsql://someone:secret@no-such-host.invalid:5432/savdex',
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ]);
+
+        $this->check();
+
+        $this->assertStringNotContainsString(
+            'Верните DB_CONNECTION',
+            Artisan::output(),
+            'требование вернуть сайт на SQLite больше не актуально',
+        );
     }
 
     /** Непонятная ошибка драйвера бесполезна тому, кто её увидит. */
@@ -73,6 +100,6 @@ class CheckPostgresTest extends TestCase
         $output = Artisan::output();
 
         $this->assertStringContainsString('Соединение', $output);
-        $this->assertStringContainsString('Переносить данные пока нельзя', $output);
+        $this->assertStringContainsString('База к работе не готова', $output);
     }
 }
