@@ -174,6 +174,7 @@ class UzumCheckoutTest extends TestCase
             'payments.providers.uzum.fiscal.spic' => '10899001001000000',
             'payments.providers.uzum.fiscal.package_code' => '1495488',
             'payments.providers.uzum.fiscal.vat_percent' => 12,
+            'payments.providers.uzum.fiscal.tin' => '123456789',
         ]);
 
         Http::fake([
@@ -194,12 +195,13 @@ class UzumCheckoutTest extends TestCase
             return $cart !== null
                 && $cart['total'] === $amount
                 && count($cart['items']) === 1
-                && $item['price'] === $amount
+                && $item['unitPrice'] === $amount
                 && $item['total'] === $amount
                 && $item['quantity'] === 1
-                && $item['spic'] === '10899001001000000'
-                && $item['packageCode'] === '1495488'
-                && $item['vatPercent'] === 12
+                && $item['receiptParams']['spic'] === '10899001001000000'
+                && $item['receiptParams']['packageCode'] === '1495488'
+                && $item['receiptParams']['vatPercent'] === 12
+                && $item['receiptParams']['TIN'] === '123456789'
                 && $item['title'] !== '';
         });
     }
@@ -219,9 +221,9 @@ class UzumCheckoutTest extends TestCase
         app(PaymentGatewayManager::class)->for('uzum')->createCheckout($this->payment);
 
         Http::assertSent(function (ClientRequest $request): bool {
-            $item = $request['merchantParams']['cart']['items'][0];
+            $receipt = $request['merchantParams']['cart']['items'][0]['receiptParams'];
 
-            return $item['spic'] === '10899001001000000' && ! array_key_exists('packageCode', $item);
+            return $receipt['spic'] === '10899001001000000' && ! array_key_exists('packageCode', $receipt);
         });
     }
 

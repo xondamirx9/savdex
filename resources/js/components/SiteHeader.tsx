@@ -596,6 +596,35 @@ export function SiteHeader() {
             ? item.match(path, search)
             : path.startsWith(item.href.split('?')[0]) && item.href !== '/';
 
+    /*
+     * Высота шапки уезжает в переменную --hd-h: к ней привязаны все
+     * липкие колонки страниц (оглавление, фильтры каталога, боковое
+     * меню кабинета) и отступ якорей. Зашитая константа 92px была
+     * меньше реальной высоты, и шапка накрывала верх липкой карточки
+     * вместе с первым пунктом. Высота плавает: на телефоне добавляется
+     * строка поиска, на узких экранах пропадает лента разделов, —
+     * поэтому наблюдатель, а не разовый замер.
+     */
+    useEffect(() => {
+        const el = headerRef.current;
+
+        if (!el) return;
+
+        const apply = () => {
+            document.documentElement.style.setProperty(
+                '--hd-h',
+                `${Math.round(el.getBoundingClientRect().height)}px`,
+            );
+        };
+
+        apply();
+
+        const observer = new ResizeObserver(apply);
+        observer.observe(el);
+
+        return () => observer.disconnect();
+    }, []);
+
     // Прокрутка страницы под открытым меню сбивает с толку
     useEffect(() => {
         document.body.style.overflow = menuOpen ? 'hidden' : '';

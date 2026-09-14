@@ -98,7 +98,9 @@ return [
              * поэтому коды одни на все позиции:
              *   spic         — ИКПУ услуги (tasnif.soliq.uz);
              *   package_code — код упаковки/единицы («услуга»);
-             *   vat_percent  — ставка НДС площадки (0, если не плательщик).
+             *   vat_percent  — ставка НДС площадки (0, если не плательщик);
+             *   tin          — ИНН площадки как продавца (Uzum требует
+             *                  TIN или ПИНФЛ в реквизитах каждой позиции).
              * Пустой spic — корзина не передаётся (терминал без
              * автофискализации).
              */
@@ -106,6 +108,7 @@ return [
                 'spic' => env('PAYMENTS_UZUM_SPIC'),
                 'package_code' => env('PAYMENTS_UZUM_PACKAGE_CODE'),
                 'vat_percent' => (int) env('PAYMENTS_UZUM_VAT_PERCENT', 12),
+                'tin' => env('PAYMENTS_UZUM_TIN'),
             ],
 
             // Список IP колбэков Uzum, если провайдер их публикует —

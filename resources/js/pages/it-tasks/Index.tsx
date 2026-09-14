@@ -1,7 +1,9 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Building2, CalendarDays, CheckCircle2, ChevronDown, Code2, ExternalLink, Menu, MessageSquareText, Search, Wallet } from 'lucide-react';
+import { Building2, CalendarDays, CheckCircle2, Code2, ExternalLink, MessageSquareText, Search, Wallet } from 'lucide-react';
 import { useState } from 'react';
+import { BoardFilter } from '@/components/BoardFilter';
+import { TaskCover } from '@/components/TaskCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
@@ -76,9 +78,12 @@ export function TaskCard({ row }: { row: TaskRow }) {
     return (
         <Link
             href={routes.itTask(row.slug)}
-            className="card lift"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'inherit' }}
+            className="card lift task-card"
+            style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'inherit' }}
         >
+            <TaskCover type={row.service_type} />
+
+            <div className="task-card-body">
             <div className="row wrap" style={{ gap: 8 }}>
                 <span className="badge badge-supply">{row.service_label}</span>
                 {row.completed ? (
@@ -161,66 +166,8 @@ export function TaskCard({ row }: { row: TaskRow }) {
                     </div>
                 )}
             </dl>
-        </Link>
-    );
-}
-
-/**
- * Вид услуги — список рубрик в панели слева.
- *
- * Список открыт целиком и никуда не прокручивается: у панели нет
- * своей высоты, поэтому второй полосы прокрутки на странице не
- * появляется. На узком экране список сворачивается под кнопку —
- * там развёрнутый перечень занял бы первый экран до самих задач.
- */
-function TypeFilter({
-    types,
-    value,
-    onPick,
-}: {
-    types: Props['types'];
-    value: string;
-    onPick: (code: string) => void;
-}) {
-    const [open, setOpen] = useState(false);
-
-    return (
-        <aside className="it-panel">
-            <button
-                type="button"
-                className="it-panel-toggle"
-                aria-expanded={open}
-                onClick={() => setOpen((v) => !v)}
-            >
-                <Menu aria-hidden className="size-4" />
-                <span>{t('it_tasks.filters')}</span>
-                <ChevronDown aria-hidden className="size-4" />
-            </button>
-
-            <span className="it-panel-title">{t('it_tasks.filters')}</span>
-
-            <div className={cn('it-filter-list', open && 'is-open')}>
-                <button
-                    type="button"
-                    className={cn('it-filter', value === '' && 'is-active')}
-                    aria-pressed={value === ''}
-                    onClick={() => onPick('')}
-                >
-                    {t('it_tasks.all_types')}
-                </button>
-                {types.map((type) => (
-                    <button
-                        key={type.code}
-                        type="button"
-                        className={cn('it-filter', value === type.code && 'is-active')}
-                        aria-pressed={value === type.code}
-                        onClick={() => onPick(type.code)}
-                    >
-                        {type.label}
-                    </button>
-                ))}
             </div>
-        </aside>
+        </Link>
     );
 }
 
@@ -239,7 +186,7 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
 
     return (
         <PublicLayout title={t('it_tasks.meta_title')} description={t('it_tasks.meta_description')}>
-            <div className="container it-tasks">
+            <div className="container board-page">
                 <div className="section-head-left" style={{ marginBottom: 20 }}>
                     <span className="eyebrow">{t('it_tasks.eyebrow')}</span>
                     {/* Заголовок и подзаголовок на ступень мельче обычной
@@ -250,12 +197,20 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                     <p className="t-sm muted" style={{ marginTop: 6 }}>{t('it_tasks.post_hint')}</p>
                 </div>
 
-                <div className="it-layout">
-                    <TypeFilter types={types} value={filters.type} onPick={(type) => apply({ type })} />
+                <div className="board-layout">
+                    <BoardFilter
+                        title={t('it_tasks.filters')}
+                        value={filters.type}
+                        onPick={(type) => apply({ type })}
+                        options={[
+                            { id: '', label: t('it_tasks.all_types') },
+                            ...types.map((type) => ({ id: type.code, label: type.label })),
+                        ]}
+                    />
 
-                    <div className="it-main">
+                    <div className="board-main">
                         <div className="toolbar">
-                            <div className="it-search">
+                            <div className="board-search">
                                 <label htmlFor="it-q" className="sr-only">
                                     {t('it_tasks.search_label')}
                                 </label>
@@ -269,7 +224,7 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                                     onChange={(e) => setQ(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
                                 />
-                                <span aria-hidden className="it-search-ico">
+                                <span aria-hidden className="board-search-ico">
                                     <Search className="size-5" />
                                 </span>
                             </div>
@@ -281,7 +236,7 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
 
                         {/* Состояние задач — под поиском: это переключатель того же
                             списка, а не отдельный раздел, как читалось в панели */}
-                        <div className="it-tabs">
+                        <div className="board-tabs">
                             <button
                                 type="button"
                                 className={cn('chip', !filters.done && 'chip-active')}
@@ -303,7 +258,7 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                                     {t('it_tasks.reset')}
                                 </button>
                             )}
-                            <span className="t-sm muted it-count">{tChoice('it_tasks.found', total)}</span>
+                            <span className="t-sm muted board-count">{tChoice('it_tasks.found', total)}</span>
                         </div>
 
                         {tasks.data.length === 0 ? (

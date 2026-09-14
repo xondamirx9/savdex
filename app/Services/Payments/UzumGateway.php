@@ -199,13 +199,11 @@ class UzumGateway implements PaymentGateway
 
         $amount = $payment->amountMinor();
         $packageCode = trim((string) ($fiscal['package_code'] ?? ''));
+        $tin = trim((string) ($fiscal['tin'] ?? ''));
 
-        $item = [
-            'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
-            'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
-            'quantity' => 1,
-            'price' => $amount,
-            'total' => $amount,
+        // Фискальные реквизиты позиции Uzum ждёт вложенным объектом
+        // receiptParams, а не полями самой позиции (иначе — 3045)
+        $receipt = [
             'spic' => $spic,
             'vatPercent' => (int) ($fiscal['vat_percent'] ?? 0),
         ];
@@ -213,8 +211,23 @@ class UzumGateway implements PaymentGateway
         // Код упаковки не всегда известен сразу — без него корзина
         // уходит как есть, и ответ Uzum скажет, обязателен ли он
         if ($packageCode !== '') {
-            $item['packageCode'] = $packageCode;
+            $receipt['packageCode'] = $packageCode;
         }
+
+        // Продавец в чеке — ИНН площадки; без него Uzum отвечает 2000
+        // «You need pass TIN or PINFL for receiptParams»
+        if ($tin !== '') {
+            $receipt['TIN'] = $tin;
+        }
+
+        $item = [
+            'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
+            'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
+            'quantity' => 1,
+            'unitPrice' => $amount,
+            'total' => $amount,
+            'receiptParams' => $receipt,
+        ];
 
         return ['merchantParams' => ['cart' => [
             'cartId' => $payment->number,
