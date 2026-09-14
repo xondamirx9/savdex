@@ -198,13 +198,69 @@ class TenderAdminTest extends TestCase
         ]);
     }
 
+    #[Test]
+    public function импорт_разбирает_таблицу_на_чужом_языке(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Construction materials']);
+
+        // Таблица выгружена с англоязычной площадки, а заголовки
+        // набраны вперемешку — в окне импорта не угадалось ничего
+        $this->import([
+            'Title' => 'Cement supply for school',
+            'Kategoriya' => 'Construction materials',
+            'Amount' => '1,000,000',
+            'Currency' => 'сум',
+            'Deadline' => '30 октября 2026',
+            'Link' => 'https://xarid.uzex.uz/lot/9',
+            'Publish' => 'ha',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Cement supply for school', $tender->title);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(1_000_000.0, (float) $tender->budget);
+        $this->assertSame('UZS', $tender->currency);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+        $this->assertSame(Tender::STATUS_PUBLISHED, $tender->status);
+    }
+
+    #[Test]
+    public function синонимы_русских_заголовков_и_сумма_словами_читаются(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+
+        $this->import([
+            'Наименование' => 'Поставка цемента',
+            'Категория ' => 'Стройматериалы',
+            'Сумма' => '250 млн',
+            'Валюта' => 'сум',
+            'Срок подачи' => '30.10.2026',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Поставка цемента', $tender->title);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(250_000_000.0, (float) $tender->budget);
+        $this->assertSame('UZS', $tender->currency);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+    }
+
     /**
      * Прогнать одну строку через импортёр так, как это делает
      * очередь Filament: соответствие колонок — по русским заголовкам.
      *
      * @param  array<string, string>  $row
+     * @param  bool  $mapped  соответствие из окна импорта; false — то,
+     *                        что Filament не угадал ни одного столбца
      */
-    private function import(array $row): void
+    private function import(array $row, bool $mapped = true): void
     {
         $import = Import::create([
             'user_id' => auth()->id(),
@@ -216,8 +272,10 @@ class TenderAdminTest extends TestCase
 
         $columnMap = [];
 
-        foreach (TenderImporter::getColumns() as $column) {
-            $columnMap[$column->getName()] = $column->getExampleHeader();
+        if ($mapped) {
+            foreach (TenderImporter::getColumns() as $column) {
+                $columnMap[$column->getName()] = $column->getExampleHeader();
+            }
         }
 
         (new TenderImporter($import, $columnMap, []))($row);
