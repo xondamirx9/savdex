@@ -39,6 +39,7 @@ class UzumPing extends Command
         $this->line('  PAYMENTS_UZUM_SPIC              = '.((string) ($config['fiscal']['spic'] ?? '') ?: '(пусто — корзина не передаётся)'));
         $this->line('  PAYMENTS_UZUM_PACKAGE_CODE      = '.((string) ($config['fiscal']['package_code'] ?? '') ?: '(пусто)'));
         $this->line('  PAYMENTS_UZUM_VAT_PERCENT       = '.(string) ($config['fiscal']['vat_percent'] ?? ''));
+        $this->line('  PAYMENTS_UZUM_TIN               = '.((string) ($config['fiscal']['tin'] ?? '') ?: '(пусто)'));
         $this->newLine();
 
         if (! $config['enabled']) {

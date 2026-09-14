@@ -174,6 +174,7 @@ class UzumCheckoutTest extends TestCase
             'payments.providers.uzum.fiscal.spic' => '10899001001000000',
             'payments.providers.uzum.fiscal.package_code' => '1495488',
             'payments.providers.uzum.fiscal.vat_percent' => 12,
+            'payments.providers.uzum.fiscal.tin' => '123456789',
         ]);
 
         Http::fake([
@@ -200,6 +201,7 @@ class UzumCheckoutTest extends TestCase
                 && $item['receiptParams']['spic'] === '10899001001000000'
                 && $item['receiptParams']['packageCode'] === '1495488'
                 && $item['receiptParams']['vatPercent'] === 12
+                && $item['receiptParams']['TIN'] === '123456789'
                 && $item['title'] !== '';
         });
     }
