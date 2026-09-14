@@ -1,4 +1,5 @@
 import { CheckCircle2, Handshake, Mail, Phone, Send, Shield, Star, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { OfficeMap, type Office } from '@/components/OfficeMap';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { useSupport } from '@/lib/support';
@@ -57,6 +58,48 @@ const MUST: string[] = [
     'Снятие объявления, когда товар закончился',
 ];
 
+/**
+ * Раздел, который сейчас на экране, — для подсветки пункта оглавления.
+ *
+ * Наблюдатель, а не обработчик прокрутки: пересчёт границ на каждый
+ * пиксель прокрутки заметен на длинной странице, а здесь браузер
+ * будит нас только на пересечении.
+ */
+function useActiveSection(ids: string[]): string {
+    const key = ids.join(',');
+    const [active, setActive] = useState(ids[0] ?? '');
+
+    useEffect(() => {
+        const targets = ids
+            .map((id) => document.getElementById(id))
+            .filter((el): el is HTMLElement => el !== null);
+
+        if (targets.length === 0) return;
+
+        const io = new IntersectionObserver(
+            (entries) => {
+                // Верхний из видимых: при прокрутке на экране обычно
+                // два соседних раздела, и подсвечивать нужно первый
+                const top = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+
+                if (top) setActive(top.target.id);
+            },
+            // Верхняя граница — под шапкой, нижняя отрезает хвост экрана:
+            // иначе активным становился раздел, едва показавшийся снизу
+            { rootMargin: '-96px 0px -60% 0px', threshold: 0 },
+        );
+
+        targets.forEach((el) => io.observe(el));
+
+        return () => io.disconnect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]);
+
+    return active;
+}
+
 export default function About({
     stats,
     office,
@@ -66,13 +109,14 @@ export default function About({
 }) {
     const sections = office !== null ? SECTIONS : SECTIONS.filter((s) => s.id !== 'office');
     const support = useSupport();
+    const active = useActiveSection(sections.map((s) => s.id));
 
     return (
         <PublicLayout
             title="О компании"
             description="SAVDEX — B2B-площадка для поставщиков и закупщиков Узбекистана и Центральной Азии. Контакты, помощь, инструкция и правила размещения."
         >
-            <div className="container" style={{ padding: '32px 0 96px' }}>
+            <div className="container about-page">
                 <div className="grid-docs">
                     {/* Оглавление первое в разметке. На узких экранах колонка
                         схлопывается, и оно превращается в горизонтальную ленту
@@ -81,7 +125,7 @@ export default function About({
                     <aside>
                         <nav className="doc-nav card" style={{ padding: 10 }} aria-label="Разделы страницы">
                             {sections.map((s) => (
-                                <a key={s.id} href={`#${s.id}`}>
+                                <a key={s.id} href={`#${s.id}`} aria-current={active === s.id ? 'true' : undefined}>
                                     {s.label}
                                 </a>
                             ))}
@@ -143,11 +187,11 @@ export default function About({
                             </div>
                         </section>
 
-                        <section id="contacts" className="doc-section">
+                        <section id="contacts" className="doc-section contacts-section">
                             <h2 className="t-h2" style={{ marginBottom: 20 }}>
                                 Контакты
                             </h2>
-                            <div className="grid grid-2">
+                            <div className="grid grid-2 contacts-cards" data-reveal-stagger>
                                 <div className="card">
                                     <h3 className="t-h4" style={{ marginBottom: 16 }}>
                                         Оператор площадки
@@ -172,7 +216,7 @@ export default function About({
                                         Как с нами связаться
                                     </h3>
                                     <div className="stack-12">
-                                        <a href={support.telHref} className="row" style={{ gap: 12 }}>
+                                        <a href={support.telHref} className="row contact-link" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Phone aria-hidden className="size-4" />
                                             </span>
@@ -182,7 +226,7 @@ export default function About({
                                                 <span className="t-caption muted">{support.hours}</span>
                                             </span>
                                         </a>
-                                        <a href={`mailto:${support.email}`} className="row" style={{ gap: 12 }}>
+                                        <a href={`mailto:${support.email}`} className="row contact-link" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Mail aria-hidden className="size-4" />
                                             </span>
@@ -192,7 +236,7 @@ export default function About({
                                                 <span className="t-caption muted">Поддержка, ответ за 4 часа</span>
                                             </span>
                                         </a>
-                                        <a href={support.telegram} className="row" style={{ gap: 12 }}>
+                                        <a href={support.telegram} className="row contact-link" style={{ gap: 12 }}>
                                             <span className="ico-box ico-box-sm">
                                                 <Send aria-hidden className="size-4" />
                                             </span>

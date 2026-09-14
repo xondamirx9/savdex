@@ -1,4 +1,4 @@
-import { Clock, MapPin, Navigation } from 'lucide-react';
+import { Clock, ExternalLink, MapPin, Navigation } from 'lucide-react';
 
 /**
  * Офис площадки: адрес, часы работы и точка на карте.
@@ -55,6 +55,21 @@ function externalLinks(lat: number, lng: number, zoom: number): [string, string]
     ];
 }
 
+/**
+ * Куда ведёт сам адрес в карточке.
+ *
+ * С координатами — прямо в точку, без них — поиском по строке адреса:
+ * здание может ещё не стоять в справочнике, но улицу карта найдёт.
+ * Яндекс, а не Google: в Узбекистане у него подробнее дома и проезд.
+ */
+function addressHref({ address, lat, lng, zoom }: Office): string {
+    if (lat !== null && lng !== null) {
+        return `https://yandex.uz/maps/?ll=${lng}%2C${lat}&z=${zoom}&pt=${lng}%2C${lat}`;
+    }
+
+    return `https://yandex.uz/maps/?text=${encodeURIComponent(address)}`;
+}
+
 export function OfficeMap({ office }: { office: Office }) {
     const { address, lat, lng, zoom, hours } = office;
     // Координаты необязательны: адрес без метки на карте — рабочий
@@ -72,8 +87,22 @@ export function OfficeMap({ office }: { office: Office }) {
                         <h3 className="t-h4" style={{ marginBottom: 4 }}>
                             Адрес
                         </h3>
+                        {/* Адрес — ссылка на карту: по нему чаще всего и
+                            нажимают, чтобы посмотреть, где это */}
                         <p className="t-body" style={{ overflowWrap: 'anywhere' }}>
-                            {address || 'Уточняется'}
+                            {address !== '' ? (
+                                <a
+                                    href={addressHref(office)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="office-address"
+                                >
+                                    {address}
+                                    <ExternalLink aria-hidden className="size-3.5" />
+                                </a>
+                            ) : (
+                                'Уточняется'
+                            )}
                         </p>
                     </div>
                 </div>
