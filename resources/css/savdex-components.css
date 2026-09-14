@@ -458,51 +458,53 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .applied{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:20px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
 
-/* ---------- IT-услуги ----------
-   Панель фильтров по образцу биржевых витрин: белая карточка, жирный
+/* ---------- Страницы-ленты: тендеры и IT-услуги ----------
+   Панель фильтра по образцу биржевых витрин: белая карточка, жирный
    подзаголовок и рубрики обычным текстом в столбик. Список открыт
-   целиком и не прокручивается внутри себя — своей высоты у панели нет,
-   поэтому второй полосы прокрутки на странице не появляется.
+   целиком и не прокручивается внутри себя — своей высоты у панели
+   нет, поэтому второй полосы прокрутки на странице не появляется.
 
    Вертикальные отступы задаются padding-block: сокращённая запись
    padding обнуляла боковые поля .container, и страница прилипала
    к краям окна. */
-.it-tasks{padding-block:24px 96px}
-.it-layout{display:grid;grid-template-columns:244px 1fr;gap:24px;align-items:start}
-.it-main{min-width:0}
-.it-panel{position:sticky;top:var(--sticky-top);padding:16px;
+.board-page{padding-block:24px 96px}
+.board-layout{display:grid;grid-template-columns:244px 1fr;gap:24px;align-items:start}
+.board-main{min-width:0}
+.board-panel{position:sticky;top:var(--sticky-top);padding:16px;
   background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
-.it-panel-title{display:block;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px}
-.it-panel-toggle{display:none}
-.it-filter-list{display:flex;flex-direction:column}
-.it-filter{padding:5px 0;text-align:left;font-size:14px;line-height:20px;
+.board-panel-title{display:block;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px}
+.board-panel-toggle{display:none}
+.board-filter-list{display:flex;flex-direction:column}
+.board-filter{padding:5px 0;text-align:left;font-size:14px;line-height:20px;
   color:var(--text-muted);cursor:pointer;transition:color var(--t-fast)}
-.it-filter:hover{color:var(--primary-600)}
-.it-filter.is-active{color:var(--primary-700);font-weight:600}
-.it-tasks .toolbar{align-items:center}
-.it-tasks .toolbar .btn{height:44px}
-.it-search{position:relative;flex:1;min-width:220px}
-.it-search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
-/* Состояние задач под поиском, счётчик прижат к правому краю строки */
-.it-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.it-tabs .it-count{margin-left:auto}
+.board-filter:hover{color:var(--primary-600)}
+.board-filter.is-active{color:var(--primary-700);font-weight:600}
+/* Подрубрика: сдвиг и кегль отделяют второй уровень от первого */
+.board-filter--child{padding-left:12px;font-size:13.5px}
+.board-page .toolbar{align-items:center}
+.board-page .toolbar .btn{height:44px}
+.board-search{position:relative;flex:1;min-width:220px}
+.board-search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+/* Состояние списка под поиском, счётчик прижат к правому краю строки */
+.board-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.board-tabs .board-count{margin-left:auto}
 /* Планшет и телефон: панель встаёт над списком и сворачивается под
-   кнопку — развёрнутый перечень занял бы первый экран до самих задач */
+   кнопку — развёрнутый перечень занял бы первый экран до карточек */
 @media (max-width:1024px){
-  .it-layout{grid-template-columns:1fr;gap:16px}
-  .it-panel{position:static;padding:10px 14px}
-  .it-panel-title{display:none}
-  .it-panel-toggle{display:flex;align-items:center;gap:8px;width:100%;
+  .board-layout{grid-template-columns:1fr;gap:16px}
+  .board-panel{position:static;padding:10px 14px}
+  .board-panel-title{display:none}
+  .board-panel-toggle{display:flex;align-items:center;gap:8px;width:100%;
     font-size:14px;font-weight:600;color:var(--text);cursor:pointer}
-  .it-panel-toggle svg:last-child{margin-left:auto;transition:transform var(--t-mid)}
-  .it-panel-toggle[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
-  .it-filter-list{display:none;margin-top:8px}
-  .it-filter-list.is-open{display:flex}
-  .it-filter{padding:7px 0}
+  .board-panel-toggle svg:last-child{margin-left:auto;transition:transform var(--t-mid)}
+  .board-panel-toggle[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
+  .board-filter-list{display:none;margin-top:8px}
+  .board-filter-list.is-open{display:flex}
+  .board-filter{padding:7px 0}
 }
 @media (max-width:560px){
-  .it-tasks .toolbar>*{width:100%}
-  .it-tabs .it-count{width:100%;margin-left:0}
+  .board-page .toolbar>*{width:100%}
+  .board-tabs .board-count{width:100%;margin-left:0}
 }
 .filter-fab{display:none}
 
