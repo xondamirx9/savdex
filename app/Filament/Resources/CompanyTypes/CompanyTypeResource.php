@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CompanyTypes;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\CompanyTypes\Pages\CreateCompanyType;
 use App\Filament\Resources\CompanyTypes\Pages\EditCompanyType;
 use App\Filament\Resources\CompanyTypes\Pages\ListCompanyTypes;
@@ -15,11 +16,14 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 class CompanyTypeResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'catalogs';
+
     protected static ?string $model = CompanyType::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
@@ -37,15 +41,6 @@ class CompanyTypeResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return (string) CompanyType::count();
-    }
-
-    /**
-     * Тип компании — поле формы регистрации, а не объект модерации:
-     * правит его тот, кто отвечает за устройство площадки.
-     */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
     }
 
     public static function form(Schema $schema): Schema

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Settings;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Settings\Pages\CreateSetting;
 use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Filament\Resources\Settings\Pages\ListSettings;
@@ -13,10 +14,13 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 class SettingResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'settings';
+
     protected static ?string $model = Setting::class;
 
     protected static ?string $navigationLabel = 'Настройки';
@@ -28,12 +32,6 @@ class SettingResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Система';
 
     protected static ?int $navigationSort = 3;
-
-    /** Настройки площадки меняет только суперадмин. */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 

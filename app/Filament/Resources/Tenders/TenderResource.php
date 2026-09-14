@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Tenders;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Tenders\Pages\CreateTender;
 use App\Filament\Resources\Tenders\Pages\EditTender;
 use App\Filament\Resources\Tenders\Pages\ListTenders;
@@ -24,6 +25,10 @@ use Filament\Tables\Table;
  */
 class TenderResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'tenders';
+
     protected static ?string $model = Tender::class;
 
     protected static ?string $navigationLabel = 'Тендеры';

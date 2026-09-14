@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\NewsPosts;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\NewsPosts\Pages\CreateNewsPost;
 use App\Filament\Resources\NewsPosts\Pages\EditNewsPost;
 use App\Filament\Resources\NewsPosts\Pages\ListNewsPosts;
@@ -13,10 +14,13 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 class NewsPostResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'content';
+
     protected static ?string $model = NewsPost::class;
 
     protected static ?string $navigationLabel = 'Новости';
@@ -30,15 +34,6 @@ class NewsPostResource extends Resource
     protected static ?int $navigationSort = 2;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    /**
-     * Новости публикуются от имени площадки: модератор проверяет
-     * чужой контент, но не выпускает свой.
-     */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

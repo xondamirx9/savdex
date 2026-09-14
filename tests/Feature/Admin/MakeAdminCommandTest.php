@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Support\AdminAccess;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -45,9 +46,41 @@ class MakeAdminCommandTest extends TestCase
 
         $user->refresh();
 
-        $this->assertTrue($user->isModerator());
+        $this->assertSame(AdminAccess::MODERATOR, $user->admin_role);
         $this->assertFalse($user->isSuperadmin());
+        $this->assertTrue($user->hasAdminAbility('listings.moderate'));
         $this->assertSame(1, User::where('email', 'moder@savdex.uz')->count(), 'дубль учётки не создаётся');
+    }
+
+    /** Ролей девять, и выдать можно любую. */
+    #[Test]
+    public function команда_выдаёт_любую_из_ролей(): void
+    {
+        User::factory()->create(['email' => 'fin@savdex.uz']);
+
+        $this->artisan('savdex:admin', ['email' => 'fin@savdex.uz', '--role' => AdminAccess::FINANCE])
+            ->assertSuccessful();
+
+        $user = User::where('email', 'fin@savdex.uz')->sole();
+
+        $this->assertSame(AdminAccess::FINANCE, $user->admin_role);
+        $this->assertTrue($user->hasAdminAbility('payments.edit'));
+        $this->assertFalse($user->hasAdminAbility('settings.view'));
+    }
+
+    /**
+     * Неизвестная роль — отказ, а не пустые права.
+     *
+     * Опечатка в имени роли молча выдала бы человеку панель без единого
+     * раздела, и разбирались бы с этим долго.
+     */
+    #[Test]
+    public function неизвестная_роль_отклоняется(): void
+    {
+        $this->artisan('savdex:admin', ['email' => 'new@savdex.uz', '--role' => 'sales-manager'])
+            ->assertFailed();
+
+        $this->assertSame(0, User::where('email', 'new@savdex.uz')->count());
     }
 
     #[Test]

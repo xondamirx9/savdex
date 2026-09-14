@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Reviews;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Reviews\Pages\ListReviews;
 use App\Filament\Resources\Reviews\Tables\ReviewsTable;
 use App\Models\Review;
@@ -22,6 +23,10 @@ use UnitEnum;
  */
 class ReviewResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'reviews';
+
     protected static ?string $model = Review::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;

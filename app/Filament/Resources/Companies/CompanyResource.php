@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Companies;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Companies\Pages\CreateCompany;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
@@ -14,12 +15,14 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Auth;
 
 class CompanyResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'companies';
+
     protected static ?string $model = Company::class;
 
     protected static ?string $navigationLabel = 'Компании';
@@ -33,35 +36,6 @@ class CompanyResource extends Resource
     protected static ?int $navigationSort = 1;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    /**
-     * Удаление компании — не модерация.
-     *
-     * Модератор смотрит содержание: карточку правит, нарушителя
-     * блокирует. Удаление уносит вместе с компанией кошелёк, подписку
-     * и раскрытые контакты, за которые заплачено, а массовое действие
-     * делает это по галочкам сразу с полусотней. Право оставлено
-     * суперадмину; модератору для его задач хватает блокировки.
-     */
-    public static function canDelete(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canForceDelete(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canRestore(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

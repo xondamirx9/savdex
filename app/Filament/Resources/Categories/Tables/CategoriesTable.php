@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Categories\Tables;
 
 use App\Models\Category;
+use App\Support\AdminAccess;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -77,7 +78,8 @@ class CategoriesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => AdminAccess::allows('catalogs.delete')),
                 ]),
             ]);
     }
