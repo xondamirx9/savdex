@@ -369,9 +369,15 @@ export default function Home({
                                 </Link>
                             </div>
                         </div>
-
-                        <HeroSearch categories={categories} countries={countries} cities={cities} />
                     </div>
+                </div>
+            </section>
+
+            {/* ── Поиск под фотографией: панель стоит на подложке
+                 страницы, а не поверх кадра — картинка остаётся целой ── */}
+            <section className="hero-search-band">
+                <div className="container">
+                    <HeroSearch categories={categories} countries={countries} cities={cities} />
                 </div>
             </section>
 
