@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Companies\Tables;
 use App\Filament\Exports\CompanyExporter;
 use App\Filament\Imports\CompanyImporter;
 use App\Models\Company;
+use App\Support\AdminAccess;
 use App\Support\CompanyEmblem;
 use App\Support\ImageStore;
 use App\Support\Notifier;
@@ -58,12 +59,12 @@ class CompaniesTable
                     ->label('Выгрузить')
                     ->exporter(CompanyExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
-                    ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                    ->visible(fn (): bool => AdminAccess::allows('companies.export')),
 
                 ImportAction::make()
                     ->label('Загрузить')
                     ->importer(CompanyImporter::class)
-                    ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                    ->visible(fn (): bool => AdminAccess::allows('companies.import')),
             ])
             ->columns([
                 TextColumn::make('name')
@@ -331,7 +332,7 @@ class CompaniesTable
                      * и без visible() модератор мог удалять записи пачкой.
                      */
                     DeleteBulkAction::make()
-                        ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                        ->visible(fn (): bool => AdminAccess::allows('companies.delete')),
                 ]),
             ]);
     }

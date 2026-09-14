@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CompanyDocuments;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\CompanyDocuments\Pages\ListCompanyDocuments;
 use App\Filament\Resources\CompanyDocuments\Tables\CompanyDocumentsTable;
 use App\Models\CompanyDocument;
@@ -23,6 +24,10 @@ use UnitEnum;
  */
 class CompanyDocumentResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'documents';
+
     protected static ?string $model = CompanyDocument::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCheck;

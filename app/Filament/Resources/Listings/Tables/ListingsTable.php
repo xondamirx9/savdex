@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Listings\Tables;
 
 use App\Filament\Exports\ListingExporter;
 use App\Models\Listing;
+use App\Support\AdminAccess;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -17,7 +18,6 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 /**
  * Объявления и очередь модерации.
@@ -60,7 +60,7 @@ class ListingsTable
                     ->label('Выгрузить')
                     ->exporter(ListingExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
-                    ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                    ->visible(fn (): bool => AdminAccess::allows('listings.export')),
             ])
             ->columns([
                 TextColumn::make('title')
@@ -183,7 +183,7 @@ class ListingsTable
                      * и без visible() модератор мог удалять записи пачкой.
                      */
                     DeleteBulkAction::make()
-                        ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                        ->visible(fn (): bool => AdminAccess::allows('listings.delete')),
                 ]),
             ])
             ->emptyStateHeading('Объявлений нет')

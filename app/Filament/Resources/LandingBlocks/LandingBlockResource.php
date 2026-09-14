@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LandingBlocks;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\LandingBlocks\Pages\CreateLandingBlock;
 use App\Filament\Resources\LandingBlocks\Pages\EditLandingBlock;
 use App\Filament\Resources\LandingBlocks\Pages\ListLandingBlocks;
@@ -13,10 +14,13 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 class LandingBlockResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'content';
+
     protected static ?string $model = LandingBlock::class;
 
     protected static ?string $navigationLabel = 'Главная страница';
@@ -30,15 +34,6 @@ class LandingBlockResource extends Resource
     protected static ?int $navigationSort = 1;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    /**
-     * Главная страница — витрина продукта. Её содержимое меняет
-     * владелец площадки, а не тот, кто разбирает жалобы.
-     */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

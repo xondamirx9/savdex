@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CreditPacks;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\CreditPacks\Pages\CreateCreditPack;
 use App\Filament\Resources\CreditPacks\Pages\EditCreditPack;
 use App\Filament\Resources\CreditPacks\Pages\ListCreditPacks;
@@ -15,7 +16,6 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 /**
@@ -24,6 +24,10 @@ use UnitEnum;
  */
 class CreditPackResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'creditpacks';
+
     protected static ?string $model = CreditPack::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTicket;
@@ -37,11 +41,6 @@ class CreditPackResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Монетизация';
 
     protected static ?int $navigationSort = 4;
-
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Categories;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Categories\Pages\CreateCategory;
 use App\Filament\Resources\Categories\Pages\EditCategory;
 use App\Filament\Resources\Categories\Pages\ListCategories;
@@ -13,10 +14,13 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 
 class CategoryResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'catalogs';
+
     protected static ?string $model = Category::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
@@ -35,15 +39,6 @@ class CategoryResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return (string) Category::count();
-    }
-
-    /**
-     * Категории меняют структуру каталога и мастера объявлений —
-     * это настройка площадки, а не модерация.
-     */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
     }
 
     public static function form(Schema $schema): Schema

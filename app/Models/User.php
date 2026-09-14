@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Notifications\VerifyEmailCode;
+use App\Support\AdminAccess;
 use App\Support\EmailVerificationCode;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -28,7 +29,7 @@ use Illuminate\Notifications\Notifiable;
  */
 #[Fillable([
     'company_id', 'name', 'email', 'password', 'phone', 'locale',
-    'company_role', 'is_admin', 'admin_role', 'must_change_password', 'status',
+    'company_role', 'is_admin', 'admin_role', 'admin_permissions', 'must_change_password', 'status',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
@@ -43,15 +44,18 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public const ROLE_MANAGER = 'manager';
 
-    /** Роли в админке (§6.3 ТЗ). */
-    public const ADMIN_MODERATOR = 'moderator';
+    /**
+     * Роли в админке. Сам список и матрица прав — в AdminAccess.
+     *
+     * Здесь оставлены только два имени, на которые ссылается код вне
+     * матрицы: суперадмин упоминается в проверках «последний владелец»,
+     * модератор — роль по умолчанию у команды создания администратора.
+     */
+    public const ADMIN_MODERATOR = AdminAccess::MODERATOR;
 
-    public const ADMIN_SUPERADMIN = 'superadmin';
+    public const ADMIN_SUPERADMIN = AdminAccess::SUPERADMIN;
 
-    public const ADMIN_ROLES = [
-        self::ADMIN_MODERATOR => 'Модератор',
-        self::ADMIN_SUPERADMIN => 'Суперадмин',
-    ];
+    public const ADMIN_ROLES = AdminAccess::ROLES;
 
     /**
      * @return array<string, string>
@@ -65,6 +69,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'admin_permissions' => 'array',
             'must_change_password' => 'boolean',
         ];
     }
@@ -144,29 +149,77 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     /**
      * Полный доступ: биллинг, настройки, выдача доступов, импорт данных.
      *
-     * Роль по умолчанию — модератор: администратор без явно указанной
-     * роли не должен случайно получить право менять тарифы и выгружать
-     * базу. Права расширяют осознанно, а не по умолчанию.
+     * Единственная роль, которой разрешено всё, включая разделы, которых
+     * ещё не существует. Иначе каждый новый раздел пришлось бы отдельно
+     * выдавать владельцу системы, и однажды про это забудут.
      */
     public function isSuperadmin(): bool
     {
         return $this->is_admin && $this->admin_role === self::ADMIN_SUPERADMIN;
     }
 
-    /** Модерация: объявления, компании, жалобы, отзывы. */
-    public function isModerator(): bool
+    /**
+     * Есть ли право — главный вопрос, который задаёт панель.
+     *
+     * Заблокированный сотрудник не имеет прав вовсе, какой бы ни была
+     * роль: отозвать доступ одним полем должно получаться, не разбираясь
+     * в том, что этой роли когда-то выдали.
+     */
+    public function hasAdminAbility(string $ability): bool
     {
-        return $this->is_admin && in_array(
-            $this->admin_role,
-            [self::ADMIN_MODERATOR, self::ADMIN_SUPERADMIN],
-            true,
+        if (! $this->is_admin || $this->status !== 'active') {
+            return false;
+        }
+
+        if ($this->isSuperadmin()) {
+            return true;
+        }
+
+        return in_array($ability, $this->adminAbilities(), true);
+    }
+
+    /**
+     * Итоговый набор: права роли плюс выданные лично, минус отозванные.
+     *
+     * Отзыв применяется последним и потому сильнее выдачи. Так «отобрать»
+     * работает предсказуемо: одно и то же право, попавшее в оба списка,
+     * не достанется никому — а спорную пару разрешать в пользу доступа
+     * было бы ровно тем поведением, которого от защиты не ждут.
+     *
+     * @return list<string>
+     */
+    public function adminAbilities(): array
+    {
+        $permissions = $this->admin_permissions ?? [];
+
+        $granted = array_merge(
+            AdminAccess::abilitiesFor($this->admin_role),
+            array_filter((array) ($permissions['grant'] ?? []), 'is_string'),
         );
+
+        $revoked = array_filter((array) ($permissions['revoke'] ?? []), 'is_string');
+
+        return array_values(array_diff(array_unique($granted), $revoked));
+    }
+
+    /**
+     * Ограничен ли раздел своими записями.
+     *
+     * Право, выданное лично, область видимости не расширяет: выдать
+     * продавцу «сделки» поштучно и нечаянно открыть ему чужие — не то,
+     * чего ждут от галочки в списке прав.
+     */
+    public function adminScopeIsOwn(string $section): bool
+    {
+        return ! $this->isSuperadmin() && AdminAccess::scopeIsOwn($this->admin_role, $section);
     }
 
     public function adminRoleLabel(): ?string
     {
-        return $this->is_admin
-            ? (self::ADMIN_ROLES[$this->admin_role] ?? 'Модератор')
-            : null;
+        if (! $this->is_admin) {
+            return null;
+        }
+
+        return self::ADMIN_ROLES[$this->admin_role] ?? 'Роль не назначена';
     }
 }

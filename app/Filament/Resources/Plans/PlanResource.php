@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Plans;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Plans\Pages\CreatePlan;
 use App\Filament\Resources\Plans\Pages\EditPlan;
 use App\Filament\Resources\Plans\Pages\ListPlans;
@@ -15,11 +16,14 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 class PlanResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'plans';
+
     protected static ?string $model = Plan::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
@@ -33,15 +37,6 @@ class PlanResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Монетизация';
 
     protected static ?int $navigationSort = 1;
-
-    /**
-     * Цены и лимиты — это выручка площадки. Модератору здесь делать
-     * нечего: его роль — содержание объявлений, а не прайс.
-     */
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

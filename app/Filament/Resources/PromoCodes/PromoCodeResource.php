@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\PromoCodes;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\PromoCodes\Pages\ListPromoCodes;
 use App\Filament\Resources\PromoCodes\Tables\PromoCodesTable;
 use App\Models\PromoCode;
@@ -11,7 +12,6 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 /**
@@ -31,6 +31,10 @@ use UnitEnum;
  */
 class PromoCodeResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'promocodes';
+
     protected static ?string $model = PromoCode::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
@@ -44,11 +48,6 @@ class PromoCodeResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Монетизация';
 
     protected static ?int $navigationSort = 5;
-
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function table(Table $table): Table
     {

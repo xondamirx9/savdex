@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Support\AdminAccess;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 
@@ -25,6 +26,7 @@ class MakeAdmin extends Command
         {email : Почта администратора}
         {--name= : Имя, если пользователя ещё нет}
         {--moderator : Выдать роль модератора вместо суперадмина}
+        {--role= : Любая из ролей: admin, sales, supplier_manager, buyer_manager, moderator, finance, support, content_manager, superadmin}
         {--password= : Свой пароль вместо сгенерированного}';
 
     protected $description = 'Создать администратора или выдать роль существующему пользователю';
@@ -39,7 +41,12 @@ class MakeAdmin extends Command
             return self::FAILURE;
         }
 
-        $role = $this->option('moderator') ? User::ADMIN_MODERATOR : User::ADMIN_SUPERADMIN;
+        $role = $this->chooseRole();
+
+        if ($role === null) {
+            return self::FAILURE;
+        }
+
         $user = User::where('email', $email)->first();
         $password = (string) ($this->option('password') ?: Str::password(14, symbols: false));
 
@@ -75,5 +82,30 @@ class MakeAdmin extends Command
         $this->warn('Пароль показан один раз. При первом входе система попросит его сменить.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Какую роль выдать.
+     *
+     * Флаг --moderator оставлен ради тех, у кого он записан в заметках,
+     * но теперь ролей девять, и общий --role точнее. Неизвестное имя —
+     * отказ со списком: молча выдать «никаких прав» хуже, чем не выдать
+     * ничего, потому что человек уйдёт с пустой панелью и без подсказки.
+     */
+    private function chooseRole(): ?string
+    {
+        $role = (string) ($this->option('role') ?: '');
+
+        if ($role === '') {
+            return $this->option('moderator') ? User::ADMIN_MODERATOR : User::ADMIN_SUPERADMIN;
+        }
+
+        if (! AdminAccess::isRole($role)) {
+            $this->error("Роли «{$role}» нет. Доступны: ".implode(', ', array_keys(AdminAccess::ROLES)).'.');
+
+            return null;
+        }
+
+        return $role;
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Users\Schemas;
 
 use App\Models\User;
+use App\Support\AdminAccess;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -85,15 +87,16 @@ class UserForm
                         // Флаг отвечает за «пускать ли вообще», роль —
                         // за «что видно». Разделение позволяет отозвать
                         // доступ целиком, не разбираясь в роли
-                        ->helperText('Отдельно от роли: снимает доступ целиком'),
+                        ->helperText('Отдельно от роли: снимает доступ целиком')
+                        ->visible(fn (): bool => self::rolesAreEditable()),
 
                     Select::make('admin_role')
                         ->label('Роль в админке')
                         ->options(User::ADMIN_ROLES)
                         ->default(User::ADMIN_MODERATOR)
-                        ->visible(fn (Get $get): bool => (bool) $get('is_admin'))
+                        ->visible(fn (Get $get): bool => (bool) $get('is_admin') && self::rolesAreEditable())
                         ->required(fn (Get $get): bool => (bool) $get('is_admin'))
-                        ->helperText('Модератор: объявления, компании, жалобы. Суперадмин: всё, включая биллинг, настройки и выдачу доступов'),
+                        ->helperText('Роль задаёт базовый набор прав. Разбор ролей — в docs/admin-roles.md'),
 
                     Select::make('status')
                         ->label('Статус')
@@ -105,6 +108,37 @@ class UserForm
                         ->required(),
                 ])
                 ->columns(3),
+
+            /*
+             * Личные исключения поверх роли.
+             *
+             * Нужны там, где заводить десятую роль ради одного человека
+             * дороже, чем выдать ему одно право: «этому администратору
+             * дополнительно открыть счета». Отзыв сильнее выдачи — право,
+             * попавшее в оба списка, не достанется никому.
+             *
+             * Полноценный экран выдачи прав — отдельный этап; здесь
+             * минимум, которым можно пользоваться уже сейчас.
+             */
+            Section::make('Личные права')
+                ->description('Поверх роли. Списки пусты у всех, кроме тех, кому что-то выдали отдельно')
+                ->schema([
+                    CheckboxList::make('admin_permissions.grant')
+                        ->label('Выдать дополнительно')
+                        ->options(AdminAccess::grantable())
+                        ->searchable()
+                        ->bulkToggleable()
+                        ->columns(2),
+
+                    CheckboxList::make('admin_permissions.revoke')
+                        ->label('Отобрать у роли')
+                        ->options(AdminAccess::grantable())
+                        ->searchable()
+                        ->bulkToggleable()
+                        ->columns(2),
+                ])
+                ->collapsed()
+                ->visible(fn (Get $get): bool => (bool) $get('is_admin') && self::rolesAreEditable()),
 
             Section::make('Пароль')
                 ->schema([
@@ -126,5 +160,17 @@ class UserForm
                 ->columns(2)
                 ->visibleOn('create'),
         ]);
+    }
+
+    /**
+     * Выдавать доступ в панель может только суперадмин.
+     *
+     * Иначе граница между администратором и суперадмином существует
+     * ровно до первой попытки её обойти: администратор открыл бы себе
+     * карточку и поставил роль повыше.
+     */
+    private static function rolesAreEditable(): bool
+    {
+        return AdminAccess::allows('roles.edit');
     }
 }

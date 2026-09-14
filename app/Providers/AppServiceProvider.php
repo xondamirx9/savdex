@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\User;
+use App\Support\AdminAccess;
 use App\Support\Seo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -29,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configurePasswordRules();
         $this->configureModels();
         $this->configureDatabase();
+        $this->configureAdminAbilities();
     }
 
     /**
@@ -46,6 +50,21 @@ class AppServiceProvider extends ServiceProvider
 
             return $this->app->isProduction() ? $rule->uncompromised() : $rule;
         });
+    }
+
+    /**
+     * Права админ-панели как обычные гейты Laravel.
+     *
+     * Гейт заводится на каждую пару «раздел + действие», даже на те, что
+     * ни одной роли не выданы. Незаведённый гейт возвращает «нет» всем
+     * подряд, включая суперадмина, — и такой отказ выглядел бы не ошибкой
+     * в списке, а сознательным запретом, что искали бы долго.
+     */
+    private function configureAdminAbilities(): void
+    {
+        foreach (AdminAccess::all() as $ability) {
+            Gate::define($ability, fn (User $user): bool => $user->hasAdminAbility($ability));
+        }
     }
 
     private function configureModels(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Subscriptions;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Subscriptions\Pages\ListSubscriptions;
 use App\Filament\Resources\Subscriptions\Tables\SubscriptionsTable;
 use App\Models\Subscription;
@@ -11,7 +12,6 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 /**
@@ -26,6 +26,10 @@ use UnitEnum;
  */
 class SubscriptionResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'subscriptions';
+
     protected static ?string $model = Subscription::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
@@ -44,11 +48,6 @@ class SubscriptionResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return (string) Subscription::query()->where('status', 'active')->count();
-    }
-
-    public static function canViewAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
     }
 
     public static function table(Table $table): Table
