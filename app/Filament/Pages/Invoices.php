@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Payment;
 use App\Services\OrderService;
+use App\Support\AdminAccess;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -48,16 +49,16 @@ class Invoices extends Page implements HasTable
     protected string $view = 'filament.pages.invoices';
 
     /**
-     * Счета и подтверждение оплат — только суперадмин.
+     * Счета и подтверждение оплат — раздел «Финансы».
      *
-     * Страница подтверждает поступление денег и активирует подписки,
-     * поэтому модератору здесь не место. Без этой проверки страница
-     * наследовала бы разрешение по умолчанию (любой в панели), и
-     * модератор по прямой ссылке подтверждал бы оплату без денег.
+     * Страница подтверждает поступление денег и активирует подписки.
+     * Без этой проверки она наследовала бы разрешение по умолчанию
+     * (любой, кто вошёл в панель), и модератор по прямой ссылке
+     * подтверждал бы оплату без денег.
      */
     public static function canAccess(): bool
     {
-        return Auth::user()?->isSuperadmin() ?? false;
+        return AdminAccess::allows('payments.view');
     }
 
     public function getTitle(): string

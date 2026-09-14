@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Listings;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\Listings\Pages\EditListing;
 use App\Filament\Resources\Listings\Pages\ListListings;
 use App\Filament\Resources\Listings\RelationManagers\ImagesRelationManager;
@@ -14,12 +15,14 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Illuminate\Support\Facades\Auth;
 
 class ListingResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'listings';
+
     protected static ?string $model = Listing::class;
 
     protected static ?string $navigationLabel = 'Объявления';
@@ -46,35 +49,6 @@ class ListingResource extends Resource
     }
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    /**
-     * Инструмент модератора — «Отклонить», а не «Удалить».
-     *
-     * Отказ снимает объявление с витрины и объясняет владельцу причину;
-     * удаление просто убирает его без следа, и человек видит пустоту
-     * вместо ответа. Для запрещённого товара отказа достаточно: из
-     * выдачи объявление исчезает сразу. Удаление, тем более массовое
-     * и безвозвратное, оставлено суперадмину.
-     */
-    public static function canDelete(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canDeleteAny(): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canForceDelete(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
-
-    public static function canRestore(Model $record): bool
-    {
-        return Auth::user()?->isSuperadmin() ?? false;
-    }
 
     public static function form(Schema $schema): Schema
     {

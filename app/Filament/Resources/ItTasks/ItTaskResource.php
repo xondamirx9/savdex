@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ItTasks;
 
+use App\Filament\Concerns\AuthorizesBySection;
 use App\Filament\Resources\ItTasks\Pages\EditItTask;
 use App\Filament\Resources\ItTasks\Pages\ListItTasks;
 use App\Filament\Resources\ItTasks\Schemas\ItTaskForm;
@@ -23,6 +24,10 @@ use Filament\Tables\Table;
  */
 class ItTaskResource extends Resource
 {
+    use AuthorizesBySection;
+
+    protected static string $accessSection = 'ittasks';
+
     protected static ?string $model = ItTask::class;
 
     protected static ?string $navigationLabel = 'IT-задачи';

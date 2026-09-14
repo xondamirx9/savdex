@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Users\Tables;
 use App\Filament\Exports\UserExporter;
 use App\Models\ActivityEvent;
 use App\Models\User;
+use App\Support\AdminAccess;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -47,7 +48,7 @@ class UsersTable
                     ->label('Выгрузить')
                     ->exporter(UserExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
-                    ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                    ->visible(fn (): bool => AdminAccess::allows('users.export')),
             ])
             ->columns([
                 TextColumn::make('name')
@@ -132,7 +133,7 @@ class UsersTable
                     ->icon('heroicon-o-envelope-open')
                     ->color('success')
                     ->visible(fn (User $record): bool => $record->email_verified_at === null
-                        && (Auth::user()?->isSuperadmin() ?? false))
+                        && AdminAccess::allows('users.edit'))
                     ->requiresConfirmation()
                     ->modalHeading('Подтвердить почту вручную?')
                     ->modalDescription(fn (User $record): string => "Адрес {$record->email} будет считаться подтверждённым без письма. Пользователь сразу сможет публиковать объявления и открывать контакты. Убедитесь, что адрес принадлежит именно этому человеку.")
@@ -220,7 +221,7 @@ class UsersTable
                      * и без visible() модератор мог удалять записи пачкой.
                      */
                     DeleteBulkAction::make()
-                        ->visible(fn (): bool => Auth::user()?->isSuperadmin() ?? false),
+                        ->visible(fn (): bool => AdminAccess::allows('users.delete')),
                 ]),
             ]);
     }

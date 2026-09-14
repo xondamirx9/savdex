@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Models\ContactUnlock;
 use App\Services\ModerationService;
+use App\Support\AdminAccess;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -36,6 +37,18 @@ use UnitEnum;
 class Complaints extends Page implements HasTable
 {
     use InteractsWithTable;
+
+    /**
+     * Жалобы — раздел модерации.
+     *
+     * Раньше страница не объявляла прав вовсе и потому открывалась
+     * любому, кто вошёл в панель, — включая роли, которым модерация
+     * не поручена.
+     */
+    public static function canAccess(): bool
+    {
+        return AdminAccess::allows('complaints.view');
+    }
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedExclamationTriangle;
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ItTasks\Tables;
 
 use App\Models\ItTask;
+use App\Support\AdminAccess;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -76,7 +77,8 @@ class ItTasksTable
                 DeleteAction::make(),
             ])
             ->toolbarActions([
-                BulkActionGroup::make([DeleteBulkAction::make()]),
+                BulkActionGroup::make([DeleteBulkAction::make()
+                    ->visible(fn (): bool => AdminAccess::allows('ittasks.delete'))]),
             ])
             ->emptyStateHeading('IT-задач пока нет')
             ->emptyStateDescription('Задачи публикуют компании из кабинета — раздел «IT-задачи»');

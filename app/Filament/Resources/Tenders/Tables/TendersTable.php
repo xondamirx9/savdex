@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Tenders\Tables;
 
 use App\Filament\Imports\TenderImporter;
 use App\Models\Tender;
+use App\Support\AdminAccess;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -80,6 +81,7 @@ class TendersTable
                 // Массовая загрузка: файл CSV с русскими заголовками,
                 // образец скачивается из окна импорта
                 ImportAction::make()
+                    ->visible(fn (): bool => AdminAccess::allows('tenders.import'))
                     ->label('Загрузить из файла')
                     ->importer(TenderImporter::class),
             ])
@@ -128,7 +130,8 @@ class TendersTable
                         })
                         ->deselectRecordsAfterCompletion(),
 
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => AdminAccess::allows('tenders.delete')),
                 ]),
             ])
             ->emptyStateHeading('Тендеров пока нет')

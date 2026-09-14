@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\NewsPosts\Tables;
 
 use App\Models\NewsPost;
+use App\Support\AdminAccess;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -108,7 +109,8 @@ class NewsPostsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => AdminAccess::allows('content.delete')),
                 ]),
             ])
             ->emptyStateHeading('Новостей нет')

@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Broadcasts\Tables;
 
 use App\Filament\Resources\Broadcasts\Schemas\BroadcastForm;
 use App\Models\Broadcast;
+use App\Support\AdminAccess;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -89,7 +90,8 @@ class BroadcastsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->visible(fn (): bool => AdminAccess::allows('broadcasts.delete')),
                 ]),
             ])
             ->emptyStateHeading('Рассылок пока не было')
