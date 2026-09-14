@@ -302,7 +302,6 @@ export default function Home({
     news,
     reviews,
     heroImage,
-    heroRatio,
 }: {
     stats: Stats;
     categories: CategoryTile[];
@@ -336,21 +335,9 @@ export default function Home({
                 и пересобирать стили ради этого незачем. Затемнение
                 и цвет подложки остаются в CSS.
 
-                Когда сервер знает пропорции кадра, первый экран
-                повторяет их (aspect-ratio): фото ложится по ширине
-                целиком — ничего не режется и нет поля под кадром */}
-            <section
-                className={cn('hero-b2b hero-b2b--underlay', heroRatio !== null && 'hero-b2b--exact')}
-                style={{
-                    backgroundImage: `url(${heroImage})`,
-                    ...(heroRatio
-                        ? ({
-                              aspectRatio: String(heroRatio),
-                              '--hero-img-h': `calc(100vw / ${heroRatio})`,
-                          } as React.CSSProperties)
-                        : {}),
-                }}
-            >
+                Высота первого экрана фиксированная (см. CSS), кадр
+                ложится cover по центру — фото не диктует высоту */}
+            <section className="hero-b2b hero-b2b--underlay" style={{ backgroundImage: `url(${heroImage})` }}>
                 <div className="container">
                     <div className="hero-b2b-inner">
                         {/* Текст занимает левую половину — фотография
@@ -370,9 +357,15 @@ export default function Home({
                                 </Link>
                             </div>
                         </div>
-
-                        <HeroSearch categories={categories} countries={countries} cities={cities} />
                     </div>
+                </div>
+            </section>
+
+            {/* ── Поиск под фотографией: панель стоит на подложке
+                 страницы, а не поверх кадра — картинка остаётся целой ── */}
+            <section className="hero-search-band">
+                <div className="container">
+                    <HeroSearch categories={categories} countries={countries} cities={cities} />
                 </div>
             </section>
 
