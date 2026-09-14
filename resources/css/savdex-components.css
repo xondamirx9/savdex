@@ -17,6 +17,11 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 .nowrap{white-space:nowrap}
 
 /* ---------- 4. Раскладка ---------- */
+/* Отступ липких колонок: реальная высота шапки плюс воздух.
+   --hd-h выставляет сама шапка при каждом изменении размера;
+   запасное значение — высота обычной десктопной шапки, чтобы
+   вёрстка не разъезжалась до первой отрисовки React. */
+:root{--sticky-top:calc(var(--hd-h, 120px) + 12px)}
 .container{max-width:var(--container);margin:0 auto;padding:0 var(--gutter)}
 .section{padding:96px 0}
 .section--tight{padding:64px 0}
@@ -427,7 +432,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 
 /* ---------- 16. Кабинет ---------- */
 .cabinet{display:grid;grid-template-columns:248px 1fr;gap:32px;align-items:start;padding:32px 0 96px}
-.side{position:sticky;top:92px;background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);padding:10px}
+.side{position:sticky;top:var(--sticky-top);background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);padding:10px}
 .side-group+.side-group{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 .side-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:10px 12px 6px}
 .side a{
@@ -444,7 +449,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 
 /* ---------- 17. Каталог ---------- */
 .catalog{display:grid;grid-template-columns:284px 1fr;gap:32px;align-items:start;padding:24px 0 96px}
-.filters{position:sticky;top:92px;background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);max-height:calc(100vh - 120px);overflow-y:auto}
+.filters{position:sticky;top:var(--sticky-top);background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);max-height:calc(100vh - 120px);overflow-y:auto}
 .filter-group{padding:18px 20px;border-bottom:1px solid var(--border)}
 .filter-group:last-child{border-bottom:none}
 .filter-title{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
@@ -465,7 +470,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .it-tasks{padding-block:24px 96px}
 .it-layout{display:grid;grid-template-columns:244px 1fr;gap:24px;align-items:start}
 .it-main{min-width:0}
-.it-panel{position:sticky;top:92px;padding:16px;
+.it-panel{position:sticky;top:var(--sticky-top);padding:16px;
   background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
 .it-panel-title{display:block;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px}
 .it-panel-toggle{display:none}
@@ -955,7 +960,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    двигаться внутри родителя, и sticky не делал ничего. Проверено
    в браузере: со сжатым aside блок уезжал за верх экрана. */
 .grid-docs>aside{align-self:stretch}
-.doc-nav{position:sticky;top:92px}
+.doc-nav{position:sticky;top:var(--sticky-top)}
 .doc-nav a{display:block;position:relative;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
   transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
   color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
@@ -968,7 +973,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   transition:height var(--t-mid)}
 .doc-nav a[aria-current="true"]::before{height:18px}
 
-.doc-section{scroll-margin-top:96px}
+.doc-section{scroll-margin-top:calc(var(--sticky-top) + 4px)}
 
 /* ---------- Страница «О компании» ----------
    Отступы задаются padding-block: сокращённая запись padding обнуляла
