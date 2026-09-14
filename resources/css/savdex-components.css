@@ -1112,10 +1112,11 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .cover-analytics{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
 .cover-useful{background:linear-gradient(135deg,#b45309,#f59e0b)}
 
-/* Обложки задач на разработку — по сфере работы. Полоса ниже новостной:
-   в карточке задачи главное всё-таки текст, картинка лишь метит вид
-   услуги, чтобы одинаковые карточки различались с первого взгляда */
-.cover-band{aspect-ratio:16/5}
+/* Обложки задач на разработку — по сфере работы: одинаковые карточки
+   различаются с первого взгляда. Пропорция как у новостной обложки,
+   знак крупный — полоса в пять раз ниже ширины читалась как цветная
+   черта, а не как картинка */
+.cover-band{aspect-ratio:16/9}
 .cover-web{background:linear-gradient(135deg,#1e40af,#3b82f6)}
 .cover-mobile{background:linear-gradient(135deg,#4338ca,#818cf8)}
 .cover-erp{background:linear-gradient(135deg,#0f766e,#14b8a6)}
