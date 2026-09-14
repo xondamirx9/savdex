@@ -1575,7 +1575,7 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   background:linear-gradient(90deg,rgba(8,18,40,.92) 0%,rgba(8,18,40,.72) 44%,rgba(8,18,40,.42) 100%)}
 /* Одна колонка: текст слева над открытой фотографией, панель поиска
    ниже на всю ширину — панель в правой колонке закрывала картинку */
-.hero-b2b-inner{position:relative;padding:72px 0 28px}
+.hero-b2b-inner{position:relative;padding:72px 0 64px}
 .hero-b2b-copy{max-width:620px}
 
 /* ── Прозрачная шапка поверх фотографии (главная) ─────────────
@@ -1649,7 +1649,10 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hero-b2b-cta .btn-secondary:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5)}
 
 /* Панель поиска: карточка с табами Товары / Компании / Запросы.
-   Стоит под текстом на всю ширину контейнера — по утверждённому макету */
+   Стоит отдельной полосой под фотографией героя на всю ширину
+   контейнера; на светлой подложке панель непрозрачная */
+.hero-search-band{position:relative;z-index:2;margin-top:32px}
+.hero-search-band .hero-panel{margin-top:0;background:var(--navy-900);backdrop-filter:none}
 .hero-panel{position:relative;background:rgba(13,27,54,.78);backdrop-filter:blur(10px);
   border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:20px;box-shadow:var(--sh-modal);
   margin-top:72px}
@@ -1690,10 +1693,8 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   font-size:13px;font-weight:500;color:var(--primary-700);white-space:nowrap}
 .listing-tag:hover{background:var(--primary-100);text-decoration:none;color:var(--primary-700)}
 
-/* ── Полоса показателей: белая карточка под hero ──
-   Карточка больше не наезжает на фото: панель поиска стоит
-   у нижнего края кадра, а между ней и цифрами — воздух */
-.stats-band{position:relative;z-index:2;margin-top:28px}
+/* ── Полоса показателей: белая карточка под панелью поиска ── */
+.stats-band{position:relative;z-index:2;margin-top:40px}
 .stats-band-card{display:grid;grid-template-columns:repeat(4,1fr);background:var(--white);
   border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--sh-md)}
 .stat-cell{display:flex;align-items:center;gap:14px;padding:22px 26px;min-width:0}
@@ -1846,8 +1847,8 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .subnav{display:none}
   .hero-b2b-inner{padding:44px 0 32px}
   .hero-b2b--underlay .hero-b2b-inner{padding-top:230px}
-  .hero-panel{margin-top:44px}
-  .stats-band{margin-top:24px}
+  .hero-search-band{margin-top:24px}
+  .stats-band{margin-top:28px}
   .stats-band-card{grid-template-columns:1fr 1fr}
   .stat-cell:nth-child(3){border-left:none}
   .stat-cell:nth-child(n+3){border-top:1px solid var(--border)}
