@@ -949,13 +949,44 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    ============================================================ */
 .grid-docs{display:grid;grid-template-columns:248px minmax(0,1fr);gap:40px;align-items:start}
 .doc-nav{position:sticky;top:92px}
-.doc-nav a{display:block;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
+.doc-nav a{display:block;position:relative;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
   color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
-.doc-nav a:hover{background:var(--bg);color:var(--text);text-decoration:none}
+.doc-nav a:hover{background:var(--primary-50);color:var(--primary-600);text-decoration:none;transform:translateX(3px)}
 .doc-nav a[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
+/* Полоска у активного пункта вырастает из нуля — видно, что оглавление
+   следит за прокруткой, а не просто подсветилось при клике */
+.doc-nav a::before{content:'';position:absolute;left:3px;top:50%;width:3px;height:0;
+  border-radius:999px;background:var(--primary-700);transform:translateY(-50%);
+  transition:height var(--t-mid)}
+.doc-nav a[aria-current="true"]::before{height:18px}
 
 .doc-section{scroll-margin-top:96px}
-.doc-section+.doc-section{border-top:1px solid var(--border);margin-top:56px;padding-top:56px}
+
+/* ---------- Страница «О компании» ----------
+   Отступы задаются padding-block: сокращённая запись padding обнуляла
+   боковые поля .container, и страница прилипала к краям окна. */
+.about-page{padding-block:32px 72px}
+/* Контакты выделены на фоне остальных разделов: рамка в цвет бренда
+   и подъём карточки под курсором — это раздел, ради которого на
+   страницу чаще всего и заходят */
+.contacts-cards>.card{border-color:var(--primary-100);
+  transition:transform var(--t-mid),box-shadow var(--t-mid),border-color var(--t-mid)}
+.contacts-cards>.card:hover{transform:translateY(-3px);box-shadow:var(--sh-hover);border-color:var(--primary-500)}
+.contact-link{border-radius:var(--r-btn);color:var(--text);
+  transition:transform var(--t-fast),color var(--t-fast)}
+.contact-link:hover{color:var(--primary-700);transform:translateX(4px);text-decoration:none}
+.contact-link .ico-box{transition:background var(--t-fast),color var(--t-fast)}
+.contact-link:hover .ico-box{background:var(--primary-700);color:#fff}
+/* Адрес офиса ведёт на карту */
+.office-address{display:inline-flex;align-items:center;gap:6px;color:var(--primary-700)}
+.office-address svg{flex-shrink:0;opacity:.7;transition:transform var(--t-fast)}
+.office-address:hover{color:var(--primary-600);text-decoration:none}
+.office-address:hover svg{transform:translate(2px,-2px)}
+/* Разделы стояли на 112 пикселях друг от друга: полтора экрана
+   пустоты на длинной странице. Половины хватает, чтобы граница
+   читалась как раздел, а не как конец страницы */
+.doc-section+.doc-section{border-top:1px solid var(--border);margin-top:32px;padding-top:32px}
 
 /* Врезка с картой офиса. Высота задаётся здесь, а не атрибутом
    height у iframe: до загрузки карты место под неё уже занято, и
