@@ -134,10 +134,10 @@ export default function About({
 
                     <div>
                         <section id="about" className="doc-section">
-                            <h1 className="t-h1" style={{ marginBottom: 12 }}>
+                            <h1 className="t-h1" style={{ marginBottom: 8 }}>
                                 О компании
                             </h1>
-                            <p className="t-lead" style={{ marginBottom: 28 }}>
+                            <p className="t-lead" style={{ marginBottom: 16 }}>
                                 SAVDEX — площадка, на которой поставщики и закупщики находят друг друга напрямую.
                             </p>
                             <p className="t-body">
@@ -150,7 +150,7 @@ export default function About({
                                 вашего контракта.
                             </p>
 
-                            <div className="grid grid-4 grid-tight mt-32">
+                            <div className="grid grid-4 grid-tight mt-24">
                                 <div className="card center">
                                     <div className="t-num">{stats.companies}</div>
                                     <div className="t-sm muted">компаний</div>
@@ -169,7 +169,7 @@ export default function About({
                                 </div>
                             </div>
 
-                            <h2 className="t-h3 mt-48" style={{ marginBottom: 20 }}>
+                            <h2 className="t-h3 mt-32" style={{ marginBottom: 12 }}>
                                 Наши принципы
                             </h2>
                             <div className="grid grid-2">
@@ -188,7 +188,7 @@ export default function About({
                         </section>
 
                         <section id="contacts" className="doc-section contacts-section">
-                            <h2 className="t-h2" style={{ marginBottom: 20 }}>
+                            <h2 className="t-h2" style={{ marginBottom: 12 }}>
                                 Контакты
                             </h2>
                             <div className="grid grid-2 contacts-cards" data-reveal-stagger>
@@ -253,7 +253,7 @@ export default function About({
 
                         {office !== null && (
                             <section id="office" className="doc-section">
-                                <h2 className="t-h2" style={{ marginBottom: 12 }}>
+                                <h2 className="t-h2" style={{ marginBottom: 10 }}>
                                     Офис на карте
                                 </h2>
                                 <p className="t-body" style={{ marginBottom: 24 }}>
@@ -265,7 +265,7 @@ export default function About({
                         )}
 
                         <section id="help" className="doc-section">
-                            <h2 className="t-h2" style={{ marginBottom: 20 }}>
+                            <h2 className="t-h2" style={{ marginBottom: 12 }}>
                                 Помощь
                             </h2>
                             {/* Нативный <details> вместо своего аккордеона: он доступен
@@ -281,7 +281,7 @@ export default function About({
                         </section>
 
                         <section id="guide" className="doc-section">
-                            <h2 className="t-h2" style={{ marginBottom: 20 }}>
+                            <h2 className="t-h2" style={{ marginBottom: 12 }}>
                                 Инструкция использования
                             </h2>
 
@@ -329,7 +329,7 @@ export default function About({
                         </section>
 
                         <section id="rules" className="doc-section">
-                            <h2 className="t-h2" style={{ marginBottom: 20 }}>
+                            <h2 className="t-h2" style={{ marginBottom: 12 }}>
                                 Правила размещения
                             </h2>
                             <div className="alert alert-danger" style={{ marginBottom: 24 }}>
