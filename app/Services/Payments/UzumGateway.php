@@ -204,7 +204,7 @@ class UzumGateway implements PaymentGateway
             'productId' => $payment->purpose.'-'.($payment->plan_id ?? $payment->credit_pack_id ?? $payment->id),
             'title' => mb_substr((string) ($payment->description ?: 'Услуги площадки SAVDEX'), 0, 255),
             'quantity' => 1,
-            'price' => $amount,
+            'unitPrice' => $amount,
             'total' => $amount,
             'spic' => $spic,
             'vatPercent' => (int) ($fiscal['vat_percent'] ?? 0),
