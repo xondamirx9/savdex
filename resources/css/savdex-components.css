@@ -431,7 +431,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .link:hover{opacity:.75}
 
 /* ---------- 16. Кабинет ---------- */
-.cabinet{display:grid;grid-template-columns:248px 1fr;gap:32px;align-items:start;padding:32px 0 96px}
+.cabinet{display:grid;grid-template-columns:248px 1fr;gap:32px;align-items:start;padding-block:32px 96px}
 .side{position:sticky;top:var(--sticky-top);background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);padding:10px}
 .side-group+.side-group{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 .side-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:10px 12px 6px}
@@ -448,7 +448,10 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .tabbar{display:none}
 
 /* ---------- 17. Каталог ---------- */
-.catalog{display:grid;grid-template-columns:284px 1fr;gap:32px;align-items:start;padding:24px 0 96px}
+/* Отступы задаются padding-block: сокращённая запись padding обнуляла
+   боковые поля .container, с которым эти классы стоят в одной
+   разметке, и страница прилипала к краям окна */
+.catalog{display:grid;grid-template-columns:284px 1fr;gap:32px;align-items:start;padding-block:24px 96px}
 .filters{position:sticky;top:var(--sticky-top);background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);max-height:calc(100vh - 120px);overflow-y:auto}
 .filter-group{padding:18px 20px;border-bottom:1px solid var(--border)}
 .filter-group:last-child{border-bottom:none}
@@ -1217,7 +1220,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .side-scroll a[aria-current="page"] .side-count{background:rgba(255,255,255,.22);color:#fff}
 
 @media(max-width:1024px){
-  .cabinet{grid-template-columns:1fr;gap:0;padding:16px 0 96px}
+  .cabinet{grid-template-columns:1fr;gap:0;padding-block:16px 96px}
   .side{display:none}
   .side-scroll{display:block;position:sticky;top:60px;z-index:30;
     background:var(--bg);border-bottom:1px solid var(--border)}
