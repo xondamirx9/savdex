@@ -1611,36 +1611,17 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hero-b2b--underlay .hero-b2b-inner{padding-top:240px}
 
 /*
- * Фотография заполняет первый экран целиком (cover по центру, как
- * в утверждённом макете): раскладка 100% auto оставляла под кадром
- * синий низ со швом-градиентом — картинка выглядела обрезанной.
- * Пропорции блока близки к кадру 16:9, поэтому cover почти ничего
- * не режет, а панель поиска лежит прямо на фотографии.
+ * Фотография заполняет первый экран (cover по центру); высота
+ * экрана фиксированная и не зависит от пропорций кадра — иначе
+ * широкий кадр растягивал герой почти на весь экран.
  */
 @media (min-width:1025px){
   .hero-b2b--underlay{background-size:cover;background-position:center}
   .hero-b2b--underlay .hero-b2b-inner{
     z-index:1;
     display:flex;flex-direction:column;justify-content:space-between;
-    min-height:min(56vw,940px);
+    min-height:min(38vw,560px);
   }
-
-  /*
-   * Точный режим: сервер знает пропорции кадра, и блок повторяет их
-   * (aspect-ratio из Home.tsx). Фото кладётся по ширине от верха —
-   * виден весь кадр, без обрезки cover и без поля под ним.
-   * Если контент оказался выше кадра (узкий десктоп), остаток
-   * растворяется в подложку с самого края кадра (--hero-img-h) —
-   * шва нет ни в каком случае.
-   */
-  .hero-b2b--exact{background-size:100% auto;background-position:center top;
-    display:flex;flex-direction:column}
-  .hero-b2b--exact>.container{flex:1;display:flex}
-  .hero-b2b--exact .hero-b2b-inner{flex:1;min-height:0}
-  .hero-b2b--exact::after{content:'';position:absolute;left:0;right:0;bottom:0;
-    top:calc(var(--hero-img-h, 100vh) - 120px);
-    background:linear-gradient(180deg,rgba(8,18,40,0) 0,var(--navy-900) 120px);
-    pointer-events:none}
 }
 .hero-b2b h1{color:#fff;font-size:clamp(34px,3.6vw,46px);line-height:1.15;font-weight:800;letter-spacing:-.02em}
 .hero-b2b-lead{margin-top:16px;font-size:16.5px;line-height:1.65;color:rgba(255,255,255,.82);max-width:52ch}
