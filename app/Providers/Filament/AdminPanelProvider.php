@@ -8,6 +8,7 @@ use App\Filament\Widgets\ActivationFunnel;
 use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
 use App\Http\Middleware\RequirePasswordChange;
+use App\Http\Middleware\SetAdminLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -21,6 +22,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -45,7 +47,7 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->brandName('SAVDEX · Управление')
-            ->brandLogo(fn () => new \Illuminate\Support\HtmlString(
+            ->brandLogo(fn () => new HtmlString(
                 '<span style="display:flex;align-items:center;gap:10px;font-weight:700">'
                 .'<img src="'.asset('images/logo-mark.svg').'" alt="" style="height:2.2rem">'
                 .'<span>SAVDEX · Управление</span></span>',
@@ -71,6 +73,7 @@ class AdminPanelProvider extends PanelProvider
                 RegistrationsChart::class,
             ])
             ->middleware([
+                SetAdminLocale::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,

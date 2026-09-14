@@ -363,8 +363,11 @@ class ItTaskTest extends TestCase
     #[Test]
     public function фильтр_по_виду_услуги_и_поиск_работают(): void
     {
-        ItTask::factory()->create(['company_id' => $this->customer->id, 'title' => 'Мобильное приложение для дилеров', 'service_type' => 'mobile']);
-        ItTask::factory()->create(['company_id' => $this->customer->id, 'title' => 'Интеграция сайта с 1С', 'service_type' => 'integration', 'stack' => ['1С', 'REST']]);
+        // Описания заданы явно: случайный текст фабрики попадает в
+        // поисковый индекс, и «rest» находилось бы то в одной задаче,
+        // то в двух — тест падал через раз
+        ItTask::factory()->create(['company_id' => $this->customer->id, 'title' => 'Мобильное приложение для дилеров', 'description' => 'Приложение для дилерской сети.', 'service_type' => 'mobile']);
+        ItTask::factory()->create(['company_id' => $this->customer->id, 'title' => 'Интеграция сайта с 1С', 'description' => 'Обмен заказами и остатками.', 'service_type' => 'integration', 'stack' => ['1С', 'REST']]);
 
         $this->get('/it-services?type=mobile')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('total', 1)

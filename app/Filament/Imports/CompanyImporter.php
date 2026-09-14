@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Imports;
 
+use App\Filament\Imports\Concerns\MapsHeadersInAnyLanguage;
 use App\Models\Company;
+use App\Models\CompanyType;
+use App\Models\CompanyTypeTranslation;
 use App\Support\CompanyNameStyle;
+use App\Support\ImportLanguage;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -18,10 +22,14 @@ use Filament\Actions\Imports\Models\Import;
  * два разных юрлица даже при одинаковом названии.
  *
  * Заголовки колонок русские: файл готовит заказчик в Excel,
- * и требовать от него slug и primary_role бессмысленно.
+ * и требовать от него slug и primary_role бессмысленно. Но язык
+ * файла любой — заголовки и тип компании узнаются на пяти языках
+ * площадки, словари в App\Support\ImportLanguage.
  */
 class CompanyImporter extends Importer
 {
+    use MapsHeadersInAnyLanguage;
+
     protected static ?string $model = Company::class;
 
     public static function getColumns(): array
@@ -30,12 +38,14 @@ class CompanyImporter extends Importer
             ImportColumn::make('tin')
                 ->label('ИНН')
                 ->exampleHeader('ИНН')
+                ->guess(ImportLanguage::COMPANY_HEADERS['tin'])
                 ->example('304561278')
                 ->rules(['nullable', 'string', 'max:20']),
 
             ImportColumn::make('name')
                 ->label('Название')
                 ->exampleHeader('Название')
+                ->guess(ImportLanguage::COMPANY_HEADERS['name'])
                 ->example('ООО «Стройбаза»')
                 ->requiredMapping()
                 // Госреестр пишет капсом — на витрине это выглядит криком
@@ -45,53 +55,95 @@ class CompanyImporter extends Importer
             ImportColumn::make('legal_name')
                 ->label('Юридическое название')
                 ->exampleHeader('Юридическое название')
+                ->guess(ImportLanguage::COMPANY_HEADERS['legal_name'])
                 ->rules(['nullable', 'string', 'max:255']),
 
             ImportColumn::make('type')
                 ->label('Тип компании')
                 ->exampleHeader('Тип компании')
+                ->guess(ImportLanguage::COMPANY_HEADERS['type'])
                 ->example('distributor')
-                // «trading» и «торговая» из таблиц — это trader справочника
-                ->castStateUsing(fn (?string $state): ?string => CompanyNameStyle::typeKey($state))
+                ->castStateUsing(fn (?string $state): ?string => self::type($state))
                 ->rules(['nullable', 'string', 'max:30']),
 
             ImportColumn::make('address')
                 ->label('Адрес')
                 ->exampleHeader('Адрес')
+                ->guess(ImportLanguage::COMPANY_HEADERS['address'])
                 ->rules(['nullable', 'string', 'max:255']),
 
             ImportColumn::make('phone')
                 ->label('Телефон')
                 ->exampleHeader('Телефон')
+                ->guess(ImportLanguage::COMPANY_HEADERS['phone'])
                 ->rules(['nullable', 'string', 'max:40']),
 
             ImportColumn::make('email')
                 ->label('Почта')
                 ->exampleHeader('Почта')
+                ->guess(ImportLanguage::COMPANY_HEADERS['email'])
                 ->rules(['nullable', 'email', 'max:190']),
 
             ImportColumn::make('website')
                 ->label('Сайт')
                 ->exampleHeader('Сайт')
+                ->guess(ImportLanguage::COMPANY_HEADERS['website'])
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('description')
                 ->label('Описание')
                 ->exampleHeader('Описание')
+                ->guess(ImportLanguage::COMPANY_HEADERS['description'])
                 ->rules(['nullable', 'string', 'max:5000']),
 
             ImportColumn::make('founded_year')
                 ->label('Год основания')
                 ->exampleHeader('Год основания')
+                ->guess(ImportLanguage::COMPANY_HEADERS['founded_year'])
                 ->numeric()
                 ->rules(['nullable', 'integer', 'between:1850,'.date('Y')]),
 
             ImportColumn::make('employees_range')
                 ->label('Сотрудников')
                 ->exampleHeader('Сотрудников')
+                ->guess(ImportLanguage::COMPANY_HEADERS['employees_range'])
                 ->example('50-100')
                 ->rules(['nullable', 'string', 'max:20']),
         ];
+    }
+
+    /** @return array<string, list<string>> */
+    protected static function headerAliases(): array
+    {
+        return ImportLanguage::COMPANY_HEADERS;
+    }
+
+    /**
+     * Код типа компании из справочника по названию на любом языке:
+     * «Производитель», «Ishlab chiqaruvchi» и «Manufacturer» — один
+     * и тот же manufacturer.
+     *
+     * Чего нет в справочнике, разбирается по привычным синонимам
+     * («trading», «торговая»), а совсем незнакомое значение остаётся
+     * как есть: оно всплывёт на карточке и в админке, а не потеряется.
+     */
+    private static function type(?string $state): ?string
+    {
+        $needle = ImportLanguage::normalize($state);
+
+        if ($needle === '') {
+            return null;
+        }
+
+        $type = CompanyType::query()
+            ->with('translations')
+            ->get()
+            ->first(fn (CompanyType $t): bool => ImportLanguage::normalize($t->code) === $needle
+                || $t->translations->contains(
+                    fn (CompanyTypeTranslation $tr): bool => ImportLanguage::normalize($tr->name) === $needle,
+                ));
+
+        return $type?->code ?? CompanyNameStyle::typeKey($state);
     }
 
     /**

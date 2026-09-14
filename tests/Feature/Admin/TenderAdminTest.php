@@ -10,6 +10,7 @@ use App\Filament\Resources\Tenders\TenderResource;
 use App\Models\Category;
 use App\Models\Tender;
 use App\Models\User;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -80,6 +81,25 @@ class TenderAdminTest extends TestCase
     }
 
     #[Test]
+    public function справочники_в_админке_на_языке_площадки(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Construction materials']);
+
+        // Так выглядит сервер, где APP_LOCALE не задана
+        app()->setLocale('en');
+
+        $this->get('/admin/tenders/create')
+            ->assertOk()
+            ->assertSee('Стройматериалы')
+            ->assertDontSee('Construction materials');
+
+        $this->assertSame('ru', app()->getLocale());
+    }
+
+    #[Test]
     public function заголовок_обязателен(): void
     {
         $this->actingAs($this->admin());
@@ -144,13 +164,163 @@ class TenderAdminTest extends TestCase
         $this->assertSame(Tender::STATUS_DRAFT, Tender::first()?->status);
     }
 
+    #[Test]
+    public function импорт_узнаёт_категорию_в_вольном_написании(): void
+    {
+        $this->actingAs($this->admin());
+
+        $metally = Category::factory()->named('Металлы')->create();
+        Category::factory()->named('Чёрные металлы')->child($metally)->create();
+
+        // «е» вместо «ё», путь из админки и неразрывный пробел из Excel
+        $this->import([
+            'Заголовок' => 'Поставка арматуры',
+            'Категория' => "Металлы →\u{00A0}Черные металлы",
+            'Ссылка на источник' => 'https://xarid.uzex.uz/lot/2',
+        ]);
+
+        $this->assertSame('Чёрные металлы', Tender::query()->firstOrFail()->category?->name());
+    }
+
+    #[Test]
+    public function путь_из_двух_частей_различает_одноимённые_подкатегории(): void
+    {
+        $this->actingAs($this->admin());
+
+        $stroy = Category::factory()->named('Стройматериалы')->create();
+        Category::factory()->named('Другое')->child($stroy)->create();
+
+        $mebel = Category::factory()->named('Мебель')->create();
+        $mebelOther = Category::factory()->named('Другое')->child($mebel)->create();
+
+        $this->import([
+            'Заголовок' => 'Стулья для офиса',
+            'Категория' => 'Мебель → Другое',
+            'Ссылка на источник' => 'https://xarid.uzex.uz/lot/3',
+        ]);
+
+        $this->assertSame($mebelOther->id, Tender::query()->firstOrFail()->category_id);
+    }
+
+    #[Test]
+    public function незнакомая_категория_останавливает_строку_с_понятной_причиной(): void
+    {
+        $this->actingAs($this->admin());
+        Category::factory()->named('Стройматериалы')->create();
+
+        $this->expectException(RowImportFailedException::class);
+        $this->expectExceptionMessage('Категория «Строительство» не найдена в каталоге');
+
+        $this->import([
+            'Заголовок' => 'Поставка цемента',
+            'Категория' => 'Строительство',
+        ]);
+    }
+
+    #[Test]
+    public function импорт_разбирает_таблицу_на_чужом_языке(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Construction materials']);
+
+        // Таблица выгружена с англоязычной площадки, а заголовки
+        // набраны вперемешку — в окне импорта не угадалось ничего
+        $this->import([
+            'Title' => 'Cement supply for school',
+            'Kategoriya' => 'Construction materials',
+            'Amount' => '1,000,000',
+            'Currency' => 'сум',
+            'Deadline' => '30 октября 2026',
+            'Link' => 'https://xarid.uzex.uz/lot/9',
+            'Publish' => 'ha',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Cement supply for school', $tender->title);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(1_000_000.0, (float) $tender->budget);
+        $this->assertSame('UZS', $tender->currency);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+        $this->assertSame(Tender::STATUS_PUBLISHED, $tender->status);
+    }
+
+    #[Test]
+    public function синонимы_русских_заголовков_и_сумма_словами_читаются(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+
+        $this->import([
+            'Наименование' => 'Поставка цемента',
+            'Категория ' => 'Стройматериалы',
+            'Сумма' => '250 млн',
+            'Валюта' => 'сум',
+            'Срок подачи' => '30.10.2026',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Поставка цемента', $tender->title);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(250_000_000.0, (float) $tender->budget);
+        $this->assertSame('UZS', $tender->currency);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+    }
+
+    #[Test]
+    public function выгрузка_с_зарубежной_площадки_читается_целиком(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Металлы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Metals']);
+
+        // Так выглядят столбцы в выгрузках закупок: ни одного
+        // совпадения с русскими подписями формы
+        $this->import([
+            'Tender title' => 'Permanent registration of suppliers',
+            'Procuring entity' => 'ПАО «Северсталь»',
+            'Sector' => 'Metals',
+            'Estimated value' => 'USD 1,200,000.00',
+            'Submission deadline' => '30 October 2026',
+            'Tender URL' => 'https://severstal.com/tender/1',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Permanent registration of suppliers', $tender->title);
+        $this->assertSame('ПАО «Северсталь»', $tender->customer);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(1_200_000.0, (float) $tender->budget);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+    }
+
+    #[Test]
+    public function бюджет_диапазоном_берётся_по_нижней_границе(): void
+    {
+        $this->actingAs($this->admin());
+
+        $this->import([
+            'Заголовок' => 'Поставка щебня',
+            'Сумма контракта' => 'от 100 000 до 200 000',
+        ], mapped: false);
+
+        $this->assertSame(100_000.0, (float) Tender::query()->firstOrFail()->budget);
+    }
+
     /**
      * Прогнать одну строку через импортёр так, как это делает
      * очередь Filament: соответствие колонок — по русским заголовкам.
      *
      * @param  array<string, string>  $row
+     * @param  bool  $mapped  соответствие из окна импорта; false — то,
+     *                        что Filament не угадал ни одного столбца
      */
-    private function import(array $row): void
+    private function import(array $row, bool $mapped = true): void
     {
         $import = Import::create([
             'user_id' => auth()->id(),
@@ -162,8 +332,10 @@ class TenderAdminTest extends TestCase
 
         $columnMap = [];
 
-        foreach (TenderImporter::getColumns() as $column) {
-            $columnMap[$column->getName()] = $column->getExampleHeader();
+        if ($mapped) {
+            foreach (TenderImporter::getColumns() as $column) {
+                $columnMap[$column->getName()] = $column->getExampleHeader();
+            }
         }
 
         (new TenderImporter($import, $columnMap, []))($row);

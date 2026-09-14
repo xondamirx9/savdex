@@ -78,7 +78,10 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // Русский, а не «en» Laravel: письма, задания очереди и консольные
+    // команды идут в обход middleware витрины, и без APP_LOCALE в
+    // окружении названия категорий и стран приходили на английском
+    'locale' => env('APP_LOCALE', 'ru'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
