@@ -199,6 +199,7 @@ class UzumGateway implements PaymentGateway
 
         $amount = $payment->amountMinor();
         $packageCode = trim((string) ($fiscal['package_code'] ?? ''));
+        $tin = trim((string) ($fiscal['tin'] ?? ''));
 
         // Фискальные реквизиты позиции Uzum ждёт вложенным объектом
         // receiptParams, а не полями самой позиции (иначе — 3045)
@@ -211,6 +212,12 @@ class UzumGateway implements PaymentGateway
         // уходит как есть, и ответ Uzum скажет, обязателен ли он
         if ($packageCode !== '') {
             $receipt['packageCode'] = $packageCode;
+        }
+
+        // Продавец в чеке — ИНН площадки; без него Uzum отвечает 2000
+        // «You need pass TIN or PINFL for receiptParams»
+        if ($tin !== '') {
+            $receipt['TIN'] = $tin;
         }
 
         $item = [
