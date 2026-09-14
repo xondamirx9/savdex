@@ -10,6 +10,7 @@ use App\Filament\Resources\Tenders\TenderResource;
 use App\Models\Category;
 use App\Models\Tender;
 use App\Models\User;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -142,6 +143,59 @@ class TenderAdminTest extends TestCase
         $this->assertSame(1, Tender::count());
         $this->assertSame('Поставка цемента М400 (уточнено)', Tender::first()?->title);
         $this->assertSame(Tender::STATUS_DRAFT, Tender::first()?->status);
+    }
+
+    #[Test]
+    public function импорт_узнаёт_категорию_в_вольном_написании(): void
+    {
+        $this->actingAs($this->admin());
+
+        $metally = Category::factory()->named('Металлы')->create();
+        Category::factory()->named('Чёрные металлы')->child($metally)->create();
+
+        // «е» вместо «ё», путь из админки и неразрывный пробел из Excel
+        $this->import([
+            'Заголовок' => 'Поставка арматуры',
+            'Категория' => "Металлы →\u{00A0}Черные металлы",
+            'Ссылка на источник' => 'https://xarid.uzex.uz/lot/2',
+        ]);
+
+        $this->assertSame('Чёрные металлы', Tender::query()->firstOrFail()->category?->name());
+    }
+
+    #[Test]
+    public function путь_из_двух_частей_различает_одноимённые_подкатегории(): void
+    {
+        $this->actingAs($this->admin());
+
+        $stroy = Category::factory()->named('Стройматериалы')->create();
+        Category::factory()->named('Другое')->child($stroy)->create();
+
+        $mebel = Category::factory()->named('Мебель')->create();
+        $mebelOther = Category::factory()->named('Другое')->child($mebel)->create();
+
+        $this->import([
+            'Заголовок' => 'Стулья для офиса',
+            'Категория' => 'Мебель → Другое',
+            'Ссылка на источник' => 'https://xarid.uzex.uz/lot/3',
+        ]);
+
+        $this->assertSame($mebelOther->id, Tender::query()->firstOrFail()->category_id);
+    }
+
+    #[Test]
+    public function незнакомая_категория_останавливает_строку_с_понятной_причиной(): void
+    {
+        $this->actingAs($this->admin());
+        Category::factory()->named('Стройматериалы')->create();
+
+        $this->expectException(RowImportFailedException::class);
+        $this->expectExceptionMessage('Категория «Строительство» не найдена в каталоге');
+
+        $this->import([
+            'Заголовок' => 'Поставка цемента',
+            'Категория' => 'Строительство',
+        ]);
     }
 
     /**

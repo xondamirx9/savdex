@@ -9,6 +9,7 @@ use App\Models\CategoryTranslation;
 use App\Models\Country;
 use App\Models\CountryTranslation;
 use App\Models\Tender;
+use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -26,6 +27,10 @@ use Throwable;
  * Повторная загрузка того же файла не плодит дублей: тендер со
  * ссылкой на источник находится по ней и обновляется; без ссылки —
  * по заголовку и заказчику.
+ *
+ * Незнакомая категория или страна останавливает строку и попадает в
+ * файл с ошибками: тендер без категории не виден ни в одном фильтре
+ * витрины, и тихо потерять её хуже, чем не загрузить строку.
  */
 class TenderImporter extends Importer
 {
@@ -175,36 +180,77 @@ class TenderImporter extends Importer
     // ── Разбор значений ──────────────────────────────────────
 
     /**
-     * Категория по slug или названию на любом языке.
+     * Категория по slug, названию на любом языке или пути
+     * «Раздел → Подраздел» — так название копируют из админки.
      *
      * Сравнение в PHP, а не lower() в SQL: lower() SQLite не трогает
      * кириллицу, и «Стройматериалы» не нашлись бы по «стройматериалы».
      */
     private static function category(?string $state): ?int
     {
-        $needle = mb_strtolower(trim((string) $state));
+        $path = self::path($state);
 
-        if ($needle === '') {
+        if ($path === []) {
             return null;
         }
 
-        $bySlug = Category::query()->where('slug', $needle)->value('id');
+        $id = self::findCategory($path);
 
-        if ($bySlug !== null) {
-            return (int) $bySlug;
+        if ($id === null) {
+            throw new RowImportFailedException(
+                'Категория «'.trim((string) $state).'» не найдена в каталоге. '
+                .'Впишите название так, как оно указано в разделе «Категории», или оставьте ячейку пустой.'
+            );
         }
 
-        $match = CategoryTranslation::query()
-            ->get(['category_id', 'name'])
-            ->first(fn (CategoryTranslation $t): bool => mb_strtolower(trim($t->name)) === $needle);
+        return $id;
+    }
 
-        return $match?->category_id;
+    /**
+     * Подкатегорию ищем по последней части пути, а раздел из пути
+     * служит уточнением: подкатегорий «Другое» столько же, сколько
+     * разделов, и без уточнения тендер попал бы в первый попавшийся.
+     *
+     * @param  list<string>  $path
+     */
+    private static function findCategory(array $path): ?int
+    {
+        $last = array_key_last($path);
+        $name = $path[$last];
+        $parentName = $last > 0 ? $path[$last - 1] : null;
+
+        $categories = Category::query()->with('translations')->get();
+        $matches = $categories->filter(fn (Category $c): bool => self::isNamed($c, $name));
+
+        if ($matches->count() > 1 && $parentName !== null) {
+            $narrowed = $matches->filter(function (Category $c) use ($categories, $parentName): bool {
+                $parent = $categories->firstWhere('id', $c->parent_id);
+
+                return $parent !== null && self::isNamed($parent, $parentName);
+            });
+
+            if ($narrowed->isNotEmpty()) {
+                $matches = $narrowed;
+            }
+        }
+
+        return $matches->first()?->id;
+    }
+
+    private static function isNamed(Category $category, string $needle): bool
+    {
+        if (self::normalize($category->slug) === $needle) {
+            return true;
+        }
+
+        return $category->translations
+            ->contains(fn (CategoryTranslation $t): bool => self::normalize($t->name) === $needle);
     }
 
     /** Страна по коду ISO («uz») или названию на любом языке. */
     private static function country(?string $state): ?int
     {
-        $needle = mb_strtolower(trim((string) $state));
+        $needle = self::normalize((string) $state);
 
         if ($needle === '') {
             return null;
@@ -218,9 +264,50 @@ class TenderImporter extends Importer
 
         $match = CountryTranslation::query()
             ->get(['country_id', 'name'])
-            ->first(fn (CountryTranslation $t): bool => mb_strtolower(trim($t->name)) === $needle);
+            ->first(fn (CountryTranslation $t): bool => self::normalize($t->name) === $needle);
 
-        return $match?->country_id;
+        if ($match === null) {
+            throw new RowImportFailedException(
+                'Страна «'.trim((string) $state).'» не найдена в справочнике. '
+                .'Напишите название целиком («Узбекистан») или код («UZ»), либо оставьте ячейку пустой.'
+            );
+        }
+
+        return (int) $match->country_id;
+    }
+
+    /**
+     * Значение ячейки — путь из нормализованных частей.
+     *
+     * «Стройматериалы → Цемент и бетон», «Стройматериалы / Цемент и
+     * бетон» и просто «Цемент и бетон» приводятся к одному виду.
+     *
+     * @return list<string>
+     */
+    private static function path(?string $state): array
+    {
+        $parts = preg_split('#\s*(?:→|->|>|/|\\\\|\|)\s*#u', (string) $state) ?: [];
+        $parts = array_map(self::normalize(...), $parts);
+
+        return array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
+    }
+
+    /**
+     * Написание, набранное человеком, — к единому виду.
+     *
+     * Excel подставляет неразрывные пробелы, «ё» пишут через «е», а
+     * узбекские названия — с четырьмя разными апострофами. Точное
+     * сравнение на таких строках молча теряло категорию.
+     */
+    private static function normalize(string $value): string
+    {
+        $value = str_replace(
+            ["\u{00A0}", "\u{202F}", "\u{2007}", "\u{200B}", 'ё', '«', '»', '"', '’', '‘', 'ʼ', 'ʻ', '`', '´'],
+            [' ', ' ', ' ', '', 'е', '', '', '', "'", "'", "'", "'", "'", "'"],
+            mb_strtolower($value),
+        );
+
+        return trim((string) preg_replace('/\s+/u', ' ', $value));
     }
 
     /** «250 000 000», «250000000,00» и «250 000 000 сум» — одно число. */
