@@ -13,7 +13,12 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Перенос данных между подключениями: SQLite → PostgreSQL.
+ * Перенос данных между подключениями: SQLite или PostgreSQL → PostgreSQL.
+ *
+ * Писалась под переезд с файла SQLite, пригодилась для переезда между
+ * двумя PostgreSQL: с Neon на базу Render. Разница только в источнике,
+ * а всё, что делает перенос осмысленным — порядок таблиц, кольцевые
+ * связи, счётчики, сверка — от источника не зависит.
  *
  * Схему создаёт `php artisan migrate` на приёмнике, а не эта команда и не
  * внешний конвертер. Конвертер выводит типы из значений SQLite, где нет
@@ -41,12 +46,12 @@ use Throwable;
 class CopyDatabase extends Command
 {
     protected $signature = 'savdex:copy-database
-        {--from=sqlite_source : Подключение-источник}
+        {--from=sqlite_source : Подключение-источник (pgsql — база, с которой работает сайт)}
         {--to=pgsql_target : Подключение-приёмник}
         {--chunk=500 : Размер порции строк}
         {--truncate : Очистить таблицы приёмника перед переносом}';
 
-    protected $description = 'Скопировать данные из одной базы в другую (SQLite → PostgreSQL)';
+    protected $description = 'Скопировать данные из одной базы в другую со сверкой каждой строки';
 
     /**
      * Таблицы, которые не переносятся.
@@ -139,8 +144,9 @@ class CopyDatabase extends Command
         if ($tooLong !== []) {
             $this->error('Значения длиннее, чем позволяет колонка приёмника:');
             $this->table(['Таблица.колонка', 'Предел', 'Строк', 'Пример id', 'Длина'], $tooLong);
-            $this->line('SQLite длину не проверяет, PostgreSQL проверяет. Почините эти строки');
-            $this->line('в источнике (или расширьте колонку миграцией) и повторите перенос.');
+            $this->line('Длину значения проверяет не всякая база: SQLite пропускает что угодно,');
+            $this->line('PostgreSQL — нет. Почините эти строки в источнике (или расширьте');
+            $this->line('колонку миграцией) и повторите перенос.');
 
             return self::FAILURE;
         }
@@ -150,13 +156,22 @@ class CopyDatabase extends Command
         if ($badJson !== []) {
             $this->error('Значения, которые PostgreSQL не примет как JSON:');
             $this->table(['Таблица.колонка', 'Строк', 'Пример id', 'Значение'], $badJson);
-            $this->line('SQLite хранит JSON как обычный текст и содержимое не проверяет.');
-            $this->line('Почините эти строки в источнике и повторите перенос.');
+            $this->line('Содержимое json-колонок проверяет не всякая база: SQLite хранит их');
+            $this->line('как обычный текст. Почините эти строки в источнике и повторите перенос.');
 
             return self::FAILURE;
         }
 
-        $this->line('Источник: '.$from->getName().', приёмник: '.$to->getName());
+        if ($this->option('truncate') && $this->targetIsLive($to)) {
+            $this->error('Приёмник — это база, с которой работает сайт.');
+            $this->line('Очистка стёрла бы боевые данные. Проверьте TARGET_DB_URL: он должен');
+            $this->line('указывать на базу, КУДА переносим, а не на ту, откуда.');
+
+            return self::FAILURE;
+        }
+
+        $this->line('Источник:  '.$this->location($from));
+        $this->line('Приёмник:  '.$this->location($to));
         $this->line('Таблиц к переносу: '.count($tables));
 
         if ($this->deferred !== []) {
@@ -442,6 +457,56 @@ class CopyDatabase extends Command
         }
 
         return (int) $m[1];
+    }
+
+    /**
+     * Приёмник и база сайта — это одно и то же?
+     *
+     * С очисткой перенос стирает приёмник целиком. Перепутанные местами
+     * адреса источника и приёмника превращают перенос в удаление боевых
+     * данных, и заметить это можно будет только по пустому сайту.
+     *
+     * Сравниваются не строки настроек, а то, что ответил сервер: один и
+     * тот же сервер отвечает на десяток разных адресов, а одна и та же
+     * база называется по-разному в разных переменных.
+     */
+    private function targetIsLive(ConnectionInterface $to): bool
+    {
+        $live = DB::connection();
+
+        if ($live->getName() === $to->getName()) {
+            return true;
+        }
+
+        if ($live->getDriverName() !== 'pgsql' || $to->getDriverName() !== 'pgsql') {
+            return false;
+        }
+
+        try {
+            return $live->scalar('select current_database()') === $to->scalar('select current_database()')
+                && $live->scalar('select inet_server_addr()') === $to->scalar('select inet_server_addr()');
+        } catch (Throwable) {
+            // Не смогли сравнить — значит и утверждать, что это боевая
+            // база, не можем; остальные проверки никуда не делись
+            return false;
+        }
+    }
+
+    /** «pgsql_target → база savdex на сервере 10.0.0.5»: куда именно поедет. */
+    private function location(ConnectionInterface $connection): string
+    {
+        $name = $connection->getName();
+
+        if ($connection->getDriverName() !== 'pgsql') {
+            return $name.' ('.$connection->getDriverName().')';
+        }
+
+        try {
+            return $name.' → база '.$connection->scalar('select current_database()')
+                .' на сервере '.($connection->scalar('select inet_server_addr()') ?: 'локальном');
+        } catch (Throwable) {
+            return $name;
+        }
     }
 
     /**
