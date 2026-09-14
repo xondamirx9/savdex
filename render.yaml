@@ -74,6 +74,11 @@ services:
         sync: false
       - key: APP_ENV
         value: staging
+      # Язык по умолчанию для писем, заданий очереди и админки:
+      # без него Laravel берёт «en», и справочники приходят на
+      # английском посреди русских подписей
+      - key: APP_LOCALE
+        value: ru
       - key: APP_DEBUG
         value: "false"
       - key: SEED_DEMO

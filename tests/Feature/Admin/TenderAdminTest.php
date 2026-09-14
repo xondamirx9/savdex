@@ -81,6 +81,25 @@ class TenderAdminTest extends TestCase
     }
 
     #[Test]
+    public function справочники_в_админке_на_языке_площадки(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Стройматериалы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Construction materials']);
+
+        // Так выглядит сервер, где APP_LOCALE не задана
+        app()->setLocale('en');
+
+        $this->get('/admin/tenders/create')
+            ->assertOk()
+            ->assertSee('Стройматериалы')
+            ->assertDontSee('Construction materials');
+
+        $this->assertSame('ru', app()->getLocale());
+    }
+
+    #[Test]
     public function заголовок_обязателен(): void
     {
         $this->actingAs($this->admin());
