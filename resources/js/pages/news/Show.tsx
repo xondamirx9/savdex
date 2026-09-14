@@ -18,7 +18,7 @@ interface Post {
 export default function NewsShow({ post, related }: { post: Post; related: Post[] }) {
     return (
         <PublicLayout title={post.title} description={post.excerpt}>
-            <div className="container" style={{ padding: '24px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '24px 96px' }}>
                 <nav aria-label="Хлебные крошки" style={{ paddingBottom: 20 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>

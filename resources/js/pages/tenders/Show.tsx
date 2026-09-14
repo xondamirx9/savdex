@@ -20,7 +20,7 @@ export default function TenderShow({ tender, similar }: { tender: Tender; simila
 
     return (
         <PublicLayout title={tender.title} description={tender.excerpt}>
-            <div className="container" style={{ padding: '24px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '24px 96px' }}>
                 <nav aria-label={t('tenders.breadcrumbs')} style={{ paddingBottom: 20 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>

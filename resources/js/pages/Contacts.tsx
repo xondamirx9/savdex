@@ -22,7 +22,7 @@ export default function Contacts() {
 
     return (
         <PublicLayout title={t('contacts.meta_title')} description={t('contacts.meta_description')}>
-            <div className="container" style={{ padding: '32px 0 96px', maxWidth: 960 }}>
+            <div className="container" style={{ paddingBlock: '32px 96px', maxWidth: 960 }}>
                 <div className="section-head-left" style={{ marginBottom: 24 }}>
                     <span className="eyebrow">{t('contacts.eyebrow')}</span>
                     <h1 className="t-section">{t('contacts.h1')}</h1>

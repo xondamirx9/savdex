@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\NewsPost;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -22,12 +23,35 @@ class NewsRepository
     /** @return Collection<int, array<string, mixed>> */
     public function all(): Collection
     {
-        return NewsPost::query()
-            ->published()
-            ->orderByDesc('published_at')
-            ->orderByDesc('sort')
+        return self::newestFirst(NewsPost::query()->published())
             ->get()
             ->map($this->present(...));
+    }
+
+    /**
+     * Свежие сверху, дальше по убыванию даты.
+     *
+     * Новость без даты публикации разрешена (см. scopePublished), и
+     * порядок таких строк зависит от базы: SQLite считает NULL меньше
+     * всего и уводит их вниз, PostgreSQL при DESC поднимает наверх.
+     * На боевом Postgres лента открывалась бы новостью без даты.
+     * Условие `published_at is null` сортируется первым и прибивает
+     * их к концу одинаково во всех базах.
+     *
+     * Замыкающая сортировка по id — ради устойчивости страниц: без
+     * неё две новости одной даты могут меняться местами между
+     * запросами и одна и та же запись попадёт на обе страницы.
+     *
+     * @param  Builder<NewsPost>  $query
+     * @return Builder<NewsPost>
+     */
+    private static function newestFirst(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw('published_at is null')
+            ->orderByDesc('published_at')
+            ->orderByDesc('sort')
+            ->orderByDesc('id');
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -59,21 +83,19 @@ class NewsRepository
 
         // Сначала из той же рубрики, потом любые свежие —
         // блок «читайте также» не должен оставаться пустым
-        $sameCategory = NewsPost::query()
-            ->published()
-            ->where('category', $post->category)
-            ->where('id', '!=', $post->id)
-            ->orderByDesc('published_at')
-            ->limit($limit)
-            ->get();
+        $sameCategory = self::newestFirst(
+            NewsPost::query()
+                ->published()
+                ->where('category', $post->category)
+                ->where('id', '!=', $post->id)
+        )->limit($limit)->get();
 
-        $rest = NewsPost::query()
-            ->published()
-            ->where('id', '!=', $post->id)
-            ->whereNotIn('id', $sameCategory->pluck('id'))
-            ->orderByDesc('published_at')
-            ->limit($limit)
-            ->get();
+        $rest = self::newestFirst(
+            NewsPost::query()
+                ->published()
+                ->where('id', '!=', $post->id)
+                ->whereNotIn('id', $sameCategory->pluck('id'))
+        )->limit($limit)->get();
 
         return $sameCategory->concat($rest)->take($limit)->map($this->present(...))->values();
     }

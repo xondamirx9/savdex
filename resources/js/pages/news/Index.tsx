@@ -22,7 +22,7 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
             title="Новости"
             description="Новости площадки SAVDEX: обновления сервиса, изменения тарифов и аналитика рынка."
         >
-            <div className="container" style={{ padding: '32px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '32px 96px' }}>
                 <nav aria-label="Хлебные крошки" style={{ paddingBottom: 16 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>

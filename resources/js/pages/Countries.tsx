@@ -20,7 +20,7 @@ interface CountryRow {
 export default function Countries({ countries, planned }: { countries: CountryRow[]; planned: CountryRow[] }) {
     return (
         <PublicLayout title={t('countries.meta_title')} description={t('countries.meta_description')}>
-            <div className="container" style={{ padding: '32px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '32px 96px' }}>
                 <div className="section-head-left" style={{ marginBottom: 24 }}>
                     <span className="eyebrow">{t('countries.eyebrow')}</span>
                     <h1 className="t-section">{t('countries.h1')}</h1>
