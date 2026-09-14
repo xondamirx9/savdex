@@ -15,7 +15,7 @@ import { routes } from '@/routes';
 export default function Favorites({ items }: { items: ProductRow[] }) {
     return (
         <PublicLayout title={t('favorites.meta_title')}>
-            <div className="container" style={{ padding: '32px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '32px 96px' }}>
                 <div className="section-head-left" style={{ marginBottom: 24 }}>
                     <span className="eyebrow">{t('favorites.eyebrow')}</span>
                     <h1 className="t-section">{t('favorites.h1')}</h1>

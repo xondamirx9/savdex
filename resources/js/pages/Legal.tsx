@@ -59,7 +59,7 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
 
     return (
         <PublicLayout title={title} description={intro}>
-            <div className="container" style={{ padding: '32px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '32px 96px' }}>
                 <nav aria-label="Хлебные крошки" style={{ paddingBottom: 16 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>

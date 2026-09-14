@@ -102,7 +102,7 @@ function RespondCard({ taskId, respond }: { taskId: number; respond: Respond }) 
 export default function ItTaskShow({ task, respond, similar }: { task: Task; respond: Respond; similar: TaskRow[] }) {
     return (
         <PublicLayout title={task.title} description={task.excerpt}>
-            <div className="container" style={{ padding: '24px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '24px 96px' }}>
                 <nav aria-label={t('it_tasks.breadcrumbs')} style={{ paddingBottom: 20 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>

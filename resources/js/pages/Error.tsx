@@ -81,7 +81,7 @@ export default function ErrorPage({ status, reference }: { status: number; refer
 
     return (
         <PublicLayout title={`${status} — ${preset.title}`}>
-            <div className="container" style={{ padding: '64px 0 96px' }}>
+            <div className="container" style={{ paddingBlock: '64px 96px' }}>
                 <div className="empty" style={{ maxWidth: 520 }}>
                     <div className={`empty-icon ${preset.tone}`}>
                         <Icon aria-hidden className="size-8" />
