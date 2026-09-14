@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Imports;
 
+use App\Filament\Imports\Concerns\MapsHeadersInAnyLanguage;
 use App\Models\Category;
 use App\Models\CategoryTranslation;
 use App\Models\Country;
@@ -35,6 +36,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class TenderImporter extends Importer
 {
+    use MapsHeadersInAnyLanguage;
+
     protected static ?string $model = Tender::class;
 
     public static function getColumns(): array
@@ -44,7 +47,7 @@ class TenderImporter extends Importer
                 ->label('Заголовок')
                 ->exampleHeader('Заголовок')
                 ->example('Поставка цемента М400 для строительства школы')
-                ->guess(ImportLanguage::HEADERS['title'])
+                ->guess(ImportLanguage::TENDER_HEADERS['title'])
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:190']),
 
@@ -52,21 +55,21 @@ class TenderImporter extends Importer
                 ->label('Описание')
                 ->exampleHeader('Описание')
                 ->example('Требуется 500 тонн цемента М400, поставка партиями до 30 октября.')
-                ->guess(ImportLanguage::HEADERS['description'])
+                ->guess(ImportLanguage::TENDER_HEADERS['description'])
                 ->rules(['nullable', 'string', 'max:10000']),
 
             ImportColumn::make('customer')
                 ->label('Заказчик')
                 ->exampleHeader('Заказчик')
                 ->example('ГУП «Тошкент шахар курилиш»')
-                ->guess(ImportLanguage::HEADERS['customer'])
+                ->guess(ImportLanguage::TENDER_HEADERS['customer'])
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('category_id')
                 ->label('Категория')
                 ->exampleHeader('Категория')
                 ->example('Стройматериалы')
-                ->guess(ImportLanguage::HEADERS['category_id'])
+                ->guess(ImportLanguage::TENDER_HEADERS['category_id'])
                 ->castStateUsing(fn (?string $state): ?int => self::category($state))
                 ->rules(['nullable', 'integer']),
 
@@ -74,7 +77,7 @@ class TenderImporter extends Importer
                 ->label('Страна')
                 ->exampleHeader('Страна')
                 ->example('Узбекистан')
-                ->guess(ImportLanguage::HEADERS['country_id'])
+                ->guess(ImportLanguage::TENDER_HEADERS['country_id'])
                 ->castStateUsing(fn (?string $state): ?int => self::country($state))
                 ->rules(['nullable', 'integer']),
 
@@ -82,14 +85,14 @@ class TenderImporter extends Importer
                 ->label('Город')
                 ->exampleHeader('Город')
                 ->example('Ташкент')
-                ->guess(ImportLanguage::HEADERS['location'])
+                ->guess(ImportLanguage::TENDER_HEADERS['location'])
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('budget')
                 ->label('Бюджет')
                 ->exampleHeader('Бюджет')
                 ->example('250000000')
-                ->guess(ImportLanguage::HEADERS['budget'])
+                ->guess(ImportLanguage::TENDER_HEADERS['budget'])
                 ->castStateUsing(fn (?string $state): ?float => ImportLanguage::amount($state))
                 ->rules(['nullable', 'numeric', 'min:0']),
 
@@ -97,7 +100,7 @@ class TenderImporter extends Importer
                 ->label('Валюта')
                 ->exampleHeader('Валюта')
                 ->example('UZS')
-                ->guess(ImportLanguage::HEADERS['currency'])
+                ->guess(ImportLanguage::TENDER_HEADERS['currency'])
                 ->castStateUsing(fn (?string $state): string => ImportLanguage::currency($state))
                 ->rules(['nullable', 'in:'.implode(',', Tender::CURRENCIES)]),
 
@@ -105,7 +108,7 @@ class TenderImporter extends Importer
                 ->label('Приём заявок до')
                 ->exampleHeader('Приём заявок до')
                 ->example('30.10.2026')
-                ->guess(ImportLanguage::HEADERS['deadline_at'])
+                ->guess(ImportLanguage::TENDER_HEADERS['deadline_at'])
                 ->castStateUsing(fn (?string $state): ?string => ImportLanguage::date($state))
                 ->rules(['nullable', 'date']),
 
@@ -113,33 +116,33 @@ class TenderImporter extends Importer
                 ->label('Ссылка на источник')
                 ->exampleHeader('Ссылка на источник')
                 ->example('https://xarid.uzex.uz/...')
-                ->guess(ImportLanguage::HEADERS['source_url'])
+                ->guess(ImportLanguage::TENDER_HEADERS['source_url'])
                 ->rules(['nullable', 'url', 'max:255']),
 
             ImportColumn::make('contact_name')
                 ->label('Контактное лицо')
                 ->exampleHeader('Контактное лицо')
-                ->guess(ImportLanguage::HEADERS['contact_name'])
+                ->guess(ImportLanguage::TENDER_HEADERS['contact_name'])
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('contact_phone')
                 ->label('Телефон')
                 ->exampleHeader('Телефон')
                 ->example('+998 71 200-00-00')
-                ->guess(ImportLanguage::HEADERS['contact_phone'])
+                ->guess(ImportLanguage::TENDER_HEADERS['contact_phone'])
                 ->rules(['nullable', 'string', 'max:40']),
 
             ImportColumn::make('contact_email')
                 ->label('Почта')
                 ->exampleHeader('Почта')
-                ->guess(ImportLanguage::HEADERS['contact_email'])
+                ->guess(ImportLanguage::TENDER_HEADERS['contact_email'])
                 ->rules(['nullable', 'email', 'max:190']),
 
             ImportColumn::make('status')
                 ->label('Опубликовать')
                 ->exampleHeader('Опубликовать')
                 ->example('да')
-                ->guess(ImportLanguage::HEADERS['status'])
+                ->guess(ImportLanguage::TENDER_HEADERS['status'])
                 ->castStateUsing(fn (?string $state): string => ImportLanguage::isYes($state)
                     ? Tender::STATUS_PUBLISHED
                     : Tender::STATUS_DRAFT)
@@ -147,39 +150,10 @@ class TenderImporter extends Importer
         ];
     }
 
-    /**
-     * Столбцы, которые не удалось сопоставить в окне импорта,
-     * разбираются по словарю синонимов.
-     *
-     * Filament подставляет соответствие точным сравнением с
-     * подсказками, поэтому «Kategoriya», «Category» и даже
-     * «Категория » с лишним пробелом остаются пустыми — а пустой
-     * столбец загружается молча и без ошибки.
-     */
-    public function remapData(): void
+    /** @return array<string, list<string>> */
+    protected static function headerAliases(): array
     {
-        $taken = array_values(array_filter($this->columnMap));
-
-        foreach (array_keys(ImportLanguage::HEADERS) as $column) {
-            if (filled($this->columnMap[$column] ?? null)) {
-                continue;
-            }
-
-            foreach (array_keys($this->data) as $header) {
-                $header = (string) $header;
-
-                if (in_array($header, $taken, true) || ! ImportLanguage::isHeaderOf($header, $column)) {
-                    continue;
-                }
-
-                $this->columnMap[$column] = $header;
-                $taken[] = $header;
-
-                break;
-            }
-        }
-
-        parent::remapData();
+        return ImportLanguage::TENDER_HEADERS;
     }
 
     public function resolveRecord(): ?Tender

@@ -24,14 +24,18 @@ use Throwable;
 final class ImportLanguage
 {
     /**
-     * Как называют столбец в таблицах: имя столбца → синонимы.
+     * Как называют столбец в таблице тендеров: имя столбца → синонимы.
+     *
+     * Словари у каждого импортёра свои: «Название» в тендерах — это
+     * заголовок закупки, а в компаниях — название компании, и общий
+     * список развёл бы их по разным столбцам.
      *
      * Списки заданы уже нормализованными — сравнивать их с заголовком
      * файла можно напрямую.
      *
      * @var array<string, list<string>>
      */
-    public const HEADERS = [
+    public const TENDER_HEADERS = [
         'title' => ['заголовок', 'название', 'наименование', 'предмет закупки', 'предмет', 'тема', 'лот',
             'title', 'name', 'subject', 'lot', 'nomi', 'sarlavha', 'mavzu', 'başlık', 'konu', '标题', '名称'],
 
@@ -76,6 +80,51 @@ final class ImportLanguage
 
         'status' => ['опубликовать', 'публиковать', 'публикация', 'статус',
             'publish', 'published', 'status', 'nashr etish', 'holat', 'yayınla', 'durum', '状态', '发布'],
+    ];
+
+    /**
+     * Как называют столбец в таблице компаний.
+     *
+     * @var array<string, list<string>>
+     */
+    public const COMPANY_HEADERS = [
+        'tin' => ['инн', 'налоговый номер', 'стир', 'tin', 'inn', 'stir', 'tax id', 'tax number',
+            'vergi no', 'vergi numarası', '税号'],
+
+        'name' => ['название', 'наименование', 'компания', 'название компании', 'организация', 'фирма',
+            'name', 'company', 'company name', 'firm',
+            'nomi', 'kompaniya', 'kompaniya nomi', 'tashkilot', 'şirket', 'firma', 'unvan', '公司', '名称'],
+
+        'legal_name' => ['юридическое название', 'юр. название', 'полное название', 'официальное название',
+            'legal name', 'full name', 'official name',
+            'yuridik nomi', 'rasmiy nomi', 'toliq nomi', 'resmi unvan', 'ticaret unvanı', '法定名称'],
+
+        'type' => ['тип компании', 'тип', 'вид компании', 'вид деятельности', 'роль',
+            'type', 'company type', 'kind', 'role',
+            'turi', 'kompaniya turi', 'faoliyat turi', 'tür', 'şirket türü', '类型'],
+
+        'address' => ['адрес', 'юридический адрес', 'фактический адрес', 'address', 'manzil', 'adres', '地址'],
+
+        'phone' => ['телефон', 'тел', 'номер телефона', 'контактный телефон',
+            'phone', 'telephone', 'mobile', 'telefon', 'telefon raqami', '电话'],
+
+        'email' => ['почта', 'эл. почта', 'электронная почта', 'мейл',
+            'email', 'e-mail', 'mail', 'pochta', 'elektron pochta', 'e-posta', 'eposta', '邮箱', '电子邮件'],
+
+        'website' => ['сайт', 'веб-сайт', 'веб сайт', 'вебсайт', 'адрес сайта',
+            'website', 'web site', 'site', 'url', 'web',
+            'sayt', 'veb-sayt', 'web sitesi', 'internet sitesi', '网站'],
+
+        'description' => ['описание', 'о компании', 'деятельность', 'чем занимается',
+            'description', 'about', 'activity', 'tavsif', 'faoliyat', 'açıklama', 'hakkında', '描述'],
+
+        'founded_year' => ['год основания', 'основана', 'основан', 'год',
+            'founded', 'founded year', 'year', 'established',
+            'tashkil etilgan yil', 'tashkil topgan yil', 'yil', 'kuruluş yılı', '成立年份'],
+
+        'employees_range' => ['сотрудников', 'количество сотрудников', 'численность', 'штат', 'персонал',
+            'employees', 'staff', 'headcount', 'employees count',
+            'xodimlar', 'xodimlar soni', 'çalışan sayısı', 'personel', '员工'],
     ];
 
     /** Код валюты → как её пишут словами и знаками. */
@@ -133,10 +182,14 @@ final class ImportLanguage
         return trim((string) preg_replace('/\s+/u', ' ', $value));
     }
 
-    /** Заголовок из файла — это столбец $column? */
-    public static function isHeaderOf(string $header, string $column): bool
+    /**
+     * Заголовок из файла — один из синонимов столбца?
+     *
+     * @param  list<string>  $aliases
+     */
+    public static function matches(string $header, array $aliases): bool
     {
-        return in_array(self::normalize($header), self::HEADERS[$column] ?? [], true);
+        return in_array(self::normalize($header), $aliases, true);
     }
 
     /**
