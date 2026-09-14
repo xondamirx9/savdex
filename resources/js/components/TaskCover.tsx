@@ -26,7 +26,7 @@ const STYLES: Record<string, { cls: string; icon: typeof Globe }> = {
     other: { cls: 'cover-other', icon: Code2 },
 };
 
-export function TaskCover({ type, size = 38 }: { type: string; size?: number }) {
+export function TaskCover({ type, size = 56 }: { type: string; size?: number }) {
     const style = STYLES[type] ?? STYLES.other;
     const Icon = style.icon;
 
