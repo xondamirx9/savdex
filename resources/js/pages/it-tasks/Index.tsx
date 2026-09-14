@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { Building2, CalendarDays, CheckCircle2, Code2, ExternalLink, MessageSquareText, Search, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { BoardFilter } from '@/components/BoardFilter';
+import { TaskCover } from '@/components/TaskCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
@@ -77,9 +78,12 @@ export function TaskCard({ row }: { row: TaskRow }) {
     return (
         <Link
             href={routes.itTask(row.slug)}
-            className="card lift"
-            style={{ display: 'flex', flexDirection: 'column', gap: 12, color: 'inherit' }}
+            className="card lift task-card"
+            style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', color: 'inherit' }}
         >
+            <TaskCover type={row.service_type} />
+
+            <div className="task-card-body">
             <div className="row wrap" style={{ gap: 8 }}>
                 <span className="badge badge-supply">{row.service_label}</span>
                 {row.completed ? (
@@ -162,6 +166,7 @@ export function TaskCard({ row }: { row: TaskRow }) {
                     </div>
                 )}
             </dl>
+            </div>
         </Link>
     );
 }

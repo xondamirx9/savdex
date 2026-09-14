@@ -1112,6 +1112,21 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .cover-analytics{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
 .cover-useful{background:linear-gradient(135deg,#b45309,#f59e0b)}
 
+/* Обложки задач на разработку — по сфере работы. Полоса ниже новостной:
+   в карточке задачи главное всё-таки текст, картинка лишь метит вид
+   услуги, чтобы одинаковые карточки различались с первого взгляда */
+.cover-band{aspect-ratio:16/5}
+.cover-web{background:linear-gradient(135deg,#1e40af,#3b82f6)}
+.cover-mobile{background:linear-gradient(135deg,#4338ca,#818cf8)}
+.cover-erp{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+.cover-integration{background:linear-gradient(135deg,#0369a1,#38bdf8)}
+.cover-design{background:linear-gradient(135deg,#be185d,#f472b6)}
+.cover-automation{background:linear-gradient(135deg,#b45309,#f59e0b)}
+.cover-support{background:linear-gradient(135deg,#15803d,#4ade80)}
+.cover-other{background:linear-gradient(135deg,#334155,#64748b)}
+/* Обложка идёт в край карточки, поэтому отступы переезжают внутрь */
+.task-card-body{display:flex;flex-direction:column;gap:12px;padding:14px;flex:1}
+
 /* Обложка внутри карточки чуть увеличивается при наведении —
    движение подсказывает, что карточка кликабельна целиком */
 .lift .cover-art>*{transition:transform .5s cubic-bezier(.16,1,.3,1)}
