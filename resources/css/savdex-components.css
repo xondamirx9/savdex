@@ -948,7 +948,9 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    экранах колонка схлопывается и оно просто оказывается сверху.
    ============================================================ */
 .grid-docs{display:grid;grid-template-columns:248px minmax(0,1fr);gap:40px;align-items:start}
-.doc-nav{position:sticky;top:92px}
+/* Оглавление прокручивается вместе со страницей: прилипший столбец
+   занимал место у длинных разделов и спорил с липкой шапкой */
+.doc-nav{position:static}
 .doc-nav a{display:block;position:relative;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
   transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
   color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
