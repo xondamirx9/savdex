@@ -271,6 +271,47 @@ class TenderAdminTest extends TestCase
         $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
     }
 
+    #[Test]
+    public function выгрузка_с_зарубежной_площадки_читается_целиком(): void
+    {
+        $this->actingAs($this->admin());
+
+        $category = Category::factory()->named('Металлы')->create();
+        $category->translations()->create(['locale' => 'en', 'name' => 'Metals']);
+
+        // Так выглядят столбцы в выгрузках закупок: ни одного
+        // совпадения с русскими подписями формы
+        $this->import([
+            'Tender title' => 'Permanent registration of suppliers',
+            'Procuring entity' => 'ПАО «Северсталь»',
+            'Sector' => 'Metals',
+            'Estimated value' => 'USD 1,200,000.00',
+            'Submission deadline' => '30 October 2026',
+            'Tender URL' => 'https://severstal.com/tender/1',
+        ], mapped: false);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Permanent registration of suppliers', $tender->title);
+        $this->assertSame('ПАО «Северсталь»', $tender->customer);
+        $this->assertSame($category->id, $tender->category_id);
+        $this->assertSame(1_200_000.0, (float) $tender->budget);
+        $this->assertSame('2026-10-30 23:59:59', $tender->deadline_at?->toDateTimeString());
+    }
+
+    #[Test]
+    public function бюджет_диапазоном_берётся_по_нижней_границе(): void
+    {
+        $this->actingAs($this->admin());
+
+        $this->import([
+            'Заголовок' => 'Поставка щебня',
+            'Сумма контракта' => 'от 100 000 до 200 000',
+        ], mapped: false);
+
+        $this->assertSame(100_000.0, (float) Tender::query()->firstOrFail()->budget);
+    }
+
     /**
      * Прогнать одну строку через импортёр так, как это делает
      * очередь Filament: соответствие колонок — по русским заголовкам.

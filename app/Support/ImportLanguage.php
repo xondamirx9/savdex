@@ -36,18 +36,22 @@ final class ImportLanguage
      * @var array<string, list<string>>
      */
     public const TENDER_HEADERS = [
-        'title' => ['заголовок', 'название', 'наименование', 'предмет закупки', 'предмет', 'тема', 'лот',
-            'title', 'name', 'subject', 'lot', 'nomi', 'sarlavha', 'mavzu', 'başlık', 'konu', '标题', '名称'],
+        'title' => ['заголовок', 'название', 'наименование', 'предмет закупки', 'предмет контракта', 'предмет',
+            'наименование закупки', 'название закупки', 'тема', 'лот', 'тендер',
+            'title', 'tender', 'tender title', 'tender name', 'name', 'subject', 'lot',
+            'nomi', 'sarlavha', 'mavzu', 'başlık', 'konu', '标题', '名称'],
 
         'description' => ['описание', 'подробности', 'детали', 'текст', 'условия',
             'description', 'details', 'text', 'tavsif', 'izoh', 'batafsil', 'açıklama', 'detay', '描述', '说明'],
 
-        'customer' => ['заказчик', 'организация', 'покупатель', 'клиент',
-            'customer', 'client', 'buyer', 'organization', 'organisation',
+        'customer' => ['заказчик', 'заказчик закупки', 'организатор', 'организатор закупки', 'организация',
+            'покупатель', 'клиент',
+            'customer', 'client', 'buyer', 'procuring entity', 'issuer', 'organization', 'organisation',
             'buyurtmachi', 'tashkilot', 'mijoz', 'müşteri', 'kurum', '客户', '采购方'],
 
-        'category_id' => ['категория', 'категории', 'категория товара', 'раздел', 'рубрика', 'отрасль', 'сфера', 'группа',
-            'category', 'categories', 'section', 'industry', 'group',
+        'category_id' => ['категория', 'категории', 'категория товара', 'товарная группа', 'раздел', 'рубрика',
+            'отрасль', 'сфера', 'группа', 'товар', 'продукция',
+            'category', 'categories', 'section', 'industry', 'sector', 'group', 'product',
             'kategoriya', 'turkum', "bo'lim", 'soha', 'yonalish', 'kategori', 'bölüm', 'sektör', '类别', '分类'],
 
         'country_id' => ['страна', 'государство', 'country', 'state', 'mamlakat', 'davlat', 'ülke', '国家'],
@@ -56,18 +60,22 @@ final class ImportLanguage
             'city', 'region', 'location', 'address', 'place',
             'shahar', 'viloyat', 'manzil', 'joy', 'şehir', 'bölge', 'adres', '城市', '地区'],
 
-        'budget' => ['бюджет', 'сумма', 'стоимость', 'цена', 'начальная цена',
-            'budget', 'amount', 'price', 'cost', 'sum',
+        'budget' => ['бюджет', 'сумма', 'сумма контракта', 'стоимость', 'стоимость контракта', 'цена',
+            'начальная цена', 'начальная (максимальная) цена', 'нмцк',
+            'budget', 'amount', 'price', 'cost', 'sum', 'value', 'estimated value', 'contract value', 'tender value',
             'byudjet', 'summa', 'narx', 'qiymat', 'bütçe', 'tutar', 'fiyat', '预算', '金额'],
 
         'currency' => ['валюта', 'currency', 'valyuta', 'pul birligi', 'para birimi', '货币'],
 
-        'deadline_at' => ['прием заявок до', 'срок подачи', 'срок', 'дедлайн', 'дата окончания', 'окончание приема', 'до',
-            'deadline', 'due date', 'due', 'end date', 'closing date',
+        'deadline_at' => ['прием заявок до', 'срок подачи', 'срок', 'дедлайн', 'дата окончания', 'окончание приема',
+            'дата окончания подачи', 'окончание подачи заявок', 'дата окончания приема заявок', 'дата закрытия', 'до',
+            'deadline', 'submission deadline', 'bid deadline', 'due date', 'due', 'end date',
+            'closing date', 'closing', 'last date', 'last date of submission',
             'muddat', 'oxirgi muddat', 'tugash sanasi', 'son muddat', 'bitiş tarihi', 'son tarih', '截止日期'],
 
-        'source_url' => ['ссылка на источник', 'ссылка', 'источник',
-            'url', 'link', 'source', 'havola', 'manba', 'bağlantı', 'kaynak', '链接', '来源'],
+        'source_url' => ['ссылка на источник', 'ссылка на тендер', 'ссылка', 'источник',
+            'url', 'tender url', 'tender link', 'link', 'source',
+            'havola', 'manba', 'bağlantı', 'kaynak', '链接', '来源'],
 
         'contact_name' => ['контактное лицо', 'контакт', 'фио', 'ответственный',
             'contact', 'contact person', 'aloqa shaxsi', 'masul shaxs', 'ilgili kişi', 'yetkili', '联系人'],
@@ -224,6 +232,9 @@ final class ImportLanguage
         $raw = self::normalize($state);
         $multiplier = 1;
 
+        // Множитель ищем до разбора диапазона: в «от 100 до 200 млн»
+        // «млн» относится к обеим границам
+
         foreach (self::MULTIPLIERS as $value => $words) {
             foreach ($words as $word) {
                 if (str_contains($raw, $word)) {
@@ -234,9 +245,29 @@ final class ImportLanguage
             }
         }
 
-        $digits = self::digits($raw);
+        $digits = self::digits(self::lowerBound($raw));
 
         return $digits === null ? null : $digits * $multiplier;
+    }
+
+    /**
+     * Нижняя граница диапазона: «от 100 000 до 200 000» и
+     * «100 000 — 200 000» дают 100 000.
+     *
+     * Без этого цифры обеих границ слипались в одно число, и вместо
+     * ста тысяч в бюджет попадало сто миллиардов.
+     */
+    private static function lowerBound(string $value): string
+    {
+        $parts = preg_split('/\s*(?:—|–|-|\.{2,}|…|(?<!\p{L})(?:до|to)(?!\p{L}))\s*/u', $value) ?: [];
+
+        foreach ($parts as $part) {
+            if (preg_match('/\d/', $part) === 1) {
+                return $part;
+            }
+        }
+
+        return $value;
     }
 
     /**
