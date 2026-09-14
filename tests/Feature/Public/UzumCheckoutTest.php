@@ -194,7 +194,7 @@ class UzumCheckoutTest extends TestCase
             return $cart !== null
                 && $cart['total'] === $amount
                 && count($cart['items']) === 1
-                && $item['price'] === $amount
+                && $item['unitPrice'] === $amount
                 && $item['total'] === $amount
                 && $item['quantity'] === 1
                 && $item['spic'] === '10899001001000000'
