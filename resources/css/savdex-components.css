@@ -234,7 +234,9 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .logo{display:flex;align-items:center;gap:9px;font-size:21px;font-weight:700;
   color:var(--text);letter-spacing:-.02em;white-space:nowrap}
 .logo:hover{text-decoration:none}
-.logo-img{width:34px;height:34px;display:block;flex-shrink:0}
+/* object-fit: логотип загружают из админки, и файл не обязан быть
+   квадратным — без него знак 3:1 сплющивался бы в квадрат */
+.logo-img{width:34px;height:34px;display:block;flex-shrink:0;object-fit:contain}
 .logo-word{display:inline-block}
 .logo-word span{color:var(--primary-700)}
 .logo--inverted,.logo--inverted .logo-word span{color:#fff}
@@ -1650,6 +1652,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
 /* Синий знак-самолёт на тёмном фоне гаснет — перекрашивается в белый */
 .chrome-overlay .logo-img{filter:brightness(0) invert(1)}
+/* Загруженный логотип не выбеливаем: у чужого знака свои цвета,
+   и инверсия превратила бы его в белое пятно. Вместо неё —
+   белая подложка, как в подвале: она держит любой знак
+   на тёмном первом экране */
+.chrome-overlay .logo-img--custom{filter:none;background:#fff;border-radius:9px;padding:3px}
 .chrome-overlay .hd-action{color:rgba(255,255,255,.88)}
 .chrome-overlay .hd-action:hover{color:var(--primary-500)}
 .chrome-overlay .hd .btn-ghost:hover{color:var(--primary-500)}

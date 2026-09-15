@@ -20,6 +20,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
@@ -570,6 +571,7 @@ export function SiteHeader() {
      */
     const locale = props.locale ?? 'ru';
     const localeLinks = props.localeLinks ?? [];
+    const brandLogo = useBrandLogo();
     const items = menu();
     /*
      * Язык из адреса убирается: пути в routes.* записаны без него,
@@ -647,7 +649,12 @@ export function SiteHeader() {
                 <div className="container">
                     <div className="hd-main">
                         <Link href={routes.home} className="hd-logo" aria-label={t('nav.home_link')}>
-                            <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
+                            <img
+                                src={brandLogo.src}
+                                alt=""
+                                aria-hidden
+                                className={cn('logo-img', brandLogo.custom && 'logo-img--custom')}
+                            />
                             <span className="hd-logo-word">
                                 {/* translate="no": браузерные переводчики
                                     превращали бренд в «Сохранённый Экс» */}

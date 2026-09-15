@@ -9,19 +9,28 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Оформление витрины, задаваемое из админки.
+ * Оформление витрины, задаваемое из админки: фон первого экрана
+ * и логотип площадки.
  *
- * Пока это одна настройка — фон первого экрана главной. Вынесено
- * отдельным классом, а не строкой в контроллере: картинку кладут
- * через админку в хранилище, а витрине нужен публичный адрес,
- * и превращение одного в другое должно жить в одном месте.
+ * Вынесено отдельным классом, а не строками в контроллерах:
+ * картинку кладут через админку в хранилище, а витрине нужен
+ * публичный адрес, и превращение одного в другое должно жить
+ * в одном месте — логотип читают шапка, подвал, фавикон и админка.
  */
 class Appearance
 {
     public const KEY_HERO = 'hero_image';
 
+    public const KEY_LOGO = 'logo_image';
+
     /** Картинка из коробки: её видно, пока свою не загрузили. */
     public const HERO_FALLBACK = '/images/hero-port.svg';
+
+    /** Знак из коробки: он же лежит в репозитории с самого начала. */
+    public const LOGO_FALLBACK = '/images/logo-mark.svg';
+
+    /** Иконка для экрана «Домой»: растр, которого требует iOS. */
+    public const TOUCH_FALLBACK = '/images/logo-touch.png';
 
     /**
      * Адрес фона первого экрана.
@@ -32,19 +41,44 @@ class Appearance
      */
     public static function heroImage(): string
     {
-        $path = trim((string) Setting::get(self::KEY_HERO, ''));
+        return self::url(self::KEY_HERO, self::HERO_FALLBACK);
+    }
 
-        if ($path === '') {
-            return self::HERO_FALLBACK;
-        }
+    /**
+     * Адрес логотипа площадки.
+     *
+     * Пустая настройка возвращает знак из репозитория: шапка без
+     * логотипа читается как недогрузившаяся страница.
+     */
+    public static function logo(): string
+    {
+        return self::url(self::KEY_LOGO, self::LOGO_FALLBACK);
+    }
 
-        // Загруженный через админку файл лежит на публичном диске;
-        // абсолютный адрес и внешняя ссылка берутся как есть
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
-            return $path;
-        }
+    /**
+     * Тип логотипа для <link rel="icon">.
+     *
+     * Браузер выбирает иконку по type, не скачивая файл: с чужим
+     * типом у SVG вкладка остаётся с пустым листом. У растра тип
+     * не указываем вовсе — браузер определит его сам.
+     */
+    public static function logoType(): ?string
+    {
+        return str_ends_with(strtolower(self::logo()), '.svg') ? 'image/svg+xml' : null;
+    }
 
-        return Storage::disk('public')->url($path);
+    /**
+     * Иконка для экрана «Домой» на телефоне.
+     *
+     * iOS понимает здесь только растр: SVG она молча игнорирует
+     * и рисует уменьшенный снимок страницы. Поэтому загруженный
+     * вектор сюда не идёт — остаётся готовая картинка из репозитория.
+     */
+    public static function touchIcon(): string
+    {
+        $logo = self::logo();
+
+        return preg_match('/\.(png|jpe?g)$/i', $logo) === 1 ? $logo : self::TOUCH_FALLBACK;
     }
 
     /**
@@ -60,7 +94,7 @@ class Appearance
         $path = trim((string) Setting::get(self::KEY_HERO, ''));
 
         if ($path === ''
-            || str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')
+            || self::isAbsolute($path)
             || ! Storage::disk('public')->exists($path)) {
             return null;
         }
@@ -72,5 +106,26 @@ class Appearance
 
             return $info !== false && $info[1] > 0 ? round($info[0] / $info[1], 4) : null;
         });
+    }
+
+    /** Значение настройки-картинки как публичный адрес. */
+    private static function url(string $key, string $fallback): string
+    {
+        $path = trim((string) Setting::get($key, ''));
+
+        if ($path === '') {
+            return $fallback;
+        }
+
+        // Загруженный через админку файл лежит на публичном диске;
+        // абсолютный адрес и внешняя ссылка берутся как есть
+        return self::isAbsolute($path) ? $path : Storage::disk('public')->url($path);
+    }
+
+    private static function isAbsolute(string $path): bool
+    {
+        return str_starts_with($path, 'http://')
+            || str_starts_with($path, 'https://')
+            || str_starts_with($path, '/');
     }
 }

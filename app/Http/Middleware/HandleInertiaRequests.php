@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Favorite;
 use App\Models\MessageThread;
 use App\Models\Setting;
+use App\Support\Appearance;
 use App\Support\Locales;
 use Closure;
 use Illuminate\Http\Request;
@@ -182,6 +183,16 @@ class HandleInertiaRequests extends Middleware
                 'legal_name' => (string) Setting::get('legal_name', ''),
                 'legal_tin' => (string) Setting::get('legal_tin', ''),
             ],
+
+            /*
+             * Логотип площадки из настроек админки.
+             *
+             * Не ленивый: знак рисует шапка на каждой странице, а
+             * настройки читаются из суточного кэша — запросов это
+             * не добавляет. Раньше адрес был зашит в трёх компонентах,
+             * и смена знака означала правку кода и выкладку.
+             */
+            'brandLogo' => Appearance::logo(),
 
             'locale' => app()->getLocale(),
 
