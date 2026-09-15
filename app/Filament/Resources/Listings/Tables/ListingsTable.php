@@ -8,6 +8,7 @@ use App\Filament\Exports\ListingExporter;
 use App\Models\Listing;
 use App\Services\ListingWorkbookImport;
 use App\Support\AdminAccess;
+use App\Support\AdminLog;
 use App\Support\ListingWorkbookTemplate;
 use App\Support\Notifier;
 use Filament\Actions\Action;
@@ -64,6 +65,11 @@ class ListingsTable
              */
             ->headerActions([
                 ExportAction::make()
+                    // Выгрузка уносит персональные данные целым файлом,
+                    // загрузка создаёт записи пачкой мимо форм — оба следа нужны
+                    ->before(function (): void {
+                        AdminLog::record('exported', 'listings');
+                    })
                     ->label('Выгрузить')
                     ->exporter(ListingExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
@@ -141,6 +147,12 @@ class ListingsTable
                         } finally {
                             @unlink($copy);
                         }
+
+                        // След в журнале: загрузка создаёт записи пачкой,
+                        // минуя формы и их проверки
+                        AdminLog::record('imported', 'listings', note: 'Создано: '.$result['created']
+                            .', обновлено: '.$result['updated']
+                            .', фотографий: '.$result['photos']);
 
                         self::report($result);
                     })

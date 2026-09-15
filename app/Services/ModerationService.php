@@ -8,6 +8,7 @@ use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
 use App\Models\Review;
 use App\Models\User;
+use App\Support\AdminLog;
 use App\Support\Notifier;
 use Illuminate\Support\Facades\DB;
 
@@ -74,6 +75,11 @@ class ModerationService
                 ['tone' => 'warning', 'body' => $note],
             );
         }
+
+        // Спор удовлетворён — значит отзыв скрыт. В журнале должно
+        // стоять то, что случилось с записью, а не то, что случилось
+        // с заявлением: искать будут «куда делся отзыв»
+        AdminLog::record('hidden', 'reviews', $review, note: $note, actor: $moderator);
     }
 
     /** Спор отклонён: отзыв остаётся, компания получает объяснение. */
@@ -92,6 +98,8 @@ class ModerationService
             'Спор по отзыву отклонён — отзыв остаётся',
             ['tone' => 'warning', 'body' => $note, 'url' => '/cabinet/reviews'],
         );
+
+        AdminLog::record('rejected', 'reviews', $review, note: $note, actor: $moderator);
     }
 
     // ── Премодерация отзывов ─────────────────────────────────
@@ -118,6 +126,8 @@ class ModerationService
         if ($review->authorCompany !== null && $review->company !== null) {
             $this->reviews->publishedNotice($review, $review->authorCompany, $review->company);
         }
+
+        AdminLog::record('approved', 'reviews', $review, note: null, actor: $moderator);
     }
 
     /**
@@ -148,6 +158,8 @@ class ModerationService
                 ['tone' => 'warning', 'body' => $note],
             );
         }
+
+        AdminLog::record('rejected', 'reviews', $review, note: $note, actor: $moderator);
     }
 
     /** Вернуть скрытый отзыв на витрину: решение бывает ошибочным. */
@@ -163,6 +175,8 @@ class ModerationService
 
             $this->reviews->recalculate($review->company);
         });
+
+        AdminLog::record('restored', 'reviews', $review, note: null, actor: $moderator);
     }
 
     // ── Жалобы на контакты ───────────────────────────────────
@@ -208,6 +222,8 @@ class ModerationService
                 ['tone' => 'success', 'body' => $note, 'url' => '/cabinet/contacts'],
             );
         }
+
+        AdminLog::record('refunded', 'complaints', $unlock, note: $note, actor: $moderator);
     }
 
     /** Жалоба отклонена: возврата нет, но причина названа. */
@@ -228,6 +244,8 @@ class ModerationService
                 ['tone' => 'warning', 'body' => $note, 'url' => '/cabinet/contacts'],
             );
         }
+
+        AdminLog::record('rejected', 'complaints', $unlock, note: $note, actor: $moderator);
     }
 
     // ── Документы ────────────────────────────────────────────
@@ -255,6 +273,8 @@ class ModerationService
             "Документ «{$document->title}» принят",
             ['tone' => 'success', 'url' => '/cabinet/company'],
         );
+
+        AdminLog::record('approved', 'documents', $document, note: null, actor: $moderator);
     }
 
     /** Документ отклонён: без причины человек пришлёт тот же файл. */
@@ -273,5 +293,7 @@ class ModerationService
             "Документ «{$document->title}» отклонён",
             ['tone' => 'danger', 'body' => $reason, 'url' => '/cabinet/company'],
         );
+
+        AdminLog::record('rejected', 'documents', $document, note: $reason, actor: $moderator);
     }
 }
