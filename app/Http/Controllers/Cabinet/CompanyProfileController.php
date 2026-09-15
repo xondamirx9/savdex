@@ -88,7 +88,7 @@ class CompanyProfileController extends Controller
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
-                'role' => $u->company_role === 'owner' ? 'Владелец' : 'Сотрудник',
+                'role' => __($u->company_role === 'owner' ? 'ui.cabinet.company.role_owner' : 'ui.cabinet.company.role_staff'),
                 'verified' => $u->hasVerifiedEmail(),
             ]) ?? [],
 
@@ -118,23 +118,23 @@ class CompanyProfileController extends Controller
         $user = $request->user();
 
         return [
-            ['label' => 'Почта подтверждена', 'done' => $user->hasVerifiedEmail(), 'hint' => null],
-            ['label' => 'Телефон подтверждён кодом', 'done' => $user->phone_verified_at !== null, 'hint' => null],
+            ['label' => __('ui.cabinet.company.verify_email'), 'done' => $user->hasVerifiedEmail(), 'hint' => null],
+            ['label' => __('ui.cabinet.company.verify_phone'), 'done' => $user->phone_verified_at !== null, 'hint' => null],
             [
-                'label' => 'Свидетельство о регистрации',
+                'label' => __('ui.cabinet.company.verify_registration'),
                 'done' => (bool) $company?->documents()->where('type', 'registration')->where('moderation_status', 'approved')->exists(),
                 'hint' => null,
             ],
-            ['label' => 'ИНН/СТИР указан', 'done' => filled($company?->tin), 'hint' => null],
+            ['label' => __('ui.cabinet.company.verify_tin'), 'done' => filled($company?->tin), 'hint' => null],
             [
-                'label' => 'Лицензии и сертификаты',
+                'label' => __('ui.cabinet.company.verify_licenses'),
                 'done' => (bool) $company?->documents()->where('type', 'license')->where('moderation_status', 'approved')->exists(),
-                'hint' => 'для уровня «Проверена+»',
+                'hint' => __('ui.cabinet.company.verify_hint_plus'),
             ],
             [
-                'label' => 'Юридический адрес',
+                'label' => __('ui.cabinet.company.verify_address'),
                 'done' => filled($company?->address),
-                'hint' => 'для уровня «Проверена+»',
+                'hint' => __('ui.cabinet.company.verify_hint_plus'),
             ],
         ];
     }

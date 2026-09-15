@@ -19,7 +19,24 @@ use Inertia\Response;
  */
 class AnalyticsController extends Controller
 {
-    private const PERIODS = [7 => 'Последние 7 дней', 30 => 'Последние 30 дней', 90 => 'Последние 90 дней'];
+    private const PERIODS = [7, 30, 90];
+
+    /**
+     * Подписи периодов на языке сайта.
+     *
+     * Метод, а не константа: константа вычисляется один раз при
+     * загрузке класса, и выбранный тогда язык застыл бы в ней до
+     * перезапуска процесса.
+     *
+     * @return array<int, string>
+     */
+    private static function periods(): array
+    {
+        return array_combine(
+            self::PERIODS,
+            array_map(fn (int $days): string => __('ui.cabinet.analytics.period_days', ['days' => $days]), self::PERIODS),
+        );
+    }
 
     public function index(Request $request): Response
     {
@@ -32,7 +49,7 @@ class AnalyticsController extends Controller
                 'geography' => [],
                 'queries' => [],
                 'benchmark' => [],
-                'periods' => self::PERIODS,
+                'periods' => self::periods(),
                 'period' => 30,
                 'advanced' => false,
                 'plan' => null,
@@ -41,7 +58,7 @@ class AnalyticsController extends Controller
 
         $period = (int) $request->integer('period', 30);
 
-        if (! array_key_exists($period, self::PERIODS)) {
+        if (! in_array($period, self::PERIODS, true)) {
             $period = 30;
         }
 
@@ -56,7 +73,7 @@ class AnalyticsController extends Controller
             'geography' => $metrics->geography(),
             'queries' => $plan->advanced_analytics ? $metrics->queries() : [],
             'benchmark' => $plan->advanced_analytics ? $this->benchmark($summary) : [],
-            'periods' => self::PERIODS,
+            'periods' => self::periods(),
             'period' => $period,
             'advanced' => (bool) $plan->advanced_analytics,
             'plan' => ['name' => $plan->name],
@@ -82,8 +99,8 @@ class AnalyticsController extends Controller
         $conversion = (float) $summary['conversion']['value'];
 
         return [
-            $this->row('CTR карточек', $ctr, 12.0),
-            $this->row('Конверсия в контакт', $conversion, 4.0),
+            $this->row(__('ui.cabinet.analytics.ctr'), $ctr, 12.0),
+            $this->row(__('ui.cabinet.analytics.to_contact'), $conversion, 4.0),
         ];
     }
 
@@ -93,10 +110,10 @@ class AnalyticsController extends Controller
         $ratio = $median > 0 ? $you / $median : 1.0;
 
         [$verdict, $tone] = match (true) {
-            $ratio >= 1.4 => ['топ-25 %', 'success'],
-            $ratio >= 1.0 => ['выше медианы', 'success'],
-            $ratio >= 0.7 => ['около медианы', 'muted'],
-            default => ['ниже медианы', 'warning'],
+            $ratio >= 1.4 => [__('ui.cabinet.analytics.top_quarter'), 'success'],
+            $ratio >= 1.0 => [__('ui.cabinet.analytics.above_median'), 'success'],
+            $ratio >= 0.7 => [__('ui.cabinet.analytics.near_median'), 'muted'],
+            default => [__('ui.cabinet.analytics.below_median'), 'warning'],
         };
 
         return [

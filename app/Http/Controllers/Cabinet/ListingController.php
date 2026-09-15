@@ -29,11 +29,27 @@ class ListingController extends Controller
      * (модератор снимает опубликованное с указанием причины).
      */
     private const TABS = [
-        Listing::STATUS_ACTIVE => 'Активные',
-        Listing::STATUS_DRAFT => 'Черновики',
-        Listing::STATUS_EXPIRED => 'Истёкшие',
-        Listing::STATUS_REJECTED => 'Отклонённые',
+        Listing::STATUS_ACTIVE,
+        Listing::STATUS_DRAFT,
+        Listing::STATUS_EXPIRED,
+        Listing::STATUS_REJECTED,
     ];
+
+    /**
+     * Подписи вкладок на языке сайта.
+     *
+     * Не константа: перевод берётся на каждый запрос, а константа
+     * вычисляется один раз при загрузке класса — язык бы в ней застыл.
+     *
+     * @return array<string, string>
+     */
+    private static function tabs(): array
+    {
+        return array_combine(
+            self::TABS,
+            array_map(fn (string $key): string => __('ui.cabinet.listings.tab_'.$key), self::TABS),
+        );
+    }
 
     public function index(Request $request): Response
     {
@@ -42,8 +58,8 @@ class ListingController extends Controller
         if ($company === null) {
             return Inertia::render('cabinet/listings/Index', [
                 'listings' => [],
-                'counts' => array_map(fn () => 0, self::TABS),
-                'tabs' => self::TABS,
+                'counts' => array_fill_keys(self::TABS, 0),
+                'tabs' => self::tabs(),
                 'status' => Listing::STATUS_ACTIVE,
                 'limit' => null,
             ]);
@@ -51,12 +67,12 @@ class ListingController extends Controller
 
         $status = $request->string('status')->toString();
 
-        if (! array_key_exists($status, self::TABS)) {
+        if (! in_array($status, self::TABS, true)) {
             $status = Listing::STATUS_ACTIVE;
         }
 
         $counts = collect(self::TABS)
-            ->mapWithKeys(fn (string $_, string $key): array => [
+            ->mapWithKeys(fn (string $key): array => [
                 $key => $company->listings()->where('status', $key)->count(),
             ])
             ->all();
@@ -71,7 +87,7 @@ class ListingController extends Controller
         return Inertia::render('cabinet/listings/Index', [
             'listings' => $listings,
             'counts' => $counts,
-            'tabs' => self::TABS,
+            'tabs' => self::tabs(),
             'status' => $status,
             'limit' => [
                 'used' => $counts[Listing::STATUS_ACTIVE],

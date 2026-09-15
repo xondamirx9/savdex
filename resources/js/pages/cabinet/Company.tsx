@@ -7,7 +7,7 @@ import { FileUploadModal } from '@/components/cabinet/FileUploadModal';
 import { Panel, Tabs } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { pluralize } from '@/lib/plural';
+import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 interface Company {
@@ -60,12 +60,7 @@ interface Props {
 }
 
 const EMPLOYEE_RANGES = ['1-10', '10-50', '50-100', '100-500', '500+'];
-const TYPES = [
-    ['manufacturer', 'Производитель'],
-    ['distributor', 'Дистрибьютор'],
-    ['trader', 'Трейдер'],
-    ['retailer', 'Розница'],
-];
+const TYPES = ['manufacturer', 'distributor', 'trader', 'retailer'];
 
 export default function CompanyProfile({
     company,
@@ -127,7 +122,7 @@ export default function CompanyProfile({
         const el = descRef.current;
         if (!el) return;
         const { selectionStart: a, selectionEnd: b, value } = el;
-        const selected = value.slice(a, b) || 'текст';
+        const selected = value.slice(a, b) || t('cabinet.company.sample_text');
         form.setData('description', value.slice(0, a) + before + selected + after + value.slice(b));
         requestAnimationFrame(() => {
             el.focus();
@@ -184,22 +179,26 @@ export default function CompanyProfile({
     }
 
     const tabs = [
-        { key: 'main', label: 'Основное' },
-        { key: 'docs', label: 'Верификация' },
-        { key: 'files', label: 'Файлы и материалы', count: documents.length },
-        { key: 'site', label: 'Мини-сайт' },
-        { key: 'staff', label: 'Сотрудники', count: employees.length },
+        { key: 'main', label: t('cabinet.company.tab_main') },
+        { key: 'docs', label: t('cabinet.company.tab_docs') },
+        { key: 'files', label: t('cabinet.company.tab_files'), count: documents.length },
+        { key: 'site', label: t('cabinet.company.tab_site') },
+        { key: 'staff', label: t('cabinet.company.tab_staff'), count: employees.length },
     ];
 
     return (
         <CabinetLayout
-            title="Профиль компании"
-            heading={company ? 'Профиль компании' : 'Данные компании'}
-            subheading={company ? `Заполнен на ${company.completeness} %` : 'Заполните карточку — от её имени публикуются объявления'}
+            title={t('cabinet.company.title')}
+            heading={company ? t('cabinet.company.title') : t('cabinet.company.title_new')}
+            subheading={
+                company
+                    ? t('cabinet.company.filled', { percent: company.completeness })
+                    : t('cabinet.company.subtitle_new')
+            }
             actions={
                 company ? (
                     <Link href={routes.company(company.slug)} className="btn btn-secondary">
-                        <Eye aria-hidden className="size-4" /> Как видят другие
+                        <Eye aria-hidden className="size-4" /> {t('cabinet.company.preview')}
                     </Link>
                 ) : undefined
             }
@@ -212,7 +211,7 @@ export default function CompanyProfile({
                 </div>
             )}
 
-            {company && <Tabs items={tabs} active={tab} onChange={setTab} label="Разделы профиля" />}
+            {company && <Tabs items={tabs} active={tab} onChange={setTab} label={t('cabinet.company.tabs_label')} />}
 
             {(!company || tab === 'main') && (
                 <div className="card" style={{ maxWidth: 720 }}>
@@ -229,7 +228,9 @@ export default function CompanyProfile({
                                         onClick={() => logoInput.current?.click()}
                                     >
                                         <Upload aria-hidden className="size-4" />
-                                        {company.logo ? 'Заменить логотип' : 'Загрузить логотип'}
+                                        {company.logo
+                                            ? t('cabinet.company.logo_replace')
+                                            : t('cabinet.company.logo_upload')}
                                     </button>
                                     {company.logo && (
                                         <button
@@ -237,16 +238,16 @@ export default function CompanyProfile({
                                             type="button"
                                             onClick={() =>
                                                 confirm({
-                                                    title: 'Удалить логотип?',
-                                                    description: 'На визитке и в каталоге снова появятся инициалы компании.',
-                                                    confirmLabel: 'Удалить',
+                                                    title: t('cabinet.company.logo_delete_title'),
+                                                    description: t('cabinet.company.logo_delete_text'),
+                                                    confirmLabel: t('common.delete'),
                                                     danger: true,
                                                     onConfirm: () =>
                                                         router.delete('/cabinet/company/logo', { preserveScroll: true }),
                                                 })
                                             }
                                         >
-                                            Удалить
+                                            {t('common.delete')}
                                         </button>
                                     )}
                                 </div>
@@ -266,10 +267,7 @@ export default function CompanyProfile({
                                         e.target.value = '';
                                     }}
                                 />
-                                <p className="hint">
-                                    Квадратное изображение, JPG, PNG или WebP до 8 МБ. Без логотипа
-                                    на визитке показываются инициалы.
-                                </p>
+                                <p className="hint">{t('cabinet.company.logo_hint')}</p>
                             </div>
                         </div>
                     )}
@@ -293,7 +291,9 @@ export default function CompanyProfile({
                                     onClick={() => coverInput.current?.click()}
                                 >
                                     <Upload aria-hidden className="size-4" />
-                                    {company.cover ? 'Заменить обложку' : 'Загрузить обложку'}
+                                    {company.cover
+                                        ? t('cabinet.company.cover_replace')
+                                        : t('cabinet.company.cover_upload')}
                                 </button>
                                 {company.cover && (
                                     <button
@@ -301,16 +301,16 @@ export default function CompanyProfile({
                                         type="button"
                                         onClick={() =>
                                             confirm({
-                                                title: 'Удалить обложку?',
-                                                description: 'В шапке визитки снова появится фирменный градиент.',
-                                                confirmLabel: 'Удалить',
+                                                title: t('cabinet.company.cover_delete_title'),
+                                                description: t('cabinet.company.cover_delete_text'),
+                                                confirmLabel: t('common.delete'),
                                                 danger: true,
                                                 onConfirm: () =>
                                                     router.delete('/cabinet/company/cover', { preserveScroll: true }),
                                             })
                                         }
                                     >
-                                        Удалить
+                                        {t('common.delete')}
                                     </button>
                                 )}
                             </div>
@@ -330,29 +330,27 @@ export default function CompanyProfile({
                                     e.target.value = '';
                                 }}
                             />
-                            <p className="hint">
-                                Обложка — фото в шапке визитки. Широкий кадр, JPG, PNG или WebP до 8 МБ.
-                            </p>
+                            <p className="hint">{t('cabinet.company.cover_hint')}</p>
                         </div>
                     )}
 
                     <div className="field">
                         <label className="label" htmlFor="p-name">
-                            Название <span className="req">*</span>
+                            {t('cabinet.company.name')} <span className="req">*</span>
                         </label>
                         <input
                             id="p-name"
                             className="input"
                             value={form.data.name}
                             onChange={(e) => form.setData('name', e.target.value)}
-                            placeholder="ООО «Стройбаза»"
+                            placeholder={t('cabinet.company.name_placeholder')}
                         />
                         {form.errors.name && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.name}</p>}
                     </div>
 
                     <div className="field">
                         <label className="label" htmlFor="p-legal">
-                            Юридическое название
+                            {t('cabinet.company.legal_name')}
                         </label>
                         <input
                             id="p-legal"
@@ -365,7 +363,7 @@ export default function CompanyProfile({
                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-tin">
-                                ИНН / СТИР
+                                {t('cabinet.company.tin')}
                             </label>
                             <input
                                 id="p-tin"
@@ -376,7 +374,7 @@ export default function CompanyProfile({
                         </div>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-year">
-                                Год основания
+                                {t('cabinet.company.founded')}
                             </label>
                             <input
                                 id="p-year"
@@ -394,7 +392,7 @@ export default function CompanyProfile({
                     <div className="grid grid-2 grid-tight mt-16" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-country">
-                                Страна
+                                {t('cabinet.company.country')}
                             </label>
                             <select
                                 id="p-country"
@@ -405,7 +403,7 @@ export default function CompanyProfile({
                                     form.setData('city_id', null);
                                 }}
                             >
-                                <option value="">Не указана</option>
+                                <option value="">{t('cabinet.company.country_none')}</option>
                                 {countries.map((c) => (
                                     <option key={c.id} value={c.id}>
                                         {c.name}
@@ -415,7 +413,7 @@ export default function CompanyProfile({
                         </div>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-city">
-                                Город
+                                {t('cabinet.company.city')}
                             </label>
                             <select
                                 id="p-city"
@@ -423,7 +421,7 @@ export default function CompanyProfile({
                                 value={form.data.city_id ?? ''}
                                 onChange={(e) => form.setData('city_id', e.target.value ? Number(e.target.value) : null)}
                             >
-                                <option value="">Не указан</option>
+                                <option value="">{t('cabinet.company.city_none')}</option>
                                 {availableCities.map((c) => (
                                     <option key={c.id} value={c.id}>
                                         {c.name}
@@ -435,22 +433,22 @@ export default function CompanyProfile({
 
                     <div className="field mt-16">
                         <label className="label" htmlFor="p-addr">
-                            Юридический адрес
+                            {t('cabinet.company.address')}
                         </label>
                         <input
                             id="p-addr"
                             className="input"
                             value={form.data.address}
                             onChange={(e) => form.setData('address', e.target.value)}
-                            placeholder="г. Ташкент, Мирзо-Улугбекский р-н, ул. …"
+                            placeholder={t('cabinet.company.address_placeholder')}
                         />
-                        <p className="hint">Нужен для бейджа «Проверена+»</p>
+                        <p className="hint">{t('cabinet.company.address_hint')}</p>
                     </div>
 
                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-type">
-                                Тип компании
+                                {t('cabinet.company.type')}
                             </label>
                             <select
                                 id="p-type"
@@ -458,16 +456,16 @@ export default function CompanyProfile({
                                 value={form.data.type ?? ''}
                                 onChange={(e) => form.setData('type', e.target.value)}
                             >
-                                {TYPES.map(([value, label]) => (
+                                {TYPES.map((value) => (
                                     <option key={value} value={value}>
-                                        {label}
+                                        {t(`cabinet.company.type_${value}`)}
                                     </option>
                                 ))}
                             </select>
                         </div>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-emp">
-                                Сотрудников
+                                {t('cabinet.company.employees')}
                             </label>
                             <select
                                 id="p-emp"
@@ -475,7 +473,7 @@ export default function CompanyProfile({
                                 value={form.data.employees_range ?? ''}
                                 onChange={(e) => form.setData('employees_range', e.target.value)}
                             >
-                                <option value="">Не указано</option>
+                                <option value="">{t('cabinet.company.not_set')}</option>
                                 {EMPLOYEE_RANGES.map((r) => (
                                     <option key={r} value={r}>
                                         {r}
@@ -487,7 +485,7 @@ export default function CompanyProfile({
 
                     <div className="field mt-16">
                         <label className="label" htmlFor="p-custom-cat">
-                            Своё направление деятельности
+                            {t('cabinet.company.custom_category')}
                         </label>
                         <input
                             id="p-custom-cat"
@@ -495,16 +493,14 @@ export default function CompanyProfile({
                             maxLength={80}
                             value={form.data.custom_category}
                             onChange={(e) => form.setData('custom_category', e.target.value)}
-                            placeholder="Например: клининг, логистика, IT-услуги"
+                            placeholder={t('cabinet.company.custom_category_placeholder')}
                         />
-                        <p className="hint">
-                            Для компаний с категорией «Другое»: текст показывается на визитке рядом с типом компании.
-                        </p>
+                        <p className="hint">{t('cabinet.company.custom_category_hint')}</p>
                     </div>
 
                     <div className="field mt-16">
                         <label className="label" htmlFor="p-site">
-                            Сайт
+                            {t('cabinet.company.website')}
                         </label>
                         <input
                             id="p-site"
@@ -517,22 +513,22 @@ export default function CompanyProfile({
 
                     <div className="field">
                         <label className="label" htmlFor="p-desc">
-                            Описание компании
+                            {t('cabinet.company.description')}
                         </label>
                         {/* Панель форматирования: жирный, галочка, список.
                             Разметку понимает визитка (см. lib/richtext) */}
                         <div className="row" style={{ gap: 6, marginBottom: 6 }}>
-                            <button type="button" className="btn btn-secondary btn-sm" title="Выделить жирным"
+                            <button type="button" className="btn btn-secondary btn-sm" title={t('cabinet.company.bold')}
                                 onClick={() => wrapSelection('**', '**')}>
-                                <b>Ж</b>
+                                <b>{t('cabinet.company.bold_letter')}</b>
                             </button>
-                            <button type="button" className="btn btn-secondary btn-sm" title="Вставить галочку"
+                            <button type="button" className="btn btn-secondary btn-sm" title={t('cabinet.company.check')}
                                 onClick={() => insertAtCursor('✔ ')}>
                                 ✔
                             </button>
-                            <button type="button" className="btn btn-secondary btn-sm" title="Пункт списка"
+                            <button type="button" className="btn btn-secondary btn-sm" title={t('cabinet.company.bullet')}
                                 onClick={() => insertAtCursor('\n- ')}>
-                                •&nbsp;список
+                                •&nbsp;{t('cabinet.company.list')}
                             </button>
                         </div>
                         <textarea
@@ -542,12 +538,9 @@ export default function CompanyProfile({
                             style={{ minHeight: 140 }}
                             value={form.data.description}
                             onChange={(e) => form.setData('description', e.target.value)}
-                            placeholder="Чем занимаетесь, с какого года, какие мощности и склады"
+                            placeholder={t('cabinet.company.description_placeholder')}
                         />
-                        <p className="hint">
-                            Выделите текст и нажмите «Ж» — на визитке он станет жирным. Строки, начатые с «- »,
-                            превратятся в список; эмодзи ✔ ★ 📦 можно вставлять прямо в текст.
-                        </p>
+                        <p className="hint">{t('cabinet.company.description_hint')}</p>
                     </div>
 
                     {/* Роль IT-исполнителя: только с ней видна кнопка «Откликнуться»
@@ -560,12 +553,9 @@ export default function CompanyProfile({
                                 checked={form.data.is_it_provider}
                                 onChange={(e) => form.setData('is_it_provider', e.target.checked)}
                             />
-                            Оказываем IT-услуги — хотим откликаться на IT-задачи
+                            {t('cabinet.company.it_provider')}
                         </label>
-                        <p className="hint">
-                            Компании с этой ролью видят кнопку «Откликнуться» в разделе «IT-услуги» и получают
-                            пометку «IT-исполнитель» на визитке. Отклик списывает лимит откликов тарифа.
-                        </p>
+                        <p className="hint">{t('cabinet.company.it_provider_hint')}</p>
                         {form.data.is_it_provider && (
                             <div className="row wrap mt-12" style={{ gap: 8 }}>
                                 {Object.entries(serviceTypes).map(([code, label]) => {
@@ -597,22 +587,22 @@ export default function CompanyProfile({
                     </div>
 
                     <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>
-                        {company ? 'Сохранить изменения' : 'Создать компанию'}
+                        {company ? t('cabinet.company.save') : t('cabinet.company.create')}
                     </button>
                 </div>
             )}
 
             {company && tab === 'docs' && (
                 <div className="card" style={{ maxWidth: 720 }}>
-                    <h3 className="t-h3">Уровень верификации</h3>
+                    <h3 className="t-h3">{t('cabinet.company.verification')}</h3>
                     <p className="t-sm muted mt-8" style={{ marginBottom: 20 }}>
-                        Сейчас:{' '}
+                        {t('cabinet.company.verification_now')}{' '}
                         {company.verification_level > 1 ? (
-                            <span className="badge badge-gold">Проверена+</span>
+                            <span className="badge badge-gold">{t('cabinet.company.level_2')}</span>
                         ) : company.verification_level > 0 ? (
-                            <span className="badge badge-verified">Проверена</span>
+                            <span className="badge badge-verified">{t('cabinet.company.level_1')}</span>
                         ) : (
-                            <span className="badge badge-neutral">Не проверена</span>
+                            <span className="badge badge-neutral">{t('cabinet.company.level_0')}</span>
                         )}
                     </p>
 
@@ -635,14 +625,14 @@ export default function CompanyProfile({
                     <div className="alert alert-info mt-24">
                         <Info aria-hidden className="size-5" />
                         <div>
-                            На тарифе {plan?.name} заявка рассматривается за{' '}
-                            <b>{pluralize(plan?.verification_days ?? 1, ['рабочий день', 'рабочих дня', 'рабочих дней'])}</b>
-                            . Бейдж выдаёт модератор — купить его нельзя ни на одном тарифе.
+                            {t('cabinet.company.review_time', { plan: plan?.name ?? '' })}{' '}
+                            <b>{tChoice('cabinet.company.working_days', plan?.verification_days ?? 1)}</b>
+                            {t('cabinet.company.review_note')}
                         </div>
                     </div>
 
                     <button className="btn btn-primary mt-24" onClick={() => setUploading('registration')}>
-                        <Upload aria-hidden className="size-4" /> Загрузить документ
+                        <Upload aria-hidden className="size-4" /> {t('cabinet.company.upload_document')}
                     </button>
                 </div>
             )}
@@ -651,14 +641,11 @@ export default function CompanyProfile({
                 <div className="card" style={{ maxWidth: 820 }}>
                     <div className="row-between wrap" style={{ gap: 12, marginBottom: 6 }}>
                         <div>
-                            <h3 className="t-h3">Документы и материалы</h3>
-                            <p className="t-sm muted mt-8">
-                                Презентации, прайс-листы, каталоги и документы. Вы сами решаете, что показать
-                                на визитке партнёрам.
-                            </p>
+                            <h3 className="t-h3">{t('cabinet.company.files')}</h3>
+                            <p className="t-sm muted mt-8">{t('cabinet.company.files_text')}</p>
                         </div>
                         <button className="btn btn-primary" onClick={() => setUploading('presentation')}>
-                            <Upload aria-hidden className="size-4" /> Загрузить файл
+                            <Upload aria-hidden className="size-4" /> {t('cabinet.files.upload_file')}
                         </button>
                     </div>
 
@@ -667,10 +654,9 @@ export default function CompanyProfile({
                             <div className="empty-icon">
                                 <FileText aria-hidden className="size-7" />
                             </div>
-                            <p className="t-h4">Файлов пока нет</p>
+                            <p className="t-h4">{t('cabinet.company.files_empty')}</p>
                             <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                                Прайс-лист и презентация на визитке снимают половину первых вопросов —
-                                партнёр видит ассортимент и условия до звонка.
+                                {t('cabinet.company.files_empty_text')}
                             </p>
                         </div>
                     ) : (
@@ -688,7 +674,8 @@ export default function CompanyProfile({
                                         <span className="t-caption muted">
                                             {d.type_label}
                                             {d.size && ` · ${d.size}`}
-                                            {d.valid_until && ` · до ${d.valid_until}`}
+                                            {d.valid_until &&
+                                                ` · ${t('cabinet.company.valid_until', { date: d.valid_until })}`}
                                         </span>
                                     </span>
 
@@ -696,7 +683,7 @@ export default function CompanyProfile({
                                         содержимого нет — просим загрузить заново */}
                                     {d.missing && (
                                         <span className="badge badge-danger shrink-0">
-                                            Файл утерян — загрузите заново
+                                            {t('cabinet.company.file_missing')}
                                         </span>
                                     )}
 
@@ -714,14 +701,14 @@ export default function CompanyProfile({
                                             )}
                                         >
                                             {d.status === 'approved'
-                                                ? 'Проверен'
+                                                ? t('cabinet.company.doc_approved')
                                                 : d.status === 'rejected'
-                                                  ? 'Отклонён'
-                                                  : 'На проверке'}
+                                                  ? t('cabinet.company.doc_rejected')
+                                                  : t('cabinet.company.doc_pending')}
                                         </span>
                                     )}
 
-                                    <label className="check shrink-0" title="Показывать на визитке">
+                                    <label className="check shrink-0" title={t('cabinet.files.public')}>
                                         <input
                                             type="checkbox"
                                             checked={d.is_public}
@@ -733,19 +720,19 @@ export default function CompanyProfile({
                                                 )
                                             }
                                         />
-                                        <span className="hide-mobile">На визитке</span>
+                                        <span className="hide-mobile">{t('cabinet.company.on_card')}</span>
                                     </label>
 
                                     <button
                                         className="btn btn-ghost btn-icon shrink-0"
-                                        aria-label={`Удалить «${d.title}»`}
+                                        aria-label={t('cabinet.company.delete_file_aria', { title: d.title })}
                                         onClick={() =>
                                             confirm({
-                                                title: `Удалить «${d.title}»?`,
+                                                title: t('cabinet.company.delete_file_title', { title: d.title }),
                                                 description: d.is_public
-                                                    ? 'Файл исчезнет и с визитки — партнёры его больше не увидят.'
-                                                    : 'Файл будет удалён безвозвратно.',
-                                                confirmLabel: 'Удалить',
+                                                    ? t('cabinet.company.delete_file_public')
+                                                    : t('cabinet.company.delete_file_text'),
+                                                confirmLabel: t('common.delete'),
                                                 danger: true,
                                                 onConfirm: () =>
                                                     router.delete(`/cabinet/company/files/${d.id}`, { preserveScroll: true }),
@@ -770,15 +757,12 @@ export default function CompanyProfile({
             {company && tab === 'site' && (
                 <Panel>
                     {plan?.has_microsite ? (
-                        <p className="muted">
-                            Конструктор мини-сайта: блоки «О компании», «Преимущества», «Продукция», «Галерея»,
-                            «Документы», «Команда», «Контакты», «Карта». Появится в ближайшем обновлении.
-                        </p>
+                        <p className="muted">{t('cabinet.company.microsite_soon')}</p>
                     ) : (
                         <>
-                            <p className="muted">Мини-сайт доступен на тарифах Business и Premium.</p>
+                            <p className="muted">{t('cabinet.company.microsite_plan')}</p>
                             <Link href={routes.pricing} className="btn btn-outline mt-16">
-                                Сравнить тарифы
+                                {t('cabinet.company.compare_plans')}
                             </Link>
                         </>
                     )}
@@ -787,52 +771,53 @@ export default function CompanyProfile({
 
             {company && tab === 'staff' && (
                 <Panel
-                    title="Сотрудники"
+                    title={t('cabinet.company.staff')}
                     /* Кнопка была отключена и молчала о причине. Пояснение
                        и так есть внизу раздела — дублировать его значком
                        честнее, чем показывать мёртвую кнопку */
-                    action={<span className="badge badge-neutral">приглашения скоро</span>}
+                    action={<span className="badge badge-neutral">{t('cabinet.company.invites_soon')}</span>}
                 >
                     <div className="table-wrap table-cards" style={{ border: 'none' }}>
                         <table className="table" style={{ minWidth: 0 }}>
                             <thead>
                                 <tr>
-                                    <th>Имя</th>
-                                    <th>Почта</th>
-                                    <th>Роль</th>
+                                    <th>{t('cabinet.company.col_name')}</th>
+                                    <th>{t('cabinet.company.col_email')}</th>
+                                    <th>{t('cabinet.company.col_role')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {employees.map((e) => (
                                     <tr key={e.id}>
-                                        <td data-label="Имя">
+                                        <td data-label={t('cabinet.company.col_name')}>
                                             <b>{e.name}</b>
                                         </td>
-                                        <td data-label="Почта">
+                                        <td data-label={t('cabinet.company.col_email')}>
                                             {e.email}
-                                            {!e.verified && <span className="badge badge-warning">не подтверждена</span>}
+                                            {!e.verified && (
+                                                <span className="badge badge-warning">
+                                                    {t('cabinet.company.email_unverified')}
+                                                </span>
+                                            )}
                                         </td>
-                                        <td data-label="Роль">{e.role}</td>
+                                        <td data-label={t('cabinet.company.col_role')}>{e.role}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
 
-                    <p className="t-sm muted mt-16">
-                        Лимиты тарифа считаются на компанию, кредиты — общий кошелёк всех сотрудников. Приглашение
-                        по почте появится в ближайшем обновлении.
-                    </p>
+                    <p className="t-sm muted mt-16">{t('cabinet.company.staff_note')}</p>
                 </Panel>
             )}
 
             {company && tab === 'main' && (
                 <Panel
-                    title="Контакты компании"
+                    title={t('cabinet.company.contacts')}
                     className="mt-24"
                     action={
                         <button className="btn btn-secondary btn-sm" type="button" onClick={() => openContactEditor()}>
-                            <Plus aria-hidden className="size-4" /> Добавить контакт
+                            <Plus aria-hidden className="size-4" /> {t('cabinet.company.contact_add')}
                         </button>
                     }
                 >
@@ -845,11 +830,15 @@ export default function CompanyProfile({
                                         {c.label && <span className="muted"> · {c.label}</span>}
                                     </span>
                                     <span className="row" style={{ gap: 6, flexShrink: 0 }}>
-                                        <span className="badge badge-neutral hide-mobile">{c.is_public ? 'публичный' : 'платный'}</span>
+                                        <span className="badge badge-neutral hide-mobile">
+                                            {c.is_public
+                                                ? t('cabinet.company.contact_public')
+                                                : t('cabinet.company.contact_paid')}
+                                        </span>
                                         <button
                                             className="btn btn-ghost btn-sm"
                                             type="button"
-                                            aria-label="Изменить контакт"
+                                            aria-label={t('cabinet.company.contact_edit')}
                                             onClick={() => openContactEditor(c)}
                                         >
                                             <Pencil aria-hidden className="size-4" />
@@ -857,12 +846,14 @@ export default function CompanyProfile({
                                         <button
                                             className="btn btn-ghost btn-sm"
                                             type="button"
-                                            aria-label="Удалить контакт"
+                                            aria-label={t('cabinet.company.contact_delete')}
                                             onClick={() =>
                                                 confirm({
-                                                    title: 'Удалить контакт?',
-                                                    description: `${c.value} исчезнет с визитки компании.`,
-                                                    confirmLabel: 'Удалить',
+                                                    title: t('cabinet.company.contact_delete_title'),
+                                                    description: t('cabinet.company.contact_delete_text', {
+                                                        value: c.value,
+                                                    }),
+                                                    confirmLabel: t('common.delete'),
                                                     danger: true,
                                                     onConfirm: () => router.delete(routes.companyContact(c.id), { preserveScroll: true }),
                                                 })
@@ -880,22 +871,26 @@ export default function CompanyProfile({
                         <div className="card card--pad-sm mt-16" style={{ background: 'var(--bg)' }}>
                             <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                                 <div className="field" style={{ margin: 0 }}>
-                                    <label className="label" htmlFor="ct-type">Тип</label>
+                                    <label className="label" htmlFor="ct-type">
+                                        {t('cabinet.company.contact_type')}
+                                    </label>
                                     <select
                                         id="ct-type"
                                         className="select"
                                         value={contactForm.data.type}
                                         onChange={(e) => contactForm.setData('type', e.target.value)}
                                     >
-                                        <option value="phone">Телефон</option>
-                                        <option value="email">Почта</option>
+                                        <option value="phone">{t('cabinet.company.contact_phone')}</option>
+                                        <option value="email">{t('cabinet.company.contact_email')}</option>
                                         <option value="telegram">Telegram</option>
                                         <option value="whatsapp">WhatsApp</option>
-                                        <option value="website">Сайт</option>
+                                        <option value="website">{t('cabinet.company.website')}</option>
                                     </select>
                                 </div>
                                 <div className="field" style={{ margin: 0 }}>
-                                    <label className="label" htmlFor="ct-value">Контакт</label>
+                                    <label className="label" htmlFor="ct-value">
+                                        {t('cabinet.company.contact_value')}
+                                    </label>
                                     <input
                                         id="ct-value"
                                         className="input"
@@ -909,29 +904,29 @@ export default function CompanyProfile({
                                 </div>
                             </div>
                             <div className="field mt-12" style={{ margin: 0 }}>
-                                <label className="label" htmlFor="ct-label">Подпись (необязательно)</label>
+                                <label className="label" htmlFor="ct-label">
+                                    {t('cabinet.company.contact_label')}
+                                </label>
                                 <input
                                     id="ct-label"
                                     className="input"
                                     value={contactForm.data.label}
                                     onChange={(e) => contactForm.setData('label', e.target.value)}
-                                    placeholder="Отдел продаж"
+                                    placeholder={t('cabinet.company.contact_label_placeholder')}
                                 />
                             </div>
                             <div className="row mt-16" style={{ gap: 8 }}>
                                 <button className="btn btn-primary btn-sm" type="button" disabled={contactForm.processing} onClick={submitContact}>
-                                    {contactEditor === 'new' ? 'Добавить' : 'Сохранить'}
+                                    {contactEditor === 'new' ? t('cabinet.company.contact_add_short') : t('common.save')}
                                 </button>
                                 <button className="btn btn-ghost btn-sm" type="button" onClick={() => setContactEditor(null)}>
-                                    Отмена
+                                    {t('common.cancel')}
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    <p className="t-sm muted mt-16">
-                        Телефоны и почта показываются частично, пока покупатель не оплатит раскрытие. Сайт виден всем.
-                    </p>
+                    <p className="t-sm muted mt-16">{t('cabinet.company.contacts_note')}</p>
                 </Panel>
             )}
         </CabinetLayout>

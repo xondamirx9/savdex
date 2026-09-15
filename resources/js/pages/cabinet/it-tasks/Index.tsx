@@ -6,6 +6,7 @@ import { Empty } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -53,7 +54,7 @@ function CompleteForm({ task, onDone }: { task: Row; onDone: () => void }) {
     return (
         <form onSubmit={submit} style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <div className="field" style={{ margin: 0 }}>
-                <label className="label" htmlFor={`r-url-${task.id}`}>Ссылка на результат</label>
+                <label className="label" htmlFor={`r-url-${task.id}`}>{t('cabinet.it_tasks.result_url')}</label>
                 <input
                     id={`r-url-${task.id}`}
                     className="input"
@@ -64,26 +65,26 @@ function CompleteForm({ task, onDone }: { task: Row; onDone: () => void }) {
                 {form.errors.result_url && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.result_url}</p>}
             </div>
             <div className="field" style={{ margin: 0 }}>
-                <label className="label" htmlFor={`r-sum-${task.id}`}>Что сделано</label>
+                <label className="label" htmlFor={`r-sum-${task.id}`}>{t('cabinet.it_tasks.result_summary')}</label>
                 <textarea
                     id={`r-sum-${task.id}`}
                     className="input"
                     rows={3}
                     maxLength={600}
-                    placeholder="Коротко: что получилось в итоге — это увидят другие заказчики"
+                    placeholder={t('cabinet.it_tasks.result_summary_placeholder')}
                     value={form.data.result_summary}
                     onChange={(e) => form.setData('result_summary', e.target.value)}
                 />
             </div>
             <div className="field" style={{ margin: 0 }}>
-                <label className="label" htmlFor={`r-who-${task.id}`}>Исполнитель</label>
+                <label className="label" htmlFor={`r-who-${task.id}`}>{t('cabinet.it_tasks.contractor')}</label>
                 <select
                     id={`r-who-${task.id}`}
                     className="select"
                     value={form.data.contractor_company_id}
                     onChange={(e) => form.setData('contractor_company_id', e.target.value)}
                 >
-                    <option value="">Не указывать</option>
+                    <option value="">{t('cabinet.it_tasks.contractor_none')}</option>
                     {task.responders.map((r) => (
                         <option key={r.id} value={r.id}>
                             {r.name}
@@ -93,14 +94,14 @@ function CompleteForm({ task, onDone }: { task: Row; onDone: () => void }) {
                 {form.errors.contractor_company_id && (
                     <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.contractor_company_id}</p>
                 )}
-                {task.responders.length === 0 && <p className="hint">Откликов пока не было — исполнителя можно не указывать.</p>}
+                {task.responders.length === 0 && <p className="hint">{t('cabinet.it_tasks.no_responders')}</p>}
             </div>
             <div className="row" style={{ gap: 8 }}>
                 <button type="submit" className="btn btn-primary btn-sm" disabled={form.processing}>
-                    <CheckCircle2 aria-hidden className="size-4" /> Отметить выполненной
+                    <CheckCircle2 aria-hidden className="size-4" /> {t('cabinet.it_tasks.mark_done')}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
-                    Отмена
+                    {t('common.cancel')}
                 </button>
             </div>
         </form>
@@ -113,13 +114,13 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
 
     return (
         <CabinetLayout
-            title="IT-задачи"
-            heading="IT-задачи"
-            subheading="Опишите, что нужно разработать или настроить, — IT-команды площадки откликнутся в чат"
+            title={t('cabinet.it_tasks.title')}
+            heading={t('cabinet.it_tasks.title')}
+            subheading={t('cabinet.it_tasks.subtitle')}
             actions={
                 hasCompany ? (
                     <Link href={routes.itTaskCreate} className="btn btn-primary btn-sm">
-                        <Plus aria-hidden className="size-4" /> Новая задача
+                        <Plus aria-hidden className="size-4" /> {t('cabinet.it_tasks.new')}
                     </Link>
                 ) : undefined
             }
@@ -129,105 +130,112 @@ export default function ItTasksIndex({ tasks, hasCompany }: { tasks: Row[]; hasC
             {!hasCompany ? (
                 <Empty
                     icon={Code2}
-                    title="Сначала заполните данные компании"
-                    text="IT-задача публикуется от имени компании — исполнители должны видеть, с кем будут работать."
-                    action={{ href: routes.cabinetCompany, label: 'Заполнить профиль' }}
+                    title={t('cabinet.it_tasks.no_company')}
+                    text={t('cabinet.it_tasks.no_company_text')}
+                    action={{ href: routes.cabinetCompany, label: t('cabinet.it_tasks.fill_profile') }}
                 />
             ) : tasks.length === 0 ? (
                 <Empty
                     icon={Code2}
-                    title="IT-задач пока нет"
-                    text="Сайт, мобильное приложение, интеграция с 1С, бот для заявок — опишите задачу, и исполнители сами придут в чат."
-                    action={{ href: routes.itTaskCreate, label: 'Опубликовать задачу' }}
+                    title={t('cabinet.it_tasks.empty')}
+                    text={t('cabinet.it_tasks.empty_text')}
+                    action={{ href: routes.itTaskCreate, label: t('cabinet.it_tasks.publish') }}
                 />
             ) : (
                 <div style={{ display: 'grid', gap: 12 }}>
-                    {tasks.map((t) => (
-                        <div key={t.id} className="card" style={{ display: 'grid', gap: 10 }}>
+                    {tasks.map((task) => (
+                        <div key={task.id} className="card" style={{ display: 'grid', gap: 10 }}>
                             <div className="row wrap" style={{ gap: 8, justifyContent: 'space-between' }}>
                                 <div className="row wrap" style={{ gap: 8 }}>
-                                    <span className={`badge ${STATUS_BADGE[t.status]}`}>{t.status_label}</span>
-                                    <span className="badge badge-neutral">{t.service_type}</span>
-                                    {t.published && <span className="t-caption muted">{t.published}</span>}
+                                    <span className={`badge ${STATUS_BADGE[task.status]}`}>{task.status_label}</span>
+                                    <span className="badge badge-neutral">{task.service_type}</span>
+                                    {task.published && <span className="t-caption muted">{task.published}</span>}
                                 </div>
                                 <div className="row" style={{ gap: 6 }}>
-                                    {t.status === 'active' && t.slug && (
-                                        <Link href={routes.itTask(t.slug)} className="btn btn-ghost btn-sm">
-                                            <Eye aria-hidden className="size-4" /> На сайте
+                                    {task.status === 'active' && task.slug && (
+                                        <Link href={routes.itTask(task.slug)} className="btn btn-ghost btn-sm">
+                                            <Eye aria-hidden className="size-4" /> {t('cabinet.it_tasks.on_site')}
                                         </Link>
                                     )}
-                                    <Link href={routes.itTaskEdit(t.id)} className="btn btn-secondary btn-sm">
-                                        <Pencil aria-hidden className="size-4" /> Изменить
+                                    <Link href={routes.itTaskEdit(task.id)} className="btn btn-secondary btn-sm">
+                                        <Pencil aria-hidden className="size-4" /> {t('common.edit')}
                                     </Link>
-                                    {t.status !== 'completed' && (
+                                    {task.status !== 'completed' && (
                                         <button
                                             type="button"
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => setCompleting(completing === t.id ? null : t.id)}
+                                            onClick={() => setCompleting(completing === task.id ? null : task.id)}
                                         >
-                                            <CheckCircle2 aria-hidden className="size-4" /> Выполнена
+                                            <CheckCircle2 aria-hidden className="size-4" /> {t('cabinet.it_tasks.done')}
                                         </button>
                                     )}
-                                    {t.status === 'active' ? (
+                                    {task.status === 'active' ? (
                                         <button
                                             type="button"
                                             className="btn btn-ghost btn-sm"
                                             onClick={() =>
                                                 confirm({
-                                                    title: 'Закрыть задачу?',
-                                                    description: 'Задача уйдёт с витрины, новые отклики перестанут приходить. Чаты с исполнителями останутся.',
-                                                    confirmLabel: 'Закрыть',
-                                                    onConfirm: () => router.post(routes.itTaskClose(t.id), {}, { preserveScroll: true }),
+                                                    title: t('cabinet.it_tasks.close_title'),
+                                                    description: t('cabinet.it_tasks.close_text'),
+                                                    confirmLabel: t('cabinet.it_tasks.close'),
+                                                    onConfirm: () => router.post(routes.itTaskClose(task.id), {}, { preserveScroll: true }),
                                                 })
                                             }
                                         >
-                                            Закрыть
+                                            {t('cabinet.it_tasks.close')}
                                         </button>
-                                    ) : t.status !== 'completed' ? (
+                                    ) : task.status !== 'completed' ? (
                                         <button
                                             type="button"
                                             className="btn btn-ghost btn-sm"
-                                            onClick={() => router.post(routes.itTaskReopen(t.id), {}, { preserveScroll: true })}
+                                            onClick={() => router.post(routes.itTaskReopen(task.id), {}, { preserveScroll: true })}
                                         >
-                                            Открыть снова
+                                            {t('cabinet.it_tasks.reopen')}
                                         </button>
                                     ) : null}
                                 </div>
                             </div>
 
-                            <h3 className="t-h4">{t.title}</h3>
+                            <h3 className="t-h4">{task.title}</h3>
 
                             <div className="row wrap t-sm muted" style={{ gap: 16 }}>
-                                <span>Бюджет: <b style={{ color: 'var(--text)' }}>{t.budget}</b></span>
-                                {t.deadline && <span>Срок: {t.deadline}</span>}
+                                <span>
+                                    {t('cabinet.it_tasks.budget')}{' '}
+                                    <b style={{ color: 'var(--text)' }}>{task.budget}</b>
+                                </span>
+                                {task.deadline && (
+                                    <span>{t('cabinet.it_tasks.deadline', { date: task.deadline })}</span>
+                                )}
                                 <span className="row" style={{ gap: 4 }}>
-                                    <MessageSquareText aria-hidden className="size-4" /> {t.responses}
+                                    <MessageSquareText aria-hidden className="size-4" /> {task.responses}
                                 </span>
                                 <span className="row" style={{ gap: 4 }}>
-                                    <Eye aria-hidden className="size-4" /> {t.views}
+                                    <Eye aria-hidden className="size-4" /> {task.views}
                                 </span>
-                                {t.files > 0 && (
+                                {task.files > 0 && (
                                     <span className="row" style={{ gap: 4 }}>
-                                        <Paperclip aria-hidden className="size-4" /> {t.files}
+                                        <Paperclip aria-hidden className="size-4" /> {task.files}
                                     </span>
                                 )}
                             </div>
 
-                            {t.status === 'completed' && (
+                            {task.status === 'completed' && (
                                 <div className="t-sm" style={{ display: 'grid', gap: 4 }}>
-                                    {t.result_summary && <p>{t.result_summary}</p>}
+                                    {task.result_summary && <p>{task.result_summary}</p>}
                                     <div className="row wrap muted" style={{ gap: 12 }}>
-                                        {t.result_url && (
-                                            <a href={t.result_url} target="_blank" rel="noopener noreferrer" className="row" style={{ gap: 4 }}>
-                                                <ExternalLink aria-hidden className="size-4" /> {t.result_url.replace(/^https?:\/\/(www\.)?/, '')}
+                                        {task.result_url && (
+                                            <a href={task.result_url} target="_blank" rel="noopener noreferrer" className="row" style={{ gap: 4 }}>
+                                                <ExternalLink aria-hidden className="size-4" /> {task.result_url.replace(/^https?:\/\/(www\.)?/, '')}
                                             </a>
                                         )}
-                                        {t.contractor && <span>Исполнитель: {t.contractor}</span>}
+                                        {task.contractor && (
+                                            <span>{t('cabinet.it_tasks.by', { company: task.contractor })}</span>
+                                        )}
                                     </div>
                                 </div>
                             )}
 
-                            {completing === t.id && <CompleteForm task={t} onDone={() => setCompleting(null)} />}
+                            {completing === task.id && <CompleteForm task={task} onDone={() => setCompleting(null)} />}
                         </div>
                     ))}
                 </div>

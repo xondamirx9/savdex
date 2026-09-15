@@ -1,21 +1,15 @@
 import { useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { Modal } from '@/components/Modal';
+import { t } from '@/lib/i18n';
 
-/** Что можно загрузить. Порядок и подписи совпадают с CompanyDocument. */
-const VERIFICATION_TYPES: Record<string, string> = {
-    registration: 'Свидетельство о регистрации',
-    license: 'Лицензия',
-    certificate: 'Сертификат',
-    quality: 'Паспорт качества',
-};
+/**
+ * Что можно загрузить. Порядок и ключи совпадают с CompanyDocument,
+ * подписи берутся из словаря: список рисуется на языке сайта.
+ */
+const VERIFICATION_TYPES = ['registration', 'license', 'certificate', 'quality'];
 
-const MATERIAL_TYPES: Record<string, string> = {
-    presentation: 'Презентация',
-    price_list: 'Прайс-лист',
-    catalog: 'Каталог продукции',
-    other: 'Другой файл',
-};
+const MATERIAL_TYPES = ['presentation', 'price_list', 'catalog', 'other'];
 
 /**
  * Загрузка файла компании.
@@ -54,7 +48,7 @@ export function FileUploadModal({
         if (open) setData('type', initialType);
     }, [open, initialType]);
 
-    const isVerification = Object.hasOwn(VERIFICATION_TYPES, data.type);
+    const isVerification = VERIFICATION_TYPES.includes(data.type);
 
     function submit() {
         post('/cabinet/company/files', {
@@ -71,22 +65,24 @@ export function FileUploadModal({
         <Modal
             open={open}
             onClose={onClose}
-            title="Загрузить файл"
+            title={t('cabinet.files.modal_title')}
             width={520}
             footer={
                 <>
                     <button className="btn btn-primary" style={{ flex: 1 }} disabled={processing} onClick={submit}>
-                        {processing ? `Загружаем… ${progress?.percentage ?? 0} %` : 'Загрузить'}
+                        {processing
+                            ? t('cabinet.files.uploading', { percent: progress?.percentage ?? 0 })
+                            : t('cabinet.files.upload')}
                     </button>
                     <button className="btn btn-ghost" onClick={onClose}>
-                        Отмена
+                        {t('common.cancel')}
                     </button>
                 </>
             }
         >
             <div className="field">
                 <label className="label" htmlFor="f-type">
-                    Тип файла <span className="req">*</span>
+                    {t('cabinet.files.type')} <span className="req">*</span>
                 </label>
                 <select
                     id="f-type"
@@ -94,31 +90,29 @@ export function FileUploadModal({
                     value={data.type}
                     onChange={(e) => setData('type', e.target.value)}
                 >
-                    <optgroup label="Материалы для партнёров">
-                        {Object.entries(MATERIAL_TYPES).map(([key, label]) => (
+                    <optgroup label={t('cabinet.files.group_materials')}>
+                        {MATERIAL_TYPES.map((key) => (
                             <option key={key} value={key}>
-                                {label}
+                                {t(`cabinet.files.types.${key}`)}
                             </option>
                         ))}
                     </optgroup>
-                    <optgroup label="Документы для проверки">
-                        {Object.entries(VERIFICATION_TYPES).map(([key, label]) => (
+                    <optgroup label={t('cabinet.files.group_documents')}>
+                        {VERIFICATION_TYPES.map((key) => (
                             <option key={key} value={key}>
-                                {label}
+                                {t(`cabinet.files.types.${key}`)}
                             </option>
                         ))}
                     </optgroup>
                 </select>
                 <p className="hint">
-                    {isVerification
-                        ? 'Документ уйдёт модератору. После проверки повышает уровень верификации компании.'
-                        : 'Материал появится на визитке сразу — модерация для него не нужна.'}
+                    {isVerification ? t('cabinet.files.hint_document') : t('cabinet.files.hint_material')}
                 </p>
             </div>
 
             <div className="field">
                 <label className="label" htmlFor="f-title">
-                    Название <span className="req">*</span>
+                    {t('cabinet.files.name')} <span className="req">*</span>
                 </label>
                 <input
                     id="f-title"
@@ -126,14 +120,14 @@ export function FileUploadModal({
                     maxLength={190}
                     value={data.title}
                     onChange={(e) => setData('title', e.target.value)}
-                    placeholder="Прайс-лист на цемент, июль 2026"
+                    placeholder={t('cabinet.files.name_placeholder')}
                 />
                 {errors.title && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.title}</p>}
             </div>
 
             <div className="field">
                 <label className="label" htmlFor="f-file">
-                    Файл <span className="req">*</span>
+                    {t('cabinet.files.file')} <span className="req">*</span>
                 </label>
                 <input
                     id="f-file"
@@ -142,7 +136,7 @@ export function FileUploadModal({
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
                     onChange={(e) => setData('file', e.target.files?.[0] ?? null)}
                 />
-                <p className="hint">PDF, Word, Excel, презентация, изображение или ZIP. До 20 МБ.</p>
+                <p className="hint">{t('cabinet.files.formats')}</p>
                 {errors.file && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.file}</p>}
             </div>
 
@@ -151,7 +145,7 @@ export function FileUploadModal({
             {isVerification && (
                 <div className="field">
                     <label className="label" htmlFor="f-valid">
-                        Действует до
+                        {t('cabinet.files.valid_until')}
                     </label>
                     <input
                         id="f-valid"
@@ -160,7 +154,7 @@ export function FileUploadModal({
                         value={data.valid_until}
                         onChange={(e) => setData('valid_until', e.target.value)}
                     />
-                    <p className="hint">Оставьте пустым, если срок не ограничен</p>
+                    <p className="hint">{t('cabinet.files.valid_until_hint')}</p>
                     {errors.valid_until && (
                         <p className="hint" style={{ color: 'var(--danger)' }}>{errors.valid_until}</p>
                     )}
@@ -173,7 +167,7 @@ export function FileUploadModal({
                     checked={data.is_public}
                     onChange={(e) => setData('is_public', e.target.checked)}
                 />
-                Показывать на визитке компании
+                {t('cabinet.files.public')}
             </label>
         </Modal>
     );

@@ -312,15 +312,16 @@ class ItTaskController extends Controller
 
     private function budgetLabel(ItTask $task): string
     {
-        $currency = $task->currency === 'UZS' ? 'сум' : $task->currency;
+        $currency = $task->currency === 'UZS' ? __('ui.catalog.currency_uzs') : $task->currency;
         $fmt = fn (float $v): string => number_format($v, 0, ',', ' ');
+        $negotiable = __('ui.cabinet.it_task_form.budget_negotiable');
 
         return match ($task->budget_type) {
-            'fixed' => $task->budget_from !== null ? $fmt((float) $task->budget_from).' '.$currency : 'договорной',
+            'fixed' => $task->budget_from !== null ? $fmt((float) $task->budget_from).' '.$currency : $negotiable,
             'range' => $task->budget_from !== null && $task->budget_to !== null
                 ? $fmt((float) $task->budget_from).' – '.$fmt((float) $task->budget_to).' '.$currency
-                : 'договорной',
-            default => 'договорной',
+                : $negotiable,
+            default => $negotiable,
         };
     }
 }

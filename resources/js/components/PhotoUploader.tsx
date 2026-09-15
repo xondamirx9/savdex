@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { Image as ImageIcon, Star, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/useConfirm';
+import { t } from '@/lib/i18n';
 
 export interface ListingPhoto {
     id: number;
@@ -58,10 +59,8 @@ export function PhotoUploader({
 
             <div className="row-between wrap" style={{ gap: 12, marginBottom: 16 }}>
                 <div>
-                    <h3 className="t-h4">Фотографии</h3>
-                    <p className="t-sm muted mt-8">
-                        Первая — обложка в каталоге. Объявления с фото открывают заметно чаще.
-                    </p>
+                    <h3 className="t-h4">{t('cabinet.photos.title')}</h3>
+                    <p className="t-sm muted mt-8">{t('cabinet.photos.hint')}</p>
                 </div>
                 <button
                     type="button"
@@ -70,7 +69,11 @@ export function PhotoUploader({
                     onClick={() => input.current?.click()}
                 >
                     <Upload aria-hidden className="size-4" />
-                    {busy ? 'Загружаем…' : free > 0 ? `Добавить (осталось ${free})` : 'Больше нельзя'}
+                    {busy
+                        ? t('cabinet.photos.uploading')
+                        : free > 0
+                          ? t('cabinet.photos.add', { count: free })
+                          : t('cabinet.photos.full')}
                 </button>
                 <input
                     ref={input}
@@ -87,27 +90,26 @@ export function PhotoUploader({
                     <div className="empty-icon">
                         <ImageIcon aria-hidden className="size-7" />
                     </div>
-                    <p className="t-h4">Фотографий пока нет</p>
+                    <p className="t-h4">{t('cabinet.photos.empty')}</p>
                     <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                        Объявление можно опубликовать и без них, но карточка без фото в каталоге
-                        проигрывает соседним. JPG, PNG или WebP, до 8 МБ каждая.
+                        {t('cabinet.photos.empty_text')}
                     </p>
                 </div>
             ) : (
                 <div className="photo-grid">
                     {photos.map((p, i) => (
                         <figure key={p.id} className="photo-tile">
-                            <img src={p.thumb} alt={`Фотография ${i + 1}`} loading="lazy" />
+                            <img src={p.thumb} alt={t('cabinet.photos.alt', { n: i + 1 })} loading="lazy" />
 
-                            {i === 0 && <figcaption className="photo-cover">Обложка</figcaption>}
+                            {i === 0 && <figcaption className="photo-cover">{t('cabinet.photos.cover')}</figcaption>}
 
                             <div className="photo-actions">
                                 {i > 0 && (
                                     <button
                                         type="button"
                                         className="btn btn-secondary btn-icon btn-sm"
-                                        title="Сделать обложкой"
-                                        aria-label={`Сделать обложкой фотографию ${i + 1}`}
+                                        title={t('cabinet.photos.make_cover')}
+                                        aria-label={t('cabinet.photos.make_cover_aria', { n: i + 1 })}
                                         onClick={() =>
                                             router.post(
                                                 `/cabinet/listings/${listingId}/images/${p.id}/cover`,
@@ -122,16 +124,16 @@ export function PhotoUploader({
                                 <button
                                     type="button"
                                     className="btn btn-danger btn-icon btn-sm"
-                                    title="Удалить"
-                                    aria-label={`Удалить фотографию ${i + 1}`}
+                                    title={t('common.delete')}
+                                    aria-label={t('cabinet.photos.delete_aria', { n: i + 1 })}
                                     onClick={() =>
                                         confirm({
-                                            title: 'Удалить фотографию?',
+                                            title: t('cabinet.photos.delete_title'),
                                             description:
                                                 i === 0 && photos.length > 1
-                                                    ? 'Это обложка — в каталоге её заменит следующая фотография.'
-                                                    : 'Файл будет удалён безвозвратно.',
-                                            confirmLabel: 'Удалить',
+                                                    ? t('cabinet.photos.delete_cover_text')
+                                                    : t('cabinet.photos.delete_text'),
+                                            confirmLabel: t('common.delete'),
                                             danger: true,
                                             onConfirm: () =>
                                                 router.delete(

@@ -3,7 +3,7 @@ import { BadgeCheck, Star, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { BarRow, Empty, Panel, Stars } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
-import { pluralize } from '@/lib/plural';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -36,11 +36,11 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
 
     if (!summary) {
         return (
-            <CabinetLayout title="Отзывы" heading="Отзывы">
+            <CabinetLayout title={t('cabinet.reviews.title')} heading={t('cabinet.reviews.title')}>
                 <Empty
                     icon={Star}
-                    title="Отзывов пока нет"
-                    text="Отзыв может оставить только компания, оплатившая раскрытие ваших контактов. Поэтому накрутить рейтинг невозможно — и поэтому первые отзывы появляются после первых сделок."
+                    title={t('cabinet.reviews.empty_title')}
+                    text={t('cabinet.reviews.empty_text')}
                 />
             </CabinetLayout>
         );
@@ -50,9 +50,9 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
 
     return (
         <CabinetLayout
-            title="Отзывы"
-            heading="Отзывы"
-            subheading={`Рейтинг ${summary.average} на основе ${pluralize(summary.total, ['отзыва', 'отзывов', 'отзывов'])}`}
+            title={t('cabinet.reviews.title')}
+            heading={t('cabinet.reviews.title')}
+            subheading={t('cabinet.reviews.summary', { average: summary.average, reviews: tChoice('cabinet.reviews.reviews_count', summary.total) })}
         >
             <div className="grid grid-2 grid-tight" style={{ marginBottom: 24 }}>
                 <div className="card">
@@ -62,7 +62,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
                                 <Stars value={summary.average} />
                             </div>
-                            <p className="t-caption muted mt-8">{summary.total} отзыва</p>
+                            <p className="t-caption muted mt-8">{t('cabinet.reviews.total', { count: summary.total })}</p>
                         </div>
                         <div style={{ flex: 1 }}>
                             {/* Нули показываем: пропущенная строка «2★» читается
@@ -80,7 +80,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                     </div>
                 </div>
 
-                <Panel title="По критериям">
+                <Panel title={t('cabinet.reviews.criteria')}>
                     {summary.criteria.map((c) => (
                         <BarRow
                             key={c.label}
@@ -103,7 +103,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                     <b>{r.author}</b>{' '}
                                     {r.deal_confirmed && (
                                         <span className="badge badge-verified">
-                                            <BadgeCheck aria-hidden className="size-3.5" /> Подтверждённая сделка
+                                            <BadgeCheck aria-hidden className="size-3.5" /> {t('cabinet.reviews.confirmed_deal')}
                                         </span>
                                     )}
                                     <br />
@@ -121,7 +121,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                         {r.reply && (
                             <div className="card card--pad-sm mt-16" style={{ background: 'var(--bg)', border: 'none' }}>
                                 <p className="t-caption muted" style={{ marginBottom: 6 }}>
-                                    Ваш ответ
+                                        {t('cabinet.reviews.your_answer')}
                                 </p>
                                 <p className="t-sm">{r.reply}</p>
                             </div>
@@ -135,7 +135,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                     autoFocus
                                     value={reply.data.reply}
                                     onChange={(e) => reply.setData('reply', e.target.value)}
-                                    placeholder="Спасибо за отзыв. Учли замечание — со следующей партии…"
+                                    placeholder={t('cabinet.reviews.answer_placeholder')}
                                 />
                                 {reply.errors.reply && (
                                     <p className="hint" style={{ color: 'var(--danger)' }}>
@@ -153,10 +153,10 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                             })
                                         }
                                     >
-                                        Опубликовать ответ
+                                                {t('cabinet.reviews.publish_answer')}
                                     </button>
                                     <button className="btn btn-ghost btn-sm" onClick={() => setReplying(null)}>
-                                        Отмена
+                                                {t('common.cancel')}
                                     </button>
                                 </div>
                             </div>
@@ -168,7 +168,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                     autoFocus
                                     value={dispute.data.reason}
                                     onChange={(e) => dispute.setData('reason', e.target.value)}
-                                    placeholder="Сделки с этой компанией не было: заказ отменён до отгрузки, есть переписка"
+                                    placeholder={t('cabinet.reviews.dispute_placeholder')}
                                 />
                                 {dispute.errors.reason && (
                                     <p className="hint" style={{ color: 'var(--danger)' }}>
@@ -186,10 +186,10 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                             })
                                         }
                                     >
-                                        Отправить модератору
+                                                {t('cabinet.reviews.send_to_moderator')}
                                     </button>
                                     <button className="btn btn-ghost btn-sm" onClick={() => setDisputing(null)}>
-                                        Отмена
+                                                {t('common.cancel')}
                                     </button>
                                 </div>
                             </div>
@@ -203,13 +203,13 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                             reply.setData('reply', '');
                                         }}
                                     >
-                                        Ответить
+                                            {t('cabinet.reviews.answer')}
                                     </button>
                                 )}
                                 {r.dispute_status === 'pending' ? (
-                                    <span className="badge badge-neutral">на проверке модератора</span>
+                                    <span className="badge badge-neutral">{t('cabinet.reviews.under_review')}</span>
                                 ) : r.dispute_status === 'declined' ? (
-                                    <span className="badge badge-warning">спор отклонён</span>
+                                    <span className="badge badge-warning">{t('cabinet.reviews.dispute_rejected')}</span>
                                 ) : (
                                     <button
                                         className="btn btn-ghost btn-sm"
@@ -218,7 +218,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                                             dispute.setData('reason', '');
                                         }}
                                     >
-                                        <TriangleAlert aria-hidden className="size-4" /> Оспорить отзыв
+                                        <TriangleAlert aria-hidden className="size-4" /> {t('cabinet.reviews.dispute')}
                                     </button>
                                 )}
                             </div>
@@ -232,7 +232,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
                             <div className="alert alert-warning mt-16">
                                 <TriangleAlert aria-hidden className="size-5" />
                                 <div>
-                                    <b>Решение модератора</b>
+                                    <b>{t('cabinet.reviews.moderator_decision')}</b>
                                     <p className="t-sm mt-8">{r.moderator_note}</p>
                                 </div>
                             </div>
@@ -242,8 +242,7 @@ export default function Reviews({ reviews, summary }: { reviews: Row[]; summary:
             </div>
 
             <p className="t-sm muted mt-24">
-                Удалить отзыв нельзя — только ответить или оспорить через модератора. Возможность стирать неудобные
-                отзывы обесценила бы рейтинг у всех.
+                {t('cabinet.reviews.no_delete')}
             </p>
         </CabinetLayout>
     );

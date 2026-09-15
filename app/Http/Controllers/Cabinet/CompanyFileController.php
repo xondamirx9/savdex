@@ -29,7 +29,7 @@ class CompanyFileController extends Controller
             return back()->with('error', 'Сначала заполните данные компании');
         }
 
-        $types = array_keys([...CompanyDocument::VERIFICATION_TYPES, ...CompanyDocument::MATERIAL_TYPES]);
+        $types = [...CompanyDocument::VERIFICATION_TYPES, ...CompanyDocument::MATERIAL_TYPES];
 
         $data = $request->validate([
             'type' => ['required', 'in:'.implode(',', $types)],
@@ -82,7 +82,7 @@ class CompanyFileController extends Controller
             'valid_until' => $data['valid_until'] ?? null,
             'is_public' => $request->boolean('is_public', true),
             // Материалам модерация не нужна: это не подтверждение статуса
-            'moderation_status' => array_key_exists($data['type'], CompanyDocument::MATERIAL_TYPES)
+            'moderation_status' => in_array($data['type'], CompanyDocument::MATERIAL_TYPES, true)
                 ? CompanyDocument::STATUS_APPROVED
                 : CompanyDocument::STATUS_PENDING,
         ]);

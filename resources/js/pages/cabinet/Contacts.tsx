@@ -4,8 +4,8 @@ import { BadgeCheck, Download, Info, Search, Star, TriangleAlert, Users } from '
 import { useState } from 'react';
 import { Empty } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
-import { pluralize } from '@/lib/plural';
 import { routes } from '@/routes';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -54,13 +54,13 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
 
     return (
         <CabinetLayout
-            title="Мои контакты"
-            heading="Мои контакты"
-            subheading={`${pluralize(contacts.length, ['компания', 'компании', 'компаний'])}, контакты которых вы открыли. Доступны навсегда.`}
+            title={t('cabinet.contacts.title')}
+            heading={t('cabinet.contacts.title')}
+            subheading={t('cabinet.contacts.subheading', { companies: tChoice('cabinet.contacts.companies', contacts.length) })}
             actions={
                 contacts.length > 0 ? (
                     <a href="/cabinet/contacts/export" className="btn btn-secondary">
-                        <Download aria-hidden className="size-4" /> Выгрузить в CSV
+                        <Download aria-hidden className="size-4" /> {t('cabinet.contacts.export')}
                     </a>
                 ) : undefined
             }
@@ -68,22 +68,22 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
             {contacts.length === 0 && !filters.q && !filters.status ? (
                 <Empty
                     icon={Users}
-                    title="Вы ещё не открывали контакты"
-                    text="Найдите поставщика в каталоге и откройте его контакты за кредит. Доступ остаётся навсегда — платить второй раз за ту же компанию не придётся."
-                    action={{ href: routes.companies, label: 'Открыть каталог компаний' }}
+                    title={t('cabinet.contacts.empty_title')}
+                    text={t('cabinet.contacts.empty_text')}
+                    action={{ href: routes.companies, label: t('cabinet.contacts.empty_action') }}
                 />
             ) : (
                 <>
                     <div className="toolbar">
                         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
                             <label htmlFor="c-q" className="sr-only">
-                                Поиск по контактам
+                            {t('cabinet.contacts.search_label')}
                             </label>
                             <input
                                 id="c-q"
                                 className="input"
                                 type="search"
-                                placeholder="Поиск по компании или заметке"
+                                placeholder={t('cabinet.contacts.search_placeholder')}
                                 style={{ paddingLeft: 42 }}
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
@@ -100,11 +100,11 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                         <select
                             className="select"
                             style={{ width: 'auto', minWidth: 180 }}
-                            aria-label="Статус"
+                            aria-label={t('cabinet.contacts.status')}
                             value={filters.status}
                             onChange={(e) => filter({ status: e.target.value })}
                         >
-                            <option value="">Все статусы</option>
+                            <option value="">{t('cabinet.contacts.status_all')}</option>
                             {Object.entries(statuses).map(([key, label]) => (
                                 <option key={key} value={key}>
                                     {label}
@@ -115,28 +115,28 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
 
                     {contacts.length === 0 ? (
                         <div className="card empty">
-                            <p className="t-h4">Ничего не найдено</p>
-                            <p className="t-sm muted mt-8">Попробуйте изменить запрос или сбросить фильтр статуса.</p>
+                            <p className="t-h4">{t('cabinet.contacts.nothing_title')}</p>
+                            <p className="t-sm muted mt-8">{t('cabinet.contacts.nothing_text')}</p>
                         </div>
                     ) : (
                         <div className="table-wrap table-cards">
                             <table className="table table-contacts">
                                 <thead>
                                     <tr>
-                                        <th>Компания</th>
-                                        <th>Объявление</th>
-                                        <th>Открыт</th>
-                                        <th>Статус</th>
-                                        <th>Заметка</th>
+                                        <th>{t('cabinet.contacts.company')}</th>
+                                        <th>{t('cabinet.contacts.listing')}</th>
+                                        <th>{t('cabinet.contacts.opened')}</th>
+                                        <th>{t('cabinet.contacts.status')}</th>
+                                        <th>{t('cabinet.contacts.note')}</th>
                                         <th>
-                                            <span className="sr-only">Действия</span>
+                                            <span className="sr-only">{t('cabinet.contacts.actions')}</span>
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {contacts.map((row) => (
                                         <tr key={row.id}>
-                                            <td data-label="Компания">
+                                            <td data-label={t('cabinet.contacts.company')}>
                                                 <div className="row" style={{ gap: 10 }}>
                                                     <span className="listing-logo logo-32">{row.company.initials}</span>
                                                     <span style={{ minWidth: 0 }}>
@@ -175,16 +175,16 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                 </div>
                                             </td>
 
-                                            <td data-label="Объявление">
+                                            <td data-label={t('cabinet.contacts.listing')}>
                                                 <span className="t-sm">{row.listing ?? '—'}</span>
                                             </td>
-                                            <td data-label="Открыт">{row.opened_at}</td>
+                                            <td data-label={t('cabinet.contacts.opened')}>{row.opened_at}</td>
 
-                                            <td data-label="Статус">
+                                            <td data-label={t('cabinet.contacts.status')}>
                                                 <select
                                                     className="select"
                                                     style={{ height: 32, fontSize: 13, width: 'auto' }}
-                                                    aria-label={`Статус контакта ${row.company.name}`}
+                                                    aria-label={t('cabinet.contacts.status_aria', { company: row.company.name ?? '' })}
                                                     value={row.status}
                                                     onChange={(e) => changeStatus(row.id, e.target.value)}
                                                 >
@@ -196,7 +196,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                 </select>
                                             </td>
 
-                                            <td data-label="Заметка">
+                                            <td data-label={t('cabinet.contacts.note')}>
                                                 {editing === row.id ? (
                                                     <div className="row" style={{ gap: 6 }}>
                                                         <input
@@ -211,7 +211,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                             }}
                                                         />
                                                         <button className="btn btn-primary btn-sm" onClick={() => saveNote(row.id)}>
-                                                            ОК
+                                                    {t('cabinet.contacts.ok')}
                                                         </button>
                                                     </div>
                                                 ) : (
@@ -223,7 +223,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                             setNote(row.note ?? '');
                                                         }}
                                                     >
-                                                        {row.note || <span style={{ opacity: 0.6 }}>+ заметка</span>}
+                                                        {row.note || <span style={{ opacity: 0.6 }}>{t('cabinet.contacts.add_note')}</span>}
                                                     </button>
                                                 )}
                                             </td>
@@ -233,14 +233,14 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                     {row.can_review && (
                                                         <button
                                                             className="btn btn-ghost btn-icon"
-                                                            aria-label={`Оставить отзыв о ${row.company.name}`}
-                                                            title="Оставить отзыв"
+                                                            aria-label={t('cabinet.contacts.review_aria', { company: row.company.name ?? '' })}
+                                                            title={t('cabinet.contacts.review')}
                                                         >
                                                             <Star aria-hidden className="size-5" />
                                                         </button>
                                                     )}
                                                     {row.complaint_status === 'pending' ? (
-                                                        <span className="badge badge-neutral">жалоба на проверке</span>
+                                                        <span className="badge badge-neutral">{t('cabinet.contacts.complaint_pending')}</span>
                                                     ) : row.complaint_status === 'accepted' ? (
                                                         /* Возврат — то, что обещали при подаче жалобы.
                                                            Показываем результат, а не вечное «на проверке» */
@@ -248,20 +248,20 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                             className="badge badge-verified"
                                                             title={row.moderator_note ?? undefined}
                                                         >
-                                                            {row.refunded ? 'списанное вернули' : 'жалоба принята'}
+                                                            {row.refunded ? t('cabinet.contacts.complaint_refunded') : t('cabinet.contacts.complaint_accepted')}
                                                         </span>
                                                     ) : row.complaint_status === 'declined' ? (
                                                         <span
                                                             className="badge badge-warning"
                                                             title={row.moderator_note ?? undefined}
                                                         >
-                                                            жалоба отклонена
+                                                            {t('cabinet.contacts.complaint_rejected')}
                                                         </span>
                                                     ) : (
                                                         <button
                                                             className="btn btn-ghost btn-icon"
-                                                            aria-label={`Пожаловаться на контакт ${row.company.name}`}
-                                                            title="Контакт нерабочий"
+                                                            aria-label={t('cabinet.contacts.complain_aria', { company: row.company.name ?? '' })}
+                                                            title={t('cabinet.contacts.complain_title')}
                                                             onClick={() => {
                                                                 setComplaining(row.id);
                                                                 complaint.reset();
@@ -282,14 +282,14 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                     {complaining !== null && (
                         <div className="card mt-24" style={{ borderColor: 'var(--danger)' }}>
                             <h2 className="t-h4" style={{ marginBottom: 12 }}>
-                                Что не так с контактом?
+                            {t('cabinet.contacts.complain_heading')}
                             </h2>
                             <textarea
                                 className="textarea"
                                 style={{ minHeight: 90 }}
                                 value={complaint.data.reason}
                                 onChange={(e) => complaint.setData('reason', e.target.value)}
-                                placeholder="Номер не отвечает третий день, почта возвращает ошибку доставки"
+                                placeholder={t('cabinet.contacts.complain_placeholder')}
                             />
                             {complaint.errors.reason && (
                                 <p className="hint" style={{ color: 'var(--danger)' }}>
@@ -307,10 +307,10 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                         })
                                     }
                                 >
-                                    Отправить жалобу
+                                {t('cabinet.contacts.complain_send')}
                                 </button>
                                 <button className="btn btn-ghost" onClick={() => setComplaining(null)}>
-                                    Отмена
+                                {t('common.cancel')}
                                 </button>
                             </div>
                         </div>
@@ -319,7 +319,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                     <div className="alert alert-info mt-24">
                         <Info aria-hidden className="size-5" />
                         <div>
-                            Контакт оказался нерабочим? Нажмите значок жалобы — при подтверждении вернём кредит на счёт.
+                            {t('cabinet.contacts.complain_hint')}
                         </div>
                     </div>
                 </>
