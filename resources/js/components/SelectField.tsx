@@ -32,8 +32,12 @@ export function SelectField({
     value: string;
     onChange: (value: string) => void;
     options: SelectOption[];
-    /** Пункт «любой»: пустое значение, всегда первым в списке. */
-    placeholder: string;
+    /**
+     * Пункт «любой»: пустое значение, всегда первым в списке. Без него
+     * список считается обязательным — как сортировка, где пустого
+     * значения не бывает.
+     */
+    placeholder?: string;
     ariaLabel: string;
     className?: string;
 }) {
@@ -43,7 +47,8 @@ export function SelectField({
     const ref = useDismiss(() => setOpen(false));
     const listRef = useRef<HTMLDivElement>(null);
 
-    const all: SelectOption[] = [{ value: '', label: placeholder }, ...options];
+    const all: SelectOption[] =
+        placeholder === undefined ? options : [{ value: '', label: placeholder }, ...options];
     const current = all.find((o) => o.value === value) ?? all[0];
 
     /*

@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { Package, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
+import { SelectField } from '@/components/SelectField';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
@@ -132,18 +133,13 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                     {cities.length > 0 && (
                         <div className="filter-group">
                             <div className="filter-title">{t('catalog.city')}</div>
-                            <select
-                                className="select"
-                                value={filters.city ?? ''}
-                                onChange={(e) => apply({ city: e.target.value ? Number(e.target.value) : null })}
-                            >
-                                <option value="">{t('catalog.city_any')}</option>
-                                {cities.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <SelectField
+                                ariaLabel={t('catalog.city')}
+                                placeholder={t('catalog.city_any')}
+                                value={filters.city === null ? '' : String(filters.city)}
+                                onChange={(v) => apply({ city: v === '' ? null : Number(v) })}
+                                options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
+                            />
                         </div>
                     )}
 
@@ -196,19 +192,15 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                             </span>
                         </div>
 
-                        <select
-                            className="select"
-                            style={{ width: 'auto', minWidth: 180 }}
-                            aria-label={t('catalog.sort')}
+                        {/* Сортировка без пункта «любая»: пустого значения
+                            у неё не бывает, список всегда на чём-то стоит */}
+                        <SelectField
+                            className="select-field--auto"
+                            ariaLabel={t('catalog.sort')}
                             value={filters.sort}
-                            onChange={(e) => apply({ sort: e.target.value })}
-                        >
-                            {Object.entries(sorts).map(([key, label]) => (
-                                <option key={key} value={key}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(sort) => apply({ sort })}
+                            options={Object.entries(sorts).map(([key, label]) => ({ value: key, label }))}
+                        />
                     </div>
 
                     <p className="t-sm muted" style={{ marginBottom: 16 }}>
