@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { t } from '@/lib/i18n';
 
 /**
  * Модальное окно.
@@ -87,7 +88,7 @@ export function Modal({
                         <h2 className="t-h3">{title}</h2>
                         {description && <p className="t-sm muted mt-8">{description}</p>}
                     </div>
-                    <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Закрыть">
+                    <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label={t('common.close')}>
                         <X aria-hidden className="size-5" />
                     </button>
                 </div>

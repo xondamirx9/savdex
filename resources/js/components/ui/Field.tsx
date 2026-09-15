@@ -1,6 +1,7 @@
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 interface FieldProps {
     label: string;
@@ -110,7 +111,7 @@ export function PasswordInput({ label, error, hint, required, ...rest }: TextInp
                     <button
                         type="button"
                         onClick={() => setVisible((v) => !v)}
-                        aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
+                        aria-label={visible ? t('common.hide_password') : t('common.show_password')}
                         aria-pressed={visible}
                         className="text-muted hover:text-ink hover:bg-canvas rounded-btn absolute top-1/2 right-1 grid size-10 -translate-y-1/2 place-items-center transition-colors"
                     >
