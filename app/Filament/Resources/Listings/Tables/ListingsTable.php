@@ -35,6 +35,16 @@ use Illuminate\Support\HtmlString;
  */
 class ListingsTable
 {
+    /**
+     * Сколько книг принимаем за раз.
+     *
+     * Ограничение не в самой загрузке, а во времени запроса: сервер
+     * обрывает его на двух минутах, а пересжатие сотни фотографий
+     * занимает десятки секунд. Десять книг по паре сотен строк —
+     * потолок, за которым отчёт рискует не дождаться конца.
+     */
+    private const MAX_WORKBOOKS = 10;
+
     private const STATUS_LABELS = [
         Listing::STATUS_DRAFT => 'Черновик',
         Listing::STATUS_MODERATION => 'На проверке',
@@ -90,8 +100,12 @@ class ListingsTable
                     ->modalHeading('Загрузка товаров из Excel')
                     ->modalSubmitActionLabel('Загрузить')
                     ->schema([
-                        FileUpload::make('workbook')
-                            ->label('Книга Excel')
+                        FileUpload::make('workbooks')
+                            ->label('Книги Excel')
+                            // Каталог удобнее резать на файлы по разделам,
+                            // и загружать их по одному — лишняя работа
+                            ->multiple()
+                            ->maxFiles(self::MAX_WORKBOOKS)
                             ->storeFiles(false)
                             ->required()
                             ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
@@ -99,7 +113,8 @@ class ListingsTable
                             // тяжелее обычной таблицы на порядок
                             ->maxSize(51200)
                             ->helperText(new HtmlString(
-                                'Формат XLSX. Первая строка — названия столбцов, дальше по строке на товар.<br>'
+                                'Формат XLSX, можно выбрать сразу несколько файлов (до '.self::MAX_WORKBOOKS.'). '
+                                .'Первая строка — названия столбцов, дальше по строке на товар.<br>'
                                 .'Фотографии вставьте прямо в лист, в строку своего товара: сколько снимков '
                                 .'в строке, столько и попадёт в объявление (до '.Listing::MAX_IMAGES.'). '
                                 .'Формат снимков любой, какой открывает Excel.<br>'
@@ -127,30 +142,23 @@ class ListingsTable
                             }, 'savdex-tovary-obrazec.xlsx')),
                     ])
                     ->action(function (array $data): void {
-                        $file = $data['workbook'] ?? null;
+                        $files = array_filter(
+                            (array) ($data['workbooks'] ?? []),
+                            fn (mixed $file): bool => $file instanceof UploadedFile,
+                        );
 
-                        if (! $file instanceof UploadedFile) {
+                        if ($files === []) {
                             Notification::make()->title('Файл не получен')->danger()->send();
 
                             return;
                         }
 
-                        // Книга копируется в обычный файл: ZipArchive не
-                        // умеет читать потоки, а временный диск Livewire
-                        // не обязан быть локальным
-                        $copy = (string) tempnam(sys_get_temp_dir(), 'savdex-workbook');
-                        file_put_contents($copy, $file->get());
-
-                        try {
-                            $result = app(ListingWorkbookImport::class)
-                                ->run($copy, Auth::user(), (bool) ($data['replace'] ?? false));
-                        } finally {
-                            @unlink($copy);
-                        }
+                        $result = self::importWorkbooks($files, (bool) ($data['replace'] ?? false));
 
                         // След в журнале: загрузка создаёт записи пачкой,
                         // минуя формы и их проверки
-                        AdminLog::record('imported', 'listings', note: 'Создано: '.$result['created']
+                        AdminLog::record('imported', 'listings', note: 'Книг: '.count($files)
+                            .', создано: '.$result['created']
                             .', обновлено: '.$result['updated']
                             .', фотографий: '.$result['photos']);
 
@@ -284,6 +292,45 @@ class ListingsTable
             ])
             ->emptyStateHeading('Объявлений нет')
             ->emptyStateDescription('Здесь появятся объявления, отправленные на проверку.');
+    }
+
+    /**
+     * Разобрать выбранные книги подряд и сложить итоги.
+     *
+     * @param  list<UploadedFile>  $files
+     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>}
+     */
+    private static function importWorkbooks(array $files, bool $replace): array
+    {
+        $total = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => []];
+        $many = count($files) > 1;
+
+        foreach ($files as $file) {
+            // Книга копируется в обычный файл: ZipArchive не умеет
+            // читать потоки, а временный диск Livewire не обязан
+            // быть локальным
+            $copy = (string) tempnam(sys_get_temp_dir(), 'savdex-workbook');
+            file_put_contents($copy, $file->get());
+
+            try {
+                $result = app(ListingWorkbookImport::class)->run($copy, Auth::user(), $replace);
+            } finally {
+                @unlink($copy);
+            }
+
+            foreach (['rows', 'created', 'updated', 'photos'] as $counter) {
+                $total[$counter] += $result[$counter];
+            }
+
+            // Из какой книги строка — понятно только когда их несколько
+            $prefix = $many ? $file->getClientOriginalName().', ' : '';
+
+            foreach ($result['errors'] as $error) {
+                $total['errors'][] = $prefix.($many ? lcfirst($error) : $error);
+            }
+        }
+
+        return $total;
     }
 
     /**
