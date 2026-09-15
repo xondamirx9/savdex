@@ -165,9 +165,9 @@ class CompanyProfileController extends Controller
             'it_specializations' => ['nullable', 'array', 'max:'.count(ItTask::SERVICE_TYPES)],
             'it_specializations.*' => [Rule::in(array_keys(ItTask::SERVICE_TYPES))],
         ], [
-            'name.required' => 'Укажите название компании',
-            'founded_year.between' => 'Год основания должен быть между 1850 и '.now()->year,
-            'tin.unique' => 'Компания с таким ИНН уже зарегистрирована на площадке',
+            'name.required' => __('ui.messages.company.name_required'),
+            'founded_year.between' => __('ui.messages.company.founded_between', ['year' => now()->year]),
+            'tin.unique' => __('ui.messages.company.tin_unique'),
         ]);
 
         $user = $request->user();
@@ -179,12 +179,12 @@ class CompanyProfileController extends Controller
             $user->forceFill(['company_id' => $company->id, 'company_role' => 'owner'])->save();
 
             return redirect()->route('cabinet.company')
-                ->with('success', 'Компания создана. Теперь можно публиковать объявления.');
+                ->with('success', __('ui.messages.company.created'));
         }
 
         $company->fill($data)->save();
 
-        return back()->with('success', 'Данные компании сохранены');
+        return back()->with('success', __('ui.messages.company.saved'));
     }
 
     /**
@@ -199,7 +199,7 @@ class CompanyProfileController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->with('error', 'Сначала заполните данные компании');
+            return back()->with('error', __('ui.messages.company.fill_first'));
         }
 
         $request->validate([
@@ -209,9 +209,9 @@ class CompanyProfileController extends Controller
                 'max:'.ImageStore::MAX_SIZE_KB,
             ],
         ], [
-            'logo.required' => 'Выберите файл',
-            'logo.mimes' => 'Допустимы JPG, PNG и WebP',
-            'logo.max' => 'Файл больше 8 МБ. Уменьшите разрешение или сожмите',
+            'logo.required' => __('ui.messages.file.required'),
+            'logo.mimes' => __('ui.messages.image.mimes'),
+            'logo.max' => __('ui.messages.image.max'),
         ]);
 
         $store = app(ImageStore::class);
@@ -219,7 +219,7 @@ class CompanyProfileController extends Controller
         try {
             $path = $store->store($request->file('logo'), "companies/{$company->id}", ImageStore::LOGO);
         } catch (RuntimeException) {
-            return back()->with('error', 'Файл не удалось прочитать как изображение');
+            return back()->with('error', __('ui.messages.image.unreadable'));
         }
 
         // Прежний удаляем после успешной записи нового: обратный
@@ -230,7 +230,7 @@ class CompanyProfileController extends Controller
 
         $store->delete($previous);
 
-        return back()->with('success', 'Логотип обновлён');
+        return back()->with('success', __('ui.messages.company.logo_saved'));
     }
 
     public function removeLogo(Request $request): RedirectResponse
@@ -243,7 +243,7 @@ class CompanyProfileController extends Controller
 
         $company->forceFill(['logo_path' => null])->save();
 
-        return back()->with('success', 'Логотип удалён — на визитке снова инициалы');
+        return back()->with('success', __('ui.messages.company.logo_deleted'));
     }
 
     /** Обложка визитки: фото вместо фирменного градиента в шапке. */
@@ -252,7 +252,7 @@ class CompanyProfileController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->with('error', 'Сначала заполните данные компании');
+            return back()->with('error', __('ui.messages.company.fill_first'));
         }
 
         $request->validate([
@@ -262,9 +262,9 @@ class CompanyProfileController extends Controller
                 'max:'.ImageStore::MAX_SIZE_KB,
             ],
         ], [
-            'cover.required' => 'Выберите файл',
-            'cover.mimes' => 'Допустимы JPG, PNG и WebP',
-            'cover.max' => 'Файл больше 8 МБ. Уменьшите разрешение или сожмите',
+            'cover.required' => __('ui.messages.file.required'),
+            'cover.mimes' => __('ui.messages.image.mimes'),
+            'cover.max' => __('ui.messages.image.max'),
         ]);
 
         $store = app(ImageStore::class);
@@ -272,7 +272,7 @@ class CompanyProfileController extends Controller
         try {
             $path = $store->store($request->file('cover'), "companies/{$company->id}", ImageStore::COVER);
         } catch (RuntimeException) {
-            return back()->with('error', 'Файл не удалось прочитать как изображение');
+            return back()->with('error', __('ui.messages.image.unreadable'));
         }
 
         $previous = $company->cover_path;
@@ -281,7 +281,7 @@ class CompanyProfileController extends Controller
 
         $store->delete($previous);
 
-        return back()->with('success', 'Обложка обновлена');
+        return back()->with('success', __('ui.messages.company.cover_saved'));
     }
 
     public function removeCover(Request $request): RedirectResponse
@@ -294,6 +294,6 @@ class CompanyProfileController extends Controller
 
         $company->forceFill(['cover_path' => null])->save();
 
-        return back()->with('success', 'Обложка удалена — в шапке снова фирменный градиент');
+        return back()->with('success', __('ui.messages.company.cover_deleted'));
     }
 }

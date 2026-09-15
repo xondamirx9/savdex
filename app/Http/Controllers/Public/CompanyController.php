@@ -233,7 +233,7 @@ class CompanyController extends Controller
                 ->get()
                 ->map(fn (Review $r): array => [
                     'id' => $r->id,
-                    'author' => $r->authorCompany?->name ?? 'Компания удалена',
+                    'author' => $r->authorCompany?->name ?? __('ui.cabinet.incoming.deleted'),
                     'initials' => $r->authorCompany?->initials() ?? '?',
                     'rating' => $r->rating,
                     'body' => $r->body,

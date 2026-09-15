@@ -47,11 +47,11 @@ class ContactUnlockService
         $company = $user->company;
 
         if ($company === null) {
-            return $this->fail('Сначала заполните данные компании — раскрытие идёт от её имени.');
+            return $this->fail(__('ui.messages.unlock.no_company'));
         }
 
         if ($company->id === $target->id) {
-            return $this->fail('Это контакты вашей компании.');
+            return $this->fail(__('ui.messages.unlock.own_company'));
         }
 
         /*
@@ -62,23 +62,23 @@ class ContactUnlockService
          * компанией, читал совет, который ему не поможет.
          */
         if (! $user->hasVerifiedEmail()) {
-            return $this->fail('Подтвердите почту, чтобы открывать контакты.');
+            return $this->fail(__('ui.messages.unlock.verify_email'));
         }
 
         if ($user->must_change_password) {
-            return $this->fail('Смените выданный пароль на свой — после этого раскрытие станет доступно.');
+            return $this->fail(__('ui.messages.unlock.change_password'));
         }
 
         if ($user->status !== 'active') {
-            return $this->fail('Ваша учётная запись заблокирована. Напишите в поддержку.');
+            return $this->fail(__('ui.messages.unlock.blocked'));
         }
 
         if ($company->isBlocked()) {
-            return $this->fail('Ваша компания заблокирована, раскрытие контактов недоступно.');
+            return $this->fail(__('ui.messages.unlock.company_blocked'));
         }
 
         if ($target->isBlocked()) {
-            return $this->fail('Компания заблокирована, её контакты недоступны.');
+            return $this->fail(__('ui.messages.unlock.target_blocked'));
         }
 
         // Уже открыт — повторно не списываем. Это обещание витрины:
@@ -91,7 +91,7 @@ class ContactUnlockService
         if ($existing !== null) {
             return [
                 'ok' => true,
-                'message' => 'Контакты этой компании у вас уже открыты.',
+                'message' => __('ui.messages.unlock.already_open'),
                 'unlock' => $existing,
             ];
         }
@@ -108,7 +108,7 @@ class ContactUnlockService
         $wallet = $company->wallet;
 
         if ($wallet === null) {
-            return $this->fail('Кошелёк компании не найден. Напишите в поддержку.');
+            return $this->fail(__('ui.messages.promo.no_wallet'));
         }
 
         /*
@@ -175,21 +175,21 @@ class ContactUnlockService
             if ($existing !== null) {
                 return [
                     'ok' => true,
-                    'message' => 'Контакты этой компании у вас уже открыты.',
+                    'message' => __('ui.messages.unlock.already_open'),
                     'unlock' => $existing,
                 ];
             }
 
-            throw new \RuntimeException('Не удалось открыть контакты, попробуйте ещё раз.');
+            throw new \RuntimeException(__('ui.messages.unlock.failed'));
         }
 
         if ($unlock === null) {
             $resets = $wallet->period_resets_at?->translatedFormat('d.m.Y');
 
             return $this->fail(
-                'Лимит контактов по тарифу исчерпан, кредитов на счету нет.'
-                .($resets !== null ? " Лимит обновится {$resets}." : '')
-                .' Купите пакет кредитов или смените тариф.',
+                __('ui.messages.unlock.no_credits')
+                .($resets !== null ? ' '.__('ui.messages.unlock.resets', ['date' => $resets]) : '')
+                .' '.__('ui.messages.unlock.buy_pack'),
             );
         }
 
@@ -197,7 +197,7 @@ class ContactUnlockService
 
         return [
             'ok' => true,
-            'message' => 'Контакты открыты. Доступ сохраняется навсегда — платить второй раз за эту компанию не нужно.',
+            'message' => __('ui.messages.unlock.opened'),
             'unlock' => $unlock,
         ];
     }

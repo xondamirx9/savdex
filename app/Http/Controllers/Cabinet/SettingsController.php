@@ -50,7 +50,7 @@ class SettingsController extends Controller
 
             'security' => [
                 'two_factor' => $user->two_factor_confirmed_at !== null,
-                'last_login_at' => $user->last_login_at?->translatedFormat('d.m.Y в H:i'),
+                'last_login_at' => $user->last_login_at?->translatedFormat('d.m.Y, H:i'),
                 'last_login_ip' => $user->last_login_ip,
             ],
 
@@ -74,7 +74,7 @@ class SettingsController extends Controller
             );
         }
 
-        return back()->with('success', 'Настройки уведомлений сохранены');
+        return back()->with('success', __('ui.messages.settings.notifications_saved'));
     }
 
     public function profile(Request $request): RedirectResponse
@@ -86,8 +86,8 @@ class SettingsController extends Controller
             'phone' => ['required', 'string', 'regex:/^\+?\d[\d\s\-()]{8,17}$/'],
             'locale' => ['required', 'in:ru,uz,en,zh,tr'],
         ], [
-            'name.required' => 'Укажите имя',
-            'phone.regex' => 'Номер должен содержать от 9 до 15 цифр. Например: +998 90 123-45-67',
+            'name.required' => __('ui.messages.settings.name_required'),
+            'phone.regex' => __('ui.messages.phone_format'),
         ]);
 
         // Смена номера сбрасывает подтверждение: подтверждён был старый
@@ -101,7 +101,7 @@ class SettingsController extends Controller
         // только при следующем входе
         $request->session()->put('locale', $data['locale']);
 
-        return back()->with('success', 'Профиль обновлён');
+        return back()->with('success', __('ui.messages.settings.profile_saved'));
     }
 
     /**
@@ -116,13 +116,13 @@ class SettingsController extends Controller
         $request->validate([
             'password' => ['required', 'string'],
         ], [
-            'password.required' => 'Введите пароль для подтверждения',
+            'password.required' => __('ui.messages.settings.password_confirm'),
         ]);
 
         $user = $request->user();
 
         if (! Hash::check($request->string('password')->toString(), $user->password)) {
-            return back()->withErrors(['password' => 'Неверный пароль']);
+            return back()->withErrors(['password' => __('ui.messages.settings.password_wrong')]);
         }
 
         if ($user->isOwner() && $user->company !== null) {
@@ -135,6 +135,6 @@ class SettingsController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/')->with('success', 'Аккаунт удалён. Спасибо, что были с нами.');
+        return redirect('/')->with('success', __('ui.messages.settings.account_deleted'));
     }
 }

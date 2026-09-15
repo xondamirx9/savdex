@@ -6,6 +6,7 @@ namespace Tests\Feature\Cabinet;
 
 use App\Models\Company;
 use App\Models\CompanyDocument;
+use App\Models\Listing;
 use App\Models\User;
 use App\Support\Locales;
 use Database\Seeders\PlanSeeder;
@@ -78,6 +79,39 @@ class CabinetLanguageTest extends TestCase
                 ->where('verification.0.label', __('ui.cabinet.company.verify_email', locale: $locale))
                 ->where('employees.0.role', __('ui.cabinet.company.role_owner', locale: $locale))
                 ->etc());
+    }
+
+    /**
+     * Флеш-сообщение после действия — на языке сайта.
+     *
+     * Их собирает контроллер, а не React, и в словарь фронтенда они
+     * не попадают: страница была узбекской, а «Объявление снято
+     * с публикации» — русским.
+     */
+    #[Test]
+    #[DataProvider('языки')]
+    public function флеш_сообщение_приходит_на_языке_сайта(string $locale): void
+    {
+        $listing = Listing::factory()->create([
+            'company_id' => $this->user->company_id,
+            'status' => Listing::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($this->user)
+            ->post(Locales::url("/cabinet/listings/{$listing->id}/archive", $locale))
+            ->assertSessionHas('success', __('ui.messages.listing.archived', locale: $locale));
+    }
+
+    /**
+     * Ошибка формы — тоже на языке сайта.
+     */
+    #[Test]
+    #[DataProvider('языки')]
+    public function ошибка_формы_приходит_на_языке_сайта(string $locale): void
+    {
+        $this->actingAs($this->user)
+            ->post(Locales::url('/cabinet/company/contacts', $locale), ['type' => 'phone', 'value' => ''])
+            ->assertSessionHasErrors(['value' => __('ui.messages.contact.value_required', locale: $locale)]);
     }
 
     /**

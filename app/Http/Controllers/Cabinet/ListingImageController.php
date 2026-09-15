@@ -35,9 +35,9 @@ class ListingImageController extends Controller
                 'max:'.ImageStore::MAX_SIZE_KB,
             ],
         ], [
-            'images.required' => 'Выберите фотографии',
-            'images.*.mimes' => 'Допустимы JPG, PNG и WebP',
-            'images.*.max' => 'Файл больше 8 МБ. Уменьшите разрешение или сожмите',
+            'images.required' => __('ui.messages.image.required'),
+            'images.*.mimes' => __('ui.messages.image.mimes'),
+            'images.*.max' => __('ui.messages.image.max'),
         ]);
 
         $already = $listing->images()->count();
@@ -45,7 +45,7 @@ class ListingImageController extends Controller
         $free = Listing::MAX_IMAGES - $already;
 
         if ($free <= 0) {
-            return back()->with('error', 'Больше '.Listing::MAX_IMAGES.' фотографий к одному объявлению не прикрепить');
+            return back()->with('error', __('ui.messages.image.limit', ['max' => Listing::MAX_IMAGES]));
         }
 
         // Лишние отсекаем, но загружаем то, что помещается: отказывать
@@ -71,14 +71,14 @@ class ListingImageController extends Controller
         }
 
         if ($saved === 0) {
-            return back()->with('error', 'Ни один файл не удалось прочитать как изображение');
+            return back()->with('error', __('ui.messages.image.none_readable'));
         }
 
         $skipped = count($request->file('images')) - $saved;
 
         return back()->with('success', $skipped > 0
-            ? "Загружено фотографий: {$saved}. Пропущено: {$skipped}."
-            : "Загружено фотографий: {$saved}");
+            ? __('ui.messages.image.uploaded_skipped', ['saved' => $saved, 'skipped' => $skipped])
+            : __('ui.messages.image.uploaded', ['saved' => $saved]));
     }
 
     public function destroy(Request $request, int $id, int $imageId): RedirectResponse
@@ -93,7 +93,7 @@ class ListingImageController extends Controller
 
         $this->resequence($listing);
 
-        return back()->with('success', 'Фотография удалена');
+        return back()->with('success', __('ui.messages.image.deleted'));
     }
 
     /** Сделать обложкой — то есть поставить первой. */
@@ -108,7 +108,7 @@ class ListingImageController extends Controller
 
         $this->resequence($listing);
 
-        return back()->with('success', 'Фотография стала обложкой');
+        return back()->with('success', __('ui.messages.image.cover_set'));
     }
 
     /**

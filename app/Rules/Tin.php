@@ -27,28 +27,28 @@ class Tin implements ValidationRule
         $tin = (string) $value;
 
         if (preg_match('/^\d+$/', $tin) !== 1) {
-            $fail('ИНН состоит только из цифр.');
+            $fail(__('ui.messages.tin.digits_only'));
 
             return;
         }
 
         // Повторы одной цифры и учебные последовательности
         if (preg_match('/^(\d)\1+$/', $tin) === 1 || in_array($tin, self::FAKE, true)) {
-            $fail('Указан недействительный ИНН.');
+            $fail(__('ui.messages.tin.invalid'));
 
             return;
         }
 
         if ($this->countryCode === null || $this->countryCode === 'uz') {
             if (strlen($tin) !== 9) {
-                $fail('ИНН (СТИР) в Узбекистане — ровно 9 цифр.');
+                $fail(__('ui.messages.tin.uz_length'));
             }
 
             return;
         }
 
         if (strlen($tin) < 6 || strlen($tin) > 15) {
-            $fail('ИНН должен содержать от 6 до 15 цифр.');
+            $fail(__('ui.messages.tin.length'));
         }
     }
 }

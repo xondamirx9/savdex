@@ -40,7 +40,7 @@ class PasswordResetController extends Controller
          * Иначе форма превращается в инструмент проверки, зарегистрирован
          * ли конкретный адрес на площадке (NEG-06d из QA.md).
          */
-        return back()->with('status', 'Если такой адрес зарегистрирован, письмо со ссылкой уже отправлено.');
+        return back()->with('status', __('ui.messages.auth.reset_sent'));
     }
 
     public function reset(Request $request, string $token): Response
@@ -58,7 +58,7 @@ class PasswordResetController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'confirmed', PasswordRule::defaults()],
         ], [
-            'password.confirmed' => 'Пароли не совпадают',
+            'password.confirmed' => __('ui.messages.auth.password_mismatch'),
         ]);
 
         $status = Password::reset(
@@ -77,10 +77,10 @@ class PasswordResetController extends Controller
 
         if ($status !== Password::PASSWORD_RESET) {
             return back()->withErrors([
-                'email' => 'Ссылка недействительна или устарела. Запросите новую — они живут 60 минут.',
+                'email' => __('ui.messages.auth.reset_expired'),
             ]);
         }
 
-        return redirect()->route('login')->with('status', 'Пароль изменён. Войдите с новым паролем.');
+        return redirect()->route('login')->with('status', __('ui.messages.auth.password_reset'));
     }
 }

@@ -133,8 +133,8 @@ class ReviewController extends Controller
         $data = $request->validate([
             'reply' => ['required', 'string', 'min:10', 'max:2000'],
         ], [
-            'reply.required' => 'Напишите ответ',
-            'reply.min' => 'Ответ слишком короткий',
+            'reply.required' => __('ui.messages.review.reply_required'),
+            'reply.min' => __('ui.messages.review.reply_min'),
         ]);
 
         $review->forceFill([
@@ -142,7 +142,7 @@ class ReviewController extends Controller
             'replied_at' => now(),
         ])->save();
 
-        return back()->with('success', 'Ответ опубликован');
+        return back()->with('success', __('ui.messages.review.reply_published'));
     }
 
     public function dispute(Request $request, int $id): RedirectResponse
@@ -150,14 +150,14 @@ class ReviewController extends Controller
         $review = $this->owned($request, $id);
 
         if ($review->dispute_status !== null) {
-            return back()->with('error', 'Отзыв уже на рассмотрении');
+            return back()->with('error', __('ui.messages.review.already_disputed'));
         }
 
         $data = $request->validate([
             'reason' => ['required', 'string', 'min:20', 'max:1000'],
         ], [
-            'reason.required' => 'Опишите, почему отзыв недостоверен',
-            'reason.min' => 'Модератору нужны детали: что именно не соответствует действительности',
+            'reason.required' => __('ui.messages.review.reason_required'),
+            'reason.min' => __('ui.messages.review.reason_min'),
         ]);
 
         $review->forceFill([
@@ -165,7 +165,7 @@ class ReviewController extends Controller
             'dispute_reason' => $data['reason'],
         ])->save();
 
-        return back()->with('success', 'Отзыв отправлен на проверку модератору');
+        return back()->with('success', __('ui.messages.review.dispute_sent'));
     }
 
     private function owned(Request $request, int $id): Review

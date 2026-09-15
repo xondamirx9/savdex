@@ -25,7 +25,7 @@ class CompanyContactController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->with('error', 'Сначала заполните данные компании');
+            return back()->with('error', __('ui.messages.company.fill_first'));
         }
 
         $data = $this->validated($request);
@@ -55,7 +55,7 @@ class CompanyContactController extends Controller
 
         $contact->save();
 
-        return back()->with('success', $wasNew ? 'Контакт добавлен' : 'Контакт обновлён');
+        return back()->with('success', __($wasNew ? 'ui.messages.contact.added' : 'ui.messages.contact.updated'));
     }
 
     public function update(Request $request, int $id): RedirectResponse
@@ -64,7 +64,7 @@ class CompanyContactController extends Controller
 
         $contact->fill($this->validated($request, $contact->id))->save();
 
-        return back()->with('success', 'Контакт обновлён');
+        return back()->with('success', __('ui.messages.contact.updated'));
     }
 
     public function destroy(Request $request, int $id): RedirectResponse
@@ -84,12 +84,12 @@ class CompanyContactController extends Controller
             ->count();
 
         if ($remaining === 0 && in_array($contact->type, [CompanyContact::TYPE_PHONE, CompanyContact::TYPE_EMAIL], true)) {
-            return back()->with('error', 'Это последний способ связи. Добавьте другой телефон или почту, прежде чем удалять этот.');
+            return back()->with('error', __('ui.messages.contact.last_one'));
         }
 
         $contact->delete();
 
-        return back()->with('success', 'Контакт удалён');
+        return back()->with('success', __('ui.messages.contact.deleted'));
     }
 
     /** @return array<string, mixed> */
@@ -121,10 +121,10 @@ class CompanyContactController extends Controller
             'is_public' => ['boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:99'],
         ], [
-            'value.required' => 'Введите значение контакта',
-            'value.email' => 'Проверьте адрес: нужен формат name@company.uz',
-            'value.regex' => 'Номер должен содержать от 9 до 15 цифр. Например: +998 90 123-45-67',
-            'value.unique' => 'Такой контакт у компании уже есть',
+            'value.required' => __('ui.messages.contact.value_required'),
+            'value.email' => __('ui.messages.register.email_format'),
+            'value.regex' => __('ui.messages.phone_format'),
+            'value.unique' => __('ui.messages.contact.duplicate'),
         ]);
     }
 
