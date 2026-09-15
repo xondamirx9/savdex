@@ -32,6 +32,9 @@ class Appearance
     /** Иконка для экрана «Домой»: растр, которого требует iOS. */
     public const TOUCH_FALLBACK = '/images/logo-touch.png';
 
+    /** Подсказка под полем загрузки — она же пояснение к настройке. */
+    public const LOGO_HINT = 'Знак в шапке, в подвале, на вкладке браузера и в админке. Квадратный, от 512 px; лучше SVG или PNG с прозрачным фоном — знак стоит и на белом, и на тёмно-синем. Пустое поле возвращает знак по умолчанию';
+
     /**
      * Адрес фона первого экрана.
      *
@@ -53,6 +56,44 @@ class Appearance
     public static function logo(): string
     {
         return self::url(self::KEY_LOGO, self::LOGO_FALLBACK);
+    }
+
+    /** Значение настройки логотипа — путь на публичном диске или пусто. */
+    public static function logoPath(): string
+    {
+        return trim((string) Setting::get(self::KEY_LOGO, ''));
+    }
+
+    /**
+     * Сохранить логотип.
+     *
+     * Строку заводит миграция, но полагаться на это нельзя: настройку
+     * может удалить администратор — так уже случилось с фоном первого
+     * экрана, и раздел «Оформление» тогда пропал из админки целиком.
+     * Поэтому кнопка загрузки создаёт строку, если её нет, и площадка
+     * не остаётся без способа сменить знак.
+     *
+     * Название и пояснение при этом не переписываются: их правят в той
+     * же админке, и загрузка картинки не повод откатывать правку.
+     */
+    public static function setLogo(string $path): void
+    {
+        $setting = Setting::firstOrNew(['key' => self::KEY_LOGO]);
+
+        if (! $setting->exists) {
+            $setting->fill([
+                'group' => 'appearance',
+                'label' => 'Логотип площадки',
+                'description' => self::LOGO_HINT,
+                'type' => 'image',
+                'sort' => 6,
+            ]);
+        }
+
+        $setting->value = $path;
+        $setting->save();
+
+        Setting::flushCache();
     }
 
     /**
