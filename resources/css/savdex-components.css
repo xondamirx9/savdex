@@ -118,6 +118,13 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
    <select> браузер рисует сам, и его окно с прямыми углами и своей
    синей подсветкой выглядит чужим рядом с панелью поиска. */
 .select-field{display:block}
+/* Сортировка в строке инструментов не тянется во всю ширину: рядом
+   стоит поиск, и растянутый список отбирал бы у него место. Но и
+   сжиматься ей нельзя — подпись «Сначала подходящие» обрезалась. */
+.select-field--auto{width:auto;flex:0 0 auto;min-width:220px}
+/* Меню такого поля растёт по содержимому: при ширине кнопки пункты
+   переносились на две строки */
+.select-field--auto .select-menu{right:auto;width:max-content;min-width:100%;max-width:min(360px,92vw)}
 .select-field-btn{display:flex;align-items:center;gap:10px;text-align:left;
   background-image:none;padding-right:14px}
 .select-field-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -130,6 +137,7 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
    десятки, а список во весь экран прокручивать неудобно */
 .select-menu{left:0;right:0;min-width:0;max-height:288px;overflow-y:auto}
 .select-option{justify-content:space-between;gap:10px}
+.select-field--auto .select-option{white-space:nowrap}
 .select-option.is-cursor{background:var(--bg)}
 .select-option[aria-selected="true"]{color:var(--primary-700);font-weight:600}
 .select-option-mark{flex-shrink:0;color:var(--primary-700)}
