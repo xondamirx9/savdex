@@ -32,6 +32,7 @@ use App\Models\Tender;
 use App\Models\User;
 use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
+use App\Support\Runtime;
 use App\Support\Seo;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
@@ -78,7 +79,12 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(function (): Password {
             $rule = Password::min(10)->letters()->numbers();
 
-            return $this->app->isProduction() ? $rule->uncompromised() : $rule;
+            // Проверка по базе утечек нужна везде, где пароли заводят
+            // живые люди, — то есть на любом развёрнутом сайте, а не
+            // только там, где окружение названо production
+            return Runtime::isDeployed($this->app->environment())
+                ? $rule->uncompromised()
+                : $rule;
         });
     }
 
@@ -148,16 +154,29 @@ class AppServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Предохранители разработки — только на машине разработчика.
+     *
+     * Условием было «не production», и площадка с APP_ENV=staging
+     * получала их в полном составе: страница нарочно падала у живого
+     * посетителя там, где должна была просто отработать. Одно слово
+     * в настройке хостинга решало, ломается сайт или нет.
+     *
+     * Runtime задаёт вопрос правильно: не «как называется окружение»,
+     * а «смотрит ли на него кто-то живой».
+     */
     private function configureModels(): void
     {
+        $developing = Runtime::isDeveloperMachine($this->app->environment());
+
         // Обращение к незагруженной связи должно падать в разработке,
-        // а не тихо порождать N+1 запросов на продакшене (PERF-05 из QA.md).
-        Model::preventLazyLoading(! $this->app->isProduction());
+        // а не тихо порождать N+1 запросов на боевом сайте (PERF-05 из QA.md).
+        Model::preventLazyLoading($developing);
 
         // Присвоение несуществующего атрибута — почти всегда опечатка.
         // На этом уже поймались: email_verified_at молча отбрасывался,
         // потому что не был перечислен в #[Fillable].
-        Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
+        Model::preventSilentlyDiscardingAttributes($developing);
     }
 
     /**
