@@ -135,6 +135,52 @@ final class ImportLanguage
             'xodimlar', 'xodimlar soni', 'çalışan sayısı', 'personel', '员工'],
     ];
 
+    /**
+     * Как называют столбец в таблице товаров и объявлений.
+     *
+     * @var array<string, list<string>>
+     */
+    public const LISTING_HEADERS = [
+        'id' => ['номер', 'номер объявления', 'id', 'raqam', 'no', '编号'],
+
+        'title' => ['заголовок', 'название', 'наименование', 'название товара', 'наименование товара',
+            'товар', 'продукция', 'позиция',
+            'title', 'name', 'product', 'product name', 'item',
+            'nomi', 'mahsulot', 'mahsulot nomi', 'başlık', 'ürün', 'ürün adı', '名称', '产品'],
+
+        'company' => ['компания', 'поставщик', 'продавец', 'организация', 'фирма', 'инн',
+            'company', 'supplier', 'seller', 'vendor', 'organization',
+            'kompaniya', 'yetkazib beruvchi', 'sotuvchi', 'şirket', 'firma', 'tedarikçi', '公司', '供应商'],
+
+        'category_id' => ['категория', 'категории', 'категория товара', 'раздел', 'рубрика', 'группа', 'отрасль',
+            'category', 'categories', 'section', 'group', 'industry',
+            'kategoriya', 'turkum', "bo'lim", 'soha', 'kategori', 'bölüm', '类别', '分类'],
+
+        'type' => ['тип', 'вид', 'тип объявления', 'предложение или запрос',
+            'type', 'kind', 'listing type', 'turi', 'tür', 'ilan türü', '类型'],
+
+        'price' => ['цена', 'стоимость', 'цена за единицу', 'price', 'cost', 'unit price',
+            'narx', 'narxi', 'fiyat', 'birim fiyat', '价格'],
+
+        'currency' => ['валюта', 'currency', 'valyuta', 'pul birligi', 'para birimi', '货币'],
+
+        'unit' => ['единица', 'единица измерения', 'ед. изм.', 'ед изм', 'ед',
+            'unit', 'measure', 'uom', 'birlik', "o'lchov birligi", 'birim', '单位'],
+
+        'min_order' => ['минимальный заказ', 'мин. заказ', 'мин заказ', 'минимальная партия',
+            'minimum order', 'min order', 'moq',
+            'eng kam buyurtma', 'minimal buyurtma', 'minimum sipariş', '最小起订量'],
+
+        'city_id' => ['город', 'регион', 'область', 'city', 'region', 'shahar', 'viloyat', 'şehir', '城市'],
+
+        'description' => ['описание', 'подробности', 'характеристики', 'условия',
+            'description', 'details', 'specs', 'specification',
+            'tavsif', 'izoh', 'xususiyatlari', 'açıklama', 'özellikler', '描述', '说明'],
+
+        'status' => ['статус', 'опубликовать', 'публиковать', 'публикация',
+            'status', 'publish', 'published', 'holat', 'nashr etish', 'durum', 'yayınla', '状态', '发布'],
+    ];
+
     /** Код валюты → как её пишут словами и знаками. */
     private const CURRENCIES = [
         'UZS' => ['uzs', 'сум', 'сумы', 'сумов', 'сумм', 'сўм', "so'm", 'som', 'soum'],

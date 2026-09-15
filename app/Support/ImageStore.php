@@ -66,11 +66,15 @@ class ImageStore
     /**
      * Сохранить изображение и вернуть путь на публичном диске.
      *
+     * Кроме загруженного файла принимает путь: фотографии из книги
+     * Excel распакованы на диск, а не пришли формой, и заворачивать
+     * их в UploadedFile ради одной подписи незачем.
+     *
      * @param  array{w: int, h: int, quality: int, lossless?: bool}  $size
      */
-    public function store(UploadedFile $file, string $directory, array $size): string
+    public function store(UploadedFile|string $file, string $directory, array $size): string
     {
-        $image = $this->read($file);
+        $image = $this->read($file instanceof UploadedFile ? (string) $file->getRealPath() : $file);
 
         try {
             $resized = $this->fit($image, $size['w'], $size['h']);
@@ -107,7 +111,7 @@ class ImageStore
     }
 
     /** Оригинал и уменьшенная копия одним вызовом. */
-    public function storeWithThumb(UploadedFile $file, string $directory): array
+    public function storeWithThumb(UploadedFile|string $file, string $directory): array
     {
         return [
             'path' => $this->store($file, $directory, self::PHOTO),
@@ -126,13 +130,13 @@ class ImageStore
     /**
      * @return \GdImage
      */
-    private function read(UploadedFile $file)
+    private function read(string $path)
     {
         // Размеры читаются из заголовка (getimagesize не декодирует растр)
         // и проверяются ДО imagecreatefromstring: иначе «бомба распаковки»
         // выделяет гигабайты и роняет процесс фатальной ошибкой памяти,
         // которую вызывающий код перехватить уже не может.
-        $info = @getimagesize($file->getRealPath());
+        $info = @getimagesize($path);
 
         if ($info === false) {
             throw new RuntimeException('Файл не является изображением');
@@ -142,7 +146,7 @@ class ImageStore
             throw new RuntimeException('Слишком большое изображение');
         }
 
-        $image = @imagecreatefromstring((string) file_get_contents($file->getRealPath()));
+        $image = @imagecreatefromstring((string) file_get_contents($path));
 
         if ($image === false) {
             // Расширение и MIME подделываются заголовком; настоящая
