@@ -766,8 +766,12 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
     display:block;position:fixed;inset:auto 0 0 0;z-index:110;max-height:86vh;
     border-radius:16px 16px 0 0;box-shadow:var(--sh-modal);animation:sheetUp var(--t-slow)}
   @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+  /* Кнопка «Фильтры» стоит над нижней панелью, а не на ней: на 20
+     пикселях от низа она накрывала «Создать» и «Избранное», и попасть
+     в них было нельзя. 56 пикселей — высота пункта панели. */
   .filter-fab{
-    display:inline-flex;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:80;
+    display:inline-flex;position:fixed;left:50%;transform:translateX(-50%);z-index:80;
+    bottom:calc(56px + 14px + env(safe-area-inset-bottom));
     box-shadow:var(--sh-modal);height:48px}
   .cabinet{grid-template-columns:1fr;gap:0;padding-bottom:88px}
   .side{display:none}
@@ -1951,6 +1955,15 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .features-grid{grid-template-columns:1fr}
 }
 
+/* Телефон: карточки объявлений в один столбец. В два ряда карточка
+   выходит около 170 пикселей по ширине — название обрывается на
+   втором слове, имя компании превращается в «ООО «Стро…», а плашка
+   репутации срезается краем карточки. На планшете два столбца
+   остаются: там ширины хватает. */
+@media (max-width:560px){
+  .product-grid,.product-grid--6,.product-grid--catalog{grid-template-columns:1fr;gap:12px}
+}
+
 @media (max-width:480px){
   /* Категорию на телефоне выбирают на странице каталога: селект в строке
      поиска обрезал «Все категории» до нечитаемого огрызка */
@@ -1958,7 +1971,7 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
 }
 
 @media (max-width:400px){
-  .cat-grid,.product-grid,.product-grid--6,.country-grid{grid-template-columns:1fr 1fr}
+  .cat-grid,.country-grid{grid-template-columns:1fr 1fr}
   .hd-main{gap:8px}
 }
 
