@@ -307,6 +307,15 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .mobile-count.is-zero{background:var(--text-muted)}
 .mobile-menu-foot{padding-top:20px;display:flex;flex-direction:column;gap:12px}
 .mobile-lang{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:8px}
+/* Переключатель языка — чипы, а не строки списка. Общее правило
+   пунктов меню (display:block, padding:15px 0, линия снизу) ломало
+   им размер: подпись вываливалась из овала, а у выбранного языка
+   синяя рамка снизу подменялась серой. Тот же вес селектора
+   возвращает чипу его собственную геометрию. */
+.mobile-menu .mobile-lang a:not(.btn){display:inline-flex;align-items:center;justify-content:center;
+  height:40px;min-width:48px;padding:0 14px;font-size:14px;font-weight:600;
+  border:1px solid var(--border);border-radius:var(--r-pill)}
+.mobile-menu .mobile-lang a.chip-active:not(.btn){border-color:var(--primary-700);color:#fff}
 
 /* ---------- 9. Карточка объявления ---------- */
 .listing-card{
