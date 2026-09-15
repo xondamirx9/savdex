@@ -26,6 +26,7 @@ use App\Models\PromoCode;
 use App\Models\Review;
 use App\Models\Setting;
 use App\Models\Subscription;
+use App\Models\Support\Ticket;
 use App\Models\Tender;
 use App\Models\User;
 use App\Observers\AuditObserver;
@@ -120,6 +121,7 @@ class AppServiceProvider extends ServiceProvider
             Contact::class => 'contacts',
             Task::class => 'tasks',
             Communication::class => 'communications',
+            Ticket::class => 'support',
             Payment::class => 'payments',
             Subscription::class => 'subscriptions',
             Plan::class => 'plans',
