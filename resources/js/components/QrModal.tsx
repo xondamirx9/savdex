@@ -11,14 +11,27 @@ import { Button } from '@/components/ui';
  * сканером (проверено декодером jsQR, 0 из 6). QR описан стандартом
  * ISO/IEC 18004 — писать его вручную значит добавить риск без выгоды.
  */
-function toSvg(text: string, scale = 6, quiet = 4): string {
+
+/** Светлое поле вокруг кода: четыре модуля требует стандарт. */
+const QUIET = 4;
+
+const DARK = '#0f172a';
+
+const LIGHT = '#ffffff';
+
+function encode(text: string) {
     // Уровень M: код читается при загрязнении до 15 % и остаётся компактным
     const qr = qrcode(0, 'M');
     qr.addData(text);
     qr.make();
 
+    return qr;
+}
+
+function toSvg(text: string, scale = 6): string {
+    const qr = encode(text);
     const size = qr.getModuleCount();
-    const total = (size + quiet * 2) * scale;
+    const total = (size + QUIET * 2) * scale;
 
     // Все тёмные модули одним <path>: отдельные <rect> дают файл
     // в разы тяжелее и заметно медленнее рисуются
@@ -26,16 +39,58 @@ function toSvg(text: string, scale = 6, quiet = 4): string {
     for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
             if (qr.isDark(r, c)) {
-                path += `M${(c + quiet) * scale} ${(r + quiet) * scale}h${scale}v${scale}h-${scale}z`;
+                path += `M${(c + QUIET) * scale} ${(r + QUIET) * scale}h${scale}v${scale}h-${scale}z`;
             }
         }
     }
 
     return (
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${total}" height="${total}">` +
-        `<rect width="${total}" height="${total}" fill="#ffffff"/>` +
-        `<path d="${path}" fill="#0f172a"/></svg>`
+        `<rect width="${total}" height="${total}" fill="${LIGHT}"/>` +
+        `<path d="${path}" fill="${DARK}"/></svg>`
     );
+}
+
+/**
+ * Тот же код растром.
+ *
+ * Скачивался SVG, а галерея телефона его не открывает — вместо кода
+ * показывается значок повреждённого файла. QR скачивают как раз на
+ * телефон, чтобы показать с экрана, поэтому файл обязан быть обычной
+ * картинкой. Сторона около 1024 точек: с экрана считывается с любого
+ * расстояния и хватает, чтобы напечатать код на визитке.
+ */
+function toCanvas(text: string, target = 1024): HTMLCanvasElement {
+    const qr = encode(text);
+    const size = qr.getModuleCount();
+    const modules = size + QUIET * 2;
+
+    // Сторона модуля — целое число точек: дробная даёт размытые края,
+    // а размытый модуль сканер читает хуже
+    const scale = Math.max(1, Math.round(target / modules));
+    const side = modules * scale;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = side;
+    canvas.height = side;
+
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+        ctx.fillStyle = LIGHT;
+        ctx.fillRect(0, 0, side, side);
+        ctx.fillStyle = DARK;
+
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (qr.isDark(r, c)) {
+                    ctx.fillRect((c + QUIET) * scale, (r + QUIET) * scale, scale, scale);
+                }
+            }
+        }
+    }
+
+    return canvas;
 }
 
 export function QrModal({
@@ -83,12 +138,31 @@ export function QrModal({
     if (!open) return null;
 
     function download() {
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'savdex-qr.svg';
-        a.click();
-        URL.revokeObjectURL(a.href);
+        const canvas = toCanvas(url);
+
+        const save = (href: string, temporary: boolean) => {
+            const a = document.createElement('a');
+            a.href = href;
+            a.download = 'savdex-qr.png';
+
+            // Ссылка добавляется в документ: по отсоединённому узлу
+            // часть браузеров не кликает, и скачивание не начинается
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            // Отзывать ссылку сразу нельзя: браузер не успевает
+            // забрать данные, и файл сохраняется пустым
+            if (temporary) setTimeout(() => URL.revokeObjectURL(href), 10_000);
+        };
+
+        if (typeof canvas.toBlob === 'function') {
+            canvas.toBlob((blob) => blob && save(URL.createObjectURL(blob), true), 'image/png');
+
+            return;
+        }
+
+        save(canvas.toDataURL('image/png'), false);
     }
 
     /*
