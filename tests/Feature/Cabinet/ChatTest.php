@@ -249,7 +249,7 @@ class ChatTest extends TestCase
         $this->assertStringNotContainsString('sales@stroybaza.uz', $body);
         $this->assertStringNotContainsString('https://', $body);
         $this->assertStringNotContainsString('@stroybaza', $body);
-        $this->assertStringContainsString('[скрыто]', $body);
+        $this->assertStringContainsString(ChatService::MASK, $body);
     }
 
     /** Цены маскировка не трогает: «1 200 000 сум» — не телефон. */

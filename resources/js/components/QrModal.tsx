@@ -2,6 +2,7 @@ import { Check, Copy, Download, Printer, Send, X } from 'lucide-react';
 import qrcode from 'qrcode-generator';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui';
+import { t } from '@/lib/i18n';
 
 /**
  * QR-код визитки компании.
@@ -180,7 +181,7 @@ export function QrModal({
         if (!w) return;
 
         const doc = w.document;
-        doc.title = 'QR-код SAVDEX';
+        doc.title = t('qr.window_title');
         doc.body.style.cssText = 'display:grid;place-items:center;height:100vh;margin:0;font-family:sans-serif';
 
         const box = doc.createElement('div');
@@ -206,7 +207,7 @@ export function QrModal({
     }
 
     async function share() {
-        const text = `Визитка ${name} на SAVDEX: ${url}`;
+        const text = t('qr.share_text', { name, url });
         if (navigator.share) {
             try {
                 await navigator.share({ title: 'SAVDEX', text, url });
@@ -222,8 +223,8 @@ export function QrModal({
         <div className="overlay open" onClick={(e) => e.target === e.currentTarget && onClose()}>
             <div className="modal" style={{ maxWidth: 420 }} role="dialog" aria-modal="true" aria-labelledby="qr-title" ref={dialogRef}>
                 <div className="modal-head">
-                    <h2 className="t-h3" id="qr-title">Ссылка на визитку</h2>
-                    <button className="btn btn-ghost btn-icon" aria-label="Закрыть" onClick={onClose}>
+                    <h2 className="t-h3" id="qr-title">{t('qr.title')}</h2>
+                    <button className="btn btn-ghost btn-icon" aria-label={t('common.close')} onClick={onClose}>
                         <X aria-hidden className="size-5" />
                     </button>
                 </div>
@@ -238,7 +239,7 @@ export function QrModal({
                         </span>
                         <button className="btn btn-ghost btn-sm" onClick={copyLink}>
                             {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />}
-                            {copied ? "Скопировано" : "Копировать"}
+                            {copied ? t('qr.copied') : t('qr.copy')}
                         </button>
                     </div>
                     <div
@@ -248,24 +249,22 @@ export function QrModal({
                         }}
                         dangerouslySetInnerHTML={{ __html: svg }}
                         role="img"
-                        aria-label={`QR-код со ссылкой на страницу компании ${name}`}
+                        aria-label={t('qr.code_aria', { name })}
                     />
                     <p className="t-caption muted" style={{ marginTop: 12, lineHeight: 1.5 }}>
-                        Ссылку можно отправить в переписке, а QR-код — распечатать на визитке
-                        или вложить в коммерческое предложение. Наведёте камеру телефона —
-                        откроется страница компании.
+                        {t('qr.hint')}
                     </p>
                 </div>
 
                 <div className="modal-foot" style={{ flexWrap: 'wrap' }}>
                     <Button variant="secondary" onClick={download}>
-                        <Download aria-hidden className="size-4" /> Скачать
+                        <Download aria-hidden className="size-4" /> {t('qr.download')}
                     </Button>
                     <Button variant="secondary" onClick={print}>
-                        <Printer aria-hidden className="size-4" /> Печать
+                        <Printer aria-hidden className="size-4" /> {t('qr.print')}
                     </Button>
                     <Button style={{ flex: 1 }} onClick={share}>
-                        <Send aria-hidden className="size-4" /> Отправить
+                        <Send aria-hidden className="size-4" /> {t('qr.send')}
                     </Button>
                 </div>
             </div>

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Empty } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
-import { pluralize } from '@/lib/plural';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -49,7 +49,7 @@ function CompanyCell({
             <span style={{ minWidth: 0 }}>
                 {seesNames ? (
                     <>
-                        <b>{row.slug ? <Link href={routes.company(row.slug)}>{row.name}</Link> : (row.name ?? 'Компания удалена')}</b>
+                        <b>{row.slug ? <Link href={routes.company(row.slug)}>{row.name}</Link> : (row.name ?? t('cabinet.incoming.deleted'))}</b>
                         {row.verified > 0 && (
                             <>
                                 {' '}
@@ -60,12 +60,12 @@ function CompanyCell({
                         )}
                     </>
                 ) : (
-                    <b className="muted">Название скрыто</b>
+                    <b className="muted">{t('cabinet.incoming.hidden')}</b>
                 )}
                 <br />
                 <span className="t-caption muted">
                     {row.type}
-                    {row.rating > 0 && ` · рейтинг ${row.rating.toFixed(1)}`}
+                    {row.rating > 0 && ` · ${t('cabinet.incoming.rating', { value: row.rating.toFixed(1) })}`}
                 </span>
             </span>
         </div>
@@ -102,53 +102,53 @@ export default function Incoming({
 }) {
     return (
         <CabinetLayout
-            title="Кто мной интересуется"
-            heading="Кто мной интересуется"
-            subheading="Компании, которые открыли ваши контакты или смотрели ваши страницы за последние 30 дней"
+            title={t('cabinet.incoming.title')}
+            heading={t('cabinet.incoming.title')}
+            subheading={t('cabinet.incoming.subheading')}
         >
             {rows.length === 0 && viewers.length === 0 ? (
                 <Empty
                     icon={Eye}
-                    title="Пока никто не проявлял интереса"
-                    text="Здесь появятся компании, которые смотрели ваши объявления и визитку или открыли ваши контакты. Чем полнее карточка и активнее объявления, тем быстрее это случится."
-                    action={{ href: routes.cabinetListings, label: 'Проверить объявления' }}
+                    title={t('cabinet.incoming.empty_title')}
+                    text={t('cabinet.incoming.empty_text')}
+                    action={{ href: routes.cabinetListings, label: t('cabinet.incoming.empty_action') }}
                 />
             ) : (
                 <>
                     {rows.length > 0 && (
                         <Section
                             icon={PhoneCall}
-                            title="Открыли ваши контакты"
-                            hint="Самые тёплые лиды: они заплатили за ваш контакт и готовы к разговору"
+                            title={t('cabinet.incoming.unlocked_title')}
+                            hint={t('cabinet.incoming.unlocked_hint')}
                         >
                             <div className="table-wrap table-cards">
                                 <table className="table">
                                     <thead>
                                         <tr>
-                                            <th>Компания</th>
-                                            <th>Объявление</th>
-                                            <th>Когда</th>
-                                            <th>Город</th>
+                                            <th>{t('cabinet.incoming.company')}</th>
+                                            <th>{t('cabinet.incoming.listing')}</th>
+                                            <th>{t('cabinet.incoming.when')}</th>
+                                            <th>{t('cabinet.incoming.city')}</th>
                                             <th>
-                                                <span className="sr-only">Действия</span>
+                                                <span className="sr-only">{t('cabinet.incoming.actions')}</span>
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {rows.map((row) => (
                                             <tr key={row.id}>
-                                                <td data-label="Компания">
+                                                <td data-label={t('cabinet.incoming.company')}>
                                                     <CompanyCell row={row} seesNames={sees_names} />
                                                 </td>
-                                                <td data-label="Объявление">
+                                                <td data-label={t('cabinet.incoming.listing')}>
                                                     <span className="t-sm">{row.listing ?? '—'}</span>
                                                 </td>
-                                                <td data-label="Когда">{row.when}</td>
-                                                <td data-label="Город">{row.city}</td>
+                                                <td data-label={t('cabinet.incoming.when')}>{row.when}</td>
+                                                <td data-label={t('cabinet.incoming.city')}>{row.city}</td>
                                                 <td data-label="">
                                                     {sees_names && row.slug ? (
                                                         <Link href={routes.company(row.slug)} className="btn btn-secondary btn-sm">
-                                                            Написать первым
+                                                    {t('cabinet.incoming.write_first')}
                                                         </Link>
                                                     ) : (
                                                         <span className="t-caption muted">—</span>
@@ -165,34 +165,34 @@ export default function Incoming({
                     {viewers.length > 0 && (
                         <Section
                             icon={Eye}
-                            title="Смотрели вас"
-                            hint="Компании, открывавшие ваши объявления и визитку — интерес, который ещё можно превратить в сделку"
+                            title={t('cabinet.incoming.viewed_title')}
+                            hint={t('cabinet.incoming.viewed_hint')}
                         >
                             <div className="table-wrap table-cards">
                                 <table className="table">
                                     <thead>
                                         <tr>
-                                            <th>Компания</th>
-                                            <th>Что смотрели</th>
-                                            <th>Просмотры</th>
-                                            <th>Когда</th>
-                                            <th>Город</th>
+                                            <th>{t('cabinet.incoming.company')}</th>
+                                            <th>{t('cabinet.incoming.what_viewed')}</th>
+                                            <th>{t('cabinet.incoming.views')}</th>
+                                            <th>{t('cabinet.incoming.when')}</th>
+                                            <th>{t('cabinet.incoming.city')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {viewers.map((v) => (
                                             <tr key={v.id}>
-                                                <td data-label="Компания">
+                                                <td data-label={t('cabinet.incoming.company')}>
                                                     <CompanyCell row={v} seesNames={sees_names} />
                                                 </td>
-                                                <td data-label="Что смотрели">
+                                                <td data-label={t('cabinet.incoming.what_viewed')}>
                                                     <span className="t-sm">{v.looked || '—'}</span>
                                                 </td>
-                                                <td data-label="Просмотры">
-                                                    {pluralize(v.views, ['просмотр', 'просмотра', 'просмотров'])}
+                                                <td data-label={t('cabinet.incoming.views')}>
+                                                    {tChoice('cabinet.incoming.views_count', v.views)}
                                                 </td>
-                                                <td data-label="Когда">{v.when}</td>
-                                                <td data-label="Город">{v.city}</td>
+                                                <td data-label={t('cabinet.incoming.when')}>{v.when}</td>
+                                                <td data-label={t('cabinet.incoming.city')}>{v.city}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -207,14 +207,13 @@ export default function Incoming({
                         <div className="card mt-24" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
                             <div className="row-between wrap" style={{ gap: 16 }}>
                                 <div style={{ flex: 1, minWidth: 260 }}>
-                                    <b>Названия компаний видны на тарифах Business и Premium</b>
+                                    <b>{t('cabinet.incoming.names_locked')}</b>
                                     <p className="t-sm muted mt-8">
-                                        На тарифе {plan?.name} показываются город и тип компании. Сам факт интереса
-                                        виден всегда.
+                                        {t('cabinet.incoming.names_locked_text', { plan: plan?.name ?? '' })}
                                     </p>
                                 </div>
                                 <Link href={routes.pricing} className="btn btn-primary">
-                                    Сравнить тарифы
+                            {t('cabinet.incoming.compare_plans')}
                                 </Link>
                             </div>
                         </div>

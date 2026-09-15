@@ -39,12 +39,12 @@ class EmailVerificationController extends Controller
     public function verify(EmailVerificationRequest $request): RedirectResponse
     {
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->route('cabinet')->with('success', 'Почта уже подтверждена');
+            return redirect()->route('cabinet')->with('success', __('ui.messages.auth.already_verified'));
         }
 
         $request->fulfill();
 
-        return redirect()->route('cabinet')->with('success', 'Почта подтверждена — теперь доступна публикация объявлений');
+        return redirect()->route('cabinet')->with('success', __('ui.messages.auth.verified'));
     }
 
     /**
@@ -63,12 +63,12 @@ class EmailVerificationController extends Controller
 
         $request->validate(
             ['code' => ['required', 'digits:6']],
-            ['code.required' => 'Введите код из письма', 'code.digits' => 'Код — шесть цифр'],
+            ['code.required' => __('ui.messages.auth.code_required'), 'code.digits' => __('ui.messages.auth.code_digits')],
         );
 
         if (! EmailVerificationCode::check($request->user(), $request->string('code')->toString())) {
             return back()->withErrors([
-                'code' => 'Код не подошёл или устарел. Отправьте письмо повторно и введите код из него.',
+                'code' => __('ui.messages.auth.code_invalid'),
             ]);
         }
 
@@ -76,7 +76,7 @@ class EmailVerificationController extends Controller
             event(new Verified($request->user()));
         }
 
-        return redirect()->route('cabinet')->with('success', 'Почта подтверждена — теперь доступна публикация объявлений');
+        return redirect()->route('cabinet')->with('success', __('ui.messages.auth.verified'));
     }
 
     public function send(Request $request): RedirectResponse
@@ -87,6 +87,6 @@ class EmailVerificationController extends Controller
 
         $request->user()->sendEmailVerificationNotification();
 
-        return back()->with('status', 'Письмо отправлено повторно. Не пришло — проверьте папку «Спам».');
+        return back()->with('status', __('ui.messages.auth.mail_resent'));
     }
 }

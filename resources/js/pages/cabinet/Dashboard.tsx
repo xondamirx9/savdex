@@ -15,9 +15,9 @@ import type { ComponentType } from 'react';
 import { LimitBar, Metric, Panel, type MetricData } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { pluralize } from '@/lib/plural';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Props {
     company: { name: string; slug: string; completeness: number; missing: string[] } | null;
@@ -58,18 +58,17 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
 
     if (!company) {
         return (
-            <CabinetLayout title="Кабинет" heading={`Здравствуйте, ${firstName}`.trim()}>
+            <CabinetLayout title={t('cabinet.dashboard.title')} heading={t('cabinet.dashboard.hello', { name: firstName }).trim()}>
                 <div className="card empty">
                     <div className="empty-icon">
                         <Building2 aria-hidden className="size-7" />
                     </div>
-                    <p className="t-h4">Компания ещё не создана</p>
+                    <p className="t-h4">{t('cabinet.dashboard.no_company_title')}</p>
                     <p className="t-sm muted mt-8" style={{ maxWidth: 460, margin: '8px auto 0' }}>
-                        Пока карточки нет, объявления публиковать нельзя: покупатель должен видеть, с кем имеет дело.
-                        Заполнение занимает пять минут.
+                        {t('cabinet.dashboard.no_company_text')}
                     </p>
                     <Link href={routes.cabinetCompany} className="btn btn-primary mt-24">
-                        Заполнить данные компании
+                        {t('cabinet.dashboard.no_company_action')}
                     </Link>
                 </div>
             </CabinetLayout>
@@ -80,13 +79,13 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
 
     return (
         <CabinetLayout
-            title="Кабинет"
-            heading={`Здравствуйте, ${firstName}`.trim()}
+            title={t('cabinet.dashboard.title')}
+            heading={t('cabinet.dashboard.hello', { name: firstName }).trim()}
             subheading={
                 <>
                     {company.name}
-                    {plan && ` · тариф ${plan.name}`}
-                    {plan?.until && ` до ${plan.until}`}
+                    {plan && ` · ${t('cabinet.dashboard.plan', { name: plan.name })}`}
+                    {plan?.until && ` ${t('cabinet.dashboard.plan_until', { date: plan.until })}`}
                 </>
             }
             actions={
@@ -94,9 +93,9 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
                     href={routes.listingCreate}
                     className={cn('btn btn-primary', !verified && 'is-disabled')}
                     aria-disabled={!verified || undefined}
-                    title={verified ? undefined : 'Сначала подтвердите почту'}
+                    title={verified ? undefined : t('cabinet.dashboard.verify_first')}
                 >
-                    <Plus aria-hidden className="size-4" /> Разместить объявление
+                    <Plus aria-hidden className="size-4" /> {t('cabinet.dashboard.new_listing')}
                 </Link>
             }
         >
@@ -106,18 +105,18 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
                 <div className="card" style={{ background: 'var(--warning-bg)', borderColor: 'rgba(245,158,11,.3)', marginBottom: 24 }}>
                     <div className="row-between wrap" style={{ gap: 16 }}>
                         <div style={{ flex: 1, minWidth: 260 }}>
-                            <b>Профиль заполнен на {company.completeness} %</b>
+                            <b>{t('cabinet.dashboard.completeness', { percent: company.completeness })}</b>
                             <div className="progress mt-8" style={{ maxWidth: 340 }}>
                                 <div className="progress-fill" style={{ width: `${company.completeness}%`, background: 'var(--warning)' }} />
                             </div>
                             {company.missing.length > 0 && (
                                 <p className="t-sm mt-8" style={{ color: '#78350F' }}>
-                                    Не хватает: {company.missing.join(', ')}.
+                                    {t('cabinet.dashboard.missing', { fields: company.missing.join(', ') })}
                                 </p>
                             )}
                         </div>
                         <Link href={routes.cabinetCompany} className="btn btn-secondary">
-                            Дозаполнить
+                            {t('cabinet.dashboard.complete')}
                         </Link>
                     </div>
                 </div>
@@ -125,25 +124,25 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
 
             {metrics && series && (
                 <div className="grid grid-4 grid-tight">
-                    <Metric label="Показы в выдаче" data={metrics.impressions} series={series.impressions} />
-                    <Metric label="Просмотры карточек" data={metrics.views} series={series.views} />
-                    <Metric label="Открыли ваш контакт" data={metrics.unlocks} series={series.unlocks} />
-                    <Metric label="Конверсия в контакт" data={metrics.conversion} />
+                    <Metric label={t('cabinet.dashboard.impressions')} data={metrics.impressions} series={series.impressions} />
+                    <Metric label={t('cabinet.dashboard.views')} data={metrics.views} series={series.views} />
+                    <Metric label={t('cabinet.dashboard.unlocks')} data={metrics.unlocks} series={series.unlocks} />
+                    <Metric label={t('cabinet.dashboard.conversion')} data={metrics.conversion} />
                 </div>
             )}
 
             <div className="grid grid-split mt-24" style={{ ['--split' as string]: '1.4fr 1fr' }}>
                 <Panel
-                    title="Последние события"
+                    title={t('cabinet.dashboard.events')}
                     action={
                         <Link href={routes.cabinetIncoming} className="t-sm">
-                            Все события
+                            {t('cabinet.dashboard.events_all')}
                         </Link>
                     }
                 >
                     {events.length === 0 ? (
                         <p className="muted t-sm">
-                            Пока пусто. События появятся, когда объявления начнут смотреть и открывать контакты.
+                            {t('cabinet.dashboard.events_empty')}
                         </p>
                     ) : (
                         <ul className="stack-16">
@@ -167,19 +166,19 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
                 </Panel>
 
                 {limits && plan && (
-                    <Panel title={`Лимиты тарифа ${plan.name}`}>
+                    <Panel title={t('cabinet.dashboard.limits', { name: plan.name })}>
                         <div className="stack-16">
-                            <LimitBar label="Объявления" used={limits.listings.used} total={limits.listings.total} />
+                            <LimitBar label={t('cabinet.dashboard.limit_listings')} used={limits.listings.used} total={limits.listings.total} />
                             <LimitBar
-                                label="Контакты в этом месяце"
+                                label={t('cabinet.dashboard.limit_contacts')}
                                 used={limits.contacts.used}
                                 total={limits.contacts.total}
                             />
-                            <LimitBar label="Продвижения" used={limits.promo.used} total={limits.promo.total} />
+                            <LimitBar label={t('cabinet.dashboard.limit_promo')} used={limits.promo.used} total={limits.promo.total} />
                         </div>
-                        {limits.resets_at && <p className="t-sm muted mt-16">Обновится {limits.resets_at}</p>}
+                        {limits.resets_at && <p className="t-sm muted mt-16">{t('cabinet.dashboard.limit_resets', { date: limits.resets_at })}</p>}
                         <Link href={routes.cabinetBilling} className="btn btn-secondary btn-block mt-16">
-                            Управление тарифом
+                            {t('cabinet.dashboard.manage_plan')}
                         </Link>
                     </Panel>
                 )}
@@ -191,9 +190,9 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
                         <div className="alert alert-warning">
                             <TriangleAlert aria-hidden className="size-5" />
                             <div>
-                                <b>{pluralize(expiring, ['объявление истекает', 'объявления истекают', 'объявлений истекает'])}</b>{' '}
-                                в ближайшую неделю. После истечения показы прекращаются.{' '}
-                                <Link href={routes.cabinetListings}>Проверить</Link>
+                                <b>{tChoice('cabinet.dashboard.expiring', expiring)}</b>{' '}
+                                {t('cabinet.dashboard.expiring_text')}{' '}
+                                <Link href={routes.cabinetListings}>{t('cabinet.dashboard.check')}</Link>
                             </div>
                         </div>
                     )}
@@ -201,8 +200,8 @@ export default function Dashboard({ company, metrics, series, events, limits, pl
                         <div className="alert alert-info">
                             <FileText aria-hidden className="size-5" />
                             <div>
-                                Черновиков: <b>{drafts}</b>. Они не видны покупателям, пока не опубликованы.{' '}
-                                <Link href={routes.cabinetListings}>Открыть</Link>
+                                {t('cabinet.dashboard.drafts', { count: drafts })}{' '}
+                                <Link href={routes.cabinetListings}>{t('cabinet.dashboard.open')}</Link>
                             </div>
                         </div>
                     )}

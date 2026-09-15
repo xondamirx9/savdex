@@ -47,23 +47,23 @@ class ReviewService
         $author = $user?->company;
 
         if ($author === null) {
-            return 'Отзывы оставляют от имени компании — заполните её данные в кабинете.';
+            return __('ui.messages.review.no_company');
         }
 
         if ($author->id === $target->id) {
-            return 'Это ваша компания.';
+            return __('ui.messages.review.own_company');
         }
 
         if (! $user->hasVerifiedEmail()) {
-            return 'Подтвердите почту, чтобы оставлять отзывы.';
+            return __('ui.messages.review.verify_email');
         }
 
         if ($author->isBlocked() || $user->status !== 'active') {
-            return 'Ваша учётная запись заблокирована.';
+            return __('ui.messages.review.blocked');
         }
 
         if (! $this->unlock($author, $target)) {
-            return 'Отзыв можно оставить только после раскрытия контактов: так на площадке нет отзывов от тех, кто с компанией не работал.';
+            return __('ui.messages.review.unlock_first');
         }
 
         $existing = $this->existing($author, $target);
@@ -75,9 +75,9 @@ class ReviewService
              * оставляли отзыв» и не понимает, куда тот делся.
              */
             return match ($existing->status) {
-                Review::STATUS_MODERATION => 'Ваш отзыв на проверке — он появится здесь, когда модератор его посмотрит.',
-                Review::STATUS_HIDDEN => 'Ваш отзыв не прошёл проверку. Причина — в уведомлениях.',
-                default => 'Вы уже оставляли отзыв этой компании.',
+                Review::STATUS_MODERATION => __('ui.messages.review.yours_pending'),
+                Review::STATUS_HIDDEN => __('ui.messages.review.yours_hidden'),
+                default => __('ui.messages.review.already_left'),
             };
         }
 
@@ -159,15 +159,15 @@ class ReviewService
         } catch (UniqueConstraintViolationException) {
             // Двойное нажатие или второй запрос параллельно: обещание
             // «один отзыв на компанию» держит уникальный индекс
-            return ['ok' => false, 'message' => 'Вы уже оставляли отзыв этой компании.', 'review' => null];
+            return ['ok' => false, 'message' => __('ui.messages.review.already_left'), 'review' => null];
         }
 
         if ($needsReview) {
             return [
                 'ok' => true,
                 'message' => $flags === []
-                    ? 'Отзыв отправлен на проверку. Обычно она занимает несколько часов — после этого отзыв появится на странице компании.'
-                    : 'Отзыв отправлен на проверку: '.mb_strtolower($flags[0]).'. Модератор посмотрит его вручную.',
+                    ? __('ui.messages.review.sent_to_moderation')
+                    : __('ui.messages.review.sent_flagged', ['reason' => mb_strtolower($flags[0])]),
                 'review' => $review,
             ];
         }
@@ -176,7 +176,7 @@ class ReviewService
 
         return [
             'ok' => true,
-            'message' => 'Отзыв опубликован. Компания получила уведомление и сможет ответить.',
+            'message' => __('ui.messages.review.published'),
             'review' => $review,
         ];
     }
@@ -255,9 +255,9 @@ class ReviewService
     public static function messages(): array
     {
         return [
-            'rating.required' => 'Поставьте общую оценку',
-            'body.required' => 'Напишите, как прошла работа',
-            'body.min' => 'Отзыв в пару слов ничего не говорит следующему покупателю — опишите, что было хорошо и что нет',
+            'rating.required' => __('ui.messages.review.rating_required'),
+            'body.required' => __('ui.messages.review.body_required'),
+            'body.min' => __('ui.messages.review.body_min'),
         ];
     }
 }

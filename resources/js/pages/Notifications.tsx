@@ -14,8 +14,8 @@ import type { ComponentType } from 'react';
 import { Tabs } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { pluralize } from '@/lib/plural';
 import { routes } from '@/routes';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -58,12 +58,12 @@ export default function Notifications({
 }) {
     return (
         <CabinetLayout
-            title="Уведомления"
-            heading="Уведомления"
+            title={t('notifications.title')}
+            heading={t('notifications.title')}
             subheading={
                 unread > 0
-                    ? `${pluralize(unread, ['непрочитанное', 'непрочитанных', 'непрочитанных'])}`
-                    : 'Все прочитаны'
+                    ? tChoice('notifications.unread', unread)
+                    : t('notifications.all_read')
             }
             actions={
                 unread > 0 ? (
@@ -71,15 +71,15 @@ export default function Notifications({
                         className="btn btn-secondary"
                         onClick={() => router.post(routes.notificationsReadAll, {}, { preserveScroll: true })}
                     >
-                        <CheckCheck aria-hidden className="size-4" /> Отметить всё прочитанным
+                        <CheckCheck aria-hidden className="size-4" /> {t('notifications.mark_all')}
                     </button>
                 ) : undefined
             }
         >
             <Tabs
                 items={[
-                    { key: 'all', label: 'Все' },
-                    { key: 'unread', label: 'Непрочитанные', count: unread },
+                    { key: 'all', label: t('notifications.filter_all') },
+                    { key: 'unread', label: t('notifications.filter_unread'), count: unread },
                 ]}
                 active={filter}
                 onChange={(key) =>
@@ -88,7 +88,7 @@ export default function Notifications({
                         replace: true,
                     })
                 }
-                label="Фильтр уведомлений"
+                label={t('notifications.filter_aria')}
             />
 
             {notifications.length === 0 ? (
@@ -96,9 +96,9 @@ export default function Notifications({
                     <div className="empty-icon">
                         <Bell aria-hidden className="size-7" />
                     </div>
-                    <p className="t-h4">{filter === 'unread' ? 'Непрочитанных нет' : 'Уведомлений пока нет'}</p>
+                    <p className="t-h4">{filter === 'unread' ? t('notifications.empty_unread') : t('notifications.empty')}</p>
                     <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                        Здесь появятся отклики на объявления, новые отзывы, результаты модерации и новости площадки.
+                        {t('notifications.empty_text')}
                     </p>
                 </div>
             ) : (
@@ -114,14 +114,14 @@ export default function Notifications({
                                 <span style={{ flex: 1, minWidth: 0 }}>
                                     <span className="row wrap" style={{ gap: 8 }}>
                                         <b className={cn(!n.read && 'notif-strong')}>{n.title}</b>
-                                        {n.is_broadcast && <span className="badge badge-neutral">от площадки</span>}
+                                        {n.is_broadcast && <span className="badge badge-neutral">{t('notifications.broadcast')}</span>}
                                     </span>
                                     {n.body && <p className="t-sm muted mt-8">{n.body}</p>}
                                     <span className="t-caption muted" title={n.date}>
                                         {n.ago}
                                     </span>
                                 </span>
-                                {!n.read && <span className="notif-dot-static" aria-label="Непрочитано" />}
+                                {!n.read && <span className="notif-dot-static" aria-label={t('notifications.unread_dot')} />}
                             </>
                         );
 

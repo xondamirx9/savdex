@@ -23,6 +23,7 @@ import { MobileTabBar } from '@/components/MobileTabBar';
 import { SiteHeader } from '@/components/SiteHeader';
 import { routes } from '@/routes';
 import type { CabinetCounts, SharedProps } from '@/types';
+import { t } from '@/lib/i18n';
 
 type Icon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
@@ -42,34 +43,34 @@ interface NavGroup {
 const GROUPS: NavGroup[] = [
     {
         items: [
-            { href: routes.cabinet, label: 'Дашборд', icon: LayoutDashboard },
-            { href: routes.cabinetListings, label: 'Мои объявления', icon: Package, count: 'listings' },
-            { href: routes.listingCreate, label: 'Создать объявление', icon: Plus },
-            { href: routes.cabinetItTasks, label: 'IT-задачи', icon: Code2 },
+            { href: routes.cabinet, label: t('cabinet.nav.dashboard'), icon: LayoutDashboard },
+            { href: routes.cabinetListings, label: t('cabinet.nav.listings'), icon: Package, count: 'listings' },
+            { href: routes.listingCreate, label: t('cabinet.nav.create'), icon: Plus },
+            { href: routes.cabinetItTasks, label: t('cabinet.nav.it_tasks'), icon: Code2 },
         ],
     },
     {
-        title: 'Контакты',
+        title: t('cabinet.nav.contacts_group'),
         items: [
-            { href: routes.cabinetChats, label: 'Чаты', icon: MessageSquareText, count: 'chats' },
-            { href: routes.cabinetContacts, label: 'Мои контакты', icon: Users, count: 'contacts' },
-            { href: routes.cabinetIncoming, label: 'Кто мной интересуется', icon: Eye, count: 'incoming' },
+            { href: routes.cabinetChats, label: t('cabinet.nav.chats'), icon: MessageSquareText, count: 'chats' },
+            { href: routes.cabinetContacts, label: t('cabinet.nav.contacts'), icon: Users, count: 'contacts' },
+            { href: routes.cabinetIncoming, label: t('cabinet.nav.incoming'), icon: Eye, count: 'incoming' },
         ],
     },
     {
-        title: 'Рост',
+        title: t('cabinet.nav.growth_group'),
         items: [
-            { href: routes.cabinetAnalytics, label: 'Аналитика', icon: BarChart3 },
-            { href: routes.cabinetPromo, label: 'Продвижение', icon: Rocket },
-            { href: routes.cabinetReviews, label: 'Отзывы', icon: Star, count: 'reviews' },
+            { href: routes.cabinetAnalytics, label: t('cabinet.nav.analytics'), icon: BarChart3 },
+            { href: routes.cabinetPromo, label: t('cabinet.nav.promo'), icon: Rocket },
+            { href: routes.cabinetReviews, label: t('cabinet.nav.reviews'), icon: Star, count: 'reviews' },
         ],
     },
     {
-        title: 'Аккаунт',
+        title: t('cabinet.nav.account_group'),
         items: [
-            { href: routes.cabinetCompany, label: 'Компания', icon: Building2 },
-            { href: routes.cabinetBilling, label: 'Тариф и оплата', icon: CreditCard },
-            { href: routes.cabinetSettings, label: 'Настройки', icon: Settings },
+            { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
+            { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
+            { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
         ],
     },
 ];
@@ -103,7 +104,7 @@ export function CabinetLayout({
         <>
             <Head title={title} />
             <a href="#main" className="skip-link">
-                Перейти к содержимому
+                {t('common.skip_to_content')}
             </a>
 
             <SiteHeader />
@@ -111,7 +112,7 @@ export function CabinetLayout({
             {/* На телефоне боковое меню скрыто, а нижняя панель вмещает
                 пять пунктов из двенадцати. Прокручиваемая полоса даёт
                 доступ к остальным без ухода со страницы */}
-            <nav className="side-scroll" aria-label="Разделы кабинета">
+            <nav className="side-scroll" aria-label={t('cabinet.nav.sections')}>
                 <div className="container side-scroll-inner">
                     {GROUPS.flatMap((g) => g.items).map(({ href, label, icon: Icon, count }) => (
                         <Link key={href} href={href} aria-current={isActive(href) ? 'page' : undefined}>
@@ -125,7 +126,7 @@ export function CabinetLayout({
 
             <div className="container">
                 <div className="cabinet">
-                    <nav className="side" aria-label="Разделы кабинета">
+                    <nav className="side" aria-label={t('cabinet.nav.sections')}>
                         {GROUPS.map((group, gi) => (
                             <div key={group.title ?? gi} className="side-group">
                                 {group.title && <div className="side-title">{group.title}</div>}
@@ -162,15 +163,14 @@ export function CabinetLayout({
                                 <div className="alert alert-danger" style={{ marginBottom: 20, alignItems: 'center' }}>
                                     <TriangleAlert aria-hidden className="size-5 shrink-0" />
                                     <div style={{ flex: 1, minWidth: 220 }}>
-                                        <b>Компания заблокирована модератором</b> — визитка и объявления скрыты
-                                        с витрины.
+                                        <b>{t('cabinet.blocked_title')}</b> {t('cabinet.blocked_text')}
                                         {auth.company.blocked_reason && (
                                             <>
                                                 {' '}
-                                                Причина: {auth.company.blocked_reason}.
+                                                {t('cabinet.blocked_reason', { reason: auth.company.blocked_reason })}
                                             </>
                                         )}{' '}
-                                        Напишите в поддержку, чтобы восстановить доступ.
+                                        {t('cabinet.blocked_support')}
                                     </div>
                                 </div>
                             )}
@@ -182,11 +182,10 @@ export function CabinetLayout({
                                     <MailWarning aria-hidden className="size-5 shrink-0" />
                                     <div className="row-between wrap" style={{ gap: 12, flex: 1 }}>
                                         <span style={{ flex: 1, minWidth: 220 }}>
-                                            Почта <b className="break-all">{auth.user?.email}</b> не подтверждена.
-                                            Публикация объявлений и раскрытие контактов пока недоступны.
+                                            {t('cabinet.unverified', { email: auth.user?.email ?? '' })}
                                         </span>
                                         <Link href={routes.verifyNotice} className="btn btn-secondary btn-sm shrink-0">
-                                            Подтвердить
+                                            {t('cabinet.verify')}
                                         </Link>
                                     </div>
                                 </div>

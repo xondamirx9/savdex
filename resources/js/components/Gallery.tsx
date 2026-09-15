@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 
 export interface GalleryImage {
@@ -28,14 +29,14 @@ export function Gallery({ images, alt }: { images: GalleryImage[]; alt: string }
             <img className="gallery-main" src={current.url} alt={alt} />
 
             {images.length > 1 && (
-                <div className="gallery-strip" role="tablist" aria-label="Фотографии объявления">
+                <div className="gallery-strip" role="tablist" aria-label={t('common.gallery')}>
                     {images.map((image, i) => (
                         <button
                             key={image.id}
                             type="button"
                             role="tab"
                             aria-selected={i === active}
-                            aria-label={`Фотография ${i + 1} из ${images.length}`}
+                            aria-label={t('common.photo_of', { index: i + 1, total: images.length })}
                             className={cn(i === active && 'is-active')}
                             onClick={() => setActive(i)}
                         >

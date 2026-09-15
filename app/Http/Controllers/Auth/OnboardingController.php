@@ -83,12 +83,12 @@ class OnboardingController extends Controller
             // Текст для «Другого»: чем занимается компания своими словами
             'custom_category' => ['nullable', 'string', 'max:80'],
         ], [
-            'name.required' => 'Укажите название компании',
-            'type.required' => 'Выберите тип компании',
-            'country_id.required' => 'Выберите страну',
-            'city_id.required' => 'Выберите город',
-            'categories.max' => 'Не больше пяти категорий — иначе профиль перестаёт что-либо говорить о компании',
-            'tin.unique' => 'Компания с таким ИНН уже зарегистрирована на площадке',
+            'name.required' => __('ui.messages.company.name_required'),
+            'type.required' => __('ui.messages.company.type_required'),
+            'country_id.required' => __('ui.messages.company.country_required'),
+            'city_id.required' => __('ui.messages.company.city_required'),
+            'categories.max' => __('ui.messages.company.categories_max'),
+            'tin.unique' => __('ui.messages.company.tin_unique'),
         ]);
 
         $company = Company::create([
@@ -110,13 +110,13 @@ class OnboardingController extends Controller
         ])->save();
 
         return redirect()->route('verification.notice')
-            ->with('success', 'Компания создана. Осталось подтвердить почту — и можно публиковать объявления.');
+            ->with('success', __('ui.messages.company.created_onboarding'));
     }
 
     /** Пропустить шаг: аккаунт уже есть, и терять человека из-за формы нельзя. */
     public function skip(Request $request): RedirectResponse
     {
         return redirect()->route('verification.notice')
-            ->with('warning', 'Данные компании можно заполнить позже в кабинете. Без них публикация объявлений недоступна.');
+            ->with('warning', __('ui.messages.company.skipped'));
     }
 }

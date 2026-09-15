@@ -2,61 +2,38 @@ import { CheckCircle2, Handshake, Mail, Phone, Send, Shield, Star, Wallet } from
 import { useEffect, useState } from 'react';
 import { OfficeMap, type Office } from '@/components/OfficeMap';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { t } from '@/lib/i18n';
 import { useSupport } from '@/lib/support';
 
 /**
  * Страница «О компании» — шесть разделов, каждый со своим якорем.
  * Порядок разделов задаёт порядок пунктов подменю в шапке (§6.6 ТЗ).
- * Тексты переедут в page_blocks и станут редактируемыми в спринте 13.
+ *
+ * Тексты живут в словарях lang/<язык>/ui.php: страница переводится
+ * вместе с остальной витриной, а не остаётся русской на узбекской.
+ * Здесь только идентификаторы — подписи подставляет t() при
+ * отрисовке, когда словарь уже пришёл с сервера.
  *
  * Раздел «Офис» показывается, только когда адрес заполнен в настройках
  * площадки, — поэтому оглавление собирается по факту, а не константой.
  */
-const SECTIONS = [
-    { id: 'about', label: 'О нас' },
-    { id: 'contacts', label: 'Контакты' },
-    { id: 'office', label: 'Офис на карте' },
-    { id: 'help', label: 'Помощь' },
-    { id: 'guide', label: 'Инструкция использования' },
-    { id: 'rules', label: 'Правила размещения' },
+const SECTION_IDS = ['about', 'contacts', 'office', 'help', 'guide', 'rules'] as const;
+
+const FAQ_ITEMS = [1, 2, 3, 4, 5] as const;
+
+/** Иконка остаётся в коде, текст — в словаре. */
+const PRINCIPLES: [typeof Shield, string][] = [
+    [Handshake, 'commission'],
+    [Wallet, 'money'],
+    [Shield, 'check'],
+    [Star, 'reviews'],
 ];
 
-const FAQ: [string, string][] = [
-    [
-        'Сколько стоит разместить объявление?',
-        'Размещение бесплатно на всех тарифах. Бесплатный тариф даёт 4 активных объявления и 3 раскрытия контактов в месяц.',
-    ],
-    [
-        'Почему контакты платные?',
-        'Мы не берём процент со сделок, поэтому доступ к контактам — единственный источник дохода площадки. Открыв контакт компании один раз, вы видите его навсегда по всем её объявлениям.',
-    ],
-    [
-        'Что делать, если контакт нерабочий?',
-        'Нажмите «Пожаловаться на контакт» в разделе «Мои контакты». Проверим за 2 рабочих дня; при подтверждении вернём кредит и снизим компании индекс отзывчивости.',
-    ],
-    [
-        'Как получить бейдж «Проверена»?',
-        'Загрузите свидетельство о регистрации и подтвердите ИНН. Модератор проверит: на Free и Flash — до 5 рабочих дней, на Business и Premium — 1 рабочий день. Бейдж не продаётся.',
-    ],
-    [
-        'Какими картами можно оплатить?',
-        'Картами Uzcard, Humo, Visa и Mastercard через интернет-эквайринг Uzum Bank, в сумах. Платёж подтверждается кодом 3-D Secure. Подробнее — на странице «Способы оплаты».',
-    ],
-];
+const SUPPLIER_STEPS = [1, 2, 3, 4] as const;
 
-const PRINCIPLES: [typeof Shield, string, string][] = [
-    [Handshake, 'Комиссию со сделок не берём', 'Сколько бы вы ни продали найденному здесь партнёру — процент мы не получаем.'],
-    [Wallet, 'В расчётах не участвуем', 'Деньги между компаниями через сайт не проходят. Оплата — по вашему договору.'],
-    [Shield, 'Проверяем компании вручную', 'Бейдж «Проверена» ставит модератор после сверки документов. Купить его нельзя.'],
-    [Star, 'Отзывы нельзя накрутить', 'Оставить отзыв может только тот, кто оплатил раскрытие контактов компании.'],
-];
+const BUYER_STEPS = [1, 2, 3] as const;
 
-const MUST: string[] = [
-    'Достоверные название, ИНН и адрес компании',
-    'Объявление в подходящей категории',
-    'Реальные условия поставки, оплаты и объёмов',
-    'Снятие объявления, когда товар закончился',
-];
+const MUST_ITEMS = [1, 2, 3, 4] as const;
 
 /**
  * Раздел, который сейчас на экране, — для подсветки пункта оглавления.
@@ -107,14 +84,14 @@ export default function About({
     stats: { companies: number; categories: number; countries: number };
     office: Office | null;
 }) {
-    const sections = office !== null ? SECTIONS : SECTIONS.filter((s) => s.id !== 'office');
+    const sections = office !== null ? [...SECTION_IDS] : SECTION_IDS.filter((id) => id !== 'office');
     const support = useSupport();
-    const active = useActiveSection(sections.map((s) => s.id));
+    const active = useActiveSection(sections);
 
     return (
         <PublicLayout
-            title="О компании"
-            description="SAVDEX — B2B-площадка для поставщиков и закупщиков Узбекистана и Центральной Азии. Контакты, помощь, инструкция и правила размещения."
+            title={t('about.title')}
+            description={t('about.description')}
         >
             <div className="container about-page">
                 <div className="grid-docs">
@@ -123,10 +100,10 @@ export default function About({
                         над текстом — полдюжины пунктов столбиком отодвинули бы
                         содержимое за пределы экрана. */}
                     <aside>
-                        <nav className="doc-nav card" style={{ padding: 10 }} aria-label="Разделы страницы">
-                            {sections.map((s) => (
-                                <a key={s.id} href={`#${s.id}`} aria-current={active === s.id ? 'true' : undefined}>
-                                    {s.label}
+                        <nav className="doc-nav card" style={{ padding: 10 }} aria-label={t('about.sections')}>
+                            {sections.map((id) => (
+                                <a key={id} href={`#${id}`} aria-current={active === id ? 'true' : undefined}>
+                                    {t(`about.nav.${id}`)}
                                 </a>
                             ))}
                         </nav>
@@ -135,52 +112,45 @@ export default function About({
                     <div>
                         <section id="about" className="doc-section">
                             <h1 className="t-h1" style={{ marginBottom: 8 }}>
-                                О компании
+                                {t('about.title')}
                             </h1>
                             <p className="t-lead" style={{ marginBottom: 16 }}>
-                                SAVDEX — площадка, на которой поставщики и закупщики находят друг друга напрямую.
+                                {t('about.lead')}
                             </p>
-                            <p className="t-body">
-                                Мы работаем в Узбекистане и Центральной Азии. Компании публикуют, что могут поставить
-                                или что хотят купить, находят партнёра и договариваются между собой. Площадка не
-                                участвует в переговорах, не берёт процент со сделки и не проводит через себя деньги.
-                            </p>
-                            <p className="t-body mt-16">
-                                Зарабатываем мы на подписке и доступе к контактам. Наш доход не зависит от суммы
-                                вашего контракта.
-                            </p>
+                            <p className="t-body">{t('about.text_1')}</p>
+                            <p className="t-body mt-16">{t('about.text_2')}</p>
 
                             <div className="grid grid-4 grid-tight mt-24">
                                 <div className="card center">
                                     <div className="t-num">{stats.companies}</div>
-                                    <div className="t-sm muted">компаний</div>
+                                    <div className="t-sm muted">{t('about.stats.companies')}</div>
                                 </div>
                                 <div className="card center">
                                     <div className="t-num">0</div>
-                                    <div className="t-sm muted">объявлений</div>
+                                    <div className="t-sm muted">{t('about.stats.listings')}</div>
                                 </div>
                                 <div className="card center">
                                     <div className="t-num">{stats.categories}</div>
-                                    <div className="t-sm muted">категорий</div>
+                                    <div className="t-sm muted">{t('about.stats.categories')}</div>
                                 </div>
                                 <div className="card center">
                                     <div className="t-num">{stats.countries}</div>
-                                    <div className="t-sm muted">стран</div>
+                                    <div className="t-sm muted">{t('about.stats.countries')}</div>
                                 </div>
                             </div>
 
                             <h2 className="t-h3 mt-32" style={{ marginBottom: 12 }}>
-                                Наши принципы
+                                {t('about.principles_title')}
                             </h2>
                             <div className="grid grid-2">
-                                {PRINCIPLES.map(([Icon, title, text]) => (
-                                    <div key={title} className="feature">
+                                {PRINCIPLES.map(([Icon, key]) => (
+                                    <div key={key} className="feature">
                                         <span className="feature-icon">
                                             <Icon aria-hidden className="size-5" />
                                         </span>
                                         <div>
-                                            <h4 className="t-h4">{title}</h4>
-                                            <p>{text}</p>
+                                            <h4 className="t-h4">{t(`about.principles.${key}_title`)}</h4>
+                                            <p>{t(`about.principles.${key}_text`)}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -189,31 +159,31 @@ export default function About({
 
                         <section id="contacts" className="doc-section contacts-section">
                             <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                                Контакты
+                                {t('about.nav.contacts')}
                             </h2>
                             <div className="grid grid-2 contacts-cards" data-reveal-stagger>
                                 <div className="card">
                                     <h3 className="t-h4" style={{ marginBottom: 16 }}>
-                                        Оператор площадки
+                                        {t('about.operator')}
                                     </h3>
                                     <dl className="stack-12 t-sm">
                                         <div className="row-between">
-                                            <dt className="muted">Наименование</dt>
+                                            <dt className="muted">{t('about.legal_name')}</dt>
                                             <dd>{support.legal_name}</dd>
                                         </div>
                                         <div className="row-between">
-                                            <dt className="muted">ИНН</dt>
+                                            <dt className="muted">{t('about.tin')}</dt>
                                             <dd>{support.legal_tin}</dd>
                                         </div>
                                         <div className="row-between">
-                                            <dt className="muted">Страна</dt>
-                                            <dd>Узбекистан</dd>
+                                            <dt className="muted">{t('about.country')}</dt>
+                                            <dd>{t('about.country_value')}</dd>
                                         </div>
                                     </dl>
                                 </div>
                                 <div className="card">
                                     <h3 className="t-h4" style={{ marginBottom: 16 }}>
-                                        Как с нами связаться
+                                        {t('about.reach_us')}
                                     </h3>
                                     <div className="stack-12">
                                         <a href={support.telHref} className="row contact-link" style={{ gap: 12 }}>
@@ -233,7 +203,7 @@ export default function About({
                                             <span>
                                                 <b>{support.email}</b>
                                                 <br />
-                                                <span className="t-caption muted">Поддержка, ответ за 4 часа</span>
+                                                <span className="t-caption muted">{t('about.support_hint')}</span>
                                             </span>
                                         </a>
                                         <a href={support.telegram} className="row contact-link" style={{ gap: 12 }}>
@@ -243,7 +213,7 @@ export default function About({
                                             <span>
                                                 <b>{support.tgHandle}</b>
                                                 <br />
-                                                <span className="t-caption muted">Телеграм, круглосуточно</span>
+                                                <span className="t-caption muted">{t('about.telegram_hint')}</span>
                                             </span>
                                         </a>
                                     </div>
@@ -254,11 +224,10 @@ export default function About({
                         {office !== null && (
                             <section id="office" className="doc-section">
                                 <h2 className="t-h2" style={{ marginBottom: 10 }}>
-                                    Офис на карте
+                                    {t('about.nav.office')}
                                 </h2>
                                 <p className="t-body" style={{ marginBottom: 24 }}>
-                                    Приезжайте, если вопрос проще решить лично. Договоры и документы принимаем и
-                                    по почте — приезжать ради подписи необязательно.
+                                    {t('about.office_text')}
                                 </p>
                                 <OfficeMap office={office} />
                             </section>
@@ -266,88 +235,68 @@ export default function About({
 
                         <section id="help" className="doc-section">
                             <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                                Помощь
+                                {t('about.nav.help')}
                             </h2>
                             {/* Нативный <details> вместо своего аккордеона: он доступен
                                 с клавиатуры и работает без JavaScript */}
-                            {FAQ.map(([q, a]) => (
-                                <details key={q} className="accordion-item">
+                            {FAQ_ITEMS.map((n) => (
+                                <details key={n} className="accordion-item">
                                     <summary className="accordion-btn" style={{ cursor: 'pointer' }}>
-                                        {q}
+                                        {t(`about.faq.q${n}`)}
                                     </summary>
-                                    <div className="accordion-panel">{a}</div>
+                                    <div className="accordion-panel">{t(`about.faq.a${n}`)}</div>
                                 </details>
                             ))}
                         </section>
 
                         <section id="guide" className="doc-section">
                             <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                                Инструкция использования
+                                {t('about.nav.guide')}
                             </h2>
 
                             <h3 className="t-h4" style={{ marginBottom: 16 }}>
-                                Если вы поставщик
+                                {t('about.supplier_title')}
                             </h3>
                             <ol className="stack-16">
-                                <li>
-                                    <b>Зарегистрируйтесь и подтвердите почту.</b>
-                                    <p className="t-sm muted mt-8">До подтверждения кабинет доступен, но публиковать нельзя.</p>
-                                </li>
-                                <li>
-                                    <b>Заполните карточку компании.</b>
-                                    <p className="t-sm muted mt-8">Заполненный профиль получает втрое больше обращений.</p>
-                                </li>
-                                <li>
-                                    <b>Разместите объявление.</b>
-                                    <p className="t-sm muted mt-8">
-                                        Укажите точную марку и объём — по ним ищут. Объявления с ценой смотрят в 2,4 раза чаще.
-                                    </p>
-                                </li>
-                                <li>
-                                    <b>Следите за входящими.</b>
-                                    <p className="t-sm muted mt-8">Видно, какая компания открыла ваши контакты и по какому объявлению.</p>
-                                </li>
+                                {SUPPLIER_STEPS.map((n) => (
+                                    <li key={n}>
+                                        <b>{t(`about.supplier.step_${n}`)}</b>
+                                        <p className="t-sm muted mt-8">{t(`about.supplier.hint_${n}`)}</p>
+                                    </li>
+                                ))}
                             </ol>
 
                             <h3 className="t-h4 mt-32" style={{ marginBottom: 16 }}>
-                                Если вы закупщик
+                                {t('about.buyer_title')}
                             </h3>
                             <ol className="stack-16">
-                                <li>
-                                    <b>Найдите в каталоге или опубликуйте запрос.</b>
-                                    <p className="t-sm muted mt-8">Каталог виден целиком без оплаты.</p>
-                                </li>
-                                <li>
-                                    <b>Изучите компанию до звонка.</b>
-                                    <p className="t-sm muted mt-8">Документы, рейтинг, отзывы, срок на площадке — всё открыто.</p>
-                                </li>
-                                <li>
-                                    <b>Откройте контакт.</b>
-                                    <p className="t-sm muted mt-8">Кредит списывается за компанию, а не за объявление.</p>
-                                </li>
+                                {BUYER_STEPS.map((n) => (
+                                    <li key={n}>
+                                        <b>{t(`about.buyer.step_${n}`)}</b>
+                                        <p className="t-sm muted mt-8">{t(`about.buyer.hint_${n}`)}</p>
+                                    </li>
+                                ))}
                             </ol>
                         </section>
 
                         <section id="rules" className="doc-section">
                             <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                                Правила размещения
+                                {t('about.nav.rules')}
                             </h2>
                             <div className="alert alert-danger" style={{ marginBottom: 24 }}>
                                 <Shield aria-hidden className="size-5" />
                                 <div>
-                                    <b>Контактные данные в тексте объявления запрещены.</b> Телефон, почта, ссылки и
-                                    ники в мессенджерах автоматически скрываются. Контакты передаются только через
-                                    раскрытие контактов — на этом работает площадка.
+                                    <b>{t('about.rules_warning_title')}</b> {t('about.rules_warning_text')}
                                 </div>
                             </div>
                             <h3 className="t-h4" style={{ marginBottom: 16 }}>
-                                Что обязательно
+                                {t('about.must_title')}
                             </h3>
                             <ul className="stack-12">
-                                {MUST.map((t) => (
-                                    <li key={t} className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+                                {MUST_ITEMS.map((n) => (
+                                    <li key={n} className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
                                         <CheckCircle2 aria-hidden className="text-success mt-0.5 size-5 shrink-0" />
-                                        <span>{t}</span>
+                                        <span>{t(`about.must.item_${n}`)}</span>
                                     </li>
                                 ))}
                             </ul>

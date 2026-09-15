@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { BadgeCheck, MessageSquare, Star } from 'lucide-react';
 import { useState } from 'react';
+import { t } from '@/lib/i18n';
 
 export interface CompanyReview {
     id: number;
@@ -16,7 +17,7 @@ export interface CompanyReview {
 /** Пять звёзд: заполненные до оценки включительно. */
 function Stars({ value, size = 16 }: { value: number; size?: number }) {
     return (
-        <span className="row" style={{ gap: 2 }} aria-label={`Оценка ${value} из 5`}>
+        <span className="row" style={{ gap: 2 }} aria-label={t('reviews.rating_aria', { value })}>
             {[1, 2, 3, 4, 5].map((i) => (
                 <Star
                     key={i}
@@ -51,7 +52,7 @@ function StarPicker({
                     <button
                         key={i}
                         type="button"
-                        aria-label={`${i} из 5`}
+                        aria-label={t('reviews.star_aria', { value: i })}
                         onMouseEnter={() => setHover(i)}
                         onClick={() => onChange(i)}
                         style={{ background: 'none', border: 0, padding: 2, cursor: 'pointer', lineHeight: 0 }}
@@ -119,7 +120,7 @@ export function CompanyReviews({
         <section className="card" id="reviews">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h2 className="t-h3">
-                    Отзывы {reviews.length > 0 && <span className="muted">· {reviews.length}</span>}
+                    {t('reviews.title')} {reviews.length > 0 && <span className="muted">· {reviews.length}</span>}
                 </h2>
                 {reviews.length > 0 && (
                     <div className="row" style={{ gap: 8, alignItems: 'center' }}>
@@ -134,7 +135,7 @@ export function CompanyReviews({
                     <form onSubmit={submit} className="card mb-24" style={{ background: 'var(--bg)' }}>
                         <div className="stack-16">
                             <StarPicker
-                                label="Общая оценка"
+                                label={t('reviews.overall')}
                                 value={form.data.rating}
                                 onChange={(v) => form.setData('rating', v)}
                             />
@@ -153,7 +154,7 @@ export function CompanyReviews({
 
                             <div className="field">
                                 <label className="label" htmlFor="review-body">
-                                    Как прошла работа <span className="req">*</span>
+                                    {t('reviews.how_it_went')} <span className="req">*</span>
                                 </label>
                                 <textarea
                                     id="review-body"
@@ -161,7 +162,7 @@ export function CompanyReviews({
                                     style={{ minHeight: 110 }}
                                     value={form.data.body}
                                     onChange={(e) => form.setData('body', e.target.value)}
-                                    placeholder="Что заказывали, как договаривались об условиях, уложились ли в сроки"
+                                    placeholder={t('reviews.placeholder')}
                                 />
                                 {form.errors.body && (
                                     <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.body}</p>
@@ -174,22 +175,22 @@ export function CompanyReviews({
                                     checked={form.data.deal_confirmed}
                                     onChange={(e) => form.setData('deal_confirmed', e.target.checked)}
                                 />
-                                <span className="t-sm">Сделка состоялась</span>
+                                <span className="t-sm">{t('reviews.deal_done')}</span>
                             </label>
 
                             <div className="row" style={{ gap: 10 }}>
                                 <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
-                                    Отмена
+                                    {t('common.cancel')}
                                 </button>
                                 <button className="btn btn-primary" style={{ flex: 1 }} disabled={form.processing}>
-                                    {form.processing ? 'Публикуем…' : 'Опубликовать отзыв'}
+                                    {form.processing ? t('reviews.publishing') : t('reviews.publish')}
                                 </button>
                             </div>
                         </div>
                     </form>
                 ) : (
                     <button className="btn btn-outline btn-block mb-24" onClick={() => setOpen(true)}>
-                        <MessageSquare aria-hidden className="size-4" /> Оставить отзыв
+                        <MessageSquare aria-hidden className="size-4" /> {t('reviews.leave')}
                     </button>
                 )
             ) : (
@@ -198,8 +199,7 @@ export function CompanyReviews({
 
             {reviews.length === 0 ? (
                 <p className="t-sm muted">
-                    Отзывов пока нет. Их оставляют только те, кто оплатил раскрытие контактов, — поэтому здесь
-                    не бывает отзывов от тех, кто с компанией не работал.
+                    {t('reviews.empty')}
                 </p>
             ) : (
                 <div className="stack-16">
@@ -211,8 +211,8 @@ export function CompanyReviews({
                                     <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                                         <b className="t-sm">{r.author}</b>
                                         {r.deal_confirmed && (
-                                            <span className="badge badge-verified" title="Сделка подтверждена">
-                                                <BadgeCheck aria-hidden className="size-3.5" /> Сделка
+                                            <span className="badge badge-verified" title={t('reviews.deal_confirmed')}>
+                                                <BadgeCheck aria-hidden className="size-3.5" /> {t('reviews.deal')}
                                             </span>
                                         )}
                                     </div>
@@ -228,7 +228,7 @@ export function CompanyReviews({
                                     className="mt-12"
                                     style={{ paddingLeft: 12, borderLeft: '2px solid var(--border-strong)' }}
                                 >
-                                    <div className="t-xs muted">Ответ компании</div>
+                                    <div className="t-xs muted">{t('reviews.answer')}</div>
                                     <p className="t-sm">{r.reply}</p>
                                 </div>
                             )}

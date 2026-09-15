@@ -36,8 +36,8 @@ class ForcePasswordController extends Controller
         $request->validate([
             'password' => ['required', 'string', 'confirmed', PasswordRule::defaults()],
         ], [
-            'password.required' => 'Придумайте пароль',
-            'password.confirmed' => 'Пароли не совпадают',
+            'password.required' => __('ui.messages.auth.password_new'),
+            'password.confirmed' => __('ui.messages.auth.password_mismatch'),
         ]);
 
         $user = $request->user();
@@ -48,7 +48,7 @@ class ForcePasswordController extends Controller
          */
         if (Hash::check($request->string('password')->toString(), $user->password)) {
             return back()->withErrors([
-                'password' => 'Новый пароль совпадает с прежним. Придумайте другой',
+                'password' => __('ui.messages.auth.password_same'),
             ]);
         }
 
@@ -81,6 +81,6 @@ class ForcePasswordController extends Controller
             return Inertia::location('/admin');
         }
 
-        return redirect()->route('cabinet')->with('success', 'Пароль изменён');
+        return redirect()->route('cabinet')->with('success', __('ui.messages.auth.password_changed'));
     }
 }

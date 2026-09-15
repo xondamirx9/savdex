@@ -56,9 +56,9 @@ class IncomingController extends Controller
                 'slug' => $seesNames ? $u->company?->slug : null,
                 'initials' => $seesNames ? $u->company?->initials() : null,
                 'verified' => $seesNames ? (int) ($u->company?->verification_level ?? 0) : 0,
-                'type' => $u->company?->primary_role === 'buyer' ? 'закупщик' : 'поставщик',
+                'type' => __($u->company?->primary_role === 'buyer' ? 'ui.cabinet.incoming.buyer' : 'ui.cabinet.incoming.supplier'),
                 'rating' => $seesNames ? (float) ($u->company?->rating ?? 0) : 0.0,
-                'city' => $u->company?->city?->name() ?? 'Не указан',
+                'city' => $u->company?->city?->name() ?? __('ui.cabinet.incoming.city_unknown'),
                 'listing' => $u->listing?->title,
                 'when' => $u->created_at->diffForHumans(),
             ]);
@@ -140,11 +140,11 @@ class IncomingController extends Controller
                 $looked = $listingTitles->take(2)->all();
 
                 if ($listingTitles->count() > 2) {
-                    $looked[] = 'ещё '.($listingTitles->count() - 2);
+                    $looked[] = __('ui.cabinet.incoming.and_more', ['count' => $listingTitles->count() - 2]);
                 }
 
                 if ($viewed->contains(fn ($v): bool => $v->listing_id === null)) {
-                    $looked[] = 'визитка компании';
+                    $looked[] = __('ui.cabinet.incoming.company_card');
                 }
 
                 return [
@@ -155,9 +155,9 @@ class IncomingController extends Controller
                     'slug' => $seesNames ? $viewer?->slug : null,
                     'initials' => $seesNames ? $viewer?->initials() : null,
                     'verified' => $seesNames ? (int) ($viewer?->verification_level ?? 0) : 0,
-                    'type' => $viewer?->primary_role === 'buyer' ? 'закупщик' : 'поставщик',
+                    'type' => __($viewer?->primary_role === 'buyer' ? 'ui.cabinet.incoming.buyer' : 'ui.cabinet.incoming.supplier'),
                     'rating' => $seesNames ? (float) ($viewer?->rating ?? 0) : 0.0,
-                    'city' => $viewer?->city?->name() ?? 'Не указан',
+                    'city' => $viewer?->city?->name() ?? __('ui.cabinet.incoming.city_unknown'),
                     'looked' => implode(' · ', $looked),
                     'views' => (int) $row->views_total,
                     'when' => Carbon::parse($row->last_at)->diffForHumans(),

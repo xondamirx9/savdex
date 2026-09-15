@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Jobs\TranslateListing;
+use App\Jobs\TranslateNewsPost;
 use App\Jobs\TranslateTender;
 use App\Models\AudienceView;
 use App\Models\Listing;
+use App\Models\NewsPost;
 use App\Models\Tender;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\UzumGateway;
@@ -104,6 +106,22 @@ Schedule::call(function (): void {
         ->pluck('id')
         ->each(fn (int $id) => TranslateTender::dispatch($id));
 })->hourly()->name('tenders-translate-catchup')->onOneServer();
+
+// Новости — по той же схеме, что объявления и тендеры
+Schedule::call(function (): void {
+    if (! config('services.machine_translation.enabled')) {
+        return;
+    }
+
+    NewsPost::query()
+        ->where('is_published', true)
+        ->where(fn ($q) => $q->whereNull('title_i18n')
+            ->orWhereIn('title_i18n', ['[]', '{}']))
+        ->orderBy('id')
+        ->limit(20)
+        ->pluck('id')
+        ->each(fn (int $id) => TranslateNewsPost::dispatch($id));
+})->hourly()->name('news-translate-catchup')->onOneServer();
 
 /*
  * Прозвон Uzum Checkout: доступен ли API с нашего адреса (прямо или

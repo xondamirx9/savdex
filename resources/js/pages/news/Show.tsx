@@ -3,10 +3,14 @@ import { ArrowLeft, CalendarDays, Clock } from 'lucide-react';
 import { NewsCover } from '@/components/NewsCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Post {
     slug: string;
+    // Рубрика приходит дважды: по исходной обложка выбирает
+    // оформление, переведённая идёт на экран
     category: string;
+    category_label: string;
     date: string;
     read: string;
     title: string;
@@ -19,18 +23,18 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
     return (
         <PublicLayout title={post.title} description={post.excerpt}>
             <div className="container" style={{ paddingBlock: '24px 96px' }}>
-                <nav aria-label="Хлебные крошки" style={{ paddingBottom: 20 }}>
+                <nav aria-label={t('news.breadcrumbs')} style={{ paddingBottom: 20 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>
-                            <Link href={routes.home}>Главная</Link>
+                            <Link href={routes.home}>{t('news.home')}</Link>
                         </li>
                         <li aria-hidden="true">/</li>
                         <li>
-                            <Link href={routes.news}>Новости</Link>
+                            <Link href={routes.news}>{t('news.title')}</Link>
                         </li>
                         <li aria-hidden="true">/</li>
                         <li aria-current="page" style={{ color: 'var(--text)' }}>
-                            {post.category}
+                            {post.category_label}
                         </li>
                     </ol>
                 </nav>
@@ -46,7 +50,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
 
                     <article className="news-detail-body">
                         <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
-                            <span className="badge badge-supply">{post.category}</span>
+                            <span className="badge badge-supply">{post.category_label}</span>
                             <span className="t-caption muted row" style={{ gap: 6 }}>
                                 <CalendarDays aria-hidden className="size-3.5" /> {post.date}
                             </span>
@@ -71,7 +75,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
 
                         <div className="mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
                             <Link href={routes.news} className="btn btn-secondary">
-                                <ArrowLeft aria-hidden className="size-4" /> Все новости
+                                <ArrowLeft aria-hidden className="size-4" /> {t('news.back')}
                             </Link>
                         </div>
                     </article>
@@ -80,7 +84,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                 {related.length > 0 && (
                     <section className="mt-48">
                         <h2 className="t-h3" style={{ marginBottom: 20 }}>
-                            Читайте также
+                            {t('news.related')}
                         </h2>
                         <div className="grid grid-3">
                             {related.map((r) => (
@@ -88,7 +92,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                                     <NewsCover category={r.category} image={r.image} size={36} />
                                     <div style={{ padding: 18 }}>
                                     <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
-                                        <span className="badge badge-neutral">{r.category}</span>
+                                        <span className="badge badge-neutral">{r.category_label}</span>
                                         <span className="t-caption muted">{r.date}</span>
                                     </div>
                                     <h3 className="t-h4" style={{ marginBottom: 8 }}>{r.title}</h3>

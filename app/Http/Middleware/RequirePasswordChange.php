@@ -50,6 +50,6 @@ class RequirePasswordChange
          * страница показала бы как ошибку, а не как переход.
          */
         return redirect()->route('password.forced')
-            ->with('warning', 'Смените выданный пароль — до этого разделы кабинета закрыты.');
+            ->with('warning', __('ui.messages.auth.must_change_password'));
     }
 }

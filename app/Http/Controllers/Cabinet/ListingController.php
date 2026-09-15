@@ -29,11 +29,27 @@ class ListingController extends Controller
      * (модератор снимает опубликованное с указанием причины).
      */
     private const TABS = [
-        Listing::STATUS_ACTIVE => 'Активные',
-        Listing::STATUS_DRAFT => 'Черновики',
-        Listing::STATUS_EXPIRED => 'Истёкшие',
-        Listing::STATUS_REJECTED => 'Отклонённые',
+        Listing::STATUS_ACTIVE,
+        Listing::STATUS_DRAFT,
+        Listing::STATUS_EXPIRED,
+        Listing::STATUS_REJECTED,
     ];
+
+    /**
+     * Подписи вкладок на языке сайта.
+     *
+     * Не константа: перевод берётся на каждый запрос, а константа
+     * вычисляется один раз при загрузке класса — язык бы в ней застыл.
+     *
+     * @return array<string, string>
+     */
+    private static function tabs(): array
+    {
+        return array_combine(
+            self::TABS,
+            array_map(fn (string $key): string => __('ui.cabinet.listings.tab_'.$key), self::TABS),
+        );
+    }
 
     public function index(Request $request): Response
     {
@@ -42,8 +58,8 @@ class ListingController extends Controller
         if ($company === null) {
             return Inertia::render('cabinet/listings/Index', [
                 'listings' => [],
-                'counts' => array_map(fn () => 0, self::TABS),
-                'tabs' => self::TABS,
+                'counts' => array_fill_keys(self::TABS, 0),
+                'tabs' => self::tabs(),
                 'status' => Listing::STATUS_ACTIVE,
                 'limit' => null,
             ]);
@@ -51,12 +67,12 @@ class ListingController extends Controller
 
         $status = $request->string('status')->toString();
 
-        if (! array_key_exists($status, self::TABS)) {
+        if (! in_array($status, self::TABS, true)) {
             $status = Listing::STATUS_ACTIVE;
         }
 
         $counts = collect(self::TABS)
-            ->mapWithKeys(fn (string $_, string $key): array => [
+            ->mapWithKeys(fn (string $key): array => [
                 $key => $company->listings()->where('status', $key)->count(),
             ])
             ->all();
@@ -71,7 +87,7 @@ class ListingController extends Controller
         return Inertia::render('cabinet/listings/Index', [
             'listings' => $listings,
             'counts' => $counts,
-            'tabs' => self::TABS,
+            'tabs' => self::tabs(),
             'status' => $status,
             'limit' => [
                 'used' => $counts[Listing::STATUS_ACTIVE],
@@ -129,7 +145,7 @@ class ListingController extends Controller
 
         $this->activate($listing, $company);
 
-        return back()->with('success', 'Объявление продлено до '.$listing->expires_at->translatedFormat('d.m.Y'));
+        return back()->with('success', __('ui.messages.listing.renewed', ['date' => $listing->expires_at->translatedFormat('d.m.Y')]));
     }
 
     /**
@@ -177,8 +193,10 @@ class ListingController extends Controller
     {
         $plan = $company->plan();
 
-        return "Достигнут лимит тарифа {$plan->name}: {$plan->listings_limit} активных объявлений."
-            .' Снимите ненужное с публикации или смените тариф.';
+        return __('ui.messages.listing.limit', [
+            'plan' => $plan->name,
+            'limit' => $plan->listings_limit,
+        ]).' '.__('ui.messages.listing.limit_hint');
     }
 
     public function archive(Request $request, int $id): RedirectResponse
@@ -187,14 +205,14 @@ class ListingController extends Controller
 
         $listing->forceFill(['status' => Listing::STATUS_ARCHIVED])->save();
 
-        return back()->with('success', 'Объявление снято с публикации');
+        return back()->with('success', __('ui.messages.listing.archived'));
     }
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
         $this->ownedListing($request, $id)->delete();
 
-        return back()->with('success', 'Объявление удалено');
+        return back()->with('success', __('ui.messages.listing.deleted'));
     }
 
     /**
@@ -220,7 +238,7 @@ class ListingController extends Controller
         $listings = $company->listings()->whereIn('id', $data['ids'])->get();
 
         if ($listings->isEmpty()) {
-            return back()->with('error', 'Ничего не выбрано');
+            return back()->with('error', __('ui.messages.listing.nothing_selected'));
         }
 
         /*
@@ -238,8 +256,10 @@ class ListingController extends Controller
                 if ($othersActive + $listings->count() > $limit) {
                     $free = max(0, $limit - $othersActive);
 
-                    return back()->with('error', $this->limitMessage($company)
-                        ." Свободных слотов: {$free}, выбрано: {$listings->count()}.");
+                    return back()->with('error', $this->limitMessage($company).' '.__('ui.messages.listing.slots', [
+                        'free' => $free,
+                        'picked' => $listings->count(),
+                    ]));
                 }
             }
         }
@@ -252,12 +272,10 @@ class ListingController extends Controller
             };
         }
 
-        $word = trans_choice('{1}объявление|[2,4]объявления|[5,*]объявлений', $listings->count());
-
         return back()->with('success', match ($data['action']) {
-            'renew' => "Продлено: {$listings->count()} {$word}",
-            'archive' => "Снято с публикации: {$listings->count()} {$word}",
-            'delete' => "Удалено: {$listings->count()} {$word}",
+            'renew' => trans_choice('ui.messages.listing.bulk_renewed', $listings->count()),
+            'archive' => trans_choice('ui.messages.listing.bulk_archived', $listings->count()),
+            'delete' => trans_choice('ui.messages.listing.bulk_deleted', $listings->count()),
         });
     }
 
@@ -277,7 +295,7 @@ class ListingController extends Controller
         $active = $company->activeListings()->where('id', '!=', $listing->id)->count();
 
         if ($plan->listings_limit !== null && $active >= $plan->listings_limit) {
-            return back()->with('error', "Достигнут лимит тарифа {$plan->name}: {$plan->listings_limit} активных объявлений.");
+            return back()->with('error', __('ui.messages.listing.limit', ['plan' => $plan->name, 'limit' => $plan->listings_limit]));
         }
 
         $listing->forceFill([
@@ -290,11 +308,11 @@ class ListingController extends Controller
         app(Notifier::class)->company(
             $company,
             'moderation',
-            "Объявление «{$listing->title}» опубликовано заново",
+            __('ui.messages.listing.republished_notice', ['title' => $listing->title]),
             ['tone' => 'success', 'url' => route('cabinet.listings')],
         );
 
-        return back()->with('success', 'Объявление опубликовано — покупатели снова его видят');
+        return back()->with('success', __('ui.messages.listing.republished'));
     }
 
     /**

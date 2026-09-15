@@ -50,7 +50,7 @@ class NotificationController extends Controller
             'is_broadcast' => $n->is_broadcast,
             'read' => $n->read_at !== null,
             'ago' => $n->created_at->diffForHumans(),
-            'date' => $n->created_at->translatedFormat('d.m.Y в H:i'),
+            'date' => $n->created_at->translatedFormat('d.m.Y, H:i'),
         ];
     }
 
@@ -82,6 +82,6 @@ class NotificationController extends Controller
     {
         $request->user()->alerts()->unread()->update(['read_at' => now()]);
 
-        return back()->with('success', 'Все уведомления отмечены прочитанными');
+        return back()->with('success', __('ui.messages.notifications.all_read'));
     }
 }

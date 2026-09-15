@@ -4,6 +4,7 @@ import { ArrowLeft, SendHorizontal } from 'lucide-react';
 import { useEffect, useRef, type FormEvent } from 'react';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Msg {
     id: number;
@@ -62,18 +63,18 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
 
     return (
         <CabinetLayout
-            title={`Чат — ${thread.company}`}
+            title={t('cabinet.chat.title', { company: thread.company })}
             heading={thread.company}
             subheading={
                 thread.listing
-                    ? `Объявление: ${thread.listing.title}`
+                    ? t('cabinet.chat.about_listing', { title: thread.listing.title })
                     : thread.task
-                      ? `IT-задача: ${thread.task.title}`
-                      : 'Переписка с компанией'
+                      ? t('cabinet.chat.about_task', { title: thread.task.title })
+                      : t('cabinet.chat.about_company')
             }
             actions={
                 <Link href={routes.cabinetChats} className="btn btn-secondary btn-sm">
-                    <ArrowLeft aria-hidden className="size-4" /> Все чаты
+                    <ArrowLeft aria-hidden className="size-4" /> {t('cabinet.chat.all')}
                 </Link>
             }
         >
@@ -83,7 +84,7 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                         {thread.listing.active ? (
                             <Link href={routes.listing(thread.listing.slug)}>{thread.listing.title}</Link>
                         ) : (
-                            <>{thread.listing.title} · снято с публикации</>
+                            <>{thread.listing.title} · {t('cabinet.chat.listing_off')}</>
                         )}
                     </p>
                 )}
@@ -92,7 +93,7 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                         {thread.task.active ? (
                             <Link href={routes.itTask(thread.task.slug)}>{thread.task.title}</Link>
                         ) : (
-                            <>{thread.task.title} · приём откликов закрыт</>
+                            <>{thread.task.title} · {t('cabinet.chat.task_off')}</>
                         )}
                     </p>
                 )}
@@ -111,7 +112,7 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                         className="textarea"
                         rows={2}
                         maxLength={2000}
-                        placeholder="Сообщение…"
+                        placeholder={t('cabinet.chat.placeholder')}
                         value={form.data.body}
                         onChange={(e) => form.setData('body', e.target.value)}
                         onKeyDown={(e) => {
@@ -124,7 +125,7 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                     <button
                         type="submit"
                         className="btn btn-primary"
-                        aria-label="Отправить"
+                        aria-label={t('cabinet.chat.send')}
                         disabled={form.processing || form.data.body.trim() === ''}
                     >
                         <SendHorizontal aria-hidden className="size-4" />
@@ -135,10 +136,7 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                         {form.errors.body}
                     </p>
                 )}
-                <p className="t-caption muted mt-8">
-                    Телефоны, почта и ссылки в сообщениях автоматически скрываются — контакты передаются через
-                    раскрытие контактов.
-                </p>
+                <p className="t-caption muted mt-8">{t('cabinet.chat.masked')}</p>
             </div>
         </CabinetLayout>
     );

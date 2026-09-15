@@ -54,14 +54,14 @@ class PromoCodeService
         $code = PromoCode::normalize($input);
 
         if ($code === '') {
-            throw new PromoCodeRejected('Введите промокод');
+            throw new PromoCodeRejected(__('ui.messages.billing.promo_required'));
         }
 
         return DB::transaction(function () use ($code, $company, $user): Subscription|Payment {
             $promo = PromoCode::query()->where('code', $code)->first();
 
             if ($promo === null) {
-                throw new PromoCodeRejected('Такого промокода нет. Проверьте, правильно ли он набран.');
+                throw new PromoCodeRejected(__('ui.messages.promo_code.unknown'));
             }
 
             /*
@@ -80,7 +80,7 @@ class PromoCodeService
             $plan = $promo->plan;
 
             if ($plan === null || ! $plan->is_active) {
-                throw new PromoCodeRejected('Тариф по этому промокоду больше не выдаётся. Напишите в поддержку.');
+                throw new PromoCodeRejected(__('ui.messages.promo_code.plan_gone'));
             }
 
             return $promo->isDiscount()
@@ -97,7 +97,7 @@ class PromoCodeService
         $this->assertCompanyEligibleForFree($company);
 
         if ($promo->days < 1) {
-            throw new PromoCodeRejected('Промокод выпущен с ошибкой: срок доступа не задан. Напишите в поддержку.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.no_period'));
         }
 
         $this->capture($promo, $company, $user);
@@ -132,7 +132,7 @@ class PromoCodeService
         $percent = (int) $promo->discount_percent;
 
         if ($percent < 1 || $percent > 99) {
-            throw new PromoCodeRejected('Промокод выпущен с ошибкой: размер скидки не задан. Напишите в поддержку.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.no_discount'));
         }
 
         /*
@@ -146,7 +146,7 @@ class PromoCodeService
         $active = $company->subscription;
 
         if ($active !== null && $active->isActive() && $active->plan_id === $promo->plan_id) {
-            throw new PromoCodeRejected('Этот тариф у вашей компании уже действует. Активируйте промокод, когда текущий период закончится.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.plan_active'));
         }
 
         $this->capture($promo, $company, $user);
@@ -177,13 +177,13 @@ class PromoCodeService
         }
 
         if ($promo->subscription_id !== null) {
-            throw new PromoCodeRejected('Этот промокод уже активирован.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.used'));
         }
 
         $plan = $promo->plan;
 
         if ($plan === null || ! $plan->is_active) {
-            throw new PromoCodeRejected('Тариф по этому промокоду больше не выдаётся. Напишите в поддержку.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.plan_gone'));
         }
 
         return $this->orders->orderPlanWithPromo($company, $plan, $user, $promo);
@@ -220,11 +220,11 @@ class PromoCodeService
              * коммита, и второй захват упёрся в уникальный индекс.
              * Это отказ по правилам акции, а не ошибка сервера.
              */
-            throw new PromoCodeRejected('Ваша компания уже активировала промокод — второй раз акция не действует.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.company_used'));
         }
 
         if ($captured !== 1) {
-            throw new PromoCodeRejected('Этот промокод уже активирован.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.used'));
         }
     }
 
@@ -267,15 +267,15 @@ class PromoCodeService
     private function assertCodeUsable(PromoCode $promo): void
     {
         if ($promo->isUsed()) {
-            throw new PromoCodeRejected('Этот промокод уже активирован.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.used'));
         }
 
         if ($promo->isExpired()) {
-            throw new PromoCodeRejected('Срок действия промокода истёк.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.expired'));
         }
 
         if (! $promo->is_active) {
-            throw new PromoCodeRejected('Промокод отключён. Напишите в поддержку, если получили его недавно.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.disabled'));
         }
     }
 
@@ -292,7 +292,7 @@ class PromoCodeService
             ->exists();
 
         if ($alreadyRedeemed) {
-            throw new PromoCodeRejected('Ваша компания уже активировала промокод — второй раз акция не действует.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.company_used'));
         }
     }
 
@@ -319,7 +319,7 @@ class PromoCodeService
             ->exists();
 
         if ($hasPaid) {
-            throw new PromoCodeRejected('Этот промокод действует только для компаний, которые ещё не оплачивали тариф.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.new_only'));
         }
 
         /*
@@ -330,7 +330,7 @@ class PromoCodeService
         $active = $company->subscription;
 
         if ($active !== null && $active->isActive()) {
-            throw new PromoCodeRejected('У вашей компании уже есть действующий тариф. Промокод можно активировать, когда он закончится.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.has_plan'));
         }
     }
 }

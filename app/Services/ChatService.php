@@ -45,15 +45,15 @@ class ChatService
         $seller = $listing->company;
 
         if ($seller === null) {
-            throw new ChatRejected('Объявление больше не доступно.');
+            throw new ChatRejected(__('ui.messages.chat.listing_gone'));
         }
 
         if ($seller->id === $company->id) {
-            throw new ChatRejected('Это ваше объявление — откликаться на него не нужно.');
+            throw new ChatRejected(__('ui.messages.chat.own_listing'));
         }
 
         if ($listing->status !== Listing::STATUS_ACTIVE) {
-            throw new ChatRejected('Объявление снято с публикации — откликнуться нельзя.');
+            throw new ChatRejected(__('ui.messages.chat.listing_off'));
         }
 
         return DB::transaction(function () use ($listing, $seller, $company, $user, $text): MessageThread {
@@ -93,19 +93,19 @@ class ChatService
         $customer = $task->company;
 
         if ($customer === null) {
-            throw new ChatRejected('Задача больше не доступна.');
+            throw new ChatRejected(__('ui.messages.chat.task_gone'));
         }
 
         if ($customer->id === $company->id) {
-            throw new ChatRejected('Это ваша задача — откликаться на неё не нужно.');
+            throw new ChatRejected(__('ui.messages.chat.own_task'));
         }
 
         if (! $task->isActive()) {
-            throw new ChatRejected('Приём откликов по этой задаче закрыт.');
+            throw new ChatRejected(__('ui.messages.chat.task_closed'));
         }
 
         if (! $company->is_it_provider) {
-            throw new ChatRejected('Откликаться на IT-задачи могут компании с ролью «IT-исполнитель» — включите её в профиле компании.');
+            throw new ChatRejected(__('ui.messages.chat.it_role_needed'));
         }
 
         return DB::transaction(function () use ($task, $customer, $company, $user, $text): MessageThread {
@@ -140,13 +140,13 @@ class ChatService
     public function send(MessageThread $thread, Company $company, User $user, string $text): Message
     {
         if (! $thread->isParticipant($company)) {
-            throw new ChatRejected('Этот разговор принадлежит другим компаниям.');
+            throw new ChatRejected(__('ui.messages.chat.not_yours'));
         }
 
         $body = self::maskContacts(trim($text));
 
         if ($body === '') {
-            throw new ChatRejected('Введите сообщение');
+            throw new ChatRejected(__('ui.messages.chat.body_required'));
         }
 
         $recipient = $thread->counterpart($company);
@@ -199,7 +199,7 @@ class ChatService
         }
 
         if ($limit < 1) {
-            throw new ChatRejected('Ваш тариф не включает отклики. Подключите платный тариф — и откликайтесь на предложения напрямую.');
+            throw new ChatRejected(__('ui.messages.chat.plan_no_replies'));
         }
 
         $wallet = Wallet::firstOrCreate(['company_id' => $company->id]);
@@ -210,9 +210,18 @@ class ChatService
             ->increment('responses_used_this_period');
 
         if ($spent !== 1) {
-            throw new ChatRejected("Лимит откликов на этот месяц исчерпан ({$limit}). Он обновится с началом нового периода, либо смените тариф.");
+            throw new ChatRejected(__('ui.messages.chat.replies_used_up', ['limit' => $limit]));
         }
     }
+
+    /**
+     * Метка на месте скрытого контакта.
+     *
+     * Не слово, а многоточие: подстановка попадает в текст сообщения
+     * и хранится в базе, а читает его собеседник — возможно, на другом
+     * языке. «[скрыто]» он бы не понял, «[•••]» читается одинаково.
+     */
+    public const MASK = '[•••]';
 
     /**
      * Маскировка контактов в тексте сообщения.
@@ -224,14 +233,14 @@ class ChatService
      */
     public static function maskContacts(string $text): string
     {
-        $masked = preg_replace('/[\w.+-]+@[\w-]+\.[a-z]{2,}/iu', '[скрыто]', $text);
-        $masked = preg_replace('#(?:https?://|www\.|t\.me/)\S+#iu', '[скрыто]', (string) $masked);
-        $masked = preg_replace('/(?<![\w.])@[a-z0-9_]{4,}/iu', '[скрыто]', (string) $masked);
+        $masked = preg_replace('/[\w.+-]+@[\w-]+\.[a-z]{2,}/iu', self::MASK, $text);
+        $masked = preg_replace('#(?:https?://|www\.|t\.me/)\S+#iu', self::MASK, (string) $masked);
+        $masked = preg_replace('/(?<![\w.])@[a-z0-9_]{4,}/iu', self::MASK, (string) $masked);
 
         // Телефон: девять и больше цифр подряд с учётом пробелов и скобок
         $masked = preg_replace_callback(
             '/\+?[\d(][\d\s()-]{6,}\d/u',
-            fn (array $m): string => preg_match_all('/\d/', $m[0]) >= 9 ? '[скрыто]' : $m[0],
+            fn (array $m): string => preg_match_all('/\d/', $m[0]) >= 9 ? self::MASK : $m[0],
             (string) $masked,
         );
 

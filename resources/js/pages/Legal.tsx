@@ -2,6 +2,7 @@ import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { useSupport } from '@/lib/support';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 /**
  * Юридические документы: оферта, способы оплаты, безопасность платежей,
@@ -60,10 +61,10 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
     return (
         <PublicLayout title={title} description={intro}>
             <div className="container" style={{ paddingBlock: '32px 96px' }}>
-                <nav aria-label="Хлебные крошки" style={{ paddingBottom: 16 }}>
+                <nav aria-label={t('legal_page.crumbs')} style={{ paddingBottom: 16 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>
-                            <Link href={routes.home}>Главная</Link>
+                            <Link href={routes.home}>{t('legal_page.home')}</Link>
                         </li>
                         <li aria-hidden="true">/</li>
                         <li aria-current="page" style={{ color: 'var(--text)' }}>
@@ -74,7 +75,7 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
 
                 <div className="grid-docs">
                     <aside>
-                        <nav className="doc-nav card" style={{ padding: 10 }} aria-label="Документы">
+                        <nav className="doc-nav card" style={{ padding: 10 }} aria-label={t('legal_page.documents')}>
                             {siblings.map((s) => (
                                 <Link key={s.href} href={s.href} aria-current={s.current ? 'true' : undefined}>
                                     {s.label}
@@ -91,9 +92,7 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
                             <div className="alert alert-warning mt-24">
                                 <span aria-hidden>⚠</span>
                                 <div>
-                                    <b>Рабочая редакция.</b> Текст подготовлен как основа и не является
-                                    публичной офертой до утверждения юристом. Итоговая редакция появится
-                                    до запуска площадки.
+                                    <b>{t('legal_page.draft_title')}</b> {t('legal_page.draft_text')}
                                 </div>
                             </div>
                         )}
@@ -136,7 +135,7 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
                         </div>
 
                         <p className="t-sm muted mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-                            Редакция от {updatedAt} · Оператор: {support.legal_name}, Узбекистан ·{' '}
+                            {t('legal_page.revision', { date: updatedAt, operator: support.legal_name })}{' '}
                             <a href={`mailto:${support.email}`}>{support.email}</a>
                         </p>
                     </div>
