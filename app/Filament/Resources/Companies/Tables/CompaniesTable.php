@@ -8,6 +8,7 @@ use App\Filament\Exports\CompanyExporter;
 use App\Filament\Imports\CompanyImporter;
 use App\Models\Company;
 use App\Support\AdminAccess;
+use App\Support\AdminLog;
 use App\Support\CompanyEmblem;
 use App\Support\ImageStore;
 use App\Support\Notifier;
@@ -56,12 +57,22 @@ class CompaniesTable
              */
             ->headerActions([
                 ExportAction::make()
+                    // Выгрузка уносит персональные данные целым файлом,
+                    // загрузка создаёт записи пачкой мимо форм — оба следа нужны
+                    ->before(function (): void {
+                        AdminLog::record('exported', 'companies');
+                    })
                     ->label('Выгрузить')
                     ->exporter(CompanyExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
                     ->visible(fn (): bool => AdminAccess::allows('companies.export')),
 
                 ImportAction::make()
+                    // Выгрузка уносит персональные данные целым файлом,
+                    // загрузка создаёт записи пачкой мимо форм — оба следа нужны
+                    ->before(function (): void {
+                        AdminLog::record('imported', 'companies');
+                    })
                     ->label('Загрузить')
                     ->importer(CompanyImporter::class)
                     ->visible(fn (): bool => AdminAccess::allows('companies.import')),

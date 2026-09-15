@@ -8,6 +8,7 @@ use App\Filament\Exports\UserExporter;
 use App\Models\ActivityEvent;
 use App\Models\User;
 use App\Support\AdminAccess;
+use App\Support\AdminLog;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -45,6 +46,11 @@ class UsersTable
              */
             ->headerActions([
                 ExportAction::make()
+                    // Выгрузка уносит персональные данные целым файлом,
+                    // загрузка создаёт записи пачкой мимо форм — оба следа нужны
+                    ->before(function (): void {
+                        AdminLog::record('exported', 'users');
+                    })
                     ->label('Выгрузить')
                     ->exporter(UserExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])

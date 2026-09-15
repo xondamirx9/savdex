@@ -4,7 +4,26 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Broadcast;
+use App\Models\Category;
+use App\Models\Company;
+use App\Models\CompanyDocument;
+use App\Models\CompanyType;
+use App\Models\CreditPack;
+use App\Models\ItTask;
+use App\Models\LandingBlock;
+use App\Models\Listing;
+use App\Models\NewsPost;
+use App\Models\Page;
+use App\Models\Payment;
+use App\Models\Plan;
+use App\Models\PromoCode;
+use App\Models\Review;
+use App\Models\Setting;
+use App\Models\Subscription;
+use App\Models\Tender;
 use App\Models\User;
+use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
 use App\Support\Seo;
 use Illuminate\Database\Eloquent\Model;
@@ -33,6 +52,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureModels();
         $this->configureDatabase();
         $this->configureAdminAbilities();
+        $this->configureAuditLog();
     }
 
     /**
@@ -64,6 +84,50 @@ class AppServiceProvider extends ServiceProvider
     {
         foreach (AdminAccess::all() as $ability) {
             Gate::define($ability, fn (User $user): bool => $user->hasAdminAbility($ability));
+        }
+    }
+
+    /**
+     * Что попадает в журнал действий автоматически.
+     *
+     * Карта «модель → раздел прав» держится здесь, а не выводится из
+     * имени класса: Page и NewsPost относятся к одному разделу прав,
+     * Category и CompanyType — к другому, и никакое правило по имени
+     * этого не угадает.
+     *
+     * Наблюдатель пишет только правки администратора в панели. Решения
+     * по существу — одобрение, отзыв прав, возврат средств — пишут сами
+     * службы: «изменил поле moderation_status» отвечает не на тот
+     * вопрос, ради которого журнал заводят.
+     */
+    private function configureAuditLog(): void
+    {
+        $sections = [
+            User::class => 'users',
+            Company::class => 'companies',
+            Listing::class => 'listings',
+            Tender::class => 'tenders',
+            ItTask::class => 'ittasks',
+            CompanyDocument::class => 'documents',
+            Review::class => 'reviews',
+            Payment::class => 'payments',
+            Subscription::class => 'subscriptions',
+            Plan::class => 'plans',
+            PromoCode::class => 'promocodes',
+            CreditPack::class => 'creditpacks',
+            Page::class => 'content',
+            NewsPost::class => 'content',
+            LandingBlock::class => 'content',
+            Category::class => 'catalogs',
+            CompanyType::class => 'catalogs',
+            Broadcast::class => 'broadcasts',
+            Setting::class => 'settings',
+        ];
+
+        AuditObserver::watch($sections);
+
+        foreach (array_keys($sections) as $model) {
+            $model::observe(AuditObserver::class);
         }
     }
 

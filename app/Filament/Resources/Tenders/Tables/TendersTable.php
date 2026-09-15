@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Tenders\Tables;
 use App\Filament\Imports\TenderImporter;
 use App\Models\Tender;
 use App\Support\AdminAccess;
+use App\Support\AdminLog;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -81,6 +82,11 @@ class TendersTable
                 // Массовая загрузка: файл CSV с русскими заголовками,
                 // образец скачивается из окна импорта
                 ImportAction::make()
+                    // Выгрузка уносит персональные данные целым файлом,
+                    // загрузка создаёт записи пачкой мимо форм — оба следа нужны
+                    ->before(function (): void {
+                        AdminLog::record('imported', 'tenders');
+                    })
                     ->visible(fn (): bool => AdminAccess::allows('tenders.import'))
                     ->label('Загрузить из файла')
                     ->importer(TenderImporter::class),
