@@ -284,9 +284,6 @@ return [
     // ── Ana sayfa ────────────────────────────────────────────
 
     'home' => [
-        'meta_title' => 'Tedarikçiler ve alıcılar burada buluşuyor',
-        'meta_description' => 'Özbekistan ve Orta Asya’nın B2B platformu. Teklifinizi veya talebinizi ücretsiz yayınlayın, şirketlerin doğrudan iletişim bilgilerini alın.',
-
         'eyebrow' => 'Özbekistan ve Orta Asya’nın B2B platformu',
         'h1' => 'Tedarikçiler ve alıcılar burada buluşuyor',
         'lead' => 'Teklifinizi veya talebinizi ücretsiz yayınlayın. Şirketlerin doğrudan iletişim bilgilerini alın — aracısız ve işlem komisyonu olmadan.',
@@ -522,8 +519,8 @@ return [
         'about_description' => 'Platform nasıl işler: ücretsiz ilan, yalnızca iletişim açmak için ödeme, moderasyondan geçen şirketler ve yalnızca doğrulanmış işlemlere dayanan değerlendirmeler.',
         'pricing_title' => 'Tarifeler ve fiyatlar',
         'pricing_description' => 'İlan vermek ücretsiz. Yalnızca iletişim açmak ve öne çıkarmak için ödersiniz. İşlem komisyonu yok.',
-        'home_title' => 'Özbekistan’ın tedarikçileri ve alıcıları',
-        'home_description' => 'Özbekistan ve Orta Asya B2B pazaryeri. Tedarikçi ve alıcıları aracısız bulun. İlan yayınlamak ücretsiz, işlemlerden komisyon yok.',
+        'home_title' => 'Özbekistan’da tedarikçiler ve toptan alım',
+        'home_description' => 'Özbekistan ve Orta Asya B2B pazaryeri: doğrulanmış tedarikçi kataloğu, satın alma talepleri ve ihaleler. Doğrudan iletişim, işlem komisyonu yok.',
         'catalog_subject' => 'Toptan ürün ve hizmetler',
         'catalog_in_country' => ' Özbekistan’da',
         'catalog_in_city' => ' :city şehrinde',

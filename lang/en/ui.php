@@ -284,9 +284,6 @@ return [
     // ── Home ─────────────────────────────────────────────────
 
     'home' => [
-        'meta_title' => 'Where suppliers and buyers find each other',
-        'meta_description' => 'A B2B marketplace for Uzbekistan and Central Asia. Post an offer or a request for free and get direct company contacts.',
-
         'eyebrow' => 'B2B marketplace for Uzbekistan and Central Asia',
         'h1' => 'Where suppliers and buyers find each other',
         'lead' => 'Post an offer or a request for free. Get direct company contacts — no middlemen, no commission on deals.',
@@ -522,8 +519,8 @@ return [
         'about_description' => 'How the marketplace works: free listings, payment for unlocking contacts, companies checked by moderators and reviews only from confirmed deals.',
         'pricing_title' => 'Plans and pricing',
         'pricing_description' => 'Listings are free. You only pay to unlock contacts and to promote. No commission on deals.',
-        'home_title' => 'Suppliers and buyers of Uzbekistan',
-        'home_description' => 'B2B marketplace for Uzbekistan and Central Asia. Find suppliers and buyers directly, no middlemen. Free listings, no commission on deals.',
+        'home_title' => 'Suppliers and wholesale sourcing in Uzbekistan',
+        'home_description' => 'B2B marketplace for Uzbekistan and Central Asia: verified supplier directory, purchase requests and tenders. Direct contacts, no commission on deals.',
         'catalog_subject' => 'Wholesale goods and services',
         'catalog_in_country' => ' in Uzbekistan',
         'catalog_in_city' => ' in :city',
