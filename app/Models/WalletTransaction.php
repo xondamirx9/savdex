@@ -22,4 +22,16 @@ class WalletTransaction extends Model
     {
         return $this->belongsTo(Company::class);
     }
+
+    /**
+     * Кто провёл операцию. Пусто — значит автоматически.
+     *
+     * Вместе с удалёнными: движение по кошельку живёт дольше учётной
+     * записи, а спор «кто это списал» разбирают как раз тогда, когда
+     * сотрудник уже уволился.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class)->withTrashed();
+    }
 }
