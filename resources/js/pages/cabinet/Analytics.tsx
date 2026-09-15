@@ -4,6 +4,7 @@ import { Info, Lock } from 'lucide-react';
 import { BarRow, Metric, Panel, formatNumber, type MetricData } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Benchmark {
     label: string;
@@ -47,28 +48,28 @@ export default function Analytics({
 }: Props) {
     if (!metrics || !series) {
         return (
-            <CabinetLayout title="Аналитика" heading="Аналитика">
+            <CabinetLayout title={t('cabinet.analytics.title')} heading={t('cabinet.analytics.title')}>
                 <div className="card empty">
-                    <p className="t-h4">Данных пока нет</p>
-                    <p className="t-sm muted mt-8">Аналитика появится, когда объявления начнут показываться в выдаче.</p>
+                    <p className="t-h4">{t('cabinet.analytics.empty_title')}</p>
+                    <p className="t-sm muted mt-8">{t('cabinet.analytics.empty_text')}</p>
                 </div>
             </CabinetLayout>
         );
     }
 
-    const suffix = `к прошлым ${period} дн.`;
+    const suffix = t('cabinet.analytics.suffix', { days: period });
     const weak = benchmark.find((b) => b.tone === 'warning');
 
     return (
         <CabinetLayout
-            title="Аналитика"
-            heading="Аналитика"
-            subheading={advanced ? `Расширенная — входит в тариф ${plan?.name}` : `Базовая — тариф ${plan?.name}`}
+            title={t('cabinet.analytics.title')}
+            heading={t('cabinet.analytics.title')}
+            subheading={advanced ? t('cabinet.analytics.advanced', { plan: plan?.name ?? '' }) : t('cabinet.analytics.basic', { plan: plan?.name ?? '' })}
             actions={
                 <select
                     className="select"
                     style={{ width: 'auto' }}
-                    aria-label="Период"
+                    aria-label={t('cabinet.analytics.period')}
                     value={period}
                     onChange={(e) =>
                         router.get(routes.cabinetAnalytics, { period: e.target.value }, { preserveState: true })
@@ -83,29 +84,29 @@ export default function Analytics({
             }
         >
             <div className="grid grid-4 grid-tight">
-                <Metric label="Показы в выдаче" data={metrics.impressions} series={series.impressions} deltaSuffix={suffix} />
-                <Metric label="Просмотры карточек" data={metrics.views} series={series.views} deltaSuffix={suffix} />
-                <Metric label="Открыли контакт" data={metrics.unlocks} series={series.unlocks} deltaSuffix={suffix} />
-                <Metric label="Конверсия в контакт" data={metrics.conversion} deltaSuffix={suffix} />
+                <Metric label={t('cabinet.analytics.impressions')} data={metrics.impressions} series={series.impressions} deltaSuffix={suffix} />
+                <Metric label={t('cabinet.analytics.views')} data={metrics.views} series={series.views} deltaSuffix={suffix} />
+                <Metric label={t('cabinet.analytics.unlocks')} data={metrics.unlocks} series={series.unlocks} deltaSuffix={suffix} />
+                <Metric label={t('cabinet.analytics.conversion')} data={metrics.conversion} deltaSuffix={suffix} />
             </div>
 
             {/* Сравнение с категорией — главный мотиватор: собственные
                 цифры без ориентира не говорят, хорошо это или плохо */}
             {advanced && benchmark.length > 0 && (
-                <Panel title="Сравнение с категорией" className="mt-24">
+                <Panel title={t('cabinet.analytics.benchmark')} className="mt-24">
                     <div className="stack-16">
                         {benchmark.map((b) => (
                             <div key={b.label} className="benchmark">
                                 <span>{b.label}</span>
                                 <div className="benchmark-scale">
-                                    <span className="benchmark-median" style={{ left: '50%' }} title="Медиана категории" />
+                                    <span className="benchmark-median" style={{ left: '50%' }} title={t('cabinet.analytics.median')} />
                                     <span
                                         className="benchmark-you"
                                         style={{
                                             left: `${b.position}%`,
                                             background: b.tone === 'warning' ? 'var(--warning)' : undefined,
                                         }}
-                                        title={`Ваш показатель: ${b.you}`}
+                                        title={t('cabinet.analytics.your_value', { value: b.you })}
                                     />
                                 </div>
                                 <b
@@ -122,15 +123,14 @@ export default function Analytics({
                         <div className="alert alert-warning mt-16">
                             <Info aria-hidden className="size-5" />
                             <div>
-                                Вас находят, но реже открывают контакт. Обычно причина — отсутствие цены или мало
-                                фотографий. <Link href={routes.cabinetListings}>Проверить объявления</Link>
+                                {t('cabinet.analytics.benchmark_hint')} <Link href={routes.cabinetListings}>{t('cabinet.analytics.check_listings')}</Link>
                             </div>
                         </div>
                     )}
                 </Panel>
             )}
 
-            <Panel title={`Воронка за ${period} дн.`} className="mt-24">
+            <Panel title={t('cabinet.analytics.funnel', { days: period })} className="mt-24">
                 {funnel.map((step) => (
                     <div key={step.label} className="funnel-step">
                         <span>{step.label}</span>
@@ -151,9 +151,9 @@ export default function Analytics({
             </Panel>
 
             <div className="grid grid-2 mt-24">
-                <Panel title="География спроса">
+                <Panel title={t('cabinet.analytics.geo')}>
                     {geography.length === 0 ? (
-                        <p className="muted t-sm">Пока никто не открывал ваши контакты — географию считать не из чего.</p>
+                        <p className="muted t-sm">{t('cabinet.analytics.geo_empty')}</p>
                     ) : (
                         geography.map((g) => (
                             <BarRow key={g.label} label={g.label} value={g.value} max={geography[0].value} />
@@ -161,40 +161,40 @@ export default function Analytics({
                     )}
                 </Panel>
 
-                <Panel title="По каким запросам вас находили">
+                <Panel title={t('cabinet.analytics.queries')}>
                     {!advanced ? (
                         <div className="empty" style={{ padding: '24px 8px' }}>
                             <div className="empty-icon">
                                 <Lock aria-hidden className="size-6" />
                             </div>
                             <p className="t-sm muted" style={{ maxWidth: 320, margin: '0 auto' }}>
-                                Поисковые запросы входят в тарифы Business и Premium.
+                                {t('cabinet.analytics.queries_locked')}
                             </p>
                             <Link href={routes.pricing} className="btn btn-outline btn-sm mt-16">
-                                Сравнить тарифы
+                                {t('cabinet.analytics.compare_plans')}
                             </Link>
                         </div>
                     ) : queries.length === 0 ? (
-                        <p className="muted t-sm">Данных за период нет.</p>
+                        <p className="muted t-sm">{t('cabinet.analytics.no_data')}</p>
                     ) : (
                         <div className="table-wrap table-cards" style={{ border: 'none' }}>
                             <table className="table" style={{ minWidth: 0 }}>
                                 <thead>
                                     <tr>
-                                        <th>Запрос</th>
-                                        <th className="num">Показы</th>
-                                        <th className="num">Переходы</th>
+                                        <th>{t('cabinet.analytics.query')}</th>
+                                        <th className="num">{t('cabinet.analytics.shows')}</th>
+                                        <th className="num">{t('cabinet.analytics.clicks')}</th>
                                         <th className="num">CTR</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {queries.map((q) => (
                                         <tr key={q.query}>
-                                            <td data-label="Запрос">{q.query}</td>
-                                            <td data-label="Показы" className="num">
+                                            <td data-label={t('cabinet.analytics.query')}>{q.query}</td>
+                                            <td data-label={t('cabinet.analytics.shows')} className="num">
                                                 {formatNumber(q.impressions)}
                                             </td>
-                                            <td data-label="Переходы" className="num">
+                                            <td data-label={t('cabinet.analytics.clicks')} className="num">
                                                 {formatNumber(q.clicks)}
                                             </td>
                                             <td data-label="CTR" className="num">

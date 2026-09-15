@@ -46,7 +46,7 @@ class CompanyDocumentResource extends Resource
     {
         $count = CompanyDocument::query()
             ->where('moderation_status', CompanyDocument::STATUS_PENDING)
-            ->whereIn('type', array_keys(CompanyDocument::VERIFICATION_TYPES))
+            ->whereIn('type', CompanyDocument::VERIFICATION_TYPES)
             ->count();
 
         return $count > 0 ? (string) $count : null;

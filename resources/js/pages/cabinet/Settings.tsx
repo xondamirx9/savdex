@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Notification {
     event: string;
@@ -27,6 +28,7 @@ interface Props {
     is_owner: boolean;
 }
 
+// Языки названы на самих себе — переводить их нельзя
 const LOCALES = [
     ['ru', 'Русский'],
     ['uz', 'Oʻzbekcha'],
@@ -54,15 +56,15 @@ export default function Settings({ profile, notifications, security, is_owner }:
     }
 
     return (
-        <CabinetLayout title="Настройки" heading="Настройки">
+        <CabinetLayout title={t('cabinet.settings.title')} heading={t('cabinet.settings.title')}>
             <div className="grid grid-2">
-                <Panel title="Уведомления">
+                <Panel title={t('cabinet.settings.notifications')}>
                     <div className="table-wrap" style={{ border: 'none' }}>
                         <table className="table" style={{ minWidth: 0 }}>
                             <thead>
                                 <tr>
-                                    <th>Событие</th>
-                                    <th className="center">Почта</th>
+                                    <th>{t('cabinet.settings.event')}</th>
+                                    <th className="center">{t('cabinet.settings.email')}</th>
                                     <th className="center">Telegram</th>
                                 </tr>
                             </thead>
@@ -73,7 +75,7 @@ export default function Settings({ profile, notifications, security, is_owner }:
                                         <td className="center">
                                             <input
                                                 type="checkbox"
-                                                aria-label={`${r.label} — почта`}
+                                                aria-label={t('cabinet.settings.email_aria', { label: r.label })}
                                                 checked={r.email}
                                                 onChange={() => toggle(r.event, 'email')}
                                             />
@@ -91,14 +93,14 @@ export default function Settings({ profile, notifications, security, is_owner }:
                             </tbody>
                         </table>
                     </div>
-                    <p className="t-sm muted mt-16">Изменения сохраняются сразу.</p>
+                    <p className="t-sm muted mt-16">{t('cabinet.settings.saved_instantly')}</p>
                 </Panel>
 
                 <div className="stack-16">
-                    <Panel title="Профиль">
+                    <Panel title={t('cabinet.settings.profile')}>
                         <div className="field">
                             <label className="label" htmlFor="s-name">
-                                Имя
+                                {t('cabinet.settings.name')}
                             </label>
                             <input
                                 id="s-name"
@@ -111,7 +113,7 @@ export default function Settings({ profile, notifications, security, is_owner }:
 
                         <div className="field">
                             <label className="label" htmlFor="s-phone">
-                                Телефон
+                                {t('cabinet.settings.phone')}
                             </label>
                             <input
                                 id="s-phone"
@@ -123,15 +125,14 @@ export default function Settings({ profile, notifications, security, is_owner }:
                                 <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.phone}</p>
                             ) : (
                                 <p className="hint">
-                                    {profile.phone_verified ? 'Подтверждён' : 'Не подтверждён'}. При смене номера
-                                    подтверждение сбрасывается.
+                                    {profile.phone_verified ? t('cabinet.settings.phone_verified') : t('cabinet.settings.phone_unverified')}{t('cabinet.settings.phone_note')}
                                 </p>
                             )}
                         </div>
 
                         <div className="field">
                             <label className="label" htmlFor="s-locale">
-                                Язык интерфейса
+                                {t('cabinet.settings.language')}
                             </label>
                             <select
                                 id="s-locale"
@@ -148,14 +149,14 @@ export default function Settings({ profile, notifications, security, is_owner }:
                         </div>
 
                         <div className="field">
-                            <label className="label">Почта</label>
+                            <label className="label">{t('cabinet.settings.email')}</label>
                             <p className="t-sm">
                                 {profile.email}{' '}
                                 {profile.email_verified ? (
-                                    <span className="badge badge-verified">подтверждена</span>
+                                    <span className="badge badge-verified">{t('cabinet.settings.email_verified')}</span>
                                 ) : (
                                     <Link href={routes.verifyNotice} className="badge badge-warning">
-                                        подтвердить
+                                        {t('cabinet.settings.email_verify')}
                                     </Link>
                                 )}
                             </p>
@@ -166,30 +167,30 @@ export default function Settings({ profile, notifications, security, is_owner }:
                             disabled={form.processing}
                             onClick={() => form.patch(routes.cabinetSettings + '/profile', { preserveScroll: true })}
                         >
-                            Сохранить
+                            {t('cabinet.settings.save')}
                         </button>
                     </Panel>
 
-                    <Panel title="Безопасность">
+                    <Panel title={t('cabinet.settings.security')}>
                         <div className="row-between" style={{ marginBottom: 16, gap: 12 }}>
                             <div>
-                                <b>Двухфакторная аутентификация</b>
-                                <p className="t-sm muted">Код из приложения при входе</p>
+                                <b>{t('cabinet.settings.two_factor')}</b>
+                                <p className="t-sm muted">{t('cabinet.settings.two_factor_text')}</p>
                             </div>
                             {/* Отключённая кнопка без объяснения читается как
                                 поломка. Пока двухфакторной нет — говорим об этом */}
-                            <span className="badge badge-neutral">скоро</span>
+                            <span className="badge badge-neutral">{t('cabinet.settings.soon')}</span>
                         </div>
 
                         {security.last_login_at && (
                             <p className="t-sm muted" style={{ marginBottom: 16 }}>
-                                Последний вход: {security.last_login_at}
-                                {security.last_login_ip && ` с адреса ${security.last_login_ip}`}
+                                {t('cabinet.settings.last_login', { date: security.last_login_at })}
+                                {security.last_login_ip && ` ${t('cabinet.settings.last_login_ip', { ip: security.last_login_ip })}`}
                             </p>
                         )}
 
                         <Link href={routes.passwordRequest} className="btn btn-secondary btn-block">
-                            <ShieldCheck aria-hidden className="size-4" /> Сменить пароль
+                            <ShieldCheck aria-hidden className="size-4" /> {t('cabinet.settings.change_password')}
                         </Link>
                     </Panel>
 
@@ -197,19 +198,19 @@ export default function Settings({ profile, notifications, security, is_owner }:
                         поэтому предупреждение конкретное, а не «данные будут удалены» */}
                     <div className="card" style={{ borderColor: 'rgba(220,38,38,.3)' }}>
                         <h2 className="t-h3" style={{ marginBottom: 8, color: 'var(--danger)' }}>
-                            Удаление аккаунта
+                            {t('cabinet.settings.delete_title')}
                         </h2>
                         <p className="t-sm muted" style={{ marginBottom: 16 }}>
                             {is_owner
-                                ? 'Вы владелец компании: все её объявления будут сняты с публикации. История платежей сохранится по требованию закона.'
-                                : 'Ваш доступ будет закрыт. Объявления компании останутся у остальных сотрудников.'}
+                                ? t('cabinet.settings.delete_owner')
+                                : t('cabinet.settings.delete_member')}
                         </p>
 
                         {confirmDelete ? (
                             <>
                                 <div className="field">
                                     <label className="label" htmlFor="s-pass">
-                                        Введите пароль для подтверждения
+                            {t('cabinet.settings.delete_password')}
                                     </label>
                                     <input
                                         id="s-pass"
@@ -229,16 +230,16 @@ export default function Settings({ profile, notifications, security, is_owner }:
                                         disabled={remove.processing}
                                         onClick={() => remove.post(routes.cabinetSettings + '/delete')}
                                     >
-                                        Удалить навсегда
+                                        {t('cabinet.settings.delete_forever')}
                                     </button>
                                     <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>
-                                        Отмена
+                                        {t('common.cancel')}
                                     </button>
                                 </div>
                             </>
                         ) : (
                             <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
-                                Удалить аккаунт
+                                {t('cabinet.settings.delete_account')}
                             </button>
                         )}
                     </div>

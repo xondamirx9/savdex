@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 export interface MetricData {
     value: number;
@@ -44,13 +45,14 @@ export function Metric({
     label,
     data,
     series,
-    deltaSuffix = 'к прошлым 30 дн.',
+    deltaSuffix,
 }: {
     label: string;
     data: MetricData;
     series?: number[];
     deltaSuffix?: string;
 }) {
+    const suffix = deltaSuffix ?? t('cabinet.metric.delta_suffix');
     const up = (data.delta ?? 0) > 0;
     const down = (data.delta ?? 0) < 0;
     const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
@@ -59,7 +61,7 @@ export function Metric({
 
     // Конверсия измеряется в процентах, поэтому её изменение —
     // в процентных пунктах: «+2 %» и «+2 п.п.» это разные величины
-    const deltaUnit = data.format === 'percent' ? ' п.п.' : ' %';
+    const deltaUnit = data.format === 'percent' ? t('cabinet.metric.points') : ' %';
 
     return (
         <div className="metric">
@@ -67,13 +69,13 @@ export function Metric({
             <div className="metric-value">{value}</div>
 
             {data.delta === null ? (
-                <div className="metric-delta delta-flat">нет данных за прошлый период</div>
+                <div className="metric-delta delta-flat">{t('cabinet.metric.no_previous')}</div>
             ) : (
                 <div className={cn('metric-delta', up ? 'delta-up' : down ? 'delta-down' : 'delta-flat')}>
                     <Icon aria-hidden className="size-3.5" />
                     {data.delta > 0 ? '+' : ''}
                     {data.delta}
-                    {deltaUnit} {deltaSuffix}
+                    {deltaUnit} {suffix}
                 </div>
             )}
 

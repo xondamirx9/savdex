@@ -1,6 +1,7 @@
 import { Link } from '@/components/ui/Link';
 import { Ban, Clock, Compass, ServerCrash, Wrench } from 'lucide-react';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { t } from '@/lib/i18n';
 import { useSupport } from '@/lib/support';
 import { routes } from '@/routes';
 
@@ -15,62 +16,61 @@ import { routes } from '@/routes';
 interface Preset {
     icon: typeof Compass;
     tone: string;
-    title: string;
-    text: string;
+    /** Ключ в словаре: заголовок и текст берутся из него при отрисовке. */
+    key: string;
     actions: { href: string; label: string; primary?: boolean }[];
 }
 
+/**
+ * Подписи кнопок — ключи словаря, а не готовые строки: набор
+ * констант вычисляется при загрузке модуля, когда словарь ещё
+ * не пришёл, поэтому переводится он внутри компонента.
+ */
 const PRESETS: Record<number, Preset> = {
     404: {
         icon: Compass,
         tone: '',
-        title: 'Такой страницы нет',
-        text: 'Возможно, объявление снято с публикации, компания удалила профиль или в адресе опечатка.',
+        key: 'e404',
         actions: [
-            { href: routes.companies, label: 'Смотреть компании', primary: true },
-            { href: routes.home, label: 'На главную' },
+            { href: routes.companies, label: 'companies', primary: true },
+            { href: routes.home, label: 'home' },
         ],
     },
     403: {
         icon: Ban,
         tone: 'ico-box-warning',
-        title: 'Доступ закрыт',
-        text: 'У вашей учётной записи нет прав на этот раздел. Если доступ нужен по работе, попросите владельца компании выдать его в разделе «Сотрудники».',
+        key: 'e403',
         actions: [
-            { href: routes.cabinet, label: 'В кабинет', primary: true },
-            { href: routes.home, label: 'На главную' },
+            { href: routes.cabinet, label: 'cabinet', primary: true },
+            { href: routes.home, label: 'home' },
         ],
     },
     419: {
         icon: Clock,
         tone: 'ico-box-warning',
-        title: 'Страница устарела',
-        text: 'Вы слишком долго заполняли форму, и сессия закрылась в целях безопасности. Войдите заново — введённые данные придётся ввести ещё раз.',
+        key: 'e419',
         actions: [
-            { href: routes.login, label: 'Войти', primary: true },
-            { href: routes.home, label: 'На главную' },
+            { href: routes.login, label: 'login', primary: true },
+            { href: routes.home, label: 'home' },
         ],
     },
     429: {
         icon: Clock,
         tone: 'ico-box-warning',
-        title: 'Слишком много запросов',
-        text: 'Вы отправили много запросов подряд, и мы временно ограничили доступ. Подождите минуту и попробуйте снова.',
-        actions: [{ href: routes.home, label: 'На главную', primary: true }],
+        key: 'e429',
+        actions: [{ href: routes.home, label: 'home', primary: true }],
     },
     500: {
         icon: ServerCrash,
         tone: 'ico-box-danger',
-        title: 'Что-то сломалось у нас',
-        text: 'Это ошибка на нашей стороне, а не у вас. Она уже записана, инженеры уведомлены. Попробуйте обновить страницу через минуту.',
-        actions: [{ href: routes.home, label: 'На главную', primary: true }],
+        key: 'e500',
+        actions: [{ href: routes.home, label: 'home', primary: true }],
     },
     503: {
         icon: Wrench,
         tone: 'ico-box-warning',
-        title: 'Идут технические работы',
-        text: 'Площадка ненадолго недоступна — обновляем сервис. Каталог и объявления вернутся в течение нескольких минут.',
-        actions: [{ href: routes.home, label: 'Обновить', primary: true }],
+        key: 'e503',
+        actions: [{ href: routes.home, label: 'reload', primary: true }],
     },
 };
 
@@ -80,7 +80,7 @@ export default function ErrorPage({ status, reference }: { status: number; refer
     const support = useSupport();
 
     return (
-        <PublicLayout title={`${status} — ${preset.title}`}>
+        <PublicLayout title={`${status} — ${t(`error_page.${preset.key}_title`)}`}>
             <div className="container" style={{ paddingBlock: '64px 96px' }}>
                 <div className="empty" style={{ maxWidth: 520 }}>
                     <div className={`empty-icon ${preset.tone}`}>
@@ -88,17 +88,17 @@ export default function ErrorPage({ status, reference }: { status: number; refer
                     </div>
 
                     <p className="t-caption muted" style={{ letterSpacing: '.08em' }}>
-                        ОШИБКА {status}
+                        {t('error_page.code', { status })}
                     </p>
                     <h1 className="t-h1" style={{ marginTop: 8, marginBottom: 12 }}>
-                        {preset.title}
+                        {t(`error_page.${preset.key}_title`)}
                     </h1>
-                    <p>{preset.text}</p>
+                    <p>{t(`error_page.${preset.key}_text`)}</p>
 
                     <div className="row" style={{ justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
                         {preset.actions.map((a) => (
                             <Link key={a.href + a.label} href={a.href} className={`btn ${a.primary ? 'btn-primary' : 'btn-secondary'}`}>
-                                {a.label}
+                                {t(`error_page.${a.label}`)}
                             </Link>
                         ))}
                     </div>
@@ -107,12 +107,12 @@ export default function ErrorPage({ status, reference }: { status: number; refer
                         а не спрашивала «а что вы делали» */}
                     {reference && (
                         <p className="t-caption muted mt-24" style={{ fontFamily: 'ui-monospace, monospace' }}>
-                            Код обращения: {reference}
+                            {t('error_page.reference', { reference })}
                         </p>
                     )}
 
                     <p className="t-sm muted mt-16">
-                        Не помогло? Напишите на <a href={`mailto:${support.email}`}>{support.email}</a>
+                        {t('error_page.help')} <a href={`mailto:${support.email}`}>{support.email}</a>
                     </p>
                 </div>
             </div>

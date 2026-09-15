@@ -199,11 +199,11 @@ class BillingController extends Controller
              * документах: платёж по счёту, где получатель назван
              * короче, чем в договоре с банком, банк отклоняет.
              */
-            'Получатель' => (string) Setting::get('legal_full_name', '') ?: (string) Setting::get('legal_name', ''),
-            'ИНН' => (string) Setting::get('legal_tin', ''),
-            'Расчётный счёт' => (string) Setting::get('legal_account', ''),
-            'Банк' => (string) Setting::get('legal_bank', ''),
-            'МФО' => (string) Setting::get('legal_mfo', ''),
+            __('ui.messages.billing.payee') => (string) Setting::get('legal_full_name', '') ?: (string) Setting::get('legal_name', ''),
+            __('ui.messages.billing.tin') => (string) Setting::get('legal_tin', ''),
+            __('ui.messages.billing.account') => (string) Setting::get('legal_account', ''),
+            __('ui.messages.billing.bank') => (string) Setting::get('legal_bank', ''),
+            __('ui.messages.billing.mfo') => (string) Setting::get('legal_mfo', ''),
         ], fn (string $v): bool => $v !== '');
     }
 
@@ -223,7 +223,7 @@ class BillingController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->with('error', 'Сначала заполните данные компании — счёт выставляется на неё');
+            return back()->with('error', __('ui.messages.billing.no_company_invoice'));
         }
 
         $data = $request->validate([
@@ -248,7 +248,7 @@ class BillingController extends Controller
                 return $this->checkout($duplicate);
             }
 
-            return back()->with('warning', "Счёт {$duplicate->number} на это уже выставлен и ждёт оплаты");
+            return back()->with('warning', __('ui.messages.billing.duplicate', ['number' => $duplicate->number]));
         }
 
         $orders = app(OrderService::class);
@@ -261,7 +261,10 @@ class BillingController extends Controller
             return $this->checkout($payment);
         }
 
-        return back()->with('success', "Счёт {$payment->number} на {$payment->amountLabel()} сформирован. Реквизиты — ниже, доступ откроется после зачисления.");
+        return back()->with('success', __('ui.messages.billing.issued', [
+            'number' => $payment->number,
+            'amount' => $payment->amountLabel(),
+        ]));
     }
 
     /**
@@ -281,12 +284,12 @@ class BillingController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->withErrors(['promo_code' => 'Сначала заполните данные компании — тариф выдаётся на неё']);
+            return back()->withErrors(['promo_code' => __('ui.messages.billing.no_company_promo')]);
         }
 
         $data = $request->validate(
             ['promo_code' => ['required', 'string', 'max:32']],
-            ['promo_code.required' => 'Введите промокод'],
+            ['promo_code.required' => __('ui.messages.billing.promo_required')],
         );
 
         $promos = app(PromoCodeService::class);
@@ -317,15 +320,19 @@ class BillingController extends Controller
 
             return back()->with(
                 'success',
-                "Промокод принят: скидка {$percent}%. Счёт {$result->number} на {$result->amountLabel()} выставлен — оплатите по реквизитам, тариф включится после зачисления.",
+                __('ui.messages.billing.promo_discount', [
+                    'percent' => $percent,
+                    'number' => $result->number,
+                    'amount' => $result->amountLabel(),
+                ]),
             );
         }
 
         $until = $result->ends_at?->translatedFormat('d.m.Y');
 
         return back()->with('success', $until === null
-            ? "Промокод активирован: тариф «{$result->plan->name}» подключён."
-            : "Промокод активирован: тариф «{$result->plan->name}» бесплатно до {$until}.");
+            ? __('ui.messages.billing.promo_plan', ['plan' => $result->plan->name])
+            : __('ui.messages.billing.promo_free', ['plan' => $result->plan->name, 'date' => $until]));
     }
 
     /**
@@ -343,7 +350,7 @@ class BillingController extends Controller
             ->firstOrFail();
 
         if (! $this->checkoutEnabled()) {
-            return back()->with('warning', 'Онлайн-оплата сейчас недоступна — оплатите счёт по реквизитам ниже');
+            return back()->with('warning', __('ui.messages.billing.checkout_down'));
         }
 
         return $this->checkout($payment);
@@ -386,7 +393,7 @@ class BillingController extends Controller
 
             return back()->with(
                 'warning',
-                "Онлайн-оплата сейчас недоступна. Счёт {$payment->number} выставлен — оплатите по реквизитам ниже, доступ откроется после зачисления.",
+                __('ui.messages.billing.checkout_down_invoice', ['number' => $payment->number]),
             );
         }
     }
@@ -429,7 +436,7 @@ class BillingController extends Controller
 
         app(OrderService::class)->cancel($payment);
 
-        return back()->with('success', "Счёт {$payment->number} отменён");
+        return back()->with('success', __('ui.messages.billing.cancelled', ['number' => $payment->number]));
     }
 
     /**
@@ -453,8 +460,8 @@ class BillingController extends Controller
         $until = $subscription->ends_at?->translatedFormat('d.m.Y');
 
         return back()->with('success', $until !== null
-            ? "Автопродление отключено. Тариф действует до {$until}."
-            : 'Автопродление отключено.');
+            ? __('ui.messages.billing.auto_off_until', ['date' => $until])
+            : __('ui.messages.billing.auto_off'));
     }
 
     /**
@@ -471,12 +478,12 @@ class BillingController extends Controller
         abort_if($subscription === null, 404);
 
         if ($subscription->source !== Subscription::SOURCE_PAYMENT) {
-            return back()->with('warning', 'Этот тариф выдан без оплаты — продлевать нечего. Оформите счёт, когда период закончится.');
+            return back()->with('warning', __('ui.messages.billing.nothing_to_renew'));
         }
 
         $subscription->forceFill(['auto_renew' => true, 'cancelled_at' => null])->save();
 
-        return back()->with('success', 'Автопродление включено');
+        return back()->with('success', __('ui.messages.billing.auto_on'));
     }
 
     public function removeCard(Request $request, int $id): RedirectResponse
@@ -493,12 +500,12 @@ class BillingController extends Controller
         if ($card->is_default && (bool) $company->subscription?->auto_renew) {
             return back()->with(
                 'error',
-                'Это основная карта, по ней идёт автопродление. Сначала привяжите другую или отключите автопродление.',
+                __('ui.messages.billing.card_primary'),
             );
         }
 
         $card->delete();
 
-        return back()->with('success', 'Карта отвязана');
+        return back()->with('success', __('ui.messages.billing.card_unlinked'));
     }
 }

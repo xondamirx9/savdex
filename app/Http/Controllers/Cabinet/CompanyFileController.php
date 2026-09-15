@@ -26,10 +26,10 @@ class CompanyFileController extends Controller
         $company = $request->user()->company;
 
         if ($company === null) {
-            return back()->with('error', 'Сначала заполните данные компании');
+            return back()->with('error', __('ui.messages.company.fill_first'));
         }
 
-        $types = array_keys([...CompanyDocument::VERIFICATION_TYPES, ...CompanyDocument::MATERIAL_TYPES]);
+        $types = [...CompanyDocument::VERIFICATION_TYPES, ...CompanyDocument::MATERIAL_TYPES];
 
         $data = $request->validate([
             'type' => ['required', 'in:'.implode(',', $types)],
@@ -42,11 +42,11 @@ class CompanyFileController extends Controller
             'valid_until' => ['nullable', 'date', 'after:today'],
             'is_public' => ['boolean'],
         ], [
-            'title.required' => 'Назовите файл — партнёр увидит именно это название',
-            'file.required' => 'Выберите файл',
-            'file.mimes' => 'Допустимы PDF, документы Word и Excel, презентации, изображения и ZIP',
-            'file.max' => 'Файл больше 20 МБ. Сожмите его или разбейте на части',
-            'valid_until.after' => 'Срок действия уже истёк — такой документ не подтверждает ничего',
+            'title.required' => __('ui.messages.file.title_required'),
+            'file.required' => __('ui.messages.file.required'),
+            'file.mimes' => __('ui.messages.file.mimes'),
+            'file.max' => __('ui.messages.file.max'),
+            'valid_until.after' => __('ui.messages.file.expired'),
         ]);
 
         $file = $request->file('file');
@@ -66,7 +66,7 @@ class CompanyFileController extends Controller
          * без объяснения оставляет его гадать, дошёл ли файл.
          */
         if ($path === false) {
-            return back()->with('error', 'Файл не удалось сохранить — попробуйте ещё раз. Если повторится, напишите в поддержку.');
+            return back()->with('error', __('ui.messages.file.save_failed'));
         }
 
         $document = CompanyDocument::create([
@@ -82,14 +82,14 @@ class CompanyFileController extends Controller
             'valid_until' => $data['valid_until'] ?? null,
             'is_public' => $request->boolean('is_public', true),
             // Материалам модерация не нужна: это не подтверждение статуса
-            'moderation_status' => array_key_exists($data['type'], CompanyDocument::MATERIAL_TYPES)
+            'moderation_status' => in_array($data['type'], CompanyDocument::MATERIAL_TYPES, true)
                 ? CompanyDocument::STATUS_APPROVED
                 : CompanyDocument::STATUS_PENDING,
         ]);
 
         return back()->with('success', $document->isMaterial()
-            ? 'Файл загружен и виден партнёрам на визитке'
-            : 'Документ загружен и отправлен на проверку');
+            ? __('ui.messages.file.material_uploaded')
+            : __('ui.messages.file.document_uploaded'));
     }
 
     /** Переключение показа на визитке. */
@@ -102,8 +102,8 @@ class CompanyFileController extends Controller
         ])->save();
 
         return back()->with('success', $document->is_public
-            ? 'Файл показывается на визитке'
-            : 'Файл скрыт с визитки');
+            ? __('ui.messages.file.shown')
+            : __('ui.messages.file.hidden'));
     }
 
     public function destroy(Request $request, int $id): RedirectResponse
@@ -113,7 +113,7 @@ class CompanyFileController extends Controller
         Storage::disk('local')->delete($document->file_path);
         $document->delete();
 
-        return back()->with('success', 'Файл удалён');
+        return back()->with('success', __('ui.messages.file.deleted'));
     }
 
     /**

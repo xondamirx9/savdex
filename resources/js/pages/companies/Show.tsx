@@ -10,6 +10,7 @@ import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { t, tChoice } from '@/lib/i18n';
 import { renderRichText } from '@/lib/richtext';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -22,15 +23,6 @@ interface Contact {
     href: string | null;
     /** Скрыт до оплаты. Сайт компании не скрывается никогда. */
     locked: boolean;
-}
-
-/** «1 контакт», «2 контакта», «5 контактов» */
-function plural(n: number, one: string, few: string, many: string): string {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-    return many;
 }
 
 interface BusinessCard {
@@ -152,11 +144,11 @@ export default function CompanyShow({
             description={`${company.name}${company.city ? `, ${company.city}` : ''}. ${company.description ?? ''}`.slice(0, 160)}
         >
             <div className="container" style={{ paddingBottom: 96 }}>
-                <nav aria-label="Хлебные крошки" style={{ padding: '20px 0 16px' }}>
+                <nav aria-label={t('company.crumbs')} style={{ padding: '20px 0 16px' }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
-                        <li><Link href={routes.home}>Главная</Link></li>
+                        <li><Link href={routes.home}>{t('company.home')}</Link></li>
                         <li aria-hidden="true">/</li>
-                        <li><Link href={routes.companies}>Компании</Link></li>
+                        <li><Link href={routes.companies}>{t('company.companies')}</Link></li>
                         <li aria-hidden="true">/</li>
                         <li aria-current="page" style={{ color: 'var(--text)' }}>{company.name}</li>
                     </ol>
@@ -182,14 +174,14 @@ export default function CompanyShow({
                             <div className="row wrap" style={{ gap: 10, marginBottom: 8 }}>
                                 <h1 className="t-h1">{company.name}</h1>
                                 {company.verification_level >= 3 ? (
-                                    <span className="badge badge-gold"><Shield aria-hidden className="size-3.5" /> Проверена+</span>
+                                    <span className="badge badge-gold"><Shield aria-hidden className="size-3.5" /> {t('company.verified_plus')}</span>
                                 ) : company.verification_level >= 2 ? (
-                                    <span className="badge badge-verified"><CheckCircle2 aria-hidden className="size-3.5" /> Проверена</span>
+                                    <span className="badge badge-verified"><CheckCircle2 aria-hidden className="size-3.5" /> {t('company.verified')}</span>
                                 ) : (
-                                    <span className="badge badge-neutral">Не проверена</span>
+                                    <span className="badge badge-neutral">{t('company.not_verified')}</span>
                                 )}
                                 {company.is_it_provider && (
-                                    <span className="badge badge-supply">IT-исполнитель</span>
+                                    <span className="badge badge-supply">{t('company.it_provider')}</span>
                                 )}
                             </div>
                             {company.is_it_provider && company.it_specializations.length > 0 && (
@@ -218,11 +210,11 @@ export default function CompanyShow({
                                     rel="noopener nofollow"
                                     className="btn btn-secondary"
                                 >
-                                    <Globe aria-hidden className="size-4" /> Сайт компании
+                                    <Globe aria-hidden className="size-4" /> {t('company.website')}
                                 </a>
                             )}
                             <Button variant="secondary" onClick={() => setQrOpen(true)}>
-                                <QrCode aria-hidden className="size-4" /> Сгенерировать ссылку
+                                <QrCode aria-hidden className="size-4" /> {t('company.qr')}
                             </Button>
                             {lockedCount > 0 &&
                                 /* Кнопка ведёт туда, где действие реально доступно.
@@ -230,11 +222,11 @@ export default function CompanyShow({
                                    человек решает, что сайт сломан. */
                                 (auth?.user ? (
                                     <Button onClick={() => setUnlockOpen(true)}>
-                                        <Lock aria-hidden className="size-4" /> Показать контакты
+                                        <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Button>
                                 ) : (
                                     <Link href={routes.register} className="btn btn-primary">
-                                        <Lock aria-hidden className="size-4" /> Показать контакты
+                                        <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Link>
                                 ))}
 
@@ -243,7 +235,7 @@ export default function CompanyShow({
                                 гадает, спишется ли кредит при открытии карточки */}
                             {unlocked && !isOwn && (
                                 <span className="badge badge-verified" style={{ height: 40, padding: '0 14px' }}>
-                                    <LockOpen aria-hidden className="size-4" /> Контакты открыты
+                                    <LockOpen aria-hidden className="size-4" /> {t('company.contacts_open')}
                                 </span>
                             )}
                         </div>
@@ -265,31 +257,31 @@ export default function CompanyShow({
 
                     <dl className="card-facts mt-24">
                         {company.legal_name && (
-                            <Fact icon={Building2} label="Юридическое название">{company.legal_name}</Fact>
+                            <Fact icon={Building2} label={t('company.legal_name')}>{company.legal_name}</Fact>
                         )}
-                        <Fact icon={Files} label="ИНН / СТИР">
+                        <Fact icon={Files} label={t('company.tin')}>
                             {company.tin ? (
                                 <span className="row" style={{ gap: 6 }}>
                                     <b style={{ fontVariantNumeric: 'tabular-nums' }}>{company.tin}</b>
                                     <button
                                         className="btn btn-ghost btn-icon btn-sm"
                                         onClick={copyTin}
-                                        aria-label={copied ? 'ИНН скопирован' : 'Скопировать ИНН'}
+                                        aria-label={copied ? t('company.tin_copied') : t('company.tin_copy')}
                                     >
                                         {copied ? <CheckCircle2 aria-hidden className="text-success size-4" /> : <Copy aria-hidden className="size-4" />}
                                     </button>
                                 </span>
                             ) : (
-                                <span className="muted">не указан</span>
+                                <span className="muted">{t('company.not_set')}</span>
                             )}
                         </Fact>
-                        <Fact icon={Globe} label="Страна">{company.country ?? '—'}</Fact>
-                        {company.address && <Fact icon={MapPin} label="Адрес">{company.address}</Fact>}
-                        <Fact icon={Users} label="Сотрудников">
+                        <Fact icon={Globe} label={t('company.country')}>{company.country ?? '—'}</Fact>
+                        {company.address && <Fact icon={MapPin} label={t('company.address')}>{company.address}</Fact>}
+                        <Fact icon={Users} label={t('company.employees')}>
                             {company.employees_range ?? '—'}
-                            {company.founded_year ? ` · основана в ${company.founded_year}` : ''}
+                            {company.founded_year ? ` · ${t('company.founded', { year: company.founded_year })}` : ''}
                         </Fact>
-                        <Fact icon={Layers} label="Тип компании">
+                        <Fact icon={Layers} label={t('company.type')}>
                             {company.type_label ?? '—'}
                         </Fact>
                     </dl>
@@ -301,15 +293,15 @@ export default function CompanyShow({
                     {/* Контакты */}
                     <div className="contacts-strip mt-24">
                         <div className="row-between wrap" style={{ gap: 12, marginBottom: 14 }}>
-                            <h2 className="t-h4">Контакты</h2>
+                            <h2 className="t-h4">{t('company.contacts')}</h2>
                             {lockedCount === 0 ? (
                                 <span className="badge badge-verified">
-                                    <CheckCircle2 aria-hidden className="size-3.5" /> Контакты открыты
+                                    <CheckCircle2 aria-hidden className="size-3.5" /> {t('company.contacts_open')}
                                 </span>
                             ) : (
                                 <span className="badge badge-neutral">
                                     <Lock aria-hidden className="size-3.5" /> {lockedCount}{' '}
-                                    {plural(lockedCount, 'контакт скрыт', 'контакта скрыто', 'контактов скрыто')}
+                                    {tChoice('company.locked', lockedCount)}
                                 </span>
                             )}
                         </div>
@@ -339,19 +331,18 @@ export default function CompanyShow({
 
                         {lockedCount > 0 && (
                             <p className="t-caption muted mt-16">
-                                Домен почты и код оператора видны сразу — чтобы было понятно, что контакт настоящий.
-                                Полные данные откроются после оплаты, один раз и навсегда по всей компании.
+                                {t('company.locked_hint_1')} {t('company.locked_hint_2')}
                             </p>
                         )}
                     </div>
 
-                    {/* Фотографии компании: производство, склад, продукция.
+                    {/* {t('company.photos')} компании: производство, склад, продукция.
                         Загружаются во вкладке «Файлы и материалы» кабинета —
                         картинки с публикацией попадают сюда галереей */}
                     {files.some((f) => f.is_image) && (
                         <div className="mt-24">
                             <h2 className="t-h4" style={{ marginBottom: 14 }}>
-                                Фотографии
+                                {t('company.photos')}
                             </h2>
                             <div className="co-photos">
                                 {files.filter((f) => f.is_image).map((f) => (
@@ -369,7 +360,7 @@ export default function CompanyShow({
                     {files.some((f) => !f.is_image) && (
                         <div className="mt-24">
                             <h2 className="t-h4" style={{ marginBottom: 14 }}>
-                                Документы и материалы
+                                {t('company.documents')}
                             </h2>
                             <div className="files-grid">
                                 {files.filter((f) => !f.is_image).map((f) => (
@@ -382,12 +373,12 @@ export default function CompanyShow({
                                             <span className="t-caption muted">
                                                 {f.type_label}
                                                 {f.size && ` · ${f.size}`}
-                                                {f.valid_until && ` · до ${f.valid_until}`}
+                                                {f.valid_until && ` · ${t('company.valid_until', { date: f.valid_until })}`}
                                             </span>
                                         </span>
                                         {/* Просроченный документ не молчим: он не подтверждает
                                             ничего, и партнёр должен это видеть до звонка */}
-                                        {f.expired && <span className="badge badge-danger">истёк</span>}
+                                        {f.expired && <span className="badge badge-danger">{t('company.expired')}</span>}
                                         <Download aria-hidden className="size-4 shrink-0 muted" />
                                     </a>
                                 ))}
@@ -401,27 +392,26 @@ export default function CompanyShow({
                                 {company.rating.toFixed(1)}
                             </div>
                             <div className="t-sm muted">
-                                рейтинг · {company.reviews_count}{' '}
-                                {plural(company.reviews_count, 'отзыв', 'отзыва', 'отзывов')}
+                                {t('company.rating')} · {tChoice('company.reviews', company.reviews_count)}
                             </div>
                         </div>
                         <div>
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
                                 <Star aria-hidden className="inline size-5" />
                             </div>
-                            <div className="t-sm muted">отзывы — от открывших контакты</div>
+                            <div className="t-sm muted">{t('company.reviews_note')}</div>
                         </div>
                         <div>
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
                                 {listingsCount}
                             </div>
                             <div className="t-sm muted">
-                                {plural(listingsCount, 'активное объявление', 'активных объявления', 'активных объявлений')}
+                                {tChoice('company.listings', listingsCount)}
                             </div>
                         </div>
                         <div>
                             <a href={company.url} className="t-sm row" style={{ gap: 6 }}>
-                                <ExternalLink aria-hidden className="size-4" /> Публичная ссылка
+                                <ExternalLink aria-hidden className="size-4" /> {t('company.public_link')}
                             </a>
                         </div>
                     </div>
@@ -448,8 +438,8 @@ export default function CompanyShow({
             <Modal
                 open={unlockOpen}
                 onClose={() => setUnlockOpen(false)}
-                title="Открыть контакты компании"
-                description={`${company.name} — ${plural(lockedCount, 'контакт', 'контакта', 'контактов')} скрыто`}
+                title={t('company.unlock_title')}
+                description={t('company.unlock_description', { name: company.name, contacts: tChoice('company.contacts_count', lockedCount) })}
                 width={460}
                 footer={
                     <>
@@ -464,34 +454,38 @@ export default function CompanyShow({
                                 })
                             }
                         >
-                            {unlockForm.processing ? 'Открываем…' : 'Открыть контакты'}
+                            {unlockForm.processing ? t('company.unlocking') : t('company.unlock')}
                         </button>
                         <button className="btn btn-ghost" onClick={() => setUnlockOpen(false)}>
-                            Отмена
+                            {t('company.cancel')}
                         </button>
                     </>
                 }
             >
                 <div className="card card--pad-sm" style={{ background: 'var(--bg)', border: 'none' }}>
                     <div className="row-between t-sm" style={{ marginBottom: 8 }}>
-                        <span className="muted">Спишется</span>
-                        <b>{wallet && wallet.contacts_left > 0 ? '1 контакт по тарифу' : '1 кредит'}</b>
+                        <span className="muted">{t('company.will_spend')}</span>
+                        <b>{wallet && wallet.contacts_left > 0 ? t('company.one_by_plan') : t('company.one_credit')}</b>
                     </div>
                     {wallet && (
                         <div className="row-between t-sm">
-                            <span className="muted">Останется</span>
+                            <span className="muted">{t('company.will_remain')}</span>
                             <b>
                                 {wallet.contacts_left > 0
-                                    ? `${wallet.contacts_left - 1} по тарифу`
-                                    : `${Math.max(0, wallet.credits - 1)} кредитов`}
+                                    ? t('company.left_by_plan', { count: wallet.contacts_left - 1 })
+                                    : t('company.left_credits', { count: Math.max(0, wallet.credits - 1) })}
                             </b>
                         </div>
                     )}
                 </div>
 
                 <p className="t-sm mt-16">
-                    Контакты открываются <b>за компанию целиком</b> — один раз и навсегда, по всем её
-                    объявлениям. Платить второй раз за эту компанию не придётся.
+                    {t('company.unlock_note').split(':bold').map((part, i) => (
+                        <span key={i}>
+                            {i > 0 && <b>{t('company.unlock_note_bold')}</b>}
+                            {part}
+                        </span>
+                    ))}
                 </p>
 
                 {/* Отказ объясняется до нажатия, а не после: кнопка,
@@ -501,8 +495,8 @@ export default function CompanyShow({
                         <Lock aria-hidden className="size-5" />
                         <div>
                             {wallet
-                                ? 'Лимит контактов по тарифу исчерпан, кредитов нет. Купите пакет или смените тариф.'
-                                : 'Сначала заполните данные компании — раскрытие идёт от её имени.'}
+                                ? t('company.no_credits')
+                                : t('company.no_company')}
                         </div>
                     </div>
                 )}

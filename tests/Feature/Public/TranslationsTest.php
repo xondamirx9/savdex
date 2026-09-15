@@ -63,6 +63,33 @@ class TranslationsTest extends TestCase
     }
 
     /**
+     * Непереведённый ключ показывает русский текст, а не сам ключ.
+     *
+     * Словарь растёт разделами: сначала русский, потом остальные
+     * четыре. В этот промежуток t() без подложки выводил бы на экран
+     * «cabinet.dashboard.title» — техническую строку вместо заголовка.
+     */
+    #[Test]
+    public function непереведённый_ключ_подменяется_русским(): void
+    {
+        app()->setLocale('en');
+
+        // Ключ, которого в английском словаре заведомо нет
+        app('translator')->addLines(['ui.probe.only_russian' => 'Только по-русски'], Locales::DEFAULT);
+
+        $request = tap(Request::create('/'), fn (Request $r) => $r->setLaravelSession(session()->driver()));
+        $translations = (new HandleInertiaRequests)->share($request)['translations'];
+
+        $this->assertSame('Только по-русски', $translations['probe']['only_russian']);
+
+        // Подложка не затирает то, что переведено
+        $this->assertSame(
+            __('ui.nav.catalog', locale: 'en'),
+            $translations['nav']['catalog'],
+        );
+    }
+
+    /**
      * Полнота перевода.
      *
      * Ключи сверяются с русским — исходным языком. Расхождение
@@ -81,6 +108,50 @@ class TranslationsTest extends TestCase
 
         $this->assertSame([], array_values($missing), "Нет перевода: {$locale}");
         $this->assertSame([], array_values($extra), "Лишние ключи: {$locale}");
+    }
+
+    /**
+     * Каждый ключ, который спрашивает интерфейс, есть в словаре.
+     *
+     * t() возвращает пропущенный ключ как есть, и на экран выходит
+     * «cabinet.billing.title» вместо заголовка. Найти это глазами
+     * можно только обойдя весь кабинет на пяти языках, поэтому
+     * ключи собираются из исходников и сверяются со словарём.
+     *
+     * Вычисляемые ключи (t(`...${x}`)) сюда не попадают: их значение
+     * известно только в браузере.
+     */
+    #[Test]
+    public function все_ключи_из_интерфейса_есть_в_словаре(): void
+    {
+        $dictionary = $this->flatten(require lang_path('ru/ui.php'));
+        $missing = [];
+
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(resource_path('js'), \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($files as $file) {
+            if (! in_array($file->getExtension(), ['ts', 'tsx'], true)) {
+                continue;
+            }
+
+            preg_match_all(
+                "/\bt(?:Choice)?\('([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)'/",
+                (string) file_get_contents($file->getPathname()),
+                $found,
+            );
+
+            foreach ($found[1] as $key) {
+                if (! array_key_exists($key, $dictionary)) {
+                    $missing[$key] = $file->getFilename();
+                }
+            }
+        }
+
+        // Путь к файлу в сообщении: иначе ключ приходится искать
+        // поиском по всему фронтенду
+        $this->assertSame([], $missing, 'Ключи без перевода');
     }
 
     /**

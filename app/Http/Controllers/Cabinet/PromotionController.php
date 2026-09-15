@@ -95,13 +95,13 @@ class PromotionController extends Controller
             'listing_id' => ['required', 'integer'],
             'promotion_type_id' => ['required', 'exists:promotion_types,id'],
         ], [
-            'listing_id.required' => 'Выберите объявление',
+            'listing_id.required' => __('ui.messages.promo.listing_required'),
         ]);
 
         $listing = $company->activeListings()->find($data['listing_id']);
 
         if ($listing === null) {
-            return back()->with('error', 'Продвигать можно только активные объявления');
+            return back()->with('error', __('ui.messages.promo.active_only'));
         }
 
         $type = PromotionType::findOrFail($data['promotion_type_id']);
@@ -115,17 +115,17 @@ class PromotionController extends Controller
             ->exists();
 
         if ($duplicate) {
-            return back()->with('error', "«{$type->name}» уже действует на этом объявлении");
+            return back()->with('error', __('ui.messages.promo.already_running', ['name' => $type->name]));
         }
 
         if (! $type->hasFreeSlot($listing->category_id)) {
-            return back()->with('error', "Все места «{$type->name}» заняты. Освободятся, когда закончится текущее размещение.");
+            return back()->with('error', __('ui.messages.promo.slots_taken', ['name' => $type->name]));
         }
 
         $wallet = $company->wallet;
 
         if ($wallet === null) {
-            return back()->with('error', 'Кошелёк компании не найден. Напишите в поддержку.');
+            return back()->with('error', __('ui.messages.promo.no_wallet'));
         }
 
         /*
@@ -159,18 +159,18 @@ class PromotionController extends Controller
                 ]);
             });
         } catch (InsufficientUnits) {
-            return back()->with('error', "Не хватает единиц продвижения: нужно {$type->cost_units}, есть {$wallet->promo_units}");
+            return back()->with('error', __('ui.messages.promo.not_enough', ['need' => $type->cost_units, 'have' => $wallet->promo_units]));
         } catch (UniqueConstraintViolationException) {
-            return back()->with('error', "«{$type->name}» уже действует на этом объявлении");
+            return back()->with('error', __('ui.messages.promo.already_running', ['name' => $type->name]));
         }
 
         app(Notifier::class)->company(
             $company,
             'promotion',
-            "Запущено продвижение «{$type->name}» на объявлении «{$listing->title}»",
+            __('ui.messages.promo.started_notice', ['name' => $type->name, 'title' => $listing->title]),
             ['tone' => 'success', 'url' => route('cabinet.promo')],
         );
 
-        return back()->with('success', "«{$type->name}» запущено. Списано единиц: {$type->cost_units}.");
+        return back()->with('success', __('ui.messages.promo.started', ['name' => $type->name, 'units' => $type->cost_units]));
     }
 }

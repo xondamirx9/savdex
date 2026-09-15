@@ -2,6 +2,7 @@ import { Link } from '@/components/ui/Link';
 import { Star } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 export { Metric, formatNumber } from './Metric';
 export type { MetricData } from './Metric';
@@ -51,7 +52,7 @@ export function LimitBar({
         <div>
             <div className="row-between t-sm" style={{ marginBottom: 6 }}>
                 <span>{label}</span>
-                <b>{total === null ? `${used} · без ограничений` : `${used} / ${total}`}</b>
+                <b>{total === null ? `${used} · ${t('cabinet.common.unlimited')}` : `${used} / ${total}`}</b>
             </div>
             {total !== null && (
                 <div className="progress">
@@ -87,7 +88,7 @@ export function BarRow({ label, value, max, suffix }: { label: string; value: nu
 /** Оценка звёздами. Число дублируется текстом — цвет не единственный носитель. */
 export function Stars({ value, size = 16 }: { value: number; size?: number }) {
     return (
-        <span className="stars" role="img" aria-label={`Оценка ${value} из 5`}>
+        <span className="stars" role="img" aria-label={t('cabinet.common.rating_aria', { value })}>
             {[1, 2, 3, 4, 5].map((i) => (
                 <Star
                     key={i}
@@ -152,17 +153,17 @@ export function Tabs({
 }) {
     return (
         <div role="tablist" className="tabs" aria-label={label} style={{ marginBottom: 20 }}>
-            {items.map((t) => (
+            {items.map((item) => (
                 <button
-                    key={t.key}
+                    key={item.key}
                     role="tab"
                     className="tab"
-                    aria-selected={t.key === active}
-                    tabIndex={t.key === active ? 0 : -1}
-                    onClick={() => onChange(t.key)}
+                    aria-selected={item.key === active}
+                    tabIndex={item.key === active ? 0 : -1}
+                    onClick={() => onChange(item.key)}
                 >
-                    {t.label}
-                    {t.count !== undefined && ` · ${t.count}`}
+                    {item.label}
+                    {item.count !== undefined && ` · ${item.count}`}
                 </button>
             ))}
         </div>

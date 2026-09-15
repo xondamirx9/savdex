@@ -29,23 +29,13 @@ class CompanyDocument extends Model
      * Документы для верификации. Проходят модерацию, на визитке
      * показываются только после одобрения.
      */
-    public const VERIFICATION_TYPES = [
-        'registration' => 'Свидетельство о регистрации',
-        'license' => 'Лицензия',
-        'certificate' => 'Сертификат',
-        'quality' => 'Паспорт качества',
-    ];
+    public const VERIFICATION_TYPES = ['registration', 'license', 'certificate', 'quality'];
 
     /**
      * Материалы для партнёров. Модерация им не нужна: это не
      * подтверждение статуса, а рекламные материалы самой компании.
      */
-    public const MATERIAL_TYPES = [
-        'presentation' => 'Презентация',
-        'price_list' => 'Прайс-лист',
-        'catalog' => 'Каталог продукции',
-        'other' => 'Другой файл',
-    ];
+    public const MATERIAL_TYPES = ['presentation', 'price_list', 'catalog', 'other'];
 
     /** Что разрешено загружать. Исполняемые файлы недопустимы. */
     public const ALLOWED_MIMES = [
@@ -54,11 +44,33 @@ class CompanyDocument extends Model
 
     public const MAX_SIZE_KB = 20480;
 
+    /**
+     * Подпись типа на языке сайта.
+     *
+     * Константы держат только коды: подписи живут в словаре, иначе
+     * список типов пришлось бы поддерживать на пяти языках прямо
+     * в модели.
+     */
     public function typeLabel(): string
     {
-        return self::VERIFICATION_TYPES[$this->type]
-            ?? self::MATERIAL_TYPES[$this->type]
-            ?? $this->type;
+        $key = 'ui.cabinet.files.types.'.$this->type;
+        $label = __($key);
+
+        return is_string($label) && $label !== $key ? $label : (string) $this->type;
+    }
+
+    /**
+     * Коды типов с подписями — для выпадающих списков.
+     *
+     * @param  list<string>  $types
+     * @return array<string, string>
+     */
+    public static function typeOptions(array $types): array
+    {
+        return array_combine(
+            $types,
+            array_map(fn (string $type): string => __('ui.cabinet.files.types.'.$type), $types),
+        );
     }
 
     /**
@@ -90,7 +102,7 @@ class CompanyDocument extends Model
     /** Материал для партнёров, а не документ для модератора. */
     public function isMaterial(): bool
     {
-        return array_key_exists($this->type, self::MATERIAL_TYPES);
+        return in_array($this->type, self::MATERIAL_TYPES, true);
     }
 
     /**

@@ -5,6 +5,7 @@ import { PhotoUploader, type ListingPhoto } from '@/components/PhotoUploader';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
+import { t } from '@/lib/i18n';
 
 interface Field {
     key: string;
@@ -55,7 +56,8 @@ interface Props {
     tagOptions: string[];
 }
 
-const STEPS = ['Тип и категория', 'Товар и цена', 'Условия', 'Фото и документы'];
+/* Ключи, а не подписи: шаги рисуются на языке сайта */
+const STEPS = ['category', 'price', 'terms', 'photos'];
 
 /**
  * На каком шаге искать поле, которое не прошло проверку.
@@ -73,12 +75,7 @@ const FIELD_STEP: Record<string, number> = {
     currency: 2,
 };
 
-const TIPS = [
-    'Укажите точную марку и объём — по ним ищут',
-    'Добавьте минимум 3 фото товара',
-    'Приложите паспорт качества — доверие выше',
-    'Не скрывайте цену: объявления с ценой смотрят в 2,4 раза чаще',
-];
+const TIPS = ['brand', 'photos', 'quality', 'price'];
 
 export default function Wizard({ listing, categories, slots, tagOptions }: Props) {
     const [step, setStep] = useState(listing.step);
@@ -176,9 +173,9 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
 
     return (
         <CabinetLayout
-            title="Новое объявление"
-            heading={listing.status === 'draft' ? 'Новое объявление' : 'Редактирование'}
-            subheading="Черновик сохраняется автоматически каждые 20 секунд"
+            title={t('cabinet.wizard.title')}
+            heading={listing.status === 'draft' ? t('cabinet.wizard.title') : t('cabinet.wizard.editing')}
+            subheading={t('cabinet.wizard.autosave')}
             /* Кнопка остаётся на месте после автосохранения: раньше она
                подменялась отметкой времени, и сохранить черновик руками
                становилось нечем — а именно этого от неё и ждут */
@@ -186,11 +183,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                 <div className="row" style={{ gap: 10, alignItems: 'center' }}>
                     {savedAgo && (
                         <span className="badge badge-neutral">
-                            <Check aria-hidden className="size-3.5" /> Сохранено в {savedAgo}
+                            <Check aria-hidden className="size-3.5" />{' '}
+                            {t('cabinet.wizard.saved_at', { time: savedAgo })}
                         </span>
                     )}
                     <button className="btn btn-secondary btn-sm" onClick={() => void save()}>
-                        <CloudUpload aria-hidden className="size-4" /> Сохранить черновик
+                        <CloudUpload aria-hidden className="size-4" /> {t('cabinet.wizard.save_draft')}
                     </button>
                 </div>
             }
@@ -198,8 +196,8 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
             {dialog}
 
             <div className="steps">
-                {STEPS.map((label, i) => (
-                    <span key={label} style={{ display: 'contents' }}>
+                {STEPS.map((key, i) => (
+                    <span key={key} style={{ display: 'contents' }}>
                         {i > 0 && <span className="step-line" />}
                         <button
                             type="button"
@@ -207,7 +205,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                             onClick={() => go(i + 1)}
                         >
                             <span className="step-dot">{i + 1 < step ? <Check aria-hidden className="size-3.5" /> : i + 1}</span>
-                            <span className="hide-mobile">{label}</span>
+                            <span className="hide-mobile">{t(`cabinet.wizard.step_${key}`)}</span>
                         </button>
                     </span>
                 ))}
@@ -219,15 +217,15 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                         <>
                             <fieldset style={{ border: 'none' }}>
                                 <legend className="t-h3" style={{ marginBottom: 16 }}>
-                                    Что вы публикуете?
+                                    {t('cabinet.wizard.what')}
                                 </legend>
                                 <div className="radio-cards grid-2">
                                     {(
                                         [
-                                            ['supply', 'Предложение', 'У меня есть товар', Package],
-                                            ['demand', 'Запрос', 'Мне нужен товар', ShoppingCart],
+                                            ['supply', Package],
+                                            ['demand', ShoppingCart],
                                         ] as const
-                                    ).map(([value, title, desc, Icon]) => (
+                                    ).map(([value, Icon]) => (
                                         <label key={value} className="radio-card">
                                             <input
                                                 type="radio"
@@ -237,9 +235,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                             />
                                             <div className="radio-card-body">
                                                 <div className="radio-card-title row" style={{ gap: 8 }}>
-                                                    <Icon aria-hidden className="size-4" /> {title}
+                                                    <Icon aria-hidden className="size-4" />{' '}
+                                                    {t(`cabinet.wizard.type_${value}`)}
                                                 </div>
-                                                <div className="radio-card-desc">{desc}</div>
+                                                <div className="radio-card-desc">
+                                                    {t(`cabinet.wizard.type_${value}_desc`)}
+                                                </div>
                                             </div>
                                         </label>
                                     ))}
@@ -248,7 +249,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
 
                             <div className="field mt-24">
                                 <label className="label" htmlFor="w-cat">
-                                    Категория <span className="req">*</span>
+                                    {t('cabinet.wizard.category')} <span className="req">*</span>
                                 </label>
                                 <select
                                     id="w-cat"
@@ -260,7 +261,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         setData('category_id', next?.slug === 'drugoe' ? (next.children[0]?.id ?? null) : null);
                                     }}
                                 >
-                                    <option value="">Выберите категорию</option>
+                                    <option value="">{t('cabinet.wizard.pick_category')}</option>
                                     {categories.map((c) => (
                                         <option key={c.id} value={c.id}>
                                             {c.name}
@@ -272,7 +273,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                             {parent && isOther && (
                                 <div className="field">
                                     <label className="label" htmlFor="w-custom-cat">
-                                        Своя категория <span className="req">*</span>
+                                        {t('cabinet.wizard.own_category')} <span className="req">*</span>
                                     </label>
                                     <input
                                         id="w-custom-cat"
@@ -282,19 +283,16 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         onChange={(e) =>
                                             setData('attributes', { ...data.attributes, custom_category: e.target.value })
                                         }
-                                        placeholder="Например: крепёж и метизы"
+                                        placeholder={t('cabinet.wizard.own_category_placeholder')}
                                     />
-                                    <p className="hint">
-                                        Готовой рубрики нет — назовите категорию своими словами. Она будет видна
-                                        на карточке объявления.
-                                    </p>
+                                    <p className="hint">{t('cabinet.wizard.own_category_hint')}</p>
                                 </div>
                             )}
 
                             {parent && !isOther && (
                                 <div className="field">
                                     <label className="label" htmlFor="w-sub">
-                                        Подкатегория <span className="req">*</span>
+                                        {t('cabinet.wizard.subcategory')} <span className="req">*</span>
                                     </label>
                                     <select
                                         id="w-sub"
@@ -302,7 +300,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         value={data.category_id ?? ''}
                                         onChange={(e) => setData('category_id', e.target.value ? Number(e.target.value) : null)}
                                     >
-                                        <option value="">Выберите подкатегорию</option>
+                                        <option value="">{t('cabinet.wizard.pick_subcategory')}</option>
                                         {parent.children.map((c) => (
                                             <option key={c.id} value={c.id}>
                                                 {c.name}
@@ -315,7 +313,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
 
                             <div className="field">
                                 <label className="label" htmlFor="w-title">
-                                    Заголовок <span className="req">*</span>
+                                    {t('cabinet.wizard.heading')} <span className="req">*</span>
                                 </label>
                                 <input
                                     id="w-title"
@@ -323,12 +321,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     maxLength={90}
                                     value={data.title}
                                     onChange={(e) => setData('title', e.target.value)}
-                                    placeholder="Цемент М400 навалом и в мешках 50 кг, отгрузка с завода"
+                                    placeholder={t('cabinet.wizard.heading_placeholder')}
                                 />
                                 <p className="hint">
-                                    {data.title.length} / 90 символов
-                                    {titleLeft < 15 && ` · осталось ${titleLeft}`}. Укажите товар, марку и способ
-                                    отгрузки — так находят чаще.
+                                    {t('cabinet.wizard.chars', { used: data.title.length, max: 90 })}
+                                    {titleLeft < 15 && ` · ${t('cabinet.wizard.chars_left', { left: titleLeft })}`}.{' '}
+                                    {t('cabinet.wizard.heading_hint')}
                                 </p>
                                 {errors.title && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.title}</p>}
                             </div>
@@ -341,7 +339,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}
                                 >
                                     <p className="t-caption muted" style={{ marginBottom: 12 }}>
-                                        Поля категории «{child.name}» — подставляются автоматически
+                                        {t('cabinet.wizard.category_fields', { category: child.name })}
                                     </p>
                                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                                         {child.fields.map((f) => (
@@ -358,7 +356,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                                             setData('attributes', { ...data.attributes, [f.key]: e.target.value })
                                                         }
                                                     >
-                                                        <option value="">Не указано</option>
+                                                        <option value="">{t('cabinet.wizard.not_set')}</option>
                                                         {f.options.map((o) => (
                                                             <option key={o} value={o}>
                                                                 {o}
@@ -384,7 +382,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
 
                             <div className="row mt-32" style={{ gap: 10 }}>
                                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => go(2)}>
-                                    Далее: товар и цена
+                                    {t('cabinet.wizard.next_price')}
                                 </button>
                             </div>
                         </>
@@ -393,12 +391,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                     {step === 2 && (
                         <>
                             <h2 className="t-h3" style={{ marginBottom: 16 }}>
-                                Описание и цена
+                                {t('cabinet.wizard.step_price_title')}
                             </h2>
 
                             <div className="field">
                                 <label className="label" htmlFor="w-desc">
-                                    Описание <span className="req">*</span>
+                                    {t('cabinet.wizard.description')} <span className="req">*</span>
                                 </label>
                                 <textarea
                                     id="w-desc"
@@ -406,12 +404,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     maxLength={5000}
                                     value={data.description}
                                     onChange={(e) => setData('description', e.target.value)}
-                                    placeholder="Расскажите об условиях, объёмах, гарантиях качества…"
+                                    placeholder={t('cabinet.wizard.description_placeholder')}
                                 />
                                 <p className="hint">
-                                    {data.description.length} / 5000{descLeft < 200 && ` · осталось ${descLeft}`}.
-                                    Телефоны, почта и ссылки будут автоматически скрыты — контакты передаются только
-                                    через площадку.
+                                    {t('cabinet.wizard.chars', { used: data.description.length, max: 5000 })}
+                                    {descLeft < 200 && ` · ${t('cabinet.wizard.chars_left', { left: descLeft })}`}.{' '}
+                                    {t('cabinet.wizard.description_hint')}
                                 </p>
                                 {errors.description && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.description}</p>}
                             </div>
@@ -419,7 +417,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                             <div className="grid grid-2 grid-tight mt-24" style={{ gap: 12 }}>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-price">
-                                        Цена за единицу
+                                        {t('cabinet.wizard.price')}
                                     </label>
                                     <input
                                         id="w-price"
@@ -434,7 +432,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 </div>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-cur">
-                                        Валюта
+                                        {t('cabinet.wizard.currency')}
                                     </label>
                                     <select
                                         id="w-cur"
@@ -442,8 +440,8 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         value={data.currency}
                                         onChange={(e) => setData('currency', e.target.value)}
                                     >
-                                        <option value="UZS">сум (UZS)</option>
-                                        <option value="USD">доллар (USD)</option>
+                                        <option value="UZS">{t('cabinet.wizard.uzs')}</option>
+                                        <option value="USD">{t('cabinet.wizard.usd')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -452,7 +450,8 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 единицы не отвечает, сколько стоит весь набор */}
                             <div className="field mt-12" style={{ margin: 0 }}>
                                 <label className="label" htmlFor="w-bundle">
-                                    Цена за весь комплект <span className="muted">(необязательно)</span>
+                                    {t('cabinet.wizard.bundle')}{' '}
+                                    <span className="muted">{t('cabinet.wizard.optional')}</span>
                                 </label>
                                 <input
                                     id="w-bundle"
@@ -464,28 +463,25 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     onChange={(e) => setData('bundle_price', e.target.value ? Number(e.target.value) : null)}
                                     placeholder="6000000"
                                 />
-                                <p className="hint">
-                                    Если товар продаётся комплектом — укажите цену набора целиком, она появится
-                                    на странице рядом с ценой за единицу.
-                                </p>
+                                <p className="hint">{t('cabinet.wizard.bundle_hint')}</p>
                             </div>
 
                             <div className="grid grid-2 grid-tight mt-12" style={{ gap: 12 }}>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-unit">
-                                        Единица измерения
+                                        {t('cabinet.wizard.unit')}
                                     </label>
                                     <input
                                         id="w-unit"
                                         className="input"
                                         value={data.unit}
                                         onChange={(e) => setData('unit', e.target.value)}
-                                        placeholder="т, м³, шт"
+                                        placeholder={t('cabinet.wizard.unit_placeholder')}
                                     />
                                 </div>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-min">
-                                        Минимальная партия
+                                        {t('cabinet.wizard.min_order')}
                                     </label>
                                     <input
                                         id="w-min"
@@ -504,16 +500,16 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     checked={data.price_negotiable}
                                     onChange={(e) => setData('price_negotiable', e.target.checked)}
                                 />
-                                Цена договорная — не показывать сумму
+                                {t('cabinet.wizard.negotiable')}
                             </label>
                             {errors.price && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.price}</p>}
 
                             <div className="row mt-32" style={{ gap: 10 }}>
                                 <button className="btn btn-secondary" onClick={() => go(1)}>
-                                    Назад
+                                    {t('cabinet.wizard.back')}
                                 </button>
                                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => go(3)}>
-                                    Далее: условия
+                                    {t('cabinet.wizard.next_terms')}
                                 </button>
                             </div>
                         </>
@@ -522,12 +518,12 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                     {step === 3 && (
                         <>
                             <h2 className="t-h3" style={{ marginBottom: 16 }}>
-                                Условия поставки и оплаты
+                                {t('cabinet.wizard.step_terms_title')}
                             </h2>
 
                             <div className="field">
                                 <label className="label" htmlFor="w-delivery">
-                                    Условия поставки
+                                    {t('cabinet.wizard.delivery')}
                                 </label>
                                 <textarea
                                     id="w-delivery"
@@ -535,13 +531,13 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     style={{ minHeight: 90 }}
                                     value={data.delivery_terms}
                                     onChange={(e) => setData('delivery_terms', e.target.value)}
-                                    placeholder="Самовывоз со склада, доставка по Ташкентской области, отгрузка в течение 2 дней"
+                                    placeholder={t('cabinet.wizard.delivery_placeholder')}
                                 />
                             </div>
 
                             <div className="field">
                                 <label className="label" htmlFor="w-payment">
-                                    Условия оплаты
+                                    {t('cabinet.wizard.payment')}
                                 </label>
                                 <textarea
                                     id="w-payment"
@@ -549,16 +545,16 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     style={{ minHeight: 90 }}
                                     value={data.payment_terms}
                                     onChange={(e) => setData('payment_terms', e.target.value)}
-                                    placeholder="Предоплата 50 %, остаток по факту отгрузки. Работаем с НДС"
+                                    placeholder={t('cabinet.wizard.payment_placeholder')}
                                 />
                             </div>
 
                             <div className="row mt-32" style={{ gap: 10 }}>
                                 <button className="btn btn-secondary" onClick={() => go(2)}>
-                                    Назад
+                                    {t('cabinet.wizard.back')}
                                 </button>
                                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => go(4)}>
-                                    Далее: фото
+                                    {t('cabinet.wizard.next_photos')}
                                 </button>
                             </div>
                         </>
@@ -567,7 +563,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                     {step === 4 && (
                         <>
                             <h2 className="t-h3" style={{ marginBottom: 16 }}>
-                                Фото и документы
+                                {t('cabinet.wizard.step_photos')}
                             </h2>
 
                             <PhotoUploader listingId={listing.id} photos={listing.images} />
@@ -578,10 +574,11 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 и характеристик и обновляется автосохранением */}
                             {tagChoices.length > 0 && (
                                 <div className="mt-24">
-                                    <p className="label" style={{ marginBottom: 4 }}>Теги объявления</p>
+                                    <p className="label" style={{ marginBottom: 4 }}>
+                                        {t('cabinet.wizard.tags')}
+                                    </p>
                                     <p className="t-caption muted" style={{ marginBottom: 10 }}>
-                                        Отметьте подходящие — по ним покупатели находят похожие
-                                        предложения. Не выберете ничего — подставим автоматически.
+                                        {t('cabinet.wizard.tags_hint')}
                                     </p>
                                     <div className="row wrap" style={{ gap: 8 }}>
                                         {tagChoices.map((tag) => {
@@ -597,7 +594,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                                         setData(
                                                             'tags',
                                                             active
-                                                                ? data.tags.filter((t) => t !== tag)
+                                                                ? data.tags.filter((x) => x !== tag)
                                                                 : data.tags.length < 8
                                                                   ? [...data.tags, tag]
                                                                   : data.tags,
@@ -616,7 +613,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 <div className="alert alert-danger mt-24">
                                     <TriangleAlert aria-hidden className="size-5" />
                                     <div>
-                                        <b>Объявление не опубликовано</b>
+                                        <b>{t('cabinet.wizard.not_published')}</b>
                                         <ul className="stack-8 mt-8">
                                             {problems.map((p) => (
                                                 <li key={p.field}>
@@ -626,32 +623,30 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                                         className="link"
                                                         onClick={() => go(p.step)}
                                                     >
-                                                        Шаг {p.step}: {STEPS[p.step - 1]}
+                                                        {t('cabinet.wizard.go_step', {
+                                                            step: p.step,
+                                                            name: t(`cabinet.wizard.step_${STEPS[p.step - 1]}`),
+                                                        })}
                                                     </button>
                                                 </li>
                                             ))}
                                         </ul>
-                                        <p className="t-sm mt-8">
-                                            Введённое сохранено в черновике — исправьте и нажмите «Опубликовать» ещё раз.
-                                        </p>
+                                        <p className="t-sm mt-8">{t('cabinet.wizard.draft_kept')}</p>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="alert alert-info mt-24">
                                     <Check aria-hidden className="size-5" />
-                                    <div>
-                                        Объявление появится в каталоге сразу после нажатия «Опубликовать» — вместе
-                                        с фотографиями.
-                                    </div>
+                                    <div>{t('cabinet.wizard.will_appear')}</div>
                                 </div>
                             )}
 
                             <div className="row mt-32" style={{ gap: 10 }}>
                                 <button className="btn btn-secondary" onClick={() => go(3)}>
-                                    Назад
+                                    {t('cabinet.wizard.back')}
                                 </button>
                                 <button className="btn btn-primary" style={{ flex: 1 }} disabled={processing} onClick={publish}>
-                                    {processing ? 'Отправляем…' : 'Опубликовать'}
+                                    {processing ? t('cabinet.wizard.sending') : t('cabinet.wizard.publish')}
                                 </button>
                             </div>
                         </>
@@ -661,13 +656,13 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                 <aside className="stack-16">
                     <div className="card">
                         <h3 className="t-h4" style={{ marginBottom: 12 }}>
-                            Как получить больше откликов
+                            {t('cabinet.wizard.tips')}
                         </h3>
                         <ul className="stack-12 t-sm">
                             {TIPS.map((tip) => (
                                 <li key={tip} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
                                     <Check aria-hidden className="size-4 shrink-0" style={{ color: 'var(--success)', marginTop: 4 }} />
-                                    {tip}
+                                    {t(`cabinet.wizard.tip_${tip}`)}
                                 </li>
                             ))}
                         </ul>
@@ -675,25 +670,30 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
 
                     <div className="card" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
                         <p className="t-sm">
-                            <b>Осталось слотов:</b>{' '}
-                            {slots.total === null ? 'без ограничений' : `${slots.total - slots.used} из ${slots.total}`}
+                            <b>{t('cabinet.wizard.slots')}</b>{' '}
+                            {slots.total === null
+                                ? t('cabinet.common.unlimited')
+                                : t('cabinet.wizard.slots_left', {
+                                      left: slots.total - slots.used,
+                                      total: slots.total,
+                                  })}
                         </p>
-                        <p className="t-sm muted mt-8">Черновики слот не занимают — только опубликованные объявления.</p>
+                        <p className="t-sm muted mt-8">{t('cabinet.wizard.slots_hint')}</p>
                     </div>
 
                     <button
                         className="btn btn-ghost btn-block"
                         onClick={() =>
                             confirm({
-                                title: 'Удалить черновик?',
-                                description: 'Введённый текст и загруженные фотографии будут потеряны безвозвратно.',
-                                confirmLabel: 'Удалить черновик',
+                                title: t('cabinet.wizard.delete_title'),
+                                description: t('cabinet.wizard.delete_text'),
+                                confirmLabel: t('cabinet.wizard.delete'),
                                 danger: true,
                                 onConfirm: () => router.delete(`/cabinet/listings/${listing.id}`),
                             })
                         }
                     >
-                        Удалить черновик
+                        {t('cabinet.wizard.delete')}
                     </button>
                 </aside>
             </div>

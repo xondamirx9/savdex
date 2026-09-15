@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Modal } from '@/components/Modal';
+import { t } from '@/lib/i18n';
 
 interface Request {
     title: string;
@@ -40,8 +41,8 @@ export function useConfirm() {
         <Modal open onClose={close} title={request.title} description={request.description} width={420}>
             <div className="row" style={{ gap: 10, justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary" onClick={close}>
-                    Отмена
-                </button>
+                        {t('common.cancel')}
+                    </button>
                 <button
                     className={request.danger ? 'btn btn-danger' : 'btn btn-primary'}
                     onClick={() => {
@@ -49,7 +50,7 @@ export function useConfirm() {
                         close();
                     }}
                 >
-                    {request.confirmLabel ?? 'Подтвердить'}
+                    {request.confirmLabel ?? t('common.confirm')}
                 </button>
             </div>
         </Modal>

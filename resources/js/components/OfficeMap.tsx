@@ -1,4 +1,5 @@
 import { Clock, ExternalLink, MapPin, Navigation } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 /**
  * Офис площадки: адрес, часы работы и точка на карте.
@@ -50,7 +51,7 @@ function embedSrc(lat: number, lng: number, zoom: number): string {
 function externalLinks(lat: number, lng: number, zoom: number): [string, string][] {
     return [
         // У Яндекса координаты идут в обратном порядке — долгота, широта
-        ['Яндекс.Карты', `https://yandex.uz/maps/?ll=${lng}%2C${lat}&z=${zoom}&pt=${lng}%2C${lat}`],
+        [t('office.yandex'), `https://yandex.uz/maps/?ll=${lng}%2C${lat}&z=${zoom}&pt=${lng}%2C${lat}`],
         ['Google Maps', `https://www.google.com/maps/search/?api=1&query=${lat}%2C${lng}`],
     ];
 }
@@ -85,7 +86,7 @@ export function OfficeMap({ office }: { office: Office }) {
                     </span>
                     <div style={{ minWidth: 0 }}>
                         <h3 className="t-h4" style={{ marginBottom: 4 }}>
-                            Адрес
+                            {t('office.address')}
                         </h3>
                         {/* Адрес — ссылка на карту: по нему чаще всего и
                             нажимают, чтобы посмотреть, где это */}
@@ -101,7 +102,7 @@ export function OfficeMap({ office }: { office: Office }) {
                                     <ExternalLink aria-hidden className="size-3.5" />
                                 </a>
                             ) : (
-                                'Уточняется'
+                                t('office.address_unknown')
                             )}
                         </p>
                     </div>
@@ -114,7 +115,7 @@ export function OfficeMap({ office }: { office: Office }) {
                         </span>
                         <div style={{ minWidth: 0 }}>
                             <h3 className="t-h4" style={{ marginBottom: 4 }}>
-                                Часы работы
+                                {t('office.hours')}
                             </h3>
                             <p className="t-body">{hours}</p>
                         </div>
@@ -131,7 +132,7 @@ export function OfficeMap({ office }: { office: Office }) {
                             // читателей до неё не доходит вовсе
                             loading="lazy"
                             src={embedSrc(lat, lng, zoom)}
-                            title={address !== '' ? `Офис на карте: ${address}` : 'Офис на карте'}
+                            title={address !== '' ? t('office.map_title', { address }) : t('office.map_title_short')}
                         />
                     </div>
 

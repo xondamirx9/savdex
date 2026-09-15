@@ -15,7 +15,7 @@ import { Modal } from '@/components/Modal';
 import { Panel, formatNumber } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { pluralize } from '@/lib/plural';
+import { t, tChoice } from '@/lib/i18n';
 
 interface Type {
     id: number;
@@ -81,65 +81,66 @@ export default function Promo({
 
     return (
         <CabinetLayout
-            title="Продвижение"
-            heading="Продвижение"
+            title={t('cabinet.promo.title')}
+            heading={t('cabinet.promo.title')}
             subheading={
                 <>
-                    {pluralize(units, ['единица', 'единицы', 'единиц'])} продвижения на счёте
-                    {resets_at && ` · обновится ${resets_at}`}
+                    {tChoice('cabinet.promo.balance', units)}
+                    {resets_at && ` · ${t('cabinet.promo.resets', { date: resets_at })}`}
                 </>
             }
         >
             {listings.length === 0 && (
                 <div className="alert alert-warning" style={{ marginBottom: 24 }}>
                     <Info aria-hidden className="size-5" />
-                    <div>Продвигать пока нечего: нужно хотя бы одно активное объявление.</div>
+                    <div>{t('cabinet.promo.nothing_to_promote')}</div>
                 </div>
             )}
 
-            <Panel title="Активные продвижения" className="mb-24">
+            <Panel title={t('cabinet.promo.active')} className="mb-24">
                 {active.length === 0 ? (
-                    <p className="muted t-sm">
-                        Сейчас ничего не продвигается. Инструменты ниже поднимают объявление в выдаче — эффект виден
-                        в этой таблице.
-                    </p>
+                    <p className="muted t-sm">{t('cabinet.promo.active_empty')}</p>
                 ) : (
                     <div className="table-wrap table-cards" style={{ border: 'none' }}>
                         <table className="table" style={{ minWidth: 0 }}>
                             <thead>
                                 <tr>
-                                    <th>Объявление</th>
-                                    <th>Инструмент</th>
-                                    <th>До</th>
-                                    <th className="num">Показы до</th>
-                                    <th className="num">Показы после</th>
-                                    <th className="num">Эффект</th>
+                                    <th>{t('cabinet.promo.col_listing')}</th>
+                                    <th>{t('cabinet.promo.col_tool')}</th>
+                                    <th>{t('cabinet.promo.col_until')}</th>
+                                    <th className="num">{t('cabinet.promo.col_before')}</th>
+                                    <th className="num">{t('cabinet.promo.col_after')}</th>
+                                    <th className="num">{t('cabinet.promo.col_effect')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {active.map((p) => (
                                     <tr key={p.id}>
-                                        <td data-label="Объявление">
+                                        <td data-label={t('cabinet.promo.col_listing')}>
                                             <b>{p.listing}</b>
                                         </td>
-                                        <td data-label="Инструмент">
+                                        <td data-label={t('cabinet.promo.col_tool')}>
                                             <span className="badge badge-top">{p.badge ?? p.type}</span>
                                         </td>
-                                        <td data-label="До">{p.ends_at ?? 'разово'}</td>
-                                        <td data-label="Показы до" className="num">
+                                        <td data-label={t('cabinet.promo.col_until')}>
+                                            {p.ends_at ?? t('cabinet.promo.once')}
+                                        </td>
+                                        <td data-label={t('cabinet.promo.col_before')} className="num">
                                             {formatNumber(p.before)}
                                         </td>
-                                        <td data-label="Показы после" className="num">
+                                        <td data-label={t('cabinet.promo.col_after')} className="num">
                                             {p.after !== null ? formatNumber(p.after) : '—'}
                                         </td>
                                         <td
-                                            data-label="Эффект"
+                                            data-label={t('cabinet.promo.col_effect')}
                                             className="num"
                                             style={{ color: (p.effect ?? 0) > 0 ? 'var(--success)' : undefined }}
                                         >
                                             {/* Промежуточный эффект не показываем: цифра
                                                 до окончания периода вводит в заблуждение */}
-                                            {p.effect !== null ? `${p.effect > 0 ? '+' : ''}${p.effect} %` : 'считаем'}
+                                            {p.effect !== null
+                                                ? `${p.effect > 0 ? '+' : ''}${p.effect} %`
+                                                : t('cabinet.promo.counting')}
                                         </td>
                                     </tr>
                                 ))}
@@ -150,58 +151,63 @@ export default function Promo({
             </Panel>
 
             <h2 className="t-h3" style={{ marginBottom: 16 }}>
-                Купить продвижение
+                {t('cabinet.promo.buy')}
             </h2>
 
             <div className="grid grid-3">
-                {types.map((t) => {
-                    const Icon = ICONS[t.icon ?? ''] ?? Rocket;
-                    const enough = units >= t.cost;
-                    const disabled = !t.available || !enough || listings.length === 0;
+                {types.map((item) => {
+                    const Icon = ICONS[item.icon ?? ''] ?? Rocket;
+                    const enough = units >= item.cost;
+                    const disabled = !item.available || !enough || listings.length === 0;
 
                     return (
                         <div
-                            key={t.id}
+                            key={item.id}
                             className={cn('card card-hover')}
-                            style={t.code === 'category_top' ? { borderColor: 'var(--primary-500)' } : undefined}
+                            style={item.code === 'category_top' ? { borderColor: 'var(--primary-500)' } : undefined}
                         >
                             <div className="row-between" style={{ marginBottom: 10 }}>
                                 <span
-                                    className={cn('ico-box', t.code === 'category_top' && 'ico-box-solid')}
+                                    className={cn('ico-box', item.code === 'category_top' && 'ico-box-solid')}
                                 >
                                     <Icon aria-hidden className="size-5" />
                                 </span>
-                                <b>{t.cost_label}</b>
+                                <b>{item.cost_label}</b>
                             </div>
 
-                            <h3 className="t-h4">{t.name}</h3>
-                            <p className="t-sm muted mt-8">{t.description}</p>
-                            {t.effect_hint && (
+                            <h3 className="t-h4">{item.name}</h3>
+                            <p className="t-sm muted mt-8">{item.description}</p>
+                            {item.effect_hint && (
                                 <p className="t-sm mt-16" style={{ color: 'var(--success)' }}>
-                                    {t.effect_hint}
+                                    {item.effect_hint}
                                 </p>
                             )}
 
-                            {t.slots !== null && (
+                            {item.slots !== null && (
                                 <p className="t-caption muted mt-8">
-                                    {t.available
-                                        ? `Свободно ${pluralize(t.slots - (t.taken ?? 0), ['место', 'места', 'мест'])} из ${t.slots}`
-                                        : `Занято ${t.taken} из ${t.slots} — места освободятся после окончания размещений`}
+                                    {item.available
+                                        ? tChoice('cabinet.promo.slots_free', item.slots - (item.taken ?? 0), {
+                                              total: item.slots,
+                                          })
+                                        : t('cabinet.promo.slots_taken', {
+                                              taken: item.taken ?? 0,
+                                              total: item.slots,
+                                          })}
                                 </p>
                             )}
 
                             {!enough && (
                                 <p className="t-caption mt-8" style={{ color: 'var(--warning)' }}>
-                                    Не хватает единиц: нужно {t.cost}, есть {units}
+                                    {t('cabinet.promo.not_enough', { need: item.cost, have: units })}
                                 </p>
                             )}
 
                             <button
-                                className={cn('btn btn-block mt-16', t.code === 'category_top' ? 'btn-primary' : 'btn-outline')}
+                                className={cn('btn btn-block mt-16', item.code === 'category_top' ? 'btn-primary' : 'btn-outline')}
                                 disabled={disabled}
-                                onClick={() => apply(t)}
+                                onClick={() => apply(item)}
                             >
-                                {t.available ? 'Применить' : 'Мест нет'}
+                                {item.available ? t('cabinet.promo.apply') : t('cabinet.promo.no_slots')}
                             </button>
                         </div>
                     );
@@ -217,7 +223,7 @@ export default function Promo({
             <Modal
                 open={picking !== null}
                 onClose={() => setPicking(null)}
-                title={picking ? `Запустить «${picking.name}»` : ''}
+                title={picking ? t('cabinet.promo.start', { name: picking.name }) : ''}
                 description={picking?.description}
                 width={520}
                 footer={
@@ -229,11 +235,11 @@ export default function Promo({
                             onClick={submit}
                         >
                             {form.processing
-                                ? 'Запускаем…'
-                                : `Подтвердить и списать ${pluralize(picking?.cost ?? 0, ['единицу', 'единицы', 'единиц'])}`}
+                                ? t('cabinet.promo.starting')
+                                : tChoice('cabinet.promo.confirm', picking?.cost ?? 0)}
                         </button>
                         <button className="btn btn-ghost" onClick={() => setPicking(null)}>
-                            Отмена
+                            {t('common.cancel')}
                         </button>
                     </>
                 }
@@ -242,7 +248,7 @@ export default function Promo({
                     <>
                         <div className="field">
                             <label className="label" htmlFor="promo-listing">
-                                Какое объявление продвигаем <span className="req">*</span>
+                                {t('cabinet.promo.which_listing')} <span className="req">*</span>
                             </label>
                             <select
                                 id="promo-listing"
@@ -267,15 +273,19 @@ export default function Promo({
                             а не после: списание единиц необратимо */}
                         <div className="card card--pad-sm" style={{ background: 'var(--bg)', border: 'none' }}>
                             <div className="row-between t-sm" style={{ marginBottom: 8 }}>
-                                <span className="muted">Стоимость</span>
-                                <b>{pluralize(picking.cost, ['единица', 'единицы', 'единиц'])}</b>
+                                <span className="muted">{t('cabinet.promo.cost')}</span>
+                                <b>{tChoice('cabinet.promo.units', picking.cost)}</b>
                             </div>
                             <div className="row-between t-sm" style={{ marginBottom: 8 }}>
-                                <span className="muted">Срок действия</span>
-                                <b>{picking.cost_label.includes('/') ? picking.cost_label.split('/')[1].trim() : 'разово'}</b>
+                                <span className="muted">{t('cabinet.promo.duration')}</span>
+                                <b>
+                                    {picking.cost_label.includes('/')
+                                        ? picking.cost_label.split('/')[1].trim()
+                                        : t('cabinet.promo.once')}
+                                </b>
                             </div>
                             <div className="row-between t-sm">
-                                <span className="muted">Останется на счёте</span>
+                                <span className="muted">{t('cabinet.promo.left')}</span>
                                 <b>{units - picking.cost}</b>
                             </div>
                         </div>
@@ -286,20 +296,14 @@ export default function Promo({
                             </p>
                         )}
 
-                        <p className="t-caption muted mt-8">
-                            Единицы спишутся сразу, продвижение начнёт действовать в течение нескольких минут.
-                            Отменить запуск и вернуть единицы нельзя.
-                        </p>
+                        <p className="t-caption muted mt-8">{t('cabinet.promo.irreversible')}</p>
                     </>
                 )}
             </Modal>
 
             <div className="alert alert-info mt-24">
                 <Info aria-hidden className="size-5" />
-                <div>
-                    Продвинутые объявления помечаются словом «Продвигается». Мы не выдаём рекламу за органическую
-                    выдачу — это принцип площадки.
-                </div>
+                <div>{t('cabinet.promo.honest')}</div>
             </div>
         </CabinetLayout>
     );

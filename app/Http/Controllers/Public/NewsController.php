@@ -17,8 +17,8 @@ class NewsController extends Controller
     public function index(): Response
     {
         app(Seo::class)
-            ->title('Новости площадки и рынка')
-            ->description('Обновления SAVDEX, разборы условий поставки и новости оптового рынка Узбекистана.')
+            ->title(__('ui.news.title'))
+            ->description(__('ui.news.description'))
             ->canonical(url('/news'));
 
         return Inertia::render('news/Index', [
@@ -36,7 +36,7 @@ class NewsController extends Controller
          * в выдаче стоит без даты, а дата у новости — половина смысла.
          */
         app(Seo::class)
-            ->title($post['title'] ?? 'Новость')
+            ->title($post['title'] ?? __('ui.news.title'))
             ->description($post['excerpt'] ?? null)
             ->canonical(url('/news/'.$slug))
             ->image($post['image'] ?? null)

@@ -48,7 +48,10 @@ class OrderService
         return $this->create($company, $user, [
             'purpose' => 'subscription',
             'plan_id' => $plan->id,
-            'description' => "Тариф «{$plan->name}» на {$plan->period_days} дн.",
+            'description' => __('ui.messages.order.plan', [
+                'plan' => $plan->name,
+                'days' => $plan->period_days,
+            ]),
             'amount' => $plan->priceUzs($this->rate->usd()),
         ]);
     }
@@ -68,7 +71,7 @@ class OrderService
         // Счёт на ноль сумов не выставляется: скидка 99% от нулевой
         // цены — признак кода, выпущенного на бесплатный тариф
         if ($amount < 1) {
-            throw new PromoCodeRejected('Промокод выпущен с ошибкой: тариф по нему не продаётся. Напишите в поддержку.');
+            throw new PromoCodeRejected(__('ui.messages.promo_code.plan_not_sold'));
         }
 
         /*
@@ -89,7 +92,13 @@ class OrderService
             'purpose' => 'subscription',
             'plan_id' => $plan->id,
             'promo_code_id' => $promo->id,
-            'description' => "Тариф «{$plan->name}» на {$plan->period_days} дн. · промокод {$promo->code}, скидка {$percent}%",
+            'description' => __('ui.messages.order.plan', [
+                'plan' => $plan->name,
+                'days' => $plan->period_days,
+            ]).' · '.__('ui.messages.order.with_promo', [
+                'code' => $promo->code,
+                'percent' => $percent,
+            ]),
             'amount' => $amount,
         ]);
     }
@@ -106,7 +115,10 @@ class OrderService
         return $this->create($company, $user, [
             'purpose' => 'credits',
             'credit_pack_id' => $pack->id,
-            'description' => "Пакет «{$pack->name}»: {$pack->credits} раскрытий контактов",
+            'description' => __('ui.messages.order.pack', [
+                'pack' => $pack->name,
+                'credits' => $pack->credits,
+            ]),
             'amount' => $pack->priceUzs($this->rate->usd()),
         ]);
     }
@@ -206,13 +218,13 @@ class OrderService
     private function settle(Payment $payment, array $stamp, ?User $admin): array
     {
         if ($payment->status === 'paid') {
-            return ['ok' => false, 'message' => 'Счёт уже оплачен — повторное начисление не выполнено.'];
+            return ['ok' => false, 'message' => __('ui.messages.order.already_paid')];
         }
 
         $company = $payment->company;
 
         if ($company === null) {
-            return ['ok' => false, 'message' => 'Компания удалена, начислять некому.'];
+            return ['ok' => false, 'message' => __('ui.messages.order.company_gone')];
         }
 
         DB::transaction(function () use ($payment, $company, $admin, $stamp): void {
@@ -232,7 +244,7 @@ class OrderService
             ['tone' => 'success', 'body' => $payment->description, 'url' => '/cabinet/billing'],
         );
 
-        return ['ok' => true, 'message' => 'Оплата зачислена, купленное начислено.'];
+        return ['ok' => true, 'message' => __('ui.messages.order.credited')];
     }
 
     private function grantPlan(Payment $payment, Company $company, ?User $admin): void

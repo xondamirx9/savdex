@@ -32,7 +32,7 @@ class ListingWizardController extends Controller
 
         if ($company === null) {
             return redirect()->route('cabinet.company')
-                ->with('warning', 'Сначала заполните данные компании — объявление публикуется от её имени');
+                ->with('warning', __('ui.messages.listing.no_company'));
         }
 
         // Лимит тарифа считается по активным: черновики не занимают слот
@@ -42,7 +42,8 @@ class ListingWizardController extends Controller
         if ($plan->listings_limit !== null && $active >= $plan->listings_limit) {
             return redirect()->route('cabinet.listings')->with(
                 'error',
-                "Достигнут лимит тарифа {$plan->name}: {$plan->listings_limit} активных объявлений. Снимите ненужное или смените тариф.",
+                __('ui.messages.listing.limit', ['plan' => $plan->name, 'limit' => $plan->listings_limit])
+                    .' '.__('ui.messages.listing.limit_hint'),
             );
         }
 
@@ -208,16 +209,16 @@ class ListingWizardController extends Controller
             'bundle_price' => ['nullable', 'numeric', 'min:0'],
             'price_negotiable' => ['boolean'],
         ], [
-            'category_id.required' => 'Выберите категорию — без неё объявление не найдут',
-            'title.required' => 'Укажите заголовок',
-            'title.min' => 'Заголовок слишком короткий: укажите товар, марку и объём',
-            'description.required' => 'Добавьте описание',
-            'description.min' => 'Описание слишком короткое — расскажите об условиях и объёмах',
+            'category_id.required' => __('ui.messages.listing.category_required'),
+            'title.required' => __('ui.messages.listing.title_required'),
+            'title.min' => __('ui.messages.listing.title_min'),
+            'description.required' => __('ui.messages.listing.description_required'),
+            'description.min' => __('ui.messages.listing.description_min'),
         ]);
 
         if (! $request->boolean('price_negotiable') && $request->input('price') === null) {
             throw ValidationException::withMessages([
-                'price' => 'Укажите цену или отметьте «цена договорная»',
+                'price' => __('ui.messages.listing.price_required'),
             ]);
         }
 
@@ -226,7 +227,7 @@ class ListingWizardController extends Controller
         $active = $company->activeListings()->where('id', '!=', $listing->id)->count();
 
         if ($plan->listings_limit !== null && $active >= $plan->listings_limit) {
-            return back()->with('error', "Достигнут лимит тарифа {$plan->name}: {$plan->listings_limit} активных объявлений.");
+            return back()->with('error', __('ui.messages.listing.limit', ['plan' => $plan->name, 'limit' => $plan->listings_limit]));
         }
 
         $listing->fill($request->only([
@@ -255,12 +256,12 @@ class ListingWizardController extends Controller
         app(Notifier::class)->company(
             $company,
             'moderation',
-            "Объявление «{$listing->title}» опубликовано и видно покупателям",
+            __('ui.messages.listing.published_notice', ['title' => $listing->title]),
             ['tone' => 'success', 'url' => route('cabinet.listings')],
         );
 
         return redirect()->route('cabinet.listings')
-            ->with('success', 'Объявление опубликовано — покупатели уже видят его в каталоге.');
+            ->with('success', __('ui.messages.listing.published'));
     }
 
     /**

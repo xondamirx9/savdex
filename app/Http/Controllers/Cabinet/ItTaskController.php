@@ -59,7 +59,7 @@ class ItTaskController extends Controller
                 'contractor' => $t->contractor?->name,
                 'responders' => $t->threads->map(fn ($thread): array => [
                     'id' => $thread->buyer_company_id,
-                    'name' => $thread->buyer?->name ?? 'Компания удалена',
+                    'name' => $thread->buyer?->name ?? __('ui.cabinet.incoming.deleted'),
                 ])->values()->all(),
             ])->values(),
         ]);
@@ -69,7 +69,7 @@ class ItTaskController extends Controller
     {
         if ($request->user()->company === null) {
             return redirect()->route('cabinet.company')
-                ->with('warning', 'Сначала заполните данные компании — задача публикуется от её имени');
+                ->with('warning', __('ui.messages.it_task.no_company'));
         }
 
         return Inertia::render('cabinet/it-tasks/Form', [
@@ -99,7 +99,7 @@ class ItTaskController extends Controller
         $this->storeFiles($task, $files);
 
         return redirect()->route('cabinet.it-tasks')
-            ->with('success', 'Задача опубликована в разделе «IT-услуги». Отклики исполнителей придут в чаты.');
+            ->with('success', __('ui.messages.it_task.published'));
     }
 
     public function edit(Request $request, int $id): Response
@@ -139,7 +139,7 @@ class ItTaskController extends Controller
         $task->fill($data)->save();
         $this->storeFiles($task, $request->file('files', []));
 
-        return redirect()->route('cabinet.it-tasks')->with('success', 'Задача обновлена');
+        return redirect()->route('cabinet.it-tasks')->with('success', __('ui.messages.it_task.updated'));
     }
 
     /** Закрыть приём откликов: исполнитель найден или задача неактуальна. */
@@ -151,7 +151,7 @@ class ItTaskController extends Controller
             $task->forceFill(['status' => ItTask::STATUS_CLOSED, 'closed_at' => now()])->save();
         }
 
-        return back()->with('success', 'Задача закрыта — на витрине её больше нет, чаты остались');
+        return back()->with('success', __('ui.messages.it_task.closed'));
     }
 
     /**
@@ -171,8 +171,8 @@ class ItTaskController extends Controller
             'result_summary' => ['nullable', 'string', 'max:600'],
             'contractor_company_id' => ['nullable', 'integer', Rule::in($responders)],
         ], [
-            'result_url.url' => 'Ссылка должна начинаться с http:// или https://',
-            'contractor_company_id.in' => 'Исполнителем можно отметить только компанию, которая откликалась на задачу',
+            'result_url.url' => __('ui.messages.it_task.url'),
+            'contractor_company_id.in' => __('ui.messages.it_task.contractor_in'),
         ]);
 
         $task->forceFill([
@@ -184,7 +184,7 @@ class ItTaskController extends Controller
             'contractor_company_id' => $data['contractor_company_id'] ?? null,
         ])->save();
 
-        return back()->with('success', 'Задача отмечена выполненной — она попала в «Выполненные» на витрине');
+        return back()->with('success', __('ui.messages.it_task.completed'));
     }
 
     /** Открыть заново: снова на витрину, срок не трогаем. */
@@ -196,7 +196,7 @@ class ItTaskController extends Controller
             $task->forceFill(['status' => ItTask::STATUS_ACTIVE, 'closed_at' => null, 'published_at' => now()])->save();
         }
 
-        return back()->with('success', 'Задача снова открыта для откликов');
+        return back()->with('success', __('ui.messages.it_task.reopened'));
     }
 
     public function destroy(Request $request, int $id): RedirectResponse
@@ -209,7 +209,7 @@ class ItTaskController extends Controller
 
         $task->delete();
 
-        return redirect()->route('cabinet.it-tasks')->with('success', 'Задача удалена');
+        return redirect()->route('cabinet.it-tasks')->with('success', __('ui.messages.it_task.deleted'));
     }
 
     public function destroyFile(Request $request, int $id, int $fileId): RedirectResponse
@@ -220,7 +220,7 @@ class ItTaskController extends Controller
         Storage::disk('local')->delete($file->file_path);
         $file->delete();
 
-        return back()->with('success', 'Файл удалён');
+        return back()->with('success', __('ui.messages.file.deleted'));
     }
 
     // ── Внутреннее ───────────────────────────────────────────
@@ -242,17 +242,17 @@ class ItTaskController extends Controller
             'files' => ['nullable', 'array', 'max:'.ItTaskFile::MAX_FILES],
             'files.*' => ['file', 'mimes:'.implode(',', ItTaskFile::ALLOWED_MIMES), 'max:'.ItTaskFile::MAX_SIZE_KB],
         ], [
-            'title.required' => 'Назовите задачу — по названию её найдут исполнители',
-            'title.min' => 'Название слишком короткое — опишите суть хотя бы в нескольких словах',
-            'description.required' => 'Опишите задачу: что нужно сделать и что должно получиться',
-            'description.min' => 'Описание слишком короткое — исполнителю нужно понять объём работы',
-            'budget_from.required_if' => 'Укажите бюджет или выберите «договорной»',
-            'budget_to.required_if' => 'Укажите верхнюю границу диапазона',
-            'budget_to.gte' => 'Верхняя граница не может быть меньше нижней',
-            'deadline_at.after' => 'Срок должен быть в будущем',
-            'files.max' => 'Не больше '.ItTaskFile::MAX_FILES.' файлов к задаче',
-            'files.*.mimes' => 'Допустимы PDF, документы Word и Excel, презентации, изображения, TXT и ZIP',
-            'files.*.max' => 'Файл больше 20 МБ',
+            'title.required' => __('ui.messages.it_task.title_required'),
+            'title.min' => __('ui.messages.it_task.title_min'),
+            'description.required' => __('ui.messages.it_task.description_required'),
+            'description.min' => __('ui.messages.it_task.description_min'),
+            'budget_from.required_if' => __('ui.messages.it_task.budget_required'),
+            'budget_to.required_if' => __('ui.messages.it_task.budget_to_required'),
+            'budget_to.gte' => __('ui.messages.it_task.budget_to_gte'),
+            'deadline_at.after' => __('ui.messages.it_task.deadline_future'),
+            'files.max' => __('ui.messages.it_task.files_max', ['max' => ItTaskFile::MAX_FILES]),
+            'files.*.mimes' => __('ui.messages.it_task.files_mimes'),
+            'files.*.max' => __('ui.messages.it_task.files_size'),
         ]);
 
         // Стек — чистые непустые строки без дублей
@@ -312,15 +312,16 @@ class ItTaskController extends Controller
 
     private function budgetLabel(ItTask $task): string
     {
-        $currency = $task->currency === 'UZS' ? 'сум' : $task->currency;
+        $currency = $task->currency === 'UZS' ? __('ui.catalog.currency_uzs') : $task->currency;
         $fmt = fn (float $v): string => number_format($v, 0, ',', ' ');
+        $negotiable = __('ui.cabinet.it_task_form.budget_negotiable');
 
         return match ($task->budget_type) {
-            'fixed' => $task->budget_from !== null ? $fmt((float) $task->budget_from).' '.$currency : 'договорной',
+            'fixed' => $task->budget_from !== null ? $fmt((float) $task->budget_from).' '.$currency : $negotiable,
             'range' => $task->budget_from !== null && $task->budget_to !== null
                 ? $fmt((float) $task->budget_from).' – '.$fmt((float) $task->budget_to).' '.$currency
-                : 'договорной',
-            default => 'договорной',
+                : $negotiable,
+            default => $negotiable,
         };
     }
 }

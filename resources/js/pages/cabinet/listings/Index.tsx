@@ -6,7 +6,7 @@ import { Empty, Tabs, formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { pluralize } from '@/lib/plural';
+import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 interface Row {
@@ -37,20 +37,23 @@ interface Props {
     limit: { used: number; total: number | null } | null;
 }
 
-const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
-    active: { cls: 'badge-verified', label: 'Активно' },
-    moderation: { cls: 'badge-neutral', label: 'На проверке' },
-    draft: { cls: 'badge-neutral', label: 'Черновик' },
-    expired: { cls: 'badge-neutral', label: 'Истекло' },
-    rejected: { cls: 'badge-danger', label: 'Отклонено' },
-    archived: { cls: 'badge-neutral', label: 'Снято' },
+/* Подпись берётся из словаря по тому же ключу, что и статус: цвет
+   здесь, текст — в переводе, иначе список статусов пришлось бы держать
+   в двух местах и следить, чтобы они не разъехались. */
+const STATUS_BADGE: Record<string, string> = {
+    active: 'badge-verified',
+    moderation: 'badge-neutral',
+    draft: 'badge-neutral',
+    expired: 'badge-neutral',
+    rejected: 'badge-danger',
+    archived: 'badge-neutral',
 };
 
 function priceLabel(row: Row): string {
-    if (row.negotiable || row.price === null) return 'цена договорная';
+    if (row.negotiable || row.price === null) return t('cabinet.listings.negotiable');
 
     const amount = formatNumber(row.price);
-    const currency = row.currency === 'UZS' ? 'сум' : row.currency;
+    const currency = row.currency === 'UZS' ? t('catalog.currency_uzs') : row.currency;
 
     return row.unit ? `${amount} ${currency}/${row.unit}` : `${amount} ${currency}`;
 }
@@ -88,9 +91,9 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
         }
 
         confirm({
-            title: `Удалить ${pluralize(selected.length, ['объявление', 'объявления', 'объявлений'])}?`,
-            description: 'Вместе с ними исчезнут фотографии и статистика показов. Восстановить нельзя. Если объявления просто не нужны сейчас — снимите их с публикации, это обратимо.',
-            confirmLabel: 'Удалить',
+            title: tChoice('cabinet.listings.delete_title', selected.length),
+            description: t('cabinet.listings.delete_text'),
+            confirmLabel: t('common.delete'),
             danger: true,
             onConfirm: () => send('delete'),
         });
@@ -101,35 +104,39 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
 
     return (
         <CabinetLayout
-            title="Мои объявления"
-            heading="Мои объявления"
+            title={t('cabinet.listings.title')}
+            heading={t('cabinet.listings.title')}
             subheading={
                 limit
                     ? limit.total === null
-                        ? `${limit.used} активных, тариф без ограничений`
-                        : `${limit.used} активных из ${limit.total} доступных по тарифу`
+                        ? t('cabinet.listings.limit_unlimited', { used: limit.used })
+                        : t('cabinet.listings.limit', { used: limit.used, total: limit.total })
                     : undefined
             }
             actions={
                 <Link href={routes.listingCreate} className="btn btn-primary">
-                    <Plus aria-hidden className="size-4" /> Создать объявление
+                    <Plus aria-hidden className="size-4" /> {t('cabinet.listings.create')}
                 </Link>
             }
         >
             {dialog}
 
-            <Tabs items={tabItems} active={status} onChange={switchTab} label="Статусы объявлений" />
+            <Tabs items={tabItems} active={status} onChange={switchTab} label={t('cabinet.listings.tabs_label')} />
 
             {listings.length === 0 ? (
                 <Empty
                     icon={Package}
-                    title={status === 'active' ? 'Активных объявлений нет' : 'Здесь пусто'}
+                    title={status === 'active' ? t('cabinet.listings.empty') : t('cabinet.listings.empty_tab')}
                     text={
                         status === 'active'
-                            ? 'Разместите предложение или запрос — покупатели находят компании именно через объявления.'
-                            : 'В этой вкладке пока ничего нет.'
+                            ? t('cabinet.listings.empty_text')
+                            : t('cabinet.listings.empty_tab_text')
                     }
-                    action={status === 'active' ? { href: routes.listingCreate, label: 'Создать объявление' } : undefined}
+                    action={
+                        status === 'active'
+                            ? { href: routes.listingCreate, label: t('cabinet.listings.create') }
+                            : undefined
+                    }
                 />
             ) : (
                 <>
@@ -143,28 +150,29 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                     checked={allChecked}
                                     onChange={(e) => setSelected(e.target.checked ? listings.map((l) => l.id) : [])}
                                 />
-                                Выбрать все
+                                {t('cabinet.listings.select_all')}
                             </label>
                             <button
                                 className="btn btn-secondary btn-sm"
                                 disabled={selected.length === 0 || bulk.processing}
                                 onClick={() => runBulk('renew')}
                             >
-                                Продлить{selected.length > 0 && ` (${selected.length})`}
+                                {t('cabinet.listings.renew')}
+                                {selected.length > 0 && ` (${selected.length})`}
                             </button>
                             <button
                                 className="btn btn-secondary btn-sm"
                                 disabled={selected.length === 0 || bulk.processing}
                                 onClick={() => runBulk('archive')}
                             >
-                                Снять с публикации
+                                {t('cabinet.listings.archive')}
                             </button>
                             <button
                                 className="btn btn-secondary btn-sm"
                                 disabled={selected.length === 0 || bulk.processing}
                                 onClick={() => runBulk('delete')}
                             >
-                                Удалить
+                                {t('common.delete')}
                             </button>
                         </div>
                     )}
@@ -173,9 +181,9 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                         <div className="alert alert-danger" style={{ marginBottom: 16 }}>
                             <TriangleAlert aria-hidden className="size-5" />
                             <div>
-                                <b>«{listings[0].title}» — отклонено.</b>
+                                <b>{t('cabinet.listings.rejected', { title: listings[0].title })}</b>
                                 <br />
-                                Причина: {listings[0].moderation_note}
+                                {t('cabinet.listings.reason', { reason: listings[0].moderation_note })}
                             </div>
                         </div>
                     )}
@@ -186,23 +194,23 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                 <tr>
                                     {(status === 'active' || status === 'expired') && (
                                         <th style={{ width: 34 }}>
-                                            <span className="sr-only">Выбор</span>
+                                            <span className="sr-only">{t('cabinet.listings.col_select')}</span>
                                         </th>
                                     )}
-                                    <th>Объявление</th>
-                                    <th>Статус</th>
-                                    <th className="num">Показы</th>
-                                    <th className="num">Просмотры</th>
-                                    <th className="num">Контакты</th>
-                                    <th>До</th>
+                                    <th>{t('cabinet.listings.col_listing')}</th>
+                                    <th>{t('cabinet.listings.col_status')}</th>
+                                    <th className="num">{t('cabinet.listings.col_impressions')}</th>
+                                    <th className="num">{t('cabinet.listings.col_views')}</th>
+                                    <th className="num">{t('cabinet.listings.col_unlocks')}</th>
+                                    <th>{t('cabinet.listings.col_until')}</th>
                                     <th>
-                                        <span className="sr-only">Действия</span>
+                                        <span className="sr-only">{t('cabinet.listings.col_actions')}</span>
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {listings.map((row) => {
-                                    const badge = STATUS_BADGE[row.status] ?? STATUS_BADGE.draft;
+                                    const badgeClass = STATUS_BADGE[row.status] ?? STATUS_BADGE.draft;
                                     const TypeIcon = row.type === 'demand' ? ShoppingCart : Package;
 
                                     return (
@@ -211,14 +219,16 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                 <td data-label="">
                                                     <input
                                                         type="checkbox"
-                                                        aria-label={`Выбрать «${row.title}»`}
+                                                        aria-label={t('cabinet.listings.select_one', {
+                                                            title: row.title,
+                                                        })}
                                                         checked={selected.includes(row.id)}
                                                         onChange={() => toggle(row.id)}
                                                     />
                                                 </td>
                                             )}
 
-                                            <td data-label="Объявление">
+                                            <td data-label={t('cabinet.listings.col_listing')}>
                                                 <div className="row" style={{ gap: 10 }}>
                                                     <span
                                                         className={cn(
@@ -242,14 +252,17 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                         </Link>
                                                         <br />
                                                         <span className="t-caption muted">
-                                                            {row.category ?? 'Без категории'} · {priceLabel(row)}
+                                                            {row.category ?? t('cabinet.listings.no_category')} ·{' '}
+                                                            {priceLabel(row)}
                                                         </span>
                                                     </span>
                                                 </div>
                                             </td>
 
-                                            <td data-label="Статус">
-                                                <span className={cn('badge', badge.cls)}>{badge.label}</span>{' '}
+                                            <td data-label={t('cabinet.listings.col_status')}>
+                                                <span className={cn('badge', badgeClass)}>
+                                                    {t(`cabinet.listings.status_${row.status}`)}
+                                                </span>{' '}
                                                 {row.badges.map((b) => (
                                                     <span key={b} className="badge badge-top">
                                                         {b}
@@ -257,17 +270,17 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                 ))}
                                             </td>
 
-                                            <td data-label="Показы" className="num">
+                                            <td data-label={t('cabinet.listings.col_impressions')} className="num">
                                                 {formatNumber(row.impressions)}
                                             </td>
-                                            <td data-label="Просмотры" className="num">
+                                            <td data-label={t('cabinet.listings.col_views')} className="num">
                                                 {formatNumber(row.views)}
                                             </td>
-                                            <td data-label="Контакты" className="num">
+                                            <td data-label={t('cabinet.listings.col_unlocks')} className="num">
                                                 {row.unlocks}
                                             </td>
 
-                                            <td data-label="До">
+                                            <td data-label={t('cabinet.listings.col_until')}>
                                                 {row.expires_at ? (
                                                     <span
                                                         style={
@@ -292,7 +305,7 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                                 router.post(`/cabinet/listings/${row.id}/resubmit`, {}, { preserveScroll: true })
                                                             }
                                                         >
-                                                            Опубликовать снова
+                                                            {t('cabinet.listings.resubmit')}
                                                         </button>
                                                     ) : row.expiring_soon || row.status === 'expired' ? (
                                                         <button
@@ -301,13 +314,15 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                                 router.post(`/cabinet/listings/${row.id}/renew`, {}, { preserveScroll: true })
                                                             }
                                                         >
-                                                            Продлить
+                                                            {t('cabinet.listings.renew')}
                                                         </button>
                                                     ) : row.status === 'active' ? (
                                                         <Link
                                                             href={routes.cabinetPromo}
                                                             className="btn btn-ghost btn-icon"
-                                                            aria-label={`Продвинуть «${row.title}»`}
+                                                            aria-label={t('cabinet.listings.promote_one', {
+                                                                title: row.title,
+                                                            })}
                                                         >
                                                             <Rocket aria-hidden className="size-5" />
                                                         </Link>
@@ -319,10 +334,18 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                             className="btn btn-ghost btn-icon"
                                                             aria-label={
                                                                 row.status === 'active'
-                                                                    ? `Посмотреть «${row.title}» на сайте`
-                                                                    : `Предпросмотр «${row.title}»`
+                                                                    ? t('cabinet.listings.view_one', {
+                                                                          title: row.title,
+                                                                      })
+                                                                    : t('cabinet.listings.preview_one', {
+                                                                          title: row.title,
+                                                                      })
                                                             }
-                                                            title={row.status === 'active' ? 'Посмотреть на сайте' : 'Предпросмотр'}
+                                                            title={
+                                                                row.status === 'active'
+                                                                    ? t('cabinet.listings.view')
+                                                                    : t('cabinet.listings.preview')
+                                                            }
                                                         >
                                                             <Eye aria-hidden className="size-5" />
                                                         </Link>
@@ -331,7 +354,9 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                     <Link
                                                         href={routes.listingEdit(row.id)}
                                                         className="btn btn-ghost btn-icon"
-                                                        aria-label={`Редактировать «${row.title}»`}
+                                                        aria-label={t('cabinet.listings.edit_one', {
+                                                            title: row.title,
+                                                        })}
                                                     >
                                                         <Pencil aria-hidden className="size-5" />
                                                     </Link>

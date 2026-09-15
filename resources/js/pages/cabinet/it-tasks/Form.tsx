@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Task {
     id: number;
@@ -88,12 +89,12 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
 
     return (
         <CabinetLayout
-            title={task ? 'Изменить IT-задачу' : 'Новая IT-задача'}
-            heading={task ? 'Изменить IT-задачу' : 'Новая IT-задача'}
-            subheading="Чем точнее описание, тем меньше вопросов у исполнителей и точнее их оценки"
+            title={task ? t('cabinet.it_task_form.edit') : t('cabinet.it_task_form.create')}
+            heading={task ? t('cabinet.it_task_form.edit') : t('cabinet.it_task_form.create')}
+            subheading={t('cabinet.it_task_form.subtitle')}
             actions={
                 <Link href={routes.cabinetItTasks} className="btn btn-secondary btn-sm">
-                    <ArrowLeft aria-hidden className="size-4" /> Все задачи
+                    <ArrowLeft aria-hidden className="size-4" /> {t('cabinet.it_task_form.all')}
                 </Link>
             }
         >
@@ -102,14 +103,14 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
             <form onSubmit={submit} className="card" style={{ maxWidth: 760 }}>
                 <div className="field">
                     <label className="label" htmlFor="t-title">
-                        Название задачи <span className="req">*</span>
+                        {t('cabinet.it_task_form.name')} <span className="req">*</span>
                     </label>
                     <input
                         id="t-title"
                         className="input"
                         value={form.data.title}
                         onChange={(e) => form.setData('title', e.target.value)}
-                        placeholder="Интернет-магазин стройматериалов с оплатой картой"
+                        placeholder={t('cabinet.it_task_form.name_placeholder')}
                         maxLength={120}
                     />
                     {err('title') && <p className="hint" style={{ color: 'var(--danger)' }}>{err('title')}</p>}
@@ -117,7 +118,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
 
                 <div className="field">
                     <label className="label" htmlFor="t-type">
-                        Вид услуги <span className="req">*</span>
+                        {t('cabinet.it_task_form.service')} <span className="req">*</span>
                     </label>
                     <select
                         id="t-type"
@@ -135,7 +136,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
 
                 <div className="field">
                     <label className="label" htmlFor="t-desc">
-                        Описание <span className="req">*</span>
+                        {t('cabinet.it_task_form.description')} <span className="req">*</span>
                     </label>
                     <textarea
                         id="t-desc"
@@ -143,16 +144,14 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                         rows={9}
                         value={form.data.description}
                         onChange={(e) => form.setData('description', e.target.value)}
-                        placeholder={
-                            'Что нужно сделать и зачем. Что уже есть (сайт, 1С, база). Что должно получиться в итоге. Как будете принимать работу.'
-                        }
+                        placeholder={t('cabinet.it_task_form.description_placeholder')}
                     />
                     {err('description') && <p className="hint" style={{ color: 'var(--danger)' }}>{err('description')}</p>}
                 </div>
 
                 <div className="field">
                     <label className="label" htmlFor="t-stack">
-                        Технологии и стек
+                        {t('cabinet.it_task_form.stack')}
                     </label>
                     <div className="row wrap" style={{ gap: 6, marginBottom: form.data.stack.length ? 8 : 0 }}>
                         {form.data.stack.map((s) => (
@@ -160,7 +159,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                 {s}
                                 <button
                                     type="button"
-                                    aria-label={`Убрать ${s}`}
+                                    aria-label={t('cabinet.it_task_form.remove_tag', { tag: s })}
                                     onClick={() => form.setData('stack', form.data.stack.filter((x) => x !== s))}
                                     style={{ display: 'inline-flex' }}
                                 >
@@ -181,27 +180,21 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                     addTag();
                                 }
                             }}
-                            placeholder="Laravel, React, 1С, Telegram Bot API… Enter — добавить"
+                            placeholder={t('cabinet.it_task_form.stack_placeholder')}
                             maxLength={30}
                             disabled={form.data.stack.length >= 10}
                         />
                         <button type="button" className="btn btn-secondary" onClick={addTag} disabled={!tag.trim()}>
-                            Добавить
+                            {t('cabinet.it_task_form.add')}
                         </button>
                     </div>
-                    <p className="hint">Необязательно. До 10 технологий — по ним исполнители найдут вашу задачу.</p>
+                    <p className="hint">{t('cabinet.it_task_form.stack_hint')}</p>
                 </div>
 
                 <div className="field">
-                    <span className="label">Бюджет</span>
+                    <span className="label">{t('cabinet.it_task_form.budget')}</span>
                     <div className="row wrap" style={{ gap: 6 }}>
-                        {(
-                            [
-                                ['negotiable', 'Договорной'],
-                                ['fixed', 'Фиксированный'],
-                                ['range', 'Диапазон'],
-                            ] as const
-                        ).map(([value, label]) => (
+                        {(['negotiable', 'fixed', 'range'] as const).map((value) => (
                             <button
                                 key={value}
                                 type="button"
@@ -209,7 +202,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                 aria-pressed={form.data.budget_type === value}
                                 onClick={() => form.setData('budget_type', value)}
                             >
-                                {label}
+                                {t(`cabinet.it_task_form.budget_${value}`)}
                             </button>
                         ))}
                     </div>
@@ -221,8 +214,16 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                     type="number"
                                     min={0}
                                     inputMode="numeric"
-                                    aria-label={form.data.budget_type === 'range' ? 'Бюджет от' : 'Бюджет'}
-                                    placeholder={form.data.budget_type === 'range' ? 'от' : 'сумма'}
+                                    aria-label={
+                                        form.data.budget_type === 'range'
+                                            ? t('cabinet.it_task_form.budget_from')
+                                            : t('cabinet.it_task_form.budget')
+                                    }
+                                    placeholder={
+                                        form.data.budget_type === 'range'
+                                            ? t('cabinet.it_task_form.from')
+                                            : t('cabinet.it_task_form.amount')
+                                    }
                                     value={form.data.budget_from}
                                     onChange={(e) => form.setData('budget_from', e.target.value)}
                                 />
@@ -235,8 +236,8 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                         type="number"
                                         min={0}
                                         inputMode="numeric"
-                                        aria-label="Бюджет до"
-                                        placeholder="до"
+                                        aria-label={t('cabinet.it_task_form.budget_to')}
+                                        placeholder={t('cabinet.it_task_form.to')}
                                         value={form.data.budget_to}
                                         onChange={(e) => form.setData('budget_to', e.target.value)}
                                     />
@@ -246,13 +247,13 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                             <select
                                 className="select"
                                 style={{ width: 'auto' }}
-                                aria-label="Валюта"
+                                aria-label={t('cabinet.it_task_form.currency')}
                                 value={form.data.currency}
                                 onChange={(e) => form.setData('currency', e.target.value)}
                             >
                                 {currencies.map((c) => (
                                     <option key={c} value={c}>
-                                        {c === 'UZS' ? 'сум' : c}
+                                        {c === 'UZS' ? t('catalog.currency_uzs') : c}
                                     </option>
                                 ))}
                             </select>
@@ -262,7 +263,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
 
                 <div className="field">
                     <label className="label" htmlFor="t-deadline">
-                        Желаемый срок сдачи
+                        {t('cabinet.it_task_form.deadline')}
                     </label>
                     <input
                         id="t-deadline"
@@ -276,7 +277,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                 </div>
 
                 <div className="field">
-                    <span className="label">Техзадание и файлы</span>
+                    <span className="label">{t('cabinet.it_task_form.files')}</span>
                     {files.length > 0 && (
                         <ul style={{ display: 'grid', gap: 6, marginBottom: 10, padding: 0, listStyle: 'none' }}>
                             {files.map((f) => (
@@ -288,13 +289,13 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                     <button
                                         type="button"
                                         className="btn btn-ghost btn-sm"
-                                        aria-label={`Удалить ${f.title}`}
+                                        aria-label={t('cabinet.it_task_form.remove_file', { title: f.title })}
                                         onClick={() =>
                                             task &&
                                             confirm({
-                                                title: 'Удалить файл?',
+                                                title: t('cabinet.it_task_form.delete_file'),
                                                 description: f.title,
-                                                confirmLabel: 'Удалить',
+                                                confirmLabel: t('common.delete'),
                                                 danger: true,
                                                 onConfirm: () =>
                                                     router.delete(routes.itTaskFileDelete(task.id, f.id), { preserveScroll: true }),
@@ -317,12 +318,11 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                 onChange={(e) => form.setData('files', Array.from(e.target.files ?? []).slice(0, roomForFiles))}
                             />
                             <p className="hint">
-                                До {roomForFiles} файлов по 20 МБ: PDF, Word, Excel, презентации, изображения, ZIP. Файлы видны
-                                только вошедшим пользователям.
+                                {t('cabinet.it_task_form.files_hint', { count: roomForFiles })}
                             </p>
                         </>
                     ) : (
-                        <p className="hint">Достигнут максимум — {MAX_FILES} файлов. Удалите лишний, чтобы добавить новый.</p>
+                        <p className="hint">{t('cabinet.it_task_form.files_full', { max: MAX_FILES })}</p>
                     )}
                     {(err('files') || err('files.0')) && (
                         <p className="hint" style={{ color: 'var(--danger)' }}>{err('files') ?? err('files.0')}</p>
@@ -331,14 +331,16 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
 
                 <div className="row" style={{ gap: 10, marginTop: 24 }}>
                     <button className="btn btn-primary" type="submit" disabled={form.processing}>
-                        {task ? 'Сохранить' : 'Опубликовать задачу'}
+                        {task ? t('common.save') : t('cabinet.it_task_form.publish')}
                     </button>
-                    {form.progress && <span className="t-sm muted">Загрузка {form.progress.percentage}%</span>}
+                    {form.progress && (
+                        <span className="t-sm muted">
+                            {t('cabinet.it_task_form.progress', { percent: form.progress.percentage ?? 0 })}
+                        </span>
+                    )}
                 </div>
                 {!task && (
-                    <p className="hint mt-12">
-                        Задача появится в разделе «IT-услуги» сразу после публикации. Отклики исполнителей придут в «Чаты».
-                    </p>
+                    <p className="hint mt-12">{t('cabinet.it_task_form.after_publish')}</p>
                 )}
             </form>
         </CabinetLayout>

@@ -46,24 +46,24 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Как к вам обращаться? Укажите имя',
-            'name.min' => 'Имя слишком короткое',
+            'name.required' => __('ui.messages.register.name_required'),
+            'name.min' => __('ui.messages.register.name_min'),
 
-            'email.required' => 'Введите рабочую почту',
-            'email.email' => 'Проверьте адрес: нужен формат name@company.uz',
-            'email.unique' => 'На этот адрес уже зарегистрирована компания. Войдите или восстановите пароль',
+            'email.required' => __('ui.messages.register.email_required'),
+            'email.email' => __('ui.messages.register.email_format'),
+            'email.unique' => __('ui.messages.register.email_taken'),
 
-            'phone.required' => 'Введите номер телефона',
-            'phone.regex' => 'Номер должен содержать от 9 до 15 цифр. Например: +998 90 123-45-67',
+            'phone.required' => __('ui.messages.register.phone_required'),
+            'phone.regex' => __('ui.messages.phone_format'),
 
-            'password.required' => 'Придумайте пароль',
-            'password.confirmed' => 'Пароли не совпадают',
-            'password.min' => 'Пароль должен быть не короче 10 символов',
-            'password.letters' => 'Добавьте в пароль хотя бы одну букву',
-            'password.numbers' => 'Добавьте в пароль хотя бы одну цифру',
-            'password.uncompromised' => 'Этот пароль встречается в утечках данных. Придумайте другой',
+            'password.required' => __('ui.messages.auth.password_new'),
+            'password.confirmed' => __('ui.messages.auth.password_mismatch'),
+            'password.min' => __('ui.messages.register.password_min'),
+            'password.letters' => __('ui.messages.register.password_letters'),
+            'password.numbers' => __('ui.messages.register.password_numbers'),
+            'password.uncompromised' => __('ui.messages.register.password_leaked'),
 
-            'terms.accepted' => 'Нужно принять оферту и политику конфиденциальности',
+            'terms.accepted' => __('ui.messages.register.terms'),
         ];
     }
 
@@ -79,8 +79,10 @@ class RegisterRequest extends FormRequest
          * человек во втором. Дублируем сообщение туда, где его ждут.
          */
         $validator->after(function (Validator $v): void {
-            if ($v->errors()->first('password') === 'Пароли не совпадают') {
-                $v->errors()->add('password_confirmation', 'Пароли не совпадают');
+            // По правилу, а не по тексту: текст приходит из словаря
+            // и на другом языке сравнение со строкой перестало бы работать
+            if (array_key_exists('Confirmed', $v->failed()['password'] ?? [])) {
+                $v->errors()->add('password_confirmation', __('ui.messages.auth.password_mismatch'));
             }
         });
 
@@ -91,15 +93,16 @@ class RegisterRequest extends FormRequest
                 return;
             }
 
-            // Сообщение об уже занятом адресе перекрывать не нужно — оно полезнее
-            if (str_contains((string) $v->errors()->first('email'), 'уже зарегистрирована')) {
+            // Сообщение об уже занятом адресе перекрывать не нужно — оно полезнее.
+            // Смотрим на сработавшее правило, а не на текст: текст переводится
+            if (array_key_exists('Unique', $v->failed()['email'] ?? [])) {
                 return;
             }
 
             $message = ! str_contains($email, '@')
-                ? 'В адресе не хватает знака @. Например: rustam@company.uz'
+                ? __('ui.messages.register.email_no_at')
                 : (! str_contains(substr($email, (int) strpos($email, '@')), '.')
-                    ? 'Похоже, адрес неполный. Нужен формат name@company.uz'
+                    ? __('ui.messages.register.email_incomplete')
                     : null);
 
             if ($message !== null) {

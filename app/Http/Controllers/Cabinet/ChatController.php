@@ -63,7 +63,7 @@ class ChatController extends Controller
 
                 return [
                     'id' => $t->id,
-                    'company' => $other?->name ?? 'Компания удалена',
+                    'company' => $other?->name ?? __('ui.cabinet.incoming.deleted'),
                     'initials' => $other?->initials() ?? '—',
                     'listing' => $t->listing?->title ?? $t->itTask?->title,
                     'last' => $last === null ? null : Str::limit($last->body, 80),
@@ -95,7 +95,7 @@ class ChatController extends Controller
         return Inertia::render('cabinet/Chat', [
             'thread' => [
                 'id' => $thread->id,
-                'company' => $other?->name ?? 'Компания удалена',
+                'company' => $other?->name ?? __('ui.cabinet.incoming.deleted'),
                 'initials' => $other?->initials() ?? '—',
                 'company_slug' => $other?->slug,
                 'listing' => $thread->listing === null ? null : [
@@ -132,7 +132,7 @@ class ChatController extends Controller
 
         $data = $request->validate(
             ['body' => ['required', 'string', 'max:'.ChatService::MAX_LENGTH]],
-            ['body.required' => 'Введите сообщение', 'body.max' => 'Сообщение слишком длинное'],
+            ['body.required' => __('ui.messages.chat.body_required'), 'body.max' => __('ui.messages.chat.body_max')],
         );
 
         try {
@@ -154,14 +154,14 @@ class ChatController extends Controller
         $company = $user->company;
 
         if ($company === null) {
-            return back()->withErrors(['body' => 'Сначала заполните данные компании — отклик отправляется от её имени']);
+            return back()->withErrors(['body' => __('ui.messages.chat.no_company')]);
         }
 
         $task = ItTask::query()->with('company')->findOrFail($id);
 
         $data = $request->validate(
             ['body' => ['required', 'string', 'max:'.ChatService::MAX_LENGTH]],
-            ['body.required' => 'Напишите, чем можете помочь', 'body.max' => 'Сообщение слишком длинное'],
+            ['body.required' => __('ui.messages.chat.body_help'), 'body.max' => __('ui.messages.chat.body_max')],
         );
 
         try {
@@ -172,7 +172,7 @@ class ChatController extends Controller
 
         return redirect()
             ->route('cabinet.chats.show', $thread->id)
-            ->with('success', 'Отклик отправлен — продолжайте разговор здесь.');
+            ->with('success', __('ui.messages.chat.reply_sent'));
     }
 
     public function respond(Request $request, int $id): RedirectResponse
@@ -181,14 +181,14 @@ class ChatController extends Controller
         $company = $user->company;
 
         if ($company === null) {
-            return back()->withErrors(['body' => 'Сначала заполните данные компании — отклик отправляется от её имени']);
+            return back()->withErrors(['body' => __('ui.messages.chat.no_company')]);
         }
 
         $listing = Listing::query()->with('company')->findOrFail($id);
 
         $data = $request->validate(
             ['body' => ['required', 'string', 'max:'.ChatService::MAX_LENGTH]],
-            ['body.required' => 'Напишите, что вас интересует', 'body.max' => 'Сообщение слишком длинное'],
+            ['body.required' => __('ui.messages.chat.body_interest'), 'body.max' => __('ui.messages.chat.body_max')],
         );
 
         try {
@@ -199,6 +199,6 @@ class ChatController extends Controller
 
         return redirect()
             ->route('cabinet.chats.show', $thread->id)
-            ->with('success', 'Отклик отправлен — продолжайте разговор здесь.');
+            ->with('success', __('ui.messages.chat.reply_sent'));
     }
 }

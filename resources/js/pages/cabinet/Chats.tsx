@@ -3,6 +3,7 @@ import { MessageSquareText } from 'lucide-react';
 import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface ThreadRow {
     id: number;
@@ -22,22 +23,23 @@ interface ThreadRow {
  */
 export default function Chats({ threads, hasCompany }: { threads: ThreadRow[]; hasCompany: boolean }) {
     return (
-        <CabinetLayout title="Чаты" heading="Чаты" subheading="Отклики на объявления и переписка с компаниями">
+        <CabinetLayout
+            title={t('cabinet.chats.title')}
+            heading={t('cabinet.chats.title')}
+            subheading={t('cabinet.chats.subtitle')}
+        >
             {!hasCompany ? (
                 <Panel>
-                    <p className="muted">Заполните данные компании — переписка на площадке ведётся от её имени.</p>
+                    <p className="muted">{t('cabinet.chats.no_company')}</p>
                 </Panel>
             ) : threads.length === 0 ? (
                 <Panel>
                     <div className="stack-8" style={{ textAlign: 'center', padding: '24px 0' }}>
                         <MessageSquareText aria-hidden className="size-8" style={{ margin: '0 auto', color: 'var(--text-muted)' }} />
-                        <p className="muted">
-                            Пока пусто. Найдите товар в каталоге и нажмите «Откликнуться» — разговор появится здесь.
-                            Отклики на ваши объявления тоже приходят сюда.
-                        </p>
+                        <p className="muted">{t('cabinet.chats.empty')}</p>
                         <p>
                             <Link href={routes.catalog} className="btn btn-secondary btn-sm">
-                                Открыть каталог
+                                {t('cabinet.chats.open_catalog')}
                             </Link>
                         </p>
                     </div>
@@ -60,7 +62,7 @@ export default function Chats({ threads, hasCompany }: { threads: ThreadRow[]; h
                                         className="t-sm truncate"
                                         style={{ fontWeight: thread.unread > 0 ? 600 : 400 }}
                                     >
-                                        {thread.last_mine ? 'Вы: ' : ''}
+                                        {thread.last_mine ? t('cabinet.chats.you') : ''}
                                         {thread.last}
                                     </p>
                                 )}

@@ -196,7 +196,7 @@ class HandleInertiaRequests extends Middleware
              * Смена языка — обычная ссылка с перезагрузкой, поэтому
              * новый словарь приходит вместе с новой страницей.
              */
-            'translations' => $request->hasHeader('X-Inertia') ? null : trans('ui'),
+            'translations' => $request->hasHeader('X-Inertia') ? null : $this->translations(),
 
             /*
              * Адреса этой же страницы на других языках.
@@ -215,6 +215,36 @@ class HandleInertiaRequests extends Middleware
              */
             'localeSuggest' => SetLocale::suggest($request),
         ];
+    }
+
+    /**
+     * Словарь интерфейса для текущего языка, поверх русского.
+     *
+     * Переводы пишутся вручную и появляются не одновременно: сначала
+     * новый раздел добавляется в русский словарь, потом расходится по
+     * остальным четырём. В этот промежуток у t() нет ключа, и на экран
+     * уходит сам ключ — человек видит «cabinet.dashboard.title» вместо
+     * заголовка. Русский текст в этом месте хуже перевода, но лучше
+     * технической строки, поэтому он идёт подложкой.
+     *
+     * Рекурсивно, потому что словарь вложенный: раздел может быть
+     * переведён наполовину, и заменять его целиком нельзя.
+     *
+     * @return array<string, mixed>
+     */
+    private function translations(): array
+    {
+        /** @var array<string, mixed> $active */
+        $active = trans('ui');
+
+        if (app()->getLocale() === Locales::DEFAULT) {
+            return $active;
+        }
+
+        /** @var array<string, mixed> $base */
+        $base = trans('ui', locale: Locales::DEFAULT);
+
+        return array_replace_recursive($base, $active);
     }
 
     /**

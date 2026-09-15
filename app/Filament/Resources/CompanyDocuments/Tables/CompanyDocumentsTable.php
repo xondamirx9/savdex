@@ -34,7 +34,7 @@ class CompanyDocumentsTable
     {
         return $table
             ->modifyQueryUsing(fn ($query) => $query
-                ->whereIn('type', array_keys(CompanyDocument::VERIFICATION_TYPES))
+                ->whereIn('type', CompanyDocument::VERIFICATION_TYPES)
                 ->with(['company', 'moderator']))
             ->columns([
                 TextColumn::make('company.name')
@@ -91,7 +91,8 @@ class CompanyDocumentsTable
                     CompanyDocument::STATUS_REJECTED => 'Отклонён',
                 ]),
 
-                SelectFilter::make('type')->label('Тип')->options(CompanyDocument::VERIFICATION_TYPES),
+                SelectFilter::make('type')->label('Тип')
+                    ->options(CompanyDocument::typeOptions(CompanyDocument::VERIFICATION_TYPES)),
             ])
             ->recordActions([
                 Action::make('open')

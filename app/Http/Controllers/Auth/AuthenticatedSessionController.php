@@ -46,9 +46,9 @@ class AuthenticatedSessionController extends Controller
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ], [
-            'email.required' => 'Введите почту',
-            'email.email' => 'Проверьте адрес почты',
-            'password.required' => 'Введите пароль',
+            'email.required' => __('ui.messages.auth.email_required'),
+            'email.email' => __('ui.messages.auth.email_invalid'),
+            'password.required' => __('ui.messages.auth.password_required'),
         ]);
 
         $email = mb_strtolower(trim($credentials['email']));
@@ -71,11 +71,10 @@ class AuthenticatedSessionController extends Controller
             throw ValidationException::withMessages([
                 'email' => $fresh->isLocked()
                     ? $this->lockoutMessage($fresh)
-                    : sprintf(
-                        'Неверная почта или пароль. Осталось попыток: %d из %d',
-                        $fresh->remainingAttempts(),
-                        LoginThrottle::MAX_ATTEMPTS,
-                    ),
+                    : __('ui.messages.auth.wrong_credentials', [
+                        'left' => $fresh->remainingAttempts(),
+                        'total' => LoginThrottle::MAX_ATTEMPTS,
+                    ]),
             ]);
         }
 
@@ -88,7 +87,7 @@ class AuthenticatedSessionController extends Controller
             $request->session()->invalidate();
 
             throw ValidationException::withMessages([
-                'email' => 'Учётная запись заблокирована. Напишите в поддержку, чтобы разобраться',
+                'email' => __('ui.messages.auth.blocked'),
             ]);
         }
 
@@ -123,9 +122,6 @@ class AuthenticatedSessionController extends Controller
         $seconds = $throttle->secondsUntilUnlock();
         $minutes = (int) ceil($seconds / 60);
 
-        return sprintf(
-            'Слишком много попыток входа. Попробуйте через %d мин. или восстановите пароль по почте',
-            max(1, $minutes),
-        );
+        return __('ui.messages.auth.locked_out', ['minutes' => max(1, $minutes)]);
     }
 }

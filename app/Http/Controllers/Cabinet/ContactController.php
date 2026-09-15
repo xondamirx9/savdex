@@ -97,7 +97,7 @@ class ContactController extends Controller
 
         $unlock->fill($data)->save();
 
-        return back()->with('success', 'Сохранено');
+        return back()->with('success', __('ui.messages.saved'));
     }
 
     /**
@@ -111,14 +111,14 @@ class ContactController extends Controller
         $unlock = $this->owned($request, $id);
 
         if ($unlock->complaint_status !== null) {
-            return back()->with('error', 'Жалоба уже отправлена и рассматривается');
+            return back()->with('error', __('ui.messages.complaint.pending'));
         }
 
         $data = $request->validate([
             'reason' => ['required', 'string', 'min:10', 'max:500'],
         ], [
-            'reason.required' => 'Опишите, что не так с контактом',
-            'reason.min' => 'Слишком коротко — модератору нужны детали для проверки',
+            'reason.required' => __('ui.messages.complaint.reason_required'),
+            'reason.min' => __('ui.messages.complaint.reason_min'),
         ]);
 
         $unlock->forceFill([
@@ -127,7 +127,7 @@ class ContactController extends Controller
             'complained_at' => now(),
         ])->save();
 
-        return back()->with('success', 'Жалоба отправлена. Проверим и вернём кредит, если контакт действительно нерабочий.');
+        return back()->with('success', __('ui.messages.complaint.sent'));
     }
 
     /**
@@ -150,7 +150,15 @@ class ContactController extends Controller
 
             fwrite($out, "\xEF\xBB\xBF");
 
-            fputcsv($out, ['Компания', 'Телефоны', 'Почта', 'Объявление', 'Открыт', 'Статус', 'Заметка'], ';');
+            fputcsv($out, [
+                __('ui.cabinet.contacts.company'),
+                __('ui.messages.export.phones'),
+                __('ui.messages.export.emails'),
+                __('ui.cabinet.contacts.listing'),
+                __('ui.cabinet.contacts.opened'),
+                __('ui.cabinet.contacts.status'),
+                __('ui.cabinet.contacts.note'),
+            ], ';');
 
             foreach ($rows as $u) {
                 fputcsv($out, [
