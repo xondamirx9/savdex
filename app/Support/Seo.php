@@ -50,6 +50,18 @@ class Seo
     /** @var array<string, mixed> */
     private array $organizationDetails = [];
 
+    /**
+     * Языки, на которых страница существует; null — на всех.
+     *
+     * Загруженное объявление без перевода на языке не показывается —
+     * и hreflang не должен обещать поисковику английскую версию,
+     * которой нет: по адресу /en/… он увидит русский текст и сочтёт
+     * страницу дублем русской.
+     *
+     * @var list<string>|null
+     */
+    private ?array $locales = null;
+
     public function title(string $title): self
     {
         $title = trim($title);
@@ -78,6 +90,18 @@ class Seo
         $clean = trim((string) preg_replace('/\s+/u', ' ', strip_tags($text)));
 
         $this->description = Str::limit($clean, 155, '…');
+
+        return $this;
+    }
+
+    /**
+     * Ограничить языки страницы.
+     *
+     * @param  list<string>  $codes
+     */
+    public function onlyLocales(array $codes): self
+    {
+        $this->locales = $codes;
 
         return $this;
     }
@@ -193,7 +217,15 @@ class Seo
      */
     public function getCanonical(): string
     {
-        return Locales::url($this->path(), app()->getLocale());
+        $locale = app()->getLocale();
+
+        // На языке, где страницы нет, канонической объявляется
+        // русская: текст на ней всё равно русский
+        if ($this->locales !== null && ! in_array($locale, $this->locales, true)) {
+            $locale = Locales::DEFAULT;
+        }
+
+        return Locales::url($this->path(), $locale);
     }
 
     /**
@@ -212,6 +244,10 @@ class Seo
         $links = [];
 
         foreach (Locales::ALL as $code => $meta) {
+            if ($this->locales !== null && ! in_array($code, $this->locales, true)) {
+                continue;
+            }
+
             $links[$meta['hreflang']] = Locales::url($path, $code);
         }
 

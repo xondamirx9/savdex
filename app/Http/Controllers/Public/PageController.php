@@ -304,7 +304,7 @@ class PageController extends Controller
     {
         return [
             'companies' => Company::where('status', Company::STATUS_ACTIVE)->count(),
-            'listings' => Listing::where('status', Listing::STATUS_ACTIVE)->count(),
+            'listings' => Listing::where('status', Listing::STATUS_ACTIVE)->visibleIn()->count(),
             // Считаем подкатегории: разделов верхнего уровня шесть,
             // и «6 категорий товаров» продаёт площадку хуже, чем есть
             'categories' => Category::where('is_active', true)->whereNotNull('parent_id')->count(),
@@ -328,6 +328,7 @@ class PageController extends Controller
     {
         $counts = Listing::query()
             ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
             ->whereNotNull('category_id')
             ->selectRaw('category_id, count(*) as total')
             ->groupBy('category_id')
@@ -375,6 +376,7 @@ class PageController extends Controller
             // место в ленте, покупатель платит именно за него
             ->withCount(['promotions as boosted' => fn ($q) => $q->where('status', 'active')])
             ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
             ->where('type', Listing::TYPE_SUPPLY)
             ->whereHas('company', fn ($q) => $q
                 ->where('status', Company::STATUS_ACTIVE)
@@ -404,6 +406,7 @@ class PageController extends Controller
         return Listing::query()
             ->with(ListingCard::relations())
             ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
             ->where('type', Listing::TYPE_DEMAND)
             ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
             ->latest('published_at')

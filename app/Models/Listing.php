@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Jobs\TranslateListing;
 use App\Services\MachineTranslator;
+use App\Support\Locales;
 use App\Support\SearchText;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -164,6 +165,31 @@ class Listing extends Model
     }
 
     /**
+     * Показывать ли объявление на этом языке.
+     *
+     * Написанное в кабинете — всегда: перевода у него могло не быть
+     * никогда, и русский текст лучше пустой выдачи. Загруженное из
+     * книги — только с заголовком на этом языке: переводы для него
+     * готовят руками, и без перевода на английской версии сайта
+     * такое объявление не должно висеть по-русски. Тот же ответ
+     * даёт scopeVisibleIn, только на стороне базы.
+     */
+    public function visibleIn(?string $locale = null): bool
+    {
+        $locale ??= app()->getLocale();
+
+        return $locale === Locales::DEFAULT
+            || ! $this->isImported()
+            || $this->hasTranslation('title', $locale);
+    }
+
+    /** @return list<string> языки, на которых объявление показывается */
+    public function visibleLocales(): array
+    {
+        return array_values(array_filter(Locales::codes(), fn (string $code): bool => $this->visibleIn($code)));
+    }
+
+    /**
      * Есть язык каталога, на который заголовок ещё не переведён.
      *
      * Раньше переводы были либо все, либо никакие, и хватало проверки
@@ -271,6 +297,27 @@ class Listing extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    /**
+     * Только то, что показывается на языке, — см. visibleIn().
+     *
+     * На русском правило не сужает ничего, и условие не добавляется
+     * вовсе: лишний JSON-предикат в каждом запросе витрины ни к чему.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeVisibleIn(Builder $query, ?string $locale = null): void
+    {
+        $locale ??= app()->getLocale();
+
+        if ($locale === Locales::DEFAULT) {
+            return;
+        }
+
+        $query->where(fn (Builder $q) => $q
+            ->where('source', '!=', self::SOURCE_IMPORT)
+            ->orWhereJsonContainsKey('title_i18n->'.$locale));
     }
 
     /**

@@ -34,6 +34,7 @@ class SeoBuilders
             ->title($listing->localizedTitle().($city !== null ? " — {$city}" : ''))
             ->description($listing->localizedDescription() ?: "{$listing->localizedTitle()}. {$price}. Поставщик: {$company?->name}.")
             ->canonical(url('/listing/'.$listing->slug))
+            ->onlyLocales($listing->visibleLocales())
             /*
              * Превью — всегда растровый JPEG через свой маршрут:
              * боты Telegram и WhatsApp не понимают SVG-заглушки,
