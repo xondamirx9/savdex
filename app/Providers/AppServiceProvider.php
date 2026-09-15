@@ -10,6 +10,11 @@ use App\Models\Company;
 use App\Models\CompanyDocument;
 use App\Models\CompanyType;
 use App\Models\CreditPack;
+use App\Models\Crm\Communication;
+use App\Models\Crm\Contact;
+use App\Models\Crm\Deal;
+use App\Models\Crm\Lead;
+use App\Models\Crm\Task;
 use App\Models\ItTask;
 use App\Models\LandingBlock;
 use App\Models\Listing;
@@ -110,6 +115,11 @@ class AppServiceProvider extends ServiceProvider
             ItTask::class => 'ittasks',
             CompanyDocument::class => 'documents',
             Review::class => 'reviews',
+            Lead::class => 'leads',
+            Deal::class => 'deals',
+            Contact::class => 'contacts',
+            Task::class => 'tasks',
+            Communication::class => 'communications',
             Payment::class => 'payments',
             Subscription::class => 'subscriptions',
             Plan::class => 'plans',
