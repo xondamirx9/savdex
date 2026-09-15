@@ -235,6 +235,41 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertSame(Listing::STATUS_ACTIVE, $listing->status);
     }
 
+    #[Test]
+    public function книга_на_пяти_языках_читается_целиком(): void
+    {
+        // Каждый столбец назван на своём языке, значения — тоже
+        Company::factory()->create(['name' => 'Uyut Gulistan Mebel']);
+
+        $furniture = Category::factory()->named('Мебель')->create();
+        $furniture->translations()->create(['locale' => 'zh', 'name' => '家具']);
+
+        $city = $this->city('Ташкент');
+        $city->translations()->create(['locale' => 'uz', 'name' => 'Toshkent']);
+
+        $path = tempnam(sys_get_temp_dir(), 'savdex-test').'.xlsx';
+
+        $writer = new Writer;
+        $writer->openToFile($path);
+        $writer->addRow(Row::fromValues(['Nomi', 'Şirket', '类别', 'Price', 'Валюта', 'Shahar', 'Yayınla']));
+        $writer->addRow(Row::fromValues([
+            'Ofis stoli', 'Uyut Gulistan Mebel', '家具', '1 200 000', "so'm", 'Toshkent', 'evet',
+        ]));
+        $writer->close();
+
+        $result = $this->import($path);
+
+        $listing = Listing::query()->where('title', 'Ofis stoli')->firstOrFail();
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('Мебель', $listing->category?->name());
+        $this->assertSame($city->id, $listing->city_id);
+        $this->assertSame(1_200_000.0, (float) $listing->price);
+        $this->assertSame('UZS', $listing->currency);
+        $this->assertSame(Listing::STATUS_ACTIVE, $listing->status);
+    }
+
     // ── Сборка книги ────────────────────────────────────────────
 
     /**
