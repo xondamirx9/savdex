@@ -1823,6 +1823,23 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .product-grid--catalog{grid-template-columns:repeat(2,1fr)}
   .country-grid{grid-template-columns:repeat(3,1fr)}
   .hd-action{min-width:52px}
+
+  /* Строка поиска ужималась быстрее собственного содержимого: кнопка
+     «Поиск» выезжала за её край и наползала на язык и значки действий,
+     а в поле оставалось 80 пикселей — три буквы запроса. Подпись кнопки
+     и длинное название рубрики уходят, поле получает рабочий минимум. */
+  .hd-search input{min-width:140px}
+  .hd-search>button{padding:0 16px}
+  .hd-search>button span{display:none}
+  .hd-cat-btn{padding:0 10px 0 12px}
+  .hd-cat-btn>span{max-width:96px}
+}
+
+/* Ещё теснее: рубрикатор уходит из строки поиска. Он дублируется
+   фильтром на странице каталога, а поле ввода без него остаётся
+   пригодным для ввода — это важнее выбора рубрики прямо в шапке. */
+@media (max-width:1100px){
+  .hd-search-cat{display:none}
 }
 
 @media (max-width:1024px){
@@ -2036,8 +2053,15 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
      сама высота ссылки */
   .footer li{margin-bottom:0}
   .footer li a,.contact-value,.pay-note,.topbar-more,.logo,
-  .subnav-inner a,.subnav-post{
+  .subnav-inner a,.subnav-post,.section-bar-link{
     display:inline-flex;align-items:center;min-height:44px}
+  /* Подсказки популярных запросов на первом экране: 28 пикселей
+     по высоте — промах пальцем через раз */
+  .hero-chips a{height:40px;padding:0 14px}
+  /* Кнопка «Вид услуги» разворачивает список фильтра — на телефоне
+     это основной элемент управления страницей, а по высоте он был
+     в строку текста */
+  .board-panel-toggle{min-height:44px}
 }
 
 /* ---------- Чат ---------- */
