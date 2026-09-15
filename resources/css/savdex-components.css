@@ -289,6 +289,22 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .mobile-group-list{padding:0 0 8px 16px}
 .mobile-group-list a{font-size:15.5px;padding:12px 0;color:var(--text-muted);border-bottom:none}
 .mobile-group-list a:hover{color:var(--primary-700)}
+
+/* Личные разделы в мобильном меню: строка со значком, подписью и
+   счётчиком справа. Счётчик — тот же смысл, что бейдж на значке
+   в шапке, поэтому он красный и прижат к правому краю строки. */
+.mobile-account{display:flex;flex-direction:column;border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);margin:6px 0;padding:6px 0}
+/* :not(.btn) в общем правиле меню весит столько же, сколько простой
+   селектор строки, и display:block из него выигрывал по порядку —
+   значок оказывался над подписью. Тот же вес плюс более поздняя
+   запись возвращает строку в один ряд. */
+.mobile-menu .mobile-account a:not(.btn){display:flex;align-items:center;gap:12px}
+.mobile-account svg{color:var(--text-muted);flex-shrink:0}
+.mobile-count{margin-left:auto;min-width:22px;height:22px;padding:0 7px;border-radius:var(--r-pill);
+  background:var(--danger);color:#fff;font-size:12px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center}
+.mobile-count.is-zero{background:var(--text-muted)}
 .mobile-menu-foot{padding-top:20px;display:flex;flex-direction:column;gap:12px}
 .mobile-lang{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:8px}
 
@@ -1848,6 +1864,14 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .hd-search-mobile .hd-search{display:flex}
   .hd-main{height:62px;gap:10px}
   .hd .burger{display:flex}
+
+  /* Избранное, сообщения, контакты и меню пользователя уезжают в бургер:
+     шесть значков с подписями не помещались в строку рядом с логотипом,
+     а поиск из-за них съезжал в отдельную строку и всё равно был тесен.
+     Бургер прижимается к правому краю — он остаётся единственной точкой
+     входа в личные разделы. */
+  .hd-actions,.hd .user-menu,.hd-auth{display:none}
+  .hd .burger{margin-left:auto}
   .subnav{display:none}
   .hero-b2b-inner{padding:44px 0 32px}
   .hero-b2b--underlay .hero-b2b-inner{padding-top:230px}
