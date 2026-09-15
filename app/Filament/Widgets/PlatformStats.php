@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Support\AdminAccess;
 use App\Support\PlatformMetrics;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -26,14 +27,27 @@ class PlatformStats extends StatsOverviewWidget
         $metrics = new PlatformMetrics;
         $summary = $metrics->summary();
 
-        return [
+        $stats = [
             $this->stat('Новых компаний', $summary['companies'], 'heroicon-o-building-office'),
             $this->stat('Новых объявлений', $summary['listings'], 'heroicon-o-rectangle-stack'),
             $this->stat('Раскрытий контактов', $summary['unlocks'], 'heroicon-o-eye')
                 ->description('Конверсия из просмотра: '.$metrics->unlockConversion().' %'),
-            $this->stat('Выручка, сум', $summary['revenue'], 'heroicon-o-banknotes')
-                ->description('Средний чек: '.number_format($metrics->averagePayment(), 0, ',', ' ').' сум'),
         ];
+
+        /*
+         * Выручка — только тем, кому положены финансы.
+         *
+         * У продавца, поддержки, модератора и контент-менеджера в
+         * границах роли записано «не видит финансовую аналитику», а
+         * дашборд открывался всем одинаковый. Это утечка, оформленная
+         * как удобство: раздел закрыт, а цифра из него на первом экране.
+         */
+        if (AdminAccess::allows('finreports.view')) {
+            $stats[] = $this->stat('Выручка, сум', $summary['revenue'], 'heroicon-o-banknotes')
+                ->description('Средний чек: '.number_format($metrics->averagePayment(), 0, ',', ' ').' сум');
+        }
+
+        return $stats;
     }
 
     /** @param array{value: int|float, delta: float|null, suffix: string} $data */
