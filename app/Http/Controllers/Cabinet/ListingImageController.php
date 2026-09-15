@@ -23,15 +23,12 @@ use RuntimeException;
  */
 class ListingImageController extends Controller
 {
-    /** Больше десяти фотографий никто не листает, а место они занимают. */
-    private const MAX_IMAGES = 10;
-
     public function store(Request $request, int $id): RedirectResponse
     {
         $listing = $this->owned($request, $id);
 
         $request->validate([
-            'images' => ['required', 'array', 'max:'.self::MAX_IMAGES],
+            'images' => ['required', 'array', 'max:'.Listing::MAX_IMAGES],
             'images.*' => [
                 'file',
                 'mimes:'.implode(',', ImageStore::ALLOWED_MIMES),
@@ -45,10 +42,10 @@ class ListingImageController extends Controller
 
         $already = $listing->images()->count();
         $files = $request->file('images');
-        $free = self::MAX_IMAGES - $already;
+        $free = Listing::MAX_IMAGES - $already;
 
         if ($free <= 0) {
-            return back()->with('error', 'Больше '.self::MAX_IMAGES.' фотографий к одному объявлению не прикрепить');
+            return back()->with('error', 'Больше '.Listing::MAX_IMAGES.' фотографий к одному объявлению не прикрепить');
         }
 
         // Лишние отсекаем, но загружаем то, что помещается: отказывать

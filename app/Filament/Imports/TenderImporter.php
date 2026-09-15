@@ -5,11 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Imports;
 
 use App\Filament\Imports\Concerns\MapsHeadersInAnyLanguage;
-use App\Models\Category;
-use App\Models\CategoryTranslation;
-use App\Models\Country;
-use App\Models\CountryTranslation;
 use App\Models\Tender;
+use App\Support\CatalogLookup;
 use App\Support\ImportLanguage;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
@@ -204,21 +201,16 @@ class TenderImporter extends Importer
     // ── Справочники ──────────────────────────────────────────
 
     /**
-     * Категория по slug, названию на любом языке или пути
-     * «Раздел → Подраздел» — так название копируют из админки.
-     *
-     * Сравнение в PHP, а не lower() в SQL: lower() SQLite не трогает
-     * кириллицу, и «Стройматериалы» не нашлись бы по «стройматериалы».
+     * Категория по названию. Справочники ищет CatalogLookup — те же
+     * правила работают в загрузке объявлений.
      */
     private static function category(?string $state): ?int
     {
-        $path = self::path($state);
-
-        if ($path === []) {
+        if (ImportLanguage::normalize($state) === '') {
             return null;
         }
 
-        $id = self::findCategory($path);
+        $id = CatalogLookup::categoryId($state);
 
         if ($id === null) {
             throw new RowImportFailedException(
@@ -230,89 +222,22 @@ class TenderImporter extends Importer
         return $id;
     }
 
-    /**
-     * Подкатегорию ищем по последней части пути, а раздел из пути
-     * служит уточнением: подкатегорий «Другое» столько же, сколько
-     * разделов, и без уточнения тендер попал бы в первый попавшийся.
-     *
-     * @param  list<string>  $path
-     */
-    private static function findCategory(array $path): ?int
-    {
-        $last = array_key_last($path);
-        $name = $path[$last];
-        $parentName = $last > 0 ? $path[$last - 1] : null;
-
-        $categories = Category::query()->with('translations')->get();
-        $matches = $categories->filter(fn (Category $c): bool => self::isNamed($c, $name));
-
-        if ($matches->count() > 1 && $parentName !== null) {
-            $narrowed = $matches->filter(function (Category $c) use ($categories, $parentName): bool {
-                $parent = $categories->firstWhere('id', $c->parent_id);
-
-                return $parent !== null && self::isNamed($parent, $parentName);
-            });
-
-            if ($narrowed->isNotEmpty()) {
-                $matches = $narrowed;
-            }
-        }
-
-        return $matches->first()?->id;
-    }
-
-    private static function isNamed(Category $category, string $needle): bool
-    {
-        if (ImportLanguage::normalize($category->slug) === $needle) {
-            return true;
-        }
-
-        return $category->translations
-            ->contains(fn (CategoryTranslation $t): bool => ImportLanguage::normalize($t->name) === $needle);
-    }
-
     /** Страна по коду ISO («uz») или названию на любом языке. */
     private static function country(?string $state): ?int
     {
-        $needle = ImportLanguage::normalize($state);
-
-        if ($needle === '') {
+        if (ImportLanguage::normalize($state) === '') {
             return null;
         }
 
-        $byCode = Country::query()->where('code', $needle)->value('id');
+        $id = CatalogLookup::countryId($state);
 
-        if ($byCode !== null) {
-            return (int) $byCode;
-        }
-
-        $match = CountryTranslation::query()
-            ->get(['country_id', 'name'])
-            ->first(fn (CountryTranslation $t): bool => ImportLanguage::normalize($t->name) === $needle);
-
-        if ($match === null) {
+        if ($id === null) {
             throw new RowImportFailedException(
                 'Страна «'.trim((string) $state).'» не найдена в справочнике. '
                 .'Напишите название целиком («Узбекистан») или код («UZ»), либо оставьте ячейку пустой.'
             );
         }
 
-        return (int) $match->country_id;
-    }
-
-    /**
-     * Значение ячейки — путь из нормализованных частей.
-     *
-     * «Стройматериалы → Цемент и бетон», «Стройматериалы / Цемент и
-     * бетон» и просто «Цемент и бетон» приводятся к одному виду.
-     *
-     * @return list<string>
-     */
-    private static function path(?string $state): array
-    {
-        $parts = preg_split('#\s*(?:→|->|>|/|\\\\|\|)\s*#u', (string) $state) ?: [];
-        $parts = array_map(ImportLanguage::normalize(...), $parts);
-
-        return array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
+        return $id;
     }
 }

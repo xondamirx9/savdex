@@ -204,7 +204,7 @@ final class AdminAccess
     private const EXTRAS = [
         self::ADMIN => [
             'companies.export', 'companies.import',
-            'listings.export', 'users.export',
+            'listings.export', 'listings.import', 'users.export',
             'tenders.export', 'tenders.import',
         ],
         self::FINANCE => [

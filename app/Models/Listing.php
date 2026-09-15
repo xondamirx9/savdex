@@ -53,6 +53,9 @@ class Listing extends Model
     /** Срок жизни публикации по умолчанию. */
     public const LIFETIME_DAYS = 90;
 
+    /** Больше десяти фотографий никто не листает, а место они занимают. */
+    public const MAX_IMAGES = 10;
+
     /**
      * @return array<string, string>
      */

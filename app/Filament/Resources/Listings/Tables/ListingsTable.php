@@ -6,18 +6,25 @@ namespace App\Filament\Resources\Listings\Tables;
 
 use App\Filament\Exports\ListingExporter;
 use App\Models\Listing;
+use App\Services\ListingWorkbookImport;
 use App\Support\AdminAccess;
+use App\Support\ListingWorkbookTemplate;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 
 /**
  * Объявления и очередь модерации.
@@ -61,6 +68,83 @@ class ListingsTable
                     ->exporter(ListingExporter::class)
                     ->formats([ExportFormat::Xlsx, ExportFormat::Csv])
                     ->visible(fn (): bool => AdminAccess::allows('listings.export')),
+
+                /*
+                 * Загрузка каталога книгой Excel — вместе с фотографиями.
+                 *
+                 * Обычный импорт Filament принимает только CSV, а в CSV
+                 * картинку не положишь: заказчик собирает каталог в Excel
+                 * и вставляет снимки прямо в строку товара. Разбирает
+                 * книгу ListingWorkbookImport, здесь только окно и отчёт.
+                 */
+                Action::make('importWorkbook')
+                    ->label('Загрузить')
+                    ->icon('heroicon-o-arrow-up-tray')
+                    ->color('gray')
+                    ->modalHeading('Загрузка товаров из Excel')
+                    ->modalSubmitActionLabel('Загрузить')
+                    ->schema([
+                        FileUpload::make('workbook')
+                            ->label('Книга Excel')
+                            ->storeFiles(false)
+                            ->required()
+                            ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+                            // Фотографии лежат внутри книги, поэтому файл
+                            // тяжелее обычной таблицы на порядок
+                            ->maxSize(51200)
+                            ->helperText(new HtmlString(
+                                'Формат XLSX. Первая строка — названия столбцов, дальше по строке на товар.<br>'
+                                .'Фотографии вставьте прямо в лист, в строку своего товара: сколько снимков '
+                                .'в строке, столько и попадёт в объявление (до '.Listing::MAX_IMAGES.'). '
+                                .'Формат снимков любой, какой открывает Excel.<br>'
+                                .'Строка с «Номером» правит объявление с этим номером, без номера — ищется '
+                                .'по названию и компании, не нашлось — заводится новое.'
+                            )),
+
+                        Toggle::make('replace')
+                            ->label('Заменить фотографии, если они уже есть')
+                            ->helperText('Обычно снимки добавляются только объявлениям без фотографий — '
+                                .'повторная загрузка того же файла не плодит одинаковые.'),
+                    ])
+                    ->extraModalFooterActions([
+                        Action::make('workbookTemplate')
+                            ->label('Скачать образец')
+                            ->color('gray')
+                            ->link()
+                            ->action(fn () => response()->streamDownload(function (): void {
+                                $path = tempnam(sys_get_temp_dir(), 'savdex-template');
+                                ListingWorkbookTemplate::write($path);
+
+                                echo (string) file_get_contents($path);
+
+                                @unlink($path);
+                            }, 'savdex-tovary-obrazec.xlsx')),
+                    ])
+                    ->action(function (array $data): void {
+                        $file = $data['workbook'] ?? null;
+
+                        if (! $file instanceof UploadedFile) {
+                            Notification::make()->title('Файл не получен')->danger()->send();
+
+                            return;
+                        }
+
+                        // Книга копируется в обычный файл: ZipArchive не
+                        // умеет читать потоки, а временный диск Livewire
+                        // не обязан быть локальным
+                        $copy = (string) tempnam(sys_get_temp_dir(), 'savdex-workbook');
+                        file_put_contents($copy, $file->get());
+
+                        try {
+                            $result = app(ListingWorkbookImport::class)
+                                ->run($copy, Auth::user(), (bool) ($data['replace'] ?? false));
+                        } finally {
+                            @unlink($copy);
+                        }
+
+                        self::report($result);
+                    })
+                    ->visible(fn (): bool => AdminAccess::allows('listings.import')),
             ])
             ->columns([
                 TextColumn::make('title')
@@ -188,5 +272,43 @@ class ListingsTable
             ])
             ->emptyStateHeading('Объявлений нет')
             ->emptyStateDescription('Здесь появятся объявления, отправленные на проверку.');
+    }
+
+    /**
+     * Отчёт о загрузке.
+     *
+     * Причины по строкам показываются на месте, а не «скачайте файл
+     * с ошибками»: строк в каталоге десятки, и ради двух опечаток
+     * ходить за отдельным файлом незачем. Уведомление не гаснет само —
+     * иначе отчёт исчезает раньше, чем его успевают прочитать.
+     *
+     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>}  $result
+     */
+    private static function report(array $result): void
+    {
+        $body = 'Обработано строк: '.$result['rows']
+            .'. Создано: '.$result['created']
+            .', обновлено: '.$result['updated']
+            .', фотографий добавлено: '.$result['photos'].'.';
+
+        $errors = array_slice($result['errors'], 0, 10);
+        $hidden = count($result['errors']) - count($errors);
+
+        if ($errors !== []) {
+            // Причины собраны из ячеек файла: разметку из них убираем,
+            // чтобы название товара не приехало в окно как разметка
+            $body .= ' — '.implode(' • ', array_map(strip_tags(...), $errors));
+
+            if ($hidden > 0) {
+                $body .= ' • и ещё '.$hidden;
+            }
+        }
+
+        $notification = Notification::make()
+            ->title($result['errors'] === [] ? 'Загрузка завершена' : 'Загрузка завершена с ошибками')
+            ->body($body)
+            ->persistent();
+
+        ($result['errors'] === [] ? $notification->success() : $notification->warning())->send();
     }
 }
