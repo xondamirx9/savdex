@@ -739,4 +739,124 @@ return [
         ],
     ],
 
+    // ── Haberler ─────────────────────────────────────────────
+
+    'news' => [
+        'breadcrumbs' => 'Gezinti yolu',
+        'home' => 'Ana sayfa',
+        'title' => 'Haberler',
+        'eyebrow' => 'Platform blogu',
+        'lead' => 'Platform güncellemeleri, koşul değişiklikleri ve pazar analizi',
+        'description' => 'SAVDEX haberleri: servis güncellemeleri, tarife değişiklikleri ve toptan pazar analizi.',
+        'all' => 'Tümü',
+        'back' => 'Tüm haberler',
+        'related' => 'Bunları da okuyun',
+        'read_full' => 'Tamamını oku',
+        'read_short' => 'Oku',
+        'read_time' => ':count dk',
+
+        'rubrics' => [
+            'updates' => 'Servis güncellemeleri',
+            'pricing' => 'Tarifeler ve ödeme',
+            'market' => 'Pazar analizi',
+            'useful' => 'Faydalı',
+        ],
+    ],
+
+    // ── Şirket hakkında ──────────────────────────────────────
+
+    'about' => [
+        'title' => 'Şirket hakkında',
+        'description' => 'SAVDEX, Özbekistan ve Orta Asya’daki tedarikçiler ile alıcılar için bir B2B platformudur. İletişim, yardım, kullanım kılavuzu ve ilan kuralları.',
+        'sections' => 'Sayfa bölümleri',
+
+        'nav' => [
+            'about' => 'Hakkımızda',
+            'contacts' => 'İletişim',
+            'office' => 'Haritada ofis',
+            'help' => 'Yardım',
+            'guide' => 'Kullanım kılavuzu',
+            'rules' => 'İlan kuralları',
+        ],
+
+        'lead' => 'SAVDEX, tedarikçiler ile alıcıların birbirini doğrudan bulduğu bir platformdur.',
+        'text_1' => 'Özbekistan ve Orta Asya’da çalışıyoruz. Şirketler ne tedarik edebileceğini ya da ne almak istediğini yayımlar, ortağını bulur ve kendi aralarında anlaşır. Platform görüşmelere katılmaz, işlemden pay almaz ve parayı kendi üzerinden geçirmez.',
+        'text_2' => 'Gelirimiz abonelik ve iletişim bilgilerine erişimden gelir. Kazancımız sözleşmenizin tutarına bağlı değildir.',
+
+        'stats' => [
+            'companies' => 'şirket',
+            'listings' => 'ilan',
+            'categories' => 'kategori',
+            'countries' => 'ülke',
+        ],
+
+        'principles_title' => 'İlkelerimiz',
+        'principles' => [
+            'commission_title' => 'İşlemlerden komisyon almıyoruz',
+            'commission_text' => 'Burada bulduğunuz ortağa ne kadar satarsanız satın, biz pay almıyoruz.',
+            'money_title' => 'Ödemelere karışmıyoruz',
+            'money_text' => 'Şirketler arasındaki para site üzerinden geçmez. Ödeme kendi sözleşmenize göre yapılır.',
+            'check_title' => 'Şirketleri elle doğruluyoruz',
+            'check_text' => '«Doğrulanmış» rozetini, belgeleri karşılaştırdıktan sonra moderatör verir. Satın alınamaz.',
+            'reviews_title' => 'Yorumlar şişirilemez',
+            'reviews_text' => 'Yorum yalnızca şirketin iletişim bilgilerini açmak için ödeme yapan kişi bırakabilir.',
+        ],
+
+        'operator' => 'Platform işletmecisi',
+        'legal_name' => 'Unvan',
+        'tin' => 'Vergi No',
+        'country' => 'Ülke',
+        'country_value' => 'Özbekistan',
+        'reach_us' => 'Bize nasıl ulaşırsınız',
+        'support_hint' => 'Destek, 4 saat içinde yanıt',
+        'telegram_hint' => 'Telegram, 7/24',
+
+        'office_text' => 'Konuyu yüz yüze çözmek daha kolaysa buyurun gelin. Sözleşme ve belgeleri posta ile de alıyoruz — yalnızca imza için yola çıkmak gerekmez.',
+
+        'faq' => [
+            'q1' => 'İlan yayımlamak ne kadar tutuyor?',
+            'a1' => 'Yayımlamak tüm tarifelerde ücretsizdir. Ücretsiz tarife ayda 4 aktif ilan ve 3 iletişim açma hakkı verir.',
+            'q2' => 'İletişim bilgileri neden ücretli?',
+            'a2' => 'İşlemlerden pay almıyoruz, bu yüzden iletişim bilgilerine erişim platformun tek gelir kaynağıdır. Bir şirketin iletişim bilgisini bir kez açtığınızda, onun tüm ilanlarında kalıcı olarak görürsünüz.',
+            'q3' => 'İletişim bilgisi çalışmıyorsa ne yapmalı?',
+            'a3' => '«İletişim bilgilerim» bölümünde «İletişimi bildir» düğmesine basın. 2 iş günü içinde kontrol ederiz; doğrulanırsa krediyi iade eder ve şirketin yanıt verme puanını düşürürüz.',
+            'q4' => '«Doğrulanmış» rozeti nasıl alınır?',
+            'a4' => 'Kayıt belgesini yükleyin ve vergi numarasını doğrulayın. Moderatör kontrol eder: Free ve Flash’ta 5 iş gününe kadar, Business ve Premium’da 1 iş günü. Rozet satılık değildir.',
+            'q5' => 'Hangi kartlarla ödeme yapılabilir?',
+            'a5' => 'Uzcard, Humo, Visa ve Mastercard ile Uzum Bank internet sanal POS üzerinden, som cinsinden. Ödeme 3-D Secure koduyla onaylanır. Ayrıntılar «Ödeme yöntemleri» sayfasında.',
+        ],
+
+        'supplier_title' => 'Tedarikçiyseniz',
+        'supplier' => [
+            'step_1' => 'Kayıt olun ve e-postanızı doğrulayın.',
+            'hint_1' => 'Doğrulamadan önce panel açıktır, ancak ilan yayımlanamaz.',
+            'step_2' => 'Şirket kartınızı doldurun.',
+            'hint_2' => 'Eksiksiz profil üç kat daha fazla başvuru alır.',
+            'step_3' => 'İlan yayımlayın.',
+            'hint_3' => 'Tam markayı ve hacmi yazın — arama bunlarla yapılır. Fiyatı olan ilanlara 2,4 kat daha sık bakılır.',
+            'step_4' => 'Gelen talepleri izleyin.',
+            'hint_4' => 'Hangi şirketin iletişim bilgilerinizi hangi ilandan açtığı görünür.',
+        ],
+
+        'buyer_title' => 'Alıcıysanız',
+        'buyer' => [
+            'step_1' => 'Katalogdan bulun ya da bir talep yayımlayın.',
+            'hint_1' => 'Katalog ödeme yapmadan tümüyle görünür.',
+            'step_2' => 'Aramadan önce şirketi inceleyin.',
+            'hint_2' => 'Belgeler, puan, yorumlar, platformdaki süre — hepsi açıktır.',
+            'step_3' => 'İletişim bilgisini açın.',
+            'hint_3' => 'Kredi ilan başına değil, şirket başına düşer.',
+        ],
+
+        'rules_warning_title' => 'İlan metninde iletişim bilgisi yasaktır.',
+        'rules_warning_text' => 'Telefon, e-posta, bağlantılar ve mesajlaşma kullanıcı adları otomatik olarak gizlenir. İletişim bilgileri yalnızca iletişim açma yoluyla verilir — platform buna dayanır.',
+        'must_title' => 'Zorunlu olanlar',
+        'must' => [
+            'item_1' => 'Şirketin gerçek unvanı, vergi numarası ve adresi',
+            'item_2' => 'Uygun kategoride bir ilan',
+            'item_3' => 'Gerçek teslimat, ödeme ve hacim koşulları',
+            'item_4' => 'Ürün bittiğinde ilanın kaldırılması',
+        ],
+    ],
+
 ];

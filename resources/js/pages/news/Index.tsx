@@ -3,10 +3,14 @@ import { ArrowRight, CalendarDays, Clock } from 'lucide-react';
 import { NewsCover } from '@/components/NewsCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
+import { t } from '@/lib/i18n';
 
 interface Post {
     slug: string;
+    // Рубрика приходит дважды: по исходной обложка выбирает
+    // оформление, переведённая идёт на экран
     category: string;
+    category_label: string;
     date: string;
     read: string;
     title: string;
@@ -14,38 +18,40 @@ interface Post {
     image: string | null;
 }
 
-export default function NewsIndex({ posts, categories }: { posts: Post[]; categories: string[] }) {
+type Rubric = { value: string; label: string };
+
+export default function NewsIndex({ posts, categories }: { posts: Post[]; categories: Rubric[] }) {
     const [lead, ...rest] = posts;
 
     return (
         <PublicLayout
-            title="Новости"
-            description="Новости площадки SAVDEX: обновления сервиса, изменения тарифов и аналитика рынка."
+            title={t('news.title')}
+            description={t('news.description')}
         >
             <div className="container" style={{ paddingBlock: '32px 96px' }}>
-                <nav aria-label="Хлебные крошки" style={{ paddingBottom: 16 }}>
+                <nav aria-label={t('news.breadcrumbs')} style={{ paddingBottom: 16 }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>
-                            <Link href={routes.home}>Главная</Link>
+                            <Link href={routes.home}>{t('news.home')}</Link>
                         </li>
                         <li aria-hidden="true">/</li>
                         <li aria-current="page" style={{ color: 'var(--text)' }}>
-                            Новости
+                            {t('news.title')}
                         </li>
                     </ol>
                 </nav>
 
                 <div className="section-head-left">
-                    <span className="eyebrow">Блог площадки</span>
-                    <h1 className="t-section">Новости</h1>
-                    <p className="t-lead">Обновления площадки, изменения условий и аналитика рынка</p>
+                    <span className="eyebrow">{t('news.eyebrow')}</span>
+                    <h1 className="t-section">{t('news.title')}</h1>
+                    <p className="t-lead">{t('news.lead')}</p>
                 </div>
 
                 <div className="row wrap" style={{ gap: 8, marginBottom: 32 }}>
-                    <button className="chip chip-active">Все</button>
+                    <button className="chip chip-active">{t('news.all')}</button>
                     {categories.map((c) => (
-                        <button key={c} className="chip">
-                            {c}
+                        <button key={c.value} className="chip">
+                            {c.label}
                         </button>
                     ))}
                 </div>
@@ -63,7 +69,7 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
                         <NewsCover category={lead.category} image={lead.image} size={64} />
                         <div className="news-lead-body">
                             <div className="row wrap" style={{ gap: 10, marginBottom: 14 }}>
-                                <span className="badge badge-supply">{lead.category}</span>
+                                <span className="badge badge-supply">{lead.category_label}</span>
                                 <span className="t-caption muted row" style={{ gap: 6 }}>
                                     <CalendarDays aria-hidden className="size-3.5" /> {lead.date}
                                 </span>
@@ -78,7 +84,7 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
                                 {lead.excerpt}
                             </p>
                             <span className="row mt-24" style={{ gap: 8, color: 'var(--primary-700)', fontWeight: 600 }}>
-                                Читать полностью <ArrowRight aria-hidden className="go-arrow size-4" />
+                                {t('news.read_full')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </span>
                         </div>
                     </Link>
@@ -101,7 +107,7 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
                             <NewsCover category={p.category} image={p.image} />
                             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', flex: 1 }}>
                                 <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
-                                    <span className="badge badge-neutral">{p.category}</span>
+                                    <span className="badge badge-neutral">{p.category_label}</span>
                                     <span className="t-caption muted">{p.date}</span>
                                 </div>
                                 <h3 className="t-h4" style={{ marginBottom: 8 }}>
@@ -114,7 +120,7 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
                                     className="row mt-16 t-sm"
                                     style={{ gap: 6, color: 'var(--primary-700)', fontWeight: 600 }}
                                 >
-                                    Читать <ArrowRight aria-hidden className="go-arrow size-4" />
+                                    {t('news.read_short')} <ArrowRight aria-hidden className="go-arrow size-4" />
                                 </span>
                             </div>
                         </Link>

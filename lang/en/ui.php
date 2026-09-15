@@ -739,4 +739,124 @@ return [
         ],
     ],
 
+    // ── News ─────────────────────────────────────────────────
+
+    'news' => [
+        'breadcrumbs' => 'Breadcrumbs',
+        'home' => 'Home',
+        'title' => 'News',
+        'eyebrow' => 'Platform blog',
+        'lead' => 'Platform updates, changes to terms and market analytics',
+        'description' => 'SAVDEX news: service updates, pricing changes and wholesale market analytics.',
+        'all' => 'All',
+        'back' => 'All news',
+        'related' => 'Read next',
+        'read_full' => 'Read in full',
+        'read_short' => 'Read',
+        'read_time' => ':count min',
+
+        'rubrics' => [
+            'updates' => 'Service updates',
+            'pricing' => 'Plans and payment',
+            'market' => 'Market analytics',
+            'useful' => 'Useful',
+        ],
+    ],
+
+    // ── About the company ────────────────────────────────────
+
+    'about' => [
+        'title' => 'About the company',
+        'description' => 'SAVDEX is a B2B marketplace for suppliers and buyers in Uzbekistan and Central Asia. Contacts, help, a step-by-step guide and posting rules.',
+        'sections' => 'Page sections',
+
+        'nav' => [
+            'about' => 'About us',
+            'contacts' => 'Contacts',
+            'office' => 'Office on the map',
+            'help' => 'Help',
+            'guide' => 'How to use the platform',
+            'rules' => 'Posting rules',
+        ],
+
+        'lead' => 'SAVDEX is a marketplace where suppliers and buyers find each other directly.',
+        'text_1' => 'We work in Uzbekistan and Central Asia. Companies publish what they can supply or what they want to buy, find a partner and agree between themselves. The platform takes no part in the talks, takes no percentage of the deal and never handles the money.',
+        'text_2' => 'We earn from subscriptions and access to contacts. Our income does not depend on the size of your contract.',
+
+        'stats' => [
+            'companies' => 'companies',
+            'listings' => 'listings',
+            'categories' => 'categories',
+            'countries' => 'countries',
+        ],
+
+        'principles_title' => 'Our principles',
+        'principles' => [
+            'commission_title' => 'We take no commission on deals',
+            'commission_text' => 'However much you sell to a partner found here, we get no percentage of it.',
+            'money_title' => 'We stay out of the payments',
+            'money_text' => 'Money between companies never passes through the site. You pay under your own contract.',
+            'check_title' => 'We verify companies by hand',
+            'check_text' => 'The “Verified” badge is granted by a moderator after checking documents. It cannot be bought.',
+            'reviews_title' => 'Reviews cannot be faked',
+            'reviews_text' => 'Only someone who has paid to unlock a company’s contacts can leave a review.',
+        ],
+
+        'operator' => 'Platform operator',
+        'legal_name' => 'Legal name',
+        'tin' => 'Tax ID',
+        'country' => 'Country',
+        'country_value' => 'Uzbekistan',
+        'reach_us' => 'How to reach us',
+        'support_hint' => 'Support, reply within 4 hours',
+        'telegram_hint' => 'Telegram, around the clock',
+
+        'office_text' => 'Come over if a question is easier to settle in person. We also accept contracts and documents by post — there is no need to travel just for a signature.',
+
+        'faq' => [
+            'q1' => 'How much does posting a listing cost?',
+            'a1' => 'Posting is free on every plan. The free plan gives 4 active listings and 3 contact unlocks per month.',
+            'q2' => 'Why are contacts paid?',
+            'a2' => 'We take no percentage of deals, so access to contacts is the platform’s only source of income. Unlock a company’s contact once and you keep it for good, across all of its listings.',
+            'q3' => 'What if a contact does not work?',
+            'a3' => 'Press “Report contact” in the “My contacts” section. We check within 2 business days; if confirmed, we return the credit and lower the company’s responsiveness score.',
+            'q4' => 'How do I get the “Verified” badge?',
+            'a4' => 'Upload the certificate of registration and confirm the tax ID. A moderator checks it: up to 5 business days on Free and Flash, 1 business day on Business and Premium. The badge is not for sale.',
+            'q5' => 'Which cards can I pay with?',
+            'a5' => 'Uzcard, Humo, Visa and Mastercard through Uzum Bank online acquiring, in soum. The payment is confirmed by a 3-D Secure code. Details are on the “Payment methods” page.',
+        ],
+
+        'supplier_title' => 'If you are a supplier',
+        'supplier' => [
+            'step_1' => 'Sign up and confirm your email.',
+            'hint_1' => 'The dashboard works before confirmation, but publishing does not.',
+            'step_2' => 'Fill in your company profile.',
+            'hint_2' => 'A complete profile gets three times more enquiries.',
+            'step_3' => 'Post a listing.',
+            'hint_3' => 'Give the exact grade and volume — that is what people search by. Listings with a price are viewed 2.4 times more often.',
+            'step_4' => 'Watch your incoming requests.',
+            'hint_4' => 'You see which company unlocked your contacts and from which listing.',
+        ],
+
+        'buyer_title' => 'If you are a buyer',
+        'buyer' => [
+            'step_1' => 'Search the catalogue or post a request.',
+            'hint_1' => 'The whole catalogue is visible without paying.',
+            'step_2' => 'Study the company before you call.',
+            'hint_2' => 'Documents, rating, reviews, time on the platform — all of it is open.',
+            'step_3' => 'Unlock the contact.',
+            'hint_3' => 'A credit is spent per company, not per listing.',
+        ],
+
+        'rules_warning_title' => 'Contact details in the listing text are not allowed.',
+        'rules_warning_text' => 'Phone numbers, emails, links and messenger handles are hidden automatically. Contacts are passed only through contact unlocking — that is what the platform runs on.',
+        'must_title' => 'What is required',
+        'must' => [
+            'item_1' => 'A truthful company name, tax ID and address',
+            'item_2' => 'A listing in the right category',
+            'item_3' => 'Real terms of delivery, payment and volume',
+            'item_4' => 'Taking the listing down when the goods run out',
+        ],
+    ],
+
 ];

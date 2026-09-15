@@ -101,6 +101,11 @@ class NewsRepository
     }
 
     /** @return list<string> */
+    /**
+     * Рубрики для фильтра: значение для отбора и подпись для экрана.
+     *
+     * @return list<array{value: string, label: string}>
+     */
     public function categories(): array
     {
         return NewsPost::query()
@@ -109,6 +114,10 @@ class NewsRepository
             ->distinct()
             ->orderBy('category')
             ->pluck('category')
+            ->map(fn (?string $category): array => [
+                'value' => (string) $category,
+                'label' => NewsPost::categoryLabel($category),
+            ])
             ->all();
     }
 
@@ -122,15 +131,18 @@ class NewsRepository
     {
         return [
             'slug' => $post->slug,
+            // Рубрика отдаётся дважды: по исходному значению обложка
+            // выбирает оформление, переведённое идёт на экран
             'category' => $post->category,
+            'category_label' => NewsPost::categoryLabel($post->category),
             'date' => $post->published_at !== null
                 ? DateHelper::dayMonthYear($post->published_at)
                 : '',
             'sort' => $post->sort,
             'read' => $post->readTime(),
             'image' => $this->imageUrl($post),
-            'title' => $post->title,
-            'excerpt' => $post->excerpt,
+            'title' => $post->localizedTitle(),
+            'excerpt' => $post->localizedExcerpt(),
             'body' => $post->paragraphs(),
         ];
     }
