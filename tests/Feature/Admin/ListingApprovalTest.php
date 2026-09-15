@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Listings\Pages\ListListings;
+use App\Jobs\TranslateListing;
 use App\Models\Company;
 use App\Models\Listing;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -64,6 +66,57 @@ class ListingApprovalTest extends TestCase
 
         // Одобренное объявление видно на витрине
         $this->get('/listing/'.$fresh->slug)->assertOk();
+    }
+
+    /**
+     * Загружает книги роль admin, а права модерировать у неё нет.
+     * Загруженное она обязана уметь опубликовать сама — иначе
+     * загружает то, что повесит в «На проверке» до прихода модератора.
+     */
+    #[Test]
+    public function загрузивший_публикует_загруженное_без_права_модерировать(): void
+    {
+        $listing = $this->pending();
+
+        Livewire::actingAs($this->admin(AdminAccess::ADMIN))
+            ->test(ListListings::class)
+            ->callAction(TestAction::make('approve')->table($listing))
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(Listing::STATUS_ACTIVE, $listing->fresh()->status);
+
+        // А написанное в кабинете — нет: это уже модерация
+        $cabinet = Listing::factory()->for(Company::factory())->create([
+            'status' => Listing::STATUS_MODERATION,
+            'source' => Listing::SOURCE_CABINET,
+        ]);
+
+        Livewire::actingAs($this->admin(AdminAccess::ADMIN))
+            ->test(ListListings::class)
+            ->assertActionHidden(TestAction::make('approve')->table($cabinet));
+    }
+
+    /**
+     * Книга дала английский, остальных языков нет: одобрение должно
+     * позвать машинный перевод за недостающими, а не считать, что раз
+     * переводы «есть», добирать нечего.
+     */
+    #[Test]
+    public function одобрение_с_частью_языков_запускает_добор_перевода(): void
+    {
+        config()->set('services.machine_translation.enabled', true);
+        Queue::fake();
+
+        $listing = $this->pending();
+        $listing->forceFill(['title_i18n' => ['en' => 'Ceramic brick M150']])->save();
+
+        Queue::assertNothingPushed();
+
+        Livewire::actingAs($this->admin(AdminAccess::MODERATOR))
+            ->test(ListListings::class)
+            ->callAction(TestAction::make('approve')->table($listing));
+
+        Queue::assertPushed(TranslateListing::class, fn (TranslateListing $job): bool => $job->listingId === $listing->id);
     }
 
     #[Test]

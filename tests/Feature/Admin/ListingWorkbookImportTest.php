@@ -564,6 +564,130 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertStringContainsString('XYZ', $result['errors'][0]);
     }
 
+    #[Test]
+    public function скрытый_лист_не_читается(): void
+    {
+        Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+
+        // Лист «English» из образца спрятали вместо удаления: в нём
+        // остался пример, и он не должен стать переводом чужого товара
+        $workbook = $this->workbook(
+            rows: [
+                2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', ''],
+                3 => ['', 'Пряжа хлопковая 30/1', 'ООО «Стройбаза»', '', '', '', '', ''],
+            ],
+            pictures: [],
+            translations: ['English' => [2 => ['Ceramic brick M150', 'Sample.', '', '']]],
+            hidden: ['English'],
+        );
+
+        $result = $this->import($workbook);
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(2, $result['created']);
+        $this->assertCount(1, $result['notes']);
+        $this->assertStringContainsString('Скрытый лист «English»', $result['notes'][0]);
+
+        $brick = Listing::query()->where('title', 'Кирпич керамический М150')->firstOrFail();
+        $this->assertFalse($brick->hasTranslation('title', 'en'));
+    }
+
+    #[Test]
+    public function лист_с_неузнанным_именем_пропускается_с_заметкой(): void
+    {
+        Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+
+        $workbook = $this->workbook(
+            rows: [2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']],
+            pictures: [],
+            translations: ['Eng.' => [2 => ['Ceramic brick M150', '', '', '']]],
+        );
+
+        $result = $this->import($workbook);
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(1, $result['created']);
+        $this->assertCount(1, $result['notes']);
+        $this->assertStringContainsString('«Eng.»', $result['notes'][0]);
+        $this->assertFalse(Listing::query()->firstOrFail()->hasTranslation('title', 'en'));
+    }
+
+    #[Test]
+    public function перевод_напротив_пустой_русской_строки_отклоняет_книгу(): void
+    {
+        Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+
+        // Число строк сходится, но в русском листе строку стёрли,
+        // а внизу дописали: переводы съехали на соседний товар
+        $workbook = $this->workbook(
+            rows: [
+                2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', ''],
+                3 => [],
+                4 => ['', 'Пряжа хлопковая 30/1', 'ООО «Стройбаза»', '', '', '', '', ''],
+            ],
+            pictures: [],
+            translations: ['English' => [
+                2 => ['Ceramic brick M150', '', '', ''],
+                3 => ['Orphan translation', '', '', ''],
+                4 => ['Cotton yarn 30/1', '', '', ''],
+            ]],
+        );
+
+        $result = $this->import($workbook);
+
+        $this->assertSame(0, $result['created']);
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('строка 3', $result['errors'][0]);
+        $this->assertStringContainsString('разъехались', $result['errors'][0]);
+    }
+
+    #[Test]
+    public function одинаковый_заголовок_у_разных_компаний_требует_компанию(): void
+    {
+        $first = Listing::factory()->for(Company::factory()->create())->create([
+            'title' => 'Кирпич керамический М150', 'price' => 100,
+        ]);
+        $second = Listing::factory()->for(Company::factory()->create())->create([
+            'title' => 'Кирпич керамический М150', 'price' => 200,
+        ]);
+
+        // Ни номера, ни компании: править первое попавшееся — значит
+        // менять цену чужого товара
+        $workbook = $this->workbook(
+            rows: [2 => ['', 'Кирпич керамический М150', '', '', '777', '', '', '']],
+            pictures: [],
+        );
+
+        $result = $this->import($workbook);
+
+        $this->assertSame(0, $result['updated']);
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('нескольких объявлений', $result['errors'][0]);
+        $this->assertSame(100.0, (float) $first->fresh()->price);
+        $this->assertSame(200.0, (float) $second->fresh()->price);
+    }
+
+    #[Test]
+    public function слишком_длинный_текст_останавливает_строку(): void
+    {
+        Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+
+        // Форма админки не примет заголовок длиннее 90 знаков —
+        // значит, и книга не должна его класть
+        $workbook = $this->workbook(
+            rows: [2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']],
+            pictures: [],
+            translations: ['English' => [2 => [str_repeat('Brick ', 20), '', '', '']]],
+        );
+
+        $result = $this->import($workbook);
+
+        $this->assertSame(0, $result['created']);
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('«en»', $result['errors'][0]);
+        $this->assertStringContainsString('90', $result['errors'][0]);
+    }
+
     // ── Сборка книги ────────────────────────────────────────────
 
     /**
@@ -577,21 +701,28 @@ class ListingWorkbookImportTest extends TestCase
      * @param  array<int, list<string>>  $rows  номер строки в Excel → ячейки русского листа
      * @param  array<int, int>  $pictures  номер строки → сколько картинок вставить (на русский лист)
      * @param  array<string, array<int, list<string>>>  $translations  имя вкладки → (номер строки → ячейки)
+     * @param  list<string>  $hidden  какие вкладки спрятать, как это делает Excel
      */
-    private function workbook(array $rows, array $pictures, array $translations = [], bool $russianLast = false): string
-    {
+    private function workbook(
+        array $rows,
+        array $pictures,
+        array $translations = [],
+        bool $russianLast = false,
+        array $hidden = [],
+    ): string {
         $path = tempnam(sys_get_temp_dir(), 'savdex-test').'.xlsx';
 
         $writer = new Writer;
         $writer->openToFile($path);
 
         $first = true;
-        $sheet = function (?string $name, array $headers, array $body) use ($writer, &$first): void {
+        $sheet = function (?string $name, array $headers, array $body) use ($writer, &$first, $hidden): void {
             $page = $first ? $writer->getCurrentSheet() : $writer->addNewSheetAndMakeItCurrent();
             $first = false;
 
             if ($name !== null) {
                 $page->setName($name);
+                $page->setIsVisible(! in_array($name, $hidden, true));
             }
 
             $writer->addRow(Row::fromValues($headers));

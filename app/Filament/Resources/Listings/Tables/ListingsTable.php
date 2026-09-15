@@ -208,8 +208,8 @@ class ListingsTable
                         default => 'gray',
                     }),
 
-                // Загруженное живёт по своим правилам (на языке без перевода
-                // не показывается), и модератору полезно видеть, откуда запись
+                // Модератору полезно видеть, откуда запись: загруженное
+                // из книги проверяет тот, кто его загрузил
                 TextColumn::make('source')
                     ->label('Источник')
                     ->badge()
@@ -246,7 +246,7 @@ class ListingsTable
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->visible(fn (Listing $record): bool => $record->status === Listing::STATUS_MODERATION
-                        && AdminAccess::allows('listings.moderate'))
+                        && self::canModerate($record))
                     ->requiresConfirmation()
                     ->action(function (Listing $record): void {
                         $record->forceFill([
@@ -274,7 +274,7 @@ class ListingsTable
                         $record->status,
                         [Listing::STATUS_MODERATION, Listing::STATUS_ACTIVE],
                         true,
-                    ) && AdminAccess::allows('listings.moderate'))
+                    ) && self::canModerate($record))
                     ->schema([
                         Textarea::make('reason')
                             ->label('Причина отказа')
@@ -318,6 +318,19 @@ class ListingsTable
             ])
             ->emptyStateHeading('Объявлений нет')
             ->emptyStateDescription('Здесь появятся объявления, отправленные на проверку.');
+    }
+
+    /**
+     * Кому можно одобрять и отклонять.
+     *
+     * Модератору — всё. Тому, кто загружает книги, — загруженное:
+     * загрузка кладёт объявления в «На проверке», и без этого права
+     * администратор загружал бы то, что опубликовать не может.
+     */
+    private static function canModerate(Listing $record): bool
+    {
+        return AdminAccess::allows('listings.moderate')
+            || ($record->isImported() && AdminAccess::allows('listings.import'));
     }
 
     /**

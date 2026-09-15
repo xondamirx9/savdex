@@ -118,6 +118,80 @@ class ListingTranslationTest extends TestCase
         $this->assertSame('Цементные бриз-блоки', $listing->localizedTitle('en'));
     }
 
+    /**
+     * Добор по расписанию видит не только «переводов нет», но и «не все»:
+     * из книги или из админки приходит один английский, остальные
+     * языки должен доделать переводчик.
+     */
+    #[Test]
+    public function добор_находит_частично_переведённые(): void
+    {
+        $none = Listing::factory()->create(['title_i18n' => null]);
+        $empty = Listing::factory()->create(['title_i18n' => []]);
+        $partial = Listing::factory()->create(['title_i18n' => ['en' => 'Cement']]);
+        $full = Listing::factory()->create([
+            'title_i18n' => ['en' => 'Cement', 'uz' => 'Sement', 'tr' => 'Çimento', 'zh' => '水泥'],
+        ]);
+
+        $found = Listing::query()->lackingTranslations()->pluck('id')->all();
+
+        $this->assertEqualsCanonicalizing([$none->id, $empty->id, $partial->id], $found);
+        $this->assertNotContains($full->id, $found);
+    }
+
+    /**
+     * Пока задача ходила к переводчику, администратор вписал перевод
+     * руками. Снимок задачи старше базы — база выигрывает.
+     */
+    #[Test]
+    public function перевод_из_очереди_не_затирает_вписанный_руками(): void
+    {
+        config()->set('services.machine_translation.enabled', false);
+        $listing = $this->listing();
+
+        $translator = new class($listing) extends MachineTranslator
+        {
+            public function __construct(private readonly Listing $listing) {}
+
+            public function translate(string $text, string $to): ?string
+            {
+                // Первый же запрос: администратор успел сохранить свой перевод
+                if ($to === 'en') {
+                    Listing::query()->whereKey($this->listing->id)
+                        ->update(['title_i18n' => json_encode(['en' => 'Manual title'])]);
+                }
+
+                return 'Machine '.$to;
+            }
+        };
+
+        (new TranslateListing($listing->id))->handle($translator);
+
+        $fresh = $listing->fresh();
+
+        $this->assertSame('Manual title', $fresh->title_i18n['en']);
+        $this->assertSame('Machine uz', $fresh->title_i18n['uz']);
+    }
+
+    /** Условия поставки и оплаты тоже переводятся — и доходят до страницы. */
+    #[Test]
+    public function условия_на_странице_объявления_на_языке_посетителя(): void
+    {
+        $listing = $this->listing();
+        $listing->forceFill([
+            'delivery_terms' => 'Самовывоз со склада',
+            'delivery_terms_i18n' => ['en' => 'Pick-up from the warehouse'],
+        ])->save();
+
+        $this->get('/listing/'.$listing->slug)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('listing.delivery_terms', 'Самовывоз со склада'));
+
+        $this->get('/en/listing/'.$listing->slug)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('listing.delivery_terms', 'Pick-up from the warehouse'));
+    }
+
     #[Test]
     public function повторный_запуск_не_перезапрашивает_готовые_переводы(): void
     {

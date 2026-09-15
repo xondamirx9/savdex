@@ -80,8 +80,8 @@ class ListingForm
                 ->columns(2),
 
             Section::make('Тексты по языкам')
-                ->description('Русский обязателен. Остальные языки — по желанию: без перевода загруженное '
-                    .'из Excel объявление на этом языке не показывается, написанное в кабинете — показывается по-русски.')
+                ->description('Русский обязателен. Остальные языки — по желанию: пока перевода нет, '
+                    .'на этом языке показывается русский текст.')
                 ->schema([
                     Tabs::make('texts')
                         ->tabs(array_map(
@@ -178,26 +178,26 @@ class ListingForm
                     ->label('Заголовок')
                     ->required($russian)
                     ->minLength($russian ? 10 : null)
-                    ->maxLength(90)
+                    ->maxLength(Listing::MAX_LENGTH['title'])
                     ->columnSpanFull(),
 
                 Textarea::make($name('description'))
                     ->label('Описание')
                     ->required($russian)
                     ->minLength($russian ? 30 : null)
-                    ->maxLength(5000)
+                    ->maxLength(Listing::MAX_LENGTH['description'])
                     ->rows(8)
                     ->columnSpanFull(),
 
                 Textarea::make($name('delivery_terms'))
                     ->label('Условия поставки')
                     ->rows(3)
-                    ->maxLength(2000),
+                    ->maxLength(Listing::MAX_LENGTH['delivery_terms']),
 
                 Textarea::make($name('payment_terms'))
                     ->label('Условия оплаты')
                     ->rows(3)
-                    ->maxLength(2000),
+                    ->maxLength(Listing::MAX_LENGTH['payment_terms']),
             ])
             ->columns(2);
     }

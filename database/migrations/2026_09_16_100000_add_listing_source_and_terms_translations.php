@@ -13,8 +13,11 @@ use Illuminate\Support\Facades\Schema;
  * Источник нужен витрине: объявления, загруженные админом из Excel,
  * на языке без перевода не показываются, а написанные в кабинете
  * показываются по-русски — у них перевода не было и не могло быть.
- * Раньше загруженные отличались только тем, что автор — админ; по
- * этому признаку они и помечаются задним числом.
+ * Раньше загруженные отличались только тем, что автор — админ, а
+ * объявление принадлежит чужой компании; по этому признаку они и
+ * помечаются задним числом. Просто «автор — админ» не годится:
+ * человек мог написать объявления в кабинете своей компании и лишь
+ * потом получить доступ в админку.
  *
  * Условия поставки и оплаты получают такие же JSON-колонки переводов,
  * как заголовок и описание: {en: ..., uz: ..., tr: ..., zh: ...}.
@@ -36,9 +39,15 @@ return new class extends Migration
             $table->text('payment_terms')->nullable()->change();
         });
 
-        DB::table('listings')
-            ->whereIn('user_id', DB::table('users')->where('is_admin', true)->select('id'))
-            ->update(['source' => 'import']);
+        $imported = DB::table('listings')
+            ->join('users', 'users.id', '=', 'listings.user_id')
+            ->where('users.is_admin', true)
+            ->where(fn ($q) => $q
+                ->whereNull('users.company_id')
+                ->orWhereColumn('listings.company_id', '!=', 'users.company_id'))
+            ->pluck('listings.id');
+
+        DB::table('listings')->whereIn('id', $imported)->update(['source' => 'import']);
     }
 
     public function down(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Jobs\TranslateListing;
+use App\Services\MachineTranslator;
 use App\Support\SearchText;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -67,6 +68,22 @@ class Listing extends Model
      * @var list<string>
      */
     public const TRANSLATABLE = ['title', 'description', 'delivery_terms', 'payment_terms'];
+
+    /**
+     * Предел длины текстов — один на кабинет, админку и загрузку.
+     *
+     * Загрузка обязана проверять то же, что форма: иначе книга кладёт
+     * заголовок в 120 знаков, а форма админки потом не даёт сохранить
+     * объявление, пока перевод не укоротят.
+     *
+     * @var array<string, int>
+     */
+    public const MAX_LENGTH = [
+        'title' => 90,
+        'description' => 5000,
+        'delivery_terms' => 2000,
+        'payment_terms' => 2000,
+    ];
 
     /** Срок жизни публикации по умолчанию. */
     public const LIFETIME_DAYS = 90;
@@ -146,6 +163,24 @@ class Listing extends Model
         return $this->source === self::SOURCE_IMPORT;
     }
 
+    /**
+     * Есть язык каталога, на который заголовок ещё не переведён.
+     *
+     * Раньше переводы были либо все, либо никакие, и хватало проверки
+     * на null. Загрузка из книги и вкладки в админке дают частичные
+     * наборы — английский есть, узбекского нет, — и машинному
+     * переводчику нужно понимать, что добирать есть что.
+     */
+    public function missingTranslations(): bool
+    {
+        $present = array_keys(array_filter(
+            $this->title_i18n ?? [],
+            fn (mixed $text): bool => trim((string) $text) !== '',
+        ));
+
+        return array_diff(MachineTranslator::TARGETS, $present) !== [];
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -215,12 +250,17 @@ class Listing extends Model
         /*
          * Перевод — фоном после публикации: четыре обращения
          * к внешнему сервису не должны задерживать сохранение.
-         * Повторной отправки нет: после первого прохода title_i18n
-         * уже не null (пусть даже пустой), добор — по расписанию.
+         *
+         * Только в момент публикации, а не при каждом сохранении:
+         * задача сама сохраняет объявление, и при сбое части языков
+         * недостающие остались бы — сохранение запускало бы задачу
+         * снова, и так по кругу. Что не сложилось — доберёт
+         * расписание (routes/console.php).
          */
         static::saved(function (self $listing): void {
             if ($listing->status === self::STATUS_ACTIVE
-                && $listing->title_i18n === null
+                && ($listing->wasRecentlyCreated || $listing->wasChanged('status'))
+                && $listing->missingTranslations()
                 && config('services.machine_translation.enabled')) {
                 TranslateListing::dispatch($listing->id);
             }
@@ -231,6 +271,21 @@ class Listing extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    /**
+     * Объявления, у которых нет заголовка хотя бы на одном языке
+     * каталога: null, пустой набор и частичный подходят одинаково.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeLackingTranslations(Builder $query): void
+    {
+        $query->where(function (Builder $q): void {
+            foreach (MachineTranslator::TARGETS as $locale) {
+                $q->orWhereJsonDoesntContainKey('title_i18n->'.$locale);
+            }
+        });
     }
 
     /**

@@ -68,7 +68,7 @@ final class ListingWorkbookImport
     {
         $result = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => [], 'notes' => []];
 
-        $sheets = $this->sheets($workbook);
+        $sheets = $this->sheets($workbook, $result);
         $roles = $this->roles($sheets, $result);
 
         if ($roles === null) {
@@ -126,13 +126,19 @@ final class ListingWorkbookImport
     /**
      * Листы книги с разобранными строками.
      *
-     * Читаются те, что могут понадобиться: первый (главный, если
-     * русского по имени нет) и все с узнаваемым именем языка. Прочие —
-     * справочники и заметки — пропускаются, не разбирая.
+     * Читаются те, что могут понадобиться: первый видимый (главный,
+     * если русского по имени нет) и все с узнаваемым именем языка.
+     * Скрытые вкладки не читаются вовсе: человек их в Excel не видит,
+     * и лист «English» с примером из образца, спрятанный вместо
+     * удаления, стал бы переводом его товаров. Прочие — справочники
+     * и заметки — пропускаются с заметкой в отчёте: вкладка «Eng.»
+     * с переводами, которую загрузка не узнала, иначе теряется молча
+     * за зелёным «Загрузка завершена».
      *
+     * @param  array{notes: list<string>}  $result
      * @return list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>
      */
-    private function sheets(string $workbook): array
+    private function sheets(string $workbook, array &$result): array
     {
         $options = new Options;
 
@@ -148,9 +154,19 @@ final class ListingWorkbookImport
         try {
             foreach ($reader->getSheetIterator() as $sheet) {
                 $name = $sheet->getName();
+
+                if (! $sheet->isVisible()) {
+                    $result['notes'][] = 'Скрытый лист «'.$name.'» пропущен.';
+
+                    continue;
+                }
+
                 $locale = ImportLanguage::sheetLocale($name);
 
                 if ($locale === null && $sheets !== []) {
+                    $result['notes'][] = 'Лист «'.$name.'» пропущен: имя вкладки не узнано как язык. '
+                        .'Языковые вкладки называются «Русский», «English», «O‘zbekcha», «中文», «Türkçe» — как в образце.';
+
                     continue;
                 }
 
@@ -270,14 +286,20 @@ final class ListingWorkbookImport
     }
 
     /**
-     * Строки листов совпадают по числу — иначе переводы съедут.
+     * Строки листов совпадают — иначе переводы съедут.
+     *
+     * Проверяется и число строк, и что напротив каждой заполненной
+     * строки перевода стоит заполненная русская: текст переводчика
+     * напротив пустой русской строки — верный признак, что строки
+     * съехали (в русском листе строку стёрли, а внизу дописали).
+     * Ловить это только по числу строк нельзя — число совпадает.
      *
      * Лист без шапки — ошибка: он подписан языком, но таблицы в нём
      * не нашлось. Лист с одной шапкой — просто нет переводов на этот
      * язык, это отмечается, но не мешает загрузке.
      *
-     * @param  array{name: string, last: int}  $master
-     * @param  array<string, array{name: string, header: int|null, last: int}>  $translations
+     * @param  array{name: string, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}  $master
+     * @param  array<string, array{name: string, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>  $translations
      * @param  array{errors: list<string>, notes: list<string>}  $result
      */
     private function aligned(array $master, array &$translations, array &$result): bool
@@ -304,6 +326,16 @@ final class ListingWorkbookImport
                     .'пустой, но не удаляйте её. Книга не загружена.';
 
                 return false;
+            }
+
+            foreach ($sheet['rows'] as $offset => $row) {
+                if ($row['fields'] !== [] && ($master['rows'][$offset]['fields'] ?? []) === []) {
+                    $result['errors'][] = 'Лист «'.$sheet['name'].'», строка '.$row['number']
+                        .': заполнена, а на русском листе строка '.($master['rows'][$offset]['number'] ?? $row['number'])
+                        .' пуста — строки разъехались. Книга не загружена.';
+
+                    return false;
+                }
             }
         }
 
@@ -370,10 +402,17 @@ final class ListingWorkbookImport
         $found = Listing::query()
             ->where('title', $title)
             ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
-            ->first();
+            ->limit(2)
+            ->get();
 
-        if ($found !== null) {
-            return $found;
+        // Без компании один заголовок может стоять у разных продавцов:
+        // править первый попавшийся — значит менять цену чужого товара
+        if ($found->count() > 1) {
+            throw new RuntimeException('заголовок «'.$title.'» есть у нескольких объявлений — укажите «Номер» или «Компанию»');
+        }
+
+        if ($found->isNotEmpty()) {
+            return $found->first();
         }
 
         if ($companyId === null) {
@@ -422,7 +461,7 @@ final class ListingWorkbookImport
 
         foreach (['title', 'description', 'unit', 'delivery_terms', 'payment_terms'] as $plain) {
             if (trim($fields[$plain] ?? '') !== '') {
-                $listing->{$plain} = trim($fields[$plain]);
+                $listing->{$plain} = $this->fits($plain, trim($fields[$plain]));
             }
         }
 
@@ -502,10 +541,38 @@ final class ListingWorkbookImport
 
                 $column = $field.'_i18n';
                 $translations = $listing->{$column} ?? [];
-                $translations[$locale] = $value;
+                $translations[$locale] = $this->fits($field, $value, $locale);
                 $listing->{$column} = $translations;
             }
         }
+    }
+
+    /**
+     * Текст не длиннее, чем принимает форма.
+     *
+     * Иначе книга кладёт заголовок в 120 знаков, а админка потом
+     * не даёт сохранить объявление, пока перевод не укоротят, —
+     * и модератор не понимает, что не так с ценой, которую он правил.
+     */
+    private function fits(string $field, string $value, ?string $locale = null): string
+    {
+        $limit = Listing::MAX_LENGTH[$field] ?? null;
+
+        if ($limit !== null && mb_strlen($value) > $limit) {
+            $labels = [
+                'title' => 'заголовок',
+                'description' => 'описание',
+                'delivery_terms' => 'условия поставки',
+                'payment_terms' => 'условия оплаты',
+            ];
+
+            throw new RuntimeException(
+                ($labels[$field] ?? $field).($locale !== null ? ' на языке «'.$locale.'»' : '')
+                .' длиннее '.$limit.' символов'
+            );
+        }
+
+        return $value;
     }
 
     /**

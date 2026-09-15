@@ -48,11 +48,24 @@ class TranslateListing implements ShouldQueue
             }
         }
 
-        // array_filter убирает несложившиеся переводы: пустой ключ
-        // будет запрошен заново при следующем заходе задачи
-        $listing->forceFill([
-            'title_i18n' => array_filter($titles),
-            'description_i18n' => array_filter($descriptions),
+        /*
+         * Перечитать перед записью: пока шли обращения к переводчику
+         * (до восьми запросов по несколько секунд), администратор мог
+         * вписать перевод руками. Снимок задачи старше базы, и при
+         * слиянии выигрывает база — левый операнд «+».
+         *
+         * array_filter убирает несложившиеся переводы: пустой ключ
+         * будет запрошен заново при следующем заходе задачи.
+         */
+        $fresh = Listing::query()->find($this->listingId);
+
+        if ($fresh === null) {
+            return;
+        }
+
+        $fresh->forceFill([
+            'title_i18n' => array_filter(($fresh->title_i18n ?? []) + $titles),
+            'description_i18n' => array_filter(($fresh->description_i18n ?? []) + $descriptions),
         ])->save();
     }
 }
