@@ -54,6 +54,10 @@ class AdminPanelProvider extends PanelProvider
             ))
             ->favicon(asset('images/logo-mark.svg'))
             ->navigationGroups([
+                // CRM первой: у продаж и менеджеров направлений это
+                // единственная группа, с которой они работают каждый день
+                'CRM',
+                'Поддержка',
                 'Контент',
                 'Модерация',
                 'Монетизация',

@@ -38,6 +38,30 @@ class Payment extends Model
         return $this->belongsTo(Company::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
+    /**
+     * Сколько уже возвращено.
+     *
+     * Возвраты бывают частичными и не один: без суммы уже возвращённого
+     * второй возврат легко сделать на всю сумму повторно.
+     */
+    public function refundedAmount(): int
+    {
+        return (int) $this->refunds()
+            ->where('status', Refund::STATUS_DONE)
+            ->sum('amount');
+    }
+
+    /** Сколько ещё можно вернуть. */
+    public function refundableAmount(): int
+    {
+        return max(0, $this->amount - $this->refundedAmount());
+    }
+
     public function method(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class, 'payment_method_id');
