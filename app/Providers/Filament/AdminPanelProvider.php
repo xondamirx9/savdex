@@ -5,8 +5,15 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Widgets\ActivationFunnel;
+use App\Filament\Widgets\ContentDrafts;
+use App\Filament\Widgets\FinanceToday;
+use App\Filament\Widgets\IntakeQueue;
+use App\Filament\Widgets\ModerationQueue;
+use App\Filament\Widgets\MyLeads;
+use App\Filament\Widgets\MyTasks;
 use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
+use App\Filament\Widgets\SupportQueue;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use Filament\Http\Middleware\Authenticate;
@@ -71,7 +78,24 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
+            /*
+             * Стартовый экран собирается из виджетов роли.
+             *
+             * Каждый виджет сам решает, показываться ли, — по праву,
+             * а не по списку здесь. Поэтому продавец видит свои лиды и
+             * задачи, модератор очередь на проверку, поддержка открытые
+             * обращения, а показатели площадки — только тот, кому они
+             * положены. Порядок задают свойства sort у самих виджетов:
+             * рабочие очереди отрицательными, общая аналитика после них.
+             */
             ->widgets([
+                MyLeads::class,
+                MyTasks::class,
+                IntakeQueue::class,
+                ModerationQueue::class,
+                SupportQueue::class,
+                FinanceToday::class,
+                ContentDrafts::class,
                 PlatformStats::class,
                 ActivationFunnel::class,
                 RegistrationsChart::class,

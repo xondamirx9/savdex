@@ -93,6 +93,7 @@ final class AdminAccess
         'users' => 'Пользователи',
         'roles' => 'Роли и права',
         'audit' => 'Журнал действий',
+        'dashboard' => 'Показатели площадки',
         'companies' => 'Компании',
         'listings' => 'Объявления и товары',
         'tenders' => 'Тендеры и потребности',
@@ -146,7 +147,7 @@ final class AdminAccess
      */
     private const MATRIX = [
         self::ADMIN => [
-            'users' => 'w', 'audit' => 'r',
+            'users' => 'w', 'audit' => 'r', 'dashboard' => 'r',
             'companies' => 'w', 'listings' => 'w', 'tenders' => 'w', 'ittasks' => 'w',
             'documents' => 'r', 'reviews' => 'w', 'complaints' => 'w',
             'leads' => 'w', 'deals' => 'w', 'contacts' => 'w', 'tasks' => 'w', 'communications' => 'w',
