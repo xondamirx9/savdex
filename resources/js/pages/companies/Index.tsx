@@ -234,15 +234,28 @@ export default function CompaniesIndex({
                                             </div>
                                         </div>
 
+                                        {/* Подпись и значение лежат в одном узле: как соседи
+                                            по флексу они рвались на отдельные колонки, и
+                                            «профиль заполнен на» с процентом расходились
+                                            по разным строкам */}
                                         <div className="co-facts">
                                             <span className="co-fact">
-                                                <FileText aria-hidden className="size-4" /> {t('companies_page.tin')} <b>{c.tin ?? t('companies_page.tin_none')}</b>
+                                                <FileText aria-hidden className="size-4" />
+                                                <span>
+                                                    {t('companies_page.tin')} <b>{c.tin ?? t('companies_page.tin_none')}</b>
+                                                </span>
                                             </span>
                                             <span className="co-fact">
-                                                <CalendarDays aria-hidden className="size-4" /> <b>{t('companies_page.since', { date: c.created_at ?? '—' })}</b>
+                                                <CalendarDays aria-hidden className="size-4" />
+                                                <span>
+                                                    <b>{t('companies_page.since', { date: c.created_at ?? '—' })}</b>
+                                                </span>
                                             </span>
                                             <span className="co-fact">
-                                                <Handshake aria-hidden className="size-4" /> {t('companies_page.trust')} <b>{c.trust}%</b>
+                                                <Handshake aria-hidden className="size-4" />
+                                                <span>
+                                                    {t('companies_page.trust')} <b>{c.trust}%</b>
+                                                </span>
                                             </span>
                                         </div>
 
