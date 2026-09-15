@@ -20,12 +20,14 @@ use Illuminate\Support\Str;
  * Объявление — предложение товара или запрос на закупку.
  */
 #[Fillable([
-    'company_id', 'user_id', 'category_id', 'city_id', 'type', 'slug', 'title',
+    'company_id', 'user_id', 'source', 'category_id', 'city_id', 'type', 'slug', 'title',
     'description', 'price', 'bundle_price', 'currency', 'unit', 'price_negotiable', 'min_order',
     'delivery_terms', 'payment_terms', 'status', 'wizard_step', 'published_at', 'expires_at', 'tags',
     // Заметка модерации правится из админки; без неё форма молча
     // теряла бы текст, который видит владелец объявления
     'moderation_note',
+    // Переводы правятся в админке по языкам; кабинет их не присылает
+    'title_i18n', 'description_i18n', 'delivery_terms_i18n', 'payment_terms_i18n',
 ])]
 class Listing extends Model
 {
@@ -50,6 +52,22 @@ class Listing extends Model
 
     public const TYPE_DEMAND = 'demand';
 
+    /** Написано продавцом в кабинете. */
+    public const SOURCE_CABINET = 'cabinet';
+
+    /** Загружено администратором из книги Excel. */
+    public const SOURCE_IMPORT = 'import';
+
+    /**
+     * Поля, у которых есть версия на каждом языке.
+     *
+     * Русский оригинал лежит в самой колонке, переводы — в колонке
+     * с суффиксом _i18n: {en: ..., uz: ..., tr: ..., zh: ...}.
+     *
+     * @var list<string>
+     */
+    public const TRANSLATABLE = ['title', 'description', 'delivery_terms', 'payment_terms'];
+
     /** Срок жизни публикации по умолчанию. */
     public const LIFETIME_DAYS = 90;
 
@@ -70,41 +88,62 @@ class Listing extends Model
             'tags' => 'array',
             'title_i18n' => 'array',
             'description_i18n' => 'array',
+            'delivery_terms_i18n' => 'array',
+            'payment_terms_i18n' => 'array',
         ];
     }
 
     /**
      * Заголовок на языке посетителя.
      *
-     * Оригинал пишется по-русски; машинный перевод появляется фоном
-     * после публикации. Пока перевода нет — показывается оригинал:
-     * русский заголовок лучше пустой карточки.
+     * Оригинал пишется по-русски; перевод либо загружен из книги
+     * Excel, либо сделан машиной фоном после публикации. Пока
+     * перевода нет — показывается оригинал: русский заголовок лучше
+     * пустой карточки.
      */
     public function localizedTitle(?string $locale = null): string
     {
-        $locale ??= app()->getLocale();
-
-        if ($locale === 'ru') {
-            return $this->title;
-        }
-
-        return trim((string) ($this->title_i18n[$locale] ?? '')) !== ''
-            ? $this->title_i18n[$locale]
-            : $this->title;
+        return (string) $this->localized('title', $locale);
     }
 
     /** Описание на языке посетителя — по тем же правилам. */
     public function localizedDescription(?string $locale = null): ?string
     {
-        $locale ??= app()->getLocale();
+        return $this->localized('description', $locale);
+    }
 
+    public function localizedDeliveryTerms(?string $locale = null): ?string
+    {
+        return $this->localized('delivery_terms', $locale);
+    }
+
+    public function localizedPaymentTerms(?string $locale = null): ?string
+    {
+        return $this->localized('payment_terms', $locale);
+    }
+
+    /** Перевод поля есть и не пустой. */
+    public function hasTranslation(string $field, string $locale): bool
+    {
         if ($locale === 'ru') {
-            return $this->description;
+            return trim((string) $this->{$field}) !== '';
         }
 
-        return trim((string) ($this->description_i18n[$locale] ?? '')) !== ''
-            ? $this->description_i18n[$locale]
-            : $this->description;
+        return trim((string) ($this->{$field.'_i18n'}[$locale] ?? '')) !== '';
+    }
+
+    private function localized(string $field, ?string $locale): ?string
+    {
+        $locale ??= app()->getLocale();
+
+        return $this->hasTranslation($field, $locale) && $locale !== 'ru'
+            ? $this->{$field.'_i18n'}[$locale]
+            : $this->{$field};
+    }
+
+    public function isImported(): bool
+    {
+        return $this->source === self::SOURCE_IMPORT;
     }
 
     public function company(): BelongsTo

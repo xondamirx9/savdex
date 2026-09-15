@@ -86,6 +86,43 @@ class AdminFormsTest extends TestCase
     }
 
     /**
+     * Тексты по языкам — вкладками: русский в своих колонках, остальные
+     * в переводных. Пустой перевод не хранится пустой строкой: для
+     * витрины «есть перевод, но пустой» и «перевода нет» — разные вещи.
+     */
+    #[Test]
+    public function переводы_объявления_правятся_по_вкладкам(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $listing = Listing::factory()->create([
+            'title' => 'Кирпич керамический полнотелый М150',
+            'title_i18n' => ['en' => 'Old brick', 'uz' => 'Eski g‘isht'],
+        ]);
+
+        Livewire::test(EditListing::class, ['record' => $listing->getRouteKey()])
+            ->assertFormSet(['title_i18n.en' => 'Old brick', 'title_i18n.uz' => 'Eski g‘isht'])
+            ->fillForm([
+                'title_i18n.en' => 'Ceramic brick M150',
+                'description_i18n.en' => 'Solid brick, grade M150.',
+                'delivery_terms_i18n.tr' => 'Depodan teslim',
+                // Узбекский стёрли: ключа быть не должно, а не пустой строки
+                'title_i18n.uz' => '',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $fresh = $listing->fresh();
+
+        $this->assertSame('Ceramic brick M150', $fresh->localizedTitle('en'));
+        $this->assertSame('Solid brick, grade M150.', $fresh->localizedDescription('en'));
+        $this->assertSame('Depodan teslim', $fresh->localizedDeliveryTerms('tr'));
+        $this->assertSame(['en' => 'Ceramic brick M150'], $fresh->title_i18n);
+        $this->assertNull($fresh->payment_terms_i18n);
+        $this->assertSame('Кирпич керамический полнотелый М150', $fresh->title);
+    }
+
+    /**
      * Заметка модерации — единственное поле формы, которого не было
      * в списке заполняемых. Без него текст отказа молча пропадал бы
      * при сохранении, а владелец объявления так и не узнал бы причину.

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Cabinet;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Listing;
+use App\Support\Currencies;
 use App\Support\ListingTags;
 use App\Support\Notifier;
 use Illuminate\Http\JsonResponse;
@@ -129,7 +130,7 @@ class ListingWizardController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'price' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
             'bundle_price' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
-            'currency' => ['nullable', 'in:UZS,USD'],
+            'currency' => ['nullable', 'in:'.implode(',', Currencies::codes())],
             'unit' => ['nullable', 'string', 'max:20'],
             'price_negotiable' => ['nullable', 'boolean'],
             'min_order' => ['nullable', 'integer', 'min:0'],
