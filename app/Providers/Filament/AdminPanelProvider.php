@@ -16,6 +16,7 @@ use App\Filament\Widgets\RegistrationsChart;
 use App\Filament\Widgets\SupportQueue;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
+use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -54,12 +55,19 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->brandName('SAVDEX · Управление')
+            /*
+             * Знак берём из настроек, а не из репозитория: логотип
+             * меняют в разделе «Оформление», и админка обязана
+             * показывать тот же знак, что витрина. Замыкание — чтобы
+             * настройка читалась при отрисовке панели, а не при
+             * регистрации провайдера на каждом запросе сайта.
+             */
             ->brandLogo(fn () => new HtmlString(
                 '<span style="display:flex;align-items:center;gap:10px;font-weight:700">'
-                .'<img src="'.asset('images/logo-mark.svg').'" alt="" style="height:2.2rem">'
+                .'<img src="'.e(Appearance::logo()).'" alt="" style="height:2.2rem">'
                 .'<span>SAVDEX · Управление</span></span>',
             ))
-            ->favicon(asset('images/logo-mark.svg'))
+            ->favicon(fn (): string => Appearance::logo())
             ->navigationGroups([
                 // CRM первой: у продаж и менеджеров направлений это
                 // единственная группа, с которой они работают каждый день

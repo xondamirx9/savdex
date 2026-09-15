@@ -92,6 +92,12 @@ export interface SharedProps extends InertiaPageProps {
     navCategories?: { id: number; name: string }[];
     /** Контакты поддержки и реквизиты — правятся в админке. */
     support: SupportContacts;
+    /**
+     * Адрес логотипа площадки — из настроек админки, раздел
+     * «Оформление». Всегда заполнен: пустая настройка отдаёт знак
+     * из репозитория.
+     */
+    brandLogo: string;
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];
