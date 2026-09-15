@@ -309,8 +309,15 @@ export default function Home({
 
     return (
         <PublicLayout
-            title={t('home.meta_title')}
-            description={t('home.meta_description')}
+            /*
+             * Заголовок и описание — те же строки, что печатает сервер
+             * в <title> и <meta name="description">. Раньше у главной
+             * были свои home.meta_*, и тексты разошлись: в выдаче Google
+             * заголовок оказался клиентский, а описание серверное —
+             * страница представлялась двумя разными фразами.
+             */
+            title={t('seo.home_title')}
+            description={t('seo.home_description')}
             overlayHeader
         >
             {/* ── Первый экран: тёмно-синий порт ── */}
