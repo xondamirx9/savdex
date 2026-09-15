@@ -28,7 +28,16 @@ return new class extends Migration
         Schema::create('admin_actions', function (Blueprint $table): void {
             $table->id();
 
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            /*
+             * Ссылка на автора — без внешнего ключа.
+             *
+             * Журнал обязан пережить всё, что описывает, включая удаление
+             * самого автора. С внешним ключом запись об удалении сотрудника
+             * не вставлялась вовсе: она ссылается на строку, которой в этот
+             * момент уже нет. Отвечает на вопрос «кто» снимок имени ниже,
+             * а ссылка нужна лишь для удобной связи, пока автор существует.
+             */
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->string('user_name', 120);
             $table->string('user_role', 20)->nullable();
 

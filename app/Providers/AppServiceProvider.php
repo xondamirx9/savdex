@@ -23,6 +23,7 @@ use App\Models\Page;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\PromoCode;
+use App\Models\Refund;
 use App\Models\Review;
 use App\Models\Setting;
 use App\Models\Subscription;
@@ -122,6 +123,7 @@ class AppServiceProvider extends ServiceProvider
             Task::class => 'tasks',
             Communication::class => 'communications',
             Ticket::class => 'support',
+            Refund::class => 'refunds',
             Payment::class => 'payments',
             Subscription::class => 'subscriptions',
             Plan::class => 'plans',

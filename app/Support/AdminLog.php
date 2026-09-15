@@ -8,7 +8,9 @@ use App\Models\AdminAction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
+use Throwable;
 
 /**
  * Запись в журнал действий администраторов.
@@ -50,7 +52,16 @@ final class AdminLog
         try {
             $actor ??= Auth::user() instanceof User ? Auth::user() : null;
 
-            AdminAction::create([
+            /*
+             * Точка сохранения вокруг записи.
+             *
+             * Журнал не должен ронять действие, которое он записывает, —
+             * но и глотать ошибку внутри чужой транзакции нельзя:
+             * PostgreSQL отменяет транзакцию целиком при первой же
+             * ошибке, и дальше падает всё, включая само действие.
+             * Вложенная транзакция откатывает только свою точку.
+             */
+            DB::transaction(fn () => AdminAction::create([
                 'user_id' => $actor?->getKey(),
                 // Снимок имени: ссылка умрёт вместе с удалённым сотрудником,
                 // а вопрос «кто это сделал» задают как раз после увольнения
@@ -64,8 +75,8 @@ final class AdminLog
                 'changes' => self::clean($changes) ?: null,
                 'note' => $note,
                 'ip' => Request::ip(),
-            ]);
-        } catch (\Throwable $e) {
+            ]));
+        } catch (Throwable $e) {
             // Действие уже совершено — падать поздно. Но и молчать нельзя:
             // незаписанное действие должно оставить след хотя бы в логах.
             report($e);
