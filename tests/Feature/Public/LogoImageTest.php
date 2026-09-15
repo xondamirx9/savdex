@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Public;
 
 use App\Filament\Resources\Settings\Pages\EditSetting;
+use App\Filament\Resources\Settings\Pages\ListSettings;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\Appearance;
@@ -170,6 +171,70 @@ class LogoImageTest extends TestCase
 
         $this->assertStringEndsWith('.svg', $saved);
         Storage::disk('public')->assertExists($saved);
+    }
+
+    /**
+     * Кнопка над списком настроек: знак ищут глазами, а не поиском
+     * по ключу среди трёх десятков строк.
+     */
+    #[Test]
+    public function знак_загружается_кнопкой_над_списком(): void
+    {
+        Storage::fake('public');
+
+        Livewire::actingAs($this->admin())
+            ->test(ListSettings::class)
+            ->callAction('logo', ['logo' => [UploadedFile::fake()->image('znak.png', 512, 512)]]);
+
+        Setting::flushCache();
+
+        $saved = Appearance::logoPath();
+
+        $this->assertNotSame('', $saved, 'Путь к загруженному файлу должен попасть в настройку');
+        Storage::disk('public')->assertExists($saved);
+    }
+
+    /**
+     * Настройку может удалить администратор — так уже случилось с фоном
+     * первого экрана. Кнопка обязана завести строку заново, иначе
+     * площадка остаётся без способа сменить знак.
+     */
+    #[Test]
+    public function кнопка_заводит_настройку_заново_если_её_удалили(): void
+    {
+        Storage::fake('public');
+
+        Setting::query()->where('key', Appearance::KEY_LOGO)->delete();
+        Setting::flushCache();
+
+        Livewire::actingAs($this->admin())
+            ->test(ListSettings::class)
+            ->callAction('logo', ['logo' => [UploadedFile::fake()->image('znak.png', 512, 512)]]);
+
+        Setting::flushCache();
+
+        $setting = Setting::query()->where('key', Appearance::KEY_LOGO)->first();
+
+        $this->assertNotNull($setting, 'Строка настройки должна завестись заново');
+        $this->assertSame('appearance', $setting->group);
+        $this->assertSame('image', $setting->type);
+        $this->assertStringContainsString('/storage/', Appearance::logo());
+    }
+
+    /** Пустое поле — вернуть знак из репозитория, а не сломать шапку. */
+    #[Test]
+    public function пустое_поле_возвращает_знак_по_умолчанию(): void
+    {
+        $this->setLogo('appearance/znak.png');
+
+        Livewire::actingAs($this->admin())
+            ->test(ListSettings::class)
+            ->callAction('logo', ['logo' => []]);
+
+        Setting::flushCache();
+
+        $this->assertSame('', Appearance::logoPath());
+        $this->assertSame(Appearance::LOGO_FALLBACK, Appearance::logo());
     }
 
     #[Test]
