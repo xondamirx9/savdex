@@ -202,11 +202,44 @@ class ListingWorkbookImportTest extends TestCase
         Livewire::actingAs($admin)
             ->test(ListListings::class)
             ->callAction(TestAction::make('importWorkbook')->table(), [
-                'workbook' => UploadedFile::fake()->createWithContent('catalog.xlsx', (string) file_get_contents($workbook)),
+                'workbooks' => [
+                    UploadedFile::fake()->createWithContent('catalog.xlsx', (string) file_get_contents($workbook)),
+                ],
             ])
             ->assertHasNoActionErrors();
 
         $this->assertSame(1, $listing->images()->count());
+    }
+
+    #[Test]
+    public function за_раз_принимается_несколько_книг(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => User::ADMIN_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        $company = Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+        $brick = Listing::factory()->for($company)->create(['title' => 'Кирпич керамический М150']);
+        $yarn = Listing::factory()->for($company)->create(['title' => 'Пряжа хлопковая 30/1']);
+
+        // Каталог разрезан по разделам: в каждой книге свой товар
+        $first = $this->workbook([2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']], [2 => 1]);
+        $second = $this->workbook([2 => ['', 'Пряжа хлопковая 30/1', 'ООО «Стройбаза»', '', '', '', '', '']], [2 => 1]);
+
+        Livewire::actingAs($admin)
+            ->test(ListListings::class)
+            ->callAction(TestAction::make('importWorkbook')->table(), [
+                'workbooks' => [
+                    UploadedFile::fake()->createWithContent('stroy.xlsx', (string) file_get_contents($first)),
+                    UploadedFile::fake()->createWithContent('tekstil.xlsx', (string) file_get_contents($second)),
+                ],
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(1, $brick->images()->count());
+        $this->assertSame(1, $yarn->images()->count());
     }
 
     #[Test]
@@ -232,6 +265,41 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertSame('Ташкент', $listing->city?->name());
         $this->assertSame('UZS', $listing->currency);
         $this->assertSame(1_200.0, (float) $listing->price);
+        $this->assertSame(Listing::STATUS_ACTIVE, $listing->status);
+    }
+
+    #[Test]
+    public function книга_на_пяти_языках_читается_целиком(): void
+    {
+        // Каждый столбец назван на своём языке, значения — тоже
+        Company::factory()->create(['name' => 'Uyut Gulistan Mebel']);
+
+        $furniture = Category::factory()->named('Мебель')->create();
+        $furniture->translations()->create(['locale' => 'zh', 'name' => '家具']);
+
+        $city = $this->city('Ташкент');
+        $city->translations()->create(['locale' => 'uz', 'name' => 'Toshkent']);
+
+        $path = tempnam(sys_get_temp_dir(), 'savdex-test').'.xlsx';
+
+        $writer = new Writer;
+        $writer->openToFile($path);
+        $writer->addRow(Row::fromValues(['Nomi', 'Şirket', '类别', 'Price', 'Валюта', 'Shahar', 'Yayınla']));
+        $writer->addRow(Row::fromValues([
+            'Ofis stoli', 'Uyut Gulistan Mebel', '家具', '1 200 000', "so'm", 'Toshkent', 'evet',
+        ]));
+        $writer->close();
+
+        $result = $this->import($path);
+
+        $listing = Listing::query()->where('title', 'Ofis stoli')->firstOrFail();
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(1, $result['created']);
+        $this->assertSame('Мебель', $listing->category?->name());
+        $this->assertSame($city->id, $listing->city_id);
+        $this->assertSame(1_200_000.0, (float) $listing->price);
+        $this->assertSame('UZS', $listing->currency);
         $this->assertSame(Listing::STATUS_ACTIVE, $listing->status);
     }
 

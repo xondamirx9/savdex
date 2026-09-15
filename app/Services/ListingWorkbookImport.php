@@ -327,9 +327,12 @@ final class ListingWorkbookImport
     {
         $needle = ImportLanguage::normalize($value);
 
-        $demand = ['запрос', 'спрос', 'закупка', 'куплю', 'потребность',
-            'demand', 'request', 'rfq', 'buy', 'buying',
-            'talab', 'sotib olish', 'talep', 'alım'];
+        // Перечислены только слова запроса: всё остальное — предложение,
+        // и незнакомое слово попадает в предложения, а не теряет строку
+        $demand = ['запрос', 'спрос', 'закупка', 'покупка', 'куплю', 'потребность',
+            'demand', 'request', 'rfq', 'buy', 'buying', 'purchase',
+            'talab', 'sotib olish', 'xarid', 'talep', 'alım', 'satın alma',
+            '采购', '求购', '需求'];
 
         return in_array($needle, $demand, true) ? Listing::TYPE_DEMAND : Listing::TYPE_SUPPLY;
     }
