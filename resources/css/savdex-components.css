@@ -113,6 +113,27 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 .select{appearance:none;padding-right:38px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 14px center;cursor:pointer}
+/* ---------- Выпадающий список площадки ----------
+   Кнопка повторяет поле ввода, список — обычная разметка: системный
+   <select> браузер рисует сам, и его окно с прямыми углами и своей
+   синей подсветкой выглядит чужим рядом с панелью поиска. */
+.select-field{display:block}
+.select-field-btn{display:flex;align-items:center;gap:10px;text-align:left;
+  background-image:none;padding-right:14px}
+.select-field-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Подпись-заглушка бледнее выбранного значения — как placeholder у поля */
+.select-field-btn.is-empty .select-field-value{color:var(--text-muted)}
+.select-field-arrow{flex-shrink:0;color:var(--text-muted);transition:transform var(--t-mid)}
+.select-field-btn[aria-expanded="true"]{border-color:var(--primary-500);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.select-field-btn[aria-expanded="true"] .select-field-arrow{transform:rotate(180deg)}
+/* Список: во всю ширину поля, с прокруткой — городов и рубрик бывают
+   десятки, а список во весь экран прокручивать неудобно */
+.select-menu{left:0;right:0;min-width:0;max-height:288px;overflow-y:auto}
+.select-option{justify-content:space-between;gap:10px}
+.select-option.is-cursor{background:var(--bg)}
+.select-option[aria-selected="true"]{color:var(--primary-700);font-weight:600}
+.select-option-mark{flex-shrink:0;color:var(--primary-700)}
+
 .input::placeholder,.textarea::placeholder{color:#94A3B8}
 .input:hover,.select:hover,.textarea:hover{border-color:var(--border-strong)}
 .input:focus,.select:focus,.textarea:focus{
@@ -1672,7 +1693,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 /* Панель поиска: карточка с табами Товары / Компании / Запросы.
    Стоит отдельной полосой под фотографией героя на всю ширину
    контейнера; на светлой подложке панель непрозрачная */
-.hero-search-band{position:relative;z-index:2;margin-top:32px}
+/* Полоса поиска лежит выше следующих секций: у неё и у полосы
+   показателей был один z-index, и при равном весе побеждала та,
+   что ниже по разметке — карточки цифр разрезали открытый список
+   городов пополам. */
+.hero-search-band{position:relative;z-index:20;margin-top:32px}
 .hero-search-band .hero-panel{margin-top:0;background:var(--navy-900);backdrop-filter:none}
 .hero-panel{position:relative;background:rgba(13,27,54,.78);backdrop-filter:blur(10px);
   border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:20px;box-shadow:var(--sh-modal);
