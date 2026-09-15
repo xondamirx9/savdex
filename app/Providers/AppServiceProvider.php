@@ -33,10 +33,13 @@ use App\Models\User;
 use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
 use App\Support\Seo;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
@@ -157,12 +160,42 @@ class AppServiceProvider extends ServiceProvider
         Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
     }
 
+    /**
+     * Сигнал о медленной странице — с подробностями и на боевом сайте тоже.
+     *
+     * Прежняя версия писала «что-то было медленным» и молчала о том,
+     * что именно. По такому сообщению причину не найти: остаётся
+     * гадать, а гадание стоит дороже самой починки.
+     *
+     * Работает и в продакшене намеренно. Медленно отвечающая панель —
+     * это как раз то, что замечают на живом сайте и не замечают на
+     * машине разработчика с базой под боком.
+     */
     private function configureDatabase(): void
     {
-        if (! $this->app->isProduction()) {
-            DB::whenQueryingForLongerThan(500, function (): void {
-                logger()->warning('Медленный запрос к базе данных: дольше 500 мс');
-            });
-        }
+        /*
+         * Число запросов отличает «один тяжёлый» от «четырёхсот мелких».
+         * Без него полсекунды одинаково выглядят и в том, и в другом
+         * случае, а чинятся они совершенно по-разному.
+         */
+        $queries = 0;
+
+        DB::listen(static function () use (&$queries): void {
+            $queries++;
+        });
+
+        DB::whenQueryingForLongerThan(500, function (Connection $connection, QueryExecuted $query) use (&$queries): void {
+            logger()->warning('База отвечает медленно', [
+                'всего_мс' => (int) round($connection->totalQueryDuration()),
+                'запросов' => $queries,
+                // Запрос, на котором счётчик перевалил за порог. Не
+                // обязательно самый медленный, но почти всегда он
+                'на_запросе' => Str::limit(preg_replace('/\s+/', ' ', $query->sql) ?? '', 400),
+                'этот_мс' => (int) round($query->time),
+                'страница' => $this->app->runningInConsole()
+                    ? 'консоль: '.implode(' ', array_slice($_SERVER['argv'] ?? [], 1))
+                    : request()->method().' '.request()->path(),
+            ]);
+        });
     }
 }
