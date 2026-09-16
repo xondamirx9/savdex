@@ -11,6 +11,7 @@ use App\Models\CompanyContact;
 use App\Models\Listing;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
+use App\Support\PriceDisplay;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -50,6 +51,7 @@ class CatalogController extends Controller
     public function __construct(
         private readonly StatsRecorder $stats,
         private readonly SeoBuilders $seo,
+        private readonly PriceDisplay $prices,
     ) {}
 
     public function index(Request $request): Response
@@ -292,6 +294,14 @@ class CatalogController extends Controller
                 'price' => $listing->price !== null ? (float) $listing->price : null,
                 'bundle_price' => $listing->bundle_price !== null ? (float) $listing->bundle_price : null,
                 'currency' => $listing->currency,
+                // Приблизительно в валюте языка, рядом с ценой продавца.
+                // Договорная цена не пересчитывается — её не показывают
+                'converted' => $listing->price_negotiable
+                    ? null
+                    : $this->prices->convert($listing->price, $listing->currency),
+                'bundle_converted' => $listing->price_negotiable
+                    ? null
+                    : $this->prices->convert($listing->bundle_price, $listing->currency),
                 'unit' => $listing->unit,
                 'negotiable' => $listing->price_negotiable,
                 'min_order' => $listing->min_order,

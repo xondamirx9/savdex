@@ -432,6 +432,7 @@ return [
         'verified' => 'tekshirilgan',
         'price_negotiable' => 'Narx kelishilgan holda',
         'currency_uzs' => 'so‘m',
+        'seller_price' => 'Sotuvchi narxi: :price',
         'badge_new' => 'NEW',
         'price_from' => ':price dan',
         'moq' => 'MOQ',

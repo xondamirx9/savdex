@@ -22,6 +22,22 @@ export function setTranslations(next: Dict, nextLocale: string): void {
     locale = nextLocale;
 }
 
+/**
+ * Локаль для чисел на языке страницы: «97,7» по-русски, «97.7»
+ * по-английски, «1.250.000» по-турецки. Узбекский — латиницей.
+ */
+const NUMBER_LOCALES: Record<string, string> = {
+    ru: 'ru-RU',
+    uz: 'uz-Latn-UZ',
+    en: 'en-US',
+    zh: 'zh-CN',
+    tr: 'tr-TR',
+};
+
+export function numberLocale(): string {
+    return NUMBER_LOCALES[locale] ?? 'ru-RU';
+}
+
 function lookup(key: string): string | undefined {
     let node: unknown = dict;
 

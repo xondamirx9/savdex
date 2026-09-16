@@ -11,6 +11,7 @@ use App\Models\NewsPost;
 use App\Models\Tender;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\UzumGateway;
+use App\Support\CurrencyRate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
@@ -54,6 +55,18 @@ Schedule::command('billing:reset-periods')
 Schedule::command('ratings:recalculate')
     ->dailyAt('03:00')
     ->withoutOverlapping()
+    ->onOneServer();
+
+/*
+ * Курсы ЦБ — заранее, а не первым посетителем: кэш живёт сутки,
+ * и без обновления по расписанию тот, кто откроет каталог сразу
+ * после его истечения, ждал бы ответа cbu.uz до пяти секунд.
+ * Каждые четыре часа: ЦБ публикует курс раз в день, но в какой час —
+ * не обещает.
+ */
+Schedule::call(fn () => app(CurrencyRate::class)->refresh())
+    ->everyFourHours()
+    ->name('cbu-rates:refresh')
     ->onOneServer();
 
 // Экспорты и импорты Filament уходят в очередь; на проде нужен

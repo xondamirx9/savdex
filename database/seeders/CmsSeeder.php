@@ -8,6 +8,8 @@ use App\Models\LandingBlock;
 use App\Models\NewsPost;
 use App\Models\Page;
 use App\Models\Setting;
+use App\Support\Locales;
+use App\Support\PriceDisplay;
 use Illuminate\Database\Seeder;
 
 /**
@@ -240,6 +242,25 @@ class CmsSeeder extends Seeder
              * это проверяет ReviewScreening.
              */
             ['moderation', 'reviews_premoderation', 'Проверять каждый отзыв перед публикацией', 'boolean', true],
+
+            /*
+             * Валюта показа цен по языкам витрины. Цена продавца
+             * остаётся в его валюте, рядом витрина показывает
+             * приблизительный пересчёт по курсу ЦБ (PriceDisplay).
+             */
+            ...array_map(
+                fn (string $locale, string $currency): array => [
+                    'currency',
+                    PriceDisplay::key($locale),
+                    'Валюта на версии «'.Locales::ALL[$locale]['label'].'»',
+                    'string',
+                    $currency,
+                    'Код валюты, в которой посетители этой языковой версии видят цены: UZS, USD, EUR, CNY, TRY, RUB, KZT. '
+                    .'Цена продавца остаётся в его валюте, пересчёт по курсу ЦБ показывается рядом со знаком «≈»',
+                ],
+                array_keys(PriceDisplay::DEFAULTS),
+                PriceDisplay::DEFAULTS,
+            ),
         ];
 
         foreach ($settings as $i => $row) {

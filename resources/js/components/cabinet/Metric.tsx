@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { numberLocale, t } from '@/lib/i18n';
 
 export interface MetricData {
     value: number;
@@ -8,9 +8,13 @@ export interface MetricData {
     format: 'int' | 'percent';
 }
 
-/** Разделитель разрядов — узкий пробел: 4 218 читается быстрее, чем 4218. */
+/**
+ * Число на языке страницы: разделители разрядов и дробной части —
+ * как принято в этом языке. Там, где разряды делит пробел, он узкий:
+ * 4 218 читается быстрее, чем 4218.
+ */
 export function formatNumber(value: number): string {
-    return value.toLocaleString('ru-RU').replace(/ /g, ' ');
+    return value.toLocaleString(numberLocale()).replace(/ /g, ' ');
 }
 
 /**

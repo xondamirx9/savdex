@@ -434,6 +434,7 @@ return [
         'verified' => 'проверена',
         'price_negotiable' => 'Цена договорная',
         'currency_uzs' => 'сум',
+        'seller_price' => 'Цена продавца: :price',
         'badge_new' => 'NEW',
         'price_from' => 'от :price',
         'moq' => 'MOQ',

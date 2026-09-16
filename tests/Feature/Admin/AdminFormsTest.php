@@ -6,6 +6,7 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Listings\Pages\EditListing;
+use App\Filament\Resources\Settings\Pages\CreateSetting;
 use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Models\Category;
 use App\Models\Company;
@@ -13,6 +14,7 @@ use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\OfficeLocation;
+use App\Support\PriceDisplay;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -245,5 +247,51 @@ class AdminFormsTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('+998 71 300-00-00', $setting->refresh()->value);
+    }
+
+    /** Валюта показа выбирается из списка — код мимо списка форма не пропускает. */
+    #[Test]
+    public function валюта_языка_выбирается_из_списка(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $setting = Setting::query()->where('key', PriceDisplay::key('en'))->firstOrFail();
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->assertFormSet(['value' => 'USD'])
+            ->fillForm(['value' => 'EUR'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('EUR', $setting->refresh()->value);
+        $this->assertSame('EUR', PriceDisplay::currency('en'));
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->fillForm(['value' => 'XXX'])
+            ->call('save')
+            ->assertHasFormErrors(['value']);
+
+        $this->assertSame('EUR', $setting->refresh()->value);
+    }
+
+    /** Удалённую настройку валюты заводят заново — и на создании код тоже из списка. */
+    #[Test]
+    public function валюта_языка_при_создании_настройки_тоже_из_списка(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        Setting::query()->where('key', PriceDisplay::key('tr'))->delete();
+
+        Livewire::test(CreateSetting::class)
+            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'XXX'])
+            ->call('create')
+            ->assertHasFormErrors(['value']);
+
+        Livewire::test(CreateSetting::class)
+            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'EUR'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('EUR', PriceDisplay::currency('tr'));
     }
 }

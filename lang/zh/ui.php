@@ -428,6 +428,7 @@ return [
         'verified' => '已核验',
         'price_negotiable' => '价格面议',
         'currency_uzs' => '苏姆',
+        'seller_price' => '卖家价格：:price',
         'badge_new' => '新品',
         'price_from' => ':price 起',
         'moq' => '起订量',
