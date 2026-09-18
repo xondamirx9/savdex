@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Banner;
 use App\Models\Broadcast;
 use App\Models\Category;
 use App\Models\City;
@@ -150,6 +151,7 @@ class AppServiceProvider extends ServiceProvider
             Page::class => 'content',
             NewsPost::class => 'content',
             LandingBlock::class => 'content',
+            Banner::class => 'content',
             Category::class => 'catalogs',
             CompanyType::class => 'catalogs',
             Country::class => 'catalogs',

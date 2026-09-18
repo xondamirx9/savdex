@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { NewsCover } from '@/components/NewsCover';
+import { BannerSlot, type BannerData } from '@/components/BannerSlot';
 import { CardRow } from '@/components/CardRow';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { SelectField } from '@/components/SelectField';
@@ -285,6 +286,7 @@ export default function Home({
     news,
     reviews,
     heroImage,
+    banner,
 }: {
     stats: Stats;
     categories: CategoryTile[];
@@ -299,6 +301,8 @@ export default function Home({
     /** Пропорции кадра (ширина/высота); null — фон из коробки */
     heroRatio: number | null;
     reviews: ReviewRow[];
+    /** Баннер акции под первым экраном; null — сейчас ничего не идёт */
+    banner: BannerData | null;
 }) {
     const statCells: [typeof Users, string, number, string][] = [
         [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies')],
@@ -358,6 +362,12 @@ export default function Home({
                     <HeroSearch categories={categories} countries={countries} cities={cities} />
                 </div>
             </section>
+
+            {/* ── Баннер акции: заводится из админки, срок задаётся там же.
+                 Место не резервируется — нет акции, нет и пустоты ── */}
+            <div className="container">
+                <BannerSlot banner={banner} />
+            </div>
 
             {/* ── Показатели: цифры из базы — выдуманные счётчики
                  на витрине недопустимы ── */}

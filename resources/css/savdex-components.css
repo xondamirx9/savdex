@@ -2257,3 +2257,24 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
 
 /* Логотип компании в кнопке меню шапки */
 .user-avatar img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+
+/* ── Баннер акции ────────────────────────────────────────────────────
+   Широкая картинка на компьютере, узкая на телефоне. Без узкой широкая
+   обрезается по точке фокуса, заданной в админке: объект нужной высоты
+   с object-fit: cover — единственный способ не получить полосу-ниточку
+   на узком экране и не растянуть картинку. */
+.banner-slot{position:relative;margin:0 auto 24px;max-width:1200px;border-radius:12px;overflow:hidden;line-height:0}
+.banner-slot__link{display:block;line-height:0}
+.banner-slot__image{display:block;width:100%;height:clamp(120px,18vw,260px);object-fit:cover}
+.banner-slot__close{position:absolute;top:8px;right:8px;display:flex;align-items:center;justify-content:center;
+    width:28px;height:28px;border:0;border-radius:50%;cursor:pointer;line-height:1;
+    background:rgba(17,24,39,.55);color:#fff;transition:background .15s}
+.banner-slot__close:hover{background:rgba(17,24,39,.8)}
+.banner-slot__close:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* На телефоне баннер выше: узкая картинка обычно вертикальнее,
+   а полоса в 120px на ней превращается в невнятную нарезку */
+@media (max-width:640px){
+    .banner-slot{margin-bottom:16px;border-radius:8px}
+    .banner-slot__image{height:clamp(140px,42vw,220px)}
+}

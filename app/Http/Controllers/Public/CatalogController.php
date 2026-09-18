@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\CompanyContact;
 use App\Models\Listing;
 use App\Models\Tender;
+use App\Support\BannerCard;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
 use App\Support\PriceDisplay;
@@ -129,6 +131,9 @@ class CatalogController extends Controller
         );
 
         return Inertia::render('catalog/Index', [
+            // Каталог для посетителя — одна страница с переключателем
+            // вида, поэтому баннер отдаётся обоим её видам
+            'banner' => BannerCard::forPlacement(Banner::PLACEMENT_CATALOG),
             'listings' => $listings->through(fn (Listing $l): array => $this->present($l)),
             'filters' => [
                 'q' => $query,
@@ -194,6 +199,7 @@ class CatalogController extends Controller
             ->noindex($query !== '' || $closed || $categoryId !== 0 || $tenders->currentPage() > 1);
 
         return Inertia::render('catalog/Index', [
+            'banner' => BannerCard::forPlacement(Banner::PLACEMENT_CATALOG),
             'tenders' => $tenders->through(fn (Tender $t): array => TenderCard::present($t)),
             'filters' => [
                 'q' => $query,
