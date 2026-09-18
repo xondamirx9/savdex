@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Reviews;
 
 use App\Filament\Concerns\AuthorizesBySection;
+use App\Filament\Resources\Reviews\Pages\CreateReview;
+use App\Filament\Resources\Reviews\Pages\EditReview;
 use App\Filament\Resources\Reviews\Pages\ListReviews;
+use App\Filament\Resources\Reviews\Schemas\ReviewForm;
 use App\Filament\Resources\Reviews\Tables\ReviewsTable;
 use App\Models\Review;
 use BackedEnum;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
@@ -61,6 +65,11 @@ class ReviewResource extends Resource
         return 'warning';
     }
 
+    public static function form(Schema $schema): Schema
+    {
+        return ReviewForm::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return ReviewsTable::configure($table);
@@ -70,6 +79,8 @@ class ReviewResource extends Resource
     {
         return [
             'index' => ListReviews::route('/'),
+            'create' => CreateReview::route('/create'),
+            'edit' => EditReview::route('/{record}/edit'),
         ];
     }
 }
