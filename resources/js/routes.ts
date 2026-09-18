@@ -19,6 +19,8 @@ export const routes = {
     tenders: '/catalog?type=tender',
     tender: (slug: string) => `/tenders/${slug}`,
     itTasks: '/it-services',
+    resumes: '/resumes',
+    resume: (slug: string) => `/resume/${slug}`,
     itTask: (slug: string) => `/it-services/${slug}`,
     itTaskRespond: (id: number) => `/it-services/${id}/respond`,
     itTaskFile: (id: number) => `/it-services/files/${id}`,
@@ -55,6 +57,7 @@ export const routes = {
     // Кабинет
     cabinet: '/cabinet',
     cabinetListings: '/cabinet/listings',
+    cabinetResume: '/cabinet/resume',
     cabinetIncoming: '/cabinet/incoming',
     cabinetAnalytics: '/cabinet/analytics',
     cabinetPromo: '/cabinet/promo',

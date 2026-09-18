@@ -28,6 +28,12 @@ class City extends Model
         return $this->hasMany(Listing::class);
     }
 
+    /** Резюме соискателей: по ним строится фильтр городов в разделе. */
+    public function resumes(): HasMany
+    {
+        return $this->hasMany(Resume::class);
+    }
+
     public function translations(): HasMany
     {
         return $this->hasMany(CityTranslation::class);

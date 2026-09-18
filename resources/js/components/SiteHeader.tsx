@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import {
+    FileUser,
     AlertTriangle,
     Building2,
     ChevronDown,
@@ -77,6 +78,7 @@ function menu(): MenuItem[] {
                 && (search.includes('type=demand') || search.includes('type=tender')),
         },
         { href: routes.itTasks, label: t('nav.it_services') },
+        { href: routes.resumes, label: t('nav.resumes') },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },
@@ -524,6 +526,14 @@ function UserMenu({
                     onClick={() => setOpen(false)}
                 >
                     <Megaphone aria-hidden className="size-4" /> {t('header.my_listings')}
+                </Link>
+                <Link
+                    href={routes.cabinetResume}
+                    className="dropdown-item"
+                    role="menuitem"
+                    onClick={() => setOpen(false)}
+                >
+                    <FileUser aria-hidden className="size-4" /> {t('cabinet.nav.resume')}
                 </Link>
                 <Link
                     href={routes.cabinetCompany}

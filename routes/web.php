@@ -22,6 +22,7 @@ use App\Http\Controllers\Cabinet\ListingController;
 use App\Http\Controllers\Cabinet\ListingImageController;
 use App\Http\Controllers\Cabinet\ListingWizardController;
 use App\Http\Controllers\Cabinet\PromotionController;
+use App\Http\Controllers\Cabinet\ResumeController;
 use App\Http\Controllers\Cabinet\ReviewController;
 use App\Http\Controllers\Cabinet\SettingsController;
 use App\Http\Controllers\Cabinet\TelegramLinkController;
@@ -39,6 +40,7 @@ use App\Http\Controllers\Public\LegalController;
 use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
+use App\Http\Controllers\Public\ResumeController as PublicResumeController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\TenderController;
 use App\Http\Middleware\RequirePasswordChange;
@@ -102,6 +104,13 @@ Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
  */
 Route::get('/tenders', [TenderController::class, 'index'])->name('tenders');
 Route::get('/tenders/{slug}', [TenderController::class, 'show'])->name('tenders.show');
+
+/*
+ * Резюме — раздел бесплатный с обеих сторон: соискатель публикует
+ * без оплаты, компания смотрит без списания кредитов.
+ */
+Route::get('/resumes', [PublicResumeController::class, 'index'])->name('resumes');
+Route::get('/resume/{slug}', [PublicResumeController::class, 'show'])->name('resumes.show');
 
 // IT-услуги — IT-задачи компаний; откликаются IT-исполнители
 Route::get('/it-services', [ItTaskController::class, 'index'])->name('it-tasks');
@@ -440,6 +449,19 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::patch('/cabinet/settings/notifications', [SettingsController::class, 'notifications'])->name('cabinet.settings.notifications');
     Route::patch('/cabinet/settings/profile', [SettingsController::class, 'profile'])->name('cabinet.settings.profile');
     Route::post('/cabinet/settings/delete', [SettingsController::class, 'destroy'])->name('cabinet.settings.destroy');
+
+    /*
+     * «Моё резюме». Одно на человека, поэтому адреса без номера:
+     * заводить, править и снимать нечего, кроме своего.
+     */
+    Route::get('/cabinet/resume', [ResumeController::class, 'edit'])->name('cabinet.resume');
+    Route::patch('/cabinet/resume', [ResumeController::class, 'update'])->name('cabinet.resume.update');
+    Route::post('/cabinet/resume/publish', [ResumeController::class, 'publish'])->name('cabinet.resume.publish');
+    Route::post('/cabinet/resume/hide', [ResumeController::class, 'hide'])->name('cabinet.resume.hide');
+    Route::post('/cabinet/resume/photo', [ResumeController::class, 'photo'])
+        ->middleware('throttle:30,60')
+        ->name('cabinet.resume.photo');
+    Route::delete('/cabinet/resume', [ResumeController::class, 'destroy'])->name('cabinet.resume.destroy');
 
     /*
      * Привязка Telegram: туда площадка присылает ссылку на смену
