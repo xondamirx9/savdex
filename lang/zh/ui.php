@@ -519,7 +519,7 @@ return [
         'about_description' => '平台如何运作：免费发布信息，仅在解锁联系方式时付费，企业经人工审核，评价只来自已确认的交易。',
         'pricing_title' => '套餐与价格',
         'pricing_description' => '发布信息免费。只在解锁联系方式和推广时付费。交易不收佣金。',
-        'home_title' => '乌兹别克斯坦供应商与批量采购',
+        'home_title' => '招标贸易',
         'home_description' => '乌兹别克斯坦及中亚 B2B 平台：经审核的供应商目录、采购需求与招标。直接联系企业，交易零佣金。',
         'catalog_subject' => '批发商品与服务',
         'catalog_in_country' => '（乌兹别克斯坦）',
