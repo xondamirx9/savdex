@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\RefusesDeletionWhenReferenced;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class City extends Model
 {
+    use RefusesDeletionWhenReferenced;
+
     protected $fillable = ['country_id', 'slug', 'lat', 'lng', 'sort', 'is_active'];
 
     protected function casts(): array
@@ -40,5 +43,25 @@ class City extends Model
         return $this->translations->firstWhere('locale', $locale)?->name
             ?? $this->translations->firstWhere('locale', 'ru')?->name
             ?? $this->slug;
+    }
+
+    public function companies(): HasMany
+    {
+        return $this->hasMany(Company::class);
+    }
+
+    /**
+     * Что удерживает город от удаления.
+     *
+     * @return array<string, int>
+     */
+    public function references(): array
+    {
+        $counts = [
+            'компании' => $this->companies()->count(),
+            'объявления' => $this->listings()->count(),
+        ];
+
+        return array_filter($counts);
     }
 }

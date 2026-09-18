@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\RefusesDeletionWhenReferenced;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Country extends Model
 {
+    use RefusesDeletionWhenReferenced;
+
     protected $fillable = ['code', 'phone_code', 'currency_code', 'sort', 'is_active'];
 
     protected function casts(): array
@@ -54,5 +57,29 @@ class Country extends Model
         return $this->translations->firstWhere('locale', $locale)?->name
             ?? $this->translations->firstWhere('locale', 'ru')?->name
             ?? $this->code;
+    }
+
+    public function tenders(): HasMany
+    {
+        return $this->hasMany(Tender::class);
+    }
+
+    /**
+     * Что удерживает страну от удаления.
+     *
+     * Города считаются наравне с компаниями: внешний ключ у них
+     * каскадный, и удаление страны увело бы их за собой без вопросов.
+     *
+     * @return array<string, int>
+     */
+    public function references(): array
+    {
+        $counts = [
+            'города' => $this->cities()->count(),
+            'компании' => $this->companies()->count(),
+            'тендеры' => $this->tenders()->count(),
+        ];
+
+        return array_filter($counts);
     }
 }

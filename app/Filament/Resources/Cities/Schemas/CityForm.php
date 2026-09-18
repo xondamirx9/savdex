@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Categories\Schemas;
+namespace App\Filament\Resources\Cities\Schemas;
 
-use App\Models\Category;
+use App\Models\Country;
 use App\Support\Locales;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -13,46 +13,33 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
-/**
- * Форма категории.
- *
- * Названия на пяти языках задаются здесь же, а не отдельным экраном:
- * категория без перевода отображается своим слагом, и такую забывают
- * дозаполнить — заметно это становится уже на витрине.
- */
-class CategoryForm
+class CityForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Категория')
+            Section::make('Город')
                 ->schema([
-                    Select::make('parent_id')
-                        ->label('Родительская категория')
-                        ->relationship(
-                            'parent',
-                            'slug',
-                            // Подкатегорию нельзя вложить в подкатегорию:
-                            // дерево ровно на два уровня, третий сломает
-                            // и фильтры каталога, и мастер объявления
-                            fn ($query) => $query->whereNull('parent_id'),
-                        )
-                        ->getOptionLabelFromRecordUsing(fn (Category $record): string => $record->name())
+                    Select::make('country_id')
+                        ->label('Страна')
+                        ->relationship('country', 'code')
+                        ->getOptionLabelFromRecordUsing(fn (Country $record): string => $record->name())
+                        ->required()
                         ->searchable()
                         ->preload()
-                        ->helperText('Пусто — это раздел верхнего уровня'),
+                        /*
+                         * Выключенные страны в списке остаются намеренно:
+                         * у страны, снятой с публикации, города никуда не
+                         * делись, и их надо уметь править — иначе форма
+                         * города, стоящего на ней, не сохранится вовсе.
+                         */
+                        ->helperText('Выключенные страны тоже доступны — их города продолжают жить'),
 
                     TextInput::make('slug')
                         ->label('Адрес (slug)')
                         ->required()
                         ->maxLength(190)
-                        ->unique(ignoreRecord: true)
-                        ->helperText('Латиницей, участвует в адресе страницы'),
-
-                    TextInput::make('icon')
-                        ->label('Иконка')
-                        ->maxLength(64)
-                        ->helperText('Имя иконки Lucide, например package'),
+                        ->helperText('Латиницей, участвует в адресе страницы: tashkent'),
 
                     TextInput::make('sort')
                         ->label('Порядок')
@@ -62,11 +49,30 @@ class CategoryForm
                         ->helperText('Меньше — выше в списке'),
 
                     Toggle::make('is_active')
-                        ->label('Активна')
-                        ->default(true)
-                        ->helperText('Выключенная скрыта из каталога и мастера объявлений'),
+                        ->label('Показывать при регистрации')
+                        ->default(true),
                 ])
                 ->columns(2),
+
+            Section::make('Координаты')
+                ->description('Необязательны. Нужны там, где город показывается на карте.')
+                ->schema([
+                    TextInput::make('lat')
+                        ->label('Широта')
+                        ->numeric()
+                        ->minValue(-90)
+                        ->maxValue(90)
+                        ->helperText('Например 41.2995'),
+
+                    TextInput::make('lng')
+                        ->label('Долгота')
+                        ->numeric()
+                        ->minValue(-180)
+                        ->maxValue(180)
+                        ->helperText('Например 69.2401'),
+                ])
+                ->columns(2)
+                ->collapsed(),
 
             Section::make('Названия на языках')
                 ->description('Русское название обязательно — оно подставляется, если перевода нет.')
