@@ -403,6 +403,7 @@ return [
         'type_all' => '全部',
         'type_supply' => '供应',
         'type_demand' => '求购',
+        'type_tender' => '招标',
         'category' => '类目',
         'city' => '城市',
         'city_any' => '不限',

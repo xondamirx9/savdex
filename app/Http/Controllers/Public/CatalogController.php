@@ -9,11 +9,14 @@ use App\Models\Category;
 use App\Models\City;
 use App\Models\CompanyContact;
 use App\Models\Listing;
+use App\Models\Tender;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
 use App\Support\PriceDisplay;
+use App\Support\Seo;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
+use App\Support\TenderCard;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -33,6 +36,18 @@ class CatalogController extends Controller
     private const PER_PAGE = 20;
 
     private const SORT_KEYS = ['relevant', 'fresh', 'cheap', 'expensive'];
+
+    /**
+     * Тендеры — четвёртая вкладка того же фильтра, что «Предложения»
+     * и «Запросы».
+     *
+     * Тендер — не объявление компании, а закупка внешнего заказчика,
+     * и лежит он в своей таблице. Но человек, пришедший за запросами
+     * на закупку, ищет и то и другое: отдельный раздел в шапке значил
+     * для него «посмотри ещё и вон там». Поэтому список тендеров живёт
+     * в каталоге вкладкой, а не страницей.
+     */
+    private const TYPE_TENDER = 'tender';
 
     /**
      * Подписи сортировок — из словаря: селект в каталоге должен
@@ -56,6 +71,10 @@ class CatalogController extends Controller
 
     public function index(Request $request): Response
     {
+        if ($request->string('type')->toString() === self::TYPE_TENDER) {
+            return $this->tenders($request);
+        }
+
         $query = $request->string('q')->toString();
         $sort = $request->string('sort')->toString();
 
@@ -119,11 +138,77 @@ class CatalogController extends Controller
                 'verified' => $request->boolean('verified'),
                 'with_price' => $request->boolean('with_price'),
                 'sort' => $sort,
+                // Вкладка тендеров своё состояние держит здесь же:
+                // страница одна, и набор фильтров у неё один
+                'closed' => false,
             ],
             'sorts' => $this->sorts(),
             'categories' => $this->categories(),
             'cities' => $this->cities(),
             'total' => $listings->total(),
+        ]);
+    }
+
+    /**
+     * Вкладка «Тендеры»: закупки внешних заказчиков.
+     *
+     * Страница та же, что у объявлений, — меняется только лента и те
+     * фильтры, которых у тендера нет: города, проверенной компании
+     * и цены. Из своих у него состояние приёма заявок: открытые
+     * по умолчанию, завершённые — переключателем, иначе актуальные
+     * закупки хоронятся среди прошлогодних.
+     */
+    private function tenders(Request $request): Response
+    {
+        $query = trim($request->string('q')->toString());
+        $closed = $request->boolean('closed');
+        $categoryId = $request->integer('category');
+
+        $tenders = Tender::query()
+            ->with(TenderCard::relations())
+            ->published()
+            ->when(! $closed, fn (Builder $q) => $q->open())
+            ->when($closed, fn (Builder $q) => $q->whereNotNull('deadline_at')->where('deadline_at', '<', now()))
+            ->when($query !== '', fn (Builder $q) => $q->search($query))
+            ->when($categoryId, fn (Builder $q, int $id) => $this->applyCategory($q, $id))
+            // Ближайший срок подачи — сверху: тендер, до которого
+            // осталось три дня, важнее того, до которого три месяца
+            ->tap(fn (Builder $q) => $closed
+                ? $q->orderByDesc('deadline_at')
+                : $q->orderByRaw('deadline_at is null, deadline_at asc'))
+            ->orderByDesc('published_at')
+            ->orderByDesc('id')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        /*
+         * Заголовки — тендерные: вкладка открывается по прямой ссылке
+         * и из шапки, и «Каталог объявлений» в выдаче поисковика вёл бы
+         * не туда. Сама вкладка индексируется, отборы внутри неё — нет,
+         * как и у объявлений.
+         */
+        app(Seo::class)
+            ->title(__('ui.tenders.meta_title'))
+            ->description(__('ui.tenders.meta_description'))
+            ->canonical(url('/catalog').'?type='.self::TYPE_TENDER)
+            ->noindex($query !== '' || $closed || $categoryId !== 0 || $tenders->currentPage() > 1);
+
+        return Inertia::render('catalog/Index', [
+            'tenders' => $tenders->through(fn (Tender $t): array => TenderCard::present($t)),
+            'filters' => [
+                'q' => $query,
+                'type' => self::TYPE_TENDER,
+                'category' => $categoryId ?: null,
+                'city' => null,
+                'verified' => false,
+                'with_price' => false,
+                'sort' => 'relevant',
+                'closed' => $closed,
+            ],
+            'sorts' => $this->sorts(),
+            'categories' => $this->categories(),
+            'cities' => $this->cities(),
+            'total' => $tenders->total(),
         ]);
     }
 

@@ -1,21 +1,27 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Package, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Building2, Package, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { SelectField } from '@/components/SelectField';
+import { TenderCard, type TenderRow } from '@/components/TenderCard';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
+interface Page<Row> {
+    data: Row[];
+    links: { url: string | null; label: string; active: boolean }[];
+    current_page: number;
+    last_page: number;
+}
+
 interface Props {
-    listings: {
-        data: ProductRow[];
-        links: { url: string | null; label: string; active: boolean }[];
-        current_page: number;
-        last_page: number;
-    };
+    /** Лента объявлений; на вкладке тендеров её нет */
+    listings?: Page<ProductRow>;
+    /** Лента тендеров; приходит только на своей вкладке */
+    tenders?: Page<TenderRow>;
     filters: {
         q: string;
         type: string;
@@ -24,6 +30,8 @@ interface Props {
         verified: boolean;
         with_price: boolean;
         sort: string;
+        /** Состояние приёма заявок — только у тендеров */
+        closed: boolean;
     };
     sorts: Record<string, string>;
     categories: { id: number; name: string; children: { id: number; name: string }[] }[];
@@ -31,17 +39,44 @@ interface Props {
     total: number;
 }
 
-export default function CatalogIndex({ listings, filters, sorts, categories, cities, total }: Props) {
+/**
+ * Каталог: объявления и тендеры на одной странице.
+ *
+ * Тендер лежит в своей таблице и карточка у него своя, но ищут его
+ * там же, где запросы на закупку, — поэтому он не отдельный раздел,
+ * а вкладка того же фильтра. Фильтров у тендера меньше: города,
+ * проверенной компании и цены у закупки нет, и показывать их
+ * неработающими хуже, чем не показывать.
+ */
+export default function CatalogIndex({ listings, tenders, filters, sorts, categories, cities, total }: Props) {
     const [q, setQ] = useState(filters.q);
     const [filtersOpen, setFiltersOpen] = useState(false);
 
+    const isTenders = filters.type === 'tender';
+    const feed = isTenders ? tenders : listings;
+
     function apply(next: Partial<Props['filters']>) {
+        /*
+         * При переходе на тендеры отборы, которых у закупки нет,
+         * снимаются: адрес с «?type=tender&city=5» обещал бы фильтр,
+         * которого не будет, и при возврате к объявлениям срабатывал бы
+         * неожиданно. Обратный переход снимает состояние заявок.
+         */
+        const switching = next.type !== undefined && next.type !== filters.type;
+        const cleared = switching
+            ? next.type === 'tender'
+                ? { city: null, verified: false, with_price: false }
+                : { closed: false }
+            : {};
+
         router.get(
             routes.catalog,
             // Пустые значения выкидываются: адрес с «?type=&city=»
             // невозможно ни прочитать, ни переслать коллеге
             Object.fromEntries(
-                Object.entries({ ...filters, ...next }).filter(([, v]) => v !== '' && v !== null && v !== false),
+                Object.entries({ ...filters, ...next, ...cleared }).filter(
+                    ([, v]) => v !== '' && v !== null && v !== false,
+                ),
             ),
             { preserveState: true, preserveScroll: true, replace: true },
         );
@@ -49,12 +84,12 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
 
     const hasFilters =
         filters.type !== '' || filters.category !== null || filters.city !== null ||
-        filters.verified || filters.with_price;
+        filters.verified || filters.with_price || filters.closed;
 
     return (
         <PublicLayout
-            title={t('catalog.meta_title')}
-            description={t('catalog.meta_description')}
+            title={t(isTenders ? 'tenders.meta_title' : 'catalog.meta_title')}
+            description={t(isTenders ? 'tenders.meta_description' : 'catalog.meta_description')}
         >
             <div className="container catalog">
                 <aside className={cn('filters', filtersOpen && 'open')}>
@@ -79,6 +114,9 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                                     ['', t('catalog.type_all')],
                                     ['supply', t('catalog.type_supply')],
                                     ['demand', t('catalog.type_demand')],
+                                    // Закупки внешних заказчиков — здесь же:
+                                    // их ищут вместе с запросами компаний
+                                    ['tender', t('catalog.type_tender')],
                                 ] as const
                             ).map(([value, label]) => (
                                 <button
@@ -90,6 +128,27 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                                 </button>
                             ))}
                         </div>
+
+                        {/* Приём заявок — состояние того же списка,
+                            поэтому под вкладками, а не отдельной группой */}
+                        {isTenders && (
+                            <div className="row wrap mt-12" style={{ gap: 6 }}>
+                                <button
+                                    className={cn('chip', !filters.closed && 'chip-active')}
+                                    aria-pressed={!filters.closed}
+                                    onClick={() => apply({ closed: false })}
+                                >
+                                    {t('tenders.tab_open')}
+                                </button>
+                                <button
+                                    className={cn('chip', filters.closed && 'chip-active')}
+                                    aria-pressed={filters.closed}
+                                    onClick={() => apply({ closed: true })}
+                                >
+                                    {t('tenders.tab_closed')}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="filter-group">
@@ -130,7 +189,7 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                         </div>
                     </div>
 
-                    {cities.length > 0 && (
+                    {cities.length > 0 && ! isTenders && (
                         <div className="filter-group">
                             <div className="filter-title">{t('catalog.city')}</div>
                             <SelectField
@@ -143,7 +202,9 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                         </div>
                     )}
 
-                    <div className="filter-group">
+                    {/* У закупки нет ни проверенной компании, ни цены:
+                        неработающая галочка хуже её отсутствия */}
+                    <div className="filter-group" hidden={isTenders}>
                         <label className="check">
                             <input
                                 type="checkbox"
@@ -165,8 +226,9 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
 
                 <div className="min-w-0">
                     <div className="section-head-left" style={{ marginBottom: 20 }}>
-                        <span className="eyebrow">{t('catalog.eyebrow')}</span>
-                        <h1 className="t-section">{t('catalog.h1')}</h1>
+                        <span className="eyebrow">{t(isTenders ? 'tenders.eyebrow' : 'catalog.eyebrow')}</span>
+                        <h1 className="t-section">{t(isTenders ? 'tenders.h1' : 'catalog.h1')}</h1>
+                        {isTenders && <p className="t-body muted">{t('tenders.lead')}</p>}
                     </div>
 
                     <div className="toolbar">
@@ -178,7 +240,7 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                                 id="cat-q"
                                 className="input"
                                 type="search"
-                                placeholder={t('catalog.search_placeholder')}
+                                placeholder={t(isTenders ? 'tenders.search_placeholder' : 'catalog.search_placeholder')}
                                 style={{ paddingLeft: 42 }}
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
@@ -193,47 +255,61 @@ export default function CatalogIndex({ listings, filters, sorts, categories, cit
                         </div>
 
                         {/* Сортировка без пункта «любая»: пустого значения
-                            у неё не бывает, список всегда на чём-то стоит */}
-                        <SelectField
+                            у неё не бывает, список всегда на чём-то стоит.
+                            У тендеров её нет: они всегда идут по сроку
+                            подачи — сначала те, до которых ближе */}
+                        {! isTenders && <SelectField
                             className="select-field--auto"
                             ariaLabel={t('catalog.sort')}
                             value={filters.sort}
                             onChange={(sort) => apply({ sort })}
                             options={Object.entries(sorts).map(([key, label]) => ({ value: key, label }))}
-                        />
+                        />}
                     </div>
 
                     <p className="t-sm muted" style={{ marginBottom: 16 }}>
-                        {tChoice('catalog.found', total)}
+                        {tChoice(isTenders ? 'tenders.found' : 'catalog.found', total)}
                     </p>
 
-                    {listings.data.length === 0 ? (
+                    {feed === undefined || feed.data.length === 0 ? (
                         <div className="card empty">
                             <div className="empty-icon">
-                                <Package aria-hidden className="size-7" />
+                                {isTenders
+                                    ? <Building2 aria-hidden className="size-7" />
+                                    : <Package aria-hidden className="size-7" />}
                             </div>
-                            <p className="t-h4">{t('catalog.empty_title')}</p>
+                            <p className="t-h4">{t(isTenders ? 'tenders.empty_title' : 'catalog.empty_title')}</p>
                             <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                                {t('catalog.empty_text')}
+                                {t(isTenders ? 'tenders.empty_text' : 'catalog.empty_text')}
                             </p>
-                            <Link href={routes.listingCreate} className="btn btn-primary mt-24">
-                                {t('catalog.empty_action')}
-                            </Link>
+                            {/* Разместить можно объявление: тендеры заводит
+                                площадка, кнопка вела бы не туда */}
+                            {! isTenders && (
+                                <Link href={routes.listingCreate} className="btn btn-primary mt-24">
+                                    {t('catalog.empty_action')}
+                                </Link>
+                            )}
+                        </div>
+                    ) : isTenders ? (
+                        <div className="grid grid-3" data-reveal-stagger>
+                            {(feed as Page<TenderRow>).data.map((row) => (
+                                <TenderCard key={row.id} row={row} />
+                            ))}
                         </div>
                     ) : (
                         /* Сетка карточек, как в макете новой витрины:
                            фотография, метка NEW, флаг страны, цена и MOQ.
                            Три в ряд — четвёртую колонку съедают фильтры */
                         <div className="product-grid product-grid--catalog">
-                            {listings.data.map((row) => (
+                            {(feed as Page<ProductRow>).data.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
                         </div>
                     )}
 
-                    {listings.last_page > 1 && (
+                    {feed !== undefined && feed.last_page > 1 && (
                         <nav className="pagination mt-32" aria-label={t('catalog.pages')}>
-                            {listings.links.map((link, i) =>
+                            {feed.links.map((link, i) =>
                                 link.url ? (
                                     <Link
                                         key={i}

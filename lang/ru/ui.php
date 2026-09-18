@@ -409,6 +409,7 @@ return [
         'type_all' => 'Все',
         'type_supply' => 'Предложения',
         'type_demand' => 'Запросы',
+        'type_tender' => 'Тендеры',
         'category' => 'Категория',
         'city' => 'Город',
         'city_any' => 'Любой',

@@ -52,6 +52,9 @@ interface MenuItem {
  *
  * «Запросы (RFQ)» — каталог с фильтром по типу «спрос»: запрос
  * на закупку и есть RFQ, отдельной сущности для него не нужно.
+ * Тендеры живут там же, соседней вкладкой фильтра: закупка внешнего
+ * заказчика — тот же запрос, и отдельный пункт в ленте разделов
+ * заставлял искать её дважды.
  */
 function menu(): MenuItem[] {
     const rfq = `${routes.catalog}?type=demand`;
@@ -61,14 +64,18 @@ function menu(): MenuItem[] {
         {
             href: routes.catalog,
             label: t('nav.products'),
-            match: (path, search) => path.startsWith(routes.catalog) && !search.includes('type=demand'),
+            match: (path, search) =>
+                path.startsWith(routes.catalog)
+                && !search.includes('type=demand')
+                && !search.includes('type=tender'),
         },
         {
             href: rfq,
             label: t('nav.rfq'),
-            match: (path, search) => path.startsWith(routes.catalog) && search.includes('type=demand'),
+            match: (path, search) =>
+                path.startsWith(routes.catalog)
+                && (search.includes('type=demand') || search.includes('type=tender')),
         },
-        { href: routes.tenders, label: t('nav.tenders') },
         { href: routes.itTasks, label: t('nav.it_services') },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },

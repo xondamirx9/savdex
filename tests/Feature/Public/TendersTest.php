@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Public;
 
 use App\Models\Category;
+use App\Models\Company;
+use App\Models\Listing;
 use App\Models\Tender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -12,7 +14,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Витрина тендеров — отдельный раздел рядом с каталогом.
+ * Тендеры — вкладка каталога.
+ *
+ * Список закупок живёт на той же странице, что объявления: человек,
+ * пришедший за запросами на закупку, ищет и то и другое. Старый
+ * адрес раздела остаётся постоянным редиректом.
  *
  * Показываются только опубликованные; по умолчанию — те, у которых
  * не прошёл срок подачи заявок. Завершённые доступны отдельной
@@ -29,10 +35,11 @@ class TendersTest extends TestCase
         Tender::factory()->draft()->create(['title' => 'Черновик закупки']);
         Tender::factory()->closed()->create(['title' => 'Завершённая закупка']);
 
-        $this->get('/tenders')
+        $this->get('/catalog?type=tender')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->component('tenders/Index')
+                ->component('catalog/Index')
+                ->where('filters.type', 'tender')
                 ->where('total', 1)
                 ->where('tenders.data.0.slug', $open->slug)
                 ->where('tenders.data.0.title', 'Поставка цемента для школы')
@@ -45,7 +52,7 @@ class TendersTest extends TestCase
         Tender::factory()->create(['title' => 'Открытая закупка']);
         $closed = Tender::factory()->closed()->create(['title' => 'Завершённая закупка']);
 
-        $this->get('/tenders?closed=1')
+        $this->get('/catalog?type=tender&closed=1')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('total', 1)
@@ -60,12 +67,12 @@ class TendersTest extends TestCase
         Tender::factory()->create(['title' => 'Поставка арматуры', 'description' => 'Сталь А500С', 'customer' => 'ГУП «Мостстрой»']);
         Tender::factory()->create(['title' => 'Закупка пряжи', 'description' => 'Хлопок 30/1', 'customer' => 'ООО «Текстиль»']);
 
-        $this->get('/tenders?q=мостстрой')
+        $this->get('/catalog?type=tender&q=мостстрой')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('total', 1)
                 ->where('tenders.data.0.title', 'Поставка арматуры'));
 
-        $this->get('/tenders?q=хлопок')
+        $this->get('/catalog?type=tender&q=хлопок')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('total', 1)
                 ->where('tenders.data.0.title', 'Закупка пряжи'));
@@ -81,7 +88,7 @@ class TendersTest extends TestCase
         Tender::factory()->create(['title' => 'Цемент М400', 'category_id' => $child->id]);
         Tender::factory()->create(['title' => 'Пряжа', 'category_id' => $other->id]);
 
-        $this->get("/tenders?category={$parent->id}")
+        $this->get("/catalog?type=tender&category={$parent->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('total', 1)
                 ->where('tenders.data.0.title', 'Цемент М400')
@@ -95,7 +102,7 @@ class TendersTest extends TestCase
         Tender::factory()->create(['title' => 'Без срока', 'deadline_at' => null]);
         Tender::factory()->create(['title' => 'Через неделю', 'deadline_at' => now()->addDays(7)]);
 
-        $this->get('/tenders')
+        $this->get('/catalog?type=tender')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('tenders.data.0.title', 'Через неделю')
                 ->where('tenders.data.1.title', 'Через месяц')
@@ -135,7 +142,7 @@ class TendersTest extends TestCase
 
         $this->get("/tenders/{$draft->slug}")->assertNotFound();
         $this->get("/tenders/{$future->slug}")->assertNotFound();
-        $this->get('/tenders')->assertInertia(fn (AssertableInertia $page) => $page->where('total', 0));
+        $this->get('/catalog?type=tender')->assertInertia(fn (AssertableInertia $page) => $page->where('total', 0));
     }
 
     #[Test]
@@ -166,6 +173,47 @@ class TendersTest extends TestCase
 
         $this->get('/sitemap.xml')->assertOk()->assertSee(url('/sitemap-tenders.xml'), false);
         $this->get('/sitemap-tenders.xml')->assertOk()->assertSee(url('/tenders/'.$tender->slug), false);
-        $this->get('/sitemap-static.xml')->assertOk()->assertSee(url('/tenders'), false);
+        $this->get('/sitemap-static.xml')->assertOk()->assertSee(url('/catalog').'?type=tender', false);
+    }
+
+    /**
+     * Старый адрес раздела не должен ломаться: по нему приходят
+     * из переписки и из выдачи поисковика.
+     */
+    #[Test]
+    public function старый_адрес_ведёт_на_вкладку_каталога(): void
+    {
+        $this->get('/tenders')->assertRedirect('/catalog?type=tender');
+
+        $this->get('/tenders?closed=1&q=цемент')
+            ->assertRedirect('/catalog?type=tender&q='.rawurlencode('цемент').'&closed=1');
+
+        $this->assertSame(301, $this->get('/tenders')->getStatusCode());
+    }
+
+    /** Вкладка тендеров не подмешивает объявления, и наоборот. */
+    #[Test]
+    public function вкладки_каталога_не_смешиваются(): void
+    {
+        $company = Company::factory()->create(['status' => 'active']);
+        Listing::factory()->create([
+            'company_id' => $company->id,
+            'status' => Listing::STATUS_ACTIVE,
+            'type' => Listing::TYPE_DEMAND,
+            'title' => 'Куплю цемент М400',
+        ]);
+        Tender::factory()->create(['title' => 'Закупка цемента для школы']);
+
+        $this->get('/catalog?type=tender')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('total', 1)
+                ->where('tenders.data.0.title', 'Закупка цемента для школы')
+                ->missing('listings'));
+
+        $this->get('/catalog?type=demand')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('total', 1)
+                ->where('listings.data.0.title', 'Куплю цемент М400')
+                ->missing('tenders'));
     }
 }
