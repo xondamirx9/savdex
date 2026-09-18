@@ -287,9 +287,6 @@ return [
     // ── Bosh sahifa ──────────────────────────────────────────
 
     'home' => [
-        'meta_title' => 'Yetkazib beruvchilar va xaridorlar bir-birini topadi',
-        'meta_description' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi. Taklif yoki so‘rovni bepul joylashtiring, kompaniyalarning to‘g‘ridan-to‘g‘ri kontaktlarini oling.',
-
         'eyebrow' => 'O‘zbekiston va Markaziy Osiyoning B2B platformasi',
         'h1' => 'Yetkazib beruvchilar va xaridorlar bir-birini topadi',
         'lead' => 'Taklif yoki so‘rovni bepul joylashtiring. Kompaniyalarning to‘g‘ridan-to‘g‘ri kontaktlarini oling — vositachilarsiz va bitimdan komissiyasiz.',
@@ -526,8 +523,8 @@ return [
         'about_description' => 'Platforma qanday ishlaydi: bepul joylashtirish, kontaktni ochish uchun to‘lov, kompaniyalarni moderatsiya tekshiruvi va faqat tasdiqlangan bitimlar bo‘yicha sharhlar.',
         'pricing_title' => 'Tariflar va narxlar',
         'pricing_description' => 'E’lon joylashtirish bepul. Faqat kontaktni ochish va reklama uchun to‘laysiz. Bitimlardan komissiya yo‘q.',
-        'home_title' => 'O‘zbekiston yetkazib beruvchilari va xaridorlari',
-        'home_description' => 'O‘zbekiston va Markaziy Osiyo B2B-platformasi. Yetkazib beruvchi va xaridorlarni vositachisiz toping. Joylashtirish bepul, bitimlardan komissiya yo‘q.',
+        'home_title' => 'O‘zbekistonda yetkazib beruvchilar va xaridlar',
+        'home_description' => 'O‘zbekiston va Markaziy Osiyo B2B-platformasi: tekshirilgan yetkazib beruvchilar katalogi, xarid so‘rovlari va tenderlar. To‘g‘ridan-to‘g‘ri aloqa.',
         'catalog_subject' => 'Ulgurji mahsulot va xizmatlar',
         'catalog_in_country' => ' O‘zbekistonda',
         'catalog_in_city' => ' :city shahrida',

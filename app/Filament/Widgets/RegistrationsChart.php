@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Support\AdminAccess;
 use App\Support\PlatformMetrics;
 use Filament\Widgets\ChartWidget;
 
@@ -23,6 +24,18 @@ class RegistrationsChart extends ChartWidget
     protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
+
+    /**
+     * Показатели площадки — не всем.
+     *
+     * Продавцу, модератору и контент-менеджеру общая картина площадки
+     * не нужна и в границах роли не значится: у каждого свой стартовый
+     * экран с тем, что требует действия сегодня.
+     */
+    public static function canView(): bool
+    {
+        return AdminAccess::allows('dashboard.view');
+    }
 
     protected function getData(): array
     {

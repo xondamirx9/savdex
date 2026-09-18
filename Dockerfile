@@ -57,6 +57,7 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 WORKDIR /var/www/html
 COPY --from=vendor --chown=www-data:www-data /app ./
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
+COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
 COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
 RUN chmod +x /usr/local/bin/render-entrypoint
 

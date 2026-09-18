@@ -15,10 +15,12 @@ import {
     Search,
     Settings,
     Shield,
+    User,
     Wallet,
     X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
@@ -569,6 +571,7 @@ export function SiteHeader() {
      */
     const locale = props.locale ?? 'ru';
     const localeLinks = props.localeLinks ?? [];
+    const brandLogo = useBrandLogo();
     const items = menu();
     /*
      * Язык из адреса убирается: пути в routes.* записаны без него,
@@ -646,7 +649,12 @@ export function SiteHeader() {
                 <div className="container">
                     <div className="hd-main">
                         <Link href={routes.home} className="hd-logo" aria-label={t('nav.home_link')}>
-                            <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
+                            <img
+                                src={brandLogo.src}
+                                alt=""
+                                aria-hidden
+                                className={cn('logo-img', brandLogo.custom && 'logo-img--custom')}
+                            />
                             <span className="hd-logo-word">
                                 {/* translate="no": браузерные переводчики
                                     превращали бренд в «Сохранённый Экс» */}
@@ -746,19 +754,53 @@ export function SiteHeader() {
                         </Link>
                     ))}
 
-                    <Link href={routes.pricing} onClick={() => setMenuOpen(false)}>
-                        {t('nav.pricing')}
-                    </Link>
-
+                    {/* Избранное, сообщения, контакты и профиль переехали
+                        сюда из шапки: на планшете и телефоне шесть значков
+                        в строке не помещались рядом с логотипом и поиском.
+                        Счётчики остаются на виду — ради них на значки
+                        и смотрят. */}
                     {authed && (
-                        <Link href={routes.favorites} onClick={() => setMenuOpen(false)}>
-                            {t('header.favorites')}
-                        </Link>
+                        <div className="mobile-account">
+                            <Link href={routes.favorites} onClick={() => setMenuOpen(false)}>
+                                <Heart aria-hidden className="size-5" />
+                                {t('header.favorites')}
+                                {favCount > 0 && <span className="mobile-count">{favCount > 99 ? '99+' : favCount}</span>}
+                            </Link>
+
+                            <Link href={routes.notifications} onClick={() => setMenuOpen(false)}>
+                                <MessageSquareText aria-hidden className="size-5" />
+                                {t('header.messages')}
+                                {(bell?.unread ?? 0) > 0 && (
+                                    <span className="mobile-count">{bell!.unread > 99 ? '99+' : bell!.unread}</span>
+                                )}
+                            </Link>
+
+                            <Link href={routes.cabinetBilling} onClick={() => setMenuOpen(false)}>
+                                <Wallet aria-hidden className="size-5" />
+                                {/* В шапке подпись под значком считалась вместе
+                                    с числом («3 контакта»), в меню число ушло
+                                    в счётчик справа — строке нужна обычная
+                                    подпись раздела */}
+                                {t('tabbar.contacts')}
+                                {contactsLeft && contactsLeft.total !== null && (
+                                    <span className={cn('mobile-count', contactsLeft.total === 0 && 'is-zero')}>
+                                        {contactsLeft.total}
+                                    </span>
+                                )}
+                            </Link>
+
+                            <Link href={routes.cabinet} onClick={() => setMenuOpen(false)}>
+                                <User aria-hidden className="size-5" />
+                                {auth.company?.name ?? auth.user!.name}
+                            </Link>
+                        </div>
                     )}
 
-                    <Link href={authed ? routes.cabinet : routes.login} onClick={() => setMenuOpen(false)}>
-                        {authed ? t('nav.cabinet') : t('nav.login')}
-                    </Link>
+                    {!authed && (
+                        <Link href={routes.login} onClick={() => setMenuOpen(false)}>
+                            {t('nav.login')}
+                        </Link>
+                    )}
 
                     {!authed && (
                         <Link href={routes.register} onClick={() => setMenuOpen(false)}>

@@ -1,3 +1,4 @@
+import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 
 /**
@@ -12,9 +13,11 @@ import { cn } from '@/lib/cn';
  * ссылки: вложенный <a> внутри <a> недопустим.
  */
 export function Logo({ inverted = false, asContent = false }: { inverted?: boolean; asContent?: boolean }) {
+    const logo = useBrandLogo();
+
     const content = (
         <>
-            <img src="/images/logo-mark.svg" alt="" aria-hidden className="logo-img" />
+            <img src={logo.src} alt="" aria-hidden className={cn('logo-img', logo.custom && 'logo-img--custom')} />
             {/* translate="no": браузерные переводчики превращали
                 бренд в «Сохранённый Экс» */}
             <span className="logo-word notranslate" translate="no">

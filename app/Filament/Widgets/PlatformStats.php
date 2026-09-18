@@ -22,6 +22,18 @@ class PlatformStats extends StatsOverviewWidget
 
     protected static ?int $sort = 1;
 
+    /**
+     * Показатели площадки — не всем.
+     *
+     * Продавцу, модератору и контент-менеджеру общая картина площадки
+     * не нужна и в границах роли не значится: у каждого свой стартовый
+     * экран с тем, что требует действия сегодня.
+     */
+    public static function canView(): bool
+    {
+        return AdminAccess::allows('dashboard.view');
+    }
+
     protected function getStats(): array
     {
         $metrics = new PlatformMetrics;

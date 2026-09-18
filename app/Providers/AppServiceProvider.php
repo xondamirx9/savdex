@@ -34,11 +34,15 @@ use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
 use App\Support\CurrencyRate;
 use App\Support\PriceDisplay;
+use App\Support\Runtime;
 use App\Support\Seo;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
@@ -82,7 +86,12 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(function (): Password {
             $rule = Password::min(10)->letters()->numbers();
 
-            return $this->app->isProduction() ? $rule->uncompromised() : $rule;
+            // Проверка по базе утечек нужна везде, где пароли заводят
+            // живые люди, — то есть на любом развёрнутом сайте, а не
+            // только там, где окружение названо production
+            return Runtime::isDeployed($this->app->environment())
+                ? $rule->uncompromised()
+                : $rule;
         });
     }
 
@@ -152,24 +161,67 @@ class AppServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Предохранители разработки — только на машине разработчика.
+     *
+     * Условием было «не production», и площадка с APP_ENV=staging
+     * получала их в полном составе: страница нарочно падала у живого
+     * посетителя там, где должна была просто отработать. Одно слово
+     * в настройке хостинга решало, ломается сайт или нет.
+     *
+     * Runtime задаёт вопрос правильно: не «как называется окружение»,
+     * а «смотрит ли на него кто-то живой».
+     */
     private function configureModels(): void
     {
+        $developing = Runtime::isDeveloperMachine($this->app->environment());
+
         // Обращение к незагруженной связи должно падать в разработке,
-        // а не тихо порождать N+1 запросов на продакшене (PERF-05 из QA.md).
-        Model::preventLazyLoading(! $this->app->isProduction());
+        // а не тихо порождать N+1 запросов на боевом сайте (PERF-05 из QA.md).
+        Model::preventLazyLoading($developing);
 
         // Присвоение несуществующего атрибута — почти всегда опечатка.
         // На этом уже поймались: email_verified_at молча отбрасывался,
         // потому что не был перечислен в #[Fillable].
-        Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
+        Model::preventSilentlyDiscardingAttributes($developing);
     }
 
+    /**
+     * Сигнал о медленной странице — с подробностями и на боевом сайте тоже.
+     *
+     * Прежняя версия писала «что-то было медленным» и молчала о том,
+     * что именно. По такому сообщению причину не найти: остаётся
+     * гадать, а гадание стоит дороже самой починки.
+     *
+     * Работает и в продакшене намеренно. Медленно отвечающая панель —
+     * это как раз то, что замечают на живом сайте и не замечают на
+     * машине разработчика с базой под боком.
+     */
     private function configureDatabase(): void
     {
-        if (! $this->app->isProduction()) {
-            DB::whenQueryingForLongerThan(500, function (): void {
-                logger()->warning('Медленный запрос к базе данных: дольше 500 мс');
-            });
-        }
+        /*
+         * Число запросов отличает «один тяжёлый» от «четырёхсот мелких».
+         * Без него полсекунды одинаково выглядят и в том, и в другом
+         * случае, а чинятся они совершенно по-разному.
+         */
+        $queries = 0;
+
+        DB::listen(static function () use (&$queries): void {
+            $queries++;
+        });
+
+        DB::whenQueryingForLongerThan(500, function (Connection $connection, QueryExecuted $query) use (&$queries): void {
+            logger()->warning('База отвечает медленно', [
+                'всего_мс' => (int) round($connection->totalQueryDuration()),
+                'запросов' => $queries,
+                // Запрос, на котором счётчик перевалил за порог. Не
+                // обязательно самый медленный, но почти всегда он
+                'на_запросе' => Str::limit(preg_replace('/\s+/', ' ', $query->sql) ?? '', 400),
+                'этот_мс' => (int) round($query->time),
+                'страница' => $this->app->runningInConsole()
+                    ? 'консоль: '.implode(' ', array_slice($_SERVER['argv'] ?? [], 1))
+                    : request()->method().' '.request()->path(),
+            ]);
+        });
     }
 }

@@ -113,6 +113,35 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 .select{appearance:none;padding-right:38px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 14px center;cursor:pointer}
+/* ---------- Выпадающий список площадки ----------
+   Кнопка повторяет поле ввода, список — обычная разметка: системный
+   <select> браузер рисует сам, и его окно с прямыми углами и своей
+   синей подсветкой выглядит чужим рядом с панелью поиска. */
+.select-field{display:block}
+/* Сортировка в строке инструментов не тянется во всю ширину: рядом
+   стоит поиск, и растянутый список отбирал бы у него место. Но и
+   сжиматься ей нельзя — подпись «Сначала подходящие» обрезалась. */
+.select-field--auto{width:auto;flex:0 0 auto;min-width:220px}
+/* Меню такого поля растёт по содержимому: при ширине кнопки пункты
+   переносились на две строки */
+.select-field--auto .select-menu{right:auto;width:max-content;min-width:100%;max-width:min(360px,92vw)}
+.select-field-btn{display:flex;align-items:center;gap:10px;text-align:left;
+  background-image:none;padding-right:14px}
+.select-field-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Подпись-заглушка бледнее выбранного значения — как placeholder у поля */
+.select-field-btn.is-empty .select-field-value{color:var(--text-muted)}
+.select-field-arrow{flex-shrink:0;color:var(--text-muted);transition:transform var(--t-mid)}
+.select-field-btn[aria-expanded="true"]{border-color:var(--primary-500);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.select-field-btn[aria-expanded="true"] .select-field-arrow{transform:rotate(180deg)}
+/* Список: во всю ширину поля, с прокруткой — городов и рубрик бывают
+   десятки, а список во весь экран прокручивать неудобно */
+.select-menu{left:0;right:0;min-width:0;max-height:288px;overflow-y:auto}
+.select-option{justify-content:space-between;gap:10px}
+.select-field--auto .select-option{white-space:nowrap}
+.select-option.is-cursor{background:var(--bg)}
+.select-option[aria-selected="true"]{color:var(--primary-700);font-weight:600}
+.select-option-mark{flex-shrink:0;color:var(--primary-700)}
+
 .input::placeholder,.textarea::placeholder{color:#94A3B8}
 .input:hover,.select:hover,.textarea:hover{border-color:var(--border-strong)}
 .input:focus,.select:focus,.textarea:focus{
@@ -205,7 +234,9 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .logo{display:flex;align-items:center;gap:9px;font-size:21px;font-weight:700;
   color:var(--text);letter-spacing:-.02em;white-space:nowrap}
 .logo:hover{text-decoration:none}
-.logo-img{width:34px;height:34px;display:block;flex-shrink:0}
+/* object-fit: логотип загружают из админки, и файл не обязан быть
+   квадратным — без него знак 3:1 сплющивался бы в квадрат */
+.logo-img{width:34px;height:34px;display:block;flex-shrink:0;object-fit:contain}
 .logo-word{display:inline-block}
 .logo-word span{color:var(--primary-700)}
 .logo--inverted,.logo--inverted .logo-word span{color:#fff}
@@ -289,8 +320,33 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
 .mobile-group-list{padding:0 0 8px 16px}
 .mobile-group-list a{font-size:15.5px;padding:12px 0;color:var(--text-muted);border-bottom:none}
 .mobile-group-list a:hover{color:var(--primary-700)}
+
+/* Личные разделы в мобильном меню: строка со значком, подписью и
+   счётчиком справа. Счётчик — тот же смысл, что бейдж на значке
+   в шапке, поэтому он красный и прижат к правому краю строки. */
+.mobile-account{display:flex;flex-direction:column;border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);margin:6px 0;padding:6px 0}
+/* :not(.btn) в общем правиле меню весит столько же, сколько простой
+   селектор строки, и display:block из него выигрывал по порядку —
+   значок оказывался над подписью. Тот же вес плюс более поздняя
+   запись возвращает строку в один ряд. */
+.mobile-menu .mobile-account a:not(.btn){display:flex;align-items:center;gap:12px}
+.mobile-account svg{color:var(--text-muted);flex-shrink:0}
+.mobile-count{margin-left:auto;min-width:22px;height:22px;padding:0 7px;border-radius:var(--r-pill);
+  background:var(--danger);color:#fff;font-size:12px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center}
+.mobile-count.is-zero{background:var(--text-muted)}
 .mobile-menu-foot{padding-top:20px;display:flex;flex-direction:column;gap:12px}
 .mobile-lang{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:8px}
+/* Переключатель языка — чипы, а не строки списка. Общее правило
+   пунктов меню (display:block, padding:15px 0, линия снизу) ломало
+   им размер: подпись вываливалась из овала, а у выбранного языка
+   синяя рамка снизу подменялась серой. Тот же вес селектора
+   возвращает чипу его собственную геометрию. */
+.mobile-menu .mobile-lang a:not(.btn){display:inline-flex;align-items:center;justify-content:center;
+  height:40px;min-width:48px;padding:0 14px;font-size:14px;font-weight:600;
+  border:1px solid var(--border);border-radius:var(--r-pill)}
+.mobile-menu .mobile-lang a.chip-active:not(.btn){border-color:var(--primary-700);color:#fff}
 
 /* ---------- 9. Карточка объявления ---------- */
 .listing-card{
@@ -741,8 +797,12 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
     display:block;position:fixed;inset:auto 0 0 0;z-index:110;max-height:86vh;
     border-radius:16px 16px 0 0;box-shadow:var(--sh-modal);animation:sheetUp var(--t-slow)}
   @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+  /* Кнопка «Фильтры» стоит над нижней панелью, а не на ней: на 20
+     пикселях от низа она накрывала «Создать» и «Избранное», и попасть
+     в них было нельзя. 56 пикселей — высота пункта панели. */
   .filter-fab{
-    display:inline-flex;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:80;
+    display:inline-flex;position:fixed;left:50%;transform:translateX(-50%);z-index:80;
+    bottom:calc(56px + 14px + env(safe-area-inset-bottom));
     box-shadow:var(--sh-modal);height:48px}
   .cabinet{grid-template-columns:1fr;gap:0;padding-bottom:88px}
   .side{display:none}
@@ -893,10 +953,15 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .co-card-head{display:flex;gap:14px;align-items:flex-start}
 
 .co-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13px}
-.co-fact{display:flex;gap:7px;align-items:center;color:var(--text-muted);min-width:0}
+/* Строка факта: иконка и текст. Подпись со значением — один узел,
+   поэтому они переносятся как обычный текст. Раньше значение было
+   соседом по флексу: подпись «профиль заполнен на» забирала ширину
+   ячейки, а процент сжимался и обрезался до «7…». */
+.co-fact{display:flex;gap:7px;align-items:flex-start;color:var(--text-muted);min-width:0}
+.co-fact>span{min-width:0}
 /* Иконка не сжимается и не уезжает на свою строку */
 .co-fact>svg{flex-shrink:0}
-.co-fact b{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-fact b{color:var(--text);font-weight:600;white-space:nowrap}
 
 .co-cats{display:flex;flex-wrap:wrap;gap:6px}
 .co-cat{font-size:12px;padding:3px 9px;border-radius:var(--r-pill);
@@ -1587,6 +1652,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
 /* Синий знак-самолёт на тёмном фоне гаснет — перекрашивается в белый */
 .chrome-overlay .logo-img{filter:brightness(0) invert(1)}
+/* Загруженный логотип не выбеливаем: у чужого знака свои цвета,
+   и инверсия превратила бы его в белое пятно. Вместо неё —
+   белая подложка, как в подвале: она держит любой знак
+   на тёмном первом экране */
+.chrome-overlay .logo-img--custom{filter:none;background:#fff;border-radius:9px;padding:3px}
 .chrome-overlay .hd-action{color:rgba(255,255,255,.88)}
 .chrome-overlay .hd-action:hover{color:var(--primary-500)}
 .chrome-overlay .hd .btn-ghost:hover{color:var(--primary-500)}
@@ -1638,7 +1708,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 /* Панель поиска: карточка с табами Товары / Компании / Запросы.
    Стоит отдельной полосой под фотографией героя на всю ширину
    контейнера; на светлой подложке панель непрозрачная */
-.hero-search-band{position:relative;z-index:2;margin-top:32px}
+/* Полоса поиска лежит выше следующих секций: у неё и у полосы
+   показателей был один z-index, и при равном весе побеждала та,
+   что ниже по разметке — карточки цифр разрезали открытый список
+   городов пополам. */
+.hero-search-band{position:relative;z-index:20;margin-top:32px}
 .hero-search-band .hero-panel{margin-top:0;background:var(--navy-900);backdrop-filter:none}
 .hero-panel{position:relative;background:rgba(13,27,54,.78);backdrop-filter:blur(10px);
   border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:20px;box-shadow:var(--sh-modal);
@@ -1827,6 +1901,23 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .product-grid--catalog{grid-template-columns:repeat(2,1fr)}
   .country-grid{grid-template-columns:repeat(3,1fr)}
   .hd-action{min-width:52px}
+
+  /* Строка поиска ужималась быстрее собственного содержимого: кнопка
+     «Поиск» выезжала за её край и наползала на язык и значки действий,
+     а в поле оставалось 80 пикселей — три буквы запроса. Подпись кнопки
+     и длинное название рубрики уходят, поле получает рабочий минимум. */
+  .hd-search input{min-width:140px}
+  .hd-search>button{padding:0 16px}
+  .hd-search>button span{display:none}
+  .hd-cat-btn{padding:0 10px 0 12px}
+  .hd-cat-btn>span{max-width:96px}
+}
+
+/* Ещё теснее: рубрикатор уходит из строки поиска. Он дублируется
+   фильтром на странице каталога, а поле ввода без него остаётся
+   пригодным для ввода — это важнее выбора рубрики прямо в шапке. */
+@media (max-width:1100px){
+  .hd-search-cat{display:none}
 }
 
 @media (max-width:1024px){
@@ -1835,8 +1926,30 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .hd-search-mobile .hd-search{display:flex}
   .hd-main{height:62px;gap:10px}
   .hd .burger{display:flex}
+
+  /* Избранное, сообщения, контакты и меню пользователя уезжают в бургер:
+     шесть значков с подписями не помещались в строку рядом с логотипом,
+     а поиск из-за них съезжал в отдельную строку и всё равно был тесен.
+     Бургер прижимается к правому краю — он остаётся единственной точкой
+     входа в личные разделы. */
+  .hd-actions,.hd .user-menu,.hd-auth{display:none}
+  .hd .burger{margin-left:auto}
   .subnav{display:none}
   .hero-b2b-inner{padding:44px 0 32px}
+  /* Кадр сдвигается влево: при обрезке по центру узкий экран показывает
+     середину снимка — небо и краны, а грузовик с логотипом остаётся за
+     правым краем. 72 % ставят в центр видимой части именно борт с
+     логотипом. */
+  .hero-b2b,.hero-b2b--underlay{background-position:72% center}
+  /* Затемнение поворачивается. На широком экране текст занимает левую
+     половину кадра, и горизонтального градиента ему хватает. На
+     планшете и телефоне строки идут во всю ширину и ложатся на светлую
+     часть снимка — прямо на кабину грузовика, где белый текст тонет.
+     Вертикальный градиент подкладывает тёмный фон под весь текст и
+     оставляет верх кадра открытым. Замер поверх светлого снимка:
+     средняя яркость под текстом падает со 110 до 70 из 255. */
+  .hero-b2b::before{background:linear-gradient(180deg,
+    rgba(8,18,40,.58) 0%,rgba(8,18,40,.82) 42%,rgba(8,18,40,.94) 100%)}
   .hero-b2b--underlay .hero-b2b-inner{padding-top:230px}
   .hero-search-band{margin-top:24px}
   .stats-band{margin-top:28px}
@@ -1891,6 +2004,15 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   .features-grid{grid-template-columns:1fr}
 }
 
+/* Телефон: карточки объявлений в один столбец. В два ряда карточка
+   выходит около 170 пикселей по ширине — название обрывается на
+   втором слове, имя компании превращается в «ООО «Стро…», а плашка
+   репутации срезается краем карточки. На планшете два столбца
+   остаются: там ширины хватает. */
+@media (max-width:560px){
+  .product-grid,.product-grid--6,.product-grid--catalog{grid-template-columns:1fr;gap:12px}
+}
+
 @media (max-width:480px){
   /* Категорию на телефоне выбирают на странице каталога: селект в строке
      поиска обрезал «Все категории» до нечитаемого огрызка */
@@ -1898,7 +2020,7 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
 }
 
 @media (max-width:400px){
-  .cat-grid,.product-grid,.product-grid--6,.country-grid{grid-template-columns:1fr 1fr}
+  .cat-grid,.country-grid{grid-template-columns:1fr 1fr}
   .hd-main{gap:8px}
 }
 
@@ -2040,8 +2162,15 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
      сама высота ссылки */
   .footer li{margin-bottom:0}
   .footer li a,.contact-value,.pay-note,.topbar-more,.logo,
-  .subnav-inner a,.subnav-post{
+  .subnav-inner a,.subnav-post,.section-bar-link{
     display:inline-flex;align-items:center;min-height:44px}
+  /* Подсказки популярных запросов на первом экране: 28 пикселей
+     по высоте — промах пальцем через раз */
+  .hero-chips a{height:40px;padding:0 14px}
+  /* Кнопка «Вид услуги» разворачивает список фильтра — на телефоне
+     это основной элемент управления страницей, а по высоте он был
+     в строку текста */
+  .board-panel-toggle{min-height:44px}
 }
 
 /* ---------- Чат ---------- */

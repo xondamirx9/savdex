@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Widgets\ActivationFunnel;
+use App\Filament\Widgets\ContentDrafts;
+use App\Filament\Widgets\FinanceToday;
+use App\Filament\Widgets\IntakeQueue;
+use App\Filament\Widgets\ModerationQueue;
+use App\Filament\Widgets\MyLeads;
+use App\Filament\Widgets\MyTasks;
 use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
+use App\Filament\Widgets\SupportQueue;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
+use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -47,12 +55,19 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->brandName('SAVDEX · Управление')
+            /*
+             * Знак берём из настроек, а не из репозитория: логотип
+             * меняют в разделе «Оформление», и админка обязана
+             * показывать тот же знак, что витрина. Замыкание — чтобы
+             * настройка читалась при отрисовке панели, а не при
+             * регистрации провайдера на каждом запросе сайта.
+             */
             ->brandLogo(fn () => new HtmlString(
                 '<span style="display:flex;align-items:center;gap:10px;font-weight:700">'
-                .'<img src="'.asset('images/logo-mark.svg').'" alt="" style="height:2.2rem">'
+                .'<img src="'.e(Appearance::logo()).'" alt="" style="height:2.2rem">'
                 .'<span>SAVDEX · Управление</span></span>',
             ))
-            ->favicon(asset('images/logo-mark.svg'))
+            ->favicon(fn (): string => Appearance::logo())
             ->navigationGroups([
                 // CRM первой: у продаж и менеджеров направлений это
                 // единственная группа, с которой они работают каждый день
@@ -71,7 +86,24 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
+            /*
+             * Стартовый экран собирается из виджетов роли.
+             *
+             * Каждый виджет сам решает, показываться ли, — по праву,
+             * а не по списку здесь. Поэтому продавец видит свои лиды и
+             * задачи, модератор очередь на проверку, поддержка открытые
+             * обращения, а показатели площадки — только тот, кому они
+             * положены. Порядок задают свойства sort у самих виджетов:
+             * рабочие очереди отрицательными, общая аналитика после них.
+             */
             ->widgets([
+                MyLeads::class,
+                MyTasks::class,
+                IntakeQueue::class,
+                ModerationQueue::class,
+                SupportQueue::class,
+                FinanceToday::class,
+                ContentDrafts::class,
                 PlatformStats::class,
                 ActivationFunnel::class,
                 RegistrationsChart::class,

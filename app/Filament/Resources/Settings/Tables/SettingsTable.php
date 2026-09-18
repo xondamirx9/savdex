@@ -9,6 +9,7 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class SettingsTable
@@ -53,7 +54,20 @@ class SettingsTable
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => Setting::GROUPS[$state] ?? $state),
             ])
-            ->defaultGroup('group')
+            /*
+             * Заголовок группы — по-русски. defaultGroup('group') берёт
+             * значение колонки как есть, и над разделом стояло
+             * «Group: appearance»: английский ключ из кода посреди
+             * русской админки, тогда как в самой строке тот же раздел
+             * подписан «Оформление».
+             */
+            ->defaultGroup(
+                Group::make('group')
+                    ->label('Раздел')
+                    ->getTitleFromRecordUsing(
+                        fn (Setting $record): string => Setting::GROUPS[$record->group] ?? $record->group,
+                    ),
+            )
             ->defaultSort('sort')
             ->paginated(false)
             ->filters([

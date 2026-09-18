@@ -32,6 +32,7 @@ import { useState } from 'react';
 import { NewsCover } from '@/components/NewsCover';
 import { CardRow } from '@/components/CardRow';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
+import { SelectField } from '@/components/SelectField';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { formatNumber } from '@/components/cabinet';
 import { Link } from '@/components/ui/Link';
@@ -222,49 +223,31 @@ function HeroSearch({
 
                 <div className="hero-panel-fields">
                     {tab === 'companies' ? (
-                        <select
-                            className="select"
-                            aria-label={t('home.select_country')}
+                        <SelectField
+                            ariaLabel={t('home.select_country')}
+                            placeholder={t('home.select_country')}
                             value={country}
-                            onChange={(e) => setCountry(e.target.value)}
-                        >
-                            <option value="">{t('home.select_country')}</option>
-                            {countries.map((c) => (
-                                <option key={c.code} value={c.code}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setCountry}
+                            options={countries.map((c) => ({ value: c.code, label: c.name }))}
+                        />
                     ) : (
                         <>
-                            <select
-                                className="select"
-                                aria-label={t('home.select_category')}
+                            <SelectField
+                                ariaLabel={t('home.select_category')}
+                                placeholder={t('home.select_category')}
                                 value={category}
-                                onChange={(e) => setCategory(e.target.value)}
-                            >
-                                <option value="">{t('home.select_category')}</option>
-                                {categories.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={setCategory}
+                                options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                            />
 
                             {cities.length > 0 && (
-                                <select
-                                    className="select"
-                                    aria-label={t('home.select_city')}
+                                <SelectField
+                                    ariaLabel={t('home.select_city')}
+                                    placeholder={t('home.select_city')}
                                     value={city}
-                                    onChange={(e) => setCity(e.target.value)}
-                                >
-                                    <option value="">{t('home.select_city')}</option>
-                                    {cities.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={setCity}
+                                    options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
+                                />
                             )}
                         </>
                     )}
@@ -326,8 +309,15 @@ export default function Home({
 
     return (
         <PublicLayout
-            title={t('home.meta_title')}
-            description={t('home.meta_description')}
+            /*
+             * Заголовок и описание — те же строки, что печатает сервер
+             * в <title> и <meta name="description">. Раньше у главной
+             * были свои home.meta_*, и тексты разошлись: в выдаче Google
+             * заголовок оказался клиентский, а описание серверное —
+             * страница представлялась двумя разными фразами.
+             */
+            title={t('seo.home_title')}
+            description={t('seo.home_description')}
             overlayHeader
         >
             {/* ── Первый экран: тёмно-синий порт ── */}

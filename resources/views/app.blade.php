@@ -6,10 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    {{-- Знак площадки: вектор для современных браузеров, ico — запасной --}}
+    {{--
+        Знак площадки: загруженный в админке логотип, ico — запасной.
+
+        type проставляется только вектору: браузер выбирает иконку
+        по нему, не скачивая файл, и с чужим типом вкладка остаётся
+        с пустым листом.
+    --}}
+    @php($logo = App\Support\Appearance::logo())
     <link rel="icon" href="/favicon.ico" sizes="32x32">
-    <link rel="icon" type="image/svg+xml" href="{{ asset('images/logo-mark.svg') }}">
-    <link rel="apple-touch-icon" href="{{ asset('images/logo-touch.png') }}">
+    <link rel="icon" @if ($type = App\Support\Appearance::logoType()) type="{{ $type }}" @endif href="{{ $logo }}">
+    <link rel="apple-touch-icon" href="{{ App\Support\Appearance::touchIcon() }}">
 
     {{--
         Мета-теги печатает сервер, а не скрипт.

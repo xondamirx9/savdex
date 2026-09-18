@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Settings\Schemas;
 
 use App\Models\Setting;
+use App\Support\Appearance;
 use App\Support\Currencies;
 use App\Support\OfficeLocation;
 use App\Support\PriceDisplay;
@@ -123,17 +124,32 @@ class SettingForm
                      * что телефон поддержки.
                      */
                     FileUpload::make('value_image')
-                        ->label('Изображение')
+                        ->label(fn (Get $get): string => $get('key') === Appearance::KEY_LOGO ? 'Логотип' : 'Изображение')
                         ->visible(fn (Get $get): bool => $get('type') === 'image')
                         ->image()
-                        ->imageEditor()
+                        /*
+                         * Логотип принимается и вектором: знак стоит
+                         * в шапке, в подвале, на вкладке браузера и
+                         * в админке — от 16 до 360 px сразу, и растр
+                         * на мелких размерах мылит. SVG загружает
+                         * администратор — тот же человек, что правит
+                         * тексты страниц, — поэтому файл берём как есть.
+                         */
+                        ->acceptedFileTypes(fn (Get $get): array => $get('key') === Appearance::KEY_LOGO
+                            ? ['image/svg+xml', 'image/png', 'image/webp', 'image/jpeg']
+                            : ['image/png', 'image/webp', 'image/jpeg'])
+                        // Кадрировать знак незачем, а вектор редактор
+                        // всё равно не откроет — он работает с растром
+                        ->imageEditor(fn (Get $get): bool => $get('key') !== Appearance::KEY_LOGO)
                         // Диск указан явно: витрина строит адрес картинки
                         // через публичный диск, а по умолчанию Filament
                         // кладёт файл туда, где его не отдаст веб-сервер
                         ->disk('public')
                         ->directory('appearance')
                         ->maxSize(8192)
-                        ->helperText('До 8 МБ. Для фона первого экрана берите широкую горизонтальную картинку от 1920 px: она обрезается по центру и затемняется, чтобы читался белый текст'),
+                        ->helperText(fn (Get $get): string => $get('key') === Appearance::KEY_LOGO
+                            ? Appearance::LOGO_HINT
+                            : 'До 8 МБ. Для фона первого экрана берите широкую горизонтальную картинку от 1920 px: она обрезается по центру и затемняется, чтобы читался белый текст'),
 
                     Textarea::make('description')
                         ->label('Пояснение')
