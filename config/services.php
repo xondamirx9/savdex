@@ -43,4 +43,32 @@ return [
         'enabled' => env('MACHINE_TRANSLATION_ENABLED', true),
     ],
 
+    /*
+     * Бот Telegram: им площадка присылает ссылку на смену пароля тем,
+     * кто привязал Telegram к учётной записи. Заводится в @BotFather
+     * за минуту; пока токена нет, способ не показывается на форме.
+     *
+     * webhook_secret — часть адреса, на который Telegram присылает
+     * сообщения: адрес без секрета открыт всему интернету, и написать
+     * в него «/start чужой-токен» мог бы кто угодно.
+     */
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+    ],
+
+    /*
+     * WhatsApp Business (Meta Cloud API). Сообщение вне суточного окна
+     * переписки отправляется только утверждённым шаблоном — его имя
+     * задаётся здесь же. Шаблон нужен категории «Аутентификация»
+     * с одной переменной: в неё подставляется ссылка.
+     */
+    'whatsapp' => [
+        'token' => env('WHATSAPP_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'template' => env('WHATSAPP_TEMPLATE', 'password_reset'),
+        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
+    ],
+
 ];

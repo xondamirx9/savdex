@@ -1,6 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { ShieldCheck } from 'lucide-react';
+import { Send, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
@@ -25,6 +25,7 @@ interface Props {
         phone_verified: boolean;
     };
     notifications: Notification[];
+    telegram: { available: boolean; linked: boolean; username: string | null };
     security: { two_factor: boolean; last_login_at: string | null; last_login_ip: string | null };
     is_owner: boolean;
 }
@@ -38,11 +39,13 @@ const LOCALES = [
     ['tr', 'Türkçe'],
 ];
 
-export default function Settings({ profile, notifications, security, is_owner }: Props) {
+export default function Settings({ profile, notifications, telegram, security, is_owner }: Props) {
     const [rows, setRows] = useState(notifications);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
     const notify = useForm<{ notifications: Notification[] }>({ notifications });
+    const link = useForm({});
+    const unlink = useForm({});
     const form = useForm({ name: profile.name, phone: profile.phone ?? '', locale: profile.locale });
     const remove = useForm({ password: '' });
 
@@ -166,6 +169,51 @@ export default function Settings({ profile, notifications, security, is_owner }:
                             {t('cabinet.settings.save')}
                         </button>
                     </Panel>
+
+                    {/* Telegram — не украшение: это второй способ вернуть
+                        доступ, когда рабочая почта потеряна вместе
+                        с сотрудником, который её заводил */}
+                    {telegram.available && (
+                        <Panel title={t('cabinet.settings.telegram_title')}>
+                            <p className="t-sm muted" style={{ marginBottom: 16 }}>
+                                {t('cabinet.settings.telegram_lead')}
+                            </p>
+
+                            {telegram.linked ? (
+                                <div className="row-between" style={{ gap: 12 }}>
+                                    <span>
+                                        <span className="badge badge-supply">{t('cabinet.settings.telegram_linked')}</span>
+                                        {telegram.username && <b className="ml-8">@{telegram.username}</b>}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() =>
+                                            unlink.delete(routes.cabinetSettings + '/telegram', { preserveScroll: true })
+                                        }
+                                    >
+                                        {t('cabinet.settings.telegram_disconnect')}
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Не ссылка на бот, а запрос к серверу:
+                                        одноразовый токен привязки выдаётся
+                                        в момент нажатия и живёт 15 минут */}
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-block"
+                                        onClick={() => link.post(routes.cabinetSettings + '/telegram')}
+                                        disabled={link.processing}
+                                    >
+                                        <Send aria-hidden className="size-4" />{' '}
+                                        {t('cabinet.settings.telegram_connect')}
+                                    </button>
+                                    <p className="t-sm muted mt-8">{t('cabinet.settings.telegram_hint')}</p>
+                                </>
+                            )}
+                        </Panel>
+                    )}
 
                     <Panel title={t('cabinet.settings.security')}>
                         <div className="row-between" style={{ marginBottom: 16, gap: 12 }}>

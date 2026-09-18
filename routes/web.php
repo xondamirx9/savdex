@@ -24,8 +24,10 @@ use App\Http\Controllers\Cabinet\ListingWizardController;
 use App\Http\Controllers\Cabinet\PromotionController;
 use App\Http\Controllers\Cabinet\ReviewController;
 use App\Http\Controllers\Cabinet\SettingsController;
+use App\Http\Controllers\Cabinet\TelegramLinkController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Payment\UzumMerchantController;
 use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Controllers\Public\CatalogController;
@@ -77,6 +79,15 @@ Route::get('/robots.txt', fn () => response()
 Route::get('/og/listing/{id}.jpg', OgImageController::class)
     ->where('id', '[0-9]+')
     ->name('og.listing');
+
+/*
+ * Бот Telegram присылает сюда «/start токен» — по нему чат
+ * привязывается к учётной записи. Секрет прямо в адресе: без него
+ * написать боту от чужого имени мог бы кто угодно.
+ */
+Route::post('/telegram/webhook/{secret}', TelegramWebhookController::class)
+    ->where('secret', '[A-Za-z0-9_-]{8,64}')
+    ->name('telegram.webhook');
 
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])
@@ -432,6 +443,16 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::patch('/cabinet/settings/notifications', [SettingsController::class, 'notifications'])->name('cabinet.settings.notifications');
     Route::patch('/cabinet/settings/profile', [SettingsController::class, 'profile'])->name('cabinet.settings.profile');
     Route::post('/cabinet/settings/delete', [SettingsController::class, 'destroy'])->name('cabinet.settings.destroy');
+
+    /*
+     * Привязка Telegram: туда площадка присылает ссылку на смену
+     * пароля тому, кто потерял доступ к рабочей почте.
+     */
+    Route::post('/cabinet/settings/telegram', [TelegramLinkController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('cabinet.settings.telegram');
+    Route::delete('/cabinet/settings/telegram', [TelegramLinkController::class, 'destroy'])
+        ->name('cabinet.settings.telegram.destroy');
 });
 
 /*

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\PasswordResetDelivery;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,30 +18,49 @@ use Inertia\Response;
 /**
  * Восстановление пароля.
  *
+ * Ссылку можно получить не только на почту: тот, кто потерял доступ
+ * к рабочему ящику, выбирает Telegram или WhatsApp — куда именно,
+ * решает PasswordResetDelivery.
+ *
  * Маршрут password.reset обязателен по той же причине, что и
  * verification.verify: письмо ResetPassword строит ссылку через route().
  */
 class PasswordResetController extends Controller
 {
+    public function __construct(private readonly PasswordResetDelivery $delivery) {}
+
     public function request(Request $request): Response
     {
         return Inertia::render('auth/ForgotPassword', [
             'status' => $request->session()->get('status'),
+            // Способы, которые площадка умеет: пока бот и WhatsApp
+            // не настроены, на форме остаётся одна почта
+            'channels' => $this->delivery->channels(),
         ]);
     }
 
     public function email(Request $request): RedirectResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
+        $request->validate([
+            'email' => ['required', 'email'],
+            'channel' => ['nullable', 'string'],
+        ]);
 
-        Password::sendResetLink($request->only('email'));
+        $channel = $request->string('channel')->toString();
+
+        if (! $this->delivery->supports($channel)) {
+            $channel = PasswordResetDelivery::MAIL;
+        }
+
+        $this->delivery->send($request->string('email')->toString(), $channel);
 
         /*
-         * Ответ одинаков независимо от того, есть такой адрес или нет.
-         * Иначе форма превращается в инструмент проверки, зарегистрирован
-         * ли конкретный адрес на площадке (NEG-06d из QA.md).
+         * Ответ одинаков независимо от того, есть такой адрес или нет,
+         * дошло сообщение или нет. Иначе форма превращается
+         * в инструмент проверки, зарегистрирован ли конкретный адрес
+         * на площадке и есть ли у человека Telegram (NEG-06d из QA.md).
          */
-        return back()->with('status', __('ui.messages.auth.reset_sent'));
+        return back()->with('status', __('ui.messages.auth.reset_sent_'.$channel));
     }
 
     public function reset(Request $request, string $token): Response

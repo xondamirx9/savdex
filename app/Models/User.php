@@ -30,6 +30,7 @@ use Illuminate\Notifications\Notifiable;
 #[Fillable([
     'company_id', 'name', 'email', 'password', 'phone', 'locale',
     'company_role', 'is_admin', 'admin_role', 'admin_permissions', 'must_change_password', 'status',
+    'telegram_chat_id', 'telegram_username', 'telegram_linked_at',
 ])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret'])]
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
@@ -65,6 +66,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
+            'telegram_linked_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
