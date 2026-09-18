@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\City;
+use App\Models\Company;
 use App\Models\ItTask;
 use App\Models\ItTaskFile;
 use App\Support\DateHelper;
@@ -37,6 +39,9 @@ class ItTaskController extends Controller
         // внутри него — в адресе они выглядят одинаково
         $type = in_array($type, ItTask::filterableTypes(), true) ? $type : '';
         $done = $request->boolean('done');
+        $city = $request->integer('city');
+        $verified = $request->boolean('verified');
+        $withBudget = $request->boolean('with_budget');
 
         $tasks = ItTask::query()
             ->with(['company.city.translations', 'contractor'])
@@ -44,6 +49,19 @@ class ItTaskController extends Controller
             ->whereHas('company', fn (Builder $q) => $q->where('status', 'active'))
             ->when($query !== '', fn (Builder $q) => $q->search($query))
             ->when($type !== '', fn (Builder $q) => $q->whereIn('service_type', ItTask::typesUnder($type)))
+            ->when($city !== 0, fn (Builder $q) => $q->whereHas(
+                'company',
+                fn (Builder $c) => $c->where('city_id', $city),
+            ))
+            // Уровень 2 — тот же порог, что у бейджа «Проверена»
+            // в каталоге: иначе одна и та же галочка означала бы
+            // на двух страницах разное
+            ->when($verified, fn (Builder $q) => $q->whereHas(
+                'company',
+                fn (Builder $c) => $c->where('verification_level', '>=', 2),
+            ))
+            // «Договорной» — это отсутствие суммы, а не сумма ноль
+            ->when($withBudget, fn (Builder $q) => $q->where('budget_type', '!=', 'negotiable'))
             ->tap(fn (Builder $q) => $done ? $q->orderByDesc('completed_at') : $q->orderByDesc('published_at'))
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
@@ -53,12 +71,23 @@ class ItTaskController extends Controller
             ->title(__('ui.it_tasks.meta_title'))
             ->description(__('ui.it_tasks.meta_description'))
             ->canonical(url('/it-services'))
-            ->noindex($query !== '' || $type !== '' || $tasks->currentPage() > 1);
+            // Отфильтрованная выборка — не самостоятельная страница:
+            // десятки сочетаний фильтров в индексе выглядят как дубли
+            ->noindex($query !== '' || $type !== '' || $city !== 0 || $verified || $withBudget
+                || $tasks->currentPage() > 1);
 
         return Inertia::render('it-tasks/Index', [
             'tasks' => $tasks->through(fn (ItTask $t): array => $this->card($t)),
-            'filters' => ['q' => $query, 'type' => $type, 'done' => $done],
+            'filters' => [
+                'q' => $query,
+                'type' => $type,
+                'done' => $done,
+                'city' => $city ?: null,
+                'verified' => $verified,
+                'with_budget' => $withBudget,
+            ],
             'types' => $this->types(),
+            'cities' => $this->cities(),
             'total' => $tasks->total(),
             'viewer' => $this->viewer($request),
         ]);
@@ -199,6 +228,35 @@ class ItTaskController extends Controller
                 'label' => __('ui.it_tasks.types.'.$child),
             ], ItTask::SERVICE_SECTIONS[$code]),
         ], array_keys(ItTask::SERVICE_SECTIONS));
+    }
+
+    /**
+     * Города, в которых действительно есть открытые задачи.
+     *
+     * Полный справочник в фильтре бесполезен: человек выбирает Нукус
+     * и получает пустую ленту, не понимая, дело в фильтре или в том,
+     * что задач нет вовсе.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function cities(): array
+    {
+        $ids = Company::query()
+            ->where('status', 'active')
+            ->whereNotNull('city_id')
+            ->whereIn('id', ItTask::query()->active()->select('company_id'))
+            ->distinct()
+            ->pluck('city_id');
+
+        return City::query()
+            ->whereIn('id', $ids)
+            ->where('is_active', true)
+            ->with('translations')
+            ->get()
+            ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name()])
+            ->sortBy('name')
+            ->values()
+            ->all();
     }
 
     /** @return array{guest: bool, provider: bool} */

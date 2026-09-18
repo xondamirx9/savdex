@@ -1,4 +1,5 @@
 import { ChevronDown, Menu } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -58,11 +59,18 @@ export function BoardFilter({
     options,
     value,
     onPick,
+    children,
 }: {
     title: string;
     options: FilterOption[];
     value: string;
     onPick: (id: string) => void;
+    /**
+     * Дополнительные фильтры под списком — город, галочки. Тендерам
+     * они не нужны, поэтому не часть компонента: он отвечает за
+     * перечень разделов, а что ставить под ним, решает страница.
+     */
+    children?: ReactNode;
 }) {
     const [open, setOpen] = useState(false);
 
@@ -85,6 +93,12 @@ export function BoardFilter({
                 {options.map((option) => (
                     <Option key={option.id || 'all'} option={option} value={value} onPick={onPick} />
                 ))}
+
+                {/* Внутри того же блока: на узком экране панель
+                    сворачивается под кнопку целиком, вместе с городом
+                    и галочками — иначе свёрнутый фильтр оставлял бы
+                    половину себя на экране */}
+                {children}
             </div>
         </aside>
     );
