@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Button, TextInput } from '@/components/ui';
+import { SelectField } from '@/components/SelectField';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
@@ -107,18 +108,13 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                     <label className="label" htmlFor="c-type">
                         {t('auth.company_type_label')} <span className="req">*</span>
                     </label>
-                    <select
+                    <SelectField
                         id="c-type"
-                        className="select"
+                        ariaLabel={t('auth.company_type_label')}
                         value={data.type}
-                        onChange={(e) => setData('type', e.target.value)}
-                    >
-                        {Object.entries(types).map(([key, label]) => (
-                            <option key={key} value={key}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(value) => setData('type', value)}
+                        options={Object.entries(types).map(([key, label]) => ({ value: key, label }))}
+                    />
                     {errors.type && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.type}</p>}
                 </div>
 
@@ -146,42 +142,32 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                         <label className="label" htmlFor="c-country">
                             {t('auth.country_label')} <span className="req">*</span>
                         </label>
-                        <select
+                        <SelectField
                             id="c-country"
-                            className="select"
-                            value={data.country_id ?? ''}
-                            onChange={(e) => {
-                                setData('country_id', Number(e.target.value));
+                            ariaLabel={t('auth.country_label')}
+                            value={String(data.country_id ?? '')}
+                            onChange={(value) => {
+                                setData('country_id', Number(value));
                                 // Город из другой страны — рассинхрон,
                                 // который потом ищут в данных руками
                                 setData('city_id', null);
                             }}
-                        >
-                            {countries.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
+                            options={countries.map((c) => ({ value: String(c.id), label: c.name }))}
+                        />
                     </div>
 
                     <div className="field" style={{ margin: 0 }}>
                         <label className="label" htmlFor="c-city">
                             {t('auth.city_label')} <span className="req">*</span>
                         </label>
-                        <select
+                        <SelectField
                             id="c-city"
-                            className="select"
-                            value={data.city_id ?? ''}
-                            onChange={(e) => setData('city_id', e.target.value ? Number(e.target.value) : null)}
-                        >
-                            <option value="">{t('auth.city_choose')}</option>
-                            {availableCities.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
+                            ariaLabel={t('auth.city_label')}
+                            value={String(data.city_id ?? '')}
+                            onChange={(value) => setData('city_id', value ? Number(value) : null)}
+                            placeholder={t('auth.city_choose')}
+                            options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
+                        />
                         {errors.city_id && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.city_id}</p>}
                     </div>
                 </div>
@@ -223,21 +209,16 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                     <label className="label" htmlFor="c-cats">
                         {t('auth.categories_label')}
                     </label>
-                    <select
+                    <SelectField
                         id="c-cats"
-                        className="select"
+                        ariaLabel={t('auth.categories_add')}
                         value=""
-                        onChange={(e) => e.target.value && toggleCategory(Number(e.target.value))}
-                    >
-                        <option value="">{t('auth.categories_add')}</option>
-                        {categories
+                        onChange={(value) => value && toggleCategory(Number(value))}
+                        placeholder={t('auth.categories_add')}
+                        options={categories
                             .filter((c) => !data.categories.includes(c.id))
-                            .map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                    </select>
+                            .map((c) => ({ value: String(c.id), label: c.name }))}
+                    />
 
                     {data.categories.some((id) => categories.some((c) => c.id === id)) && (
                         <div className="row wrap mt-8" style={{ gap: 6 }}>

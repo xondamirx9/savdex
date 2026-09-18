@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { SelectField } from '@/components/SelectField';
 import { t } from '@/lib/i18n';
 
 interface Notification {
@@ -134,18 +135,13 @@ export default function Settings({ profile, notifications, security, is_owner }:
                             <label className="label" htmlFor="s-locale">
                                 {t('cabinet.settings.language')}
                             </label>
-                            <select
+                            <SelectField
                                 id="s-locale"
-                                className="select"
+                                ariaLabel={t('cabinet.settings.language')}
                                 value={form.data.locale}
-                                onChange={(e) => form.setData('locale', e.target.value)}
-                            >
-                                {LOCALES.map(([code, label]) => (
-                                    <option key={code} value={code}>
-                                        {label}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => form.setData('locale', value)}
+                                options={LOCALES.map(([code, label]) => ({ value: code, label }))}
+                            />
                         </div>
 
                         <div className="field">

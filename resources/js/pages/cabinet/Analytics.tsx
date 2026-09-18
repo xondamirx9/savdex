@@ -4,6 +4,7 @@ import { Info, Lock } from 'lucide-react';
 import { BarRow, Metric, Panel, formatNumber, type MetricData } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { SelectField } from '@/components/SelectField';
 import { t } from '@/lib/i18n';
 
 interface Benchmark {
@@ -66,21 +67,15 @@ export default function Analytics({
             heading={t('cabinet.analytics.title')}
             subheading={advanced ? t('cabinet.analytics.advanced', { plan: plan?.name ?? '' }) : t('cabinet.analytics.basic', { plan: plan?.name ?? '' })}
             actions={
-                <select
-                    className="select"
-                    style={{ width: 'auto' }}
-                    aria-label={t('cabinet.analytics.period')}
-                    value={period}
-                    onChange={(e) =>
-                        router.get(routes.cabinetAnalytics, { period: e.target.value }, { preserveState: true })
+                <SelectField
+                    className="select-field--auto"
+                    ariaLabel={t('cabinet.analytics.period')}
+                    value={String(period)}
+                    onChange={(value) =>
+                        router.get(routes.cabinetAnalytics, { period: value }, { preserveState: true })
                     }
-                >
-                    {Object.entries(periods).map(([days, label]) => (
-                        <option key={days} value={days}>
-                            {label}
-                        </option>
-                    ))}
-                </select>
+                    options={Object.entries(periods).map(([days, label]) => ({ value: days, label }))}
+                />
             }
         >
             <div className="grid grid-4 grid-tight">
