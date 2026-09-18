@@ -196,11 +196,7 @@ class PageController extends Controller
             ->groupBy('country_id')
             ->pluck('total', 'country_id');
 
-        $countries = Country::query()
-            ->where('is_active', true)
-            ->with('translations')
-            ->orderBy('sort')
-            ->get()
+        $countries = Country::listed()
             ->map(fn (Country $c): array => [
                 'code' => $c->code,
                 'name' => $c->name(),
@@ -491,11 +487,7 @@ class PageController extends Controller
      */
     private function countryOptions(): array
     {
-        return Country::query()
-            ->where('is_active', true)
-            ->with('translations')
-            ->orderBy('sort')
-            ->get()
+        return Country::listed()
             ->map(fn (Country $c): array => ['code' => $c->code, 'name' => $c->name()])
             ->all();
     }

@@ -84,17 +84,21 @@
     @endif
 
     {{--
-        Inter со стороннего домена. docs/DESIGN.md §3 требует локальный —
+        Manrope со стороннего домена. Локальный был бы быстрее —
         внешний запрос откладывает отрисовку текста и ставит скорость
         площадки в зависимость от чужого сервера, а из Узбекистана
         европейские CDN отвечают заметно медленнее. Пока шрифт внешний,
         второй preconnect с crossorigin обязателен: без него браузер
         открывает соединение только под стили, а под сами woff2 —
         заново, и это лишний круг до первой отрисовки текста.
+
+        Пять начертаний — ровно те, которыми набрана вёрстка. Просить
+        то, чего у семейства нет, нельзя: ответ на такой запрос ломает
+        весь список, и страница осталась бы вообще без шрифта.
     --}}
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
-    <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700,800&display=swap" rel="stylesheet">
 
     @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/app.tsx'])

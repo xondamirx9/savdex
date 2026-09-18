@@ -75,8 +75,15 @@
     --color-demand-text: #047857;
 
     /* ── Типографика ── */
+    /* Диапазон Manrope — от 200 до 800, то есть вся шкала вёрстки
+       рисуется настоящими начертаниями: и 500 у пунктов меню, и 600
+       у заголовков, и 800 у знака в шапке, заголовка первого экрана
+       и чисел в счётчиках. Подменять ничего не приходится.
+
+       'Noto Sans SC' остаётся в списке — у Manrope нет иероглифов,
+       и китайская версия сайта держится именно на нём. */
     --font-sans:
-        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+        'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
 
     --text-display: 3rem; /* 48 */
     --text-display--line-height: 3.5rem;

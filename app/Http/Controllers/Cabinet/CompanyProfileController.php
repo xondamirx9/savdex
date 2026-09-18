@@ -92,10 +92,13 @@ class CompanyProfileController extends Controller
                 'verified' => $u->hasVerifiedEmail(),
             ]) ?? [],
 
-            'countries' => Country::query()->where('is_active', true)->with('translations')->get()
+            'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['id' => $c->id, 'name' => $c->name()]),
 
-            'cities' => City::query()->where('is_active', true)->with('translations')->get()
+            // Порядок внутри страны — по значимости города (sort):
+            // в списке из трёх десятков российских городов Москва
+            // должна стоять первой, а не там, куда её положил id
+            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->get()
                 ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name(), 'country_id' => $c->country_id]),
 
             'verification' => $this->verificationChecklist($request, $company),
