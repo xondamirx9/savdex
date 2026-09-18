@@ -75,8 +75,16 @@
     --color-demand-text: #047857;
 
     /* ── Типографика ── */
+    /* У Lato есть 400, 700 и 900; промежуточных 500 и 600 в семействе
+       нет. Браузер по правилам подбора CSS отдаёт 500 начертанию 400,
+       а 600 — начертанию 700: интерфейсная мелочь набирается обычным,
+       заголовки и кнопки — жирным. Это сознательный размен: три
+       ступени вместо пяти.
+
+       'Noto Sans SC' остаётся в списке — у Lato нет иероглифов,
+       и китайская версия сайта держится именно на нём. */
     --font-sans:
-        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+        'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
 
     --text-display: 3rem; /* 48 */
     --text-display--line-height: 3.5rem;
