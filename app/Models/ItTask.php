@@ -46,7 +46,13 @@ class ItTask extends Model
         self::STATUS_ARCHIVED => 'В архиве',
     ];
 
-    /** Виды IT-услуг: код → подпись. Те же коды — специализации исполнителей. */
+    /**
+     * Виды услуг: код → подпись. Те же коды — специализации исполнителей.
+     *
+     * Здесь только то, что может лежать в колонке service_type, то есть
+     * конечные виды. Направления («IT-услуги») здесь не значатся: они
+     * не хранятся, а собираются из своих видов — см. SERVICE_SECTIONS.
+     */
     public const SERVICE_TYPES = [
         'web' => 'Сайты и веб-приложения',
         'mobile' => 'Мобильные приложения',
@@ -55,8 +61,51 @@ class ItTask extends Model
         'design' => 'Дизайн и UX',
         'automation' => 'Автоматизация и боты',
         'support' => 'Поддержка и администрирование',
+        'logistics' => 'Логистика и перевозки',
+        'hr' => 'Подбор персонала',
+        'customs' => 'Декларирование и ВЭД',
+        'accounting' => 'Бухгалтерские услуги',
         'other' => 'Другое',
     ];
+
+    /**
+     * Направления услуг для фильтра: раздел → входящие в него виды.
+     *
+     * Раздел с пустым списком — сам себе вид: «Логистика» и её код
+     * в service_type совпадают. У IT-услуг видов семь, и раскладывать
+     * их в один плоский перечень рядом с бухгалтерией значит утопить
+     * четыре новых направления среди семи старых пунктов.
+     *
+     * Порядок здесь — порядок в панели фильтра.
+     */
+    public const SERVICE_SECTIONS = [
+        'it' => ['web', 'mobile', 'erp', 'integration', 'design', 'automation', 'support'],
+        'logistics' => [],
+        'hr' => [],
+        'customs' => [],
+        'accounting' => [],
+        'other' => [],
+    ];
+
+    /** Коды, по которым можно фильтровать: конечные виды и направления. */
+    public static function filterableTypes(): array
+    {
+        return array_merge(array_keys(self::SERVICE_TYPES), array_keys(self::SERVICE_SECTIONS));
+    }
+
+    /**
+     * Виды, попадающие под код фильтра.
+     *
+     * Для направления — его виды, для конечного вида — он сам.
+     *
+     * @return list<string>
+     */
+    public static function typesUnder(string $code): array
+    {
+        $children = self::SERVICE_SECTIONS[$code] ?? [];
+
+        return $children === [] ? [$code] : $children;
+    }
 
     public const BUDGET_TYPES = ['fixed', 'range', 'negotiable'];
 
