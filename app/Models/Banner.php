@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Support\Business;
+use App\Support\ImageStore;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -75,6 +76,40 @@ class Banner extends Model
             'focal_y' => 'integer',
             'sort' => 'integer',
         ];
+    }
+
+    /**
+     * Картинки удаляются вместе с баннером и при замене.
+     *
+     * Диск на сервере постоянный и небольшой, а снятая акция не
+     * вспомнит про свой файл уже никогда: без этого каждая правка
+     * баннера оставляла на диске прежнюю картинку навсегда.
+     *
+     * Языковые картинки убираются здесь же: строки banner_images
+     * уносит внешний ключ на стороне базы, и события модели на них
+     * не срабатывают — файлы остались бы без владельца.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $banner): void {
+            $store = app(ImageStore::class);
+
+            foreach (['image_path', 'image_mobile_path'] as $column) {
+                if ($banner->isDirty($column)) {
+                    $store->delete($banner->getOriginal($column));
+                }
+            }
+        });
+
+        static::deleting(function (self $banner): void {
+            $store = app(ImageStore::class);
+
+            $store->delete($banner->image_path, $banner->image_mobile_path);
+
+            foreach ($banner->images()->get() as $image) {
+                $store->delete($image->image_path, $image->image_mobile_path);
+            }
+        });
     }
 
     /** Картинки под отдельные языки; основная лежит на самом баннере. */

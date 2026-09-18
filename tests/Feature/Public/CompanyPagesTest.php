@@ -265,4 +265,31 @@ class CompanyPagesTest extends TestCase
         $this->get("/company/{$company->slug}")
             ->assertInertia(fn (AssertableInertia $page) => $page->has('contacts', 1));
     }
+
+    /**
+     * «Компаний N, из них проверенных M» — обе цифры об одном наборе.
+     *
+     * Проверенных считали без условия по статусу, и подпись могла
+     * показать проверенных больше, чем компаний всего: заблокированные
+     * и ждущие проверки в каталог не попадают, а в счётчик попадали.
+     */
+    #[Test]
+    public function счётчик_проверенных_не_считает_компании_вне_каталога(): void
+    {
+        Company::factory()->create([
+            'status' => Company::STATUS_ACTIVE,
+            'verification_level' => Company::VERIFICATION_COMPANY,
+        ]);
+
+        Company::factory()->create([
+            'status' => 'blocked',
+            'verification_level' => Company::VERIFICATION_COMPANY,
+        ]);
+
+        $this->get('/companies')->assertInertia(
+            fn ($page) => $page
+                ->where('stats.total', 1)
+                ->where('stats.verified', 1),
+        );
+    }
 }
