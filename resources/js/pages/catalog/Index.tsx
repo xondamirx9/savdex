@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
+import { BannerSlot, type BannerData } from '@/components/BannerSlot';
 import { Building2, Package, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
@@ -18,6 +19,8 @@ interface Page<Row> {
 }
 
 interface Props {
+    /** Баннер акции над списком; null — сейчас ничего не идёт */
+    banner: BannerData | null;
     /** Лента объявлений; на вкладке тендеров её нет */
     listings?: Page<ProductRow>;
     /** Лента тендеров; приходит только на своей вкладке */
@@ -48,7 +51,7 @@ interface Props {
  * проверенной компании и цены у закупки нет, и показывать их
  * неработающими хуже, чем не показывать.
  */
-export default function CatalogIndex({ listings, tenders, filters, sorts, categories, cities, total }: Props) {
+export default function CatalogIndex({ banner, listings, tenders, filters, sorts, categories, cities, total }: Props) {
     const [q, setQ] = useState(filters.q);
     const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -91,6 +94,12 @@ export default function CatalogIndex({ listings, tenders, filters, sorts, catego
             title={t(isTenders ? 'tenders.meta_title' : 'catalog.meta_title')}
             description={t(isTenders ? 'tenders.meta_description' : 'catalog.meta_description')}
         >
+            {/* Баннер акции — над списком, до фильтров: ниже его
+                не видно за колонкой отборов */}
+            <div className="container">
+                <BannerSlot banner={banner} />
+            </div>
+
             <div className="container catalog">
                 <aside className={cn('filters', filtersOpen && 'open')}>
                     <div className="filter-group">

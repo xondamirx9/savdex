@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Company;
@@ -14,6 +15,7 @@ use App\Models\Plan;
 use App\Models\Review;
 use App\Models\Setting;
 use App\Support\Appearance;
+use App\Support\BannerCard;
 use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
@@ -72,6 +74,9 @@ class PageController extends Controller
 
         return Inertia::render('Home', [
             'stats' => $stats,
+            // Баннер акции — сразу под первым экраном. Пусто, если
+            // сейчас ничего не идёт: место не резервируется
+            'banner' => BannerCard::forPlacement(Banner::PLACEMENT_HOME),
             // Фон первого экрана: меняется в админке, в разделе
             // «Оформление». Пустая настройка даёт картинку из коробки
             'heroImage' => Appearance::heroImage(),

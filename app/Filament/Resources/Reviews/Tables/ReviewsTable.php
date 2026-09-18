@@ -7,6 +7,8 @@ namespace App\Filament\Resources\Reviews\Tables;
 use App\Models\Review;
 use App\Services\ModerationService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
@@ -49,7 +51,7 @@ class ReviewsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['company', 'authorCompany', 'moderator']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['company', 'authorCompany', 'moderator', 'creator']))
             ->columns([
                 TextColumn::make('company.name')
                     ->label('О компании')
@@ -104,6 +106,21 @@ class ReviewsTable
                     ->wrap()
                     ->placeholder('—'),
 
+                /*
+                 * Откуда отзыв. На сайте он выглядит одинаково
+                 * независимо от происхождения, здесь же видно, какая
+                 * часть рейтинга пришла от покупателей, а какая
+                 * заведена площадкой. Без этого столбца пометка
+                 * в базе ничего не меняет.
+                 */
+                TextColumn::make('origin')
+                    ->label('Откуда')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => Review::ORIGINS[$state] ?? $state)
+                    ->color(fn (string $state): string => $state === Review::ORIGIN_BUYER ? 'success' : 'warning')
+                    ->description(fn (Review $record): ?string => $record->creator?->name)
+                    ->toggleable(),
+
                 TextColumn::make('created_at')->label('Оставлен')->date('d.m.Y')->sortable(),
 
                 TextColumn::make('moderated_at')
@@ -115,6 +132,10 @@ class ReviewsTable
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
+                SelectFilter::make('origin')
+                    ->label('Откуда отзыв')
+                    ->options(Review::ORIGINS),
+
                 /*
                  * Всё, что ждёт решения: новые отзывы на премодерации
                  * и споры по опубликованным. Одним фильтром, а не двумя
@@ -143,6 +164,16 @@ class ReviewsTable
                 ]),
             ])
             ->recordActions([
+                EditAction::make(),
+
+                /*
+                 * Удаление — не то же, что скрытие. Скрытый отзыв
+                 * остаётся в базе и в истории спора; удалять стоит
+                 * только то, чего не должно было быть вовсе: спам,
+                 * клевету, чужие персональные данные.
+                 */
+                DeleteAction::make(),
+
                 Action::make('approve')
                     ->label('Опубликовать')
                     ->icon('heroicon-o-check-badge')
