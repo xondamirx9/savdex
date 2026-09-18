@@ -54,6 +54,11 @@ class ListingsTable
         Listing::STATUS_ARCHIVED => 'Снято',
     ];
 
+    private const SOURCE_LABELS = [
+        Listing::SOURCE_CABINET => 'Из кабинета',
+        Listing::SOURCE_IMPORT => 'Загружено из Excel',
+    ];
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -114,12 +119,19 @@ class ListingsTable
                             ->maxSize(51200)
                             ->helperText(new HtmlString(
                                 'Формат XLSX, можно выбрать сразу несколько файлов (до '.self::MAX_WORKBOOKS.'). '
-                                .'Первая строка — названия столбцов, дальше по строке на товар.<br>'
-                                .'Фотографии вставьте прямо в лист, в строку своего товара: сколько снимков '
-                                .'в строке, столько и попадёт в объявление (до '.Listing::MAX_IMAGES.'). '
+                                .'В книге до пяти листов, по одному на язык: «Русский», «English», «O‘zbekcha», '
+                                .'«中文», «Türkçe» — как в образце. Первая строка листа — названия столбцов, '
+                                .'дальше по строке на товар.<br>'
+                                .'Русский лист главный: цена, валюта, категория, компания, город и фотографии '
+                                .'берутся с него. На остальных листах — заголовок, описание, условия поставки '
+                                .'и оплаты на своём языке, строка к строке с русским листом: число строк должно '
+                                .'совпадать, иначе книга не примется.<br>'
+                                .'Фотографии вставьте прямо в русский лист, в строку своего товара: сколько '
+                                .'снимков в строке, столько и попадёт в объявление (до '.Listing::MAX_IMAGES.'). '
                                 .'Формат снимков любой, какой открывает Excel.<br>'
                                 .'Строка с «Номером» правит объявление с этим номером, без номера — ищется '
-                                .'по названию и компании, не нашлось — заводится новое.'
+                                .'по названию и компании, не нашлось — заводится новое. Новые объявления '
+                                .'попадают в «На проверке» — опубликуйте их из списка.'
                             )),
 
                         Toggle::make('replace')
@@ -196,6 +208,15 @@ class ListingsTable
                         default => 'gray',
                     }),
 
+                // Модератору полезно видеть, откуда запись: загруженное
+                // из книги проверяет тот, кто его загрузил
+                TextColumn::make('source')
+                    ->label('Источник')
+                    ->badge()
+                    ->color('gray')
+                    ->formatStateUsing(fn (string $state): string => self::SOURCE_LABELS[$state] ?? $state)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('views_count')->label('Просмотры')->numeric()->sortable()->toggleable(),
                 TextColumn::make('unlocks_count')->label('Контакты')->numeric()->sortable()->toggleable(),
 
@@ -214,13 +235,18 @@ class ListingsTable
                 SelectFilter::make('type')
                     ->label('Тип')
                     ->options(['supply' => 'Предложение', 'demand' => 'Запрос']),
+
+                SelectFilter::make('source')
+                    ->label('Источник')
+                    ->options(self::SOURCE_LABELS),
             ])
             ->recordActions([
                 Action::make('approve')
                     ->label('Одобрить')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (Listing $record): bool => $record->status === Listing::STATUS_MODERATION)
+                    ->visible(fn (Listing $record): bool => $record->status === Listing::STATUS_MODERATION
+                        && self::canModerate($record))
                     ->requiresConfirmation()
                     ->action(function (Listing $record): void {
                         $record->forceFill([
@@ -248,7 +274,7 @@ class ListingsTable
                         $record->status,
                         [Listing::STATUS_MODERATION, Listing::STATUS_ACTIVE],
                         true,
-                    ))
+                    ) && self::canModerate($record))
                     ->schema([
                         Textarea::make('reason')
                             ->label('Причина отказа')
@@ -295,14 +321,27 @@ class ListingsTable
     }
 
     /**
+     * Кому можно одобрять и отклонять.
+     *
+     * Модератору — всё. Тому, кто загружает книги, — загруженное:
+     * загрузка кладёт объявления в «На проверке», и без этого права
+     * администратор загружал бы то, что опубликовать не может.
+     */
+    private static function canModerate(Listing $record): bool
+    {
+        return AdminAccess::allows('listings.moderate')
+            || ($record->isImported() && AdminAccess::allows('listings.import'));
+    }
+
+    /**
      * Разобрать выбранные книги подряд и сложить итоги.
      *
      * @param  list<UploadedFile>  $files
-     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>}
+     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}
      */
     private static function importWorkbooks(array $files, bool $replace): array
     {
-        $total = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => []];
+        $total = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => [], 'notes' => []];
         $many = count($files) > 1;
 
         foreach ($files as $file) {
@@ -325,8 +364,10 @@ class ListingsTable
             // Из какой книги строка — понятно только когда их несколько
             $prefix = $many ? $file->getClientOriginalName().', ' : '';
 
-            foreach ($result['errors'] as $error) {
-                $total['errors'][] = $prefix.($many ? lcfirst($error) : $error);
+            foreach (['errors', 'notes'] as $kind) {
+                foreach ($result[$kind] as $line) {
+                    $total[$kind][] = $prefix.($many ? lcfirst($line) : $line);
+                }
             }
         }
 
@@ -341,7 +382,7 @@ class ListingsTable
      * ходить за отдельным файлом незачем. Уведомление не гаснет само —
      * иначе отчёт исчезает раньше, чем его успевают прочитать.
      *
-     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>}  $result
+     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}  $result
      */
     private static function report(array $result): void
     {
@@ -361,6 +402,12 @@ class ListingsTable
             if ($hidden > 0) {
                 $body .= ' • и ещё '.$hidden;
             }
+        }
+
+        // Заметки — не ошибки: пустой языковой лист загрузке не мешает,
+        // но человек должен знать, что переводов на этот язык не пришло
+        if ($result['notes'] !== []) {
+            $body .= ' '.implode(' ', array_map(strip_tags(...), $result['notes']));
         }
 
         $notification = Notification::make()

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Listing;
 use App\Models\User;
 use App\Support\CatalogLookup;
+use App\Support\Currencies;
 use App\Support\ImageStore;
 use App\Support\ImportLanguage;
 use App\Support\WorkbookImages;
@@ -27,12 +28,30 @@ use Throwable;
  * openspout, фотографии достаёт WorkbookImages, — и то и другое
  * сходится по номеру строки.
  *
- * Что делает загрузка со строкой:
+ * Книга — до пяти листов, по одному на язык. Лист узнаётся по имени
+ * вкладки (ImportLanguage::SHEET_LOCALES); без узнаваемых имён
+ * главным считается первый лист, как в книге на одном языке.
+ *
+ *  — русский лист главный: с него берутся цена, валюта, категория,
+ *    компания, город и фотографии — всё, что у товара одно на все
+ *    языки;
+ *  — остальные листы отдают только тексты: заголовок, описание,
+ *    условия поставки и оплаты — строка к строке с русским листом.
+ *    Пятая строка английского листа — тот же товар, что пятая
+ *    строка русского. Другой связи нет, поэтому число строк на
+ *    листах обязано совпадать: иначе переводы съедут на соседний
+ *    товар, и никто этого не заметит.
+ *
+ * Что делает загрузка со строкой русского листа:
  *
  *  — «Номер» заполнен → правится это объявление;
  *  — иначе ищется по заголовку и компании;
  *  — не нашлось → заводится новое (без компании нельзя: объявление
  *    без продавца не показать).
+ *
+ * Новое объявление ждёт проверки: администратор публикует его
+ * из списка. Уже опубликованное повторная загрузка не снимает —
+ * только обновляет тексты и цену.
  *
  * Фотографии добавляются только объявлениям, у которых их нет:
  * повторная загрузка того же файла не должна плодить одинаковые
@@ -43,35 +62,59 @@ final class ListingWorkbookImport
     public function __construct(private readonly ImageStore $images) {}
 
     /**
-     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>}
+     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}
      */
     public function run(string $workbook, User $author, bool $replacePhotos = false): array
     {
-        $directory = storage_path('app/listing-workbook/'.Str::random(16));
-        $photos = WorkbookImages::extract($workbook, $directory);
+        $result = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => [], 'notes' => []];
 
-        $result = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => []];
+        $sheets = $this->sheets($workbook, $result);
+        $roles = $this->roles($sheets, $result);
+
+        if ($roles === null) {
+            return $result;
+        }
+
+        [$master, $translations] = $roles;
+
+        if (! $this->aligned($master, $translations, $result)) {
+            return $result;
+        }
+
+        $directory = storage_path('app/listing-workbook/'.Str::random(16));
+        $photos = WorkbookImages::extract($workbook, $directory, $master['name']);
+
+        // Строка называется с листом, только когда листов несколько:
+        // в книге на одном языке «Лист «Лист1», строка 5» — лишний шум
+        $named = $translations !== [];
 
         try {
-            $options = new Options;
+            foreach ($master['rows'] as $offset => $row) {
+                $fields = $row['fields'];
+                $number = $row['number'];
 
-            // Пустые строки нужны: без них номера строк сползают, и
-            // фотография из седьмой строки достаётся пятому товару
-            $options->SHOULD_PRESERVE_EMPTY_ROWS = true;
-
-            $reader = new Reader($options);
-            $reader->open($workbook);
-
-            try {
-                foreach ($reader->getSheetIterator() as $sheet) {
-                    $this->readSheet($sheet->getRowIterator(), $photos, $author, $replacePhotos, $result);
-
-                    // Товары лежат на первом листе; остальные — справочники
-                    // и заметки, разбирать их как каталог незачем
-                    break;
+                if ($fields === [] && ! isset($photos[$number])) {
+                    continue;
                 }
-            } finally {
-                $reader->close();
+
+                $result['rows']++;
+
+                $texts = [];
+
+                foreach ($translations as $locale => $sheet) {
+                    if (isset($sheet['rows'][$offset])) {
+                        $texts[$locale] = $sheet['rows'][$offset]['fields'];
+                    }
+                }
+
+                try {
+                    $this->saveRow($fields, $texts, $photos[$number] ?? [], $author, $replacePhotos, $result);
+                } catch (RuntimeException $e) {
+                    $result['errors'][] = $this->where($master, $number, $named).': '.$e->getMessage();
+                } catch (Throwable $e) {
+                    report($e);
+                    $result['errors'][] = $this->where($master, $number, $named).': строку не удалось загрузить';
+                }
             }
         } finally {
             File::deleteDirectory($directory);
@@ -81,14 +124,78 @@ final class ListingWorkbookImport
     }
 
     /**
-     * @param  iterable<Row>  $rows
-     * @param  array<int, list<string>>  $photos
-     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>}  $result
+     * Листы книги с разобранными строками.
+     *
+     * Читаются те, что могут понадобиться: первый видимый (главный,
+     * если русского по имени нет) и все с узнаваемым именем языка.
+     * Скрытые вкладки не читаются вовсе: человек их в Excel не видит,
+     * и лист «English» с примером из образца, спрятанный вместо
+     * удаления, стал бы переводом его товаров. Прочие — справочники
+     * и заметки — пропускаются с заметкой в отчёте: вкладка «Eng.»
+     * с переводами, которую загрузка не узнала, иначе теряется молча
+     * за зелёным «Загрузка завершена».
+     *
+     * @param  array{notes: list<string>}  $result
+     * @return list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>
      */
-    private function readSheet(iterable $rows, array $photos, User $author, bool $replace, array &$result): void
+    private function sheets(string $workbook, array &$result): array
+    {
+        $options = new Options;
+
+        // Пустые строки нужны: без них номера строк сползают, и
+        // фотография из седьмой строки достаётся пятому товару
+        $options->SHOULD_PRESERVE_EMPTY_ROWS = true;
+
+        $reader = new Reader($options);
+        $reader->open($workbook);
+
+        $sheets = [];
+
+        try {
+            foreach ($reader->getSheetIterator() as $sheet) {
+                $name = $sheet->getName();
+
+                if (! $sheet->isVisible()) {
+                    $result['notes'][] = 'Скрытый лист «'.$name.'» пропущен.';
+
+                    continue;
+                }
+
+                $locale = ImportLanguage::sheetLocale($name);
+
+                if ($locale === null && $sheets !== []) {
+                    $result['notes'][] = 'Лист «'.$name.'» пропущен: имя вкладки не узнано как язык. '
+                        .'Языковые вкладки называются «Русский», «English», «O‘zbekcha», «中文», «Türkçe» — как в образце.';
+
+                    continue;
+                }
+
+                $sheets[] = ['name' => $name, 'locale' => $locale, ...$this->readSheet($sheet->getRowIterator())];
+            }
+        } finally {
+            $reader->close();
+        }
+
+        return $sheets;
+    }
+
+    /**
+     * Строки одного листа: шапка и всё, что под ней.
+     *
+     * Номер строки — как в Excel, с единицы и с учётом всего, что
+     * стоит над шапкой; по нему сходятся фотографии. Смещение от
+     * шапки — ключ массива: по нему сходятся листы между собой.
+     *
+     * @param  iterable<Row>  $rows
+     * @return array{header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}
+     */
+    private function readSheet(iterable $rows): array
     {
         $columns = null;
+        $header = null;
         $number = 0;
+        $last = 0;
+        $parsed = [];
 
         foreach ($rows as $row) {
             $number++;
@@ -101,41 +208,159 @@ final class ListingWorkbookImport
                 // или пустые строки перед таблицей
                 if ($columns === []) {
                     $columns = null;
+                } else {
+                    $header = $number;
                 }
 
                 continue;
             }
 
             $fields = $this->fields($columns, $values);
+            $offset = $number - $header;
+            $parsed[$offset] = ['number' => $number, 'fields' => $fields];
 
-            if ($fields === [] && ! isset($photos[$number])) {
+            if ($fields !== []) {
+                $last = $offset;
+            }
+        }
+
+        return ['header' => $header, 'last' => $last, 'rows' => $parsed];
+    }
+
+    /**
+     * Какой лист главный и какие — переводы.
+     *
+     * @param  list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>  $sheets
+     * @param  array{errors: list<string>, notes: list<string>}  $result
+     * @return array{0: array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}, 1: array<string, array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>}|null
+     */
+    private function roles(array $sheets, array &$result): ?array
+    {
+        if ($sheets === []) {
+            return null;
+        }
+
+        $byLocale = [];
+
+        foreach ($sheets as $sheet) {
+            if ($sheet['locale'] === null) {
                 continue;
             }
 
-            $result['rows']++;
+            if (isset($byLocale[$sheet['locale']])) {
+                $result['errors'][] = 'Два листа на одном языке: «'.$byLocale[$sheet['locale']]['name'].'» и «'
+                    .$sheet['name'].'». Оставьте один — книга не загружена.';
 
-            try {
-                $this->saveRow($fields, $photos[$number] ?? [], $author, $replace, $result);
-            } catch (RuntimeException $e) {
-                $result['errors'][] = 'Строка '.$number.': '.$e->getMessage();
-            } catch (Throwable $e) {
-                report($e);
-                $result['errors'][] = 'Строка '.$number.': строку не удалось загрузить';
+                return null;
+            }
+
+            $byLocale[$sheet['locale']] = $sheet;
+        }
+
+        $master = $byLocale['ru'] ?? null;
+
+        // Русского по имени нет: главный — первый лист, если он
+        // не подписан другим языком. Книга из одного листа «Лист1»
+        // остаётся книгой на русском, как и раньше
+        if ($master === null) {
+            if ($sheets[0]['locale'] !== null) {
+                $result['errors'][] = 'В книге нет русского листа. Назовите вкладку с ценами и фотографиями «Русский» — '
+                    .'она главная, остальные листы дают только переводы. Книга не загружена.';
+
+                return null;
+            }
+
+            $master = $sheets[0];
+        }
+
+        if ($master['header'] === null) {
+            $result['errors'][] = 'Лист «'.$master['name'].'»: не найдена строка с названиями столбцов. '
+                .'Скачайте образец книги — в нём столбцы названы так, как их ждёт загрузка.';
+
+            return null;
+        }
+
+        unset($byLocale['ru']);
+
+        return [$master, $byLocale];
+    }
+
+    /**
+     * Строки листов совпадают — иначе переводы съедут.
+     *
+     * Проверяется и число строк, и что напротив каждой заполненной
+     * строки перевода стоит заполненная русская: текст переводчика
+     * напротив пустой русской строки — верный признак, что строки
+     * съехали (в русском листе строку стёрли, а внизу дописали).
+     * Ловить это только по числу строк нельзя — число совпадает.
+     *
+     * Лист без шапки — ошибка: он подписан языком, но таблицы в нём
+     * не нашлось. Лист с одной шапкой — просто нет переводов на этот
+     * язык, это отмечается, но не мешает загрузке.
+     *
+     * @param  array{name: string, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}  $master
+     * @param  array<string, array{name: string, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>  $translations
+     * @param  array{errors: list<string>, notes: list<string>}  $result
+     */
+    private function aligned(array $master, array &$translations, array &$result): bool
+    {
+        foreach ($translations as $locale => $sheet) {
+            if ($sheet['header'] === null) {
+                $result['errors'][] = 'Лист «'.$sheet['name'].'»: не найдена строка с названиями столбцов '
+                    .'(Заголовок, Описание, Условия поставки, Условия оплаты). Книга не загружена.';
+
+                return false;
+            }
+
+            if ($sheet['last'] === 0) {
+                $result['notes'][] = 'Лист «'.$sheet['name'].'» пуст — переводов на этот язык нет.';
+                unset($translations[$locale]);
+
+                continue;
+            }
+
+            if ($sheet['last'] !== $master['last']) {
+                $result['errors'][] = 'Лист «'.$sheet['name'].'»: строк с данными '.$sheet['last']
+                    .', на русском листе '.$master['last'].'. Переводы связаны по порядку строк, при разном '
+                    .'числе строк они разъедутся по чужим товарам. Если перевода нет, оставьте строку '
+                    .'пустой, но не удаляйте её. Книга не загружена.';
+
+                return false;
+            }
+
+            foreach ($sheet['rows'] as $offset => $row) {
+                if ($row['fields'] !== [] && ($master['rows'][$offset]['fields'] ?? []) === []) {
+                    $result['errors'][] = 'Лист «'.$sheet['name'].'», строка '.$row['number']
+                        .': заполнена, а на русском листе строка '.($master['rows'][$offset]['number'] ?? $row['number'])
+                        .' пуста — строки разъехались. Книга не загружена.';
+
+                    return false;
+                }
             }
         }
+
+        return true;
+    }
+
+    /** @param array{name: string} $sheet */
+    private function where(array $sheet, int $number, bool $named): string
+    {
+        return $named ? 'Лист «'.$sheet['name'].'», строка '.$number : 'Строка '.$number;
     }
 
     /**
      * @param  array<string, string>  $fields
+     * @param  array<string, array<string, string>>  $texts  язык → переводимые поля
      * @param  list<string>  $files
-     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>}  $result
+     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}  $result
      */
-    private function saveRow(array $fields, array $files, User $author, bool $replace, array &$result): void
+    private function saveRow(array $fields, array $texts, array $files, User $author, bool $replace, array &$result): void
     {
         $listing = $this->resolve($fields);
         $exists = $listing->exists;
 
         $this->fill($listing, $fields, $author);
+        $this->translate($listing, $texts);
         $listing->save();
 
         if (blank($listing->slug)) {
@@ -177,10 +402,17 @@ final class ListingWorkbookImport
         $found = Listing::query()
             ->where('title', $title)
             ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
-            ->first();
+            ->limit(2)
+            ->get();
 
-        if ($found !== null) {
-            return $found;
+        // Без компании один заголовок может стоять у разных продавцов:
+        // править первый попавшийся — значит менять цену чужого товара
+        if ($found->count() > 1) {
+            throw new RuntimeException('заголовок «'.$title.'» есть у нескольких объявлений — укажите «Номер» или «Компанию»');
+        }
+
+        if ($found->isNotEmpty()) {
+            return $found->first();
         }
 
         if ($companyId === null) {
@@ -214,16 +446,22 @@ final class ListingWorkbookImport
         if (! $listing->exists) {
             $listing->user_id = $author->id;
             $listing->type = Listing::TYPE_SUPPLY;
-            $listing->status = Listing::STATUS_ACTIVE;
+            // Ждёт проверки: публикует администратор из списка,
+            // посмотрев, что получилось
+            $listing->status = Listing::STATUS_MODERATION;
         }
+
+        // Загруженное помечается всегда, и при обновлении тоже:
+        // объявление, которое ведут книгой, живёт по правилам книги
+        $listing->source = Listing::SOURCE_IMPORT;
 
         if (($company = $this->companyId($fields)) !== null) {
             $listing->company_id = $company;
         }
 
-        foreach (['title', 'description', 'unit'] as $plain) {
+        foreach (['title', 'description', 'unit', 'delivery_terms', 'payment_terms'] as $plain) {
             if (trim($fields[$plain] ?? '') !== '') {
-                $listing->{$plain} = trim($fields[$plain]);
+                $listing->{$plain} = $this->fits($plain, trim($fields[$plain]));
             }
         }
 
@@ -257,27 +495,84 @@ final class ListingWorkbookImport
         }
 
         if (trim($fields['currency'] ?? '') !== '') {
-            $listing->currency = ImportLanguage::currency($fields['currency']);
+            $currency = ImportLanguage::currency($fields['currency']);
+
+            if (! Currencies::supports($currency)) {
+                throw new RuntimeException('валюта «'.trim($fields['currency']).'» не поддерживается; можно: '
+                    .implode(', ', Currencies::codes()));
+            }
+
+            $listing->currency = $currency;
         }
 
         if (trim($fields['min_order'] ?? '') !== '') {
             $listing->min_order = (int) (ImportLanguage::amount($fields['min_order']) ?? 0) ?: null;
         }
 
-        if (trim($fields['status'] ?? '') !== '') {
-            $listing->status = ImportLanguage::isYes($fields['status'])
-                ? Listing::STATUS_ACTIVE
-                : Listing::STATUS_MODERATION;
-        }
-
         $listing->currency = $listing->currency ?: 'UZS';
 
         // Опубликованному объявлению нужен срок: без него оно не
-        // попадает ни в один список витрины
+        // попадает ни в один список витрины. Новое сюда не попадает —
+        // срок ему поставит публикация из админки
         if ($listing->status === Listing::STATUS_ACTIVE) {
             $listing->published_at ??= now();
             $listing->expires_at ??= now()->addDays(Listing::LIFETIME_DAYS);
         }
+    }
+
+    /**
+     * Тексты с языковых листов — в переводные колонки.
+     *
+     * Пустая ячейка не стирает перевод, как и в остальных полях:
+     * повторная загрузка книги, где переводчик ещё не дошёл до
+     * строки, не должна обнулять то, что уже переведено.
+     *
+     * @param  array<string, array<string, string>>  $texts
+     */
+    private function translate(Listing $listing, array $texts): void
+    {
+        foreach ($texts as $locale => $values) {
+            foreach (Listing::TRANSLATABLE as $field) {
+                $value = trim($values[$field] ?? '');
+
+                if ($value === '') {
+                    continue;
+                }
+
+                $column = $field.'_i18n';
+                $translations = $listing->{$column} ?? [];
+                $translations[$locale] = $this->fits($field, $value, $locale);
+                $listing->{$column} = $translations;
+            }
+        }
+    }
+
+    /**
+     * Текст не длиннее, чем принимает форма.
+     *
+     * Иначе книга кладёт заголовок в 120 знаков, а админка потом
+     * не даёт сохранить объявление, пока перевод не укоротят, —
+     * и модератор не понимает, что не так с ценой, которую он правил.
+     */
+    private function fits(string $field, string $value, ?string $locale = null): string
+    {
+        $limit = Listing::MAX_LENGTH[$field] ?? null;
+
+        if ($limit !== null && mb_strlen($value) > $limit) {
+            $labels = [
+                'title' => 'заголовок',
+                'description' => 'описание',
+                'delivery_terms' => 'условия поставки',
+                'payment_terms' => 'условия оплаты',
+            ];
+
+            throw new RuntimeException(
+                ($labels[$field] ?? $field).($locale !== null ? ' на языке «'.$locale.'»' : '')
+                .' длиннее '.$limit.' символов'
+            );
+        }
+
+        return $value;
     }
 
     /**

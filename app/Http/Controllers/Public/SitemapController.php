@@ -102,7 +102,11 @@ class SitemapController extends Controller
      * перечисляются остальные версии — так поисковик понимает, что
      * это переводы одной страницы, а не пять похожих страниц.
      *
-     * @param  list<array<string, string>>  $urls
+     * Адрес может нести свой список языков ('locales'): загруженное
+     * объявление без перевода на языке не показывается, и в карте
+     * его на этом языке быть не должно.
+     *
+     * @param  list<array<string, mixed>>  $urls
      * @return list<array<string, mixed>>
      */
     private function withLocales(array $urls): array
@@ -115,13 +119,19 @@ class SitemapController extends Controller
             $path = str_starts_with($path, $root) ? substr($path, strlen($root)) : $path;
             $path = $path === '' ? '/' : $path;
 
+            /** @var list<string> $codes */
+            $codes = $url['locales'] ?? Locales::codes();
+            unset($url['locales']);
+
             $alternates = [];
             foreach (Locales::ALL as $code => $meta) {
-                $alternates[$meta['hreflang']] = Locales::url($path, $code);
+                if (in_array($code, $codes, true)) {
+                    $alternates[$meta['hreflang']] = Locales::url($path, $code);
+                }
             }
             $alternates['x-default'] = Locales::url($path, Locales::DEFAULT);
 
-            foreach (Locales::codes() as $code) {
+            foreach ($codes as $code) {
                 $out[] = [...$url, 'loc' => Locales::url($path, $code), 'alternates' => $alternates];
             }
         }
@@ -214,12 +224,13 @@ class SitemapController extends Controller
             ->whereNotNull('slug')
             ->orderBy('id')
             ->forPage($page, self::CHUNK)
-            ->get(['slug', 'updated_at'])
+            ->get(['slug', 'updated_at', 'source', 'title_i18n'])
             ->map(fn (Listing $l): array => [
                 'loc' => url('/listing/'.$l->slug),
                 'lastmod' => $l->updated_at?->toAtomString(),
                 'priority' => '0.6',
                 'changefreq' => 'weekly',
+                'locales' => $l->visibleLocales(),
             ])
             ->all();
     }

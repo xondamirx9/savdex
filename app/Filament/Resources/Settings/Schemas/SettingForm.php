@@ -6,7 +6,9 @@ namespace App\Filament\Resources\Settings\Schemas;
 
 use App\Models\Setting;
 use App\Support\Appearance;
+use App\Support\Currencies;
 use App\Support\OfficeLocation;
+use App\Support\PriceDisplay;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -40,6 +42,10 @@ class SettingForm
                         ->required()
                         ->unique(ignoreRecord: true)
                         ->disabledOn('edit')
+                        // Поле значения зависит от ключа: у валюты показа
+                        // это список, и при создании он должен появиться,
+                        // как только ключ набран
+                        ->live(onBlur: true)
                         ->helperText('По нему настройка читается из кода. После создания не меняется'),
 
                     Select::make('group')
@@ -67,9 +73,21 @@ class SettingForm
 
             Section::make('Значение')
                 ->schema([
+                    /*
+                     * Валюта показа — из списка, а не строкой: код,
+                     * которого витрина не знает, молча заменялся бы
+                     * валютой по умолчанию, и администратор не понял бы,
+                     * почему «RUB » с пробелом ничего не поменял.
+                     */
+                    Select::make('value')
+                        ->label('Валюта')
+                        ->visible(fn (Get $get): bool => $get('type') === 'string' && PriceDisplay::isKey($get('key')))
+                        ->options(Currencies::labels())
+                        ->required(),
+
                     TextInput::make('value')
                         ->label('Значение')
-                        ->visible(fn (Get $get): bool => $get('type') === 'string')
+                        ->visible(fn (Get $get): bool => $get('type') === 'string' && ! PriceDisplay::isKey($get('key')))
                         ->maxLength(500)
                         /*
                          * Координаты проверяются прямо в форме. Строка

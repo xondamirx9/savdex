@@ -17,6 +17,7 @@ import {
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { formatNumber } from '@/components/cabinet';
+import { type Money, sellerPrice, shownPrice } from '@/components/ProductCard';
 import { Gallery } from '@/components/Gallery';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
@@ -41,6 +42,9 @@ interface Listing {
     price: number | null;
     bundle_price: number | null;
     currency: string;
+    /** Приблизительно в валюте языка; null — пересчитывать нечего */
+    converted: Money | null;
+    bundle_converted: Money | null;
     unit: string | null;
     negotiable: boolean;
     min_order: number | null;
@@ -63,6 +67,7 @@ interface Similar {
     title: string;
     price: number | null;
     currency: string;
+    converted: Money | null;
     unit: string | null;
     negotiable: boolean;
     company: { name: string | null };
@@ -111,11 +116,11 @@ export default function ListingShow({
     const lockedCount = contacts.filter((c) => c.locked).length;
     const TypeIcon = listing.type === 'demand' ? ShoppingCart : Package;
 
-    const currency = listing.currency === 'UZS' ? t('catalog.currency_uzs') : listing.currency;
+    const priced = !listing.negotiable && listing.price !== null;
 
-    const price = listing.negotiable || listing.price === null
+    const price = !priced
         ? t('catalog.price_negotiable')
-        : `${formatNumber(listing.price)} ${currency}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
+        : `${shownPrice(listing.price!, listing.currency, listing.converted)}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
 
     return (
         <PublicLayout
@@ -177,12 +182,21 @@ export default function ListingShow({
 
                             <p className="t-num mt-16" style={{ fontSize: 28 }}>{price}</p>
 
+                            {/* Пересчёт приблизителен — цена продавца
+                                остаётся рядом: договор заключают по ней */}
+                            {priced && listing.converted && (
+                                <p className="t-sm muted mt-8">{sellerPrice(listing.price!, listing.currency, listing.converted)}</p>
+                            )}
+
                             {/* Цена комплекта — под ценой единицы; при
                                 «договорной» суммы скрыты обе */}
                             {listing.bundle_price !== null && !listing.negotiable && (
                                 <p className="t-sm mt-8">
                                     {t('listing.bundle_price')}:{' '}
-                                    <b>{formatNumber(listing.bundle_price)} {currency}</b>
+                                    <b>{shownPrice(listing.bundle_price, listing.currency, listing.bundle_converted)}</b>
+                                    {listing.bundle_converted && (
+                                        <span className="muted"> ({sellerPrice(listing.bundle_price, listing.currency, listing.bundle_converted)})</span>
+                                    )}
                                 </p>
                             )}
 
@@ -273,7 +287,7 @@ export default function ListingShow({
                                             <p className="t-sm mt-8">
                                                 {s.negotiable || s.price === null
                                                     ? t('catalog.price_negotiable')
-                                                    : `${formatNumber(s.price)} ${s.currency === 'UZS' ? t('catalog.currency_uzs') : s.currency}`}
+                                                    : shownPrice(s.price, s.currency, s.converted)}
                                             </p>
                                         </Link>
                                     ))}

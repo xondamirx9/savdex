@@ -11,6 +11,7 @@ use App\Models\CompanyContact;
 use App\Models\Listing;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
+use App\Support\PriceDisplay;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -50,6 +51,7 @@ class CatalogController extends Controller
     public function __construct(
         private readonly StatsRecorder $stats,
         private readonly SeoBuilders $seo,
+        private readonly PriceDisplay $prices,
     ) {}
 
     public function index(Request $request): Response
@@ -64,6 +66,7 @@ class CatalogController extends Controller
         $listings = Listing::query()
             ->with(ListingCard::relations())
             ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
             // Объявление заблокированной компании не должно висеть в выдаче
             ->whereHas('company', fn (Builder $q) => $q->where('status', 'active'))
             ->when($query !== '', fn (Builder $q) => $q->search($query))
@@ -206,7 +209,9 @@ class CatalogController extends Controller
             ->whereNull('parent_id')
             ->where('is_active', true)
             ->with(['translations', 'children.translations'])
-            ->withCount(['listings as active_count' => fn (Builder $q) => $q->where('status', Listing::STATUS_ACTIVE)])
+            ->withCount(['listings as active_count' => fn (Builder $q) => $q
+                ->where('status', Listing::STATUS_ACTIVE)
+                ->visibleIn()])
             ->orderBy('sort')
             ->get()
             ->map(fn (Category $c): array => [
@@ -226,7 +231,7 @@ class CatalogController extends Controller
         return City::query()
             ->where('is_active', true)
             ->with('translations')
-            ->whereHas('listings', fn (Builder $q) => $q->where('status', Listing::STATUS_ACTIVE))
+            ->whereHas('listings', fn (Builder $q) => $q->where('status', Listing::STATUS_ACTIVE)->visibleIn())
             ->get()
             ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name()])
             ->sortBy('name')
@@ -289,11 +294,19 @@ class CatalogController extends Controller
                 'price' => $listing->price !== null ? (float) $listing->price : null,
                 'bundle_price' => $listing->bundle_price !== null ? (float) $listing->bundle_price : null,
                 'currency' => $listing->currency,
+                // Приблизительно в валюте языка, рядом с ценой продавца.
+                // Договорная цена не пересчитывается — её не показывают
+                'converted' => $listing->price_negotiable
+                    ? null
+                    : $this->prices->convert($listing->price, $listing->currency),
+                'bundle_converted' => $listing->price_negotiable
+                    ? null
+                    : $this->prices->convert($listing->bundle_price, $listing->currency),
                 'unit' => $listing->unit,
                 'negotiable' => $listing->price_negotiable,
                 'min_order' => $listing->min_order,
-                'delivery_terms' => $listing->delivery_terms,
-                'payment_terms' => $listing->payment_terms,
+                'delivery_terms' => $listing->localizedDeliveryTerms(),
+                'payment_terms' => $listing->localizedPaymentTerms(),
                 'city' => $company?->city?->name(),
                 'published' => $listing->published_at?->translatedFormat('d.m.Y'),
                 'expires' => $listing->expires_at?->translatedFormat('d.m.Y'),
@@ -372,6 +385,7 @@ class CatalogController extends Controller
         return Listing::query()
             ->with(ListingCard::relations())
             ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
             // Как и в выдаче: объявление заблокированной компании
             // не должно висеть в блоке похожих
             ->whereHas('company', fn (Builder $q) => $q->where('status', 'active'))

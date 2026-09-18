@@ -11,6 +11,7 @@ use App\Models\NewsPost;
 use App\Models\Tender;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\UzumGateway;
+use App\Support\CurrencyRate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
@@ -56,6 +57,18 @@ Schedule::command('ratings:recalculate')
     ->withoutOverlapping()
     ->onOneServer();
 
+/*
+ * Курсы ЦБ — заранее, а не первым посетителем: кэш живёт сутки,
+ * и без обновления по расписанию тот, кто откроет каталог сразу
+ * после его истечения, ждал бы ответа cbu.uz до пяти секунд.
+ * Каждые четыре часа: ЦБ публикует курс раз в день, но в какой час —
+ * не обещает.
+ */
+Schedule::call(fn () => app(CurrencyRate::class)->refresh())
+    ->everyFourHours()
+    ->name('cbu-rates:refresh')
+    ->onOneServer();
+
 // Экспорты и импорты Filament уходят в очередь; на проде нужен
 // постоянный воркер, но раз в час подбираем зависшие задания
 Schedule::command('queue:prune-batches --hours=48')->daily();
@@ -72,7 +85,8 @@ Schedule::call(fn () => AudienceView::query()
 
 /*
  * Добор переводов объявлений: несложившиеся при публикации (сеть,
- * лимиты переводчика) и опубликованные до появления функции.
+ * лимиты переводчика), опубликованные до появления функции и
+ * переведённые руками не на все языки — из книги или в админке.
  * Небольшими порциями — переводчик внешний и бесплатный.
  */
 Schedule::call(function (): void {
@@ -82,9 +96,7 @@ Schedule::call(function (): void {
 
     Listing::query()
         ->where('status', Listing::STATUS_ACTIVE)
-        ->where(fn ($q) => $q
-            ->whereNull('title_i18n')
-            ->orWhereIn('title_i18n', ['[]', '{}']))
+        ->lackingTranslations()
         ->orderBy('id')
         ->limit(20)
         ->pluck('id')

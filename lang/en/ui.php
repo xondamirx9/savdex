@@ -426,6 +426,7 @@ return [
         'verified' => 'verified',
         'price_negotiable' => 'Price negotiable',
         'currency_uzs' => 'UZS',
+        'seller_price' => 'Seller’s price: :price',
         'badge_new' => 'NEW',
         'price_from' => 'from :price',
         'moq' => 'MOQ',

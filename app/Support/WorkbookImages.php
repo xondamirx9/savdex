@@ -40,15 +40,16 @@ final class WorkbookImages
     private const SHEET = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
     /**
-     * Разобрать книгу и сложить картинки первого листа в каталог.
+     * Разобрать книгу и сложить картинки одного листа в каталог.
      *
+     * Лист выбирается по имени вкладки; без имени берётся первый.
      * Файлы кладутся на диск, а не держатся в памяти: сотня фотографий
      * по три мегабайта — это триста мегабайт, и процесс падает на
      * половине книги.
      *
      * @return array<int, list<string>> номер строки (с единицы) → пути к файлам
      */
-    public static function extract(string $workbook, string $into): array
+    public static function extract(string $workbook, string $into, ?string $sheetName = null): array
     {
         $zip = new ZipArchive;
 
@@ -57,7 +58,7 @@ final class WorkbookImages
         }
 
         try {
-            $sheet = self::firstSheetPath($zip);
+            $sheet = self::sheetPath($zip, $sheetName);
 
             if ($sheet === null) {
                 return [];
@@ -177,8 +178,13 @@ final class WorkbookImages
         return $saved;
     }
 
-    /** Путь к XML первого листа книги. */
-    private static function firstSheetPath(ZipArchive $zip): ?string
+    /**
+     * Путь к XML листа: по имени вкладки, а без имени — первого.
+     *
+     * Имя сравнивается как есть: его отдаёт openspout из той же
+     * книги, и совпадение здесь буквальное.
+     */
+    private static function sheetPath(ZipArchive $zip, ?string $name): ?string
     {
         $workbook = self::xml($zip, 'xl/workbook.xml');
 
@@ -193,14 +199,22 @@ final class WorkbookImages
          * <sheets>, но у полученного узла обращение ->sheet ищет уже
          * в пустом пространстве и возвращает ничего.
          */
-        $sheets = $workbook->children(self::SHEET)->sheets;
-        $sheet = $sheets->children(self::SHEET)->sheet[0] ?? null;
+        $sheets = $workbook->children(self::SHEET)->sheets->children(self::SHEET)->sheet;
+        $chosen = null;
 
-        if ($sheet === null) {
+        foreach ($sheets as $sheet) {
+            if ($name === null || self::attribute($sheet, 'name') === $name) {
+                $chosen = $sheet;
+
+                break;
+            }
+        }
+
+        if ($chosen === null) {
             return null;
         }
 
-        $id = (string) $sheet->attributes(self::DOC_RELS)->id;
+        $id = (string) $chosen->attributes(self::DOC_RELS)->id;
 
         return self::relationTargets($zip, 'xl/workbook.xml')[$id] ?? null;
     }

@@ -247,7 +247,7 @@ class CompanyController extends Controller
 
             // Счётчик из базы: на визитке стоял литеральный ноль,
             // и компания с десятком объявлений выглядела пустой
-            'listings_count' => $company->activeListings()->count(),
+            'listings_count' => $company->activeListings()->visibleIn()->count(),
 
             /*
              * Остаток на счету покупателя. Нужен, чтобы окно раскрытия

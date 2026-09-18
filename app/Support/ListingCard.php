@@ -33,6 +33,11 @@ final class ListingCard
             'category' => $listing->category?->name(),
             'price' => $listing->price !== null ? (float) $listing->price : null,
             'currency' => $listing->currency,
+            // Приблизительно в валюте языка: покупателю на китайской
+            // версии — юани. null, если пересчитывать нечего
+            'converted' => $listing->price_negotiable
+                ? null
+                : app(PriceDisplay::class)->convert($listing->price, $listing->currency),
             'unit' => $listing->unit,
             'negotiable' => $listing->price_negotiable,
             'min_order' => $listing->min_order,

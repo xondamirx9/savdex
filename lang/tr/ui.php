@@ -426,6 +426,7 @@ return [
         'verified' => 'doğrulandı',
         'price_negotiable' => 'Fiyat görüşülür',
         'currency_uzs' => 'som',
+        'seller_price' => 'Satıcı fiyatı: :price',
         'badge_new' => 'YENİ',
         'price_from' => ':price’den',
         'moq' => 'MOQ',

@@ -26,6 +26,8 @@ export interface ProductRow {
     category: string | null;
     price: number | null;
     currency: string;
+    /** Приблизительно в валюте языка; null — пересчитывать нечего */
+    converted: Money | null;
     unit: string | null;
     negotiable: boolean;
     min_order: number | null;
@@ -42,6 +44,11 @@ export interface ProductRow {
     active?: boolean;
 }
 
+export interface Money {
+    price: number;
+    currency: string;
+}
+
 /** Знак валюты перед числом — как пишут прайсы: $95, €80. */
 const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', RUB: '₽', CNY: '¥', TRY: '₺' };
 
@@ -51,6 +58,21 @@ export function money(price: number, currency: string): string {
     if (symbol) return `${symbol}${formatNumber(price)}`;
 
     return `${formatNumber(price)} ${currency === 'UZS' ? t('catalog.currency_uzs') : currency}`;
+}
+
+/**
+ * Цена на витрине: в валюте языка, если она пересчитана.
+ *
+ * Пересчёт по курсу ЦБ приблизителен, поэтому со знаком «≈»; цена
+ * продавца остаётся рядом (sellerPrice) — договор заключают по ней.
+ */
+export function shownPrice(price: number, currency: string, converted: Money | null): string {
+    return converted ? `≈ ${money(converted.price, converted.currency)}` : money(price, currency);
+}
+
+/** Подпись «Цена продавца: …» — только когда показан пересчёт. */
+export function sellerPrice(price: number, currency: string, converted: Money | null): string | null {
+    return converted ? t('catalog.seller_price', { price: money(price, currency) }) : null;
 }
 
 /**
@@ -154,7 +176,7 @@ export function ProductCard({ row }: { row: ProductRow }) {
                             <>
                                 {/* Шаблон «от :price» лежит в словаре целиком:
                                     в узбекском и китайском «от» стоит после числа */}
-                                {t('catalog.price_from', { price: money(row.price, row.currency) })}
+                                {t('catalog.price_from', { price: shownPrice(row.price, row.currency, row.converted) })}
                                 {row.unit && <small> / {unitLabel(row.unit)}</small>}
                             </>
                         )}
@@ -166,6 +188,14 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         </span>
                     )}
                 </div>
+
+                {/* Пересчёт приблизителен — цена продавца остаётся
+                    на карточке: договор заключают по ней */}
+                {!row.negotiable && row.price !== null && row.converted && (
+                    <span className="product-seller-price">
+                        {sellerPrice(row.price, row.currency, row.converted)}
+                    </span>
+                )}
 
                 <span className="product-company">
                     {/* Имя собственное: браузерный переводчик превращал

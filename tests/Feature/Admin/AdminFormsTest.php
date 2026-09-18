@@ -6,6 +6,7 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Listings\Pages\EditListing;
+use App\Filament\Resources\Settings\Pages\CreateSetting;
 use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Models\Category;
 use App\Models\Company;
@@ -13,6 +14,7 @@ use App\Models\Listing;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\OfficeLocation;
+use App\Support\PriceDisplay;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -83,6 +85,43 @@ class AdminFormsTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('Кирпич керамический полнотелый М200', $listing->fresh()->title);
+    }
+
+    /**
+     * Тексты по языкам — вкладками: русский в своих колонках, остальные
+     * в переводных. Пустой перевод не хранится пустой строкой: для
+     * витрины «есть перевод, но пустой» и «перевода нет» — разные вещи.
+     */
+    #[Test]
+    public function переводы_объявления_правятся_по_вкладкам(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $listing = Listing::factory()->create([
+            'title' => 'Кирпич керамический полнотелый М150',
+            'title_i18n' => ['en' => 'Old brick', 'uz' => 'Eski g‘isht'],
+        ]);
+
+        Livewire::test(EditListing::class, ['record' => $listing->getRouteKey()])
+            ->assertFormSet(['title_i18n.en' => 'Old brick', 'title_i18n.uz' => 'Eski g‘isht'])
+            ->fillForm([
+                'title_i18n.en' => 'Ceramic brick M150',
+                'description_i18n.en' => 'Solid brick, grade M150.',
+                'delivery_terms_i18n.tr' => 'Depodan teslim',
+                // Узбекский стёрли: ключа быть не должно, а не пустой строки
+                'title_i18n.uz' => '',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $fresh = $listing->fresh();
+
+        $this->assertSame('Ceramic brick M150', $fresh->localizedTitle('en'));
+        $this->assertSame('Solid brick, grade M150.', $fresh->localizedDescription('en'));
+        $this->assertSame('Depodan teslim', $fresh->localizedDeliveryTerms('tr'));
+        $this->assertSame(['en' => 'Ceramic brick M150'], $fresh->title_i18n);
+        $this->assertNull($fresh->payment_terms_i18n);
+        $this->assertSame('Кирпич керамический полнотелый М150', $fresh->title);
     }
 
     /**
@@ -208,5 +247,51 @@ class AdminFormsTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('+998 71 300-00-00', $setting->refresh()->value);
+    }
+
+    /** Валюта показа выбирается из списка — код мимо списка форма не пропускает. */
+    #[Test]
+    public function валюта_языка_выбирается_из_списка(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        $setting = Setting::query()->where('key', PriceDisplay::key('en'))->firstOrFail();
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->assertFormSet(['value' => 'USD'])
+            ->fillForm(['value' => 'EUR'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('EUR', $setting->refresh()->value);
+        $this->assertSame('EUR', PriceDisplay::currency('en'));
+
+        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
+            ->fillForm(['value' => 'XXX'])
+            ->call('save')
+            ->assertHasFormErrors(['value']);
+
+        $this->assertSame('EUR', $setting->refresh()->value);
+    }
+
+    /** Удалённую настройку валюты заводят заново — и на создании код тоже из списка. */
+    #[Test]
+    public function валюта_языка_при_создании_настройки_тоже_из_списка(): void
+    {
+        $this->actingAs($this->superadmin());
+
+        Setting::query()->where('key', PriceDisplay::key('tr'))->delete();
+
+        Livewire::test(CreateSetting::class)
+            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'XXX'])
+            ->call('create')
+            ->assertHasFormErrors(['value']);
+
+        Livewire::test(CreateSetting::class)
+            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'EUR'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('EUR', PriceDisplay::currency('tr'));
     }
 }

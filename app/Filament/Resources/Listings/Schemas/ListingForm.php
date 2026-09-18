@@ -7,12 +7,16 @@ namespace App\Filament\Resources\Listings\Schemas;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Listing;
+use App\Support\Currencies;
+use App\Support\Locales;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 
 /**
@@ -27,11 +31,14 @@ use Filament\Schemas\Schema;
  * Смены статуса в форме нет. Одобрение и отказ уходят уведомлением
  * владельцу, отказ требует причины — это действия в списке, а не
  * выпадающий список рядом с ценой.
+ *
+ * Тексты — по вкладке на язык. Русский лежит в самих колонках,
+ * остальные четыре — в колонках переводов (title_i18n.en и т. д.).
+ * Цена, категория и прочее, что у товара одно на все языки, стоят
+ * один раз: пять цен — это пять мест, где она может разойтись.
  */
 class ListingForm
 {
-    private const CURRENCIES = ['UZS' => 'сум', 'USD' => 'доллар'];
-
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -68,23 +75,23 @@ class ListingForm
                         ->searchable()
                         ->required(),
 
-                    TextInput::make('title')
-                        ->label('Заголовок')
-                        ->required()
-                        ->minLength(10)
-                        ->maxLength(90)
-                        ->columnSpanFull(),
-
-                    Textarea::make('description')
-                        ->label('Описание')
-                        ->required()
-                        ->minLength(30)
-                        ->maxLength(5000)
-                        ->rows(8)
-                        ->columnSpanFull(),
                 ])
                 ->columnSpanFull()
                 ->columns(2),
+
+            Section::make('Тексты по языкам')
+                ->description('Русский обязателен. Остальные языки — по желанию: без перевода загруженное '
+                    .'из Excel объявление на этом языке не показывается, написанное в кабинете — показывается по-русски.')
+                ->schema([
+                    Tabs::make('texts')
+                        ->tabs(array_map(
+                            fn (string $locale): Tab => self::textsTab($locale),
+                            Locales::codes(),
+                        ))
+                        ->persistTabInQueryString('lang')
+                        ->columnSpanFull(),
+                ])
+                ->columnSpanFull(),
 
             Section::make('Цена и условия')
                 ->schema([
@@ -110,17 +117,13 @@ class ListingForm
 
                     Select::make('currency')
                         ->label('Валюта')
-                        ->options(self::CURRENCIES)
+                        ->options(Currencies::labels())
                         ->required()
                         ->default('UZS'),
 
                     TextInput::make('unit')->label('Единица')->maxLength(20)->placeholder('шт, тонна, м³'),
 
                     TextInput::make('min_order')->label('Минимальный заказ')->numeric()->minValue(0),
-
-                    Textarea::make('delivery_terms')->label('Условия поставки')->rows(3)->maxLength(500),
-
-                    Textarea::make('payment_terms')->label('Условия оплаты')->rows(3)->maxLength(500),
                 ])
                 ->columnSpanFull()
                 ->columns(4),
@@ -154,5 +157,48 @@ class ListingForm
                 ->columnSpanFull()
                 ->columns(2),
         ]);
+    }
+
+    /**
+     * Вкладка одного языка: четыре переводимых поля.
+     *
+     * У русского поля — обычные колонки и те же требования, что
+     * в кабинете. У остальных — переводные колонки и без «обязательно»:
+     * перевод может отсутствовать, это законное состояние.
+     */
+    private static function textsTab(string $locale): Tab
+    {
+        $russian = $locale === Locales::DEFAULT;
+        $name = fn (string $field): string => $russian ? $field : $field.'_i18n.'.$locale;
+
+        return Tab::make($locale)
+            ->label(Locales::ALL[$locale]['label'])
+            ->schema([
+                TextInput::make($name('title'))
+                    ->label('Заголовок')
+                    ->required($russian)
+                    ->minLength($russian ? 10 : null)
+                    ->maxLength(Listing::MAX_LENGTH['title'])
+                    ->columnSpanFull(),
+
+                Textarea::make($name('description'))
+                    ->label('Описание')
+                    ->required($russian)
+                    ->minLength($russian ? 30 : null)
+                    ->maxLength(Listing::MAX_LENGTH['description'])
+                    ->rows(8)
+                    ->columnSpanFull(),
+
+                Textarea::make($name('delivery_terms'))
+                    ->label('Условия поставки')
+                    ->rows(3)
+                    ->maxLength(Listing::MAX_LENGTH['delivery_terms']),
+
+                Textarea::make($name('payment_terms'))
+                    ->label('Условия оплаты')
+                    ->rows(3)
+                    ->maxLength(Listing::MAX_LENGTH['payment_terms']),
+            ])
+            ->columns(2);
     }
 }

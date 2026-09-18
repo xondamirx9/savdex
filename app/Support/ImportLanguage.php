@@ -177,8 +177,33 @@ final class ImportLanguage
             'description', 'details', 'specs', 'specification',
             'tavsif', 'izoh', 'xususiyatlari', 'açıklama', 'özellikler', '描述', '说明'],
 
-        'status' => ['статус', 'опубликовать', 'публиковать', 'публикация',
-            'status', 'publish', 'published', 'holat', 'nashr etish', 'durum', 'yayınla', '状态', '发布'],
+        'delivery_terms' => ['условия поставки', 'условия доставки', 'поставка', 'доставка', 'отгрузка',
+            'delivery terms', 'delivery', 'shipping', 'shipping terms',
+            'yetkazib berish shartlari', 'yetkazib berish', 'teslimat koşulları', 'teslimat', 'teslimat şartları',
+            '交货条件', '交付条件', '运输条件', '交货'],
+
+        'payment_terms' => ['условия оплаты', 'оплата', 'порядок оплаты',
+            'payment terms', 'payment',
+            "to'lov shartlari", "to'lov", 'ödeme koşulları', 'ödeme', 'ödeme şartları',
+            '付款条件', '支付条件', '付款'],
+    ];
+
+    /**
+     * Как называют лист книги с текстами на одном языке.
+     *
+     * Загрузка ждёт по листу на язык: русский — главный, с ценами и
+     * фотографиями, остальные — только тексты. Лист узнаётся по имени
+     * вкладки, а не по порядку: вкладки переставляют, и «второй лист»
+     * — ненадёжная примета.
+     *
+     * @var array<string, list<string>>
+     */
+    public const SHEET_LOCALES = [
+        'ru' => ['ru', 'rus', 'ru-ru', 'русский', 'рус', 'russian', 'ruscha', 'rusça', 'rusca', '俄语', '俄文'],
+        'en' => ['en', 'eng', 'en-us', 'en-gb', 'english', 'английский', 'англ', 'inglizcha', 'ingliz', 'ingilizce', '英语', '英文'],
+        'uz' => ['uz', 'uzb', 'uz-uz', "o'zbekcha", "o'zbek", 'uzbek', 'uzbekcha', 'ozbekcha', 'узбекский', 'узбек', 'özbekçe', 'ozbekce', '乌兹别克语'],
+        'zh' => ['zh', 'zh-cn', 'zh-hans', 'cn', 'chinese', 'китайский', 'кит', 'xitoycha', 'xitoy', 'çince', 'cince', '中文', '汉语', '简体中文'],
+        'tr' => ['tr', 'tur', 'tr-tr', 'türkçe', 'turkce', 'turkish', 'турецкий', 'тур', 'turkcha', 'turk', '土耳其语', '土耳其文'],
     ];
 
     /** Код валюты → как её пишут словами и знаками. */
@@ -188,6 +213,7 @@ final class ImportLanguage
         'EUR' => ['eur', '€', 'евро', 'euro', 'avro', '欧元'],
         'RUB' => ['rub', '₽', 'руб', 'рубль', 'рубли', 'рублей', 'ruble', 'rubl', '卢布'],
         'CNY' => ['cny', '¥', 'юань', 'юани', 'юаней', 'yuan', 'rmb', '元', '人民币'],
+        'TRY' => ['try', '₺', 'лира', 'лиры', 'лир', 'lira', 'tl', 'türk lirası', 'turk lirasi', '里拉', '土耳其里拉'],
         'KZT' => ['kzt', '₸', 'тенге', 'tenge'],
     ];
 
@@ -244,6 +270,20 @@ final class ImportLanguage
     public static function matches(string $header, array $aliases): bool
     {
         return in_array(self::normalize($header), $aliases, true);
+    }
+
+    /** Язык листа по имени вкладки; null — вкладка не про язык. */
+    public static function sheetLocale(string $name): ?string
+    {
+        $needle = self::normalize($name);
+
+        foreach (self::SHEET_LOCALES as $locale => $aliases) {
+            if (in_array($needle, $aliases, true)) {
+                return $locale;
+            }
+        }
+
+        return null;
     }
 
     /**

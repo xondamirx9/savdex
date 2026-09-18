@@ -28,6 +28,7 @@ class Setting extends Model
         'social' => 'Соцсети',
         'limits' => 'Ограничения',
         'moderation' => 'Модерация',
+        'currency' => 'Валюты',
     ];
 
     protected function casts(): array

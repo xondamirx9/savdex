@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Jobs\TranslateListing;
+use App\Services\MachineTranslator;
+use App\Support\Locales;
 use App\Support\SearchText;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -20,12 +22,14 @@ use Illuminate\Support\Str;
  * Объявление — предложение товара или запрос на закупку.
  */
 #[Fillable([
-    'company_id', 'user_id', 'category_id', 'city_id', 'type', 'slug', 'title',
+    'company_id', 'user_id', 'source', 'category_id', 'city_id', 'type', 'slug', 'title',
     'description', 'price', 'bundle_price', 'currency', 'unit', 'price_negotiable', 'min_order',
     'delivery_terms', 'payment_terms', 'status', 'wizard_step', 'published_at', 'expires_at', 'tags',
     // Заметка модерации правится из админки; без неё форма молча
     // теряла бы текст, который видит владелец объявления
     'moderation_note',
+    // Переводы правятся в админке по языкам; кабинет их не присылает
+    'title_i18n', 'description_i18n', 'delivery_terms_i18n', 'payment_terms_i18n',
 ])]
 class Listing extends Model
 {
@@ -50,6 +54,38 @@ class Listing extends Model
 
     public const TYPE_DEMAND = 'demand';
 
+    /** Написано продавцом в кабинете. */
+    public const SOURCE_CABINET = 'cabinet';
+
+    /** Загружено администратором из книги Excel. */
+    public const SOURCE_IMPORT = 'import';
+
+    /**
+     * Поля, у которых есть версия на каждом языке.
+     *
+     * Русский оригинал лежит в самой колонке, переводы — в колонке
+     * с суффиксом _i18n: {en: ..., uz: ..., tr: ..., zh: ...}.
+     *
+     * @var list<string>
+     */
+    public const TRANSLATABLE = ['title', 'description', 'delivery_terms', 'payment_terms'];
+
+    /**
+     * Предел длины текстов — один на кабинет, админку и загрузку.
+     *
+     * Загрузка обязана проверять то же, что форма: иначе книга кладёт
+     * заголовок в 120 знаков, а форма админки потом не даёт сохранить
+     * объявление, пока перевод не укоротят.
+     *
+     * @var array<string, int>
+     */
+    public const MAX_LENGTH = [
+        'title' => 90,
+        'description' => 5000,
+        'delivery_terms' => 2000,
+        'payment_terms' => 2000,
+    ];
+
     /** Срок жизни публикации по умолчанию. */
     public const LIFETIME_DAYS = 90;
 
@@ -70,41 +106,105 @@ class Listing extends Model
             'tags' => 'array',
             'title_i18n' => 'array',
             'description_i18n' => 'array',
+            'delivery_terms_i18n' => 'array',
+            'payment_terms_i18n' => 'array',
         ];
     }
 
     /**
      * Заголовок на языке посетителя.
      *
-     * Оригинал пишется по-русски; машинный перевод появляется фоном
-     * после публикации. Пока перевода нет — показывается оригинал:
-     * русский заголовок лучше пустой карточки.
+     * Оригинал пишется по-русски; перевод либо загружен из книги
+     * Excel, либо сделан машиной фоном после публикации. Пока
+     * перевода нет — показывается оригинал: русский заголовок лучше
+     * пустой карточки.
      */
     public function localizedTitle(?string $locale = null): string
     {
-        $locale ??= app()->getLocale();
-
-        if ($locale === 'ru') {
-            return $this->title;
-        }
-
-        return trim((string) ($this->title_i18n[$locale] ?? '')) !== ''
-            ? $this->title_i18n[$locale]
-            : $this->title;
+        return (string) $this->localized('title', $locale);
     }
 
     /** Описание на языке посетителя — по тем же правилам. */
     public function localizedDescription(?string $locale = null): ?string
     {
-        $locale ??= app()->getLocale();
+        return $this->localized('description', $locale);
+    }
 
+    public function localizedDeliveryTerms(?string $locale = null): ?string
+    {
+        return $this->localized('delivery_terms', $locale);
+    }
+
+    public function localizedPaymentTerms(?string $locale = null): ?string
+    {
+        return $this->localized('payment_terms', $locale);
+    }
+
+    /** Перевод поля есть и не пустой. */
+    public function hasTranslation(string $field, string $locale): bool
+    {
         if ($locale === 'ru') {
-            return $this->description;
+            return trim((string) $this->{$field}) !== '';
         }
 
-        return trim((string) ($this->description_i18n[$locale] ?? '')) !== ''
-            ? $this->description_i18n[$locale]
-            : $this->description;
+        return trim((string) ($this->{$field.'_i18n'}[$locale] ?? '')) !== '';
+    }
+
+    private function localized(string $field, ?string $locale): ?string
+    {
+        $locale ??= app()->getLocale();
+
+        return $this->hasTranslation($field, $locale) && $locale !== 'ru'
+            ? $this->{$field.'_i18n'}[$locale]
+            : $this->{$field};
+    }
+
+    public function isImported(): bool
+    {
+        return $this->source === self::SOURCE_IMPORT;
+    }
+
+    /**
+     * Показывать ли объявление на этом языке.
+     *
+     * Написанное в кабинете — всегда: перевода у него могло не быть
+     * никогда, и русский текст лучше пустой выдачи. Загруженное из
+     * книги — только с заголовком на этом языке: переводы для него
+     * готовят руками, и без перевода на английской версии сайта
+     * такое объявление не должно висеть по-русски. Тот же ответ
+     * даёт scopeVisibleIn, только на стороне базы.
+     */
+    public function visibleIn(?string $locale = null): bool
+    {
+        $locale ??= app()->getLocale();
+
+        return $locale === Locales::DEFAULT
+            || ! $this->isImported()
+            || $this->hasTranslation('title', $locale);
+    }
+
+    /** @return list<string> языки, на которых объявление показывается */
+    public function visibleLocales(): array
+    {
+        return array_values(array_filter(Locales::codes(), fn (string $code): bool => $this->visibleIn($code)));
+    }
+
+    /**
+     * Есть язык каталога, на который заголовок ещё не переведён.
+     *
+     * Раньше переводы были либо все, либо никакие, и хватало проверки
+     * на null. Загрузка из книги и вкладки в админке дают частичные
+     * наборы — английский есть, узбекского нет, — и машинному
+     * переводчику нужно понимать, что добирать есть что.
+     */
+    public function missingTranslations(): bool
+    {
+        $present = array_keys(array_filter(
+            $this->title_i18n ?? [],
+            fn (mixed $text): bool => trim((string) $text) !== '',
+        ));
+
+        return array_diff(MachineTranslator::TARGETS, $present) !== [];
     }
 
     public function company(): BelongsTo
@@ -176,12 +276,17 @@ class Listing extends Model
         /*
          * Перевод — фоном после публикации: четыре обращения
          * к внешнему сервису не должны задерживать сохранение.
-         * Повторной отправки нет: после первого прохода title_i18n
-         * уже не null (пусть даже пустой), добор — по расписанию.
+         *
+         * Только в момент публикации, а не при каждом сохранении:
+         * задача сама сохраняет объявление, и при сбое части языков
+         * недостающие остались бы — сохранение запускало бы задачу
+         * снова, и так по кругу. Что не сложилось — доберёт
+         * расписание (routes/console.php).
          */
         static::saved(function (self $listing): void {
             if ($listing->status === self::STATUS_ACTIVE
-                && $listing->title_i18n === null
+                && ($listing->wasRecentlyCreated || $listing->wasChanged('status'))
+                && $listing->missingTranslations()
                 && config('services.machine_translation.enabled')) {
                 TranslateListing::dispatch($listing->id);
             }
@@ -192,6 +297,42 @@ class Listing extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    /**
+     * Только то, что показывается на языке, — см. visibleIn().
+     *
+     * На русском правило не сужает ничего, и условие не добавляется
+     * вовсе: лишний JSON-предикат в каждом запросе витрины ни к чему.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeVisibleIn(Builder $query, ?string $locale = null): void
+    {
+        $locale ??= app()->getLocale();
+
+        if ($locale === Locales::DEFAULT) {
+            return;
+        }
+
+        $query->where(fn (Builder $q) => $q
+            ->where('source', '!=', self::SOURCE_IMPORT)
+            ->orWhereJsonContainsKey('title_i18n->'.$locale));
+    }
+
+    /**
+     * Объявления, у которых нет заголовка хотя бы на одном языке
+     * каталога: null, пустой набор и частичный подходят одинаково.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeLackingTranslations(Builder $query): void
+    {
+        $query->where(function (Builder $q): void {
+            foreach (MachineTranslator::TARGETS as $locale) {
+                $q->orWhereJsonDoesntContainKey('title_i18n->'.$locale);
+            }
+        });
     }
 
     /**
