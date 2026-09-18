@@ -529,22 +529,28 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .board-page{padding-block:24px 96px}
 .board-layout{display:grid;grid-template-columns:244px 1fr;gap:24px;align-items:start}
 .board-main{min-width:0}
-.board-panel{position:sticky;top:var(--sticky-top);padding:16px;
+/* Отступы живут на группах, а не на самой панели: разделитель между
+   группами обязан идти от края до края, как в фильтрах каталога.
+   С отступом на панели он получался вдвинутым и читался как случайная
+   черта посреди списка. */
+.board-panel{position:sticky;top:var(--sticky-top);
   background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
-.board-panel-title{display:block;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px}
+.board-panel-title{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px}
 .board-panel-toggle{display:none}
 .board-filter-list{display:flex;flex-direction:column}
+.board-filter-items{display:flex;flex-direction:column}
 .board-filter{padding:5px 0;text-align:left;font-size:14px;line-height:20px;
   color:var(--text-muted);cursor:pointer;transition:color var(--t-fast)}
 .board-filter:hover{color:var(--primary-600)}
 .board-filter.is-active{color:var(--primary-700);font-weight:600}
 /* Подрубрика: сдвиг и кегль отделяют второй уровень от первого */
 .board-filter--child{padding-left:12px;font-size:13.5px}
-/* Группа фильтров под перечнем разделов: город, галочки. Разделитель
-   сверху — тот же приём, что у групп в панели каталога: без него
-   город читается как ещё один раздел */
-.board-group{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
-.board-group-title{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
+/* Группа панели: разделы, город, галочки. Те же размеры, что
+   у .filter-group в каталоге, — панели на двух страницах должны
+   читаться как одна и та же вещь */
+.board-group{padding:18px 20px;border-top:1px solid var(--border)}
+.board-group:first-child{border-top:none}
+.board-group-title{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px}
 .board-page .toolbar{align-items:center}
 .board-page .toolbar .btn{height:44px}
 .board-search{position:relative;flex:1;min-width:220px}
@@ -556,13 +562,16 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    кнопку — развёрнутый перечень занял бы первый экран до карточек */
 @media (max-width:1024px){
   .board-layout{grid-template-columns:1fr;gap:16px}
-  .board-panel{position:static;padding:10px 14px}
+  .board-panel{position:static}
   .board-panel-title{display:none}
-  .board-panel-toggle{display:flex;align-items:center;gap:8px;width:100%;
+  /* Свёрнутая панель — одна кнопка, поэтому отступы на ней самой */
+  .board-panel-toggle{display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;
     font-size:14px;font-weight:600;color:var(--text);cursor:pointer}
+  .board-group{padding:0 14px 14px}
+  .board-group:first-child{padding-top:0}
   .board-panel-toggle svg:last-child{margin-left:auto;transition:transform var(--t-mid)}
   .board-panel-toggle[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
-  .board-filter-list{display:none;margin-top:8px}
+  .board-filter-list{display:none}
   .board-filter-list.is-open{display:flex}
   .board-filter{padding:7px 0}
 }
