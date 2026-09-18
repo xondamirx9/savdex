@@ -540,6 +540,11 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .board-filter.is-active{color:var(--primary-700);font-weight:600}
 /* Подрубрика: сдвиг и кегль отделяют второй уровень от первого */
 .board-filter--child{padding-left:12px;font-size:13.5px}
+/* Группа фильтров под перечнем разделов: город, галочки. Разделитель
+   сверху — тот же приём, что у групп в панели каталога: без него
+   город читается как ещё один раздел */
+.board-group{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+.board-group-title{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
 .board-page .toolbar{align-items:center}
 .board-page .toolbar .btn{height:44px}
 .board-search{position:relative;flex:1;min-width:220px}
