@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Support\AdminAccess;
+use App\Support\Business;
 use App\Support\GatewayReconciliation as Recon;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Url;
 use UnitEnum;
 
@@ -49,8 +50,12 @@ class GatewayReconciliation extends Page
 
     public function mount(): void
     {
-        $this->from = $this->from !== '' ? $this->from : now()->startOfMonth()->toDateString();
-        $this->to = $this->to !== '' ? $this->to : now()->endOfMonth()->toDateString();
+        // Умолчание — местный месяц: по UTC с полуночи до пяти утра
+        // первого числа «этот месяц» был бы прошлым
+        [$start, $end] = Business::currentMonth();
+
+        $this->from = $this->from !== '' ? $this->from : $start;
+        $this->to = $this->to !== '' ? $this->to : $end;
     }
 
     public function getTitle(): string
@@ -76,10 +81,21 @@ class GatewayReconciliation extends Page
             return null;
         }
 
-        $summary = Recon::summary(now()->subMonth(), now());
-        $urgent = $summary[Recon::PERFORMED_WITHOUT_PAID]
-            + $summary[Recon::DOUBLE_PERFORMED]
-            + $summary[Recon::AMOUNT_MISMATCH];
+        /*
+         * Значок считается на каждой странице админки, а полная сверка
+         * поднимает все счета месяца вместе с транзакциями. Замер: три
+         * запроса и проход по всем счетам — на каждый показ любой
+         * страницы. Пять минут задержки на значке никому не мешают,
+         * а нагрузка перестаёт зависеть от того, как часто человек
+         * ходит по панели.
+         */
+        $urgent = Cache::remember('recon.urgent', now()->addMinutes(5), function (): int {
+            $summary = Recon::summary(now()->subMonth(), now());
+
+            return $summary[Recon::PERFORMED_WITHOUT_PAID]
+                + $summary[Recon::DOUBLE_PERFORMED]
+                + $summary[Recon::AMOUNT_MISMATCH];
+        });
 
         return $urgent > 0 ? (string) $urgent : null;
     }
@@ -105,8 +121,8 @@ class GatewayReconciliation extends Page
     /** @return array<string, mixed> */
     public function getViewData(): array
     {
-        $from = Carbon::parse($this->from !== '' ? $this->from : now()->startOfMonth())->startOfDay();
-        $to = Carbon::parse($this->to !== '' ? $this->to : now()->endOfMonth())->endOfDay();
+        $from = Business::startOfDay($this->from !== '' ? $this->from : Business::currentMonth()[0]);
+        $to = Business::endOfDay($this->to !== '' ? $this->to : Business::currentMonth()[1]);
 
         $findings = Recon::findings($from, $to);
 

@@ -9,6 +9,7 @@ use App\Filament\Resources\Refunds\RefundResource;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Support\AdminAccess;
+use App\Support\Business;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -32,7 +33,13 @@ class FinanceToday extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $paidToday = Payment::where('status', 'paid')->whereDate('paid_at', today());
+        // «Сегодня» — ташкентское: по UTC с полуночи до пяти утра
+        // сегодняшние оплаты считались вчерашними
+        $paidToday = Payment::query()->received()
+            ->whereBetween('paid_at', [
+                Business::startOfDay(Business::today()->toDateString()),
+                Business::endOfDay(Business::today()->toDateString()),
+            ]);
         $pending = Payment::where('status', 'pending');
         $refunds = Refund::where('status', Refund::STATUS_REQUESTED);
 

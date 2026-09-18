@@ -79,8 +79,19 @@
                                         {{ $row['ours'] !== null ? number_format($row['ours'], 0, ',', ' ').' '.($row['currency'] === 'UZS' ? 'сум' : $row['currency']) : '—' }}
                                     </td>
                                     <td class="py-2 pr-4 text-right tabular-nums">
-                                        {{-- Сторона шлюза хранится в тийинах: показываем в тех же сумах --}}
-                                        {{ $row['theirs'] !== null ? number_format($row['theirs'] / 100, 0, ',', ' ').' '.($row['currency'] === 'UZS' ? 'сум' : $row['currency']) : '—' }}
+                                        {{--
+                                            Сторона шлюза хранится в тийинах. Копейки
+                                            показываются, только если они есть: округлив
+                                            их всегда, мы бы вывели две одинаковые суммы
+                                            в строке, которая помечена как расхождение,
+                                            и человек решил бы, что ошибается экран.
+                                        --}}
+                                        @if ($row['theirs'] === null)
+                                            —
+                                        @else
+                                            {{ number_format($row['theirs'] / 100, $row['theirs'] % 100 === 0 ? 0 : 2, ',', ' ') }}
+                                            {{ $row['currency'] === 'UZS' ? 'сум' : $row['currency'] }}
+                                        @endif
                                     </td>
                                     <td class="py-2 text-gray-500 dark:text-gray-400">{{ $row['note'] ?? '' }}</td>
                                 </tr>

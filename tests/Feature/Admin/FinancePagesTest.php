@@ -13,6 +13,7 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -178,6 +179,7 @@ class FinancePagesTest extends TestCase
 
         // «Закрыт без транзакции» — предупреждение, а не срочное
         $this->payment('paid');
+        Cache::forget('recon.urgent');
         $this->assertNull(GatewayReconciliation::getNavigationBadge());
 
         $unpaid = $this->payment('pending');
@@ -192,6 +194,7 @@ class FinancePagesTest extends TestCase
             'performed_at' => now(),
         ]);
 
+        Cache::forget('recon.urgent');
         $this->assertSame('1', GatewayReconciliation::getNavigationBadge());
     }
 
@@ -207,5 +210,75 @@ class FinancePagesTest extends TestCase
             ->assertDontSee('250 000', escape: false)
             ->call('setPeriod', 'prev')
             ->assertSee('250 000', escape: false);
+    }
+
+    /**
+     * Расхождение в тийинах обязано быть видно.
+     *
+     * Округляя копейки всегда, экран вывел бы две одинаковые суммы
+     * в строке, помеченной как расхождение, — и человек решил бы,
+     * что ошибается экран, а не платёж.
+     */
+    #[Test]
+    public function расхождение_в_копейках_показывается_целиком(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::FINANCE));
+
+        $payment = $this->payment('paid', 100000);
+        PaymentTransaction::query()->create([
+            'payment_id' => $payment->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => fake()->uuid(),
+            'state' => PaymentTransaction::STATE_PERFORMED,
+            'amount_minor' => 10000050, // 100 000,50 сум
+            'currency' => 'UZS',
+            'payload' => [],
+            'performed_at' => now(),
+        ]);
+
+        Livewire::test(GatewayReconciliation::class)
+            ->assertOk()
+            ->assertSee('Суммы расходятся')
+            ->assertSee('100 000,50', escape: false);
+    }
+
+    /** Значок берётся из кэша: он считается на каждой странице админки. */
+    #[Test]
+    public function значок_не_пересчитывается_на_каждой_странице(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::FINANCE));
+
+        $unpaid = $this->payment('pending');
+        PaymentTransaction::query()->create([
+            'payment_id' => $unpaid->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => fake()->uuid(),
+            'state' => PaymentTransaction::STATE_PERFORMED,
+            'amount_minor' => $unpaid->amountMinor(),
+            'currency' => 'UZS',
+            'payload' => [],
+            'performed_at' => now(),
+        ]);
+
+        Cache::forget('recon.urgent');
+        $this->assertSame('1', GatewayReconciliation::getNavigationBadge());
+
+        // Новое расхождение сразу после — значок держится на кэше
+        $another = $this->payment('pending');
+        PaymentTransaction::query()->create([
+            'payment_id' => $another->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => fake()->uuid(),
+            'state' => PaymentTransaction::STATE_PERFORMED,
+            'amount_minor' => $another->amountMinor(),
+            'currency' => 'UZS',
+            'payload' => [],
+            'performed_at' => now(),
+        ]);
+
+        $this->assertSame('1', GatewayReconciliation::getNavigationBadge(), 'значение обязано браться из кэша');
+
+        Cache::forget('recon.urgent');
+        $this->assertSame('2', GatewayReconciliation::getNavigationBadge());
     }
 }

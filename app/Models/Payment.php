@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Services\OrderService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,6 +32,34 @@ class Payment extends Model
     protected function casts(): array
     {
         return ['paid_at' => 'datetime', 'amount' => 'integer'];
+    }
+
+    /**
+     * Счета, по которым деньги действительно пришли.
+     *
+     * Не `status = paid`. Полный возврат помечает счёт «возвращён»,
+     * и по прежней формуле он выпадал из выручки целиком — вместе
+     * с месяцем, в котором деньги приходили. Отчёт менялся задним
+     * числом: выручка сентября, посчитанная в октябре и в декабре,
+     * давала разные числа, потому что между ними прошёл возврат.
+     *
+     * Статус — состояние счёта сегодня. Приход денег — событие,
+     * которое уже произошло, и отменить его задним числом нельзя.
+     * Возврат вычитается отдельно и по своей дате.
+     *
+     * «failed» сюда попасть не может: OrderService::cancel отменяет
+     * только счета в статусе pending, оплаченный до него не доходит.
+     *
+     * Определение живёт здесь, а не в отчёте: выручку считают ещё
+     * инфопанель и виджет «оплачено сегодня», и три копии формулы
+     * разошлись бы на первой же правке — а разойдясь, дали бы два
+     * экрана с разной выручкой за один период.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeReceived(Builder $query): void
+    {
+        $query->whereIn('status', ['paid', 'refunded'])->whereNotNull('paid_at');
     }
 
     public function company(): BelongsTo

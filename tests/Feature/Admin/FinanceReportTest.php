@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Refund;
 use App\Models\Subscription;
+use App\Support\Business;
 use App\Support\FinanceReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -41,9 +42,12 @@ class FinanceReportTest extends TestCase
         ], $extra));
     }
 
+    /** Границы — как их строит страница: по местному календарю. */
     private function period(): array
     {
-        return [now()->startOfMonth(), now()->endOfMonth()];
+        [$start, $end] = Business::currentMonth();
+
+        return [Business::startOfDay($start), Business::endOfDay($end)];
     }
 
     /** RefreshDatabase сидеры не гоняет — тариф заводится тестом. */
@@ -141,9 +145,15 @@ class FinanceReportTest extends TestCase
     #[Test]
     public function пустые_месяцы_остаются_в_отчёте(): void
     {
-        $this->paid(100000, now()->startOfMonth());
+        $this->paid(100000, Business::startOfDay(Business::currentMonth()[0])->addDays(2));
 
-        $rows = FinanceReport::byMonth(now()->subMonths(2)->startOfMonth(), now()->endOfMonth());
+        // Границы строятся так же, как их строит страница: по местному
+        // календарю. Период, собранный в UTC, захватил бы лишний месяц —
+        // конец месяца по UTC это уже первое число по Ташкенту
+        $rows = FinanceReport::byMonth(
+            Business::startOfDay(Business::today()->copy()->subMonths(2)->startOfMonth()->toDateString()),
+            Business::endOfDay(Business::currentMonth()[1]),
+        );
 
         $this->assertCount(3, $rows);
         $this->assertSame(0, $rows[0]['gross']);
@@ -262,5 +272,164 @@ class FinanceReportTest extends TestCase
         [$from, $to] = $this->period();
 
         $this->assertSame(0, FinanceReport::subscriptions($from, $to)['expired']);
+    }
+
+    // ── Дыры, найденные при проверке ────────────────────────────────
+
+    /**
+     * Полный возврат помечает счёт «возвращён», и он выпадал из
+     * выручки: gross считался по status = paid.
+     *
+     * Последствие хуже разовой ошибки — отчёт менялся задним числом.
+     * Сентябрьская выручка, посчитанная в октябре и в декабре, давала
+     * разные числа, потому что между ними прошёл возврат.
+     */
+    #[Test]
+    public function полностью_возвращённый_счёт_остаётся_в_поступлениях(): void
+    {
+        $payment = $this->paid(100000);
+
+        Refund::query()->create([
+            'payment_id' => $payment->id,
+            'company_id' => $payment->company_id,
+            'amount' => 100000,
+            'currency' => 'UZS',
+            'reason' => 'Полный возврат',
+            'status' => Refund::STATUS_DONE,
+            'decided_at' => now(),
+        ]);
+        $payment->forceFill(['status' => 'refunded'])->save();
+
+        [$from, $to] = $this->period();
+        $revenue = FinanceReport::revenue($from, $to);
+
+        $this->assertSame(100000, $revenue['UZS']['gross'], 'деньги приходили — это факт периода');
+        $this->assertSame(100000, $revenue['UZS']['refunded']);
+        $this->assertSame(0, $revenue['UZS']['net'], 'пришло и ушло — ноль, а не минус сто тысяч');
+        $this->assertSame(1, $revenue['UZS']['count']);
+    }
+
+    /** Возврат в следующем месяце не должен переписывать прошлый. */
+    #[Test]
+    public function возврат_не_переписывает_прошедший_месяц(): void
+    {
+        $payment = $this->paid(100000, now()->subMonth()->startOfMonth()->addDay());
+
+        Refund::query()->create([
+            'payment_id' => $payment->id,
+            'company_id' => $payment->company_id,
+            'amount' => 100000,
+            'currency' => 'UZS',
+            'reason' => 'Вернули позже',
+            'status' => Refund::STATUS_DONE,
+            'decided_at' => now(),
+        ]);
+        $payment->forceFill(['status' => 'refunded'])->save();
+
+        $prev = FinanceReport::revenue(
+            now()->subMonth()->startOfMonth(),
+            now()->subMonth()->endOfMonth(),
+        );
+
+        $this->assertSame(100000, $prev['UZS']['gross'], 'в прошлом месяце деньги приходили');
+        $this->assertSame(0, $prev['UZS']['refunded'], 'возврат прошёл в этом месяце, не в прошлом');
+        $this->assertSame(100000, $prev['UZS']['net']);
+    }
+
+    /** Разбивки обязаны сходиться с общей выручкой, иначе им нельзя верить. */
+    #[Test]
+    public function разбивки_сходятся_с_общей_выручкой(): void
+    {
+        $refunded = $this->paid(100000);
+        Refund::query()->create([
+            'payment_id' => $refunded->id,
+            'company_id' => $refunded->company_id,
+            'amount' => 100000, 'currency' => 'UZS', 'reason' => 'Возврат',
+            'status' => Refund::STATUS_DONE, 'decided_at' => now(),
+        ]);
+        $refunded->forceFill(['status' => 'refunded'])->save();
+
+        $this->paid(50000, null, ['purpose' => 'credits']);
+
+        [$from, $to] = $this->period();
+
+        $gross = FinanceReport::revenue($from, $to)['UZS']['gross'];
+        $byPlan = array_sum(array_column(FinanceReport::byPlan($from, $to), 'gross'));
+        $bySource = array_sum(array_column(FinanceReport::bySource($from, $to), 'gross'));
+        $byMonth = array_sum(array_column(FinanceReport::byMonth($from, $to), 'gross'));
+
+        $this->assertSame(150000, $gross);
+        $this->assertSame($gross, $byPlan, 'сумма по тарифам обязана сойтись с общей');
+        $this->assertSame($gross, $bySource, 'сумма по источникам обязана сойтись с общей');
+        $this->assertSame($gross, $byMonth, 'сумма по месяцам обязана сойтись с общей');
+    }
+
+    /**
+     * Инфопанель и отчёт обязаны говорить одно и то же.
+     *
+     * Формула выручки жила в трёх местах: отчёт, показатели площадки
+     * и виджет «оплачено сегодня». Разойдясь, они дали бы два экрана
+     * с разной выручкой за один период — а человек, увидевший это,
+     * перестаёт верить обоим.
+     */
+    #[Test]
+    public function инфопанель_и_отчёт_считают_выручку_одинаково(): void
+    {
+        $kept = $this->paid(200000, now()->subDays(3));
+
+        $returned = $this->paid(100000, now()->subDays(2));
+        Refund::query()->create([
+            'payment_id' => $returned->id,
+            'company_id' => $returned->company_id,
+            'amount' => 100000, 'currency' => 'UZS', 'reason' => 'Возврат',
+            'status' => Refund::STATUS_DONE, 'decided_at' => now(),
+        ]);
+        $returned->forceFill(['status' => 'refunded'])->save();
+
+        $fromReport = FinanceReport::revenue(now()->subMonth(), now())['UZS']['gross'];
+
+        $fromDashboard = (int) Payment::query()
+            ->received()
+            ->whereBetween('paid_at', [now()->subMonth(), now()])
+            ->sum('amount');
+
+        $this->assertSame(300000, $fromReport);
+        $this->assertSame($fromReport, $fromDashboard, 'два экрана не должны расходиться в деньгах');
+    }
+
+    /**
+     * Граница месяца считается по ташкентскому календарю.
+     *
+     * Хранится всё в UTC. Оплата 1 октября в 02:00 по Ташкенту — это
+     * 30 сентября 21:00 UTC, и в отчёте она уезжала в сентябрь.
+     * Раз в месяц пять часов выручки оказывались в чужом периоде:
+     * не потеря, но расхождение с тем, что человек закрывает как месяц.
+     */
+    #[Test]
+    public function граница_месяца_по_местному_календарю(): void
+    {
+        // 1 октября 02:00 в Ташкенте = 30 сентября 21:00 UTC
+        $payment = $this->paid(100000, Carbon::parse('2026-09-30 21:00:00', 'UTC'));
+
+        $rows = FinanceReport::byMonth(
+            Carbon::parse('2026-09-01 00:00:00', 'UTC'),
+            Carbon::parse('2026-10-31 23:59:59', 'UTC'),
+        );
+
+        $september = collect($rows)->firstWhere('month', '2026-09');
+        $october = collect($rows)->firstWhere('month', '2026-10');
+
+        $this->assertSame(0, $september['gross'], 'по ташкентскому календарю это уже октябрь');
+        $this->assertSame(100000, $october['gross']);
+    }
+
+    /** Часовой пояс дел берётся через config, а не env: конфиг на проде кэшируется. */
+    #[Test]
+    public function часовой_пояс_дел_переживает_кэш_конфигурации(): void
+    {
+        $this->assertSame('Asia/Tashkent', Business::timezone());
+
+        config(['app.business_timezone' => 'Europe/Istanbul']);
+        $this->assertSame('Europe/Istanbul', Business::timezone());
     }
 }
