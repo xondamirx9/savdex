@@ -96,12 +96,8 @@ class CompanyController extends Controller
             'companies' => $companies,
             'filters' => $request->only(['q', 'type', 'verified', 'country', 'age']),
             'types' => Company::typeOptions(),
-            'countries' => Country::query()
-                ->where('is_active', true)
-                ->with('translations')
-                ->orderBy('sort')
-                ->get()
-                ->map(fn ($c): array => ['code' => $c->code, 'name' => $c->name()])
+            'countries' => Country::listed()
+                ->map(fn (Country $c): array => ['code' => $c->code, 'name' => $c->name()])
                 ->all(),
             'stats' => [
                 'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),

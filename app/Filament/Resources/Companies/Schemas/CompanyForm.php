@@ -85,10 +85,10 @@ class CompanyForm
                 ->schema([
                     Select::make('country_id')
                         ->label('Страна')
-                        ->options(fn (): array => Country::query()
-                            ->with('translations')
-                            ->orderBy('sort')
-                            ->get()
+                        // Со снятыми с публикации: страна, выключенная
+                        // после того, как на ней встала компания, иначе
+                        // пропала бы из списка и поле обнулилось молча
+                        ->options(fn (): array => Country::listed(withInactive: true)
                             ->mapWithKeys(fn (Country $c): array => [$c->id => $c->name()])
                             ->all())
                         ->searchable()
@@ -102,6 +102,7 @@ class CompanyForm
                         ->options(fn ($get): array => City::query()
                             ->where('country_id', $get('country_id'))
                             ->with('translations')
+                            ->orderBy('sort')
                             ->get()
                             ->mapWithKeys(fn (City $c): array => [$c->id => $c->name()])
                             ->all())
