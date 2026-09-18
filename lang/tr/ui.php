@@ -1942,6 +1942,7 @@ return [
             'reset_sent_whatsapp' => 'Bu adres kayıtlıysa ve profilde telefon varsa, bağlantı WhatsApp’a gönderildi.',
             'reset_message' => 'SAVDEX’te parola değişikliği. Bağlantıyı açıp yeni parola belirleyin: :link — 60 dakika geçerlidir ve bir kez çalışır. Parolanızı kaybetmediyseniz bağlantıyı açmayın.',
             'telegram_linked' => ':name, hazır: Telegram bağlandı. E-postanıza erişimi kaybederseniz parola değiştirme bağlantısı buraya gelir.',
+            'telegram_start' => 'Bu, SAVDEX platformunun botudur. İş e-postanıza erişimi kaybederseniz parola değiştirme bağlantısı buraya gelir. Telegram’ı bağlamak için savdex.uz’a giriş yapın, hesabınızdaki “Ayarlar”ı açın ve “Telegram’ı bağla”ya basın.',
             'telegram_link_expired' => 'Bu bağlama bağlantısı artık geçerli değil. Hesap ayarlarını açıp “Telegram’ı bağla”ya yeniden basın.',
             'telegram_unlinked' => 'Telegram bağlantısı kaldırıldı.',
             'telegram_unavailable' => 'Telegram bağlama platformda henüz yapılandırılmadı.',

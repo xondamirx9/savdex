@@ -1941,6 +1941,7 @@ return [
             'reset_sent_whatsapp' => '如果该邮箱已注册且资料中填写了手机号，链接已发送到 WhatsApp。',
             'reset_message' => 'SAVDEX 修改密码。打开链接并设置新密码：:link — 链接有效期 60 分钟，只能使用一次。如果您并未丢失密码，请不要打开它。',
             'telegram_linked' => ':name，已完成：Telegram 已绑定。若邮箱无法访问，修改密码的链接会发到这里。',
+            'telegram_start' => '这是 SAVDEX 平台的机器人。若您无法访问工作邮箱，修改密码的链接会发到这里。要绑定 Telegram，请登录 savdex.uz，打开账户中的“设置”，点击“绑定 Telegram”。',
             'telegram_link_expired' => '该绑定链接已失效。请打开账户设置，重新点击“绑定 Telegram”。',
             'telegram_unlinked' => 'Telegram 已解绑。',
             'telegram_unavailable' => '平台尚未配置 Telegram 绑定。',
