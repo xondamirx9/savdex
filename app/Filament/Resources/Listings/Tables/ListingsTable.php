@@ -250,8 +250,18 @@ class ListingsTable
                     ->label('Одобрить')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (Listing $record): bool => $record->status === Listing::STATUS_MODERATION
-                        && self::canModerate($record))
+                    /*
+                     * И отклонённое тоже: отклонение окончательно для
+                     * автора, но не для модератора. Раньше промах кнопкой
+                     * исправлял сам автор — жал «опубликовать заново»;
+                     * теперь этот путь закрыт, и отменить решение должно
+                     * быть кому.
+                     */
+                    ->visible(fn (Listing $record): bool => in_array(
+                        $record->status,
+                        [Listing::STATUS_MODERATION, Listing::STATUS_REJECTED],
+                        true,
+                    ) && self::canModerate($record))
                     ->requiresConfirmation()
                     ->action(function (Listing $record): void {
                         $record->forceFill([
@@ -286,7 +296,7 @@ class ListingsTable
                     ->color('warning')
                     ->visible(fn (Listing $record): bool => in_array(
                         $record->status,
-                        [Listing::STATUS_MODERATION, Listing::STATUS_ACTIVE],
+                        [Listing::STATUS_MODERATION, Listing::STATUS_ACTIVE, Listing::STATUS_REJECTED],
                         true,
                     ) && self::canModerate($record))
                     ->schema([

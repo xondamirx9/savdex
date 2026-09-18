@@ -202,6 +202,15 @@ class ListingWizardController extends Controller
     {
         $listing = $this->owned($request, $id);
 
+        /*
+         * Отклонённое объявление через мастер тоже не возвращается:
+         * это был третий обход запрета — открыть редактор, нажать
+         * «опубликовать», и снятая модератором запись снова на витрине.
+         */
+        if ($listing->status === Listing::STATUS_REJECTED) {
+            return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+        }
+
         $request->validate([
             'category_id' => ['required', 'exists:categories,id'],
             'title' => ['required', 'string', 'min:10', 'max:90'],

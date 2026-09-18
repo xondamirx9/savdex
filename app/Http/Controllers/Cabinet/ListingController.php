@@ -140,6 +140,13 @@ class ListingController extends Controller
         $listing = $this->ownedListing($request, $id);
         $company = $listing->company;
 
+        // Продление — четвёртый путь в статус «активно», и через него
+        // отклонённое объявление возвращалось на витрину в обход
+        // повторной публикации
+        if ($listing->status === Listing::STATUS_REJECTED) {
+            return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+        }
+
         if (! $this->hasFreeSlot($company, [$listing->id])) {
             return back()->with('error', $this->limitMessage($company));
         }
@@ -248,6 +255,16 @@ class ListingController extends Controller
          * по очереди, каждое видя актуальный на свой момент остаток.
          */
         if ($data['action'] === 'renew') {
+            // Отклонённые не продлеваются — иначе запрет обходился бы
+            // выделением галочками
+            $listings = $listings->reject(
+                fn (Listing $listing): bool => $listing->status === Listing::STATUS_REJECTED,
+            );
+
+            if ($listings->isEmpty()) {
+                return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+            }
+
             $limit = $company->plan()->listings_limit;
 
             if ($limit !== null) {

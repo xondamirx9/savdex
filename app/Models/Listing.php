@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\RejectedListingStaysDown;
 use App\Jobs\TranslateListing;
 use App\Services\MachineTranslator;
+use App\Support\AdminLog;
 use App\Support\Locales;
 use App\Support\SearchText;
 use Database\Factories\ListingFactory;
@@ -57,6 +59,19 @@ class Listing extends Model
     /** Возвращено автору: правит и публикует снова, тем же объявлением. */
     public const STATUS_NEEDS_CHANGES = 'needs_changes';
 
+    /**
+     * Отклонённое объявление не возвращается на витрину.
+     *
+     * Запрет стоит в модели, а не в контроллерах, потому что путей
+     * в статус «активно» четыре: повторная публикация, продление,
+     * массовое продление и мастер. Проверка в одном из них закрывала
+     * один путь и оставляла три — ровно это и обнаружилось при
+     * проверке. Здесь закрыты все, включая те, которых ещё нет.
+     *
+     * Модератора запрет не касается: снять отклонение — его работа,
+     * и ошибиться кнопкой он тоже может. Автору остаётся новая
+     * запись (§5.7 ТЗ).
+     */
     public const STATUS_EXPIRED = 'expired';
 
     public const STATUS_ARCHIVED = 'archived';
@@ -272,6 +287,29 @@ class Listing extends Model
          * не трогает кириллицу, а LIKE в PostgreSQL регистрозависим —
          * поиск вёл бы себя по-разному в тестах и в бою.
          */
+        /*
+         * Отклонённое объявление не возвращается на витрину.
+         *
+         * Запрет стоит здесь, а не в контроллерах, потому что путей
+         * в статус «активно» четыре: повторная публикация, продление,
+         * массовое продление и мастер. Проверка в одном из них
+         * закрывала один путь и оставляла три — ровно это и
+         * обнаружилось при проверке.
+         *
+         * Модератора запрет не касается: снять своё отклонение —
+         * его работа, ошибиться кнопкой он тоже может. Автору
+         * остаётся новая запись (§5.7 ТЗ).
+         */
+        static::saving(function (self $listing): void {
+            $wasRejected = $listing->getOriginal('status') === self::STATUS_REJECTED;
+
+            if ($wasRejected
+                && $listing->status === self::STATUS_ACTIVE
+                && ! AdminLog::actorIsAdmin()) {
+                throw new RejectedListingStaysDown;
+            }
+        });
+
         static::saving(function (self $listing): void {
             // Обе графики разом: узбекская аудитория ищет латиницей
             // («sement»), а объявления пишутся кириллицей — и наоборот.

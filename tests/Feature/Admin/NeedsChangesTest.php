@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Exceptions\RejectedListingStaysDown;
 use App\Filament\Resources\Listings\Pages\ListListings;
 use App\Models\Company;
 use App\Models\Listing;
@@ -197,5 +198,129 @@ class NeedsChangesTest extends TestCase
             ->get('/cabinet/listings?status=needs_changes')
             ->assertOk()
             ->assertSee('needs_changes');
+    }
+
+    // ── Все пути в статус «активно» ─────────────────────────────────
+
+    /**
+     * Путей в статус «активно» четыре, и запрет должен стоять на всех.
+     *
+     * Проверка только в повторной публикации закрывала один путь
+     * и оставляла три: продление, массовое продление и мастер.
+     * Каждый из них возвращал снятое модератором объявление
+     * на витрину неизменным.
+     *
+     * Проверяются все четыре сразу и называются все дырявые: падение
+     * на первом же скрыло бы состояние остальных трёх, а именно это
+     * и увело проверку в прошлый раз.
+     */
+    #[Test]
+    public function отклонённое_не_возвращается_ни_одним_из_четырёх_путей(): void
+    {
+        $leaked = [];
+
+        $attempts = [
+            'повторная публикация' => fn (Listing $l) => $this->post("/cabinet/listings/{$l->id}/resubmit"),
+            'продление' => fn (Listing $l) => $this->post("/cabinet/listings/{$l->id}/renew"),
+            'мастер' => fn (Listing $l) => $this->post("/cabinet/listings/{$l->id}/publish", [
+                'category_id' => $l->category_id,
+                'title' => 'Заголовок достаточной длины для проверки',
+                'description' => str_repeat('Описание объявления. ', 5),
+                'price' => 1000,
+            ]),
+            'массовое продление' => fn (Listing $l) => $this->post('/cabinet/listings/bulk', [
+                'action' => 'renew',
+                'ids' => [$l->id],
+            ]),
+        ];
+
+        foreach ($attempts as $name => $attempt) {
+            $listing = $this->listing(Listing::STATUS_REJECTED);
+
+            $this->actingAs($this->author($listing));
+
+            try {
+                $attempt($listing);
+            } catch (\Throwable) {
+                // Исключение — тоже отказ, и он засчитывается
+            }
+
+            if ($listing->fresh()->status === Listing::STATUS_ACTIVE) {
+                $leaked[] = $name;
+            }
+        }
+
+        $this->assertSame([], $leaked, 'отклонённое объявление вернулось на витрину через: '.implode(', ', $leaked));
+    }
+
+    /**
+     * Запрет стоит в модели, а не только в контроллерах: путь, которого
+     * ещё нет, тоже должен упереться.
+     */
+    #[Test]
+    public function модель_не_даёт_поднять_отклонённое_даже_напрямую(): void
+    {
+        $listing = $this->listing(Listing::STATUS_REJECTED);
+
+        $this->actingAs($this->author($listing));
+
+        $this->expectException(RejectedListingStaysDown::class);
+
+        $listing->forceFill(['status' => Listing::STATUS_ACTIVE])->save();
+    }
+
+    /**
+     * Модератора запрет не касается: промах кнопкой исправлять некому,
+     * если и ему закрыть путь назад.
+     */
+    #[Test]
+    public function модератор_отменяет_своё_отклонение(): void
+    {
+        $this->actingAs($this->moderator());
+        $listing = $this->listing(Listing::STATUS_REJECTED);
+
+        Livewire::test(ListListings::class)
+            ->callAction(TestAction::make('approve')->table($listing))
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(Listing::STATUS_ACTIVE, $listing->fresh()->status);
+    }
+
+    /** Или возвращает автору на исправление — если дело поправимо. */
+    #[Test]
+    public function модератор_переводит_отклонённое_в_исправление(): void
+    {
+        $this->actingAs($this->moderator());
+        $listing = $this->listing(Listing::STATUS_REJECTED);
+
+        Livewire::test(ListListings::class)
+            ->callAction(TestAction::make('returnForChanges')->table($listing), ['reason' => 'Поправьте цену и верните.'])
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(Listing::STATUS_NEEDS_CHANGES, $listing->fresh()->status);
+    }
+
+    /**
+     * Приёмка ТЗ, пункт 20: решение появилось в журнале с автором.
+     *
+     * Разграничение, которое нельзя проверить постфактум, — это
+     * договорённость, а не защита.
+     */
+    #[Test]
+    public function возврат_попадает_в_журнал_действий(): void
+    {
+        $moderator = $this->moderator();
+        $this->actingAs($moderator);
+        $listing = $this->listing();
+
+        Livewire::test(ListListings::class)
+            ->callAction(TestAction::make('returnForChanges')->table($listing), ['reason' => 'В цене лишний ноль, поправьте.'])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('admin_actions', [
+            'user_id' => $moderator->id,
+            'section' => 'listings',
+            'subject_id' => $listing->id,
+        ]);
     }
 }
