@@ -92,7 +92,7 @@ class CompanyProfileController extends Controller
                 'verified' => $u->hasVerifiedEmail(),
             ]) ?? [],
 
-            'countries' => Country::query()->where('is_active', true)->with('translations')->get()
+            'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['id' => $c->id, 'name' => $c->name()]),
 
             'cities' => City::query()->where('is_active', true)->with('translations')->get()

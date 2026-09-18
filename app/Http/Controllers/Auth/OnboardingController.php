@@ -34,7 +34,7 @@ class OnboardingController extends Controller
         }
 
         return Inertia::render('auth/CompanyStep', [
-            'countries' => Country::query()->where('is_active', true)->with('translations')->orderBy('sort')->get()
+            'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['id' => $c->id, 'name' => $c->name()]),
 
             'cities' => City::query()->where('is_active', true)->with('translations')->get()
