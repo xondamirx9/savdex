@@ -522,7 +522,7 @@ return [
         'about_description' => 'Platforma qanday ishlaydi: bepul joylashtirish, kontaktni ochish uchun to‘lov, kompaniyalarni moderatsiya tekshiruvi va faqat tasdiqlangan bitimlar bo‘yicha sharhlar.',
         'pricing_title' => 'Tariflar va narxlar',
         'pricing_description' => 'E’lon joylashtirish bepul. Faqat kontaktni ochish va reklama uchun to‘laysiz. Bitimlardan komissiya yo‘q.',
-        'home_title' => 'O‘zbekistonda yetkazib beruvchilar va xaridlar',
+        'home_title' => 'Tender asosida savdo',
         'home_description' => 'O‘zbekiston va Markaziy Osiyo B2B-platformasi: tekshirilgan yetkazib beruvchilar katalogi, xarid so‘rovlari va tenderlar. To‘g‘ridan-to‘g‘ri aloqa.',
         'catalog_subject' => 'Ulgurji mahsulot va xizmatlar',
         'catalog_in_country' => ' O‘zbekistonda',

@@ -519,7 +519,7 @@ return [
         'about_description' => 'Platform nasıl işler: ücretsiz ilan, yalnızca iletişim açmak için ödeme, moderasyondan geçen şirketler ve yalnızca doğrulanmış işlemlere dayanan değerlendirmeler.',
         'pricing_title' => 'Tarifeler ve fiyatlar',
         'pricing_description' => 'İlan vermek ücretsiz. Yalnızca iletişim açmak ve öne çıkarmak için ödersiniz. İşlem komisyonu yok.',
-        'home_title' => 'Özbekistan’da tedarikçiler ve toptan alım',
+        'home_title' => 'İhale ile ticaret',
         'home_description' => 'Özbekistan ve Orta Asya B2B pazaryeri: doğrulanmış tedarikçi kataloğu, satın alma talepleri ve ihaleler. Doğrudan iletişim, işlem komisyonu yok.',
         'catalog_subject' => 'Toptan ürün ve hizmetler',
         'catalog_in_country' => ' Özbekistan’da',

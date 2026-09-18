@@ -519,7 +519,7 @@ return [
         'about_description' => 'How the marketplace works: free listings, payment for unlocking contacts, companies checked by moderators and reviews only from confirmed deals.',
         'pricing_title' => 'Plans and pricing',
         'pricing_description' => 'Listings are free. You only pay to unlock contacts and to promote. No commission on deals.',
-        'home_title' => 'Suppliers and wholesale sourcing in Uzbekistan',
+        'home_title' => 'Tender-based trading',
         'home_description' => 'B2B marketplace for Uzbekistan and Central Asia: verified supplier directory, purchase requests and tenders. Direct contacts, no commission on deals.',
         'catalog_subject' => 'Wholesale goods and services',
         'catalog_in_country' => ' in Uzbekistan',
