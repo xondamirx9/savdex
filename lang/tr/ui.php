@@ -643,7 +643,7 @@ return [
         'search_label' => 'Şirket arama',
         'search_placeholder' => 'Şirket adı veya vergi numarası',
         'empty_title' => 'Sorgunuza uyan bir şey yok',
-        'empty_text' => '«Yalnızca doğrulanmış» filtresini kaldırmayı veya sorguyu değiştirmeyi deneyin.',
+        'empty_text' => 'Aramayı değiştirin veya filtreleri sıfırlayın.',
         'empty_reset' => 'Filtreleri sıfırla',
         'tin' => 'Vergi no',
         'tin_none' => 'belirtilmemiş',

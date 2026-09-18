@@ -646,7 +646,7 @@ return [
         'search_label' => 'Kompaniya qidirish',
         'search_placeholder' => 'Kompaniya nomi yoki STIR',
         'empty_title' => 'So‘rovingiz bo‘yicha hech narsa topilmadi',
-        'empty_text' => '«Faqat tasdiqlanganlar» filtrini olib tashlab yoki so‘rovni o‘zgartirib ko‘ring.',
+        'empty_text' => 'Soʻrovni oʻzgartiring yoki filtrlarni tozalang.',
         'empty_reset' => 'Filtrlarni tozalash',
         'tin' => 'STIR',
         'tin_none' => 'ko‘rsatilmagan',

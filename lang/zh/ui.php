@@ -642,7 +642,7 @@ return [
         'search_label' => '搜索公司',
         'search_placeholder' => '公司名称或税号',
         'empty_title' => '没有符合条件的结果',
-        'empty_text' => '试试去掉“仅看已认证”筛选或修改搜索词。',
+        'empty_text' => '请更换关键词或清除筛选条件。',
         'empty_reset' => '重置筛选',
         'tin' => '税号',
         'tin_none' => '未填写',

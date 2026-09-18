@@ -643,7 +643,7 @@ return [
         'search_label' => 'Company search',
         'search_placeholder' => 'Company name or tax ID',
         'empty_title' => 'Nothing matches your query',
-        'empty_text' => 'Try removing the “Verified only” filter or changing the query.',
+        'empty_text' => 'Try a different query or reset the filters.',
         'empty_reset' => 'Reset filters',
         'tin' => 'Tax ID',
         'tin_none' => 'not specified',
