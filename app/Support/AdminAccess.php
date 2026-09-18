@@ -99,6 +99,7 @@ final class AdminAccess
         'tenders' => 'Тендеры и потребности',
         'ittasks' => 'IT-задачи',
         'documents' => 'Документы на проверку',
+        'resumes' => 'Резюме соискателей',
         'reviews' => 'Отзывы',
         'complaints' => 'Жалобы на контакты',
         'leads' => 'Лиды',
@@ -149,7 +150,7 @@ final class AdminAccess
         self::ADMIN => [
             'users' => 'w', 'audit' => 'r', 'dashboard' => 'r',
             'companies' => 'w', 'listings' => 'w', 'tenders' => 'w', 'ittasks' => 'w',
-            'documents' => 'r', 'reviews' => 'w', 'complaints' => 'w',
+            'documents' => 'r', 'resumes' => 'm', 'reviews' => 'w', 'complaints' => 'w',
             'leads' => 'w', 'deals' => 'w', 'contacts' => 'w', 'tasks' => 'w', 'communications' => 'w',
             'support' => 'w',
             'content' => 'w', 'catalogs' => 'w', 'broadcasts' => 'r',
@@ -174,7 +175,7 @@ final class AdminAccess
         ],
         self::MODERATOR => [
             'companies' => 'm', 'listings' => 'm', 'tenders' => 'm', 'ittasks' => 'm',
-            'documents' => 'm', 'reviews' => 'm', 'complaints' => 'm',
+            'documents' => 'm', 'resumes' => 'm', 'reviews' => 'm', 'complaints' => 'm',
             'catalogs' => 'r',
         ],
         self::FINANCE => [
@@ -184,7 +185,7 @@ final class AdminAccess
         ],
         self::SUPPORT => [
             'users' => 'r', 'companies' => 'r', 'listings' => 'r', 'ittasks' => 'r',
-            'reviews' => 'r', 'complaints' => 'r',
+            'resumes' => 'r', 'reviews' => 'r', 'complaints' => 'r',
             'contacts' => 'r', 'tasks' => 'wo', 'communications' => 'wo',
             'support' => 'w', 'subscriptions' => 'r',
         ],

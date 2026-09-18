@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use App\Jobs\TranslateListing;
 use App\Jobs\TranslateNewsPost;
+use App\Jobs\TranslateResume;
 use App\Jobs\TranslateTender;
 use App\Models\AudienceView;
 use App\Models\Listing;
 use App\Models\NewsPost;
+use App\Models\Resume;
 use App\Models\Tender;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\UzumGateway;
@@ -102,6 +104,21 @@ Schedule::call(function (): void {
         ->pluck('id')
         ->each(fn (int $id) => TranslateListing::dispatch($id));
 })->hourly()->name('listings-translate-catchup')->onOneServer();
+
+// Резюме — по той же схеме: должность, текст о себе и места работы
+Schedule::call(function (): void {
+    if (! config('services.machine_translation.enabled')) {
+        return;
+    }
+
+    Resume::query()
+        ->where('status', Resume::STATUS_PUBLISHED)
+        ->lackingTranslations()
+        ->orderBy('id')
+        ->limit(10)
+        ->pluck('id')
+        ->each(fn (int $id) => TranslateResume::dispatch($id));
+})->hourly()->name('resumes-translate-catchup')->onOneServer();
 
 // Тендеры переводятся по той же схеме, что объявления
 Schedule::call(function (): void {
