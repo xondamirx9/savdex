@@ -250,6 +250,9 @@ export default function Promo({
                             <label className="label" htmlFor="promo-listing">
                                 {t('cabinet.promo.which_listing')} <span className="req">*</span>
                             </label>
+                            {/* Нативный список: окно прокручивается
+                                (.modal — max-height 90vh, overflow-y:auto),
+                                и своё меню оно обрезало бы по нижнему краю */}
                             <select
                                 id="promo-listing"
                                 className="select"

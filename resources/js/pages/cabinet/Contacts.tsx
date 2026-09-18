@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Empty } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { SelectField } from '@/components/SelectField';
 import { t, tChoice } from '@/lib/i18n';
 
 interface Row {
@@ -97,20 +98,14 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                 <Search className="size-5" />
                             </span>
                         </div>
-                        <select
-                            className="select"
-                            style={{ width: 'auto', minWidth: 180 }}
-                            aria-label={t('cabinet.contacts.status')}
+                        <SelectField
+                            className="select-field--auto"
+                            ariaLabel={t('cabinet.contacts.status')}
                             value={filters.status}
-                            onChange={(e) => filter({ status: e.target.value })}
-                        >
-                            <option value="">{t('cabinet.contacts.status_all')}</option>
-                            {Object.entries(statuses).map(([key, label]) => (
-                                <option key={key} value={key}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(value) => filter({ status: value })}
+                            placeholder={t('cabinet.contacts.status_all')}
+                            options={Object.entries(statuses).map(([key, label]) => ({ value: key, label }))}
+                        />
                     </div>
 
                     {contacts.length === 0 ? (
@@ -181,6 +176,9 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                             <td data-label={t('cabinet.contacts.opened')}>{row.opened_at}</td>
 
                                             <td data-label={t('cabinet.contacts.status')}>
+                                                {/* Здесь остаётся нативный список: таблица лежит
+                                                    в .table-wrap с горизонтальной прокруткой,
+                                                    и своё меню она обрезала бы по краю */}
                                                 <select
                                                     className="select"
                                                     style={{ height: 32, fontSize: 13, width: 'auto' }}

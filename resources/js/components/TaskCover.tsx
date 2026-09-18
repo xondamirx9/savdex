@@ -1,4 +1,17 @@
-import { Bot, Code2, Database, Globe, Headset, Palette, Smartphone, Workflow } from 'lucide-react';
+import {
+    Bot,
+    Calculator,
+    Code2,
+    Database,
+    FileCheck2,
+    Globe,
+    Headset,
+    Palette,
+    Smartphone,
+    Truck,
+    UserSearch,
+    Workflow,
+} from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 
@@ -23,6 +36,10 @@ const STYLES: Record<string, { cls: string; icon: typeof Globe }> = {
     design: { cls: 'cover-design', icon: Palette },
     automation: { cls: 'cover-automation', icon: Bot },
     support: { cls: 'cover-support', icon: Headset },
+    logistics: { cls: 'cover-logistics', icon: Truck },
+    hr: { cls: 'cover-hr', icon: UserSearch },
+    customs: { cls: 'cover-customs', icon: FileCheck2 },
+    accounting: { cls: 'cover-accounting', icon: Calculator },
     other: { cls: 'cover-other', icon: Code2 },
 };
 

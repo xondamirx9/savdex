@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { routes } from '@/routes';
+import { SelectField } from '@/components/SelectField';
 import { t } from '@/lib/i18n';
 
 interface Task {
@@ -120,18 +121,13 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                     <label className="label" htmlFor="t-type">
                         {t('cabinet.it_task_form.service')} <span className="req">*</span>
                     </label>
-                    <select
+                    <SelectField
                         id="t-type"
-                        className="select"
+                        ariaLabel={t('cabinet.it_task_form.service')}
                         value={form.data.service_type}
-                        onChange={(e) => form.setData('service_type', e.target.value)}
-                    >
-                        {Object.entries(serviceTypes).map(([code, label]) => (
-                            <option key={code} value={code}>
-                                {label}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(value) => form.setData('service_type', value)}
+                        options={Object.entries(serviceTypes).map(([code, label]) => ({ value: code, label }))}
+                    />
                 </div>
 
                 <div className="field">
@@ -244,19 +240,16 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                                     {err('budget_to') && <p className="hint" style={{ color: 'var(--danger)' }}>{err('budget_to')}</p>}
                                 </div>
                             )}
-                            <select
-                                className="select"
-                                style={{ width: 'auto' }}
-                                aria-label={t('cabinet.it_task_form.currency')}
+                            <SelectField
+                                className="select-field--auto"
+                                ariaLabel={t('cabinet.it_task_form.currency')}
                                 value={form.data.currency}
-                                onChange={(e) => form.setData('currency', e.target.value)}
-                            >
-                                {currencies.map((c) => (
-                                    <option key={c} value={c}>
-                                        {c === 'UZS' ? t('catalog.currency_uzs') : c}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => form.setData('currency', value)}
+                                options={currencies.map((c) => ({
+                                    value: c,
+                                    label: c === 'UZS' ? t('catalog.currency_uzs') : c,
+                                }))}
+                            />
                         </div>
                     )}
                 </div>

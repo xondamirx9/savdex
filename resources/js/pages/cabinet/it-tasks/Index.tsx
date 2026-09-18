@@ -6,6 +6,7 @@ import { Empty } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
+import { SelectField } from '@/components/SelectField';
 import { t } from '@/lib/i18n';
 
 interface Row {
@@ -78,19 +79,14 @@ function CompleteForm({ task, onDone }: { task: Row; onDone: () => void }) {
             </div>
             <div className="field" style={{ margin: 0 }}>
                 <label className="label" htmlFor={`r-who-${task.id}`}>{t('cabinet.it_tasks.contractor')}</label>
-                <select
+                <SelectField
                     id={`r-who-${task.id}`}
-                    className="select"
+                    ariaLabel={t('cabinet.it_tasks.contractor_none')}
                     value={form.data.contractor_company_id}
-                    onChange={(e) => form.setData('contractor_company_id', e.target.value)}
-                >
-                    <option value="">{t('cabinet.it_tasks.contractor_none')}</option>
-                    {task.responders.map((r) => (
-                        <option key={r.id} value={r.id}>
-                            {r.name}
-                        </option>
-                    ))}
-                </select>
+                    onChange={(value) => form.setData('contractor_company_id', value)}
+                    placeholder={t('cabinet.it_tasks.contractor_none')}
+                    options={task.responders.map((r) => ({ value: String(r.id), label: r.name }))}
+                />
                 {form.errors.contractor_company_id && (
                     <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.contractor_company_id}</p>
                 )}

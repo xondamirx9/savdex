@@ -53,7 +53,11 @@ class Setting extends Model
      */
     public static function flushCache(): void
     {
-        Cache::forget(self::CACHE_KEY);
+        // Через memo(), а не Cache::forget(): забыть надо и в хранилище,
+        // и в памяти запроса. Иначе страница, сохранившая настройку,
+        // дочитала бы старое значение из памяти и показала бы его —
+        // ровно то «не сохранилось», от которого избавлялись выше.
+        Cache::memo()->forget(self::CACHE_KEY);
     }
 
     /**
@@ -67,7 +71,20 @@ class Setting extends Model
      */
     public static function values(): array
     {
-        return Cache::remember(
+        /*
+         * memo() — потому что Setting::get() вызывается по шесть раз
+         * на страницу (телефон, почта, часы, телеграм, название, ИНН
+         * в общих свойствах Inertia), и каждый вызов шёл в хранилище
+         * кэша за одним и тем же ключом. Пока кэш лежал в PostgreSQL,
+         * это были шесть запросов к базе за данными, которые меняются
+         * раз в месяц. Теперь — один за запрос, остальные из памяти
+         * процесса.
+         *
+         * Память живёт ровно один запрос: контейнер приложения
+         * пересобирается на каждом, и следующий посетитель получит
+         * свежее значение.
+         */
+        return Cache::memo()->remember(
             self::CACHE_KEY,
             now()->addDay(),
             fn (): array => self::query()->pluck('value', 'key')->all(),
@@ -83,6 +100,6 @@ class Setting extends Model
     {
         self::query()->where('key', $key)->update(['value' => json_encode($value)]);
 
-        Cache::forget(self::CACHE_KEY);
+        self::flushCache();
     }
 }

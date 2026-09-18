@@ -28,6 +28,7 @@ export function SelectField({
     placeholder,
     ariaLabel,
     className,
+    id,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -40,6 +41,11 @@ export function SelectField({
     placeholder?: string;
     ariaLabel: string;
     className?: string;
+    /**
+     * Для <label for>. Кнопка — размечаемый элемент, как и <select>,
+     * поэтому подпись остаётся кликабельной в обоих режимах.
+     */
+    id?: string;
 }) {
     const [custom, setCustom] = useState(false);
     const [open, setOpen] = useState(false);
@@ -75,6 +81,7 @@ export function SelectField({
     if (!custom) {
         return (
             <select
+                id={id}
                 className={cn('select', className)}
                 aria-label={ariaLabel}
                 value={value}
@@ -137,6 +144,7 @@ export function SelectField({
     return (
         <div className={cn('dropdown select-field', className)} ref={ref}>
             <button
+                id={id}
                 type="button"
                 className={cn('select select-field-btn', value === '' && 'is-empty')}
                 aria-haspopup="listbox"

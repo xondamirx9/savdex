@@ -41,41 +41,51 @@ interface NavGroup {
     items: NavItem[];
 }
 
-const GROUPS: NavGroup[] = [
-    {
-        items: [
-            { href: routes.cabinet, label: t('cabinet.nav.dashboard'), icon: LayoutDashboard },
-            { href: routes.cabinetListings, label: t('cabinet.nav.listings'), icon: Package, count: 'listings' },
-            { href: routes.cabinetResume, label: t('cabinet.nav.resume'), icon: FileUser },
-            { href: routes.listingCreate, label: t('cabinet.nav.create'), icon: Plus },
-            { href: routes.cabinetItTasks, label: t('cabinet.nav.it_tasks'), icon: Code2 },
-        ],
-    },
-    {
-        title: t('cabinet.nav.contacts_group'),
-        items: [
-            { href: routes.cabinetChats, label: t('cabinet.nav.chats'), icon: MessageSquareText, count: 'chats' },
-            { href: routes.cabinetContacts, label: t('cabinet.nav.contacts'), icon: Users, count: 'contacts' },
-            { href: routes.cabinetIncoming, label: t('cabinet.nav.incoming'), icon: Eye, count: 'incoming' },
-        ],
-    },
-    {
-        title: t('cabinet.nav.growth_group'),
-        items: [
-            { href: routes.cabinetAnalytics, label: t('cabinet.nav.analytics'), icon: BarChart3 },
-            { href: routes.cabinetPromo, label: t('cabinet.nav.promo'), icon: Rocket },
-            { href: routes.cabinetReviews, label: t('cabinet.nav.reviews'), icon: Star, count: 'reviews' },
-        ],
-    },
-    {
-        title: t('cabinet.nav.account_group'),
-        items: [
-            { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
-            { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
-            { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
-        ],
-    },
-];
+/**
+ * Разделы кабинета.
+ *
+ * Функция, а не константа модуля: t() читает словарь, а словарь
+ * приходит с сервера и ставится при запуске приложения. Значение,
+ * посчитанное при импорте модуля, успевало взяться раньше словаря,
+ * и в меню выходили сами ключи — «cabinet.nav.dashboard».
+ */
+function groups(): NavGroup[] {
+    return [
+        {
+            items: [
+                { href: routes.cabinet, label: t('cabinet.nav.dashboard'), icon: LayoutDashboard },
+                { href: routes.cabinetListings, label: t('cabinet.nav.listings'), icon: Package, count: 'listings' },
+                { href: routes.cabinetResume, label: t('cabinet.nav.resume'), icon: FileUser },
+                { href: routes.listingCreate, label: t('cabinet.nav.create'), icon: Plus },
+                { href: routes.cabinetItTasks, label: t('cabinet.nav.it_tasks'), icon: Code2 },
+            ],
+        },
+        {
+            title: t('cabinet.nav.contacts_group'),
+            items: [
+                { href: routes.cabinetChats, label: t('cabinet.nav.chats'), icon: MessageSquareText, count: 'chats' },
+                { href: routes.cabinetContacts, label: t('cabinet.nav.contacts'), icon: Users, count: 'contacts' },
+                { href: routes.cabinetIncoming, label: t('cabinet.nav.incoming'), icon: Eye, count: 'incoming' },
+            ],
+        },
+        {
+            title: t('cabinet.nav.growth_group'),
+            items: [
+                { href: routes.cabinetAnalytics, label: t('cabinet.nav.analytics'), icon: BarChart3 },
+                { href: routes.cabinetPromo, label: t('cabinet.nav.promo'), icon: Rocket },
+                { href: routes.cabinetReviews, label: t('cabinet.nav.reviews'), icon: Star, count: 'reviews' },
+            ],
+        },
+        {
+            title: t('cabinet.nav.account_group'),
+            items: [
+                { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
+                { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
+                { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
+            ],
+        },
+    ];
+}
 
 /**
  * Раскладка кабинета: шапка сайта, боковое меню разделов, содержимое.
@@ -97,6 +107,7 @@ export function CabinetLayout({
     children: ReactNode;
 }) {
     const { auth, flash, counts } = usePage<SharedProps>().props;
+    const GROUPS = groups();
     const path = typeof window !== 'undefined' ? window.location.pathname : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
 

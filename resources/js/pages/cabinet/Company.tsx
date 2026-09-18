@@ -4,6 +4,7 @@ import { Check, Eye, FileText, Info, Pencil, Plus, Trash2, Upload, X } from 'luc
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/useConfirm';
 import { FileUploadModal } from '@/components/cabinet/FileUploadModal';
+import { SelectField } from '@/components/SelectField';
 import { Panel, Tabs } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
@@ -394,40 +395,30 @@ export default function CompanyProfile({
                             <label className="label" htmlFor="p-country">
                                 {t('cabinet.company.country')}
                             </label>
-                            <select
+                            <SelectField
                                 id="p-country"
-                                className="select"
-                                value={form.data.country_id ?? ''}
-                                onChange={(e) => {
-                                    form.setData('country_id', e.target.value ? Number(e.target.value) : null);
+                                ariaLabel={t('cabinet.company.country')}
+                                value={String(form.data.country_id ?? '')}
+                                onChange={(value) => {
+                                    form.setData('country_id', value ? Number(value) : null);
                                     form.setData('city_id', null);
                                 }}
-                            >
-                                <option value="">{t('cabinet.company.country_none')}</option>
-                                {countries.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
+                                placeholder={t('cabinet.company.country_none')}
+                                options={countries.map((c) => ({ value: String(c.id), label: c.name }))}
+                            />
                         </div>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-city">
                                 {t('cabinet.company.city')}
                             </label>
-                            <select
+                            <SelectField
                                 id="p-city"
-                                className="select"
-                                value={form.data.city_id ?? ''}
-                                onChange={(e) => form.setData('city_id', e.target.value ? Number(e.target.value) : null)}
-                            >
-                                <option value="">{t('cabinet.company.city_none')}</option>
-                                {availableCities.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
+                                ariaLabel={t('cabinet.company.city')}
+                                value={String(form.data.city_id ?? '')}
+                                onChange={(value) => form.setData('city_id', value ? Number(value) : null)}
+                                placeholder={t('cabinet.company.city_none')}
+                                options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
+                            />
                         </div>
                     </div>
 
@@ -450,36 +441,29 @@ export default function CompanyProfile({
                             <label className="label" htmlFor="p-type">
                                 {t('cabinet.company.type')}
                             </label>
-                            <select
+                            <SelectField
                                 id="p-type"
-                                className="select"
+                                ariaLabel={t('cabinet.company.type')}
                                 value={form.data.type ?? ''}
-                                onChange={(e) => form.setData('type', e.target.value)}
-                            >
-                                {TYPES.map((value) => (
-                                    <option key={value} value={value}>
-                                        {t(`cabinet.company.type_${value}`)}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => form.setData('type', value)}
+                                options={TYPES.map((value) => ({
+                                    value,
+                                    label: t(`cabinet.company.type_${value}`),
+                                }))}
+                            />
                         </div>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-emp">
                                 {t('cabinet.company.employees')}
                             </label>
-                            <select
+                            <SelectField
                                 id="p-emp"
-                                className="select"
+                                ariaLabel={t('cabinet.company.employees')}
                                 value={form.data.employees_range ?? ''}
-                                onChange={(e) => form.setData('employees_range', e.target.value)}
-                            >
-                                <option value="">{t('cabinet.company.not_set')}</option>
-                                {EMPLOYEE_RANGES.map((r) => (
-                                    <option key={r} value={r}>
-                                        {r}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => form.setData('employees_range', value)}
+                                placeholder={t('cabinet.company.not_set')}
+                                options={EMPLOYEE_RANGES.map((r) => ({ value: r, label: r }))}
+                            />
                         </div>
                     </div>
 
@@ -874,18 +858,19 @@ export default function CompanyProfile({
                                     <label className="label" htmlFor="ct-type">
                                         {t('cabinet.company.contact_type')}
                                     </label>
-                                    <select
+                                    <SelectField
                                         id="ct-type"
-                                        className="select"
+                                        ariaLabel={t('cabinet.company.contact_type')}
                                         value={contactForm.data.type}
-                                        onChange={(e) => contactForm.setData('type', e.target.value)}
-                                    >
-                                        <option value="phone">{t('cabinet.company.contact_phone')}</option>
-                                        <option value="email">{t('cabinet.company.contact_email')}</option>
-                                        <option value="telegram">Telegram</option>
-                                        <option value="whatsapp">WhatsApp</option>
-                                        <option value="website">{t('cabinet.company.website')}</option>
-                                    </select>
+                                        onChange={(value) => contactForm.setData('type', value)}
+                                        options={[
+                                            { value: 'phone', label: t('cabinet.company.contact_phone') },
+                                            { value: 'email', label: t('cabinet.company.contact_email') },
+                                            { value: 'telegram', label: 'Telegram' },
+                                            { value: 'whatsapp', label: 'WhatsApp' },
+                                            { value: 'website', label: t('cabinet.company.website') },
+                                        ]}
+                                    />
                                 </div>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="ct-value">

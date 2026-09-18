@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { Building2, CalendarDays, CheckCircle2, Code2, ExternalLink, MessageSquareText, Search, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { BoardFilter } from '@/components/BoardFilter';
+import { SelectField } from '@/components/SelectField';
 import { TaskCover } from '@/components/TaskCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
@@ -49,8 +50,18 @@ interface Props {
         current_page: number;
         last_page: number;
     };
-    filters: { q: string; type: string; done: boolean };
-    types: { code: string; label: string }[];
+    filters: {
+        q: string;
+        type: string;
+        done: boolean;
+        city: number | null;
+        verified: boolean;
+        with_budget: boolean;
+    };
+    /** Направления услуг: у IT есть виды внутри, у остальных — нет */
+    types: { code: string; label: string; children: { code: string; label: string }[] }[];
+    /** Только города, где задачи действительно есть */
+    cities: { id: number; name: string }[];
     total: number;
     viewer: { guest: boolean; provider: boolean };
 }
@@ -171,7 +182,7 @@ export function TaskCard({ row }: { row: TaskRow }) {
     );
 }
 
-export default function ItTasksIndex({ tasks, filters, types, total, viewer }: Props) {
+export default function ItTasksIndex({ tasks, filters, types, cities, total, viewer }: Props) {
     const [q, setQ] = useState(filters.q);
 
     function apply(next: Partial<Props['filters']>) {
@@ -204,9 +215,45 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                         onPick={(type) => apply({ type })}
                         options={[
                             { id: '', label: t('it_tasks.all_types') },
-                            ...types.map((type) => ({ id: type.code, label: type.label })),
+                            ...types.map((type) => ({
+                                id: type.code,
+                                label: type.label,
+                                children: type.children.map((child) => ({ id: child.code, label: child.label })),
+                            })),
                         ]}
-                    />
+                    >
+                        {cities.length > 0 && (
+                            <div className="board-group">
+                                <span className="board-group-title">{t('it_tasks.city')}</span>
+                                <SelectField
+                                    ariaLabel={t('it_tasks.city')}
+                                    placeholder={t('it_tasks.city_any')}
+                                    value={filters.city === null ? '' : String(filters.city)}
+                                    onChange={(value) => apply({ city: value === '' ? null : Number(value) })}
+                                    options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
+                                />
+                            </div>
+                        )}
+
+                        <div className="board-group">
+                            <label className="check">
+                                <input
+                                    type="checkbox"
+                                    checked={filters.verified}
+                                    onChange={(e) => apply({ verified: e.target.checked })}
+                                />
+                                {t('it_tasks.verified_only')}
+                            </label>
+                            <label className="check mt-12">
+                                <input
+                                    type="checkbox"
+                                    checked={filters.with_budget}
+                                    onChange={(e) => apply({ with_budget: e.target.checked })}
+                                />
+                                {t('it_tasks.with_budget')}
+                            </label>
+                        </div>
+                    </BoardFilter>
 
                     <div className="board-main">
                         <div className="toolbar">

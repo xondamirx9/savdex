@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\CompanyTypes\Schemas;
 
-use App\Filament\Resources\Categories\Schemas\CategoryForm;
+use App\Support\Locales;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -56,7 +56,7 @@ class CompanyTypeForm
                         ->schema([
                             Select::make('locale')
                                 ->label('Язык')
-                                ->options(CategoryForm::LOCALES)
+                                ->options(Locales::options())
                                 ->required()
                                 ->distinct()
                                 ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
@@ -69,7 +69,7 @@ class CompanyTypeForm
                         ->columns(2)
                         ->defaultItems(1)
                         ->addActionLabel('Добавить язык')
-                        ->itemLabel(fn (array $state): ?string => CategoryForm::LOCALES[$state['locale'] ?? ''] ?? null),
+                        ->itemLabel(fn (array $state): ?string => Locales::options()[$state['locale'] ?? ''] ?? null),
                 ]),
         ]);
     }

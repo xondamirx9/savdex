@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Categories\Schemas;
 
 use App\Models\Category;
+use App\Support\Locales;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -21,15 +22,6 @@ use Filament\Schemas\Schema;
  */
 class CategoryForm
 {
-    /** Языки площадки (§13 ТЗ). Русский обязателен как запасной. */
-    public const LOCALES = [
-        'ru' => 'Русский',
-        'uz' => 'Oʻzbekcha',
-        'en' => 'English',
-        'zh' => '中文',
-        'tr' => 'Türkçe',
-    ];
-
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -85,7 +77,7 @@ class CategoryForm
                         ->schema([
                             Select::make('locale')
                                 ->label('Язык')
-                                ->options(self::LOCALES)
+                                ->options(Locales::options())
                                 ->required()
                                 ->distinct()
                                 ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
@@ -98,7 +90,7 @@ class CategoryForm
                         ->columns(2)
                         ->defaultItems(1)
                         ->addActionLabel('Добавить язык')
-                        ->itemLabel(fn (array $state): ?string => self::LOCALES[$state['locale'] ?? ''] ?? null),
+                        ->itemLabel(fn (array $state): ?string => Locales::options()[$state['locale'] ?? ''] ?? null),
                 ]),
         ]);
     }

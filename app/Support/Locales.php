@@ -50,6 +50,21 @@ final class Locales
         return array_keys(self::ALL);
     }
 
+    /**
+     * Язык => подпись, для выпадающих списков в админке.
+     *
+     * Формы справочников (категории, страны, города) задают переводы
+     * репитером по языкам, и список языков у всех обязан быть один:
+     * два списка разошлись бы на первом же новом языке, а разойдясь,
+     * дали бы справочник, переведённый наполовину.
+     *
+     * @return array<string, string>
+     */
+    public static function options(): array
+    {
+        return array_map(fn (array $locale): string => $locale['label'], self::ALL);
+    }
+
     /** Языки, у которых в адресе есть префикс. */
     public static function prefixed(): array
     {

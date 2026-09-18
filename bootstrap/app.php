@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\CanonicalHost;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LocalizeUrl;
@@ -34,6 +35,13 @@ return Application::configure(basePath: dirname(__DIR__))
          * и перенаправление, собранное после него, теряло бы язык.
          */
         $middleware->prepend(CanonicalHost::class);
+
+        /*
+         * Самым первым: отказ коммерческим SEO-роботам. Смысл в том,
+         * чтобы не дойти ни до маршрутизации, ни до сессии, ни до
+         * базы — процесс освобождается сразу и достаётся человеку.
+         */
+        $middleware->prepend(BlockGreedyCrawlers::class);
 
         /*
          * На хостинге приложение стоит за обратным прокси (Render,
