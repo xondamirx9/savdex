@@ -133,6 +133,8 @@ final class ImportLanguage
         'employees_range' => ['сотрудников', 'количество сотрудников', 'численность', 'штат', 'персонал',
             'employees', 'staff', 'headcount', 'employees count',
             'xodimlar', 'xodimlar soni', 'çalışan sayısı', 'personel', '员工'],
+
+        'country' => ['страна', 'страна компании', 'country', 'davlat', 'mamlakat', 'ülke', '国家'],
     ];
 
     /**

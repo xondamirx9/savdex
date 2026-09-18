@@ -40,10 +40,34 @@ class CompanyNameStyle
     }
 
     /**
+     * Корни, по которым узнаётся тип компании, на пяти языках.
+     *
+     * Порядок важен: «производство и экспорт» — это производитель,
+     * который ещё и вывозит, а не торговый дом, поэтому производство
+     * проверяется раньше торговли.
+     *
+     * @var array<string, list<string>>
+     */
+    private const TYPE_STEMS = [
+        'manufacturer' => ['производ', 'изготов', 'завод', 'фабрик', 'manufact', 'factory', 'producer',
+            'ishlab chiqar', 'üretim', 'üretici', 'imalat', '制造', '生产'],
+        'distributor' => ['дистриб', 'distrib', 'дилер', 'dealer', 'bayi', '经销'],
+        'importer' => ['импорт', 'import', 'ithalat', '进口'],
+        'trader' => ['торгов', 'экспорт', 'trade', 'trading', 'export', 'savdo', 'eksport',
+            'ticaret', 'ihracat', '贸易', '出口'],
+        'service' => ['услуг', 'сервис', 'service', 'xizmat', 'hizmet', '服务'],
+    ];
+
+    /**
      * Ключ типа компании из вольной записи в таблице импорта.
      *
-     * «trading» и «торговая» — это trader из справочника; неизвестное
-     * значение остаётся как есть и всплывёт на карточке, а не потеряется.
+     * Справочник знает пять типов, а в таблице пишут как придётся:
+     * «производство», «Производство и экспорт», «üretim», «IT».
+     * Поэтому узнаём не точное слово, а корень: «производ» — это
+     * manufacturer на любом языке и в любом падеже.
+     *
+     * Совсем незнакомое значение остаётся как есть: оно всплывёт
+     * на карточке и в админке, а не потеряется.
      */
     public static function typeKey(?string $raw): ?string
     {
@@ -53,13 +77,25 @@ class CompanyNameStyle
             return null;
         }
 
-        return match ($value) {
-            'trading', 'trade', 'торговая', 'торговая компания' => 'trader',
-            'производитель' => 'manufacturer',
-            'дистрибьютор' => 'distributor',
-            'импортёр', 'импортер' => 'importer',
-            'услуги', 'services' => 'service',
-            default => $value,
+        // Точные значения — первыми: «it» коротко и внутри слов
+        // встречается слишком часто, чтобы искать его корнем
+        $exact = match ($value) {
+            'it', 'ит', 'айти', 'it-услуги', 'it services' => 'service',
+            default => null,
         };
+
+        if ($exact !== null) {
+            return $exact;
+        }
+
+        foreach (self::TYPE_STEMS as $code => $stems) {
+            foreach ($stems as $stem) {
+                if (str_contains($value, $stem)) {
+                    return $code;
+                }
+            }
+        }
+
+        return $value;
     }
 }

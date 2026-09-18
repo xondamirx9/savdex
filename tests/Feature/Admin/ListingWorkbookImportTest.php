@@ -157,8 +157,16 @@ class ListingWorkbookImportTest extends TestCase
         Storage::disk('public')->assertMissing($old);
     }
 
+    /**
+     * Непонятная ячейка пропускается, а товар загружается.
+     *
+     * Файл на триста позиций не должен разворачиваться из-за опечатки
+     * в одной клетке: объявление ждёт проверки в админке, и модератор
+     * дочинит категорию там, где видит остальную карточку. Пропуск
+     * при этом записан в отчёт — тихо потерянная категория хуже.
+     */
     #[Test]
-    public function незнакомая_категория_останавливает_строку_с_причиной(): void
+    public function незнакомая_категория_пропускается_а_товар_загружается(): void
     {
         Company::factory()->create(['name' => 'ООО «Стройбаза»']);
 
@@ -169,10 +177,16 @@ class ListingWorkbookImportTest extends TestCase
 
         $result = $this->import($workbook);
 
-        $this->assertSame(0, $result['created']);
-        $this->assertCount(1, $result['errors']);
-        $this->assertStringContainsString('Строка 2', $result['errors'][0]);
-        $this->assertStringContainsString('Строительство', $result['errors'][0]);
+        $this->assertSame(1, $result['created']);
+        $this->assertSame([], $result['errors']);
+        $this->assertCount(1, $result['notes']);
+        $this->assertStringContainsString('Строка 2', $result['notes'][0]);
+        $this->assertStringContainsString('Строительство', $result['notes'][0]);
+
+        $listing = Listing::query()->firstOrFail();
+
+        $this->assertSame('Профнастил С8', $listing->title);
+        $this->assertNull($listing->category_id);
     }
 
     #[Test]
@@ -547,8 +561,9 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertSame('Предоплата 50 %', $listing->payment_terms);
     }
 
+    /** Валюта не из списка — цена остаётся в сумах, товар загружается. */
     #[Test]
-    public function незнакомая_валюта_останавливает_строку_с_причиной(): void
+    public function незнакомая_валюта_пропускается(): void
     {
         Company::factory()->create(['name' => 'ООО «Стройбаза»']);
 
@@ -559,9 +574,14 @@ class ListingWorkbookImportTest extends TestCase
 
         $result = $this->import($workbook);
 
-        $this->assertSame(0, $result['created']);
-        $this->assertCount(1, $result['errors']);
-        $this->assertStringContainsString('XYZ', $result['errors'][0]);
+        $this->assertSame(1, $result['created']);
+        $this->assertSame([], $result['errors']);
+        $this->assertStringContainsString('XYZ', $result['notes'][0]);
+
+        $listing = Listing::query()->firstOrFail();
+
+        $this->assertSame('100.00', $listing->price);
+        $this->assertSame('UZS', $listing->currency);
     }
 
     #[Test]
@@ -667,13 +687,16 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertSame(200.0, (float) $second->fresh()->price);
     }
 
+    /**
+     * Длинный текст обрезается по границе слова, а не отменяет строку:
+     * у заголовка лишние символы — это хвост, а не смысл, и терять
+     * из-за него товар с ценой и фотографиями несоразмерно.
+     */
     #[Test]
-    public function слишком_длинный_текст_останавливает_строку(): void
+    public function слишком_длинный_текст_обрезается_с_заметкой(): void
     {
         Company::factory()->create(['name' => 'ООО «Стройбаза»']);
 
-        // Форма админки не примет заголовок длиннее 90 знаков —
-        // значит, и книга не должна его класть
         $workbook = $this->workbook(
             rows: [2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']],
             pictures: [],
@@ -682,10 +705,15 @@ class ListingWorkbookImportTest extends TestCase
 
         $result = $this->import($workbook);
 
-        $this->assertSame(0, $result['created']);
-        $this->assertCount(1, $result['errors']);
-        $this->assertStringContainsString('«en»', $result['errors'][0]);
-        $this->assertStringContainsString('90', $result['errors'][0]);
+        $this->assertSame(1, $result['created']);
+        $this->assertSame([], $result['errors']);
+        $this->assertStringContainsString('«en»', $result['notes'][0]);
+        $this->assertStringContainsString('90', $result['notes'][0]);
+
+        $english = Listing::query()->firstOrFail()->title_i18n['en'];
+
+        $this->assertLessThanOrEqual(90, mb_strlen($english));
+        $this->assertStringStartsWith('Brick Brick', $english);
     }
 
     // ── Сборка книги ────────────────────────────────────────────

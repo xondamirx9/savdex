@@ -10,7 +10,6 @@ use App\Filament\Resources\Tenders\TenderResource;
 use App\Models\Category;
 use App\Models\Tender;
 use App\Models\User;
-use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -202,19 +201,37 @@ class TenderAdminTest extends TestCase
         $this->assertSame($mebelOther->id, Tender::query()->firstOrFail()->category_id);
     }
 
+    /**
+     * Ячейка, которую загрузка не понимает, пропускается — закупка
+     * загружается. Файл на триста строк не должен отменяться из-за
+     * опечатки в одной категории: пустая категория видна в списке
+     * админки и правится там, потерянная закупка не видна нигде.
+     */
     #[Test]
-    public function незнакомая_категория_останавливает_строку_с_понятной_причиной(): void
+    public function незнакомая_категория_и_страна_пропускаются_а_строка_грузится(): void
     {
         $this->actingAs($this->admin());
         Category::factory()->named('Стройматериалы')->create();
 
-        $this->expectException(RowImportFailedException::class);
-        $this->expectExceptionMessage('Категория «Строительство» не найдена в каталоге');
-
         $this->import([
             'Заголовок' => 'Поставка цемента',
             'Категория' => 'Строительство',
+            'Страна' => 'Мордор',
+            'Почта' => '—',
+            'Телефон' => 'нет данных',
+            'Ссылка на источник' => 'уточняется',
+            'Бюджет' => '250 000 000',
         ]);
+
+        $tender = Tender::query()->firstOrFail();
+
+        $this->assertSame('Поставка цемента', $tender->title);
+        $this->assertNull($tender->category_id);
+        $this->assertNull($tender->country_id);
+        $this->assertNull($tender->contact_email);
+        $this->assertNull($tender->contact_phone);
+        $this->assertNull($tender->source_url);
+        $this->assertSame(250000000.0, (float) $tender->budget);
     }
 
     #[Test]
