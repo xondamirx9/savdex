@@ -6,9 +6,11 @@ namespace App\Providers;
 
 use App\Models\Broadcast;
 use App\Models\Category;
+use App\Models\City;
 use App\Models\Company;
 use App\Models\CompanyDocument;
 use App\Models\CompanyType;
+use App\Models\Country;
 use App\Models\CreditPack;
 use App\Models\Crm\Communication;
 use App\Models\Crm\Contact;
@@ -150,6 +152,8 @@ class AppServiceProvider extends ServiceProvider
             LandingBlock::class => 'content',
             Category::class => 'catalogs',
             CompanyType::class => 'catalogs',
+            Country::class => 'catalogs',
+            City::class => 'catalogs',
             Broadcast::class => 'broadcasts',
             Setting::class => 'settings',
         ];

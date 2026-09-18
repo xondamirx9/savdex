@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Categories\Schemas;
+namespace App\Filament\Resources\Countries\Schemas;
 
-use App\Models\Category;
 use App\Support\Locales;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -14,57 +13,56 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 /**
- * Форма категории.
+ * Форма страны.
  *
  * Названия на пяти языках задаются здесь же, а не отдельным экраном:
- * категория без перевода отображается своим слагом, и такую забывают
- * дозаполнить — заметно это становится уже на витрине.
+ * страна без перевода показывается своим кодом («uz» вместо
+ * «Узбекистан»), и такую забывают дозаполнить — заметно это
+ * становится уже на экране регистрации.
  */
-class CategoryForm
+class CountryForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Категория')
+            Section::make('Страна')
                 ->schema([
-                    Select::make('parent_id')
-                        ->label('Родительская категория')
-                        ->relationship(
-                            'parent',
-                            'slug',
-                            // Подкатегорию нельзя вложить в подкатегорию:
-                            // дерево ровно на два уровня, третий сломает
-                            // и фильтры каталога, и мастер объявления
-                            fn ($query) => $query->whereNull('parent_id'),
-                        )
-                        ->getOptionLabelFromRecordUsing(fn (Category $record): string => $record->name())
-                        ->searchable()
-                        ->preload()
-                        ->helperText('Пусто — это раздел верхнего уровня'),
-
-                    TextInput::make('slug')
-                        ->label('Адрес (slug)')
+                    TextInput::make('code')
+                        ->label('Код страны')
                         ->required()
-                        ->maxLength(190)
+                        ->minLength(2)
+                        ->maxLength(2)
                         ->unique(ignoreRecord: true)
-                        ->helperText('Латиницей, участвует в адресе страницы'),
+                        // Модель всё равно приводит код к нижнему регистру
+                        // при сохранении, но человек должен видеть это
+                        // сразу, а не обнаруживать после сохранения
+                        ->extraInputAttributes(['style' => 'text-transform: lowercase'])
+                        ->helperText('Две буквы по ISO 3166-1: uz, kz, cn. Участвует в проверке ИНН'),
 
-                    TextInput::make('icon')
-                        ->label('Иконка')
-                        ->maxLength(64)
-                        ->helperText('Имя иконки Lucide, например package'),
+                    TextInput::make('phone_code')
+                        ->label('Телефонный код')
+                        ->required()
+                        ->maxLength(8)
+                        ->helperText('Со знаком плюс: +998'),
+
+                    TextInput::make('currency_code')
+                        ->label('Валюта')
+                        ->required()
+                        ->minLength(3)
+                        ->maxLength(3)
+                        ->helperText('Три буквы по ISO 4217: UZS, KZT, USD'),
 
                     TextInput::make('sort')
                         ->label('Порядок')
                         ->numeric()
                         ->default(0)
                         ->required()
-                        ->helperText('Меньше — выше в списке'),
+                        ->helperText('Меньше — выше в списке. Внутри одного порядка страны идут по алфавиту'),
 
                     Toggle::make('is_active')
-                        ->label('Активна')
+                        ->label('Показывать при регистрации')
                         ->default(true)
-                        ->helperText('Выключенная скрыта из каталога и мастера объявлений'),
+                        ->helperText('Выключенная страна исчезает из выбора, но у компаний, которые её уже выбрали, остаётся'),
                 ])
                 ->columns(2),
 
