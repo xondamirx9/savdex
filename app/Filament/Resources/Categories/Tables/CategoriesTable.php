@@ -66,9 +66,25 @@ class CategoriesTable
             ])
             ->defaultSort('sort')
             ->filters([
+                /*
+                 * В списке — названия разделов, а не слаги: фильтр
+                 * показывал «stroymateriali» и «gotovaya-odezhda», и
+                 * человек, который ищет «Стройматериалы», их там
+                 * не находил. Переводы грузятся сразу: ленивую
+                 * загрузку проект запрещает, и name() без них падает.
+                 */
                 SelectFilter::make('parent_id')
                     ->label('Раздел')
-                    ->relationship('parent', 'slug'),
+                    ->relationship(
+                        'parent',
+                        'slug',
+                        // Только верхний уровень: подкатегория
+                        // родителем быть не может — дерево на два уровня
+                        fn ($query) => $query->whereNull('parent_id')->with('translations'),
+                    )
+                    ->getOptionLabelFromRecordUsing(fn (Category $record): string => $record->name())
+                    ->searchable()
+                    ->preload(),
 
                 TernaryFilter::make('is_active')->label('Активна'),
             ])
