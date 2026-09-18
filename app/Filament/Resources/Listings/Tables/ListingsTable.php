@@ -49,6 +49,7 @@ class ListingsTable
         Listing::STATUS_DRAFT => 'Черновик',
         Listing::STATUS_MODERATION => 'На проверке',
         Listing::STATUS_ACTIVE => 'Активно',
+        Listing::STATUS_NEEDS_CHANGES => 'На исправлении',
         Listing::STATUS_REJECTED => 'Отклонено',
         Listing::STATUS_EXPIRED => 'Истекло',
         Listing::STATUS_ARCHIVED => 'Снято',
@@ -207,6 +208,7 @@ class ListingsTable
                     ->color(fn (string $state): string => match ($state) {
                         Listing::STATUS_ACTIVE => 'success',
                         Listing::STATUS_MODERATION => 'warning',
+                        Listing::STATUS_NEEDS_CHANGES => 'warning',
                         Listing::STATUS_REJECTED => 'danger',
                         default => 'gray',
                     }),
@@ -269,6 +271,54 @@ class ListingsTable
                         Notification::make()->title('Объявление опубликовано')->success()->send();
                     }),
 
+                /*
+                 * Вернуть на исправление — не мягкая версия отказа,
+                 * а другой исход (§5.7 ТЗ).
+                 *
+                 * Автор правит это же объявление и публикует снова.
+                 * Отклонённое на витрину не вернётся вовсе — подавать
+                 * нужно заново. Пока статус был один, опечатка в цене
+                 * и спам получали одинаковый ответ.
+                 */
+                Action::make('returnForChanges')
+                    ->label('Вернуть на исправление')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('warning')
+                    ->visible(fn (Listing $record): bool => in_array(
+                        $record->status,
+                        [Listing::STATUS_MODERATION, Listing::STATUS_ACTIVE],
+                        true,
+                    ) && self::canModerate($record))
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('Что исправить')
+                            ->required()
+                            ->minLength(10)
+                            ->rows(3)
+                            // Без этого текста человек не знает, что менять,
+                            // и присылает то же самое второй раз
+                            ->helperText('Текст увидит владелец объявления. Напишите, что конкретно исправить.'),
+                    ])
+                    ->action(function (Listing $record, array $data): void {
+                        $record->forceFill([
+                            'status' => Listing::STATUS_NEEDS_CHANGES,
+                            'moderation_note' => $data['reason'],
+                        ])->save();
+
+                        app(Notifier::class)->company(
+                            $record->company,
+                            'moderation',
+                            "Объявление «{$record->title}» возвращено на исправление",
+                            [
+                                'tone' => 'warning',
+                                'body' => $data['reason'],
+                                'url' => '/cabinet/listings?status=needs_changes',
+                            ],
+                        );
+
+                        Notification::make()->title('Объявление возвращено автору')->warning()->send();
+                    }),
+
                 Action::make('reject')
                     ->label('Отклонить')
                     ->icon('heroicon-o-x-circle')
@@ -284,9 +334,10 @@ class ListingsTable
                             ->required()
                             ->minLength(10)
                             ->rows(3)
-                            // Причина уходит человеку дословно: он должен
-                            // понять, что именно исправить
-                            ->helperText('Текст увидит владелец объявления. Напишите, что конкретно исправить.'),
+                            // Отклонение окончательно: это же объявление
+                            // на витрину не вернётся. Если дело поправимо —
+                            // соседнее решение, «вернуть на исправление»
+                            ->helperText('Текст увидит владелец. Объявление на витрину не вернётся — если дело поправимо, верните на исправление.'),
                     ])
                     ->action(function (Listing $record, array $data): void {
                         $record->forceFill([

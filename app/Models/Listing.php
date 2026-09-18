@@ -44,7 +44,18 @@ class Listing extends Model
 
     public const STATUS_ACTIVE = 'active';
 
+    /**
+     * Отклонено: на витрину не вернётся, подавать нужно заново.
+     *
+     * Отличается от needs_changes намеренно. Одно решение означает
+     * «поправьте вот это», другое — «так публиковать нельзя». Пока
+     * статус был один, спам и опечатка в цене получали одинаковый
+     * ответ, а автор в обоих случаях жал «опубликовать заново».
+     */
     public const STATUS_REJECTED = 'rejected';
+
+    /** Возвращено автору: правит и публикует снова, тем же объявлением. */
+    public const STATUS_NEEDS_CHANGES = 'needs_changes';
 
     public const STATUS_EXPIRED = 'expired';
 
