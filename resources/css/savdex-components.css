@@ -1667,7 +1667,20 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 /* ── Прозрачная шапка поверх фотографии (главная) ─────────────
    Обёртка выводит шапку из потока и кладёт на первый экран:
    фон просвечивает, белый текст читается на затемнении hero. */
-.chrome-overlay{position:absolute;top:0;left:0;right:0;z-index:60}
+/* Шапка первого экрана закреплена, как и на остальных страницах
+   (.hd там sticky). absolute уводил её вверх вместе с кадром, и на
+   длинной главной до поиска и меню приходилось возвращаться
+   прокруткой в самый верх. */
+.chrome-overlay{position:fixed;top:0;left:0;right:0;z-index:60}
+/* Ниже первого экрана под шапкой белая страница, и прозрачная шапка
+   на ней читается как слова, висящие поверх текста: нужен фон. Тот
+   же тёмно-синий, что у кадра, — подписи в шапке уже белые, и
+   перекрашивать их не приходится. */
+.chrome-overlay.is-solid .hd{background:var(--navy-900);border-bottom-color:rgba(255,255,255,.14);
+  box-shadow:0 6px 20px rgba(8,18,40,.28)}
+/* Полоса тестового режима с прокруткой уезжает — как и на остальных
+   страницах, где она лежит над прилипающей шапкой, а не внутри неё */
+.chrome-overlay.is-solid .topbar{display:none}
 .chrome-overlay .hd{position:static;background:transparent;border-bottom:1px solid rgba(255,255,255,.14);box-shadow:none}
 .chrome-overlay .hd-logo-name{color:#fff}
 .chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
