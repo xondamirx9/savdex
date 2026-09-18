@@ -161,23 +161,48 @@ class ListingPublishTest extends TestCase
     }
 
     /**
-     * Отклонённое объявление публикуется заново в один клик — тоже
-     * без очереди, но с проверкой лимита тарифа: иначе отклонение
+     * Возвращённое на исправление публикуется заново в один клик —
+     * тоже без очереди, но с проверкой лимита тарифа: иначе возврат
      * и повторная публикация обходили бы его.
      */
     #[Test]
-    public function отклонённое_публикуется_заново_сразу(): void
+    public function возвращённое_на_исправление_публикуется_заново_сразу(): void
     {
-        $rejected = $this->draft(['status' => Listing::STATUS_REJECTED, 'moderation_note' => 'Мало данных']);
+        $returned = $this->draft([
+            'status' => Listing::STATUS_NEEDS_CHANGES,
+            'moderation_note' => 'Мало данных',
+        ]);
+
+        $this->actingAs($this->user)
+            ->post("/cabinet/listings/{$returned->id}/resubmit")
+            ->assertSessionHas('success');
+
+        $returned->refresh();
+
+        $this->assertSame(Listing::STATUS_ACTIVE, $returned->status);
+        $this->assertNull($returned->moderation_note);
+    }
+
+    /**
+     * Отклонённое — не публикуется заново (§5.7 ТЗ).
+     *
+     * Раньше публиковалось: модератор снимал объявление, автор
+     * возвращал его одним нажатием неизменным, и так по кругу.
+     * Решение модератора не значило ничего.
+     */
+    #[Test]
+    public function отклонённое_заново_не_публикуется(): void
+    {
+        $rejected = $this->draft([
+            'status' => Listing::STATUS_REJECTED,
+            'moderation_note' => 'Запрещённый товар',
+        ]);
 
         $this->actingAs($this->user)
             ->post("/cabinet/listings/{$rejected->id}/resubmit")
-            ->assertSessionHas('success');
+            ->assertSessionHas('error');
 
-        $rejected->refresh();
-
-        $this->assertSame(Listing::STATUS_ACTIVE, $rejected->status);
-        $this->assertNull($rejected->moderation_note);
+        $this->assertSame(Listing::STATUS_REJECTED, $rejected->fresh()->status);
     }
 
     /**

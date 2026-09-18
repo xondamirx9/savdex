@@ -31,6 +31,7 @@ class ListingController extends Controller
     private const TABS = [
         Listing::STATUS_ACTIVE,
         Listing::STATUS_DRAFT,
+        Listing::STATUS_NEEDS_CHANGES,
         Listing::STATUS_EXPIRED,
         Listing::STATUS_REJECTED,
     ];
@@ -138,6 +139,13 @@ class ListingController extends Controller
     {
         $listing = $this->ownedListing($request, $id);
         $company = $listing->company;
+
+        // Продление — четвёртый путь в статус «активно», и через него
+        // отклонённое объявление возвращалось на витрину в обход
+        // повторной публикации
+        if ($listing->status === Listing::STATUS_REJECTED) {
+            return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+        }
 
         if (! $this->hasFreeSlot($company, [$listing->id])) {
             return back()->with('error', $this->limitMessage($company));
@@ -247,6 +255,16 @@ class ListingController extends Controller
          * по очереди, каждое видя актуальный на свой момент остаток.
          */
         if ($data['action'] === 'renew') {
+            // Отклонённые не продлеваются — иначе запрет обходился бы
+            // выделением галочками
+            $listings = $listings->reject(
+                fn (Listing $listing): bool => $listing->status === Listing::STATUS_REJECTED,
+            );
+
+            if ($listings->isEmpty()) {
+                return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+            }
+
             $limit = $company->plan()->listings_limit;
 
             if ($limit !== null) {
@@ -280,15 +298,27 @@ class ListingController extends Controller
     }
 
     /**
-     * Опубликовать отклонённое объявление заново.
+     * Опубликовать заново объявление, возвращённое на исправление.
      *
-     * Предварительной модерации нет — объявление сразу возвращается
-     * на витрину. Лимит тарифа проверяется как при публикации: иначе
-     * отклонение и повторная публикация обходили бы его.
+     * Только возвращённое. Раньше сюда проходило и отклонённое: автор
+     * жал «опубликовать заново», и снятое модератором объявление
+     * возвращалось на витрину неизменным. Решение модератора не значило
+     * ничего, а спам отличался от опечатки только формулировкой.
+     *
+     * Отклонение окончательно (§5.7 ТЗ): повторная подача — новой
+     * записью, и лимит тарифа она проходит как обычная публикация.
+     *
+     * Предварительной модерации нет — исправленное объявление сразу
+     * возвращается на витрину. Лимит проверяется и здесь: иначе
+     * возврат на исправление обходил бы его.
      */
     public function resubmit(Request $request, int $id): RedirectResponse
     {
         $listing = $this->ownedListing($request, $id);
+
+        if ($listing->status !== Listing::STATUS_NEEDS_CHANGES) {
+            return back()->with('error', __('ui.messages.listing.resubmit_closed'));
+        }
 
         $company = $listing->company;
         $plan = $company->plan();

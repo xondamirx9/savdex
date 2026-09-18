@@ -45,6 +45,9 @@ const STATUS_BADGE: Record<string, string> = {
     moderation: 'badge-neutral',
     draft: 'badge-neutral',
     expired: 'badge-neutral',
+    // Возвращённое — предупреждение, а не отказ: его ещё можно
+    // довести до витрины, и цвет не должен говорить обратное
+    needs_changes: 'badge-warning',
     rejected: 'badge-danger',
     archived: 'badge-neutral',
 };
@@ -177,13 +180,28 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                         </div>
                     )}
 
-                    {status === 'rejected' && listings[0]?.moderation_note && (
+                    {/* Отклонённое и возвращённое — разные исходы, и объяснения
+                        у них разные: одно правят и публикуют снова, другое
+                        подают заново. Замечание к каждому объявлению стоит
+                        в его же строке — здесь общий смысл вкладки */}
+                    {status === 'needs_changes' && listings.length > 0 && (
+                        <div className="alert alert-warning" style={{ marginBottom: 16 }}>
+                            <TriangleAlert aria-hidden className="size-5" />
+                            <div>
+                                <b>{t('cabinet.listings.needs_changes_title')}</b>
+                                <br />
+                                {t('cabinet.listings.needs_changes_text')}
+                            </div>
+                        </div>
+                    )}
+
+                    {status === 'rejected' && listings.length > 0 && (
                         <div className="alert alert-danger" style={{ marginBottom: 16 }}>
                             <TriangleAlert aria-hidden className="size-5" />
                             <div>
-                                <b>{t('cabinet.listings.rejected', { title: listings[0].title })}</b>
+                                <b>{t('cabinet.listings.rejected_title')}</b>
                                 <br />
-                                {t('cabinet.listings.reason', { reason: listings[0].moderation_note })}
+                                {t('cabinet.listings.rejected_text')}
                             </div>
                         </div>
                     )}
@@ -255,6 +273,24 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                             {row.category ?? t('cabinet.listings.no_category')} ·{' '}
                                                             {priceLabel(row)}
                                                         </span>
+                                                        {/* Замечание модератора — у своего объявления.
+                                                            Раньше показывалось только замечание первого
+                                                            в списке, и при трёх возвращённых остальные
+                                                            два своих не видели вовсе */}
+                                                        {row.moderation_note &&
+                                                            (row.status === 'needs_changes' || row.status === 'rejected') && (
+                                                                <>
+                                                                    <br />
+                                                                    <span
+                                                                        className="t-caption"
+                                                                        style={{ color: 'var(--danger)' }}
+                                                                    >
+                                                                        {t('cabinet.listings.reason', {
+                                                                            reason: row.moderation_note,
+                                                                        })}
+                                                                    </span>
+                                                                </>
+                                                            )}
                                                     </span>
                                                 </div>
                                             </td>
@@ -298,7 +334,10 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
 
                                             <td data-label="">
                                                 <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
-                                                    {row.status === 'rejected' ? (
+                                                    {/* Отклонённое на витрину не вернётся — кнопки повторной
+                                                        публикации у него быть не должно, иначе человек жмёт
+                                                        её и получает отказ вместо объявления */}
+                                                    {row.status === 'needs_changes' ? (
                                                         <button
                                                             className="btn btn-primary btn-sm"
                                                             onClick={() =>
