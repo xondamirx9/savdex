@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Banner;
 use App\Models\Broadcast;
 use App\Models\Category;
 use App\Models\City;
@@ -150,6 +151,7 @@ class AppServiceProvider extends ServiceProvider
             Page::class => 'content',
             NewsPost::class => 'content',
             LandingBlock::class => 'content',
+            Banner::class => 'content',
             Category::class => 'catalogs',
             CompanyType::class => 'catalogs',
             Country::class => 'catalogs',
@@ -204,6 +206,23 @@ class AppServiceProvider extends ServiceProvider
     private function configureDatabase(): void
     {
         /*
+         * Только для страниц, не для консоли.
+         *
+         * Порог в полсекунды означает «посетитель ждёт слишком долго».
+         * Для команды он не значит ничего: сидер, обходящий три сотни
+         * городов, обязан потратить это время, а очередь накапливает
+         * его за часы работы одного процесса.
+         *
+         * Пока проверка стояла внутри, каждый деплой заливал журнал
+         * предупреждениями от сидеров, и настоящие — те, что про живые
+         * страницы, — тонули среди них. Предупреждение, которое звучит
+         * всегда, перестают читать.
+         */
+        if ($this->app->runningInConsole()) {
+            return;
+        }
+
+        /*
          * Число запросов отличает «один тяжёлый» от «четырёхсот мелких».
          * Без него полсекунды одинаково выглядят и в том, и в другом
          * случае, а чинятся они совершенно по-разному.
@@ -222,9 +241,7 @@ class AppServiceProvider extends ServiceProvider
                 // обязательно самый медленный, но почти всегда он
                 'на_запросе' => Str::limit(preg_replace('/\s+/', ' ', $query->sql) ?? '', 400),
                 'этот_мс' => (int) round($query->time),
-                'страница' => $this->app->runningInConsole()
-                    ? 'консоль: '.implode(' ', array_slice($_SERVER['argv'] ?? [], 1))
-                    : request()->method().' '.request()->path(),
+                'страница' => request()->method().' '.request()->path(),
             ]);
         });
     }

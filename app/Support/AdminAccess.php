@@ -208,6 +208,14 @@ final class AdminAccess
             'companies.export', 'companies.import',
             'listings.export', 'listings.import', 'users.export',
             'tenders.export', 'tenders.import',
+            /*
+             * Загрузка отзывов пачкой — только администратору,
+             * не модератору. Отзывы складываются в рейтинг, по
+             * которому покупатель решает, с кем работать: файл
+             * на триста строк двигает его сильнее, чем месяц
+             * работы модератора.
+             */
+            'reviews.import',
         ],
         self::FINANCE => [
             'payments.export', 'subscriptions.export', 'finreports.export',
