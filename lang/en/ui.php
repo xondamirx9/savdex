@@ -1942,6 +1942,7 @@ return [
             'reset_sent_whatsapp' => 'If that address is registered and has a phone number, the link has already been sent to WhatsApp.',
             'reset_message' => 'Password change on SAVDEX. Open the link and set a new password: :link — it lasts 60 minutes and works once. If you did not lose your password, simply do not open it.',
             'telegram_linked' => ':name, done: Telegram is linked. The password reset link will arrive here if you lose access to your email.',
+            'telegram_start' => 'This is the SAVDEX bot. It delivers your password reset link if you lose access to your work email. To link Telegram, sign in at savdex.uz, open “Settings” in your account and press “Link Telegram”.',
             'telegram_link_expired' => 'This linking link is no longer valid. Open your account settings and press “Link Telegram” again.',
             'telegram_unlinked' => 'Telegram unlinked.',
             'telegram_unavailable' => 'Telegram linking is not set up on the platform yet.',

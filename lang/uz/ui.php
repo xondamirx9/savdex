@@ -1945,6 +1945,7 @@ return [
             'reset_sent_whatsapp' => 'Agar bu manzil ro‘yxatdan o‘tgan va profilda telefon ko‘rsatilgan bo‘lsa, havola WhatsAppga yuborildi.',
             'reset_message' => 'SAVDEXda parolni almashtirish. Havolani oching va yangi parol qo‘ying: :link — u 60 daqiqa yashaydi va bir marta ishlaydi. Agar parolni yo‘qotmagan bo‘lsangiz, uni ochmang.',
             'telegram_linked' => ':name, tayyor: Telegram ulandi. Pochtaga kirish yo‘qolsa, parolni almashtirish havolasi shu yerga keladi.',
+            'telegram_start' => 'Bu — SAVDEX maydonchasining boti. Ish pochtasiga kirish yoʻqolsa, parolni almashtirish havolasi shu yerga keladi. Telegramni ulash uchun savdex.uz saytiga kiring, kabinetdagi «Sozlamalar»ni oching va «Telegramni ulash» tugmasini bosing.',
             'telegram_link_expired' => 'Ulash havolasi eskirdi. Kabinet sozlamalarini oching va «Telegramni ulash» tugmasini qaytadan bosing.',
             'telegram_unlinked' => 'Telegram uzildi.',
             'telegram_unavailable' => 'Telegram ulash hozircha maydonchada sozlanmagan.',
