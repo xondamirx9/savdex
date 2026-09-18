@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Check, CloudUpload, Package, ShoppingCart, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PhotoUploader, type ListingPhoto } from '@/components/PhotoUploader';
+import { SelectField } from '@/components/SelectField';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
@@ -251,23 +252,18 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 <label className="label" htmlFor="w-cat">
                                     {t('cabinet.wizard.category')} <span className="req">*</span>
                                 </label>
-                                <select
+                                <SelectField
                                     id="w-cat"
-                                    className="select"
-                                    value={data.parent_id ?? ''}
-                                    onChange={(e) => {
-                                        const next = categories.find((c) => c.id === Number(e.target.value));
+                                    ariaLabel={t('cabinet.wizard.category')}
+                                    value={String(data.parent_id ?? '')}
+                                    onChange={(value) => {
+                                        const next = categories.find((c) => c.id === Number(value));
                                         setData('parent_id', next?.id ?? null);
                                         setData('category_id', next?.slug === 'drugoe' ? (next.children[0]?.id ?? null) : null);
                                     }}
-                                >
-                                    <option value="">{t('cabinet.wizard.pick_category')}</option>
-                                    {categories.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder={t('cabinet.wizard.pick_category')}
+                                    options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                                />
                             </div>
 
                             {parent && isOther && (
@@ -294,19 +290,14 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     <label className="label" htmlFor="w-sub">
                                         {t('cabinet.wizard.subcategory')} <span className="req">*</span>
                                     </label>
-                                    <select
+                                    <SelectField
                                         id="w-sub"
-                                        className="select"
-                                        value={data.category_id ?? ''}
-                                        onChange={(e) => setData('category_id', e.target.value ? Number(e.target.value) : null)}
-                                    >
-                                        <option value="">{t('cabinet.wizard.pick_subcategory')}</option>
-                                        {parent.children.map((c) => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        ariaLabel={t('cabinet.wizard.subcategory')}
+                                        value={String(data.category_id ?? '')}
+                                        onChange={(value) => setData('category_id', value ? Number(value) : null)}
+                                        placeholder={t('cabinet.wizard.pick_subcategory')}
+                                        options={parent.children.map((c) => ({ value: String(c.id), label: c.name }))}
+                                    />
                                     {errors.category_id && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.category_id}</p>}
                                 </div>
                             )}
@@ -348,21 +339,16 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                                     {f.label}
                                                 </label>
                                                 {f.type === 'select' ? (
-                                                    <select
+                                                    <SelectField
                                                         id={`w-${f.key}`}
-                                                        className="select"
+                                                        ariaLabel={f.label}
                                                         value={data.attributes[f.key] ?? ''}
-                                                        onChange={(e) =>
-                                                            setData('attributes', { ...data.attributes, [f.key]: e.target.value })
+                                                        onChange={(value) =>
+                                                            setData('attributes', { ...data.attributes, [f.key]: value })
                                                         }
-                                                    >
-                                                        <option value="">{t('cabinet.wizard.not_set')}</option>
-                                                        {f.options.map((o) => (
-                                                            <option key={o} value={o}>
-                                                                {o}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                        placeholder={t('cabinet.wizard.not_set')}
+                                                        options={f.options.map((o) => ({ value: o, label: o }))}
+                                                    />
                                                 ) : (
                                                     <input
                                                         id={`w-${f.key}`}
@@ -434,15 +420,16 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     <label className="label" htmlFor="w-cur">
                                         {t('cabinet.wizard.currency')}
                                     </label>
-                                    <select
+                                    <SelectField
                                         id="w-cur"
-                                        className="select"
+                                        ariaLabel={t('cabinet.wizard.currency')}
                                         value={data.currency}
-                                        onChange={(e) => setData('currency', e.target.value)}
-                                    >
-                                        <option value="UZS">{t('cabinet.wizard.uzs')}</option>
-                                        <option value="USD">{t('cabinet.wizard.usd')}</option>
-                                    </select>
+                                        onChange={(value) => setData('currency', value)}
+                                        options={[
+                                            { value: 'UZS', label: t('cabinet.wizard.uzs') },
+                                            { value: 'USD', label: t('cabinet.wizard.usd') },
+                                        ]}
+                                    />
                                 </div>
                             </div>
 

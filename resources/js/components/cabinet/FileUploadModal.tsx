@@ -84,6 +84,9 @@ export function FileUploadModal({
                 <label className="label" htmlFor="f-type">
                     {t('cabinet.files.type')} <span className="req">*</span>
                 </label>
+                {/* Нативный список: пункты разбиты на группы <optgroup>,
+                    а SelectField групп не умеет — плоский перечень из
+                    материалов и документов вперемешку читался бы хуже */}
                 <select
                     id="f-type"
                     className="select"
