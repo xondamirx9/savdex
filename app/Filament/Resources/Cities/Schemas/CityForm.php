@@ -22,7 +22,7 @@ class CityForm
                 ->schema([
                     Select::make('country_id')
                         ->label('Страна')
-                        ->relationship('country', 'code')
+                        ->relationship('country', 'code', fn ($query) => $query->with('translations'))
                         ->getOptionLabelFromRecordUsing(fn (Country $record): string => $record->name())
                         ->required()
                         ->searchable()

@@ -35,7 +35,9 @@ class CategoryForm
                             // Подкатегорию нельзя вложить в подкатегорию:
                             // дерево ровно на два уровня, третий сломает
                             // и фильтры каталога, и мастер объявления
-                            fn ($query) => $query->whereNull('parent_id'),
+                            // Переводы сразу: ленивую загрузку проект
+                            // запрещает, а подпись строится из них
+                            fn ($query) => $query->whereNull('parent_id')->with('translations'),
                         )
                         ->getOptionLabelFromRecordUsing(fn (Category $record): string => $record->name())
                         ->searchable()
