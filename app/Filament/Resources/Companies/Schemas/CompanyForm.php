@@ -102,6 +102,7 @@ class CompanyForm
                         ->options(fn ($get): array => City::query()
                             ->where('country_id', $get('country_id'))
                             ->with('translations')
+                            ->orderBy('sort')
                             ->get()
                             ->mapWithKeys(fn (City $c): array => [$c->id => $c->name()])
                             ->all())

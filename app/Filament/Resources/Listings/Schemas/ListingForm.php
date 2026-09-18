@@ -132,11 +132,21 @@ class ListingForm
                 ->schema([
                     Select::make('city_id')
                         ->label('Город')
+                        /*
+                         * Со страной в подписи: городов на площадке
+                         * три сотни, и «Триполи» без страны рядом —
+                         * загадка, а не выбор. Как в списке категорий
+                         * выше, где раздел стоит перед подкатегорией.
+                         */
                         ->options(fn (): array => City::query()
                             ->where('is_active', true)
-                            ->with('translations')
+                            ->with(['translations', 'country.translations'])
+                            ->orderBy('country_id')
+                            ->orderBy('sort')
                             ->get()
-                            ->mapWithKeys(fn (City $c): array => [$c->id => $c->name()])
+                            ->mapWithKeys(fn (City $c): array => [
+                                $c->id => $c->country?->name().' → '.$c->name(),
+                            ])
                             ->all())
                         ->searchable(),
 
