@@ -50,7 +50,8 @@ interface Props {
         last_page: number;
     };
     filters: { q: string; type: string; done: boolean };
-    types: { code: string; label: string }[];
+    /** Направления услуг: у IT есть виды внутри, у остальных — нет */
+    types: { code: string; label: string; children: { code: string; label: string }[] }[];
     total: number;
     viewer: { guest: boolean; provider: boolean };
 }
@@ -204,7 +205,11 @@ export default function ItTasksIndex({ tasks, filters, types, total, viewer }: P
                         onPick={(type) => apply({ type })}
                         options={[
                             { id: '', label: t('it_tasks.all_types') },
-                            ...types.map((type) => ({ id: type.code, label: type.label })),
+                            ...types.map((type) => ({
+                                id: type.code,
+                                label: type.label,
+                                children: type.children.map((child) => ({ id: child.code, label: child.label })),
+                            })),
                         ]}
                     />
 

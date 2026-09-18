@@ -33,7 +33,9 @@ class ItTaskController extends Controller
     {
         $query = trim($request->string('q')->toString());
         $type = $request->string('type')->toString();
-        $type = array_key_exists($type, ItTask::SERVICE_TYPES) ? $type : '';
+        // Фильтровать можно и по направлению («IT-услуги»), и по виду
+        // внутри него — в адресе они выглядят одинаково
+        $type = in_array($type, ItTask::filterableTypes(), true) ? $type : '';
         $done = $request->boolean('done');
 
         $tasks = ItTask::query()
@@ -41,7 +43,7 @@ class ItTaskController extends Controller
             ->when($done, fn (Builder $q) => $q->completed(), fn (Builder $q) => $q->active())
             ->whereHas('company', fn (Builder $q) => $q->where('status', 'active'))
             ->when($query !== '', fn (Builder $q) => $q->search($query))
-            ->when($type !== '', fn (Builder $q) => $q->where('service_type', $type))
+            ->when($type !== '', fn (Builder $q) => $q->whereIn('service_type', ItTask::typesUnder($type)))
             ->tap(fn (Builder $q) => $done ? $q->orderByDesc('completed_at') : $q->orderByDesc('published_at'))
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
@@ -182,12 +184,21 @@ class ItTaskController extends Controller
     }
 
     /** @return list<array{code: string, label: string}> */
+    /**
+     * Дерево направлений для панели фильтра.
+     *
+     * @return list<array{code: string, label: string, children: list<array{code: string, label: string}>}>
+     */
     private function types(): array
     {
-        return array_map(
-            fn (string $code): array => ['code' => $code, 'label' => __('ui.it_tasks.types.'.$code)],
-            array_keys(ItTask::SERVICE_TYPES),
-        );
+        return array_map(fn (string $code): array => [
+            'code' => $code,
+            'label' => __('ui.it_tasks.types.'.$code),
+            'children' => array_map(fn (string $child): array => [
+                'code' => $child,
+                'label' => __('ui.it_tasks.types.'.$child),
+            ], ItTask::SERVICE_SECTIONS[$code]),
+        ], array_keys(ItTask::SERVICE_SECTIONS));
     }
 
     /** @return array{guest: bool, provider: bool} */

@@ -1192,6 +1192,13 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .cover-design{background:linear-gradient(135deg,#be185d,#f472b6)}
 .cover-automation{background:linear-gradient(135deg,#b45309,#f59e0b)}
 .cover-support{background:linear-gradient(135deg,#15803d,#4ade80)}
+/* Направления помимо разработки: тона подобраны так, чтобы в общей
+   ленте соседние карточки не сливались — холодный, тёплый, зелёный
+   и фиолетовый идут вразбивку с уже занятыми */
+.cover-logistics{background:linear-gradient(135deg,#075985,#0ea5e9)}
+.cover-hr{background:linear-gradient(135deg,#7c2d12,#f97316)}
+.cover-customs{background:linear-gradient(135deg,#065f46,#10b981)}
+.cover-accounting{background:linear-gradient(135deg,#5b21b6,#a78bfa)}
 .cover-other{background:linear-gradient(135deg,#334155,#64748b)}
 /* Обложка идёт в край карточки, поэтому отступы переезжают внутрь */
 .task-card-body{display:flex;flex-direction:column;gap:12px;padding:14px;flex:1}
