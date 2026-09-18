@@ -39,6 +39,7 @@ use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\TenderController;
+use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
@@ -65,7 +66,9 @@ Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
  * сайта должен быть абсолютным по спецификации, а домен у площадки
  * разный на каждом окружении.
  */
-Route::get('/robots.txt', fn () => response()->view('robots')->header('Content-Type', 'text/plain; charset=utf-8'))
+Route::get('/robots.txt', fn () => response()
+    ->view('robots', ['greedy' => BlockGreedyCrawlers::CRAWLERS])
+    ->header('Content-Type', 'text/plain; charset=utf-8'))
     ->name('robots');
 
 // Растровое превью объявления для og:image: боты мессенджеров
