@@ -99,9 +99,19 @@ class CompanyController extends Controller
             'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['code' => $c->code, 'name' => $c->name()])
                 ->all(),
+            /*
+             * «Компаний N, из них проверенных M» — обе цифры об одном
+             * и том же наборе. Без условия по статусу проверенных
+             * считалось больше, чем компаний всего: заблокированные
+             * и ждущие проверки в каталог не попадают, а в счётчик
+             * попадали. Заодно запрос ложится на составной индекс
+             * (status, verification_level) вместо перебора таблицы.
+             */
             'stats' => [
                 'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
-                'verified' => Company::where('verification_level', '>=', Company::VERIFICATION_COMPANY)->count(),
+                'verified' => Company::where('status', Company::STATUS_ACTIVE)
+                    ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
+                    ->count(),
             ],
         ]);
     }

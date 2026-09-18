@@ -8,10 +8,12 @@ use App\Filament\Resources\Reviews\Pages\CreateReview;
 use App\Filament\Resources\Reviews\Pages\EditReview;
 use App\Filament\Resources\Reviews\ReviewResource;
 use App\Models\Company;
+use App\Models\Listing;
 use App\Models\Review;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -284,5 +286,107 @@ class ReviewEditingTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame($before, (float) $review->company->fresh()->rating);
+    }
+
+    // ── Повтор пары ─────────────────────────────────────────────────
+
+    /**
+     * Два отзыва одной компании о другой — это удвоенный голос
+     * в рейтинге, по которому покупатель выбирает поставщика.
+     * Раньше форма заводила такой отзыв молча.
+     */
+    #[Test]
+    public function второй_отзыв_той_же_пары_не_заводится(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::ADMIN));
+
+        $about = Company::factory()->create();
+        $author = Company::factory()->create();
+
+        $this->review([
+            'company_id' => $about->id,
+            'author_company_id' => $author->id,
+            'listing_id' => null,
+            'status' => Review::STATUS_PUBLISHED,
+        ]);
+
+        Livewire::test(CreateReview::class)
+            ->fillForm([
+                'company_id' => $about->id,
+                'author_company_id' => $author->id,
+                'rating' => 5,
+                'body' => 'Второй отзыв от той же компании о той же компании.',
+                'status' => Review::STATUS_PUBLISHED,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['author_company_id']);
+
+        $this->assertSame(1, Review::query()
+            ->where('company_id', $about->id)
+            ->where('author_company_id', $author->id)
+            ->count());
+    }
+
+    /**
+     * Повтор пары с объявлением индекс ловил, но ошибкой базы:
+     * администратор получал пятисотую страницу и терял набранный текст.
+     */
+    #[Test]
+    public function повтор_пары_с_объявлением_отвечает_ошибкой_поля(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::ADMIN));
+
+        $about = Company::factory()->create();
+        $author = Company::factory()->create();
+        $listing = Listing::factory()->create(['company_id' => $about->id]);
+
+        $this->review([
+            'company_id' => $about->id,
+            'author_company_id' => $author->id,
+            'listing_id' => $listing->id,
+            'status' => Review::STATUS_PUBLISHED,
+        ]);
+
+        Livewire::test(CreateReview::class)
+            ->fillForm([
+                'company_id' => $about->id,
+                'author_company_id' => $author->id,
+                'listing_id' => $listing->id,
+                'rating' => 5,
+                'body' => 'Повтор пары автор — компания — объявление.',
+                'status' => Review::STATUS_PUBLISHED,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['author_company_id']);
+    }
+
+    /**
+     * Последний рубеж — сама база.
+     *
+     * Индекс на (компания, автор, объявление) обещал «один отзыв
+     * на пару», но у отзыва о компании вообще объявления нет, а NULL
+     * в уникальном индексе не равен NULL. Перехват ошибки базы
+     * в ReviewService — защита от двойного нажатия — не мог сработать
+     * ни разу, потому что ошибки не было.
+     */
+    #[Test]
+    public function база_не_даёт_завести_второй_отзыв_о_компании(): void
+    {
+        $about = Company::factory()->create();
+        $author = Company::factory()->create();
+
+        $this->review([
+            'company_id' => $about->id,
+            'author_company_id' => $author->id,
+            'listing_id' => null,
+        ]);
+
+        $this->expectException(UniqueConstraintViolationException::class);
+
+        $this->review([
+            'company_id' => $about->id,
+            'author_company_id' => $author->id,
+            'listing_id' => null,
+        ]);
     }
 }

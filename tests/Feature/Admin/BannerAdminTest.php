@@ -181,4 +181,78 @@ class BannerAdminTest extends TestCase
         $this->banner(['name' => 'Текущая']);
         $this->assertSame('1', BannerResource::getNavigationBadge());
     }
+
+    // ── Файлы ───────────────────────────────────────────────────────
+
+    /**
+     * Картинка баннера пересобирается, а не кладётся как есть.
+     *
+     * Снимок с телефона весит восемь мегабайт и грузится первым экраном
+     * главной у всех посетителей сразу; в EXIF остаются координаты
+     * съёмки. ImageStore — тот же путь, что у логотипов и фотографий
+     * объявлений: рамка макета, WebP, никаких посторонних данных.
+     */
+    #[Test]
+    public function картинка_баннера_проходит_через_обработку(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::SUPERADMIN));
+
+        Livewire::test(CreateBanner::class)
+            ->fillForm([
+                'name' => 'Осенняя акция',
+                'placement' => Banner::PLACEMENT_HOME,
+                'alt' => 'Скидка 30%',
+                'sort' => 0,
+                'image_path' => $this->upload(),
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $banner = Banner::query()->firstOrFail();
+
+        $this->assertStringEndsWith('.webp', $banner->image_path);
+        Storage::disk('public')->assertExists($banner->image_path);
+    }
+
+    /**
+     * Снятая акция уносит свои файлы.
+     *
+     * Диск на сервере постоянный и небольшой, а про картинку удалённого
+     * баннера не вспомнит уже никто.
+     */
+    #[Test]
+    public function удаление_баннера_убирает_файлы(): void
+    {
+        Storage::disk('public')->put('banners/wide.webp', 'x');
+        Storage::disk('public')->put('banners/narrow.webp', 'x');
+        Storage::disk('public')->put('banners/ru.webp', 'x');
+
+        $banner = $this->banner([
+            'image_path' => 'banners/wide.webp',
+            'image_mobile_path' => 'banners/narrow.webp',
+        ]);
+
+        $banner->images()->create(['locale' => 'ru', 'image_path' => 'banners/ru.webp']);
+
+        $banner->delete();
+
+        Storage::disk('public')->assertMissing('banners/wide.webp');
+        Storage::disk('public')->assertMissing('banners/narrow.webp');
+        Storage::disk('public')->assertMissing('banners/ru.webp');
+    }
+
+    /** Замена картинки убирает прежнюю — иначе правка баннера копит мусор. */
+    #[Test]
+    public function замена_картинки_убирает_прежнюю(): void
+    {
+        Storage::disk('public')->put('banners/old.webp', 'x');
+        Storage::disk('public')->put('banners/new.webp', 'x');
+
+        $banner = $this->banner(['image_path' => 'banners/old.webp']);
+
+        $banner->update(['image_path' => 'banners/new.webp']);
+
+        Storage::disk('public')->assertMissing('banners/old.webp');
+        Storage::disk('public')->assertExists('banners/new.webp');
+    }
 }

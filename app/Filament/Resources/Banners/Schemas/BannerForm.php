@@ -15,9 +15,35 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class BannerForm
 {
+    /**
+     * Поле картинки, которая проходит через ImageStore.
+
+     * Филамент по умолчанию кладёт на диск ровно то, что выбрали
+     * в проводнике. Для баннера это плохо втройне: снимок с телефона
+     * весит восемь мегабайт и грузится первым экраном главной у всех
+     * посетителей сразу; в EXIF остаются координаты съёмки; а размеры
+     * никто не проверял. ImageStore пересобирает файл в WebP по рамке
+     * макета — тот же путь, что у логотипов и фотографий объявлений.
+     *
+     * @param  array{w: int, h: int, quality: int, lossless?: bool}  $size
+     */
+    private static function image(string $name, array $size): FileUpload
+    {
+        return FileUpload::make($name)
+            ->image()
+            ->disk('public')
+            ->directory('banners')
+            ->maxSize(ImageStore::MAX_SIZE_KB)
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->saveUploadedFileUsing(
+                fn (TemporaryUploadedFile $file): string => app(ImageStore::class)->store($file, 'banners', $size),
+            );
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
@@ -88,21 +114,13 @@ class BannerForm
             Section::make('Картинка')
                 ->description('Широкая — для компьютера, узкая — для телефона. Обе необязательно: без узкой широкая обрежется по точке фокуса.')
                 ->schema([
-                    FileUpload::make('image_path')
+                    self::image('image_path', ImageStore::BANNER)
                         ->label('Для компьютера')
-                        ->image()
-                        ->disk('public')
-                        ->directory('banners')
                         ->required()
-                        ->maxSize(ImageStore::MAX_SIZE_KB)
                         ->helperText('JPG, PNG или WebP до 8 МБ. Лучше широкая, например 2400×800'),
 
-                    FileUpload::make('image_mobile_path')
+                    self::image('image_mobile_path', ImageStore::BANNER_MOBILE)
                         ->label('Для телефона')
-                        ->image()
-                        ->disk('public')
-                        ->directory('banners')
-                        ->maxSize(ImageStore::MAX_SIZE_KB)
                         // Широкий макет на узком экране красиво не
                         // обрежется никогда — отдельная картинка
                         // решает это надёжнее любой настройки обрезки
@@ -141,20 +159,12 @@ class BannerForm
                                 ->distinct()
                                 ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
 
-                            FileUpload::make('image_path')
+                            self::image('image_path', ImageStore::BANNER)
                                 ->label('Для компьютера')
-                                ->image()
-                                ->disk('public')
-                                ->directory('banners')
-                                ->required()
-                                ->maxSize(ImageStore::MAX_SIZE_KB),
+                                ->required(),
 
-                            FileUpload::make('image_mobile_path')
-                                ->label('Для телефона')
-                                ->image()
-                                ->disk('public')
-                                ->directory('banners')
-                                ->maxSize(ImageStore::MAX_SIZE_KB),
+                            self::image('image_mobile_path', ImageStore::BANNER_MOBILE)
+                                ->label('Для телефона'),
                         ])
                         ->columns(3)
                         ->defaultItems(0)
