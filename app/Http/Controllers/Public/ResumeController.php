@@ -89,18 +89,18 @@ class ResumeController extends Controller
             $resume->increment('views_count');
         }
 
-        $description = Str::limit(trim((string) $resume->about), 160);
+        $description = Str::limit(trim((string) $resume->localizedAbout()), 160);
 
         app(Seo::class)
-            ->title($resume->title)
+            ->title($resume->localizedTitle())
             ->description($description !== '' ? $description : __('ui.resume.meta_description'))
             ->canonical(url('/resume/'.$resume->slug));
 
         return Inertia::render('resumes/Show', [
             'resume' => [
                 ...$this->card($resume),
-                'about' => $resume->about,
-                'jobs' => $resume->jobs ?? [],
+                'about' => $resume->localizedAbout(),
+                'jobs' => $resume->localizedJobs(),
                 'education' => $resume->education ?? [],
                 'languages' => $resume->languages ?? [],
                 'schedule' => $resume->schedule ?? [],
@@ -143,7 +143,7 @@ class ResumeController extends Controller
         return [
             'id' => $resume->id,
             'slug' => $resume->slug,
-            'title' => $resume->title,
+            'title' => $resume->localizedTitle(),
             'field' => $resume->field,
             'name' => $resume->contact_name ?: $resume->user?->name,
             'initials' => $resume->initials(),

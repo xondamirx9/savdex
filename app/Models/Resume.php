@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Jobs\TranslateResume;
+use App\Services\MachineTranslator;
+use App\Support\Locales;
 use App\Support\ResumeOptions;
 use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -44,6 +47,9 @@ class Resume extends Model
     protected function casts(): array
     {
         return [
+            'title_i18n' => 'array',
+            'about_i18n' => 'array',
+            'jobs_i18n' => 'array',
             'employment' => 'array',
             'schedule' => 'array',
             'skills' => 'array',
@@ -54,6 +60,31 @@ class Resume extends Model
             'show_email' => 'boolean',
             'published_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        /*
+         * Текст изменили — перевод к нему больше не подходит.
+         * Старый английский заголовок у новой должности хуже, чем
+         * русский: он не просто устарел, он говорит неправду.
+         */
+        static::saving(function (self $resume): void {
+            foreach (['title', 'about', 'jobs'] as $field) {
+                if ($resume->exists && $resume->isDirty($field)) {
+                    $resume->{$field.'_i18n'} = null;
+                }
+            }
+        });
+
+        // Переводим опубликованное: черновик правят неделю, и гонять
+        // переводчик на каждое сохранение незачем
+        static::saved(function (self $resume): void {
+            if ($resume->isPublished() && $resume->missingTranslations()
+                && config('services.machine_translation.enabled')) {
+                TranslateResume::dispatch($resume->id);
+            }
+        });
     }
 
     public function user(): BelongsTo
@@ -104,6 +135,89 @@ class Resume extends Model
                     ->orWhereRaw('lower(about) like ?', [$like])
                     ->orWhereRaw('lower(skills) like ?', [$like])
                     ->orWhereRaw('lower(jobs) like ?', [$like]);
+            }
+        });
+    }
+
+    // ── Языки ────────────────────────────────────────────────
+
+    /** Должность на языке посетителя, с откатом на оригинал. */
+    public function localizedTitle(?string $locale = null): string
+    {
+        return $this->localized('title', $locale) ?? $this->title;
+    }
+
+    public function localizedAbout(?string $locale = null): ?string
+    {
+        return $this->localized('about', $locale);
+    }
+
+    /**
+     * Места работы на языке посетителя.
+     *
+     * Перевод связан с оригиналом порядком, поэтому годится, только
+     * пока мест столько же: список правили — показываем как написано,
+     * а перевод соберётся заново задачей.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function localizedJobs(?string $locale = null): array
+    {
+        $jobs = $this->jobs ?? [];
+        $locale ??= app()->getLocale();
+        $translated = ($this->jobs_i18n ?? [])[$locale] ?? null;
+
+        if (! is_array($translated) || count($translated) !== count($jobs)) {
+            return $jobs;
+        }
+
+        return array_map(
+            fn (array $job, array $row): array => [
+                ...$job,
+                'position' => filled($row['position'] ?? null) ? $row['position'] : $job['position'] ?? '',
+                'duties' => filled($row['duties'] ?? null) ? $row['duties'] : $job['duties'] ?? '',
+            ],
+            $jobs,
+            $translated,
+        );
+    }
+
+    private function localized(string $field, ?string $locale): ?string
+    {
+        $locale ??= app()->getLocale();
+        $original = $this->{$field};
+
+        if ($locale === Locales::DEFAULT) {
+            return $original;
+        }
+
+        $translated = ($this->{$field.'_i18n'} ?? [])[$locale] ?? null;
+
+        return filled($translated) ? $translated : $original;
+    }
+
+    /** Есть ли язык, на который резюме ещё не переведено. */
+    public function missingTranslations(): bool
+    {
+        foreach (MachineTranslator::TARGETS as $locale) {
+            if (blank(($this->title_i18n ?? [])[$locale] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Резюме, которым не хватает переводов, — для ежечасного добора.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeLackingTranslations(Builder $query): void
+    {
+        $query->where(function (Builder $q): void {
+            foreach (MachineTranslator::TARGETS as $locale) {
+                $q->orWhereJsonDoesntContainKey('title_i18n->'.$locale);
             }
         });
     }

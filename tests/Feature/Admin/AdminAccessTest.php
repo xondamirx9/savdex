@@ -19,6 +19,7 @@ use App\Filament\Resources\NewsPosts\NewsPostResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Plans\PlanResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
+use App\Filament\Resources\Resumes\ResumeResource;
 use App\Filament\Resources\Reviews\ReviewResource;
 use App\Filament\Resources\Settings\SettingResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
@@ -55,6 +56,7 @@ class AdminAccessTest extends TestCase
         TenderResource::class,
         ItTaskResource::class,
         CompanyDocumentResource::class,
+        ResumeResource::class,
         ReviewResource::class,
         Complaints::class,
         Invoices::class,
@@ -93,7 +95,7 @@ class AdminAccessTest extends TestCase
             'администратор' => [AdminAccess::ADMIN, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
                 TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
-                ReviewResource::class, Complaints::class,
+                ResumeResource::class, ReviewResource::class, Complaints::class,
                 CategoryResource::class, CompanyTypeResource::class,
                 PageResource::class, NewsPostResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
@@ -117,7 +119,7 @@ class AdminAccessTest extends TestCase
             'модератор' => [AdminAccess::MODERATOR, [
                 CompanyResource::class, ListingResource::class, TenderResource::class,
                 ItTaskResource::class, CompanyDocumentResource::class,
-                ReviewResource::class, Complaints::class,
+                ResumeResource::class, ReviewResource::class, Complaints::class,
                 CategoryResource::class, CompanyTypeResource::class,
             ]],
 
@@ -128,7 +130,7 @@ class AdminAccessTest extends TestCase
 
             'поддержка' => [AdminAccess::SUPPORT, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
-                ItTaskResource::class, ReviewResource::class, Complaints::class,
+                ItTaskResource::class, ResumeResource::class, ReviewResource::class, Complaints::class,
                 SubscriptionResource::class,
             ]],
 

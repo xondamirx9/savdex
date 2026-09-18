@@ -28,7 +28,6 @@ use App\Http\Controllers\Cabinet\SettingsController;
 use App\Http\Controllers\Cabinet\TelegramLinkController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Payment\UzumMerchantController;
 use App\Http\Controllers\Payment\WebhookController;
 use App\Http\Controllers\Public\CatalogController;
@@ -43,6 +42,7 @@ use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\ResumeController as PublicResumeController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\TenderController;
+use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
