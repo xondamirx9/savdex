@@ -59,6 +59,23 @@ use Throwable;
  */
 final class ListingWorkbookImport
 {
+    /**
+     * Ячейки, которые пришлось пропустить в текущей строке.
+     *
+     * Непонятная ячейка не отменяет строку: незнакомая категория,
+     * город не из справочника, валюта, которой у площадки нет, —
+     * пропускаются, а объявление загружается. Файл на триста товаров
+     * не должен разворачиваться из-за опечатки в одной клетке.
+     * Пропущенное попадает в отчёт: молча потерянная цена хуже
+     * загруженного объявления без неё.
+     *
+     * @var list<string>
+     */
+    private array $skipped = [];
+
+    /** Компания из строки, которую не нашли в справочнике. */
+    private ?string $unknownCompany = null;
+
     public function __construct(private readonly ImageStore $images) {}
 
     /**
@@ -109,6 +126,12 @@ final class ListingWorkbookImport
 
                 try {
                     $this->saveRow($fields, $texts, $photos[$number] ?? [], $author, $replacePhotos, $result);
+
+                    // Что в строке пропущено — в отчёт: строка загружена,
+                    // но человек должен знать, чего в ней не хватает
+                    foreach ($this->skipped as $skip) {
+                        $result['notes'][] = $this->where($master, $number, $named).': '.$skip;
+                    }
                 } catch (RuntimeException $e) {
                     $result['errors'][] = $this->where($master, $number, $named).': '.$e->getMessage();
                 } catch (Throwable $e) {
@@ -416,7 +439,9 @@ final class ListingWorkbookImport
         }
 
         if ($companyId === null) {
-            throw new RuntimeException('не указана компания, а без неё новое объявление не создать');
+            throw new RuntimeException($this->unknownCompany !== null
+                ? 'компания «'.$this->unknownCompany.'» не найдена в справочнике, а без компании новое объявление не создать'
+                : 'не указана компания, а без неё новое объявление не создать');
         }
 
         return new Listing(['company_id' => $companyId]);
@@ -426,6 +451,7 @@ final class ListingWorkbookImport
     private function companyId(array $fields): ?int
     {
         $company = trim($fields['company'] ?? '');
+        $this->unknownCompany = null;
 
         if ($company === '') {
             return null;
@@ -434,10 +460,22 @@ final class ListingWorkbookImport
         $id = CatalogLookup::companyId($company);
 
         if ($id === null) {
-            throw new RuntimeException('компания «'.$company.'» не найдена в справочнике');
+            // У нового объявления без компании нет продавца — там это
+            // остановит строку (resolve). У существующего продавец уже
+            // есть, и менять его по неузнанному названию нельзя
+            $this->unknownCompany = $company;
+            $this->skip('компания «'.$company.'» не найдена в справочнике — продавец остался прежним');
+
+            return null;
         }
 
         return $id;
+    }
+
+    /** Ячейка, которую не удалось использовать. */
+    private function skip(string $reason): void
+    {
+        $this->skipped[] = $reason;
     }
 
     /** @param array<string, string> $fields */
@@ -469,20 +507,20 @@ final class ListingWorkbookImport
             $category = CatalogLookup::categoryId($fields['category_id']);
 
             if ($category === null) {
-                throw new RuntimeException('категория «'.trim($fields['category_id']).'» не найдена в каталоге');
+                $this->skip('категория «'.trim($fields['category_id']).'» не найдена в каталоге — ячейка пропущена');
+            } else {
+                $listing->category_id = $category;
             }
-
-            $listing->category_id = $category;
         }
 
         if (trim($fields['city_id'] ?? '') !== '') {
             $city = CatalogLookup::cityId($fields['city_id']);
 
             if ($city === null) {
-                throw new RuntimeException('город «'.trim($fields['city_id']).'» не найден в справочнике');
+                $this->skip('город «'.trim($fields['city_id']).'» не найден в справочнике — ячейка пропущена');
+            } else {
+                $listing->city_id = $city;
             }
-
-            $listing->city_id = $city;
         }
 
         if (trim($fields['type'] ?? '') !== '') {
@@ -498,11 +536,11 @@ final class ListingWorkbookImport
             $currency = ImportLanguage::currency($fields['currency']);
 
             if (! Currencies::supports($currency)) {
-                throw new RuntimeException('валюта «'.trim($fields['currency']).'» не поддерживается; можно: '
-                    .implode(', ', Currencies::codes()));
+                $this->skip('валюта «'.trim($fields['currency']).'» не поддерживается (можно: '
+                    .implode(', ', Currencies::codes()).') — оставлена прежняя');
+            } else {
+                $listing->currency = $currency;
             }
-
-            $listing->currency = $currency;
         }
 
         if (trim($fields['min_order'] ?? '') !== '') {
@@ -558,21 +596,30 @@ final class ListingWorkbookImport
     {
         $limit = Listing::MAX_LENGTH[$field] ?? null;
 
-        if ($limit !== null && mb_strlen($value) > $limit) {
-            $labels = [
-                'title' => 'заголовок',
-                'description' => 'описание',
-                'delivery_terms' => 'условия поставки',
-                'payment_terms' => 'условия оплаты',
-            ];
-
-            throw new RuntimeException(
-                ($labels[$field] ?? $field).($locale !== null ? ' на языке «'.$locale.'»' : '')
-                .' длиннее '.$limit.' символов'
-            );
+        if ($limit === null || mb_strlen($value) <= $limit) {
+            return $value;
         }
 
-        return $value;
+        $labels = [
+            'title' => 'заголовок',
+            'description' => 'описание',
+            'delivery_terms' => 'условия поставки',
+            'payment_terms' => 'условия оплаты',
+        ];
+
+        /*
+         * Длинный текст обрезается, а не отменяет строку: у заголовка
+         * лишние символы — это хвост, а не смысл, и потерять из-за него
+         * весь товар с фотографиями и ценой несоразмерно. Обрезка
+         * попадает в отчёт — модератор допишет, если хвост был важен.
+         */
+        $this->skip(($labels[$field] ?? $field).($locale !== null ? ' на языке «'.$locale.'»' : '')
+            .' длиннее '.$limit.' символов — обрезано');
+
+        $cut = mb_substr($value, 0, $limit);
+        $space = mb_strrpos($cut, ' ');
+
+        return rtrim($space !== false && $space > $limit / 2 ? mb_substr($cut, 0, $space) : $cut, ' ,.;-');
     }
 
     /**

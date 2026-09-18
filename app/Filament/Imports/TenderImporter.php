@@ -7,8 +7,8 @@ namespace App\Filament\Imports;
 use App\Filament\Imports\Concerns\MapsHeadersInAnyLanguage;
 use App\Models\Tender;
 use App\Support\CatalogLookup;
+use App\Support\ImportCell;
 use App\Support\ImportLanguage;
-use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -27,9 +27,12 @@ use Illuminate\Support\Facades\Auth;
  * ссылкой на источник находится по ней и обновляется; без ссылки —
  * по заголовку и заказчику.
  *
- * Незнакомая категория или страна останавливает строку и попадает в
- * файл с ошибками: тендер без категории не виден ни в одном фильтре
- * витрины, и тихо потерять её хуже, чем не загрузить строку.
+ * Ячейка, которую загрузка не понимает — незнакомая категория,
+ * страна не из справочника, прочерк вместо телефона, — пропускается,
+ * а строка загружается. Раньше такая ячейка отменяла весь тендер,
+ * и файл на триста закупок не загружался из-за опечатки в одной
+ * категории. Пустая категория видна в списке админки и правится
+ * там же; потерянная закупка не видна нигде.
  */
 class TenderImporter extends Importer
 {
@@ -46,6 +49,7 @@ class TenderImporter extends Importer
                 ->example('Поставка цемента М400 для строительства школы')
                 ->guess(ImportLanguage::TENDER_HEADERS['title'])
                 ->requiredMapping()
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::text($state, 190))
                 ->rules(['required', 'string', 'max:190']),
 
             ImportColumn::make('description')
@@ -53,6 +57,7 @@ class TenderImporter extends Importer
                 ->exampleHeader('Описание')
                 ->example('Требуется 500 тонн цемента М400, поставка партиями до 30 октября.')
                 ->guess(ImportLanguage::TENDER_HEADERS['description'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::text($state, 10000))
                 ->rules(['nullable', 'string', 'max:10000']),
 
             ImportColumn::make('customer')
@@ -60,6 +65,7 @@ class TenderImporter extends Importer
                 ->exampleHeader('Заказчик')
                 ->example('ГУП «Тошкент шахар курилиш»')
                 ->guess(ImportLanguage::TENDER_HEADERS['customer'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::text($state, 190))
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('category_id')
@@ -83,6 +89,7 @@ class TenderImporter extends Importer
                 ->exampleHeader('Город')
                 ->example('Ташкент')
                 ->guess(ImportLanguage::TENDER_HEADERS['location'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::text($state, 190))
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('budget')
@@ -114,12 +121,15 @@ class TenderImporter extends Importer
                 ->exampleHeader('Ссылка на источник')
                 ->example('https://xarid.uzex.uz/...')
                 ->guess(ImportLanguage::TENDER_HEADERS['source_url'])
+                // Не ссылка — не повод терять закупку: поле пропускаем
+                ->castStateUsing(fn (?string $state): ?string => self::url($state))
                 ->rules(['nullable', 'url', 'max:255']),
 
             ImportColumn::make('contact_name')
                 ->label('Контактное лицо')
                 ->exampleHeader('Контактное лицо')
                 ->guess(ImportLanguage::TENDER_HEADERS['contact_name'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::text($state, 190))
                 ->rules(['nullable', 'string', 'max:190']),
 
             ImportColumn::make('contact_phone')
@@ -127,12 +137,14 @@ class TenderImporter extends Importer
                 ->exampleHeader('Телефон')
                 ->example('+998 71 200-00-00')
                 ->guess(ImportLanguage::TENDER_HEADERS['contact_phone'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::phone($state, 40))
                 ->rules(['nullable', 'string', 'max:40']),
 
             ImportColumn::make('contact_email')
                 ->label('Почта')
                 ->exampleHeader('Почта')
                 ->guess(ImportLanguage::TENDER_HEADERS['contact_email'])
+                ->castStateUsing(fn (?string $state): ?string => ImportCell::email($state))
                 ->rules(['nullable', 'email', 'max:190']),
 
             ImportColumn::make('status')
@@ -201,43 +213,27 @@ class TenderImporter extends Importer
     // ── Справочники ──────────────────────────────────────────
 
     /**
-     * Категория по названию. Справочники ищет CatalogLookup — те же
-     * правила работают в загрузке объявлений.
+     * Категория по названию; незнакомая — пустая ячейка.
+     *
+     * Справочники ищет CatalogLookup — те же правила работают
+     * в загрузке объявлений.
      */
     private static function category(?string $state): ?int
     {
-        if (ImportLanguage::normalize($state) === '') {
-            return null;
-        }
-
-        $id = CatalogLookup::categoryId($state);
-
-        if ($id === null) {
-            throw new RowImportFailedException(
-                'Категория «'.trim((string) $state).'» не найдена в каталоге. '
-                .'Впишите название так, как оно указано в разделе «Категории», или оставьте ячейку пустой.'
-            );
-        }
-
-        return $id;
+        return CatalogLookup::categoryId(ImportCell::first($state));
     }
 
     /** Страна по коду ISO («uz») или названию на любом языке. */
     private static function country(?string $state): ?int
     {
-        if (ImportLanguage::normalize($state) === '') {
-            return null;
-        }
+        return CatalogLookup::countryId(ImportCell::first($state));
+    }
 
-        $id = CatalogLookup::countryId($state);
+    /** Адрес источника; всё, что не похоже на ссылку, — пустая ячейка. */
+    private static function url(?string $state): ?string
+    {
+        $url = ImportCell::first($state, 255);
 
-        if ($id === null) {
-            throw new RowImportFailedException(
-                'Страна «'.trim((string) $state).'» не найдена в справочнике. '
-                .'Напишите название целиком («Узбекистан») или код («UZ»), либо оставьте ячейку пустой.'
-            );
-        }
-
-        return $id;
+        return $url !== null && filter_var($url, FILTER_VALIDATE_URL) !== false ? $url : null;
     }
 }
