@@ -1,6 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import {
+    FileUser,
     BarChart3,
     Building2,
     Code2,
@@ -54,6 +55,7 @@ function groups(): NavGroup[] {
             items: [
                 { href: routes.cabinet, label: t('cabinet.nav.dashboard'), icon: LayoutDashboard },
                 { href: routes.cabinetListings, label: t('cabinet.nav.listings'), icon: Package, count: 'listings' },
+                { href: routes.cabinetResume, label: t('cabinet.nav.resume'), icon: FileUser },
                 { href: routes.listingCreate, label: t('cabinet.nav.create'), icon: Plus },
                 { href: routes.cabinetItTasks, label: t('cabinet.nav.it_tasks'), icon: Code2 },
             ],
