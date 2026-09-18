@@ -60,7 +60,24 @@ if [ "$workers" -lt 8 ]; then
 fi
 [ "$workers" -gt 64 ] && workers=64
 
+# ── Имя сервера ─────────────────────────────────────────────────────
+#
+# Без него Apache при каждом запуске дважды жалуется в журнал:
+# «Could not reliably determine the server's fully qualified domain
+# name». На работу это не влияет — виртуальный хост слушает <*:порт>
+# и принимает всё, — но две лишние строки при каждом перезапуске
+# сорят ровно там, где мы ищем настоящие.
+#
+# Берём настоящий адрес, который Render кладёт в RENDER_EXTERNAL_URL:
+# в журнале полезнее видеть savdex.uz, чем localhost.
+server_name="${RENDER_EXTERNAL_URL:-}"
+server_name="${server_name#*://}"   # снять «https://»
+server_name="${server_name%%/*}"    # снять путь, если он есть
+[ -z "$server_name" ] && server_name=localhost
+
 cat > /etc/apache2/conf-enabled/zz-savdex-mpm.conf <<CONF
+ServerName ${server_name}
+
 <IfModule mpm_prefork_module>
     ServerLimit           ${workers}
     MaxRequestWorkers     ${workers}
