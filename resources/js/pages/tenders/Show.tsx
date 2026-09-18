@@ -3,7 +3,7 @@ import { ArrowLeft, Building2, CalendarDays, ExternalLink, Mail, MapPin, Phone, 
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
-import { budgetLabel, deadlineBadge, TenderCard, type TenderRow } from './Index';
+import { budgetLabel, deadlineBadge, TenderCard, type TenderRow } from '@/components/TenderCard';
 
 interface Tender extends TenderRow {
     description: string[];

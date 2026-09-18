@@ -156,7 +156,7 @@ class SitemapController extends Controller
             ['loc' => url('/pricing'), 'priority' => '0.7', 'changefreq' => 'monthly'],
             ['loc' => url('/about'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/news'), 'priority' => '0.6', 'changefreq' => 'weekly'],
-            ['loc' => url('/tenders'), 'priority' => '0.8', 'changefreq' => 'daily'],
+            ['loc' => url('/catalog').'?type=tender', 'priority' => '0.8', 'changefreq' => 'daily'],
             ['loc' => url('/it-services'), 'priority' => '0.8', 'changefreq' => 'daily'],
             // Разделы из подвала: индексируемые страницы, которых
             // роботу иначе не найти иначе как по ссылкам с витрины

@@ -404,6 +404,7 @@ return [
         'type_all' => 'All',
         'type_supply' => 'Offers',
         'type_demand' => 'Requests',
+        'type_tender' => 'Tenders',
         'category' => 'Category',
         'city' => 'City',
         'city_any' => 'Any',

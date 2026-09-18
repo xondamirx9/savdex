@@ -404,6 +404,7 @@ return [
         'type_all' => 'Tümü',
         'type_supply' => 'Teklifler',
         'type_demand' => 'Talepler',
+        'type_tender' => 'İhaleler',
         'category' => 'Kategori',
         'city' => 'Şehir',
         'city_any' => 'Fark etmez',

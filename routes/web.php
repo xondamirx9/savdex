@@ -83,7 +83,12 @@ Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])
 Route::get('/news', [NewsController::class, 'index'])->name('news');
 Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
 
-// Тендеры — закупки внешних заказчиков, размещённые площадкой
+/*
+ * Тендеры — закупки внешних заказчиков, размещённые площадкой.
+ * Список переехал в каталог вкладкой «Тендеры», старый адрес
+ * остаётся постоянным редиректом: по нему приходят из переписки
+ * и из выдачи поисковика.
+ */
 Route::get('/tenders', [TenderController::class, 'index'])->name('tenders');
 Route::get('/tenders/{slug}', [TenderController::class, 'show'])->name('tenders.show');
 

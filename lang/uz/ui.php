@@ -407,6 +407,7 @@ return [
         'type_all' => 'Barchasi',
         'type_supply' => 'Takliflar',
         'type_demand' => 'So‘rovlar',
+        'type_tender' => 'Tenderlar',
         'category' => 'Toifa',
         'city' => 'Shahar',
         'city_any' => 'Har qanday',

@@ -15,7 +15,8 @@ export const routes = {
     listing: (slug: string) => `/listing/${slug}`,
     news: '/news',
     newsPost: (slug: string) => `/news/${slug}`,
-    tenders: '/tenders',
+    /* Список закупок — вкладка каталога; у самой закупки адрес свой */
+    tenders: '/catalog?type=tender',
     tender: (slug: string) => `/tenders/${slug}`,
     itTasks: '/it-services',
     itTask: (slug: string) => `/it-services/${slug}`,
