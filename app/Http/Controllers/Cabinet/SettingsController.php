@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
 use App\Models\NotificationPreference;
+use App\Services\Messaging\TelegramGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,6 +48,17 @@ class SettingsController extends Controller
                     'telegram' => $saved->get($event)?->telegram ?? false,
                 ])
                 ->values(),
+
+            /*
+             * Telegram: показываем, привязан ли, и умеет ли площадка
+             * привязывать вообще. Без бота раздел не показывается —
+             * кнопка, ведущая в никуда, хуже её отсутствия.
+             */
+            'telegram' => [
+                'available' => app(TelegramGateway::class)->configured(),
+                'linked' => $user->telegram_chat_id !== null,
+                'username' => $user->telegram_username,
+            ],
 
             'security' => [
                 'two_factor' => $user->two_factor_confirmed_at !== null,

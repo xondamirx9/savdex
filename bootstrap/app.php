@@ -53,7 +53,13 @@ return Application::configure(basePath: dirname(__DIR__))
          * CSRF-токен: провайдер о нём не знает. Подлинность колбэка
          * проверяется подписью в платёжном шлюзе, а не токеном формы.
          */
-        $middleware->validateCsrfTokens(except: ['payments/*/callback', 'payments/*/callback/*']);
+        // Telegram про наши формы и токены ничего не знает: он шлёт
+        // JSON на адрес с секретом, и секрет здесь за CSRF-токен
+        $middleware->validateCsrfTokens(except: [
+            'payments/*/callback',
+            'payments/*/callback/*',
+            'telegram/webhook/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
