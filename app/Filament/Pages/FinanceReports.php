@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Support\AdminAccess;
+use App\Support\Business;
 use App\Support\FinanceReport;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Carbon;
 use Livewire\Attributes\Url;
 use UnitEnum;
 
@@ -54,8 +54,12 @@ class FinanceReports extends Page
 
     public function mount(): void
     {
-        $this->from = $this->from !== '' ? $this->from : now()->startOfMonth()->toDateString();
-        $this->to = $this->to !== '' ? $this->to : now()->endOfMonth()->toDateString();
+        // Умолчание — местный месяц: по UTC с полуночи до пяти утра
+        // первого числа «этот месяц» был бы прошлым
+        [$start, $end] = Business::currentMonth();
+
+        $this->from = $this->from !== '' ? $this->from : $start;
+        $this->to = $this->to !== '' ? $this->to : $end;
     }
 
     public function getTitle(): string
@@ -87,12 +91,15 @@ class FinanceReports extends Page
      *
      * Конец дня, а не полночь: иначе платежи последнего дня месяца
      * выпадают из отчёта, и расхождение замечают не сразу.
+     *
+     * День — местный, ташкентский: хранится всё в UTC, а месяц человек
+     * закрывает по своему календарю (см. Support\Business).
      */
     private function bounds(): array
     {
         return [
-            Carbon::parse($this->from !== '' ? $this->from : now()->startOfMonth())->startOfDay(),
-            Carbon::parse($this->to !== '' ? $this->to : now()->endOfMonth())->endOfDay(),
+            Business::startOfDay($this->from !== '' ? $this->from : Business::currentMonth()[0]),
+            Business::endOfDay($this->to !== '' ? $this->to : Business::currentMonth()[1]),
         ];
     }
 

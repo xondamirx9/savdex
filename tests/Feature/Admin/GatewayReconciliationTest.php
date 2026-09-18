@@ -159,13 +159,23 @@ class GatewayReconciliationTest extends TestCase
         $this->assertSame(9000000, $findings[0]['theirs']);
     }
 
+    /**
+     * Обычный возврат расхождением не считается.
+     *
+     * Площадка не отменяет транзакцию у шлюза: UzumGateway::refund()
+     * не подключён, возврат оформляют руками в кабинете Uzum. Значит
+     * «счёт возвращён, транзакция проведена» — это состояние КАЖДОГО
+     * возврата, а не расхождение. Экран, который загорается на каждом
+     * обычном событии, перестают открывать, и настоящее расхождение
+     * тонет вместе с ложными.
+     */
     #[Test]
-    public function возврат_без_отмены_у_шлюза(): void
+    public function обычный_возврат_расхождением_не_считается(): void
     {
         $payment = $this->payment('refunded');
         $this->transaction($payment, PaymentTransaction::STATE_PERFORMED);
 
-        $this->assertSame([Recon::REFUNDED_WITHOUT_CANCEL], $this->kinds());
+        $this->assertSame([], $this->kinds());
     }
 
     #[Test]
@@ -210,13 +220,48 @@ class GatewayReconciliationTest extends TestCase
         $this->assertSame(0, $summary[Recon::DOUBLE_PERFORMED]);
     }
 
-    /** Период считается по дате счёта: за его пределами ничего не берётся. */
+    /**
+     * Полностью прошлое остаётся в прошлом.
+     *
+     * Счёт заведён и оплачен полгода назад, транзакций в периоде нет —
+     * в месячную сверку он не попадает. Иначе список рос бы вечно
+     * и перестал быть рабочим.
+     */
     #[Test]
     public function период_ограничивает_выборку(): void
     {
         $old = $this->payment('paid');
-        $old->forceFill(['created_at' => Carbon::now()->subMonths(6)])->save();
+        $old->forceFill([
+            'created_at' => Carbon::now()->subMonths(6),
+            'paid_at' => Carbon::now()->subMonths(6),
+        ])->save();
 
-        $this->assertSame([], $this->kinds(), 'счёт полугодовой давности не должен попадать в месячную сверку');
+        $this->assertSame(
+            [],
+            array_column(Recon::findings(now()->startOfMonth(), now()->endOfMonth()), 'kind'),
+            'счёт полугодовой давности не должен попадать в месячную сверку',
+        );
+    }
+
+    /**
+     * Период считается по движению денег, а не только по дате счёта.
+     *
+     * Счёт выставили в августе, оплатили в сентябре — расхождение
+     * по нему обязано попасть в сентябрьскую сверку. Иначе его
+     * не увидит никто: в августе его ещё не было, в сентябре
+     * выборка по created_at его не берёт.
+     */
+    #[Test]
+    public function счёт_из_прошлого_месяца_оплаченный_в_этом_попадает_в_сверку(): void
+    {
+        $payment = $this->payment('pending');
+        $payment->forceFill(['created_at' => Carbon::now()->subMonths(2)])->save();
+
+        $this->transaction($payment, PaymentTransaction::STATE_PERFORMED);
+
+        $this->assertSame(
+            [Recon::PERFORMED_WITHOUT_PAID],
+            array_column(Recon::findings(now()->startOfMonth(), now()->endOfMonth()), 'kind'),
+        );
     }
 }

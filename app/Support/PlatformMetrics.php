@@ -82,8 +82,10 @@ class PlatformMetrics
             ->when($to !== null, fn ($q) => $q->where('created_at', '<', $to))
             ->count();
 
+        // received(), а не status = paid: иначе инфопанель и раздел
+        // отчётов показывали бы разную выручку за один период
         $revenue = fn (?Carbon $from, ?Carbon $to = null): int => (int) Payment::query()
-            ->where('status', 'paid')
+            ->received()
             ->when($from !== null, fn ($q) => $q->where('paid_at', '>=', $from))
             ->when($to !== null, fn ($q) => $q->where('paid_at', '<', $to))
             ->sum('amount');
@@ -271,7 +273,7 @@ class PlatformMetrics
     public function averagePayment(): int
     {
         return (int) Payment::query()
-            ->where('status', 'paid')
+            ->received()
             ->where('paid_at', '>=', $this->from())
             ->avg('amount');
     }

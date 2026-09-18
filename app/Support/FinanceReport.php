@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Models\Subscription;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -27,6 +28,23 @@ use Illuminate\Support\Collection;
 final class FinanceReport
 {
     /**
+     * Счета, по которым деньги действительно пришли в периоде.
+     *
+     * Определение прихода — одно на всю площадку, в Payment::scopeReceived:
+     * не `status = paid`, иначе полностью возвращённый счёт выпадал бы
+     * из выручки вместе с месяцем, в котором деньги приходили.
+     *
+     * @param  Builder<Payment>  $query
+     * @return Builder<Payment>
+     */
+    private static function received(Carbon $from, Carbon $to): Builder
+    {
+        return Payment::query()
+            ->received()
+            ->whereBetween('paid_at', [$from, $to]);
+    }
+
+    /**
      * Выручка за период, по валютам.
      *
      * Валюты не складываются: сумма сумов и долларов — не деньги,
@@ -41,10 +59,7 @@ final class FinanceReport
      */
     public static function revenue(Carbon $from, Carbon $to): array
     {
-        $paid = Payment::query()
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from, $to])
-            ->get(['currency', 'amount']);
+        $paid = self::received($from, $to)->get(['currency', 'amount']);
 
         $refunded = Refund::query()
             ->where('status', Refund::STATUS_DONE)
@@ -83,21 +98,21 @@ final class FinanceReport
      */
     public static function byMonth(Carbon $from, Carbon $to): array
     {
-        $paid = Payment::query()
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from, $to])
+        $paid = self::received($from, $to)
             ->get(['paid_at', 'amount'])
-            ->groupBy(fn (Payment $p): string => $p->paid_at->format('Y-m'));
+            ->groupBy(fn (Payment $p): string => Business::local($p->paid_at)->format('Y-m'));
 
         $refunds = Refund::query()
             ->where('status', Refund::STATUS_DONE)
             ->whereBetween('decided_at', [$from, $to])
             ->get(['decided_at', 'amount'])
-            ->groupBy(fn (Refund $r): string => $r->decided_at->format('Y-m'));
+            ->groupBy(fn (Refund $r): string => Business::local($r->decided_at)->format('Y-m'));
 
+        // Обход месяцев тоже по местному календарю: иначе последний
+        // месяц диапазона мог не появиться в списке вовсе
         $rows = [];
-        $cursor = $from->copy()->startOfMonth();
-        $last = $to->copy()->startOfMonth();
+        $cursor = Business::local($from)->startOfMonth();
+        $last = Business::local($to)->startOfMonth();
 
         while ($cursor->lessThanOrEqualTo($last)) {
             $key = $cursor->format('Y-m');
@@ -131,9 +146,7 @@ final class FinanceReport
      */
     public static function byPlan(Carbon $from, Carbon $to): array
     {
-        return Payment::query()
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from, $to])
+        return self::received($from, $to)
             ->with('plan:id,name')
             ->get(['plan_id', 'amount'])
             ->groupBy(fn (Payment $p): string => $p->plan?->name ?? 'Без тарифа')
@@ -161,9 +174,7 @@ final class FinanceReport
      */
     public static function bySource(Carbon $from, Carbon $to): array
     {
-        return Payment::query()
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from, $to])
+        return self::received($from, $to)
             ->get(['purpose', 'provider', 'amount'])
             ->groupBy(fn (Payment $p): string => $p->purpose.'|'.($p->provider ?? ''))
             ->map(function (Collection $group, string $key): array {
@@ -205,14 +216,29 @@ final class FinanceReport
             ->whereBetween('started_at', [$from, $to])
             ->get(['id', 'company_id', 'started_at']);
 
+        /*
+         * Самая ранняя подписка каждой компании — одним запросом.
+         *
+         * Раньше на каждую подписку периода шёл отдельный exists():
+         * шестьдесят подписок давали шестьдесят четыре запроса, а на
+         * годовом отчёте это тысячи. Проверка «была ли раньше хоть
+         * одна» равносильна сравнению с самой ранней, и она берётся
+         * разом.
+         */
+        $firstEver = Subscription::query()
+            ->whereIn('company_id', $started->pluck('company_id')->unique())
+            ->selectRaw('company_id, MIN(started_at) as first_started_at')
+            ->groupBy('company_id')
+            ->pluck('first_started_at', 'company_id');
+
         $new = 0;
         $renewed = 0;
 
         foreach ($started as $subscription) {
-            $hadEarlier = Subscription::query()
-                ->where('company_id', $subscription->company_id)
-                ->where('started_at', '<', $subscription->started_at)
-                ->exists();
+            $first = $firstEver[$subscription->company_id] ?? null;
+
+            $hadEarlier = $first !== null
+                && Carbon::parse($first)->lessThan($subscription->started_at);
 
             $hadEarlier ? $renewed++ : $new++;
         }
@@ -221,14 +247,28 @@ final class FinanceReport
             ->whereBetween('cancelled_at', [$from, $to])
             ->count();
 
-        $expired = Subscription::query()
+        $ended = Subscription::query()
             ->where('status', 'expired')
             ->whereBetween('ends_at', [$from, $to])
-            ->get(['company_id', 'ends_at'])
-            ->reject(fn (Subscription $s): bool => Subscription::query()
-                ->where('company_id', $s->company_id)
-                ->where('started_at', '>=', $s->ends_at)
-                ->exists())
+            ->get(['company_id', 'ends_at']);
+
+        // Самая поздняя подписка тех же компаний — тоже одним запросом,
+        // по той же причине, что и самая ранняя выше
+        $lastEver = Subscription::query()
+            ->whereIn('company_id', $ended->pluck('company_id')->unique())
+            ->selectRaw('company_id, MAX(started_at) as last_started_at')
+            ->groupBy('company_id')
+            ->pluck('last_started_at', 'company_id');
+
+        $expired = $ended
+            ->reject(function (Subscription $subscription) use ($lastEver): bool {
+                $last = $lastEver[$subscription->company_id] ?? null;
+
+                // Завела новую подписку после того, как истекла старая,
+                // — значит не ушла
+                return $last !== null
+                    && Carbon::parse($last)->greaterThanOrEqualTo($subscription->ends_at);
+            })
             ->count();
 
         $active = Subscription::query()

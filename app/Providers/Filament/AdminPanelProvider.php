@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Widgets\ActivationFunnel;
+use App\Filament\Widgets\AwaitingRole;
 use App\Filament\Widgets\ContentDrafts;
 use App\Filament\Widgets\FinanceToday;
 use App\Filament\Widgets\IntakeQueue;
@@ -97,6 +98,8 @@ class AdminPanelProvider extends PanelProvider
              * рабочие очереди отрицательными, общая аналитика после них.
              */
             ->widgets([
+                // Первым: если он показан, остальных всё равно нет
+                AwaitingRole::class,
                 MyLeads::class,
                 MyTasks::class,
                 IntakeQueue::class,

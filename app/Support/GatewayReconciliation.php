@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Models\Payment;
 use App\Models\PaymentTransaction;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 /**
@@ -23,6 +24,15 @@ use Illuminate\Support\Carbon;
  *
  * Поэтому экран ищет не «ошибки», а несогласия между двумя записями
  * одного события, и называет каждое своим именем.
+ *
+ * Чего здесь намеренно НЕТ: проверки «счёт возвращён, а транзакция
+ * шлюза не отменена». Площадка не отменяет транзакции у шлюза —
+ * UzumGateway::refund() не подключён, возврат оформляют руками
+ * в кабинете Uzum, — и такая проверка загоралась бы на каждом
+ * возврате без исключения. Экран, который кричит на обычном
+ * событии, перестают открывать, и настоящее расхождение тонет
+ * вместе с ложными. Проверка вернётся вместе с возвратами
+ * через шлюз.
  */
 final class GatewayReconciliation
 {
@@ -37,9 +47,6 @@ final class GatewayReconciliation
 
     /** На одном счёте больше одной проведённой транзакции: двойное списание. */
     public const DOUBLE_PERFORMED = 'double_performed';
-
-    /** Возврат проведён у нас, транзакция шлюза не отменена. */
-    public const REFUNDED_WITHOUT_CANCEL = 'refunded_without_cancel';
 
     /**
      * Насколько это срочно и как называется.
@@ -71,11 +78,6 @@ final class GatewayReconciliation
             'hint' => 'Площадка начислила, подтверждения от шлюза нет. Бывает законно — оплата заведена вручную администратором; тогда в счёте есть отметка о том, кто подтвердил.',
             'severity' => 'warning',
         ],
-        self::REFUNDED_WITHOUT_CANCEL => [
-            'title' => 'Возврат без отмены у шлюза',
-            'hint' => 'Площадка считает платёж возвращённым, транзакция шлюза не отменена. Деньги могли не уйти клиенту.',
-            'severity' => 'warning',
-        ],
     ];
 
     /**
@@ -88,8 +90,22 @@ final class GatewayReconciliation
      */
     public static function findings(Carbon $from, Carbon $to): array
     {
+        /*
+         * Счёт попадает в период, если в нём произошло хоть что-то
+         * денежное: счёт выставлен, оплачен или шлюз тронул транзакцию.
+         *
+         * По одной дате счёта было мало: счёт выставили в августе,
+         * оплатили в сентябре — расхождение по нему не увидел бы
+         * никто. В августе его ещё не было, а сентябрьская выборка
+         * по created_at его не берёт.
+         */
         $payments = Payment::query()
-            ->whereBetween('created_at', [$from, $to])
+            ->where(fn (Builder $query) => $query
+                ->whereBetween('created_at', [$from, $to])
+                ->orWhereBetween('paid_at', [$from, $to])
+                ->orWhereHas('transactions', fn (Builder $tx) => $tx
+                    ->whereBetween('performed_at', [$from, $to])
+                    ->orWhereBetween('cancelled_at', [$from, $to])))
             ->with(['company:id,name', 'transactions'])
             ->get();
 
@@ -130,11 +146,6 @@ final class GatewayReconciliation
                     $payment->amount, (int) $single->amount_minor, null);
 
                 continue;
-            }
-
-            if ($payment->status === 'refunded' && $performed->isNotEmpty()) {
-                $found[] = self::row(self::REFUNDED_WITHOUT_CANCEL, $payment, $company,
-                    $payment->amount, (int) $performed->sum('amount_minor'), null);
             }
         }
 
