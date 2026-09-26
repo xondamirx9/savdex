@@ -27,12 +27,19 @@ use Throwable;
  *
  *   exports/2026-09-26-125530-ab12/
  *     run.json                          — кто, когда, чем кончилось
- *     savdex-companies-….xlsx           — книги PHP-версии: их и скачивают
+ *     savdex-companies-….xlsx           — книги основной версии: их и скачивают
  *     savdex-listings-….xlsx
- *     python/savdex-….xlsx              — книги Python-версии, для сверки
+ *     php/savdex-….xlsx                 — книги PHP-версии, для сверки
  *
- * Python-версия работает в тени (см. config/exports.php): её сбой
- * отмечается в итоге, но выгрузку не роняет — скачивается PHP-файл.
+ * Выгрузку делают обе версии из одного снимка базы, и книги сверяются
+ * ячейка в ячейку. Основная — Python (config/exports.php, primary): после
+ * пяти совпадений подряд на боевом сервере скачиваемым файлом стала его
+ * книга, а PHP-версия ушла в тень, чтобы расхождение по-прежнему было
+ * видно. Если Python-выгрузка не удалась, отдаётся файл PHP-версии —
+ * выгрузка из-за переезда не пропадает.
+ *
+ * С primary=php всё как до переключения: скачивается PHP-файл, книги
+ * Python лежат в python/. Старые выгрузки в истории устроены так же.
  */
 class DatabaseExports
 {
@@ -149,29 +156,100 @@ class DatabaseExports
         $this->prune();
     }
 
-    /**
-     * Выгрузка PHP-версией и её тень на Python — из одного снимка базы.
-     */
+    /** Какая версия делает скачиваемые книги. */
+    public function primary(): string
+    {
+        return config('exports.primary') === 'python' && config('exports.python.enabled') ? 'python' : 'php';
+    }
+
+    /** Обе версии — из одного снимка базы; основная определяет, что скачивают. */
     private function export(string $id, string $dir, ?string $snapshot): void
     {
+        if ($this->primary() === 'python') {
+            $this->exportByPython($id, $dir, $snapshot);
+        } else {
+            $this->exportByPhp($id, $dir, $snapshot);
+        }
+    }
+
+    /**
+     * Основная — Python, PHP-версия в тени для сверки.
+     *
+     * Сначала PHP-книги в php/, затем Python пишет свои на место
+     * скачиваемых и сверяет их с PHP-книгами. Python-книга отдаётся,
+     * только если сошлась с базой (собственная сверка): расхождение
+     * с PHP при этом видно в итоге, как раньше было видно расхождение
+     * Python с PHP. Не удалась Python-выгрузка — отдаются PHP-книги.
+     */
+    private function exportByPython(string $id, string $dir, ?string $snapshot): void
+    {
+        $php = $this->runPhp($dir.'/php');
+        $this->update($id, ['engine' => 'python', 'php' => $php]);
+
         try {
-            $code = Artisan::call('savdex:export-xlsx', ['--dir' => $dir]);
-            $output = Artisan::output();
+            $python = $this->runPython($dir, $php['ok'] ? $dir.'/php' : null, $snapshot);
         } catch (Throwable $e) {
             report($e);
-            $code = 1;
-            $output = $e->getMessage();
+            $python = ['status' => 'failed', 'note' => mb_substr($e->getMessage(), 0, 300)];
         }
 
-        $php = [
-            'ok' => $code === 0,
-            'output' => self::tail($output),
-            'files' => $this->books($id),
-        ];
+        $usable = ($python['self_check'] ?? false) && count($this->books($id)) === 2;
+
+        if ($usable) {
+            $this->update($id, [
+                'status' => self::DONE,
+                'engine' => 'python',
+                'files' => $this->books($id),
+                'python' => $python,
+                'finished_at' => now()->toIso8601String(),
+            ]);
+
+            return;
+        }
+
+        // Python не справился: его недописанные или несошедшиеся книги
+        // не отдаются, на их место встают PHP-книги
+        foreach ($this->books($id) as $file) {
+            $this->disk()->delete($this->root()."/{$id}/{$file}");
+        }
 
         if (! $php['ok']) {
             $this->update($id, [
                 'status' => self::FAILED,
+                'python' => $python,
+                'note' => 'не удались обе версии выгрузки',
+                'finished_at' => now()->toIso8601String(),
+            ]);
+
+            return;
+        }
+
+        foreach ($this->books($id, 'php') as $file) {
+            $this->disk()->move($this->root()."/{$id}/php/{$file}", $this->root()."/{$id}/{$file}");
+        }
+
+        $this->update($id, [
+            'status' => self::DONE,
+            'engine' => 'php',
+            'files' => $this->books($id),
+            'python' => $python,
+            'note' => 'Python-выгрузка не удалась — отданы книги PHP-версии',
+            'finished_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Основная — PHP, Python в тени (как до переключения).
+     */
+    private function exportByPhp(string $id, string $dir, ?string $snapshot): void
+    {
+        $php = $this->runPhp($dir);
+        $php['files'] = $this->books($id);
+
+        if (! $php['ok']) {
+            $this->update($id, [
+                'status' => self::FAILED,
+                'engine' => 'php',
                 'php' => $php,
                 'python' => ['status' => 'skipped', 'note' => 'PHP-выгрузка не удалась — сверять не с чем'],
                 'finished_at' => now()->toIso8601String(),
@@ -180,11 +258,11 @@ class DatabaseExports
             return;
         }
 
-        $this->update($id, ['php' => $php]);
+        $this->update($id, ['engine' => 'php', 'files' => $php['files'], 'php' => $php]);
 
         // Тень: сбой Python не должен ронять выгрузку, файлы уже готовы
         try {
-            $python = $this->shadow($dir, $snapshot);
+            $python = $this->shadowPython($dir, $snapshot);
         } catch (Throwable $e) {
             report($e);
             $python = ['status' => 'failed', 'note' => mb_substr($e->getMessage(), 0, 300)];
@@ -195,6 +273,25 @@ class DatabaseExports
             'python' => $python,
             'finished_at' => now()->toIso8601String(),
         ]);
+    }
+
+    /**
+     * PHP-выгрузка в каталог. Внутри открытого снимка она его и читает.
+     *
+     * @return array{ok: bool, output: string}
+     */
+    private function runPhp(string $dir): array
+    {
+        try {
+            $code = Artisan::call('savdex:export-xlsx', ['--dir' => $dir]);
+            $output = Artisan::output();
+        } catch (Throwable $e) {
+            report($e);
+            $code = 1;
+            $output = $e->getMessage();
+        }
+
+        return ['ok' => $code === 0, 'output' => self::tail($output)];
     }
 
     /**
@@ -244,11 +341,28 @@ class DatabaseExports
     }
 
     /**
-     * Python-версия выгружает те же данные рядом и сверяет книги.
+     * Python-версия в тени: выгружает те же данные в python/ и сверяет
+     * свои книги с PHP-книгами.
      *
-     * @return array{status: string, note?: string, differences?: int, problems?: list<string>}
+     * @return array<string, mixed>
      */
-    private function shadow(string $dir, ?string $snapshot): array
+    private function shadowPython(string $dir, ?string $snapshot): array
+    {
+        return $this->runPython($dir.'/python', $dir, $snapshot);
+    }
+
+    /**
+     * Python-выгрузка в каталог, со сверкой с PHP-книгами, если они есть.
+     *
+     * status: match — обе сверки сошлись; differs — не сошлась собственная
+     * сверка или книги расходятся с PHP; skipped — не с чем сверять или
+     * Python не установлен; failed / timeout — Python не справился.
+     * self_check — сошлась ли Python-книга с базой: только такую можно
+     * отдавать.
+     *
+     * @return array<string, mixed>
+     */
+    private function runPython(string $dir, ?string $compareWith, ?string $snapshot): array
     {
         if (! config('exports.python.enabled')) {
             return ['status' => 'skipped', 'note' => 'сверка с Python выключена (EXPORTS_PYTHON_SHADOW)'];
@@ -269,8 +383,8 @@ class DatabaseExports
                 ])
                 ->run([
                     $binary, 'manage.py', 'export_xlsx',
-                    '--dir='.$dir.'/python',
-                    '--compare-with='.$dir,
+                    '--dir='.$dir,
+                    ...($compareWith !== null ? ['--compare-with='.$compareWith] : []),
                     '--json',
                     ...($snapshot !== null ? ['--snapshot='.$snapshot] : []),
                 ]);
@@ -291,11 +405,21 @@ class DatabaseExports
         $data = json_decode(substr($line, strlen(self::RESULT)), true) ?: [];
         $differences = (int) ($data['differences'] ?? 0);
         $selfCheck = (bool) ($data['self_check'] ?? false);
+        $problems = array_slice([...($data['self_problems'] ?? []), ...($data['problems'] ?? [])], 0, 20);
+
+        if ($selfCheck && $compareWith === null) {
+            return [
+                'status' => 'skipped',
+                'self_check' => true,
+                'note' => 'PHP-выгрузка не удалась — сверять не с чем',
+            ];
+        }
 
         return [
             'status' => $differences === 0 && $selfCheck ? 'match' : 'differs',
+            'self_check' => $selfCheck,
             'differences' => $differences,
-            'problems' => array_slice([...($data['self_problems'] ?? []), ...($data['problems'] ?? [])], 0, 20),
+            'problems' => $problems,
         ];
     }
 
@@ -403,9 +527,9 @@ class DatabaseExports
     }
 
     /** @return list<string> */
-    private function books(string $id): array
+    private function books(string $id, string $subdir = ''): array
     {
-        return collect($this->disk()->files($this->root()."/{$id}"))
+        return collect($this->disk()->files($this->root()."/{$id}".($subdir !== '' ? "/{$subdir}" : '')))
             ->map(fn (string $p): string => basename($p))
             ->filter(fn (string $name): bool => preg_match(self::BOOK, $name) === 1)
             ->sort()

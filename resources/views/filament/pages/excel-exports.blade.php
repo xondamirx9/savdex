@@ -31,7 +31,7 @@
                                 <th class="py-2 pr-4 font-medium">Кто</th>
                                 <th class="py-2 pr-4 font-medium">Состояние</th>
                                 <th class="py-2 pr-4 font-medium">Файлы</th>
-                                <th class="py-2 font-medium">Сверка с Python</th>
+                                <th class="py-2 font-medium">Сверка PHP и Python</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-white/10">
@@ -39,6 +39,9 @@
                                 @php
                                     $status = $run['status'];
                                     $python = $run['python'] ?? null;
+                                    // Старые выгрузки: книги отдавала PHP-версия, список — в php.files
+                                    $files = $run['files'] ?? $run['php']['files'] ?? [];
+                                    $engine = $run['engine'] ?? 'php';
                                 @endphp
                                 <tr class="align-top" data-run="{{ $run['id'] }}">
                                     <td class="py-3 pr-4 whitespace-nowrap">
@@ -74,7 +77,7 @@
                                     <td class="py-3 pr-4">
                                         @if ($status === 'done' && $canDownload)
                                             <div class="flex flex-col gap-1">
-                                                @foreach ($run['php']['files'] ?? [] as $file)
+                                                @foreach ($files as $file)
                                                     <x-filament::link
                                                         :href="route('filament.admin.exports.download', ['run' => $run['id'], 'file' => $file])"
                                                         icon="heroicon-o-arrow-down-tray"
@@ -82,6 +85,9 @@
                                                         {{ str_contains($file, 'companies') ? 'Компании' : 'Объявления' }}
                                                     </x-filament::link>
                                                 @endforeach
+                                                <span class="text-xs text-gray-500">
+                                                    {{ $engine === 'python' ? 'книги Python-версии' : 'книги PHP-версии' }}
+                                                </span>
                                             </div>
                                         @elseif ($status === 'done')
                                             <span class="text-gray-500">нет права скачивать</span>
@@ -132,17 +138,22 @@
             </x-filament::section>
 
             <x-filament::section collapsible collapsed>
-                <x-slot name="heading">Что значит «Сверка с Python»</x-slot>
+                <x-slot name="heading">Что значит «Сверка PHP и Python»</x-slot>
                 <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
                     <p>
                         Площадка постепенно переезжает с PHP на Python. Пока переезд идёт, каждая выгрузка делается
-                        обеими версиями на одних и тех же данных, и книги сверяются ячейка в ячейку.
-                        Скачиваете вы PHP-файл — проверенный, как и раньше.
+                        обеими версиями из одного и того же состояния базы, и книги сверяются ячейка в ячейку.
+                        @if ($primary === 'python')
+                            Скачиваете вы книги Python-версии: пять выгрузок подряд совпали с PHP, и выгрузка
+                            переключена. Каждая книга перед тем, как её отдать, сверена с базой.
+                        @else
+                            Скачиваете вы книги PHP-версии, Python-версия работает в тени.
+                        @endif
                     </p>
                     <p>
-                        «Совпала» — Python-версия выгрузила ровно то же самое. Когда так будет несколько раз подряд,
-                        выгрузку можно переключить на Python. «Расходится» или «упала» на выгрузку не влияют:
-                        ваши файлы готовы, а расхождение — повод разобраться до переключения.
+                        «Совпала» — обе версии выгрузили ровно одно и то же. «Расходится» — повод разобраться:
+                        файл готов, но стоит сообщить разработчикам. Если Python-версия упала, вы получите
+                        книги PHP-версии: выгрузка из-за переезда не пропадает.
                     </p>
                 </div>
             </x-filament::section>

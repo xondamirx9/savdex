@@ -143,6 +143,51 @@ class ExcelExportsPageTest extends TestCase
             ->assertSee('не сверялась');
     }
 
+    #[Test]
+    public function книги_python_версии_отмечены_в_списке(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::SUPERADMIN));
+        $this->выгрузка('2026-09-27-100000-py00', [
+            'engine' => 'python',
+            'files' => ['savdex-companies-2026-09-27-1000.xlsx', 'savdex-listings-2026-09-27-1000.xlsx'],
+            'php' => ['ok' => true, 'output' => ''],
+            'python' => ['status' => 'match', 'self_check' => true, 'differences' => 0, 'problems' => []],
+        ]);
+
+        Livewire::test(ExcelExports::class)
+            ->assertSee('книги Python-версии')
+            ->assertSee('совпала')
+            ->assertSee(route('filament.admin.exports.download', ['run' => '2026-09-27-100000-py00', 'file' => 'savdex-listings-2026-09-27-1000.xlsx']), false);
+    }
+
+    #[Test]
+    public function старые_выгрузки_в_истории_по_прежнему_скачиваются(): void
+    {
+        // До переключения книги перечислялись в php.files, а files и engine не было
+        $this->actingAs($this->admin(AdminAccess::SUPERADMIN));
+        $this->выгрузка('2026-09-25-100000-old0', [
+            'php' => ['ok' => true, 'output' => '', 'files' => ['savdex-companies-2026-09-25-1000.xlsx']],
+            'python' => ['status' => 'match', 'differences' => 0, 'problems' => []],
+        ]);
+
+        Livewire::test(ExcelExports::class)
+            ->assertSee('книги PHP-версии')
+            ->assertSee(route('filament.admin.exports.download', ['run' => '2026-09-25-100000-old0', 'file' => 'savdex-companies-2026-09-25-1000.xlsx']), false);
+    }
+
+    /** Готовая выгрузка с заданным run.json — как её оставил бы воркер. */
+    private function выгрузка(string $id, array $fields): void
+    {
+        Storage::disk('local')->put("exports/{$id}/run.json", json_encode([
+            'id' => $id,
+            'status' => 'done',
+            'requested_by' => 'консоль',
+            'queued_at' => now()->toIso8601String(),
+            'finished_at' => now()->toIso8601String(),
+            ...$fields,
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
     // ── Скачивание ──────────────────────────────────────────────────
 
     #[Test]

@@ -6,12 +6,13 @@ namespace App\Console\Commands;
 
 use App\Support\DatabaseExports;
 use Illuminate\Console\Command;
+use Throwable;
 
 /**
  * Выгрузка «как из админки», но сразу, без очереди.
  *
- * Тот же путь, что у кнопки: папка на постоянном диске, PHP-выгрузка,
- * теневая Python-выгрузка со сверкой, итог в run.json. Нужна для Shell
+ * Тот же путь, что у кнопки: папка на постоянном диске, выгрузка обеими
+ * версиями со сверкой, итог в run.json. Нужна для Shell
  * на Render и для проверки собранного образа в CI.
  */
 class ExportRun extends Command
@@ -32,13 +33,26 @@ class ExportRun extends Command
             return self::FAILURE;
         }
 
-        $exports->run($id);
+        try {
+            $exports->run($id);
+        } catch (Throwable $e) {
+            // Иначе выгрузка полчаса числилась бы идущей и держала кнопку
+            // (в очереди то же делает RunDatabaseExport::failed)
+            $exports->markFailed($id, $e->getMessage());
+
+            throw $e;
+        }
 
         $run = $exports->find($id) ?? [];
 
         $this->line('Выгрузка: '.$id);
         $this->line('Итог: '.($run['status'] ?? '?'));
-        $this->line('Файлы: '.implode(', ', $run['php']['files'] ?? []));
+        $this->line('Файлы: '.implode(', ', $run['files'] ?? $run['php']['files'] ?? []));
+        $this->line('Книги отдала версия: '.($run['engine'] ?? '?'));
+
+        if (isset($run['note'])) {
+            $this->line('Примечание: '.$run['note']);
+        }
 
         $python = $run['python'] ?? [];
         $this->line('Сверка с Python: '.($python['status'] ?? '?').(isset($python['note']) ? ' — '.$python['note'] : ''));

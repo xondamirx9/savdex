@@ -25,7 +25,7 @@ use UnitEnum;
  * в Shell на Render, файлы ложились не на постоянный диск и пропадали
  * при следующем деплое, а скачать их из Shell было нельзя. Здесь кнопка
  * ставит выгрузку в очередь, а список показывает ход, файлы и итог
- * сверки с Python-версией (см. config/exports.php).
+ * сверки PHP- и Python-версий (см. config/exports.php).
  */
 class ExcelExports extends Page
 {
@@ -101,6 +101,7 @@ class ExcelExports extends Page
             'active' => $exports->active() !== null,
             'canDownload' => AdminAccess::allows('backups.export'),
             'keep' => (int) config('exports.keep', 10),
+            'primary' => $exports->primary(),
         ];
     }
 
