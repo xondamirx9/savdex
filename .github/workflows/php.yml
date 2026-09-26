@@ -1,0 +1,48 @@
+# Проверки PHP-половины площадки.
+#
+# До сентября 2026 в репозитории не было CI вообще: 1286 тестов
+# гонялись вручную, и сломанная ветка выяснялась уже после слияния.
+# Заведён вместе с проверками Python (docs/migration-to-python.md),
+# чтобы обе половины проверялись одинаково, пока живут рядом.
+#
+# Базы поднимать не нужно: тесты идут на SQLite в памяти
+# (см. phpunit.xml).
+name: php
+
+on:
+  push:
+    paths-ignore: ['python/**', 'docs/**', '.github/workflows/python.yml']
+  pull_request:
+    paths-ignore: ['python/**', 'docs/**', '.github/workflows/python.yml']
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # sqlite3 и pdo_sqlite — для тестов, gd — для ImageStore
+          # (пересборка картинок), intl — для дат и падежей
+          extensions: mbstring, sqlite3, pdo_sqlite, gd, intl, bcmath
+          coverage: none
+
+      - name: Кэш composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Порядок нарочный: оформление проверяется за секунды, тесты —
+      # за две минуты. Ошибка находится раньше и дешевле
+      - name: Оформление
+        run: vendor/bin/pint --test
+
+      - name: Тесты
+        run: php artisan test
+        env:
+          APP_ENV: testing
