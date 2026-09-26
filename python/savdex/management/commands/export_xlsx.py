@@ -8,20 +8,39 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandParser
-from django.db import connections
+from django.db import connections, transaction
+from django.db.backends.base.base import BaseDatabaseWrapper
 
 from savdex.console import table
 from savdex.export.compare import pair
-from savdex.export.workbooks import Collected, Exporter, ExportError, books, verify, write
+from savdex.export.workbooks import (
+    Book,
+    Collected,
+    Exporter,
+    ExportError,
+    Verdict,
+    books,
+    verify,
+    write,
+)
 
 #: Метка строки с итогом для вызывающей стороны (--json). По ней
 #: PHP находит итог в выводе, не гадая, какая строка последняя
 RESULT = "SAVDEX-RESULT "
+
+#: Вид идентификатора снимка, который выдаёт pg_export_snapshot():
+#: «00000003-0000001B-1» (до PostgreSQL 13 — «000003A1-1»). SET TRANSACTION SNAPSHOT не принимает
+#: параметров запроса, значение вставляется в текст — поэтому только
+#: строго такой вид и ничего больше
+SNAPSHOT = re.compile(r"[0-9A-F]{8}(?:-[0-9A-F]{8})?-[0-9]{1,10}")
 
 
 class Command(BaseCommand):
@@ -44,6 +63,11 @@ class Command(BaseCommand):
             help="Каталог с книгами PHP-версии: сверить свои книги с ними ячейка в ячейку",
         )
         parser.add_argument(
+            "--snapshot",
+            default="",
+            help="Снимок базы от pg_export_snapshot(): читать ровно то, что видит вызывающий",
+        )
+        parser.add_argument(
             "--json",
             action="store_true",
             help="Последней строкой напечатать итог для программы (для вызова из PHP)",
@@ -52,6 +76,14 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         directory = Path(str(options["dir"]))
         connection = connections[str(options["database"])]
+        snapshot = str(options["snapshot"])
+
+        if snapshot != "" and (
+            connection.vendor != "postgresql" or not SNAPSHOT.fullmatch(snapshot)
+        ):
+            self.stderr.write(f"Неверный снимок базы: {snapshot!r}")
+
+            raise SystemExit(1)
 
         try:
             directory.mkdir(parents=True, exist_ok=True)
@@ -64,44 +96,17 @@ class Command(BaseCommand):
         self.stdout.write(f"Каталог: {directory}")
         self.stdout.write("")
 
-        exporter = Exporter(connection)
-        exporter.prepare()
-
-        written: list[tuple[Any, list[Collected]]] = []
-
-        for book in books(directory):
-            try:
-                collected = [exporter.collect(sheet) for sheet in book.sheets]
-            except ExportError as error:
-                self.stderr.write(str(error))
-
-                raise SystemExit(1) from None
-
-            try:
-                write(book, collected)
-            except OSError as error:
-                self.stderr.write(f"Запись {book.file.name}: {error}")
-
-                raise SystemExit(1) from None
-
-            self.stdout.write(f"Записано: {book.file.name}")
-            written.append((book, collected))
-
-        self.stdout.write("")
-        self.stdout.write("Сверка записанного с базой…")
-        self.stdout.write("")
-
-        verdict = verify(exporter, written)
+        with _consistent(connection, snapshot):
+            verdict, written, truncated = self._export(connection, directory)
 
         for line in table(("Файл", "Лист", "Строк", "Сверка"), verdict.report):
             self.stdout.write(line)
 
         self.stdout.write("")
 
-        if exporter.truncated:
+        if truncated:
             self.stdout.write(
-                f"Значений, обрезанных до предела Excel: {exporter.truncated}. "
-                "Они помечены в ячейке."
+                f"Значений, обрезанных до предела Excel: {truncated}. Они помечены в ячейке."
             )
 
         if verdict.problems:
@@ -129,7 +134,7 @@ class Command(BaseCommand):
                         "compared": against_php is not None,
                         "differences": sum(len(p) for p in (against_php or {}).values()),
                         "problems": [p for ps in (against_php or {}).values() for p in ps][:20],
-                        "truncated": exporter.truncated,
+                        "truncated": truncated,
                     },
                     ensure_ascii=False,
                 )
@@ -137,6 +142,39 @@ class Command(BaseCommand):
 
         if verdict.problems or any((against_php or {}).values()):
             raise SystemExit(1)
+
+    def _export(
+        self, connection: BaseDatabaseWrapper, directory: Path
+    ) -> tuple[Verdict, list[tuple[Book, list[Collected]]], int]:
+        """Выгрузить книги и сверить их с базой — всё внутри одного снимка."""
+        exporter = Exporter(connection)
+        exporter.prepare()
+
+        written: list[tuple[Book, list[Collected]]] = []
+
+        for book in books(directory):
+            try:
+                collected = [exporter.collect(sheet) for sheet in book.sheets]
+            except ExportError as error:
+                self.stderr.write(str(error))
+
+                raise SystemExit(1) from None
+
+            try:
+                write(book, collected)
+            except OSError as error:
+                self.stderr.write(f"Запись {book.file.name}: {error}")
+
+                raise SystemExit(1) from None
+
+            self.stdout.write(f"Записано: {book.file.name}")
+            written.append((book, collected))
+
+        self.stdout.write("")
+        self.stdout.write("Сверка записанного с базой…")
+        self.stdout.write("")
+
+        return verify(exporter, written), written, exporter.truncated
 
     def _compare(self, php_dir: str, own_dir: Path) -> dict[str, list[str]] | None:
         """
@@ -163,6 +201,45 @@ class Command(BaseCommand):
                 self.stdout.write(f"    {problem}")
 
         return result
+
+
+@contextmanager
+def _consistent(connection: BaseDatabaseWrapper, snapshot: str) -> Iterator[None]:
+    """
+    Читать базу одним неизменным снимком.
+
+    Сайт живёт, пока идёт выгрузка: счётчики просмотров растут, ставки
+    приходят. Без снимка лист тендеров пишется с одним числом
+    просмотров, а сверка через секунду читает уже другое — и честная
+    выгрузка «расходится». REPEATABLE READ держит одно состояние базы
+    на всю транзакцию, READ ONLY заодно запрещает запись.
+
+    С --snapshot транзакция берёт снимок вызывающего (PHP-выгрузки),
+    и обе версии читают буква в букву одно и то же. Обе команды
+    SET TRANSACTION обязаны идти первыми, до любого чтения.
+
+    Транзакция только читает, поэтому в конце откатывается.
+    """
+    if connection.vendor != "postgresql":
+        yield
+
+        return
+
+    # Подключение и его настройка (часовой пояс и т. п.) — до транзакции,
+    # чтобы первым запросом в ней наверняка был SET TRANSACTION
+    connection.ensure_connection()
+
+    with transaction.atomic(using=connection.alias):
+        with connection.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+
+            if snapshot != "":
+                cursor.execute(f"SET TRANSACTION SNAPSHOT '{snapshot}'")
+
+        try:
+            yield
+        finally:
+            transaction.set_rollback(True, using=connection.alias)
 
 
 def _size(file: Path) -> str:

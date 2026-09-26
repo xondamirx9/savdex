@@ -178,3 +178,155 @@ def test_режим_сверки_для_php_отдаёт_итог(выгрузк
     assert result["self_check"] is True
     assert result["compared"] is True
     assert result["differences"] == 0, result["problems"]
+
+
+def test_снимок_показывает_базу_на_момент_снимка(выгрузки, tmp_path):
+    """
+    --snapshot: Python-версия читает базу такой, какой её видел
+    вызывающий в момент снимка, а не такой, какой она стала потом.
+
+    Держим снимок открытым, как держит его админка, пока работает
+    Python; тем временем «посетители» добавляют по тысяче просмотров
+    каждому тендеру. В книге обязаны оказаться прежние числа.
+    """
+    import psycopg
+
+    with psycopg.connect(АДРЕС) as снимок, psycopg.connect(АДРЕС, autocommit=True) as сайт:
+        снимок.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        идентификатор = снимок.execute("select pg_export_snapshot()").fetchone()[0]
+        было = dict(снимок.execute("select id, views_count from tenders").fetchall())
+
+        сайт.execute("update tenders set views_count = views_count + 1000")
+
+        subprocess.run(
+            [
+                sys.executable,
+                "manage.py",
+                "export_xlsx",
+                f"--dir={tmp_path}",
+                f"--snapshot={идентификатор}",
+            ],
+            cwd=PYTHON,
+            env={**os.environ, "DATABASE_URL": АДРЕС},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    assert было, "в базе нет тендеров — проверка слепа"
+    assert _просмотры_тендеров(tmp_path) == было
+
+
+def test_чужой_снимок_не_попадает_в_запрос(tmp_path):
+    """
+    SET TRANSACTION SNAPSHOT не принимает параметров запроса, значение
+    вставляется в текст. Поэтому всё, что не похоже на снимок, —
+    отказ до обращения к базе.
+    """
+    python = subprocess.run(
+        [
+            sys.executable,
+            "manage.py",
+            "export_xlsx",
+            f"--dir={tmp_path}",
+            "--snapshot=00000003-0000001B-1'; drop table tenders; --",
+        ],
+        cwd=PYTHON,
+        env={**os.environ, "DATABASE_URL": АДРЕС},
+        capture_output=True,
+        text=True,
+    )
+
+    assert python.returncode == 1
+    assert "Неверный снимок базы" in python.stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+def _просмотры_тендеров(каталог: Path) -> dict[int, int]:
+    from openpyxl import load_workbook
+
+    for книга in каталог.glob("savdex-*.xlsx"):
+        листы = load_workbook(книга, read_only=True)
+
+        if "Тендеры" not in листы.sheetnames:
+            continue
+
+        строки = iter(листы["Тендеры"].iter_rows(values_only=True))
+
+        for шапка in строки:
+            if "Просмотров" in шапка:
+                break
+
+        ид, просмотры = шапка.index("ID"), шапка.index("Просмотров")
+
+        return {int(r[ид]): int(r[просмотры]) for r in строки if r[ид] is not None}
+
+    raise AssertionError("в книгах нет листа «Тендеры»")
+
+
+def test_выгрузка_на_живой_базе_сходится(выгрузки):
+    """
+    Выгрузка с кнопки, пока посетители смотрят тендеры и объявления.
+
+    Так и было на боевом сервере: две сверки из пяти «расходились» на
+    одну ячейку — «Тендеры, Просмотров: в базе 40, в файле 39». Кто-то
+    открыл тендер посреди выгрузки, и сверка сравнивала файл со
+    сдвинувшейся базой. Файлы при этом были верны; врала сверка.
+
+    Здесь «посетители» — поток, который без остановки увеличивает
+    счётчики просмотров всё время, пока идёт выгрузка. Без единого
+    снимка базы сверка расходится почти наверняка; со снимком — никогда.
+    """
+    import threading
+
+    import psycopg
+
+    стоп = threading.Event()
+    обновлений = 0
+
+    def посетители() -> None:
+        nonlocal обновлений
+
+        with psycopg.connect(АДРЕС, autocommit=True) as соединение:
+            while not стоп.is_set():
+                соединение.execute("update tenders set views_count = views_count + 1")
+                соединение.execute("update listing_stats set views = views + 1")
+                обновлений += 1
+
+    поток = threading.Thread(target=посетители, daemon=True)
+    поток.start()
+
+    try:
+        итог = _laravel_run("artisan", "savdex:export-run")
+    finally:
+        стоп.set()
+        поток.join(timeout=10)
+
+    assert обновлений > 10, "поток посетителей не успел ничего поменять — проверка слепа"
+    assert "Итог: done" in итог, итог
+    assert "Сверка с Python: match" in итог, итог
+
+
+def _laravel_run(*command: str) -> str:
+    """Как _laravel, но без check=True: нужен вывод и при неудаче."""
+    окружение = {
+        **os.environ,
+        "DB_CONNECTION": "pgsql",
+        "DB_URL": АДРЕС,
+        "CACHE_STORE": "array",
+        "SESSION_DRIVER": "array",
+        "QUEUE_CONNECTION": "sync",
+        "MACHINE_TRANSLATION_ENABLED": "false",
+        # Та же Python-версия, что гоняет этот тест
+        "SAVDEX_PYTHON": sys.executable,
+    }
+
+    result = subprocess.run(
+        ["php", *command],
+        cwd=КОРЕНЬ,
+        env=окружение,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout + result.stderr

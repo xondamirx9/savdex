@@ -68,6 +68,51 @@ class ExportWorkbooks extends Command
         $this->line('Каталог: '.$dir);
         $this->newLine();
 
+        return $this->inSnapshot($db, fn (): int => $this->export($db, $dir));
+    }
+
+    /**
+     * Вся выгрузка — внутри одного снимка базы.
+     *
+     * Выгрузка идёт по живой базе: пока она пишет книги и сверяет их,
+     * посетители открывают тендеры, и счётчики просмотров растут.
+     * Сверка при этом перечитывала уже сдвинувшуюся базу и честно
+     * находила расхождение в исправном файле: на боевом сервере две
+     * сверки из пяти «расходились» на один просмотр, а под нагрузкой
+     * падала и собственная сверка — выгрузка выходила «ошибкой».
+     *
+     * REPEATABLE READ в PostgreSQL даёт один неизменный снимок на всю
+     * транзакцию: запись и сверка видят одни и те же данные. READ ONLY —
+     * заодно гарантия, что выгрузка ничего не меняет.
+     *
+     * Если транзакция уже открыта — это запуск с кнопки, который сам
+     * открыл снимок и делит его с Python-версией (DatabaseExports::run).
+     * Тогда используется он: второй SET TRANSACTION посреди транзакции
+     * PostgreSQL не примет.
+     *
+     * @param  callable(): int  $work
+     */
+    private function inSnapshot(ConnectionInterface $db, callable $work): int
+    {
+        if ($db->getDriverName() !== 'pgsql' || $db->transactionLevel() > 0) {
+            return $work();
+        }
+
+        $db->beginTransaction();
+
+        try {
+            $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+
+            return $work();
+        } finally {
+            // Транзакция только читала — откат и фиксация равнозначны,
+            // откат не оставит следа даже при ошибке посередине
+            $db->rollBack();
+        }
+    }
+
+    private function export(ConnectionInterface $db, string $dir): int
+    {
         $this->loadDictionaries($db);
 
         $stamp = now()->format('Y-m-d-Hi');

@@ -7,8 +7,10 @@ namespace App\Support;
 use App\Jobs\RunDatabaseExport;
 use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -130,7 +132,28 @@ class DatabaseExports
         $this->update($id, ['status' => self::RUNNING, 'started_at' => now()->toIso8601String()]);
 
         $dir = $this->path($id);
+        $db = DB::connection();
+        $snapshot = $this->openSnapshot($db);
 
+        try {
+            $this->export($id, $dir, $snapshot);
+        } finally {
+            if ($snapshot !== null) {
+                // Транзакция только читала. Закрыть её обязательно:
+                // обработчик очереди потом удаляет задачу через это же
+                // подключение, а внутри READ ONLY это не удалось бы
+                $db->rollBack();
+            }
+        }
+
+        $this->prune();
+    }
+
+    /**
+     * Выгрузка PHP-версией и её тень на Python — из одного снимка базы.
+     */
+    private function export(string $id, string $dir, ?string $snapshot): void
+    {
         try {
             $code = Artisan::call('savdex:export-xlsx', ['--dir' => $dir]);
             $output = Artisan::output();
@@ -161,7 +184,7 @@ class DatabaseExports
 
         // Тень: сбой Python не должен ронять выгрузку, файлы уже готовы
         try {
-            $python = $this->shadow($dir);
+            $python = $this->shadow($dir, $snapshot);
         } catch (Throwable $e) {
             report($e);
             $python = ['status' => 'failed', 'note' => mb_substr($e->getMessage(), 0, 300)];
@@ -172,8 +195,38 @@ class DatabaseExports
             'python' => $python,
             'finished_at' => now()->toIso8601String(),
         ]);
+    }
 
-        $this->prune();
+    /**
+     * Открыть снимок базы, общий для PHP- и Python-выгрузки.
+     *
+     * Сайт живёт, пока идёт выгрузка: счётчики просмотров растут между
+     * чтением PHP-версии и чтением Python-версии, и исправные книги
+     * «расходились» на один просмотр (на боевом сервере — две сверки
+     * из пяти). PostgreSQL умеет отдать снимок своей транзакции другому
+     * процессу: pg_export_snapshot() здесь, SET TRANSACTION SNAPSHOT
+     * в Python-версии. Снимок живёт, пока открыта эта транзакция, —
+     * поэтому она закрывается только после сверки на Python.
+     *
+     * Не PostgreSQL (SQLite в тестах) — снимка нет, всё как раньше.
+     */
+    private function openSnapshot(ConnectionInterface $db): ?string
+    {
+        if ($db->getDriverName() !== 'pgsql' || $db->transactionLevel() > 0) {
+            return null;
+        }
+
+        $db->beginTransaction();
+
+        try {
+            $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+
+            return (string) $db->scalar('select pg_export_snapshot()');
+        } catch (Throwable $e) {
+            $db->rollBack();
+
+            throw $e;
+        }
     }
 
     /** Отметить выгрузку упавшей — когда задача очереди умерла целиком. */
@@ -195,7 +248,7 @@ class DatabaseExports
      *
      * @return array{status: string, note?: string, differences?: int, problems?: list<string>}
      */
-    private function shadow(string $dir): array
+    private function shadow(string $dir, ?string $snapshot): array
     {
         if (! config('exports.python.enabled')) {
             return ['status' => 'skipped', 'note' => 'сверка с Python выключена (EXPORTS_PYTHON_SHADOW)'];
@@ -219,6 +272,7 @@ class DatabaseExports
                     '--dir='.$dir.'/python',
                     '--compare-with='.$dir,
                     '--json',
+                    ...($snapshot !== null ? ['--snapshot='.$snapshot] : []),
                 ]);
         } catch (ProcessTimedOutException) {
             return ['status' => 'timeout', 'note' => 'Python-выгрузка не уложилась в '.config('exports.python.timeout').' с'];
