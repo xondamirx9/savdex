@@ -1,0 +1,162 @@
+"""
+Предохранители переноса.
+
+Здесь в коде закреплены правила 4.1 и 4.2 из
+`docs/migration-to-python.md`: у каждой таблицы один хозяин на запись,
+и миграции запускает только Laravel.
+
+Договорённость, которую держит только совесть, не держится. За полтора
+года переноса кто-нибудь напишет `Company.objects.filter(...).update(...)`
+в таблицу, которая всё ещё принадлежит Laravel, — и обойдёт правила,
+живущие в событиях моделей Eloquent (раздел 5 того же документа):
+пересчёт рейтинга, запрет возвращать отклонённое объявление на витрину,
+сброс устаревших переводов. Ошибка не проявится сразу и не проявится
+громко; она проявится расхождением данных через месяц.
+
+Поэтому запись запрещена по умолчанию и разрешается таблице поимённо.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, Any
+
+from django.db.backends.signals import connection_created
+from django.dispatch import receiver
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from django.db.backends.base.base import BaseDatabaseWrapper
+
+# ── Кому уже разрешено писать ───────────────────────────────────────
+
+#: Таблицы, чей хозяин — Django.
+#:
+#: Пустой на этапах 0 и 1: Django пока только читает.
+#:
+#: Добавление строки сюда — и есть «переход хозяина» из плана переноса.
+#: Прежде чем добавить, нужно выполнить три условия:
+#:
+#: 1. Правила модели из раздела 5 документа перенесены;
+#: 2. На них написаны тесты pytest, и они падают без переноса;
+#: 3. Laravel в эту таблицу больше не пишет.
+#:
+#: Порядок перехода — раздел 6 документа.
+OWNED_TABLES: frozenset[str] = frozenset()
+
+#: Журнал действий — единственное исключение (раздел 5.1 документа).
+#:
+#: В него пишут обе стороны с этапа 2, и это безопасно: таблица
+#: добавляемая, а изменение и удаление запрещены самой моделью.
+#: Делить двум писателям нечего.
+APPEND_ONLY_SHARED: frozenset[str] = frozenset({"admin_actions"})
+
+
+class WriteToForeignTableError(RuntimeError):
+    """Попытка записи в таблицу, которой Django ещё не владеет."""
+
+
+class MigrationFromDjangoError(RuntimeError):
+    """Попытка изменить схему из Django."""
+
+
+# ── Разбор запроса ──────────────────────────────────────────────────
+
+_WRITE = re.compile(
+    r"""^\s*
+    (?:
+        insert \s+ into \s+ (?P<insert>[`"\[]?[\w.]+[`"\]]?)
+      | update \s+ (?:only \s+)? (?P<update>[`"\[]?[\w.]+[`"\]]?)
+      | delete \s+ from \s+ (?P<delete>[`"\[]?[\w.]+[`"\]]?)
+      | truncate \s+ (?:table \s+)? (?P<truncate>[`"\[]?[\w.]+[`"\]]?)
+    )""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+_DDL = re.compile(r"^\s*(create|alter|drop|rename)\s", re.IGNORECASE)
+
+
+def table_of(sql: str) -> str | None:
+    """Таблица, в которую пишет запрос. None — запрос не пишет."""
+    match = _WRITE.match(sql)
+
+    if match is None:
+        return None
+
+    raw = next(value for value in match.groupdict().values() if value)
+
+    # Кавычки ставят все драйверы по-разному, схема нас не различает:
+    # одна база, один пользователь
+    return raw.strip('`"[]').rsplit(".", maxsplit=1)[-1].lower()
+
+
+def check(sql: str) -> None:
+    """Пропустить запрос или объяснить, почему нельзя."""
+    if _DDL.match(sql):
+        raise MigrationFromDjangoError(
+            "Схему базы меняет только Laravel — database/migrations "
+            "(правило 4.2 в docs/migration-to-python.md). "
+            f"Запрос: {sql[:120]}"
+        )
+
+    table = table_of(sql)
+
+    if table is None or table in OWNED_TABLES or table in APPEND_ONLY_SHARED:
+        return
+
+    raise WriteToForeignTableError(
+        f"Таблица «{table}» принадлежит Laravel, Django её только читает "
+        "(правило 4.1 в docs/migration-to-python.md). "
+        "Если её хозяин действительно переходит — сначала перенесите "
+        "правила модели из раздела 5, потом добавьте таблицу "
+        "в OWNED_TABLES."
+    )
+
+
+# ── Подключение к Django ────────────────────────────────────────────
+
+
+def guard(
+    execute: Callable[[str, Any, bool, dict[str, Any]], Any],
+    sql: str,
+    params: Any,  # noqa: ANN401
+    many: bool,
+    context: dict[str, Any],
+) -> Any:  # noqa: ANN401
+    """Обёртка вокруг каждого запроса к базе."""
+    check(sql)
+
+    return execute(sql, params, many, context)
+
+
+@receiver(connection_created)
+def install_guard(connection: BaseDatabaseWrapper, **kwargs: Any) -> None:
+    """
+    Повесить предохранитель на соединение, как только оно открылось.
+
+    Обёртка вокруг запроса, а не сигнал модели: сигнал ловит только
+    записи через ORM, а обойти его можно `cursor.execute` — то есть
+    ровно там, где руки чешутся больше всего.
+    """
+    if guard not in connection.execute_wrappers:
+        connection.execute_wrappers.append(guard)
+
+
+class LaravelOwnsSchema:
+    """
+    Маршрутизатор базы: миграции Django не применяются никогда.
+
+    Второй замок к тому же правилу 4.2. Предохранитель выше поймал бы
+    сам запрос `CREATE TABLE`, но `manage.py migrate` должен
+    останавливаться раньше — до того, как начнёт что-то делать.
+    """
+
+    def allow_migrate(
+        self,
+        db: str,
+        app_label: str,
+        model_name: str | None = None,
+        **hints: Any,
+    ) -> bool:
+        return False

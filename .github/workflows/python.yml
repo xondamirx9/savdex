@@ -1,0 +1,46 @@
+# Проверки Python-половины площадки.
+#
+# Заведён вместе с каркасом Django (этап 0 переноса,
+# docs/migration-to-python.md). Прогон ничего не разворачивает и никуда
+# не ходит: предохранители разбирают текст запроса, а проверки идут
+# на SQLite в памяти.
+#
+# PHP-половина своих проверок в CI пока не имеет — их стоит завести
+# отдельно, тем же способом.
+name: python
+
+on:
+  push:
+    paths: ['python/**', '.github/workflows/python.yml']
+  pull_request:
+    paths: ['python/**', '.github/workflows/python.yml']
+
+defaults:
+  run:
+    working-directory: python
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups
+
+      # Порядок нарочный: разбор кода быстрее проверки типов, а та
+      # быстрее тестов. Ошибка находится раньше и дешевле
+      - name: Разбор кода
+        run: uv run ruff check .
+
+      - name: Оформление
+        run: uv run ruff format --check .
+
+      - name: Типы
+        run: uv run mypy savdex
+
+      - name: Тесты
+        run: uv run pytest -q

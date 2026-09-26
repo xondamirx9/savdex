@@ -34,3 +34,10 @@ Thumbs.db
 # Локальные настройки Claude Code: пути и запуск дев-сервера
 # у каждого свои, в общем репозитории от них только конфликты
 /.claude
+
+# Python-половина (перенос на Django)
+python/.venv/
+python/.pytest_cache/
+python/.mypy_cache/
+python/.ruff_cache/
+python/**/__pycache__/
