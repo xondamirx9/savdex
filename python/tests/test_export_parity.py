@@ -305,9 +305,23 @@ def test_выгрузка_на_живой_базе_сходится(выгруз
     assert обновлений > 10, "поток посетителей не успел ничего поменять — проверка слепа"
     assert "Итог: done" in итог, итог
     assert "Сверка с Python: match" in итог, итог
+    assert "Книги отдала версия: python" in итог, итог
 
 
-def _laravel_run(*command: str) -> str:
+def test_упавший_python_не_оставляет_без_файла():
+    """
+    Python — основная версия, но если он упал, администратор всё равно
+    получает файл: книги PHP-версии встают на место скачиваемых.
+    """
+    итог = _laravel_run("artisan", "savdex:export-run", python="/bin/false")
+
+    assert "Итог: done" in итог, итог
+    assert "Книги отдала версия: php" in итог, итог
+    assert "Сверка с Python: failed" in итог, итог
+    assert "savdex-companies-" in итог and "savdex-listings-" in итог, итог
+
+
+def _laravel_run(*command: str, python: str = sys.executable) -> str:
     """Как _laravel, но без check=True: нужен вывод и при неудаче."""
     окружение = {
         **os.environ,
@@ -318,7 +332,7 @@ def _laravel_run(*command: str) -> str:
         "QUEUE_CONNECTION": "sync",
         "MACHINE_TRANSLATION_ENABLED": "false",
         # Та же Python-версия, что гоняет этот тест
-        "SAVDEX_PYTHON": sys.executable,
+        "SAVDEX_PYTHON": python,
     }
 
     result = subprocess.run(

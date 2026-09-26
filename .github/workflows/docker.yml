@@ -93,4 +93,5 @@ jobs:
               php artisan savdex:export-run | tee /tmp/run.txt
               grep -q "Итог: done" /tmp/run.txt
               grep -q "Сверка с Python: match" /tmp/run.txt
+              grep -q "Книги отдала версия: python" /tmp/run.txt
             '
