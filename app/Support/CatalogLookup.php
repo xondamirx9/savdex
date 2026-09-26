@@ -116,11 +116,31 @@ final class CatalogLookup
     }
 
     /**
+     * Организационно-правовые формы, которые пишут то перед названием
+     * («ООО «Sargon Oil»»), то после запятой («Sargon Oil, ООО» — так
+     * выгружают реестры), то не пишут вовсе. Русские, узбекские
+     * (MChJ — это ООО, XK — ЧП, QK — СП, AJ — АО, YaTT — ИП),
+     * казахское ТОО и английские.
+     */
+    private const LEGAL_FORMS = [
+        'ооо', 'оао', 'зао', 'пао', 'ао', 'ип', 'чп', 'сп', 'уп', 'гуп', 'муп', 'тоо',
+        'mchj', 'ooo', 'xk', 'qk', 'aj', 'yatt', 'xt', 'ok', 'fx',
+        'мчж', 'хк', 'қк', 'ак', 'ятт',
+        'llc', 'ltd', 'inc', 'jsc', 'plc', 'gmbh',
+    ];
+
+    /**
      * Компания по ИНН или названию.
      *
      * ИНН проверяется первым: «ООО Стройбаза» и «ООО «Стройбаза»» —
      * одна компания, а два разных ИНН означают два разных юрлица
      * даже при одинаковом названии.
+     *
+     * Не нашлось точным совпадением — ищется по названию без формы:
+     * «Sargon Oil, ООО» из файла находит «ООО «Sargon Oil»» в каталоге.
+     * Только если такая компания одна: две «Химкар» — ООО и ИП —
+     * это два разных продавца, и отдать товар первому попавшемуся
+     * значит приписать его чужой компании.
      */
     public static function companyId(?string $value): ?int
     {
@@ -139,13 +159,45 @@ final class CatalogLookup
             }
         }
 
-        $match = Company::query()
-            ->get(['id', 'name', 'legal_name', 'tin'])
-            ->first(fn (Company $c): bool => ImportLanguage::normalize($c->name) === $needle
-                || ImportLanguage::normalize((string) $c->legal_name) === $needle
-                || (string) $c->tin === $raw);
+        $companies = Company::query()->get(['id', 'name', 'legal_name', 'tin']);
 
-        return $match?->id;
+        $match = $companies->first(fn (Company $c): bool => ImportLanguage::normalize($c->name) === $needle
+            || ImportLanguage::normalize((string) $c->legal_name) === $needle
+            || (string) $c->tin === $raw);
+
+        if ($match !== null) {
+            return $match->id;
+        }
+
+        $core = self::companyCore($raw);
+
+        if ($core === '') {
+            return null;
+        }
+
+        $similar = $companies->filter(fn (Company $c): bool => self::companyCore($c->name) === $core
+            || ($c->legal_name !== null && self::companyCore($c->legal_name) === $core));
+
+        return $similar->count() === 1 ? $similar->first()->id : null;
+    }
+
+    /**
+     * Название компании без организационно-правовой формы и кавычек.
+     *
+     * «ООО «Sargon Oil»», «Sargon Oil, ООО», «MChJ "Sargon Oil"» →
+     * «sargon oil». Форма снимается только с краёв: «Ипотечный центр»
+     * начинается на «ип», но формой это не делает — после неё обязан
+     * стоять пробел или запятая.
+     */
+    public static function companyCore(string $name): string
+    {
+        $value = str_replace(['“', '”', '„'], '', ImportLanguage::normalize($name));
+        $forms = implode('|', array_map(fn (string $form): string => preg_quote($form, '/'), self::LEGAL_FORMS));
+
+        $value = (string) preg_replace('/^(?:'.$forms.')\.?(?=[\s,])[\s,]*/u', '', $value);
+        $value = (string) preg_replace('/[\s,]+(?:'.$forms.')\.?$/u', '', $value);
+
+        return trim($value, " ,.-'");
     }
 
     private static function isNamedCategory(Category $category, string $needle): bool

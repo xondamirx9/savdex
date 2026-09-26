@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Listing;
 use App\Models\User;
 use App\Support\CatalogLookup;
@@ -11,6 +12,7 @@ use App\Support\Currencies;
 use App\Support\ImageStore;
 use App\Support\ImportLanguage;
 use App\Support\WorkbookImages;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use OpenSpout\Common\Entity\Row;
@@ -49,6 +51,12 @@ use Throwable;
  *  — не нашлось → заводится новое (без компании нельзя: объявление
  *    без продавца не показать).
  *
+ * Компания новой строки — из столбца «Компания». Пустой столбец
+ * значит компанию, выбранную в окне загрузки: каталог одного
+ * поставщика незачем подписывать в каждой строке. Компанию, которой
+ * нет в справочнике, загрузка заводит сама, если в окне стоит
+ * галочка, — иначе строка останавливается с объяснением.
+ *
  * Новое объявление ждёт проверки: администратор публикует его
  * из списка. Уже опубликованное повторная загрузка не снимает —
  * только обновляет тексты и цену.
@@ -76,14 +84,35 @@ final class ListingWorkbookImport
     /** Компания из строки, которую не нашли в справочнике. */
     private ?string $unknownCompany = null;
 
+    /** Компания из окна загрузки — для строк с пустым столбцом «Компания». */
+    private ?int $defaultCompany = null;
+
+    /** Заводить ли компании, которых нет в справочнике. */
+    private bool $createCompanies = false;
+
+    /** Компания, заведённая для текущей строки, — в отчёт. */
+    private ?string $createdCompany = null;
+
     public function __construct(private readonly ImageStore $images) {}
 
     /**
-     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}
+     * @return array{rows: int, created: int, updated: int, photos: int, companies: int, errors: list<string>, notes: list<string>}
      */
-    public function run(string $workbook, User $author, bool $replacePhotos = false): array
-    {
-        $result = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => [], 'notes' => []];
+    public function run(
+        string $workbook,
+        User $author,
+        bool $replacePhotos = false,
+        ?int $defaultCompany = null,
+        bool $createCompanies = false,
+    ): array {
+        $result = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'companies' => 0, 'errors' => [], 'notes' => []];
+
+        // Компанию могли удалить, пока окно загрузки было открыто:
+        // тогда каждая строка упала бы на внешнем ключе
+        $this->defaultCompany = $defaultCompany !== null && Company::query()->whereKey($defaultCompany)->exists()
+            ? $defaultCompany
+            : null;
+        $this->createCompanies = $createCompanies;
 
         $sheets = $this->sheets($workbook, $result);
         $roles = $this->roles($sheets, $result);
@@ -116,6 +145,13 @@ final class ListingWorkbookImport
 
                 $result['rows']++;
 
+                // Пропуски и заведённая компания — свои у каждой строки:
+                // без сброса заметка второй строки повторялась у всех
+                // следующих, и отчёт о файле на двести товаров рос
+                // до десятков тысяч строк
+                $this->skipped = [];
+                $this->createdCompany = null;
+
                 $texts = [];
 
                 foreach ($translations as $locale => $sheet) {
@@ -126,6 +162,12 @@ final class ListingWorkbookImport
 
                 try {
                     $this->saveRow($fields, $texts, $photos[$number] ?? [], $author, $replacePhotos, $result);
+
+                    if ($this->createdCompany !== null) {
+                        $result['companies']++;
+                        $result['notes'][] = $this->where($master, $number, $named)
+                            .': заведена компания «'.$this->createdCompany.'» — проверьте её карточку в разделе «Компании»';
+                    }
 
                     // Что в строке пропущено — в отчёт: строка загружена,
                     // но человек должен знать, чего в ней не хватает
@@ -379,19 +421,32 @@ final class ListingWorkbookImport
      */
     private function saveRow(array $fields, array $texts, array $files, User $author, bool $replace, array &$result): void
     {
-        $listing = $this->resolve($fields);
-        $exists = $listing->exists;
+        $created = false;
 
-        $this->fill($listing, $fields, $author);
-        $this->translate($listing, $texts);
-        $listing->save();
+        /*
+         * Строка сохраняется целиком или никак. Компания, заведённая
+         * для строки, без объявления в каталоге не нужна: упади
+         * сохранение — осталась бы пустая карточка без товаров.
+         * Фотографии — после: файлы на диске транзакция не откатит.
+         */
+        $listing = DB::transaction(function () use ($fields, $texts, $author, &$created): Listing {
+            $company = $this->companyId($fields);
+            $listing = $this->resolve($fields, $company);
+            $created = ! $listing->exists;
 
-        if (blank($listing->slug)) {
-            $listing->slug = Listing::makeSlug($listing->title, $listing->id);
-            $listing->saveQuietly();
-        }
+            $this->fill($listing, $fields, $author, $company);
+            $this->translate($listing, $texts);
+            $listing->save();
 
-        $result[$exists ? 'updated' : 'created']++;
+            if (blank($listing->slug)) {
+                $listing->slug = Listing::makeSlug($listing->title, $listing->id);
+                $listing->saveQuietly();
+            }
+
+            return $listing;
+        });
+
+        $result[$created ? 'created' : 'updated']++;
         $result['photos'] += $this->attach($listing, $files, $replace);
     }
 
@@ -400,7 +455,7 @@ final class ListingWorkbookImport
      *
      * @param  array<string, string>  $fields
      */
-    private function resolve(array $fields): Listing
+    private function resolve(array $fields, ?int $company): Listing
     {
         $id = (int) preg_replace('/\D/', '', $fields['id'] ?? '');
 
@@ -420,7 +475,18 @@ final class ListingWorkbookImport
             throw new RuntimeException('не заполнен заголовок');
         }
 
-        $companyId = $this->companyId($fields);
+        $companyId = $company;
+
+        // Столбец пуст — товар той компании, что выбрана в окне
+        // загрузки. Ищется тоже только у неё: одноимённый товар
+        // другого продавца — не этот, и цену ему менять нельзя
+        if ($companyId === null && $this->unknownCompany === null) {
+            $companyId = $this->defaultCompany;
+        }
+
+        if ($companyId === null && $this->unknownCompany !== null && $this->createCompanies) {
+            $companyId = $this->createCompany($this->unknownCompany);
+        }
 
         $found = Listing::query()
             ->where('title', $title)
@@ -439,9 +505,14 @@ final class ListingWorkbookImport
         }
 
         if ($companyId === null) {
-            throw new RuntimeException($this->unknownCompany !== null
-                ? 'компания «'.$this->unknownCompany.'» не найдена в справочнике, а без компании новое объявление не создать'
-                : 'не указана компания, а без неё новое объявление не создать');
+            throw new RuntimeException(match (true) {
+                $this->unknownCompany === null => 'не указана компания — заполните столбец «Компания» '
+                    .'или выберите компанию в окне загрузки',
+                $this->createCompanies => 'компания с ИНН '.$this->unknownCompany.' не найдена в справочнике, '
+                    .'а по одному ИНН компанию не завести — впишите название',
+                default => 'компания «'.$this->unknownCompany.'» не найдена в справочнике — добавьте её '
+                    .'в «Компании» или включите в окне загрузки «Заводить компании, которых нет в справочнике»',
+            });
         }
 
         return new Listing(['company_id' => $companyId]);
@@ -460,16 +531,37 @@ final class ListingWorkbookImport
         $id = CatalogLookup::companyId($company);
 
         if ($id === null) {
-            // У нового объявления без компании нет продавца — там это
-            // остановит строку (resolve). У существующего продавец уже
-            // есть, и менять его по неузнанному названию нельзя
             $this->unknownCompany = $company;
-            $this->skip('компания «'.$company.'» не найдена в справочнике — продавец остался прежним');
-
-            return null;
         }
 
         return $id;
+    }
+
+    /**
+     * Завести компанию, которой нет в справочнике.
+     *
+     * Так же, как их заводит загрузка справочника компаний: без
+     * проверки и с пометкой на визитке, что данные взяты из открытых
+     * источников, — карточку создала площадка, а не сама компания.
+     * ИНН вместо названия не заводится: компания по имени «302456789»
+     * на витрине хуже остановленной строки.
+     */
+    private function createCompany(string $name): ?int
+    {
+        if (preg_match('/^\d{6,20}$/', $name) === 1) {
+            return null;
+        }
+
+        $company = new Company;
+        $company->name = mb_substr($name, 0, 255);
+        $company->status = Company::STATUS_ACTIVE;
+        $company->verification_level = Company::VERIFICATION_NONE;
+        $company->source_note = 'Данные компании взяты из открытых источников.';
+        $company->save();
+
+        $this->createdCompany = $company->name;
+
+        return $company->id;
     }
 
     /** Ячейка, которую не удалось использовать. */
@@ -479,7 +571,7 @@ final class ListingWorkbookImport
     }
 
     /** @param array<string, string> $fields */
-    private function fill(Listing $listing, array $fields, User $author): void
+    private function fill(Listing $listing, array $fields, User $author, ?int $company): void
     {
         if (! $listing->exists) {
             $listing->user_id = $author->id;
@@ -493,8 +585,12 @@ final class ListingWorkbookImport
         // объявление, которое ведут книгой, живёт по правилам книги
         $listing->source = Listing::SOURCE_IMPORT;
 
-        if (($company = $this->companyId($fields)) !== null) {
+        if ($company !== null) {
             $listing->company_id = $company;
+        } elseif ($this->unknownCompany !== null && $listing->exists) {
+            // У существующего объявления продавец уже есть, и менять
+            // его по неузнанному названию нельзя
+            $this->skip('компания «'.$this->unknownCompany.'» не найдена в справочнике — продавец остался прежним');
         }
 
         foreach (['title', 'description', 'unit', 'delivery_terms', 'payment_terms'] as $plain) {

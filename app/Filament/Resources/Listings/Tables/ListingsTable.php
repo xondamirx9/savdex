@@ -5,18 +5,21 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Listings\Tables;
 
 use App\Filament\Exports\ListingExporter;
+use App\Models\Company;
 use App\Models\Listing;
 use App\Services\ListingWorkbookImport;
 use App\Support\AdminAccess;
 use App\Support\AdminLog;
 use App\Support\ListingWorkbookTemplate;
 use App\Support\Notifier;
+use App\Support\SearchText;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -142,6 +145,33 @@ class ListingsTable
                             ->label('Заменить фотографии, если они уже есть')
                             ->helperText('Обычно снимки добавляются только объявлениям без фотографий — '
                                 .'повторная загрузка того же файла не плодит одинаковые.'),
+
+                        /*
+                         * Каталог одного поставщика незачем подписывать
+                         * в каждой строке: пустой столбец «Компания»
+                         * означает компанию, выбранную здесь.
+                         */
+                        Select::make('company')
+                            ->label('Компания для строк без компании')
+                            ->placeholder('Не выбрана')
+                            ->searchable()
+                            ->getSearchResultsUsing(fn (string $search): array => Company::query()
+                                ->where('search_text', 'like', '%'.SearchText::normalize($search).'%')
+                                ->orderBy('name')
+                                ->limit(50)
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->getOptionLabelUsing(fn (mixed $value): ?string => Company::query()->whereKey($value)->value('name'))
+                            ->helperText('Строки, где столбец «Компания» пуст, получат эту компанию. '
+                                .'Продавца уже загруженных объявлений пустая ячейка не меняет.'),
+
+                        Toggle::make('create_companies')
+                            ->label('Заводить компании, которых нет в справочнике')
+                            ->helperText('Компания из столбца «Компания», которую загрузка не нашла, будет добавлена '
+                                .'в раздел «Компании» — без проверки, с пометкой «данные из открытых источников». '
+                                .'Название сравнивается без «ООО», «ИП», «MChJ» и кавычек, но опечатка заведёт вторую '
+                                .'компанию — отчёт перечислит всех заведённых. Выключено — такие строки '
+                                .'пропускаются с объяснением.'),
                     ])
                     ->extraModalFooterActions([
                         Action::make('workbookTemplate')
@@ -169,14 +199,20 @@ class ListingsTable
                             return;
                         }
 
-                        $result = self::importWorkbooks($files, (bool) ($data['replace'] ?? false));
+                        $result = self::importWorkbooks(
+                            $files,
+                            (bool) ($data['replace'] ?? false),
+                            filled($data['company'] ?? null) ? (int) $data['company'] : null,
+                            (bool) ($data['create_companies'] ?? false),
+                        );
 
                         // След в журнале: загрузка создаёт записи пачкой,
                         // минуя формы и их проверки
                         AdminLog::record('imported', 'listings', note: 'Книг: '.count($files)
                             .', создано: '.$result['created']
                             .', обновлено: '.$result['updated']
-                            .', фотографий: '.$result['photos']);
+                            .', фотографий: '.$result['photos']
+                            .', компаний заведено: '.$result['companies']);
 
                         self::report($result);
                     })
@@ -401,11 +437,11 @@ class ListingsTable
      * Разобрать выбранные книги подряд и сложить итоги.
      *
      * @param  list<UploadedFile>  $files
-     * @return array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}
+     * @return array{rows: int, created: int, updated: int, photos: int, companies: int, errors: list<string>, notes: list<string>}
      */
-    private static function importWorkbooks(array $files, bool $replace): array
+    private static function importWorkbooks(array $files, bool $replace, ?int $company, bool $createCompanies): array
     {
-        $total = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => [], 'notes' => []];
+        $total = ['rows' => 0, 'created' => 0, 'updated' => 0, 'photos' => 0, 'companies' => 0, 'errors' => [], 'notes' => []];
         $many = count($files) > 1;
 
         foreach ($files as $file) {
@@ -416,12 +452,12 @@ class ListingsTable
             file_put_contents($copy, $file->get());
 
             try {
-                $result = app(ListingWorkbookImport::class)->run($copy, Auth::user(), $replace);
+                $result = app(ListingWorkbookImport::class)->run($copy, Auth::user(), $replace, $company, $createCompanies);
             } finally {
                 @unlink($copy);
             }
 
-            foreach (['rows', 'created', 'updated', 'photos'] as $counter) {
+            foreach (['rows', 'created', 'updated', 'photos', 'companies'] as $counter) {
                 $total[$counter] += $result[$counter];
             }
 
@@ -446,14 +482,16 @@ class ListingsTable
      * ходить за отдельным файлом незачем. Уведомление не гаснет само —
      * иначе отчёт исчезает раньше, чем его успевают прочитать.
      *
-     * @param  array{rows: int, created: int, updated: int, photos: int, errors: list<string>, notes: list<string>}  $result
+     * @param  array{rows: int, created: int, updated: int, photos: int, companies: int, errors: list<string>, notes: list<string>}  $result
      */
     private static function report(array $result): void
     {
         $body = 'Обработано строк: '.$result['rows']
             .'. Создано: '.$result['created']
             .', обновлено: '.$result['updated']
-            .', фотографий добавлено: '.$result['photos'].'.';
+            .', фотографий добавлено: '.$result['photos']
+            .($result['companies'] > 0 ? ', компаний заведено: '.$result['companies'] : '')
+            .'.';
 
         $errors = array_slice($result['errors'], 0, 10);
         $hidden = count($result['errors']) - count($errors);
