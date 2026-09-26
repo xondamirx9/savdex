@@ -1,0 +1,710 @@
+/* ============================================================
+   Мини-сайты компаний (acme.savdex.site)
+
+   Всё покрашено переменными --ms-*: их собирает SiteTheme на сервере
+   из выбора компании. Токены витрины здесь не используются — иначе
+   синий SAVDEX проступал бы сквозь фирменные цвета компании.
+
+   Шаблон задаёт раскладку классом .ms-tpl-*: classic — обложка
+   и логотип, bold — фирменный цвет во весь первый экран, minimal —
+   текст без картинок.
+
+   В конце файла — редактор в кабинете (классы site-*).
+   ============================================================ */
+
+.ms-body {
+    background: var(--ms-bg);
+}
+
+.ms-root {
+    min-height: 100vh;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    font-family: var(--ms-font-body);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.ms-root a {
+    color: inherit;
+}
+
+/* Витрина красит h1–h4 своим цветом текста — на тёмной теме
+   и фирменном фоне заголовки сливались с фоном */
+.ms-root :is(h1, h2, h3, h4) {
+    color: inherit;
+    letter-spacing: normal;
+}
+
+.ms-container {
+    width: 100%;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+@media (min-width: 768px) {
+    .ms-container {
+        padding: 0 32px;
+    }
+}
+
+.ms-muted {
+    color: var(--ms-muted);
+}
+
+/* ── Шапка ── */
+
+.ms-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--ms-bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--ms-line);
+}
+
+.ms-header-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    min-height: 64px;
+}
+
+.ms-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    margin-right: auto;
+    font-family: var(--ms-font-heading);
+    font-weight: 700;
+}
+
+.ms-brand .ms-logo {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+}
+
+.ms-brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-nav {
+    display: none;
+    gap: 22px;
+    font-size: 15px;
+}
+
+.ms-nav a {
+    color: var(--ms-muted);
+}
+
+.ms-nav a:hover {
+    color: var(--ms-primary-text);
+}
+
+@media (min-width: 900px) {
+    .ms-nav {
+        display: flex;
+    }
+}
+
+.ms-logo {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    border-radius: var(--ms-radius);
+    background: #fff;
+}
+
+.ms-logo-initials {
+    display: inline-grid;
+    place-items: center;
+    background: var(--ms-primary);
+    color: var(--ms-on-primary);
+    font-family: var(--ms-font-heading);
+    font-weight: 700;
+    font-size: 24px;
+}
+
+/* ── Кнопки ── */
+
+.ms-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 22px;
+    border-radius: var(--ms-radius);
+    font-weight: 600;
+    white-space: nowrap;
+    transition: filter 0.15s, background-color 0.15s;
+}
+
+.ms-btn:hover {
+    filter: brightness(1.08);
+}
+
+.ms-btn-sm {
+    min-height: 38px;
+    padding: 0 16px;
+    font-size: 14px;
+}
+
+.ms-root .ms-btn-primary {
+    background: var(--ms-primary);
+    color: var(--ms-on-primary);
+}
+
+.ms-root .ms-btn-accent {
+    background: var(--ms-accent);
+    color: var(--ms-on-accent);
+}
+
+.ms-root .ms-btn-ghost {
+    border: 1px solid currentColor;
+    color: inherit;
+}
+
+/* ── Первый экран ── */
+
+.ms-hero {
+    padding: 72px 0;
+    background-color: var(--ms-primary-soft);
+    background-size: cover;
+    background-position: center;
+}
+
+.ms-hero-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.ms-hero-title {
+    max-width: 18ch;
+    margin: 0;
+    font-family: var(--ms-font-heading);
+    font-size: clamp(32px, 6vw, 56px);
+    line-height: 1.1;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.ms-hero-sub {
+    margin: 0;
+    font-weight: 600;
+    color: var(--ms-primary-text);
+}
+
+.ms-hero-lead {
+    max-width: 60ch;
+    margin: 0;
+    font-size: 18px;
+    color: var(--ms-muted);
+}
+
+.ms-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+/* classic: обложка компании фоном под затемнением, текст белый */
+.ms-tpl-classic .ms-hero[style] {
+    position: relative;
+    color: #fff;
+}
+
+.ms-tpl-classic .ms-hero[style]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.35));
+}
+
+.ms-tpl-classic .ms-hero[style] .ms-hero-inner {
+    position: relative;
+}
+
+.ms-tpl-classic .ms-hero[style] .ms-hero-sub,
+.ms-tpl-classic .ms-hero[style] .ms-hero-lead {
+    color: rgb(255 255 255 / 0.88);
+}
+
+/* bold: фирменный цвет во весь экран, крупный заголовок */
+.ms-tpl-bold .ms-hero {
+    padding: 104px 0;
+    background: var(--ms-primary);
+    color: var(--ms-on-primary);
+}
+
+.ms-tpl-bold .ms-hero-title {
+    max-width: 20ch;
+    font-size: clamp(40px, 8vw, 80px);
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+}
+
+.ms-tpl-bold .ms-hero-sub,
+.ms-tpl-bold .ms-hero-lead {
+    color: inherit;
+    opacity: 0.88;
+}
+
+/* Инициалы на фирменном фоне иначе сливаются с ним */
+.ms-tpl-bold .ms-hero .ms-logo-initials {
+    background: var(--ms-on-primary);
+    color: var(--ms-primary);
+}
+
+.ms-tpl-bold .ms-h2 {
+    text-transform: uppercase;
+}
+
+/* minimal: без фона и картинок, тонкие линии */
+.ms-tpl-minimal .ms-hero {
+    padding: 96px 0 56px;
+    background: none;
+    border-bottom: 1px solid var(--ms-line);
+}
+
+.ms-tpl-minimal .ms-hero-title {
+    font-weight: 600;
+}
+
+.ms-tpl-minimal .ms-section-tinted {
+    background: none;
+    border-top: 1px solid var(--ms-line);
+}
+
+.ms-tpl-minimal .ms-card {
+    background: none;
+}
+
+/* ── Разделы ── */
+
+.ms-section {
+    padding: 64px 0;
+}
+
+.ms-section-tinted {
+    background: var(--ms-surface);
+}
+
+.ms-h2 {
+    margin: 0 0 28px;
+    font-family: var(--ms-font-heading);
+    font-size: clamp(26px, 4vw, 36px);
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.ms-card {
+    border: 1px solid var(--ms-line);
+    border-radius: var(--ms-radius);
+    background: var(--ms-bg);
+}
+
+.ms-about {
+    display: grid;
+    gap: 32px;
+}
+
+@media (min-width: 900px) {
+    .ms-about {
+        grid-template-columns: minmax(0, 1fr) 340px;
+        align-items: start;
+    }
+}
+
+.ms-prose p {
+    margin: 0 0 1em;
+    max-width: 70ch;
+    white-space: pre-line;
+}
+
+.ms-facts {
+    padding: 22px;
+}
+
+.ms-facts dl {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+}
+
+.ms-facts dt {
+    font-size: 13px;
+}
+
+.ms-facts dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.ms-verified {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    font-weight: 600;
+    color: var(--ms-primary-text);
+}
+
+/* ── Товары ── */
+
+.ms-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.ms-grid-wide {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.ms-tile {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color 0.15s, transform 0.15s;
+}
+
+a.ms-tile:hover {
+    border-color: var(--ms-primary);
+    transform: translateY(-2px);
+}
+
+.ms-tile-cover {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 3;
+    background: var(--ms-primary-soft);
+    color: var(--ms-primary-text);
+}
+
+.ms-tile-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ms-tile-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px 18px;
+}
+
+.ms-tile-cat {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ms-muted);
+}
+
+.ms-tile-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.ms-tile-price {
+    margin: 6px 0 0;
+    font-weight: 700;
+    color: var(--ms-primary-text);
+}
+
+/* ── Документы ── */
+
+.ms-gallery {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    margin-bottom: 24px;
+}
+
+.ms-gallery-item {
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--ms-radius);
+    background: var(--ms-surface);
+}
+
+.ms-gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ms-docs {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ms-doc {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+}
+
+.ms-doc:hover {
+    border-color: var(--ms-primary);
+}
+
+.ms-doc-title {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.ms-doc-title small {
+    font-weight: 400;
+}
+
+/* ── Отзывы ── */
+
+.ms-rating {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -12px 0 24px;
+    font-size: 18px;
+    color: var(--ms-accent);
+}
+
+.ms-rating b {
+    color: var(--ms-text);
+}
+
+.ms-review {
+    margin: 0;
+    padding: 20px;
+}
+
+.ms-review blockquote {
+    margin: 8px 0 12px;
+}
+
+.ms-review figcaption {
+    font-size: 14px;
+}
+
+.ms-stars {
+    margin: 0;
+    letter-spacing: 2px;
+    color: var(--ms-accent);
+}
+
+.ms-stars-off {
+    color: var(--ms-line);
+}
+
+/* ── Контакты ── */
+
+.ms-contacts {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.ms-contact {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+}
+
+a.ms-contact:hover {
+    border-color: var(--ms-primary);
+}
+
+.ms-contact small {
+    display: block;
+    font-size: 13px;
+}
+
+.ms-contact-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--ms-radius);
+    background: var(--ms-primary-soft);
+    color: var(--ms-primary-text);
+}
+
+.ms-contact-value {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+/* ── Подвал ── */
+
+.ms-footer {
+    padding: 28px 0;
+    border-top: 1px solid var(--ms-line);
+    font-size: 14px;
+    color: var(--ms-muted);
+}
+
+.ms-footer-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ms-made:hover {
+    color: var(--ms-primary-text);
+}
+
+/* ============================================================
+   Редактор мини-сайта в кабинете (cabinet/Site)
+
+   Это уже интерфейс площадки, поэтому токены витрины, а не --ms-*.
+   ============================================================ */
+
+.site-editor {
+    display: grid;
+    gap: 24px;
+}
+
+@media (min-width: 1200px) {
+    .site-editor {
+        grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .site-preview-col {
+        position: sticky;
+        top: 88px;
+    }
+}
+
+.site-address {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.site-address .input {
+    flex: 1;
+    min-width: 0;
+}
+
+.site-choices {
+    display: grid;
+    gap: 8px;
+}
+
+.site-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-btn);
+    background: var(--surface);
+    text-align: left;
+}
+
+.site-choice:hover {
+    border-color: var(--primary-500);
+}
+
+.site-choice-active {
+    border-color: var(--primary-700);
+    box-shadow: inset 0 0 0 1px var(--primary-700);
+    background: var(--primary-50);
+}
+
+.site-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.site-preset {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.site-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.site-preset:hover .site-swatch {
+    box-shadow: 0 0 0 2px var(--primary-500);
+}
+
+.site-color {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.site-color input[type='color'] {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-btn);
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.site-frame {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--surface);
+    box-shadow: var(--sh-sm);
+}
+
+.site-frame iframe {
+    display: block;
+    width: 100%;
+    height: min(78vh, 900px);
+    border: 0;
+}
+
+.site-frame-mobile {
+    max-width: 390px;
+    margin: 0 auto;
+}

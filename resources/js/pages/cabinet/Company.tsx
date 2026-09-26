@@ -741,7 +741,12 @@ export default function CompanyProfile({
             {company && tab === 'site' && (
                 <Panel>
                     {plan?.has_microsite ? (
-                        <p className="muted">{t('cabinet.company.microsite_soon')}</p>
+                        <>
+                            <p className="muted">{t('cabinet.company.microsite_ready')}</p>
+                            <Link href={routes.cabinetSite} className="btn btn-primary mt-16">
+                                {t('cabinet.company.microsite_open')}
+                            </Link>
+                        </>
                     ) : (
                         <>
                             <p className="muted">{t('cabinet.company.microsite_plan')}</p>

@@ -25,8 +25,10 @@ use App\Http\Controllers\Cabinet\PromotionController;
 use App\Http\Controllers\Cabinet\ResumeController;
 use App\Http\Controllers\Cabinet\ReviewController;
 use App\Http\Controllers\Cabinet\SettingsController;
+use App\Http\Controllers\Cabinet\SiteController as CabinetSiteController;
 use App\Http\Controllers\Cabinet\TelegramLinkController;
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\Microsite\SiteController as MicrositeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Payment\UzumMerchantController;
 use App\Http\Controllers\Payment\WebhookController;
@@ -45,7 +47,32 @@ use App\Http\Controllers\Public\TenderController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\RequirePasswordChange;
+use App\Support\Microsite\SiteHost;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Мини-сайты компаний на поддоменах: acme.savdex.site
+|--------------------------------------------------------------------------
+|
+| Только когда задан MICROSITE_DOMAIN. Раньше маршрутов площадки: те
+| к домену не привязаны, и главная «/» перехватила бы адрес мини-сайта.
+| Всё прочее на этом домене закрывает RestrictSiteHost.
+|
+| Без домена сайты живут на площадке по адресу /s/acme — маршрут ниже,
+| в группе витрины.
+*/
+
+if (SiteHost::usesSubdomains()) {
+    Route::domain('{subdomain}.'.SiteHost::domain())
+        ->middleware('throttle:120,1')
+        ->group(function (): void {
+            Route::get('/', [MicrositeController::class, 'show'])->name('microsite.show');
+        });
+
+    Route::domain(SiteHost::domain())->get('/', [MicrositeController::class, 'root'])->name('microsite.root');
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -70,9 +97,13 @@ Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
  * сайта должен быть абсолютным по спецификации, а домен у площадки
  * разный на каждом окружении.
  */
-Route::get('/robots.txt', fn () => response()
-    ->view('robots', ['greedy' => BlockGreedyCrawlers::CRAWLERS])
-    ->header('Content-Type', 'text/plain; charset=utf-8'))
+Route::get('/robots.txt', fn (Request $request) => SiteHost::matches($request->getHost())
+    // У мини-сайта одна страница и нет карты сайта: адрес карты
+    // площадки здесь указывал бы на чужой домен
+    ? response("User-agent: *\nAllow: /\n")->header('Content-Type', 'text/plain; charset=utf-8')
+    : response()
+        ->view('robots', ['greedy' => BlockGreedyCrawlers::CRAWLERS])
+        ->header('Content-Type', 'text/plain; charset=utf-8'))
     ->name('robots');
 
 // Растровое превью объявления для og:image: боты мессенджеров
@@ -163,6 +194,13 @@ Route::middleware('throttle:120,1')->group(function (): void {
     Route::get('/listing/{slug}', [CatalogController::class, 'show'])->name('listings.show');
     Route::get('/companies', [CompanyController::class, 'index'])->name('companies.index');
     Route::get('/company/{slug}', [CompanyController::class, 'show'])->name('companies.show');
+
+    // Мини-сайт компании страницей площадки. На поддоменах этот адрес
+    // перенаправляет на acme.savdex.site — ссылки, разосланные до
+    // покупки домена, продолжают работать
+    Route::get('/'.SiteHost::PATH_PREFIX.'/{subdomain}', [MicrositeController::class, 'page'])
+        ->where('subdomain', '[a-z0-9-]+')
+        ->name('microsite.page');
     Route::get('/files/{id}', [CompanyFileController::class, 'download'])->name('files.download');
 });
 
@@ -345,6 +383,18 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::post('/cabinet/company/contacts', [CompanyContactController::class, 'store'])->name('cabinet.contacts.store');
     Route::patch('/cabinet/company/contacts/{id}', [CompanyContactController::class, 'update'])->name('cabinet.contacts.edit');
     Route::delete('/cabinet/company/contacts/{id}', [CompanyContactController::class, 'destroy'])->name('cabinet.contacts.delete');
+
+    /*
+     * Мини-сайт компании. Предпросмотр — отдельной страницей: редактор
+     * показывает его в iframe и перекрашивает параметром theme.
+     */
+    Route::get('/cabinet/site', [CabinetSiteController::class, 'edit'])->name('cabinet.site');
+    Route::patch('/cabinet/site', [CabinetSiteController::class, 'update'])
+        ->middleware('throttle:60,1')
+        ->name('cabinet.site.update');
+    Route::post('/cabinet/site/publish', [CabinetSiteController::class, 'publish'])->name('cabinet.site.publish');
+    Route::post('/cabinet/site/unpublish', [CabinetSiteController::class, 'unpublish'])->name('cabinet.site.unpublish');
+    Route::get('/cabinet/site/preview', [CabinetSiteController::class, 'preview'])->name('cabinet.site.preview');
 
     Route::get('/cabinet/company', [CompanyProfileController::class, 'edit'])->name('cabinet.company');
     Route::patch('/cabinet/company', [CompanyProfileController::class, 'update'])->name('cabinet.company.update');
