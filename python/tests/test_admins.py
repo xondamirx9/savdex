@@ -21,7 +21,7 @@ import bcrypt
 import pytest
 
 from savdex import admins
-from savdex.management.commands.admin import _filled
+from savdex.management.commands.admin import _filled, _url
 
 КОРЕНЬ = Path(__file__).resolve().parents[2]
 PHP = shutil.which("php")
@@ -199,3 +199,37 @@ class TestПараметры:
     def test_пустое_как_в_php(self, значение, ожидается):
         """`--password=0` для PHP — «сгенерировать»: строка «0» ложна."""
         assert _filled(значение) == ожидается
+
+
+class TestАдресСайта:
+    """
+    Строка «Адрес» в таблице — куда идти входить.
+
+    На Render APP_URL может быть пуст: сайт при запуске подставляет
+    RENDER_EXTERNAL_URL (docker/render-entrypoint.sh), а в Shell этой
+    подстановки нет. Команда печатала http://localhost/admin, и
+    администратор шёл входить не туда.
+    """
+
+    def test_задан_app_url(self, monkeypatch):
+        monkeypatch.setenv("APP_URL", "https://savdex.uz/")
+        monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://savdex.onrender.com")
+
+        assert _url("/admin") == "https://savdex.uz/admin"
+
+    @pytest.mark.parametrize("пусто", [None, ""])
+    def test_пустой_app_url_как_при_запуске_сайта(self, monkeypatch, пусто):
+        if пусто is None:
+            monkeypatch.delenv("APP_URL", raising=False)
+        else:
+            monkeypatch.setenv("APP_URL", пусто)
+
+        monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://savdex.onrender.com")
+
+        assert _url("/admin") == "https://savdex.onrender.com/admin"
+
+    def test_вне_render(self, monkeypatch):
+        monkeypatch.delenv("APP_URL", raising=False)
+        monkeypatch.delenv("RENDER_EXTERNAL_URL", raising=False)
+
+        assert _url("/admin") == "http://localhost/admin"
