@@ -118,5 +118,15 @@ def _filled(value: object) -> str:
 
 
 def _url(path: str) -> str:
-    """Как url() в консоли Laravel: адрес сайта из APP_URL."""
-    return os.environ.get("APP_URL", "http://localhost").rstrip("/") + path
+    """
+    Адрес сайта — тот же, что у url() в PHP-команде.
+
+    PHP берёт его из закешированных настроек, а их при запуске собирает
+    docker/render-entrypoint.sh: пустой APP_URL он заменяет публичным
+    адресом службы, RENDER_EXTERNAL_URL. В Shell на Render этой замены
+    нет — переменные там исходные, — поэтому здесь тот же запасной путь.
+    Без него команда печатала http://localhost/admin.
+    """
+    base = os.environ.get("APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "http://localhost"
+
+    return base.rstrip("/") + path
