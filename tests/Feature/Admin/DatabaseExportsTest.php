@@ -166,7 +166,8 @@ class DatabaseExportsTest extends TestCase
         // Python получает адрес той же базы и папку PHP-книг для сверки
         Process::assertRan(fn (PendingProcess $p) => in_array('--json', $p->command, true)
             && in_array('--compare-with='.$this->exports->path($run['id']), $p->command, true)
-            && isset($p->environment['DATABASE_URL']));
+            && isset($p->environment['DATABASE_URL'])
+            && ($p->environment['DJANGO_DATABASE_URL'] ?? null) === $p->environment['DATABASE_URL']);
     }
 
     #[Test]

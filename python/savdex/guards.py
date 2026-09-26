@@ -19,6 +19,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from django.db.backends.signals import connection_created
@@ -51,6 +54,52 @@ OWNED_TABLES: frozenset[str] = frozenset()
 #: добавляемая, а изменение и удаление запрещены самой моделью.
 #: Делить двум писателям нечего.
 APPEND_ONLY_SHARED: frozenset[str] = frozenset({"admin_actions"})
+
+
+#: Чужие таблицы, в которые Django может писать — но только внутри
+#: `allowed_writes(...)`, то есть в том месте кода, которое это заявило.
+#:
+#: Это не переход хозяина: Laravel продолжает писать в таблицу, и
+#: правила её модели по-прежнему его. Годится только для таблиц без
+#: событий модели (раздел 5 документа) и для записи, которую Laravel
+#: делает тем же простым путём. Против каждой — кто пишет и почему
+#: это безопасно.
+SHARED_WRITES: dict[str, str] = {
+    "users": (
+        "выдача прав администратора (команда admin, неделя 5): у модели "
+        "User нет событий, PHP-команда пишет те же поля простым save()"
+    ),
+}
+
+#: Какие из SHARED_WRITES разрешены прямо сейчас. ContextVar, а не
+#: глобальная переменная: разрешение не должно утечь в соседний поток
+#: или запрос, пока блок с ним работает.
+_allowed: ContextVar[frozenset[str]] = ContextVar("savdex_allowed_writes", default=frozenset())
+
+
+@contextmanager
+def allowed_writes(*tables: str) -> Iterator[None]:
+    """
+    Разрешить запись в перечисленные чужие таблицы на время блока.
+
+    Разрешение узкое намеренно: не «Django может писать в users», а
+    «вот этот блок кода может». Всё остальное в том же процессе
+    по-прежнему упирается в предохранитель.
+    """
+    unknown = [t for t in tables if t not in SHARED_WRITES]
+
+    if unknown:
+        raise ValueError(
+            f"Запись в {', '.join(unknown)} не заявлена в SHARED_WRITES "
+            "(savdex/guards.py) — сначала объясните там, почему она безопасна."
+        )
+
+    token = _allowed.set(_allowed.get() | frozenset(tables))
+
+    try:
+        yield
+    finally:
+        _allowed.reset(token)
 
 
 class WriteToForeignTableError(RuntimeError):
@@ -102,7 +151,12 @@ def check(sql: str) -> None:
 
     table = table_of(sql)
 
-    if table is None or table in OWNED_TABLES or table in APPEND_ONLY_SHARED:
+    if (
+        table is None
+        or table in OWNED_TABLES
+        or table in APPEND_ONLY_SHARED
+        or table in _allowed.get()
+    ):
         return
 
     raise WriteToForeignTableError(

@@ -378,7 +378,11 @@ class DatabaseExports
             $result = Process::path(base_path('python'))
                 ->timeout((int) config('exports.python.timeout', 300))
                 ->env([
+                    // Обе переменные: у Python своя роль в DJANGO_DATABASE_URL
+                    // важнее DATABASE_URL, а выгрузка обязана читать тем же
+                    // подключением, что Laravel, — из его снимка
                     'DATABASE_URL' => $this->databaseUrl(),
+                    'DJANGO_DATABASE_URL' => $this->databaseUrl(),
                     'PYTHONDONTWRITEBYTECODE' => '1',
                 ])
                 ->run([

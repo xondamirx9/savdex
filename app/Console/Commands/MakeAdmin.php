@@ -47,7 +47,17 @@ class MakeAdmin extends Command
             return self::FAILURE;
         }
 
-        $user = User::where('email', $email)->first();
+        $user = User::withTrashed()->where('email', $email)->first();
+
+        // Почта уникальна и среди удалённых: без этой проверки команда
+        // заводила второго пользователя и падала на уникальности.
+        // Восстанавливать молча нельзя — удаляли не просто так
+        if ($user?->trashed()) {
+            $this->error("Учётка {$email} удалена {$user->deleted_at?->format('d.m.Y')}. Восстановите её в админке или выберите другую почту.");
+
+            return self::FAILURE;
+        }
+
         $password = (string) ($this->option('password') ?: Str::password(14, symbols: false));
 
         if ($user === null) {

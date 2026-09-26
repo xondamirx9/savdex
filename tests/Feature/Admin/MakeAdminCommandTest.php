@@ -83,6 +83,29 @@ class MakeAdminCommandTest extends TestCase
         $this->assertSame(0, User::where('email', 'new@savdex.uz')->count());
     }
 
+    /**
+     * Удалённая учётка с той же почтой — отказ с объяснением.
+     *
+     * Удалённых поиск не видит, а почта в базе уникальна и для них:
+     * команда пыталась завести второго пользователя и падала на
+     * нарушении уникальности с трассировкой вместо ответа. Молча
+     * восстановить удалённого и дать ему права — хуже: удаляли его
+     * не просто так.
+     */
+    #[Test]
+    public function удалённая_учётка_с_той_же_почтой_не_роняет_команду(): void
+    {
+        $user = User::factory()->create(['email' => 'gone@savdex.uz']);
+        $user->delete();
+
+        $this->artisan('savdex:admin', ['email' => 'gone@savdex.uz'])
+            ->expectsOutputToContain('удалена')
+            ->assertFailed();
+
+        $this->assertFalse($user->fresh()->is_admin);
+        $this->assertTrue($user->fresh()->trashed(), 'удалённая учётка не восстанавливается');
+    }
+
     #[Test]
     public function кривой_адрес_не_создаёт_админа(): void
     {
