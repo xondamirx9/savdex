@@ -35,10 +35,12 @@ use App\Models\Tender;
 use App\Models\User;
 use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
+use App\Support\Business;
 use App\Support\CurrencyRate;
 use App\Support\PriceDisplay;
 use App\Support\Runtime;
 use App\Support\Seo;
+use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -74,6 +76,28 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDatabase();
         $this->configureAdminAbilities();
         $this->configureAuditLog();
+        $this->configureAdminTimezone();
+    }
+
+    /**
+     * Время в админке — ташкентское.
+     *
+     * Без этого поля даты-времени в формах понимали введённое как UTC
+     * (app.timezone): администратор ставил начало акции «16:00» по своим
+     * часам, а в базу ложилось 16:00 UTC — 21:00 в Ташкенте. Баннер
+     * «с сейчас» появлялся через пять часов и на столько же дольше висел
+     * после конца акции; так же съезжали срок объявления, дедлайн тендера
+     * и публикация новости.
+     *
+     * Одна настройка на всю панель, а не ->timezone() у каждого поля:
+     * новое поле, добавленное через год, иначе снова забудут.
+     *
+     * В базе по-прежнему UTC — меняется только то, как время вводится
+     * и показывается человеку.
+     */
+    private function configureAdminTimezone(): void
+    {
+        FilamentTimezone::set(fn (): string => Business::timezone());
     }
 
     /**
