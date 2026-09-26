@@ -71,7 +71,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # таблицы, а таблицы здесь заводит Laravel. Появятся, когда дойдём
 # до этапов 5 и 6.
 INSTALLED_APPS = [
-    "savdex",
+    # Через AppConfig, а не просто "savdex": в его ready() включаются
+    # предохранители переноса (см. savdex/apps.py)
+    "savdex.apps.SavdexConfig",
 ]
 
 MIDDLEWARE: list[str] = []

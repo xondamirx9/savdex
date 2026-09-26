@@ -1,12 +1,14 @@
 # Проверки Python-половины площадки.
 #
 # Заведён вместе с каркасом Django (этап 0 переноса,
-# docs/migration-to-python.md). Прогон ничего не разворачивает и никуда
-# не ходит: предохранители разбирают текст запроса, а проверки идут
-# на SQLite в памяти.
+# docs/migration-to-python.md).
 #
-# PHP-половина своих проверок в CI пока не имеет — их стоит завести
-# отдельно, тем же способом.
+# Большинство проверок базы не требуют: предохранители разбирают текст
+# запроса, а остальное идёт на SQLite в памяти. PostgreSQL нужен там,
+# где проверяется то, чего у SQLite нет, — версия сервера, права ролей,
+# has_table_privilege. Без него такие проверки пропускаются, поэтому
+# здесь поднимается служебный контейнер: пропущенная проверка — не
+# проверка.
 name: python
 
 on:
@@ -22,6 +24,22 @@ defaults:
 jobs:
   checks:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Та же основная версия, что на Render
+        image: postgres:16
+        env:
+          POSTGRES_USER: savdex
+          POSTGRES_PASSWORD: savdex
+          POSTGRES_DB: savdex
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -44,3 +62,5 @@ jobs:
 
       - name: Тесты
         run: uv run pytest -q
+        env:
+          SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex
