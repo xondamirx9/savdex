@@ -1,7 +1,22 @@
 # Мини-сайты компаний
 
 Своя страница у каждой компании на тарифе с мини-сайтом (`has_microsite`:
-Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифтах.
+Business, Premium, VIP), в её цветах и шрифтах.
+
+Два режима адреса, выбор — переменная `MICROSITE_DOMAIN`:
+
+| `MICROSITE_DOMAIN` | Адрес сайта |
+|---|---|
+| не задана (сейчас) | `savdex.uz/s/acme` — страница самой площадки |
+| `savdex.site` | `acme.savdex.site` — свой поддомен |
+
+Адрес компании (`company_sites.subdomain`) в обоих режимах один. При
+переходе на домен `savdex.uz/s/acme` отвечает постоянным перенаправлением
+на `acme.savdex.site`: ссылки, разосланные раньше, не ломаются.
+
+Пока компании не пишут свой CSS и JS, страница на домене площадки
+безопасна. Свой CSS — повод сначала перейти на отдельный домен
+(см. ниже).
 
 ## Как устроено
 
@@ -16,7 +31,7 @@ Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифт�
 | Токены, шаблоны, контраст | `App\Support\Microsite\SiteTheme` |
 | Разбор хоста, адреса | `App\Support\Microsite\SiteHost`, `config/microsite.php` |
 | Данные страницы | `App\Support\Microsite\SitePage` — одна сборка для сайта и предпросмотра |
-| Сайт для посетителей | `Microsite\SiteController`, маршрут `{subdomain}.savdex.site` |
+| Сайт для посетителей | `Microsite\SiteController`: `/s/{subdomain}` и `{subdomain}.savdex.site` |
 | Редактор | `Cabinet\SiteController`, страница `cabinet/Site` |
 | Вёрстка | `pages/site/Show.tsx`, `resources/css/microsite.css`, `views/microsite.blade.php` |
 
@@ -32,7 +47,7 @@ Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифт�
 покупатель, но мини-сайт — собственная страница компании, оплаченная её
 тарифом. Сайт со спрятанным телефоном компании не нужен.
 
-**На домене мини-сайтов открыт только сам мини-сайт.** Маршруты площадки
+**На домене мини-сайтов открыт только сам мини-сайт** (в режиме поддоменов). Маршруты площадки
 к домену не привязаны, поэтому `RestrictSiteHost` пропускает белый список
 путей (`/`, `robots.txt`, `up`, `files/*`). Иначе `acme.savdex.site/login`
 показывал бы вход в SAVDEX на адресе компании.
@@ -41,7 +56,10 @@ Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифт�
 браузер не отправит. Страница, оформленная компанией, не окажется рядом
 с сессией SAVDEX.
 
-## Запуск на боевом сервере
+## Переход на свой домен
+
+Сейчас ничего настраивать не нужно: сайты работают на `savdex.uz/s/…`.
+Когда домен понадобится:
 
 1. Купить домен `savdex.site`.
 2. DNS: `*.savdex.site` и `savdex.site` направить CNAME/ALIAS на сервис
@@ -50,11 +68,11 @@ Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифт�
    `*.savdex.site` и `savdex.site`. Для wildcard Render попросит
    подтверждающие записи `_acme-challenge` — их добавить в DNS, сертификат
    выпустится сам.
-4. Переменная окружения `MICROSITE_DOMAIN=savdex.site` (это значение
-   по умолчанию, но лучше задать явно).
-5. `php artisan migrate` выполнит entrypoint при деплое.
+4. Задать переменную окружения `MICROSITE_DOMAIN=savdex.site` и
+   перезапустить сервис.
 
-Локально: `MICROSITE_DOMAIN=site.localhost`, сайт открывается на
+Локально без переменной сайт открывается на `http://localhost:8000/s/acme`.
+Проверить поддомены: `MICROSITE_DOMAIN=site.localhost`, сайт — на
 `http://acme.site.localhost:8000`. Просто `localhost` не годится: площадка
 на нём же попала бы под `RestrictSiteHost`.
 
@@ -78,6 +96,10 @@ Business, Premium, VIP): `acme.savdex.site`, в её цветах и шрифт�
 
 Решено пока ограничиться токенами и шаблонами. Если понадобится свой
 CSS (для VIP), вот безопасный порядок.
+
+**Сначала — отдельный домен.** На `savdex.uz/s/…` чужой CSS оказался бы
+на одном адресе с кабинетом и сессией площадки. Свой CSS включается
+только вместе с `MICROSITE_DOMAIN`.
 
 **Чего не делать никогда:** свой HTML и JavaScript. Это прямой путь к
 фишингу и краже данных посетителей, и никакая фильтрация от этого

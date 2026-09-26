@@ -42,7 +42,7 @@ class SiteController extends Controller
 
         return Inertia::render('cabinet/Site', [
             'available' => $this->available($company),
-            'domain' => SiteHost::domain(),
+            'address' => SiteHost::addressParts(),
             'site' => $site === null ? null : [
                 'subdomain' => $site->subdomain,
                 'url' => $site->url(),

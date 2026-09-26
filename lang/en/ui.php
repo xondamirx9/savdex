@@ -1164,7 +1164,7 @@ return [
         // Редактор мини-сайта (cabinet/Site)
         'site' => [
             'title' => 'Mini-site',
-            'subtitle' => 'Your company’s own website on savdex.site — in your colours and fonts',
+            'subtitle' => 'Your company’s own website — in your colours and fonts',
             'open' => 'Open site',
             'plan_required' => 'The mini-site is included in the Business, Premium and VIP plans. You can design it now and save and publish it after upgrading.',
             'compare_plans' => 'Compare plans',
@@ -1935,7 +1935,7 @@ return [
             'delete_file_title' => 'Delete “:title”?',
             'delete_file_public' => 'The file will disappear from the profile too — partners will no longer see it.',
             'delete_file_text' => 'The file will be deleted permanently.',
-            'microsite_ready' => 'A mini-site is included in your plan. Pick an address on savdex.site, a template and your brand colours — products, contacts and documents come from your profile.',
+            'microsite_ready' => 'A mini-site is included in your plan. Pick an address, a template and your brand colours — products, contacts and documents come from your profile.',
             'microsite_open' => 'Open the site editor',
             'microsite_plan' => 'The mini-site is available on the Business and Premium plans.',
             'compare_plans' => 'Compare plans',

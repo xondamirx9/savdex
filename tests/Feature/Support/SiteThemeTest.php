@@ -79,6 +79,18 @@ class SiteThemeTest extends TestCase
         $this->assertFalse(SiteHost::matches('notsavdex.site'));
     }
 
+    /** Без домена ни один хост не считается доменом мини-сайтов. */
+    #[Test]
+    public function без_домена_хосты_не_ограничиваются(): void
+    {
+        config(['microsite.domain' => null]);
+
+        $this->assertFalse(SiteHost::usesSubdomains());
+        $this->assertFalse(SiteHost::matches('savdex.site'));
+        $this->assertFalse(SiteHost::matches('localhost'));
+        $this->assertNull(SiteHost::subdomain('acme.savdex.site'));
+    }
+
     #[Test]
     public function предложенный_адрес_проходит_проверку(): void
     {

@@ -1164,7 +1164,7 @@ return [
         // Редактор мини-сайта (cabinet/Site)
         'site' => [
             'title' => 'Mini site',
-            'subtitle' => 'Şirketinizin savdex.site üzerindeki kendi sitesi — kendi renk ve yazı tiplerinizle',
+            'subtitle' => 'Şirketinizin kendi sitesi — kendi renk ve yazı tiplerinizle',
             'open' => 'Siteyi aç',
             'plan_required' => 'Mini site Business, Premium ve VIP tariflerine dahildir. Tasarımı şimdi seçebilir, tarife geçtikten sonra kaydedip yayınlayabilirsiniz.',
             'compare_plans' => 'Tarifeleri karşılaştır',
@@ -1935,7 +1935,7 @@ return [
             'delete_file_title' => '«:title» silinsin mi?',
             'delete_file_public' => 'Dosya kartvizitten de kaybolur — iş ortakları artık göremez.',
             'delete_file_text' => 'Dosya kalıcı olarak silinecek.',
-            'microsite_ready' => 'Mini site tarifinize dahildir. savdex.site üzerinde bir adres, şablon ve marka renklerinizi seçin — ürünler, iletişim bilgileri ve belgeler profilinizden gelir.',
+            'microsite_ready' => 'Mini site tarifinize dahildir. Bir adres, şablon ve marka renklerinizi seçin — ürünler, iletişim bilgileri ve belgeler profilinizden gelir.',
             'microsite_open' => 'Site düzenleyicisini aç',
             'microsite_plan' => 'Mini site Business ve Premium paketlerinde kullanılabilir.',
             'compare_plans' => 'Paketleri karşılaştır',

@@ -75,7 +75,20 @@ class SiteEditorTest extends TestCase
                 ->where('available', false)
                 ->where('subdomain', 'acme-trade')
                 ->where('site', null)
-                ->where('theme.template', 'classic'));
+                ->where('theme.template', 'classic')
+                ->where('address.suffix', '.savdex.site'));
+    }
+
+    #[Test]
+    public function без_домена_адрес_показывается_путём_площадки(): void
+    {
+        config(['microsite.domain' => null, 'app.url' => 'https://savdex.uz']);
+
+        $this->actingAs($this->user)
+            ->get('/cabinet/site')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('address.prefix', 'savdex.uz/s/')
+                ->where('address.suffix', ''));
     }
 
     #[Test]

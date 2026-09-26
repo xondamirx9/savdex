@@ -53,21 +53,26 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Мини-сайты компаний: acme.savdex.site
+| Мини-сайты компаний на поддоменах: acme.savdex.site
 |--------------------------------------------------------------------------
 |
-| Раньше маршрутов площадки: те к домену не привязаны, и главная «/»
-| перехватила бы адрес мини-сайта. Всё прочее на этом домене закрывает
-| RestrictSiteHost.
+| Только когда задан MICROSITE_DOMAIN. Раньше маршрутов площадки: те
+| к домену не привязаны, и главная «/» перехватила бы адрес мини-сайта.
+| Всё прочее на этом домене закрывает RestrictSiteHost.
+|
+| Без домена сайты живут на площадке по адресу /s/acme — маршрут ниже,
+| в группе витрины.
 */
 
-Route::domain('{subdomain}.'.SiteHost::domain())
-    ->middleware('throttle:120,1')
-    ->group(function (): void {
-        Route::get('/', [MicrositeController::class, 'show'])->name('microsite.show');
-    });
+if (SiteHost::usesSubdomains()) {
+    Route::domain('{subdomain}.'.SiteHost::domain())
+        ->middleware('throttle:120,1')
+        ->group(function (): void {
+            Route::get('/', [MicrositeController::class, 'show'])->name('microsite.show');
+        });
 
-Route::domain(SiteHost::domain())->get('/', [MicrositeController::class, 'root'])->name('microsite.root');
+    Route::domain(SiteHost::domain())->get('/', [MicrositeController::class, 'root'])->name('microsite.root');
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -189,6 +194,13 @@ Route::middleware('throttle:120,1')->group(function (): void {
     Route::get('/listing/{slug}', [CatalogController::class, 'show'])->name('listings.show');
     Route::get('/companies', [CompanyController::class, 'index'])->name('companies.index');
     Route::get('/company/{slug}', [CompanyController::class, 'show'])->name('companies.show');
+
+    // Мини-сайт компании страницей площадки. На поддоменах этот адрес
+    // перенаправляет на acme.savdex.site — ссылки, разосланные до
+    // покупки домена, продолжают работать
+    Route::get('/'.SiteHost::PATH_PREFIX.'/{subdomain}', [MicrositeController::class, 'page'])
+        ->where('subdomain', '[a-z0-9-]+')
+        ->name('microsite.page');
     Route::get('/files/{id}', [CompanyFileController::class, 'download'])->name('files.download');
 });
 

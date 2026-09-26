@@ -1163,7 +1163,7 @@ return [
         // Редактор мини-сайта (cabinet/Site)
         'site' => [
             'title' => '迷你官网',
-            'subtitle' => '公司在 savdex.site 上的专属网站——使用您的颜色和字体',
+            'subtitle' => '公司的专属网站——使用您的颜色和字体',
             'open' => '打开网站',
             'plan_required' => '迷你官网包含在 Business、Premium 和 VIP 套餐中。您现在就可以设计样式，升级套餐后即可保存并发布。',
             'compare_plans' => '比较套餐',
@@ -1934,7 +1934,7 @@ return [
             'delete_file_title' => '删除“:title”？',
             'delete_file_public' => '该文件也会从名片上消失——合作伙伴将无法再看到它。',
             'delete_file_text' => '文件将被永久删除。',
-            'microsite_ready' => '您的套餐包含迷你官网。在 savdex.site 上选择地址、模板和品牌颜色——产品、联系方式和文件将从公司资料中自动获取。',
+            'microsite_ready' => '您的套餐包含迷你官网。选择地址、模板和品牌颜色——产品、联系方式和文件将从公司资料中自动获取。',
             'microsite_open' => '打开网站编辑器',
             'microsite_plan' => '迷你官网在 Business 和 Premium 套餐中可用。',
             'compare_plans' => '比较套餐',

@@ -1167,7 +1167,7 @@ return [
         // Редактор мини-сайта (cabinet/Site)
         'site' => [
             'title' => 'Mini-sayt',
-            'subtitle' => 'Kompaniyaning savdex.site’dagi o‘z sayti — sizning ranglaringiz va shriftlaringizda',
+            'subtitle' => 'Kompaniyaning o‘z sayti — sizning ranglaringiz va shriftlaringizda',
             'open' => 'Saytni ochish',
             'plan_required' => 'Mini-sayt Business, Premium va VIP tariflariga kiradi. Dizaynni hozir tanlashingiz mumkin, saqlash va nashr qilish esa tarifga o‘tgandan keyin.',
             'compare_plans' => 'Tariflarni solishtirish',
@@ -1938,7 +1938,7 @@ return [
             'delete_file_title' => '«:title» o‘chirilsinmi?',
             'delete_file_public' => 'Fayl vizitkadan ham yo‘qoladi — hamkorlar uni boshqa ko‘rmaydi.',
             'delete_file_text' => 'Fayl butunlay o‘chiriladi.',
-            'microsite_ready' => 'Mini-sayt tarifingizga kiradi. savdex.site’da manzil, shablon va brend ranglarini tanlang — mahsulotlar, kontaktlar va hujjatlar profildan olinadi.',
+            'microsite_ready' => 'Mini-sayt tarifingizga kiradi. Manzil, shablon va brend ranglarini tanlang — mahsulotlar, kontaktlar va hujjatlar profildan olinadi.',
             'microsite_open' => 'Sayt muharririni ochish',
             'microsite_plan' => 'Mini-sayt Business va Premium tariflarida mavjud.',
             'compare_plans' => 'Tariflarni solishtirish',

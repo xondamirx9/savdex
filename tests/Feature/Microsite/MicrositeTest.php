@@ -9,13 +9,20 @@ use App\Models\CompanyContact;
 use App\Models\CompanySite;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Support\Microsite\SiteHost;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Мини-сайт на acme.savdex.site глазами посетителя.
+ * Мини-сайт глазами посетителя: на поддомене acme.savdex.site и
+ * страницей площадки /s/acme — пока домен не куплен.
+ *
+ * MICROSITE_DOMAIN задан в phpunit.xml: маршруты поддоменов
+ * регистрируются при загрузке, и выключить их из теста нельзя.
+ * Режим без домена проверяется сбросом настройки — страница /s/acme
+ * есть в обоих режимах и решает, что делать, уже при запросе.
  *
  * Сайт показывается, только пока выполнены все три условия: он
  * опубликован, компания не заблокирована и тариф включает мини-сайт.
@@ -214,5 +221,61 @@ class MicrositeTest extends TestCase
     public function главная_площадки_не_задета(): void
     {
         $this->get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('Home'));
+    }
+
+    // ── Без своего домена: savdex.uz/s/acme ─────────────────────
+
+    #[Test]
+    public function без_домена_сайт_живёт_страницей_площадки(): void
+    {
+        config(['microsite.domain' => null]);
+        $this->subscribe();
+        $site = $this->site();
+
+        $this->assertSame(rtrim((string) config('app.url'), '/').'/s/acme', $site->url());
+
+        $this->get('/s/acme')
+            ->assertOk()
+            ->assertSee('<title inertia>ООО «Акме»</title>', false)
+            ->assertSee('<link rel="canonical" href="'.$site->url().'">', false)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('site/Show')
+                ->where('site.url', $site->url()));
+    }
+
+    #[Test]
+    public function без_домена_язык_из_префикса(): void
+    {
+        config(['microsite.domain' => null]);
+        $this->subscribe();
+        $this->site();
+
+        $this->get('/uz/s/acme')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('locale', 'uz'));
+    }
+
+    #[Test]
+    public function без_домена_те_же_правила_показа(): void
+    {
+        config(['microsite.domain' => null]);
+        $this->subscribe(microsite: false);
+        $this->site();
+
+        $this->get('/s/acme')->assertNotFound();
+        $this->get('/s/nobody')->assertNotFound();
+    }
+
+    /**
+     * Ссылки, разосланные до покупки домена, не должны умереть:
+     * с появлением домена /s/acme ведёт на поддомен.
+     */
+    #[Test]
+    public function с_доменом_старый_адрес_перенаправляет_на_поддомен(): void
+    {
+        $this->subscribe();
+        $this->site();
+
+        $this->get('/s/acme')->assertStatus(301)->assertRedirect(SiteHost::url('acme'));
     }
 }

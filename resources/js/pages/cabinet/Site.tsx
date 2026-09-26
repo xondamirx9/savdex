@@ -24,7 +24,8 @@ import { routes } from '@/routes';
 
 type Props = {
     available: boolean;
-    domain: string;
+    /** Что стоит до и после поля адреса: «savdex.uz/s/» или «.savdex.site» */
+    address: { prefix: string; suffix: string };
     site: {
         subdomain: string;
         url: string;
@@ -46,7 +47,7 @@ type Props = {
 
 type FormData = { subdomain: string; theme: SiteTheme };
 
-export default function Site({ available, domain, site, subdomain, theme, options }: Props) {
+export default function Site({ available, address, site, subdomain, theme, options }: Props) {
     const form = useForm<FormData>({ subdomain, theme });
     const frame = useRef<HTMLIFrameElement>(null);
     const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -112,6 +113,7 @@ export default function Site({ available, domain, site, subdomain, theme, option
                             {t('cabinet.site.subdomain')}
                         </label>
                         <div className="site-address">
+                            {address.prefix && <span className="muted">{address.prefix}</span>}
                             <input
                                 id="site-subdomain"
                                 className="input"
@@ -123,7 +125,7 @@ export default function Site({ available, domain, site, subdomain, theme, option
                                     form.setData('subdomain', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
                                 }
                             />
-                            <span className="muted">.{domain}</span>
+                            {address.suffix && <span className="muted">{address.suffix}</span>}
                         </div>
                         {form.errors.subdomain ? (
                             <p className="hint" style={{ color: 'var(--danger)' }}>
