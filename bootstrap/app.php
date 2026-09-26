@@ -4,6 +4,7 @@ use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\CanonicalHost;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LocalizeUrl;
+use App\Http\Middleware\RestrictSiteHost;
 use App\Http\Middleware\SetLocale;
 use App\Support\Locales;
 use App\Support\Seo;
@@ -42,6 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
          * базы — процесс освобождается сразу и достаётся человеку.
          */
         $middleware->prepend(BlockGreedyCrawlers::class);
+
+        /*
+         * В конец глобального стека, после LocalizeUrl: на домене
+         * мини-сайтов открыт только сам мини-сайт, и путь сверяется
+         * уже без языкового префикса.
+         */
+        $middleware->append(RestrictSiteHost::class);
 
         /*
          * На хостинге приложение стоит за обратным прокси (Render,

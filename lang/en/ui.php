@@ -1161,7 +1161,64 @@ return [
     ],
 
     'cabinet' => [
+        // Редактор мини-сайта (cabinet/Site)
+        'site' => [
+            'title' => 'Mini-site',
+            'subtitle' => 'Your company’s own website on savdex.site — in your colours and fonts',
+            'open' => 'Open site',
+            'plan_required' => 'The mini-site is included in the Business, Premium and VIP plans. You can design it now and save and publish it after upgrading.',
+            'compare_plans' => 'Compare plans',
+            'address' => 'Address',
+            'status_published' => 'Published',
+            'status_draft' => 'Draft',
+            'subdomain' => 'Site address',
+            'subdomain_hint' => 'Latin letters, digits and hyphens, 3 to 40 characters',
+            'published_at' => 'Published :date',
+            'template' => 'Template',
+            'templates' => [
+                'classic' => 'Classic',
+                'classic_hint' => 'Company cover on the first screen and the logo',
+                'bold' => 'Bold',
+                'bold_hint' => 'Brand colour across the whole first screen, large heading',
+                'minimal' => 'Minimal',
+                'minimal_hint' => 'Text and white space, no background images',
+            ],
+            'style' => 'Style',
+            'presets' => 'Ready-made combinations',
+            'preset_names' => [
+                'savdex' => 'Classic',
+                'forest' => 'Forest',
+                'graphite' => 'Graphite',
+                'terracotta' => 'Terracotta',
+                'royal' => 'Royal',
+            ],
+            'primary' => 'Brand colour',
+            'accent' => 'Accent colour',
+            'mode' => 'Theme',
+            'modes' => [
+                'light' => 'Light',
+                'dark' => 'Dark',
+            ],
+            'heading_font' => 'Heading font',
+            'body_font' => 'Body font',
+            'radius' => 'Corners',
+            'radii' => [
+                'sharp' => 'Sharp',
+                'soft' => 'Soft',
+                'round' => 'Round',
+            ],
+            'content_hint' => 'Products, contacts and documents come from the company profile — edit them there and the site updates itself.',
+            'unpublished_changes' => 'There are unpublished changes: visitors see the previous version until you press “Publish”.',
+            'save' => 'Save draft',
+            'publish' => 'Publish',
+            'unpublish' => 'Unpublish',
+            'preview' => 'Preview',
+            'desktop' => 'Desktop',
+            'mobile' => 'Phone',
+        ],
+
         'nav' => [
+            'site' => 'Mini-site',
             'sections' => 'Dashboard sections',
             'dashboard' => 'Overview',
             'listings' => 'My listings',
@@ -1878,7 +1935,8 @@ return [
             'delete_file_title' => 'Delete “:title”?',
             'delete_file_public' => 'The file will disappear from the profile too — partners will no longer see it.',
             'delete_file_text' => 'The file will be deleted permanently.',
-            'microsite_soon' => 'The mini-site builder: the blocks “About”, “Advantages”, “Products”, “Gallery”, “Documents”, “Team”, “Contacts”, “Map”. Coming in one of the next updates.',
+            'microsite_ready' => 'A mini-site is included in your plan. Pick an address on savdex.site, a template and your brand colours — products, contacts and documents come from your profile.',
+            'microsite_open' => 'Open the site editor',
             'microsite_plan' => 'The mini-site is available on the Business and Premium plans.',
             'compare_plans' => 'Compare plans',
             'staff' => 'Employees',
@@ -1916,7 +1974,66 @@ return [
         ],
     ],
 
+    // Мини-сайт компании на savdex.site (site/Show)
+    'site' => [
+        'nav' => [
+            'label' => 'Site sections',
+            'about' => 'About',
+            'products' => 'Products',
+            'documents' => 'Documents',
+            'reviews' => 'Reviews',
+            'contacts' => 'Contacts',
+        ],
+        'contact_us' => 'Contact us',
+        'about' => [
+            'title' => 'About the company',
+            'empty' => 'The company has not told about itself yet.',
+            'founded' => 'Founded',
+            'employees' => 'Employees',
+            'location' => 'Location',
+            'type' => 'Company type',
+            'verified' => 'Verified by SAVDEX',
+        ],
+        'products' => [
+            'title' => 'Products',
+            'cta' => 'View products',
+            'negotiable' => 'Price on request',
+        ],
+        'documents' => [
+            'title' => 'Documents and photos',
+        ],
+        'reviews' => [
+            'title' => 'Reviews',
+            'count' => ':count review|:count reviews',
+            'stars' => 'Rated :rating out of 5',
+        ],
+        'contacts' => [
+            'title' => 'Contacts',
+            'address' => 'Address',
+            'empty' => 'No contacts yet.',
+            'types' => [
+                'phone' => 'Phone',
+                'email' => 'Email',
+                'telegram' => 'Telegram',
+                'whatsapp' => 'WhatsApp',
+                'website' => 'Website',
+            ],
+        ],
+        'made_with' => 'Powered by',
+    ],
+
     'messages' => [
+        'site' => [
+            'saved' => 'Draft saved',
+            'published' => 'The site is published',
+            'unpublished' => 'The site is unpublished',
+            'plan_required' => 'The mini-site is available on the Business, Premium and VIP plans',
+            'save_first' => 'Save the draft first',
+            'subdomain_format' => 'Address: Latin letters, digits and hyphens, 3 to 40 characters, no hyphen at the start or end',
+            'subdomain_taken' => 'This address is already taken',
+            'subdomain_reserved' => 'This address is reserved by the platform — choose another one',
+        ],
+
         'saved' => 'Saved',
         'phone_format' => 'The number must contain 9 to 15 digits. For example: +998 90 123-45-67',
 

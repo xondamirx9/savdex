@@ -7,6 +7,7 @@ import {
     Code2,
     CreditCard,
     Eye,
+    Globe,
     LayoutDashboard,
     MailWarning,
     TriangleAlert,
@@ -80,6 +81,7 @@ function groups(): NavGroup[] {
             title: t('cabinet.nav.account_group'),
             items: [
                 { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
+                { href: routes.cabinetSite, label: t('cabinet.nav.site'), icon: Globe },
                 { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
                 { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
             ],

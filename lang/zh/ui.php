@@ -1160,7 +1160,64 @@ return [
     ],
 
     'cabinet' => [
+        // Редактор мини-сайта (cabinet/Site)
+        'site' => [
+            'title' => '迷你官网',
+            'subtitle' => '公司在 savdex.site 上的专属网站——使用您的颜色和字体',
+            'open' => '打开网站',
+            'plan_required' => '迷你官网包含在 Business、Premium 和 VIP 套餐中。您现在就可以设计样式，升级套餐后即可保存并发布。',
+            'compare_plans' => '比较套餐',
+            'address' => '地址',
+            'status_published' => '已发布',
+            'status_draft' => '草稿',
+            'subdomain' => '网站地址',
+            'subdomain_hint' => '拉丁字母、数字和连字符，3 到 40 个字符',
+            'published_at' => '发布于 :date',
+            'template' => '模板',
+            'templates' => [
+                'classic' => '经典',
+                'classic_hint' => '首屏展示公司封面和标志',
+                'bold' => '醒目',
+                'bold_hint' => '首屏整屏品牌色，大号标题',
+                'minimal' => '简约',
+                'minimal_hint' => '文字与留白，无背景图片',
+            ],
+            'style' => '样式',
+            'presets' => '预设搭配',
+            'preset_names' => [
+                'savdex' => '经典',
+                'forest' => '森林',
+                'graphite' => '石墨',
+                'terracotta' => '赤陶',
+                'royal' => '皇家',
+            ],
+            'primary' => '品牌色',
+            'accent' => '强调色',
+            'mode' => '主题',
+            'modes' => [
+                'light' => '浅色',
+                'dark' => '深色',
+            ],
+            'heading_font' => '标题字体',
+            'body_font' => '正文字体',
+            'radius' => '圆角',
+            'radii' => [
+                'sharp' => '直角',
+                'soft' => '柔和',
+                'round' => '圆润',
+            ],
+            'content_hint' => '产品、联系方式和文件来自公司资料——在那里编辑，网站会自动更新。',
+            'unpublished_changes' => '有未发布的更改：在您点击“发布”之前，访客看到的仍是之前的版本。',
+            'save' => '保存草稿',
+            'publish' => '发布',
+            'unpublish' => '取消发布',
+            'preview' => '预览',
+            'desktop' => '电脑',
+            'mobile' => '手机',
+        ],
+
         'nav' => [
+            'site' => '迷你官网',
             'sections' => '后台栏目',
             'dashboard' => '总览',
             'listings' => '我的信息',
@@ -1877,7 +1934,8 @@ return [
             'delete_file_title' => '删除“:title”？',
             'delete_file_public' => '该文件也会从名片上消失——合作伙伴将无法再看到它。',
             'delete_file_text' => '文件将被永久删除。',
-            'microsite_soon' => '迷你官网搭建器：“公司简介”“优势”“产品”“相册”“文件”“团队”“联系方式”“地图”等模块。将在近期更新中推出。',
+            'microsite_ready' => '您的套餐包含迷你官网。在 savdex.site 上选择地址、模板和品牌颜色——产品、联系方式和文件将从公司资料中自动获取。',
+            'microsite_open' => '打开网站编辑器',
             'microsite_plan' => '迷你官网在 Business 和 Premium 套餐中可用。',
             'compare_plans' => '比较套餐',
             'staff' => '员工',
@@ -1915,7 +1973,66 @@ return [
         ],
     ],
 
+    // Мини-сайт компании на savdex.site (site/Show)
+    'site' => [
+        'nav' => [
+            'label' => '网站栏目',
+            'about' => '关于我们',
+            'products' => '产品',
+            'documents' => '文件',
+            'reviews' => '评价',
+            'contacts' => '联系方式',
+        ],
+        'contact_us' => '联系我们',
+        'about' => [
+            'title' => '关于公司',
+            'empty' => '公司尚未填写简介。',
+            'founded' => '成立年份',
+            'employees' => '员工人数',
+            'location' => '所在地',
+            'type' => '公司类型',
+            'verified' => '已通过 SAVDEX 认证',
+        ],
+        'products' => [
+            'title' => '产品',
+            'cta' => '查看产品',
+            'negotiable' => '价格面议',
+        ],
+        'documents' => [
+            'title' => '文件与照片',
+        ],
+        'reviews' => [
+            'title' => '评价',
+            'count' => ':count 条评价',
+            'stars' => '评分 :rating / 5',
+        ],
+        'contacts' => [
+            'title' => '联系方式',
+            'address' => '地址',
+            'empty' => '暂无联系方式。',
+            'types' => [
+                'phone' => '电话',
+                'email' => '邮箱',
+                'telegram' => 'Telegram',
+                'whatsapp' => 'WhatsApp',
+                'website' => '网站',
+            ],
+        ],
+        'made_with' => '技术支持：',
+    ],
+
     'messages' => [
+        'site' => [
+            'saved' => '草稿已保存',
+            'published' => '网站已发布',
+            'unpublished' => '网站已取消发布',
+            'plan_required' => '迷你官网仅在 Business、Premium 和 VIP 套餐中提供',
+            'save_first' => '请先保存草稿',
+            'subdomain_format' => '地址：拉丁字母、数字和连字符，3 到 40 个字符，开头和结尾不能是连字符',
+            'subdomain_taken' => '该地址已被占用',
+            'subdomain_reserved' => '该地址已被平台保留——请选择其他地址',
+        ],
+
         'saved' => '已保存',
         'phone_format' => '号码需包含 9 到 15 位数字。例如：+998 90 123-45-67',
 

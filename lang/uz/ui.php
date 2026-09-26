@@ -1164,7 +1164,64 @@ return [
     ],
 
     'cabinet' => [
+        // Редактор мини-сайта (cabinet/Site)
+        'site' => [
+            'title' => 'Mini-sayt',
+            'subtitle' => 'Kompaniyaning savdex.site’dagi o‘z sayti — sizning ranglaringiz va shriftlaringizda',
+            'open' => 'Saytni ochish',
+            'plan_required' => 'Mini-sayt Business, Premium va VIP tariflariga kiradi. Dizaynni hozir tanlashingiz mumkin, saqlash va nashr qilish esa tarifga o‘tgandan keyin.',
+            'compare_plans' => 'Tariflarni solishtirish',
+            'address' => 'Manzil',
+            'status_published' => 'Nashr qilingan',
+            'status_draft' => 'Qoralama',
+            'subdomain' => 'Sayt manzili',
+            'subdomain_hint' => 'Lotin harflari, raqamlar va defis, 3 dan 40 gacha belgi',
+            'published_at' => 'Nashr qilingan: :date',
+            'template' => 'Shablon',
+            'templates' => [
+                'classic' => 'Klassik',
+                'classic_hint' => 'Birinchi ekranda kompaniya muqovasi va logotip',
+                'bold' => 'Yorqin',
+                'bold_hint' => 'Butun birinchi ekran brend rangida, katta sarlavha',
+                'minimal' => 'Minimal',
+                'minimal_hint' => 'Matn va bo‘sh joy, fon rasmlarisiz',
+            ],
+            'style' => 'Dizayn',
+            'presets' => 'Tayyor uyg‘unliklar',
+            'preset_names' => [
+                'savdex' => 'Klassika',
+                'forest' => 'O‘rmon',
+                'graphite' => 'Grafit',
+                'terracotta' => 'Terrakota',
+                'royal' => 'Qirollik',
+            ],
+            'primary' => 'Brend rangi',
+            'accent' => 'Aksent rangi',
+            'mode' => 'Mavzu',
+            'modes' => [
+                'light' => 'Yorug‘',
+                'dark' => 'Qorong‘i',
+            ],
+            'heading_font' => 'Sarlavha shrifti',
+            'body_font' => 'Matn shrifti',
+            'radius' => 'Burchaklar',
+            'radii' => [
+                'sharp' => 'O‘tkir',
+                'soft' => 'Yumshoq',
+                'round' => 'Dumaloq',
+            ],
+            'content_hint' => 'Mahsulotlar, kontaktlar va hujjatlar kompaniya profilidan olinadi — ularni o‘sha yerda tahrirlang, sayt o‘zi yangilanadi.',
+            'unpublished_changes' => 'Nashr qilinmagan o‘zgarishlar bor: «Nashr qilish» tugmasini bosmaguningizcha tashrif buyuruvchilar oldingi ko‘rinishni ko‘radi.',
+            'save' => 'Qoralamani saqlash',
+            'publish' => 'Nashr qilish',
+            'unpublish' => 'Nashrdan olish',
+            'preview' => 'Oldindan ko‘rish',
+            'desktop' => 'Kompyuter',
+            'mobile' => 'Telefon',
+        ],
+
         'nav' => [
+            'site' => 'Mini-sayt',
             'sections' => 'Kabinet bo‘limlari',
             'dashboard' => 'Umumiy ko‘rinish',
             'listings' => 'Mening e’lonlarim',
@@ -1881,7 +1938,8 @@ return [
             'delete_file_title' => '«:title» o‘chirilsinmi?',
             'delete_file_public' => 'Fayl vizitkadan ham yo‘qoladi — hamkorlar uni boshqa ko‘rmaydi.',
             'delete_file_text' => 'Fayl butunlay o‘chiriladi.',
-            'microsite_soon' => 'Mini-sayt konstruktori: «Kompaniya haqida», «Afzalliklar», «Mahsulot», «Galereya», «Hujjatlar», «Jamoa», «Kontaktlar», «Xarita» bloklari. Yaqin yangilanishda paydo bo‘ladi.',
+            'microsite_ready' => 'Mini-sayt tarifingizga kiradi. savdex.site’da manzil, shablon va brend ranglarini tanlang — mahsulotlar, kontaktlar va hujjatlar profildan olinadi.',
+            'microsite_open' => 'Sayt muharririni ochish',
             'microsite_plan' => 'Mini-sayt Business va Premium tariflarida mavjud.',
             'compare_plans' => 'Tariflarni solishtirish',
             'staff' => 'Xodimlar',
@@ -1919,7 +1977,66 @@ return [
         ],
     ],
 
+    // Мини-сайт компании на savdex.site (site/Show)
+    'site' => [
+        'nav' => [
+            'label' => 'Sayt bo‘limlari',
+            'about' => 'Kompaniya haqida',
+            'products' => 'Mahsulotlar',
+            'documents' => 'Hujjatlar',
+            'reviews' => 'Sharhlar',
+            'contacts' => 'Kontaktlar',
+        ],
+        'contact_us' => 'Bog‘lanish',
+        'about' => [
+            'title' => 'Kompaniya haqida',
+            'empty' => 'Kompaniya hali o‘zi haqida yozmagan.',
+            'founded' => 'Tashkil etilgan yil',
+            'employees' => 'Xodimlar',
+            'location' => 'Manzilimiz',
+            'type' => 'Kompaniya turi',
+            'verified' => 'SAVDEX tomonidan tekshirilgan',
+        ],
+        'products' => [
+            'title' => 'Mahsulotlar',
+            'cta' => 'Mahsulotlarni ko‘rish',
+            'negotiable' => 'Narx kelishiladi',
+        ],
+        'documents' => [
+            'title' => 'Hujjatlar va rasmlar',
+        ],
+        'reviews' => [
+            'title' => 'Sharhlar',
+            'count' => ':count ta sharh',
+            'stars' => 'Baho: 5 dan :rating',
+        ],
+        'contacts' => [
+            'title' => 'Kontaktlar',
+            'address' => 'Manzil',
+            'empty' => 'Kontaktlar hali ko‘rsatilmagan.',
+            'types' => [
+                'phone' => 'Telefon',
+                'email' => 'Pochta',
+                'telegram' => 'Telegram',
+                'whatsapp' => 'WhatsApp',
+                'website' => 'Sayt',
+            ],
+        ],
+        'made_with' => 'Sayt ishlaydi:',
+    ],
+
     'messages' => [
+        'site' => [
+            'saved' => 'Qoralama saqlandi',
+            'published' => 'Sayt nashr qilindi',
+            'unpublished' => 'Sayt nashrdan olindi',
+            'plan_required' => 'Mini-sayt Business, Premium va VIP tariflarida mavjud',
+            'save_first' => 'Avval qoralamani saqlang',
+            'subdomain_format' => 'Manzil: lotin harflari, raqamlar va defis, 3 dan 40 gacha belgi, boshida va oxirida defissiz',
+            'subdomain_taken' => 'Bu manzil band',
+            'subdomain_reserved' => 'Bu manzil platforma tomonidan band qilingan — boshqasini tanlang',
+        ],
+
         'saved' => 'Saqlandi',
         'phone_format' => 'Raqam 9 dan 15 tagacha raqamdan iborat bo‘lishi kerak. Masalan: +998 90 123-45-67',
 

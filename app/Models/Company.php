@@ -192,6 +192,12 @@ class Company extends Model
         return $this->listings()->where('status', Listing::STATUS_ACTIVE);
     }
 
+    /** Мини-сайт на savdex.site; null — компания его не заводила. */
+    public function site(): HasOne
+    {
+        return $this->hasOne(CompanySite::class);
+    }
+
     public function wallet(): HasOne
     {
         return $this->hasOne(Wallet::class);

@@ -15,6 +15,8 @@
 @import './savdex-base.css' layer(base);
 @import './savdex-components.css' layer(components);
 @import './savdex-layout.css' layer(components);
+/* Мини-сайты компаний: свои токены --ms-*, классы с префиксом ms- */
+@import './microsite.css' layer(components);
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';

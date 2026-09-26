@@ -1161,7 +1161,64 @@ return [
     ],
 
     'cabinet' => [
+        // Редактор мини-сайта (cabinet/Site)
+        'site' => [
+            'title' => 'Mini site',
+            'subtitle' => 'Şirketinizin savdex.site üzerindeki kendi sitesi — kendi renk ve yazı tiplerinizle',
+            'open' => 'Siteyi aç',
+            'plan_required' => 'Mini site Business, Premium ve VIP tariflerine dahildir. Tasarımı şimdi seçebilir, tarife geçtikten sonra kaydedip yayınlayabilirsiniz.',
+            'compare_plans' => 'Tarifeleri karşılaştır',
+            'address' => 'Adres',
+            'status_published' => 'Yayında',
+            'status_draft' => 'Taslak',
+            'subdomain' => 'Site adresi',
+            'subdomain_hint' => 'Latin harfler, rakamlar ve kısa çizgi, 3 ile 40 karakter arası',
+            'published_at' => 'Yayınlandı: :date',
+            'template' => 'Şablon',
+            'templates' => [
+                'classic' => 'Klasik',
+                'classic_hint' => 'İlk ekranda şirket kapağı ve logo',
+                'bold' => 'Canlı',
+                'bold_hint' => 'Tüm ilk ekran marka renginde, büyük başlık',
+                'minimal' => 'Minimal',
+                'minimal_hint' => 'Metin ve boşluk, arka plan görseli yok',
+            ],
+            'style' => 'Görünüm',
+            'presets' => 'Hazır kombinasyonlar',
+            'preset_names' => [
+                'savdex' => 'Klasik',
+                'forest' => 'Orman',
+                'graphite' => 'Grafit',
+                'terracotta' => 'Terakota',
+                'royal' => 'Kraliyet',
+            ],
+            'primary' => 'Marka rengi',
+            'accent' => 'Vurgu rengi',
+            'mode' => 'Tema',
+            'modes' => [
+                'light' => 'Açık',
+                'dark' => 'Koyu',
+            ],
+            'heading_font' => 'Başlık yazı tipi',
+            'body_font' => 'Metin yazı tipi',
+            'radius' => 'Köşeler',
+            'radii' => [
+                'sharp' => 'Keskin',
+                'soft' => 'Yumuşak',
+                'round' => 'Yuvarlak',
+            ],
+            'content_hint' => 'Ürünler, iletişim bilgileri ve belgeler şirket profilinden alınır — onları orada düzenleyin, site kendiliğinden güncellenir.',
+            'unpublished_changes' => 'Yayınlanmamış değişiklikler var: «Yayınla» düğmesine basana kadar ziyaretçiler önceki görünümü görür.',
+            'save' => 'Taslağı kaydet',
+            'publish' => 'Yayınla',
+            'unpublish' => 'Yayından kaldır',
+            'preview' => 'Önizleme',
+            'desktop' => 'Bilgisayar',
+            'mobile' => 'Telefon',
+        ],
+
         'nav' => [
+            'site' => 'Mini site',
             'sections' => 'Panel bölümleri',
             'dashboard' => 'Genel bakış',
             'listings' => 'İlanlarım',
@@ -1878,7 +1935,8 @@ return [
             'delete_file_title' => '«:title» silinsin mi?',
             'delete_file_public' => 'Dosya kartvizitten de kaybolur — iş ortakları artık göremez.',
             'delete_file_text' => 'Dosya kalıcı olarak silinecek.',
-            'microsite_soon' => 'Mini site oluşturucu: «Şirket hakkında», «Avantajlar», «Ürünler», «Galeri», «Belgeler», «Ekip», «İletişim», «Harita» blokları. Yakın bir güncellemede gelecek.',
+            'microsite_ready' => 'Mini site tarifinize dahildir. savdex.site üzerinde bir adres, şablon ve marka renklerinizi seçin — ürünler, iletişim bilgileri ve belgeler profilinizden gelir.',
+            'microsite_open' => 'Site düzenleyicisini aç',
             'microsite_plan' => 'Mini site Business ve Premium paketlerinde kullanılabilir.',
             'compare_plans' => 'Paketleri karşılaştır',
             'staff' => 'Çalışanlar',
@@ -1916,7 +1974,66 @@ return [
         ],
     ],
 
+    // Мини-сайт компании на savdex.site (site/Show)
+    'site' => [
+        'nav' => [
+            'label' => 'Site bölümleri',
+            'about' => 'Hakkımızda',
+            'products' => 'Ürünler',
+            'documents' => 'Belgeler',
+            'reviews' => 'Yorumlar',
+            'contacts' => 'İletişim',
+        ],
+        'contact_us' => 'Bize ulaşın',
+        'about' => [
+            'title' => 'Şirket hakkında',
+            'empty' => 'Şirket henüz kendisi hakkında bilgi vermedi.',
+            'founded' => 'Kuruluş yılı',
+            'employees' => 'Çalışan sayısı',
+            'location' => 'Konum',
+            'type' => 'Şirket türü',
+            'verified' => 'SAVDEX tarafından doğrulandı',
+        ],
+        'products' => [
+            'title' => 'Ürünler',
+            'cta' => 'Ürünleri gör',
+            'negotiable' => 'Fiyat pazarlığa açık',
+        ],
+        'documents' => [
+            'title' => 'Belgeler ve fotoğraflar',
+        ],
+        'reviews' => [
+            'title' => 'Yorumlar',
+            'count' => ':count yorum',
+            'stars' => 'Puan: 5 üzerinden :rating',
+        ],
+        'contacts' => [
+            'title' => 'İletişim',
+            'address' => 'Adres',
+            'empty' => 'Henüz iletişim bilgisi yok.',
+            'types' => [
+                'phone' => 'Telefon',
+                'email' => 'E-posta',
+                'telegram' => 'Telegram',
+                'whatsapp' => 'WhatsApp',
+                'website' => 'Web sitesi',
+            ],
+        ],
+        'made_with' => 'Altyapı:',
+    ],
+
     'messages' => [
+        'site' => [
+            'saved' => 'Taslak kaydedildi',
+            'published' => 'Site yayınlandı',
+            'unpublished' => 'Site yayından kaldırıldı',
+            'plan_required' => 'Mini site Business, Premium ve VIP tariflerinde kullanılabilir',
+            'save_first' => 'Önce taslağı kaydedin',
+            'subdomain_format' => 'Adres: Latin harfler, rakamlar ve kısa çizgi, 3 ile 40 karakter arası, başta ve sonda kısa çizgi olmadan',
+            'subdomain_taken' => 'Bu adres zaten alınmış',
+            'subdomain_reserved' => 'Bu adres platform tarafından ayrılmıştır — başka bir adres seçin',
+        ],
+
         'saved' => 'Kaydedildi',
         'phone_format' => 'Numara 9 ile 15 arasında rakam içermelidir. Örneğin: +998 90 123-45-67',
 
