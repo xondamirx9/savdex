@@ -28,8 +28,11 @@ RUN mkdir -p storage/framework/views && npm run build
 # --- Рабочий образ: Apache + mod_php ---------------------------------------
 FROM php:8.3-apache
 
+# python3 — для Python-половины площадки (python/, перенос на Django):
+# выгрузка в Excel из админки сверяется ею на боевых данных
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev libpq-dev \
+        python3 \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache pdo_pgsql \
     && a2enmod rewrite headers \
@@ -57,13 +60,28 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 WORKDIR /var/www/html
 COPY --from=vendor --chown=www-data:www-data /app ./
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
+# --- Python-половина -------------------------------------------------------
+# Зависимости ставятся ровно по python/uv.lock: та же версия uv, что
+# у разработчиков, --frozen запрещает тихо пересобрать список пакетов.
+# Без пакетов разработки (pytest, mypy): на сервере они не нужны.
+# Окружение — python/.venv; владелец root, www-data только читает
+# и запускает. Байт-код собран заранее: писать его в read-only venv
+# при каждом запуске некому.
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+RUN cd python \
+    && UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-dev --no-cache --compile-bytecode \
+        --python /usr/bin/python3 \
+    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx"
+
 COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
 COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
 RUN chmod +x /usr/local/bin/render-entrypoint
 
 ENV APP_ENV=production \
     APP_DEBUG=false \
-    LOG_CHANNEL=stderr
+    LOG_CHANNEL=stderr \
+    SAVDEX_PYTHON=/var/www/html/python/.venv/bin/python \
+    PYTHONDONTWRITEBYTECODE=1
 
 ENTRYPOINT ["render-entrypoint"]
 CMD ["apache2-foreground"]

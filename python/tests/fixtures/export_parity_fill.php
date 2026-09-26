@@ -19,16 +19,24 @@
  * Не код площадки: живёт рядом с тестами Python и Laravel не трогает.
  */
 
+use App\Models\Category;
+use App\Models\Company;
+use App\Models\ContactUnlock;
+use App\Models\Listing;
+use App\Models\Review;
+use App\Models\Tender;
+use App\Models\User;
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
+
 $root = dirname(__DIR__, 3);
 
 require $root.'/vendor/autoload.php';
 $app = require $root.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
-use App\Models\{Company, User, Listing, Tender, Review, ContactUnlock, Category};
-use Illuminate\Support\Facades\DB;
-
-mt_srand(42); fake()->seed(42);
+mt_srand(42);
+fake()->seed(42);
 
 $plan = DB::table('plans')->value('id');
 $cats = Category::query()->pluck('id')->all();
@@ -41,7 +49,9 @@ $companies->each(function (Company $c, int $i) use ($plan, $cats) {
     DB::table('subscriptions')->insert(['company_id' => $c->id, 'plan_id' => $plan, 'started_at' => now()->subDays($i), 'created_at' => now(), 'updated_at' => now()]);
     DB::table('company_contacts')->insert(['company_id' => $c->id, 'type' => 'phone', 'value' => '00998'.str_pad((string) $i, 7, '0', STR_PAD_LEFT), 'created_at' => now(), 'updated_at' => now()]);
     DB::table('company_attributes')->insert(['company_id' => $c->id, 'key' => 'сертификат', 'value' => 'ISO 900'.$i, 'created_at' => now(), 'updated_at' => now()]);
-    if ($cats) DB::table('company_category')->insert(['company_id' => $c->id, 'category_id' => $cats[$i % count($cats)]]);
+    if ($cats) {
+        DB::table('company_category')->insert(['company_id' => $c->id, 'category_id' => $cats[$i % count($cats)]]);
+    }
     DB::table('company_documents')->insert(['company_id' => $c->id, 'type' => 'license', 'title' => 'Лицензия №'.$i, 'file_path' => "documents/{$c->id}/l.pdf", 'created_at' => now(), 'updated_at' => now()]);
 });
 
@@ -95,6 +105,6 @@ $alive = Listing::query()->whereNull('deleted_at')->orderBy('id')->limit(2)->plu
 DB::table('listings')->where('id', $alive[0])->update(['tags' => json_encode(['цемент', 'М400'])]);
 DB::table('listings')->where('id', $alive[1])->update(['title_i18n' => '{"en":  "Cement \\/ bags",   "uz": "Sement"}']);
 
-foreach (['companies','users','company_contacts','company_category','company_documents','wallets','subscriptions','company_attributes','contact_unlocks','reviews','listings','listing_images','listing_attributes','listing_stats','favorites','tenders'] as $t) {
+foreach (['companies', 'users', 'company_contacts', 'company_category', 'company_documents', 'wallets', 'subscriptions', 'company_attributes', 'contact_unlocks', 'reviews', 'listings', 'listing_images', 'listing_attributes', 'listing_stats', 'favorites', 'tenders'] as $t) {
     printf("%-20s %d\n", $t, DB::table($t)->count());
 }

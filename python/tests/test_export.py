@@ -231,3 +231,52 @@ class TestЗапись:
         assert page.column_dimensions["A"].width == 9
         assert page["A1"].font.b is True
         assert workbook["Справка"]["A1"].value == "SAVDEX — компании"
+
+
+class TestСравнениеВыгрузок:
+    """
+    Сравнение книг PHP и Python — рабочий код, а не только тест.
+
+    На боевом сервере каждая выгрузка из админки делается обеими
+    версиями и сверяется этим сравнением.
+    """
+
+    @staticmethod
+    def выгрузить(directory, rows):
+        from datetime import UTC, datetime
+
+        from savdex.export.workbooks import books
+
+        directory.mkdir(parents=True, exist_ok=True)
+        sheet = Sheet(name="Компании", table="companies", about="—", columns=(("ID", "id", "int"),))
+
+        for book in books(directory, now=datetime(2026, 9, 26, 12, 0, tzinfo=UTC)):
+            write(book, [Collected(sheet=sheet, rows=rows)])
+
+    def test_одинаковые_выгрузки_совпадают(self, tmp_path):
+        from savdex.export.compare import pair
+
+        self.выгрузить(tmp_path / "php", [[1], [2]])
+        self.выгрузить(tmp_path / "py", [[1], [2]])
+
+        assert pair(tmp_path / "php", tmp_path / "py") == {"companies": [], "listings": []}
+
+    def test_расхождение_названо_по_ячейке(self, tmp_path):
+        from savdex.export.compare import pair
+
+        self.выгрузить(tmp_path / "php", [[1], [2]])
+        self.выгрузить(tmp_path / "py", [[1], [3]])
+
+        result = pair(tmp_path / "php", tmp_path / "py")
+
+        assert any("Компании!A3" in p for p in result["companies"])
+
+    def test_пропавшая_книга_не_сходит_за_совпавшую(self, tmp_path):
+        from savdex.export.compare import pair
+
+        self.выгрузить(tmp_path / "php", [[1]])
+        (tmp_path / "py").mkdir()
+
+        result = pair(tmp_path / "php", tmp_path / "py")
+
+        assert result["companies"] == ["нет книги companies в выгрузке Python"]

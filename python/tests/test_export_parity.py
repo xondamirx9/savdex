@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from .xlsx_diff import diff
+from savdex.export.compare import diff
 
 КОРЕНЬ = Path(__file__).resolve().parents[2]
 PYTHON = Path(__file__).resolve().parents[1]
@@ -144,3 +144,37 @@ def test_крайние_случаи_действительно_в_выгруз�
 
     assert any(v.endswith("[…обрезано]") for v in cells), "нет обрезанного длинного текста"
     assert "000123456" in cells, "нет ИНН с ведущими нулями"
+
+
+def test_режим_сверки_для_php_отдаёт_итог(выгрузки, tmp_path):
+    """
+    Так Python-выгрузку вызывает админка на боевом сервере: рядом
+    с PHP-книгами, с --compare-with и --json. Итог — строка с меткой,
+    по которой PHP его находит.
+    """
+    import json
+
+    php_dir, _, _, _ = выгрузки
+
+    python = subprocess.run(
+        [
+            sys.executable,
+            "manage.py",
+            "export_xlsx",
+            f"--dir={tmp_path}",
+            f"--compare-with={php_dir}",
+            "--json",
+        ],
+        cwd=PYTHON,
+        env={**os.environ, "DATABASE_URL": АДРЕС},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    line = next(x for x in python.stdout.splitlines() if x.startswith("SAVDEX-RESULT "))
+    result = json.loads(line.removeprefix("SAVDEX-RESULT "))
+
+    assert result["self_check"] is True
+    assert result["compared"] is True
+    assert result["differences"] == 0, result["problems"]

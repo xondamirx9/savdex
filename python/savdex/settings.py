@@ -106,6 +106,32 @@ PASSWORD_HASHERS = [
 
 # ── Журнал ──────────────────────────────────────────────────────────
 
+
+def _log_level() -> str:
+    """
+    Уровень журнала из LOG_LEVEL — той же переменной, что у Laravel.
+
+    Соглашения у двух половин разные: Laravel пишет уровень строчными
+    и знает восемь уровней PSR-3 («debug», «notice», «emergency»), а
+    журнал Python — только пять и прописными. «debug» как есть ронял
+    Django ещё на старте: «Unable to configure root logger». Нашлось
+    первым же запуском Python-выгрузки из PHP, которая передаёт своё
+    окружение целиком.
+    """
+    level = os.environ.get("LOG_LEVEL", "info").strip().lower()
+
+    return {
+        "debug": "DEBUG",
+        "info": "INFO",
+        "notice": "INFO",
+        "warning": "WARNING",
+        "error": "ERROR",
+        "critical": "CRITICAL",
+        "alert": "CRITICAL",
+        "emergency": "CRITICAL",
+    }.get(level, "INFO")
+
+
 # В stderr, как у Laravel (LOG_CHANNEL=stderr): на Render видно
 # в одном потоке с логами PHP, и порядок событий не надо восстанавливать
 # по двум разным местам
@@ -113,5 +139,5 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"stderr": {"class": "logging.StreamHandler"}},
-    "root": {"handlers": ["stderr"], "level": os.environ.get("LOG_LEVEL", "INFO")},
+    "root": {"handlers": ["stderr"], "level": _log_level()},
 }

@@ -1,0 +1,96 @@
+# Сборка боевого образа и сквозная проверка выгрузки внутри него.
+#
+# Docker на машине разработчика есть не всегда, а ошибка в Dockerfile
+# на Render означает несостоявшийся деплой. Поэтому образ собирается
+# здесь, до слияния, и в нём прогоняется тот же путь, что у кнопки
+# «Выгрузить сейчас»: миграции, PHP-выгрузка, теневая Python-выгрузка,
+# сверка книг. Проверяется не «собралось», а «работает в том, что
+# уедет на сервер»: Python на месте, пакеты по uv.lock стоят, PHP видит
+# Python, обе версии достают до базы.
+name: docker
+
+on:
+  push:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - 'python/savdex/**'
+      - 'app/Support/DatabaseExports.php'
+      - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'app/Console/Commands/ExportRun.php'
+      - 'config/exports.php'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'python/pyproject.toml'
+      - 'python/uv.lock'
+      - 'python/savdex/**'
+      - 'app/Support/DatabaseExports.php'
+      - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'app/Console/Commands/ExportRun.php'
+      - 'config/exports.php'
+      - '.github/workflows/docker.yml'
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: savdex
+          POSTGRES_PASSWORD: savdex
+          POSTGRES_DB: savdex_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Сборка образа
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: savdex:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Python в образе
+        run: |
+          docker run --rm --entrypoint /var/www/html/python/.venv/bin/python savdex:ci \
+            -c "import django, openpyxl, psycopg, httpx; print('Django', django.get_version())"
+
+      # Ключ одноразовый, живёт только в этом прогоне
+      - name: Выгрузка как по кнопке — внутри образа
+        run: |
+          docker run --rm --network host \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e DB_CONNECTION=pgsql \
+            -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
+            -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync \
+            --entrypoint bash savdex:ci -c '
+              set -eo pipefail
+              php artisan migrate --force
+              php artisan db:seed --force
+              php artisan savdex:export-run | tee /tmp/run.txt
+              grep -q "Итог: done" /tmp/run.txt
+              grep -q "Сверка с Python: match" /tmp/run.txt
+            '

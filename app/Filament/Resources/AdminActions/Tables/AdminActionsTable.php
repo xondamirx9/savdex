@@ -38,6 +38,7 @@ class AdminActionsTable
         'hidden' => 'warning',
         'granted' => 'info',
         'exported' => 'info',
+        'downloaded' => 'info',
         'imported' => 'info',
         'refunded' => 'warning',
         'paid' => 'success',

@@ -1,6 +1,11 @@
 """
 Сравнение двух книг Excel: выгрузки PHP-версии и Python-версии.
 
+Живёт в рабочем коде, а не в тестах: им пользуется и проверка в CI,
+и каждая выгрузка на боевом сервере. Пока Python-версия не заменила
+PHP-версию, каждая выгрузка из админки делается обеими, и книги
+сверяются этим модулем — на настоящих данных, а не на проверочных.
+
 Сравнивается всё, что видит человек, открывший файл: порядок листов,
 каждая ячейка вместе с типом (число или текст — «00998…» строкой
 и числом это разные вещи), ширина столбцов, закреплённая шапка
@@ -11,15 +16,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.cell.cell import Cell, MergedCell
 
 # Ячейка времени выгрузки: лист «Справка», строка 4, столбец B
 ВРЕМЯ = ("Справка", 4, 2)
 
 
-def _значение(cell: Any) -> tuple[str, Any]:
+def _значение(cell: Cell | MergedCell) -> tuple[str, object]:
     value = cell.value
 
     # Пустая строка и пустая ячейка для человека неразличимы
@@ -56,7 +61,11 @@ def diff(php_file: Path, py_file: Path) -> list[str]:
 
                 va, vb = _значение(a.cell(r, c)), _значение(b.cell(r, c))
 
-                if va[0] == "число" and vb[0] == "число" and abs(va[1] - vb[1]) < 1e-9:
+                if (
+                    isinstance(va[1], float)
+                    and isinstance(vb[1], float)
+                    and abs(va[1] - vb[1]) < 1e-9
+                ):
                     continue
 
                 if va != vb:
@@ -88,3 +97,27 @@ def diff(php_file: Path, py_file: Path) -> list[str]:
                 break
 
     return problems
+
+
+def pair(php_dir: Path, py_dir: Path) -> dict[str, list[str]]:
+    """
+    Сравнить книги двух выгрузок по видам: компании и объявления.
+
+    Книга, которой нет в одной из папок, — тоже расхождение: выгрузка,
+    потерявшая книгу, не должна сходить за совпавшую.
+    """
+    result: dict[str, list[str]] = {}
+
+    for kind in ("companies", "listings"):
+        php = sorted(php_dir.glob(f"savdex-{kind}-*.xlsx"))
+        py = sorted(py_dir.glob(f"savdex-{kind}-*.xlsx"))
+
+        if not php or not py:
+            where = "PHP" if not php else "Python"
+            result[kind] = [f"нет книги {kind} в выгрузке {where}"]
+
+            continue
+
+        result[kind] = diff(php[-1], py[-1])
+
+    return result

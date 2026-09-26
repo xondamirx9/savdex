@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,12 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import connections
 
 from savdex.console import table
+from savdex.export.compare import pair
 from savdex.export.workbooks import Collected, Exporter, ExportError, books, verify, write
+
+#: Метка строки с итогом для вызывающей стороны (--json). По ней
+#: PHP находит итог в выводе, не гадая, какая строка последняя
+RESULT = "SAVDEX-RESULT "
 
 
 class Command(BaseCommand):
@@ -31,6 +37,16 @@ class Command(BaseCommand):
             "--database",
             default="default",
             help="Имя подключения из settings.DATABASES",
+        )
+        parser.add_argument(
+            "--compare-with",
+            default="",
+            help="Каталог с книгами PHP-версии: сверить свои книги с ними ячейка в ячейку",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="Последней строкой напечатать итог для программы (для вызова из PHP)",
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -93,15 +109,60 @@ class Command(BaseCommand):
 
             for problem in verdict.problems[:20]:
                 self.stderr.write(f"  {problem}")
+        else:
+            self.stdout.write(
+                "Все листы сошлись: число строк, шапки, наборы идентификаторов и каждая ячейка."
+            )
 
+            for book, _ in written:
+                self.stdout.write(f"  {book.file}  ({_size(book.file)})")
+
+        against_php = self._compare(str(options["compare_with"]), directory)
+
+        if options["json"]:
+            self.stdout.write(
+                RESULT
+                + json.dumps(
+                    {
+                        "self_check": not verdict.problems,
+                        "self_problems": verdict.problems[:20],
+                        "compared": against_php is not None,
+                        "differences": sum(len(p) for p in (against_php or {}).values()),
+                        "problems": [p for ps in (against_php or {}).values() for p in ps][:20],
+                        "truncated": exporter.truncated,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        if verdict.problems or any((against_php or {}).values()):
             raise SystemExit(1)
 
-        self.stdout.write(
-            "Все листы сошлись: число строк, шапки, наборы идентификаторов и каждая ячейка."
-        )
+    def _compare(self, php_dir: str, own_dir: Path) -> dict[str, list[str]] | None:
+        """
+        Сверка своих книг с книгами PHP-версии, если попросили.
 
-        for book, _ in written:
-            self.stdout.write(f"  {book.file}  ({_size(book.file)})")
+        Собственная сверка слепа к ошибке своего же чтения базы (так было
+        с полями JSON), поэтому на боевом сервере Python-версия каждый
+        раз сверяется ещё и с PHP-версией, выгрузившей те же данные.
+        """
+        if php_dir == "":
+            return None
+
+        result = pair(Path(php_dir), own_dir)
+
+        self.stdout.write("")
+        self.stdout.write("Сверка с выгрузкой PHP-версии:")
+
+        for kind, problems in result.items():
+            self.stdout.write(
+                f"  {kind}: " + ("совпадает" if not problems else f"расхождений {len(problems)}")
+            )
+
+            for problem in problems[:10]:
+                self.stdout.write(f"    {problem}")
+
+        return result
 
 
 def _size(file: Path) -> str:
