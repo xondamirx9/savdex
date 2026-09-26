@@ -35,6 +35,11 @@ const ageOptions = (): [string, string][] => [
     ['gt5', t('companies_page.age_gt5')],
 ];
 
+/** Сколько компаний за вариантом фильтра. Ноль сюда не доезжает: пустые варианты сервер не присылает. */
+function Count({ value }: { value: number }) {
+    return <span className="check-count">{value}</span>;
+}
+
 interface Paginated<T> {
     data: T[];
     links: { url: string | null; label: string; active: boolean }[];
@@ -46,16 +51,23 @@ export default function CompaniesIndex({
     filters,
     types,
     countries,
+    facets,
     stats,
 }: {
     companies: Paginated<CompanyRow>;
     filters: { q?: string; type?: string; verified?: boolean; country?: string; age?: string };
     /** Справочник типов компаний — редактируется в админке */
-    types: Record<string, string>;
-    countries: { code: string; name: string }[];
+    types: { value: string; label: string; count: number }[];
+    countries: { code: string; name: string; count: number }[];
+    /** Сколько компаний найдётся за каждым вариантом при текущих фильтрах */
+    facets: { ages: Record<string, number>; verified: number };
     stats: { total: number; verified: number };
 }) {
     const [q, setQ] = useState(filters.q ?? '');
+
+    // Возрастные группы без компаний не показываем — как типы и страны,
+    // которые сервер отсеял: щёлкать по ним не на что
+    const ages = ageOptions().filter(([value]) => (facets.ages[value] ?? 0) > 0);
 
     function search(e: FormEvent) {
         e.preventDefault();
@@ -96,85 +108,97 @@ export default function CompaniesIndex({
 
                 <div className="catalog">
                     <aside className="filters" aria-label={t('companies_page.filters_aria')}>
-                        <div className="filter-group">
-                            <div className="filter-title">{t('companies_page.type_title')}</div>
-                            <div className="filter-list">
-                                {Object.entries(types).map(([value, label]) => (
-                                    <label key={value} className="check">
-                                        <input
-                                            type="radio"
-                                            name="type"
-                                            checked={filters.type === value}
-                                            onChange={() => toggle('type', value)}
-                                        />
-                                        {label}
+                        {types.length > 0 && (
+                            <div className="filter-group">
+                                <div className="filter-title">{t('companies_page.type_title')}</div>
+                                <div className="filter-list">
+                                    {types.map((type) => (
+                                        <label key={type.value} className="check">
+                                            <input
+                                                type="radio"
+                                                name="type"
+                                                checked={filters.type === type.value}
+                                                onChange={() => toggle('type', type.value)}
+                                            />
+                                            {type.label}
+                                            <Count value={type.count} />
+                                        </label>
+                                    ))}
+                                    <label className="check">
+                                        <input type="radio" name="type" checked={!filters.type} onChange={() => toggle('type', undefined)} />
+                                        {t('companies_page.type_all')}
                                     </label>
-                                ))}
-                                <label className="check">
-                                    <input type="radio" name="type" checked={!filters.type} onChange={() => toggle('type', undefined)} />
-                                    {t('companies_page.type_all')}
-                                </label>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div className="filter-group">
-                            <div className="filter-title">{t('companies_page.country_title')}</div>
-                            <div className="filter-list">
-                                {countries.map((c) => (
-                                    <label key={c.code} className="check">
+                        {countries.length > 0 && (
+                            <div className="filter-group">
+                                <div className="filter-title">{t('companies_page.country_title')}</div>
+                                <div className="filter-list">
+                                    {countries.map((c) => (
+                                        <label key={c.code} className="check">
+                                            <input
+                                                type="radio"
+                                                name="country"
+                                                checked={filters.country === c.code}
+                                                onChange={() => toggle('country', c.code)}
+                                            />
+                                            {c.name}
+                                            <Count value={c.count} />
+                                        </label>
+                                    ))}
+                                    <label className="check">
                                         <input
                                             type="radio"
                                             name="country"
-                                            checked={filters.country === c.code}
-                                            onChange={() => toggle('country', c.code)}
+                                            checked={!filters.country}
+                                            onChange={() => toggle('country', undefined)}
                                         />
-                                        {c.name}
+                                        {t('companies_page.country_all')}
                                     </label>
-                                ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {ages.length > 0 && (
+                            <div className="filter-group">
+                                <div className="filter-title">{t('companies_page.age_title')}</div>
+                                <div className="filter-list">
+                                    {ages.map(([value, label]) => (
+                                        <label key={value} className="check">
+                                            <input
+                                                type="radio"
+                                                name="age"
+                                                checked={filters.age === value}
+                                                onChange={() => toggle('age', value)}
+                                            />
+                                            {label}
+                                            <Count value={facets.ages[value]} />
+                                        </label>
+                                    ))}
+                                    <label className="check">
+                                        <input type="radio" name="age" checked={!filters.age} onChange={() => toggle('age', undefined)} />
+                                        {t('companies_page.age_any')}
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+
+                        {facets.verified > 0 && (
+                            <div className="filter-group">
+                                <div className="filter-title">{t('companies_page.trust_title')}</div>
                                 <label className="check">
                                     <input
-                                        type="radio"
-                                        name="country"
-                                        checked={!filters.country}
-                                        onChange={() => toggle('country', undefined)}
+                                        type="checkbox"
+                                        checked={Boolean(filters.verified)}
+                                        onChange={(e) => toggle('verified', e.target.checked || undefined)}
                                     />
-                                    {t('companies_page.country_all')}
+                                    {t('companies_page.trust_only')}
+                                    <Count value={facets.verified} />
                                 </label>
                             </div>
-                        </div>
-
-                        <div className="filter-group">
-                            <div className="filter-title">{t('companies_page.age_title')}</div>
-                            <div className="filter-list">
-                                {ageOptions().map(([value, label]) => (
-                                    <label key={value} className="check">
-                                        <input
-                                            type="radio"
-                                            name="age"
-                                            checked={filters.age === value}
-                                            onChange={() => toggle('age', value)}
-                                        />
-                                        {label}
-                                    </label>
-                                ))}
-                                <label className="check">
-                                    <input type="radio" name="age" checked={!filters.age} onChange={() => toggle('age', undefined)} />
-                                    {t('companies_page.age_any')}
-                                </label>
-                            </div>
-                        </div>
-
-                        <div className="filter-group">
-                            <div className="filter-title">{t('companies_page.trust_title')}</div>
-                            <label className="check">
-                                <input
-                                    type="checkbox"
-                                    checked={Boolean(filters.verified)}
-                                    onChange={(e) => toggle('verified', e.target.checked || undefined)}
-                                />
-                                {t('companies_page.trust_only')}
-                            </label>
-                        </div>
+                        )}
                     </aside>
 
                     <div>

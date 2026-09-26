@@ -41,7 +41,19 @@ class TelegramWebhookController extends Controller
         }
 
         $token = trim(mb_substr($text, strlen('/start')));
-        $user = $token === '' ? null : $telegram->claim($token);
+
+        /*
+         * «/start» без токена — человек открыл бота сам, из поиска
+         * или по ссылке от знакомого. Молчание в ответ читается как
+         * «бот сломан», поэтому объясняем, откуда берётся привязка.
+         */
+        if ($token === '') {
+            $telegram->send($chatId, __('ui.messages.auth.telegram_start'));
+
+            return response()->noContent();
+        }
+
+        $user = $telegram->claim($token);
 
         if ($user === null) {
             $telegram->send($chatId, __('ui.messages.auth.telegram_link_expired'));

@@ -156,6 +156,7 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 
 .check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px;line-height:22px;min-height:24px}
 .check input{width:18px;height:18px;margin-top:2px;accent-color:var(--primary-700);cursor:pointer;flex-shrink:0}
+.check-count{margin-left:auto;font-size:12px;color:var(--text-muted);flex-shrink:0;padding-left:8px}
 .check.is-error{color:var(--danger)}
 .check.is-error input{outline:2px solid var(--danger);outline-offset:2px;border-radius:3px}
 
