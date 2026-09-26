@@ -15,6 +15,7 @@ use App\Filament\Widgets\MyTasks;
 use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
 use App\Filament\Widgets\SupportQueue;
+use App\Http\Controllers\Admin\DownloadExportController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Support\Appearance;
@@ -31,6 +32,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -126,6 +128,12 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 RequirePasswordChange::class,
-            ]);
+            ])
+            // Скачивание книг выгрузки — за тем же входом в админку,
+            // права проверяет сам контроллер
+            ->authenticatedRoutes(function (): void {
+                Route::get('exports/{run}/{file}', DownloadExportController::class)
+                    ->name('exports.download');
+            });
     }
 }

@@ -8,6 +8,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "dj-database-url>=2.2",
     "httpx>=0.27",
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]
@@ -17,6 +18,7 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.13",
     "django-stubs[compatible-mypy]>=5.1",
+    "types-openpyxl>=3.1",
 ]
 
 [tool.ruff]
@@ -36,6 +38,9 @@ allow-star-arg-any = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN"]
+# Описания листов — данные, перенесённые из PHP; резать фразу посреди
+# слова ради длины строки незачем
+"savdex/export/sheets.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -13,6 +13,7 @@ SQLite здесь не подходит: проверяются ровно те 
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 import psycopg
 import pytest
@@ -52,7 +53,19 @@ def _строки(отчёт) -> dict[str, tuple[str, str]]:
 
 @pytest.fixture
 def чистая_база():
-    """Схема пересоздаётся под каждую проверку."""
+    """
+    Схема пересоздаётся под каждую проверку.
+
+    `drop schema public cascade` стирает всё, поэтому только в базе,
+    названной проверочной: переменную окружения легко перепутать,
+    и цена ошибки — боевая база.
+    """
+    if "test" not in urlparse(АДРЕС).path.lstrip("/"):
+        pytest.fail(
+            "SAVDEX_TEST_PG_URL ведёт в базу без «test» в имени. "
+            "Проверка стирает схему целиком — отказываюсь."
+        )
+
     with psycopg.connect(АДРЕС, autocommit=True) as соединение:
         соединение.execute(СХЕМА)
 

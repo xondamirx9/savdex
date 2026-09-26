@@ -49,6 +49,7 @@ class AdminAction extends Model
         'granted' => 'Выдача прав',
         'revoked' => 'Отзыв прав',
         'exported' => 'Выгрузка',
+        'downloaded' => 'Скачивание',
         'imported' => 'Загрузка',
         'refunded' => 'Возврат средств',
         'paid' => 'Проведение оплаты',
