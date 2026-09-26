@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Banner;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Баннер в виде, пригодном для страницы.
@@ -37,8 +36,17 @@ final class BannerCard
             'key' => 'banner-'.$banner->id,
             'url' => $banner->url,
             'alt' => $banner->alt,
-            'image' => Storage::disk('public')->url($banner->imageFor($locale)),
-            'imageMobile' => $mobile !== null ? Storage::disk('public')->url($mobile) : null,
+            /*
+             * Адрес — через asset(), как у логотипов и обложек.
+             *
+             * Storage::url() собирает его из APP_URL, то есть из
+             * настройки, а asset() — из адреса, по которому сайт
+             * открыли. Логотипы на боевом сайте видны, значит их путь
+             * проверен. Два разных способа для одной папки загрузок —
+             * это однажды картинки одного вида есть, а другого нет.
+             */
+            'image' => asset('storage/'.$banner->imageFor($locale)),
+            'imageMobile' => $mobile !== null ? asset('storage/'.$mobile) : null,
             'focal' => $banner->focal_x.'% '.$banner->focal_y.'%',
             'dismissible' => $banner->is_dismissible,
             'dismissDays' => Banner::DISMISS_DAYS,
