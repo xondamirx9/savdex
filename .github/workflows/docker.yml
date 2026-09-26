@@ -76,15 +76,16 @@ jobs:
       - name: Python в образе
         run: |
           docker run --rm --entrypoint /var/www/html/python/.venv/bin/python savdex:ci \
-            -c "import django, openpyxl, psycopg, httpx; print('Django', django.get_version())"
+            -c "import django, openpyxl, psycopg, httpx, bcrypt; print('Django', django.get_version())"
 
       # Ключ одноразовый, живёт только в этом прогоне
-      - name: Выгрузка как по кнопке — внутри образа
+      - name: Выгрузка как по кнопке и выдача прав — внутри образа
         run: |
           docker run --rm --network host \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
             -e DB_CONNECTION=pgsql \
             -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
+            -e DJANGO_DATABASE_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
             -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync \
             --entrypoint bash savdex:ci -c '
               set -eo pipefail
@@ -94,4 +95,7 @@ jobs:
               grep -q "Итог: done" /tmp/run.txt
               grep -q "Сверка с Python: match" /tmp/run.txt
               grep -q "Книги отдала версия: python" /tmp/run.txt
+              cd python
+              BCRYPT_ROUNDS=4 .venv/bin/python manage.py admin ci@savdex.uz --role=support | tee /tmp/admin.txt
+              grep -q "Администратор создан" /tmp/admin.txt
             '

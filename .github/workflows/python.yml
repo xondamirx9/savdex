@@ -15,8 +15,11 @@
 # PHP- и Python-версий сверяются ячейка в ячейку. Собственная сверка
 # выгрузки ошибку чтения не видит, а это сравнение — видит.
 #
-# Поэтому проверка запускается и при правке PHP-выгрузки или миграций:
-# иначе правка в одной половине тихо развела бы две выгрузки.
+# То же для выдачи прав администратора (test_admin_parity.py): обе
+# команды на одной базе, и Laravel сам проверяет пароль, выданный Python.
+#
+# Поэтому проверка запускается и при правке PHP-половины этих команд или
+# миграций: иначе правка в одной половине тихо развела бы две версии.
 name: python
 
 on:
@@ -25,12 +28,20 @@ on:
       - 'python/**'
       - '.github/workflows/python.yml'
       - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'app/Console/Commands/MakeAdmin.php'
+      - 'app/Support/AdminAccess.php'
+      - 'app/Support/DatabaseExports.php'
+      - 'app/Models/User.php'
       - 'database/migrations/**'
   pull_request:
     paths:
       - 'python/**'
       - '.github/workflows/python.yml'
       - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'app/Console/Commands/MakeAdmin.php'
+      - 'app/Support/AdminAccess.php'
+      - 'app/Support/DatabaseExports.php'
+      - 'app/Models/User.php'
       - 'database/migrations/**'
 
 defaults:

@@ -62,6 +62,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/checks.py` | Проверка базы — первая перенесённая команда |
 | `savdex/payments/uzum.py` | Прозвон Uzum Checkout — вторая |
 | `savdex/export/` | Выгрузка в Excel — третья |
+| `savdex/admins.py` | Выдача доступа в админку — четвёртая и первая, что пишет |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Пока только `/up` |
 | `conftest.py` | Подмена базы на SQLite для проверок |
@@ -134,6 +135,31 @@ DATABASE_URL=postgres://... uv run python manage.py export_xlsx
 PHP-исходника. Правите в одной половине — правьте и в другой:
 тест `test_export.py` заметит расхождение.
 
+## Выдача доступа в админку
+
+```bash
+uv run python manage.py admin boss@savdex.uz                  # суперадмин
+uv run python manage.py admin fin@savdex.uz --role=finance --name="Финансы"
+uv run python manage.py admin mod@savdex.uz --moderator
+```
+
+Перенос `php artisan savdex:admin`, параметры те же. Пароль генерируется
+и показывается один раз; при первом входе Laravel попросит его сменить.
+
+Первая команда, которая пишет в базу, — поэтому повторено буква в букву
+то, что PHP делает молча (подробности в заголовке `savdex/admins.py`):
+проверка почты тем же правилом, что `filter_var`, генерация пароля как
+`Str::password`, хеш bcrypt с префиксом `$2y$` — хеш `$2b$`, который
+пишет библиотека Python, PHP не узнаёт, и Laravel не пустил бы такого
+администратора. Совпадение с PHP проверяют `tests/test_admins.py` и
+`tests/test_admin_parity.py`: вторая запускает обе команды на одной базе
+и спрашивает у самого Laravel, принимает ли он выданный пароль.
+
+Пишет только в `users` и только внутри `allowed_writes("users")` — см.
+«Предохранители». На сервере — под своей ролью в PostgreSQL
+(`DJANGO_DATABASE_URL`), которой разрешено писать только нужные поля
+`users`; SQL роли — в `docs/migration-to-python.md`, неделя 5.
+
 ## Предохранители
 
 `savdex/guards.py` закрепляет в коде два правила переноса, которые
@@ -163,6 +189,20 @@ Django её только читает (правило 4.1 в docs/migration-to-p
 ничего: маршрутизатор `LaravelOwnsSchema` запрещает миграции, а `CREATE`
 и `ALTER` не проходят предохранитель. Все изменения структуры базы идут
 через `database/migrations` у PHP — до самого конца переноса.
+
+**Узкое разрешение — не переход хозяина.** Иногда Django нужно писать
+в таблицу, которой по-прежнему владеет Laravel: команда `admin` пишет
+в `users`. Для этого таблица заявляется в `SHARED_WRITES` с объяснением,
+почему это безопасно (у модели нет событий, PHP пишет те же поля тем же
+простым путём), а запись идёт только внутри блока:
+
+```python
+with allowed_writes("users"):
+    cursor.execute("update users set ...")
+```
+
+Вне блока, в соседнем потоке и для любой другой таблицы предохранитель
+по-прежнему отказывает.
 
 ### Как передать таблицу Django
 

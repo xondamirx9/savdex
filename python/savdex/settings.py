@@ -36,11 +36,19 @@ def _database() -> dict[str, Any]:
     """
     Подключение к той же базе, с которой работает Laravel.
 
-    DATABASE_URL — то, что даёт Render. Переменные DB_* — то, что
-    стоит в .env у разработчика. Порядок именно такой: на сервере
-    выигрывает сервер.
+    DJANGO_DATABASE_URL — собственная роль Python в PostgreSQL (чтение
+    всего, запись только того, что заявлено в guards.SHARED_WRITES);
+    Laravel эту переменную не читает, поэтому на Render её можно задать
+    для всей службы, не трогая сайт. DATABASE_URL — адрес, переданный
+    явно, или то, что даёт хостинг. Переменные DB_* — то, что стоит
+    в .env у разработчика. Порядок именно такой: чем уже и явнее, тем
+    раньше.
     """
-    url = os.environ.get("DATABASE_URL") or os.environ.get("TARGET_DB_URL")
+    url = (
+        os.environ.get("DJANGO_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("TARGET_DB_URL")
+    )
 
     if url:
         import dj_database_url

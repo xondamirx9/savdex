@@ -44,6 +44,61 @@ class TestРазборЗапроса:
         assert guards.table_of(sql) is None
 
 
+class TestУзкоеРазрешение:
+    """
+    Неделя 5: команда admin пишет в users, которой Django не владеет.
+
+    Разрешение действует только внутри блока, который его заявил, и
+    только на заявленную таблицу.
+    """
+
+    def test_внутри_блока_запись_проходит(self):
+        with guards.allowed_writes("users"):
+            guards.check("update users set is_admin = true where id = 1")
+
+    def test_вне_блока_снова_запрет(self):
+        with guards.allowed_writes("users"):
+            pass
+
+        with pytest.raises(WriteToForeignTableError, match="«users»"):
+            guards.check("update users set is_admin = true where id = 1")
+
+    def test_разрешение_не_распространяется_на_другие_таблицы(self):
+        with guards.allowed_writes("users"), pytest.raises(WriteToForeignTableError):
+            guards.check("update companies set status = 'active'")
+
+    def test_незаявленную_таблицу_разрешить_нельзя(self):
+        with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("payments"):
+            pass
+
+    def test_исключение_внутри_блока_снимает_разрешение(self):
+        with pytest.raises(RuntimeError), guards.allowed_writes("users"):
+            raise RuntimeError("сбой посреди записи")
+
+        with pytest.raises(WriteToForeignTableError):
+            guards.check("delete from users where id = 1")
+
+    def test_разрешение_не_утекает_в_другой_поток(self):
+        import threading
+
+        итог: list[str] = []
+
+        def сосед() -> None:
+            try:
+                guards.check("update users set status = 'blocked'")
+            except WriteToForeignTableError:
+                итог.append("запрет")
+            else:
+                итог.append("прошло")
+
+        with guards.allowed_writes("users"):
+            поток = threading.Thread(target=сосед)
+            поток.start()
+            поток.join()
+
+        assert итог == ["запрет"]
+
+
 class TestЗапретЗаписи:
     """Правило 4.1: у каждой таблицы один хозяин."""
 
