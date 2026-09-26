@@ -15,6 +15,7 @@ from django.db import connections
 from django.db.utils import OperationalError
 
 from savdex.checks import Report, inspect, reason
+from savdex.console import table
 
 # То, чего из SQL не видно. Список тот же, что у PHP-версии: человек
 # должен различать «проверено» и «проверить нечем»
@@ -64,7 +65,8 @@ class Command(BaseCommand):
         self.stdout.write("База доступна, права понятны, схема и данные читаются.")
 
     def _print(self, report: Report) -> None:
-        self._table(report.rows)
+        for line in table(("", "Что", "Состояние"), report.rows):
+            self.stdout.write(line)
 
         if report.advice:
             self.stdout.write("")
@@ -79,26 +81,3 @@ class Command(BaseCommand):
             self.stdout.write(f"  • {line}")
 
         self.stdout.write("")
-
-    def _table(self, rows: list[tuple[str, str, str]]) -> None:
-        """
-        Своя отрисовка: у Django таблиц в консоли нет.
-
-        Ширина по содержимому, как у Laravel, — вывод двух реализаций
-        сравнивают глазами, и одинаковая рамка это заметно облегчает.
-        """
-        header = ("", "Что", "Состояние")
-        widths = [max(len(row[i]) for row in (header, *rows)) for i in range(3)]
-        rule = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
-
-        def line(row: tuple[str, str, str]) -> str:
-            return "| " + " | ".join(row[i].ljust(widths[i]) for i in range(3)) + " |"
-
-        self.stdout.write(rule)
-        self.stdout.write(line(header))
-        self.stdout.write(rule)
-
-        for row in rows:
-            self.stdout.write(line(row))
-
-        self.stdout.write(rule)

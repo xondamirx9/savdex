@@ -9,13 +9,29 @@
 # has_table_privilege. Без него такие проверки пропускаются, поэтому
 # здесь поднимается служебный контейнер: пропущенная проверка — не
 # проверка.
+#
+# PHP здесь тоже нужен — для сравнения выгрузок (test_export_parity.py):
+# схему строят миграции Laravel, данные — скрипт наполнения, и книги
+# PHP- и Python-версий сверяются ячейка в ячейку. Собственная сверка
+# выгрузки ошибку чтения не видит, а это сравнение — видит.
+#
+# Поэтому проверка запускается и при правке PHP-выгрузки или миграций:
+# иначе правка в одной половине тихо развела бы две выгрузки.
 name: python
 
 on:
   push:
-    paths: ['python/**', '.github/workflows/python.yml']
+    paths:
+      - 'python/**'
+      - '.github/workflows/python.yml'
+      - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'database/migrations/**'
   pull_request:
-    paths: ['python/**', '.github/workflows/python.yml']
+    paths:
+      - 'python/**'
+      - '.github/workflows/python.yml'
+      - 'app/Console/Commands/ExportWorkbooks.php'
+      - 'database/migrations/**'
 
 defaults:
   run:
@@ -32,7 +48,9 @@ jobs:
         env:
           POSTGRES_USER: savdex
           POSTGRES_PASSWORD: savdex
-          POSTGRES_DB: savdex
+          # «test» в имени обязателен: проверки стирают схему
+          # целиком и в базу с другим именем не пойдут
+          POSTGRES_DB: savdex_test
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready
@@ -49,6 +67,23 @@ jobs:
 
       - run: uv sync --all-groups
 
+      # PHP для сравнения выгрузок: миграции, наполнение, PHP-выгрузка
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_pgsql, gd, intl, bcmath
+          coverage: none
+
+      - name: Кэш composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Зависимости Laravel
+        working-directory: .
+        run: composer install --no-interaction --no-progress --prefer-dist
+
       # Порядок нарочный: разбор кода быстрее проверки типов, а та
       # быстрее тестов. Ошибка находится раньше и дешевле
       - name: Разбор кода
@@ -63,4 +98,5 @@ jobs:
       - name: Тесты
         run: uv run pytest -q
         env:
-          SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex
+          SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
+          SAVDEX_PARITY_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
