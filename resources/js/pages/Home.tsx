@@ -46,13 +46,27 @@ import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
-/*
- * Списки собираются функциями, а не константами модуля: подписи
- * берутся из словаря, а он приходит с сервером — константа
- * вычислилась бы до того, как словарь установлен.
+/**
+ * Секция главной: тексты и видимость из админки («Главная страница»),
+ * уже на языке посетителя (LandingBlock::card). Порядок секций задан
+ * макетом, а не админкой.
  */
-const steps = (): [string, string][] =>
-    [1, 2, 3, 4].map((i) => [t(`home.step${i}_title`), t(`home.step${i}_text`)]);
+interface Block {
+    visible: boolean;
+    eyebrow: string;
+    heading: string;
+    subheading: string;
+    button: string;
+    /** Пункты «Как это работает» и «Частых вопросов» */
+    items?: { title: string; text: string }[];
+    /** Подпись под кнопкой призыва */
+    note?: string;
+}
+
+const EMPTY_BLOCK: Block = { visible: true, eyebrow: '', heading: '', subheading: '', button: '', items: [], note: '' };
+
+/** Иконки карточек вопросов — по порядку, дальше по кругу. */
+const FAQ_ICONS = [Wallet, Percent, ShieldCheck, MessageSquareText, Users, Languages];
 
 interface Stats {
     companies: number;
@@ -295,6 +309,7 @@ function HeroSearch({
 }
 
 export default function Home({
+    blocks,
     stats,
     categories,
     services,
@@ -308,6 +323,7 @@ export default function Home({
     heroImage,
     banner,
 }: {
+    blocks: Partial<Record<string, Block>>;
     stats: Stats;
     categories: CategoryTile[];
     /** Две популярные услуги — плитки рядом с категориями */
@@ -329,6 +345,14 @@ export default function Home({
     // Каждый счётчик ведёт туда, что он считает: компании — в каталог
     // компаний, объявления и категории — в «Товары», страны — на
     // страницу стран (в шапке её нет, попасть можно отсюда и из подвала)
+    const block = (key: string): Block => blocks[key] ?? EMPTY_BLOCK;
+    const shown = (key: string): boolean => block(key).visible;
+    const hero = block('hero');
+    const how = block('how');
+    const faq = block('faq');
+    const blog = block('news');
+    const cta = block('cta');
+
     const statCells: [typeof Users, string, number, string, string][] = [
         [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies'), routes.companies],
         [Boxes, 'stat-ico-orange', stats.listings, t('home.stat_listings'), routes.catalog],
@@ -363,8 +387,8 @@ export default function Home({
                             остаётся открытой справа, панель ниже на всю
                             ширину: композиция утверждённого макета */}
                         <div className="hero-b2b-copy" data-reveal>
-                            <h1>{t('home.h1')}</h1>
-                            <p className="hero-b2b-lead">{t('home.lead')}</p>
+                            <h1>{hero.heading}</h1>
+                            {hero.subheading !== '' && <p className="hero-b2b-lead">{hero.subheading}</p>}
                             {/* «Продавцы» — предложения товаров, «Покупатели» —
                                 запросы на закупку: две стороны площадки */}
                             <div className="hero-b2b-cta">
@@ -396,30 +420,32 @@ export default function Home({
 
             {/* ── Показатели: цифры из базы — выдуманные счётчики
                  на витрине недопустимы ── */}
-            <section className="stats-band">
-                <div className="container">
-                    <div className="stats-band-card">
-                        {statCells.map(([Icon, tone, value, label, href]) => (
-                            <Link key={label} href={href} className="stat-cell">
-                                <span className={cn('stat-ico', tone)}>
-                                    <Icon aria-hidden className="size-5" />
-                                </span>
-                                <div style={{ minWidth: 0 }}>
-                                    <div className="stat-cell-num">{formatNumber(value)}</div>
-                                    <div className="stat-cell-label">{label}</div>
-                                </div>
-                            </Link>
-                        ))}
+            {shown('stats') && (
+                <section className="stats-band">
+                    <div className="container">
+                        <div className="stats-band-card">
+                            {statCells.map(([Icon, tone, value, label, href]) => (
+                                <Link key={label} href={href} className="stat-cell">
+                                    <span className={cn('stat-ico', tone)}>
+                                        <Icon aria-hidden className="size-5" />
+                                    </span>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div className="stat-cell-num">{formatNumber(value)}</div>
+                                        <div className="stat-cell-label">{label}</div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* ── Популярные категории ── */}
-            {(categories.length > 0 || services.length > 0) && (
+            {shown('categories') && (categories.length > 0 || services.length > 0) && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.categories_title')}</h2>
+                            <h2>{block('categories').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.categories_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -470,11 +496,11 @@ export default function Home({
             )}
 
             {/* ── Витрина VIP: объявления компаний с высшим тарифом ── */}
-            {latest.length > 0 && (
+            {shown('vip') && latest.length > 0 && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.vip_title')}</h2>
+                            <h2>{block('vip').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -491,11 +517,11 @@ export default function Home({
             {/* ── Запросы (RFQ): другая сторона площадки — «куплю».
                  Лента горизонтальной прокруткой в один ряд, чтобы
                  не спорить с сеткой товаров выше ── */}
-            {requests.length > 0 && (
+            {shown('requests') && requests.length > 0 && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.requests_title')}</h2>
+                            <h2>{block('requests').heading}</h2>
                             <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
                                 {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -511,11 +537,11 @@ export default function Home({
 
             {/* ── Поставщики: покупатель фильтруется по блокам — кто ищет
                  товар, остаётся выше, кто ищет партнёра — здесь ── */}
-            {suppliers.length > 0 && (
+            {shown('suppliers') && suppliers.length > 0 && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.suppliers_title')}</h2>
+                            <h2>{block('suppliers').heading}</h2>
                             <Link href={routes.companies} className="section-bar-link">
                                 {t('home.suppliers_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -547,32 +573,34 @@ export default function Home({
             )}
 
             {/* ── Как это работает ── */}
-            <section className="section-lg section--white">
-                <div className="container">
-                    <div className="section-head-left">
-                        <span className="eyebrow">{t('home.how_eyebrow')}</span>
-                        <h2 className="t-section">{t('home.how_title')}</h2>
-                        <p className="t-lead">{t('home.how_lead')}</p>
+            {shown('how') && (
+                <section className="section-lg section--white">
+                    <div className="container">
+                        <div className="section-head-left">
+                            {how.eyebrow !== '' && <span className="eyebrow">{how.eyebrow}</span>}
+                            <h2 className="t-section">{how.heading}</h2>
+                            {how.subheading !== '' && <p className="t-lead">{how.subheading}</p>}
+                        </div>
+                        <div className="flow" data-reveal-stagger>
+                            {(how.items ?? []).map((step, i) => (
+                                <div key={i} className="flow-step">
+                                    <div className="flow-num">{i + 1}</div>
+                                    <h4 className="t-h4">{step.title}</h4>
+                                    <p>{step.text}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flow" data-reveal-stagger>
-                        {steps().map(([title, text], i) => (
-                            <div key={title} className="flow-step">
-                                <div className="flow-num">{i + 1}</div>
-                                <h4 className="t-h4">{title}</h4>
-                                <p>{text}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* ── Отзывы пользователей: живые, из базы — выдуманные
                  цитаты на витрине недопустимы, как и счётчики ── */}
-            {reviews.length > 0 && (
+            {shown('reviews') && reviews.length > 0 && (
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{t('home.reviews_title')}</h2>
+                            <h2>{block('reviews').heading}</h2>
                         </div>
                         <div className="review-grid" data-reveal-stagger>
                             {reviews.map((r) => (
@@ -616,46 +644,43 @@ export default function Home({
             )}
 
             {/* ── Частые вопросы: карточки вместо аккордеона — ответ
-                 виден сразу, без клика. Нумерация вопросов совпадает
-                 с разметкой FAQPage в PageController::home ── */}
-            <section className="section">
-                <div className="container">
-                    <div className="section-bar">
-                        <h2>{t('home.objections_title')}</h2>
+                 виден сразу, без клика. Те же вопросы размечены для
+                 поисковика (FAQPage в PageController::home) ── */}
+            {shown('faq') && (faq.items ?? []).length > 0 && (
+                <section className="section">
+                    <div className="container">
+                        <div className="section-bar">
+                            <h2>{faq.heading}</h2>
+                        </div>
+                        <div className="objection-grid" data-reveal-stagger>
+                            {(faq.items ?? []).map((item, i) => {
+                                const Icon = FAQ_ICONS[i % FAQ_ICONS.length];
+
+                                return (
+                                    <div key={i} className="objection-card">
+                                        <span className="objection-ico">
+                                            <Icon aria-hidden className="size-6" />
+                                        </span>
+                                        <div>
+                                            <h3 className="t-h4">{item.title}</h3>
+                                            <p>{item.text}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <div className="objection-grid" data-reveal-stagger>
-                        {(
-                            [
-                                [Wallet, 1],
-                                [Percent, 2],
-                                [ShieldCheck, 3],
-                                [MessageSquareText, 4],
-                                [Users, 5],
-                                [Languages, 6],
-                            ] as const
-                        ).map(([Icon, i]) => (
-                            <div key={i} className="objection-card">
-                                <span className="objection-ico">
-                                    <Icon aria-hidden className="size-6" />
-                                </span>
-                                <div>
-                                    <h3 className="t-h4">{t(`home.faq_q${i}`)}</h3>
-                                    <p>{t(`home.faq_a${i}`)}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+                </section>
+            )}
 
             {/* ── Новости ── */}
-            {news.length > 0 && (
+            {shown('news') && news.length > 0 && (
                 <section className="section-lg">
                     <div className="container">
                         <div className="row-between wrap" style={{ alignItems: 'flex-end', marginBottom: 36 }}>
                             <div className="section-head-left" style={{ marginBottom: 0 }}>
-                                <span className="eyebrow">{t('home.blog_eyebrow')}</span>
-                                <h2 className="t-section">{t('home.blog_title')}</h2>
+                                {blog.eyebrow !== '' && <span className="eyebrow">{blog.eyebrow}</span>}
+                                <h2 className="t-section">{blog.heading}</h2>
                             </div>
                             <Link href={routes.news} className="btn btn-secondary">
                                 {t('home.blog_all')} <ArrowRight aria-hidden className="size-4" />
@@ -693,22 +718,24 @@ export default function Home({
             )}
 
             {/* ── Финальный призыв ── */}
-            <section className="section--tight">
-                <div className="container">
-                    <div className="cta-band">
-                        <h2 className="t-h1">{t('home.cta_title')}</h2>
-                        <p className="t-lead">{t('home.cta_lead')}</p>
-                        <Link
-                            href={routes.register}
-                            className="btn btn-lg"
-                            style={{ background: '#fff', color: 'var(--primary-700)' }}
-                        >
-                            {t('home.cta_button')}
-                        </Link>
-                        <p className="cta-note">{t('home.cta_note')}</p>
+            {shown('cta') && (
+                <section className="section--tight">
+                    <div className="container">
+                        <div className="cta-band">
+                            <h2 className="t-h1">{cta.heading}</h2>
+                            {cta.subheading !== '' && <p className="t-lead">{cta.subheading}</p>}
+                            <Link
+                                href={routes.register}
+                                className="btn btn-lg"
+                                style={{ background: '#fff', color: 'var(--primary-700)' }}
+                            >
+                                {cta.button}
+                            </Link>
+                            {cta.note !== '' && <p className="cta-note">{cta.note}</p>}
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
         </PublicLayout>
     );
 }

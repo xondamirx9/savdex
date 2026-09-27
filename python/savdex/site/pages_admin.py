@@ -94,17 +94,25 @@ class OwnTranslationsForm(forms.ModelForm):  # type: ignore[type-arg]
 
     TRANSLATED: ClassVar[tuple[str, ...]] = ()
 
+    def translated(self) -> list[str]:
+        """
+        Поля с языками, которые есть в этой форме: у секции главной
+        бывает только заголовок, и отсутствующее поле не должно стирать
+        свои переводы.
+        """
+        return [name for name in self.TRANSLATED if name in self.fields]
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
-        for name in self.TRANSLATED:
+        for name in self.translated():
             stored = getattr(self.instance, f"{name}_i18n", None) or {}
 
             for code in OTHER_LOCALES:
                 self.fields[f"{name}_{code}"].initial = stored.get(code, "")
 
     def save(self, commit: bool = True) -> Any:  # noqa: ANN401
-        for name in self.TRANSLATED:
+        for name in self.translated():
             values = {
                 code: text
                 for code in OTHER_LOCALES
@@ -121,7 +129,7 @@ class OwnTranslationsForm(forms.ModelForm):  # type: ignore[type-arg]
         """
         stale = []
 
-        for name in self.TRANSLATED:
+        for name in self.translated():
             if name not in self.changed_data:
                 continue
 

@@ -1070,6 +1070,6 @@ class NewsPostAdmin(SavdexModelAdmin):
         )
 
 
-# Раздел «Страницы и FAQ» — отдельным модулем: у него своя механика
-# полей под языки. Импорт регистрирует его в админке
-from savdex.site import pages_admin  # noqa: E402, F401
+# Разделы «Страницы и FAQ» и «Главная страница» — отдельными модулями:
+# у них своя механика полей под языки. Импорт регистрирует их в админке
+from savdex.site import landing_admin, pages_admin  # noqa: E402, F401
