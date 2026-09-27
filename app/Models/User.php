@@ -28,7 +28,7 @@ use Illuminate\Notifications\Notifiable;
  * Полная блокировка на этом шаге убила бы конверсию регистрации.
  */
 #[Fillable([
-    'company_id', 'name', 'email', 'password', 'phone', 'locale',
+    'company_id', 'name', 'email', 'password', 'phone', 'locale', 'account_type',
     'company_role', 'is_admin', 'admin_role', 'admin_permissions', 'must_change_password', 'status',
     'telegram_chat_id', 'telegram_username', 'telegram_linked_at',
 ])]

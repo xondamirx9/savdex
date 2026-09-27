@@ -178,6 +178,23 @@ return [
         'tin_label' => 'STIR',
         'tin_placeholder' => '123456789',
         'tin_hint' => '«Tasdiqlangan» belgisi uchun kerak. Keyinroq to‘ldirsa ham bo‘ladi.',
+        'account_type_legend' => 'Siz kimsiz?',
+        'account_legal' => 'Yuridik shaxs',
+        'account_legal_desc' => 'Rekvizitlari bor kompaniya, YaTT yoki tashkilot',
+        'account_individual' => 'Jismoniy shaxs',
+        'account_individual_desc' => 'O‘z nomingizdan sotib olasiz yoki sotasiz',
+        'account_freelancer' => 'Frilanser',
+        'account_freelancer_desc' => 'Mutaxassis sifatida xizmat ko‘rsatasiz va buyurtma olasiz',
+        'person_title' => 'Profilingiz',
+        'person_subheading' => 'Hamkorlar sizni platformada shunday ko‘radi. To‘ldirilgan profil ko‘proq murojaat oladi.',
+        'person_name_label' => 'Hamkorlar ko‘radigan ism',
+        'person_name_placeholder' => 'Alisher Karimov',
+        'freelancer_name_placeholder' => 'Alisher Karimov — dizayner',
+        'person_tin_label' => 'STIR yoki JShShIR',
+        'person_tin_placeholder' => '9 yoki 14 raqam',
+        'person_tin_hint' => 'Majburiy emas. «Tasdiqlangan» belgisi uchun kerak — keyinroq to‘ldirish mumkin.',
+        'person_type_label' => 'Yo‘nalish (majburiy emas)',
+        'person_type_none' => 'Ko‘rsatilmasin',
         'role_legend' => 'Platformada nima qilasiz',
         'role_supplier' => 'Sotaman',
         'role_supplier_desc' => 'Tovarimga xaridor izlayman',
@@ -1951,6 +1968,12 @@ return [
         'made_with' => 'Sayt ishlaydi:',
     ],
 
+    'legal_form' => [
+        'legal' => 'Yuridik shaxs',
+        'individual' => 'Jismoniy shaxs',
+        'freelancer' => 'Frilanser',
+    ],
+
     'messages' => [
         'site' => [
             'saved' => 'Qoralama saqlandi',
@@ -2017,18 +2040,21 @@ return [
             'password_numbers' => 'Parolga kamida bitta raqam qo‘shing',
             'password_leaked' => 'Bu parol ma’lumot sizib chiqishlarida uchraydi. Boshqasini o‘ylab toping',
             'terms' => 'Oferta va maxfiylik siyosatini qabul qilish kerak',
+            'account_type' => 'Kimligingizni tanlang: yuridik shaxs, jismoniy shaxs yoki frilanser',
         ],
 
         'tin' => [
             'digits_only' => 'STIR faqat raqamlardan iborat bo‘ladi.',
             'invalid' => 'Yaroqsiz STIR ko‘rsatilgan.',
             'uz_length' => 'O‘zbekistonda STIR — aniq 9 ta raqam.',
+            'uz_person_length' => 'O‘zbekistonda jismoniy shaxsning STIR — 9 raqam, JShShIR — 14 raqam.',
             'length' => 'STIR 6 dan 15 tagacha raqamdan iborat bo‘lishi kerak.',
         ],
 
         'company' => [
             'fill_first' => 'Avval kompaniya ma’lumotlarini to‘ldiring',
             'name_required' => 'Kompaniya nomini kiriting',
+            'person_name_required' => 'Hamkorlar ko‘radigan ismni kiriting',
             'type_required' => 'Kompaniya turini tanlang',
             'country_required' => 'Mamlakatni tanlang',
             'city_required' => 'Shaharni tanlang',

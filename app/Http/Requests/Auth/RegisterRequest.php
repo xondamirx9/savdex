@@ -36,6 +36,7 @@ class RegisterRequest extends FormRequest
                 Password::defaults(),
             ],
             'terms' => ['accepted'],
+            'account_type' => ['nullable', 'in:legal,individual,freelancer'],
             'locale' => ['nullable', 'string', 'in:ru,uz,en,zh,tr'],
         ];
     }
@@ -64,6 +65,7 @@ class RegisterRequest extends FormRequest
             'password.uncompromised' => __('ui.messages.register.password_leaked'),
 
             'terms.accepted' => __('ui.messages.register.terms'),
+            'account_type.in' => __('ui.messages.register.account_type'),
         ];
     }
 

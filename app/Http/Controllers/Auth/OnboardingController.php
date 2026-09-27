@@ -49,6 +49,11 @@ class OnboardingController extends Controller
 
             'types' => Company::typeOptions(),
 
+            // Физлицу и фрилансеру шаг показывает профиль человека:
+            // без названия компании и типа бизнеса, имя — из регистрации
+            'accountType' => self::accountType($request),
+            'personName' => $request->user()->name,
+
             /*
              * Направления раздела «Услуги» — для блока, который
              * появляется при выборе типа компании «Услуги»: эйчар,
@@ -70,14 +75,19 @@ class OnboardingController extends Controller
             return redirect()->route('cabinet');
         }
 
+        $form = self::accountType($request);
+        $person = $form !== Company::LEGAL_ENTITY;
+
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:190'],
-            'type' => ['required', 'string', 'max:30'],
+            // Тип бизнеса обязателен только компании: у физлица
+            // и фрилансера его может просто не быть
+            'type' => [$person ? 'nullable' : 'required', 'string', 'max:30'],
             'country_id' => ['required', 'exists:countries,id'],
             'city_id' => ['required', 'exists:cities,id'],
             'tin' => [
                 'nullable', 'string', 'max:20',
-                new Tin(Country::find($request->integer('country_id'))?->code),
+                new Tin(Country::find($request->integer('country_id'))?->code, person: $person),
                 Rule::unique('companies', 'tin')->whereNull('deleted_at'),
             ],
             'primary_role' => ['required', 'in:supplier,buyer,both'],
@@ -86,7 +96,7 @@ class OnboardingController extends Controller
             // Текст для «Другого»: чем занимается компания своими словами
             'custom_category' => ['nullable', 'string', 'max:80'],
         ], [
-            'name.required' => __('ui.messages.company.name_required'),
+            'name.required' => __($person ? 'ui.messages.company.person_name_required' : 'ui.messages.company.name_required'),
             'type.required' => __('ui.messages.company.type_required'),
             'country_id.required' => __('ui.messages.company.country_required'),
             'city_id.required' => __('ui.messages.company.city_required'),
@@ -96,7 +106,8 @@ class OnboardingController extends Controller
 
         $company = Company::create([
             'name' => $data['name'],
-            'type' => $data['type'],
+            'type' => $data['type'] ?? null,
+            'legal_form' => $form,
             'country_id' => $data['country_id'],
             'city_id' => $data['city_id'],
             'tin' => $data['tin'] ?? null,
@@ -114,6 +125,14 @@ class OnboardingController extends Controller
 
         return redirect()->route('verification.notice')
             ->with('success', __('ui.messages.company.created_onboarding'));
+    }
+
+    /** Выбор с первого шага регистрации; неизвестное значение — юрлицо. */
+    private static function accountType(Request $request): string
+    {
+        $type = (string) $request->user()->account_type;
+
+        return in_array($type, Company::LEGAL_FORMS, true) ? $type : Company::LEGAL_ENTITY;
     }
 
     /** Пропустить шаг: аккаунт уже есть, и терять человека из-за формы нельзя. */

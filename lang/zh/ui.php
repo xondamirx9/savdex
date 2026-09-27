@@ -174,6 +174,23 @@ return [
         'tin_label' => '税号',
         'tin_placeholder' => '123456789',
         'tin_hint' => '获取“已认证”标识所需。可稍后填写。',
+        'account_type_legend' => '您的身份',
+        'account_legal' => '法人',
+        'account_legal_desc' => '拥有登记信息的公司、个体工商户或机构',
+        'account_individual' => '个人',
+        'account_individual_desc' => '以个人名义采购或销售',
+        'account_freelancer' => '自由职业者',
+        'account_freelancer_desc' => '以专业人士身份提供服务、承接订单',
+        'person_title' => '您的资料',
+        'person_subheading' => '合作伙伴将在平台上看到这些信息。资料越完整，收到的咨询越多。',
+        'person_name_label' => '合作伙伴看到的名称',
+        'person_name_placeholder' => 'Alisher Karimov',
+        'freelancer_name_placeholder' => 'Alisher Karimov — 设计师',
+        'person_tin_label' => '税号或个人识别号（PINFL）',
+        'person_tin_placeholder' => '9 位或 14 位数字',
+        'person_tin_hint' => '选填。获得“已认证”徽章需要填写，可以稍后补充。',
+        'person_type_label' => '业务方向（选填）',
+        'person_type_none' => '不指定',
         'role_legend' => '您在平台上做什么',
         'role_supplier' => '我要卖',
         'role_supplier_desc' => '为自己的商品寻找买家',
@@ -1947,6 +1964,12 @@ return [
         'made_with' => '技术支持：',
     ],
 
+    'legal_form' => [
+        'legal' => '法人',
+        'individual' => '个人',
+        'freelancer' => '自由职业者',
+    ],
+
     'messages' => [
         'site' => [
             'saved' => '草稿已保存',
@@ -2013,18 +2036,21 @@ return [
             'password_numbers' => '请在密码中至少加入一个数字',
             'password_leaked' => '该密码出现在数据泄露记录中。请换一个',
             'terms' => '需要接受服务协议和隐私政策',
+            'account_type' => '请选择您的身份：法人、个人或自由职业者',
         ],
 
         'tin' => [
             'digits_only' => '纳税人识别号只能由数字组成。',
             'invalid' => '填写的纳税人识别号无效。',
             'uz_length' => '乌兹别克斯坦的纳税人识别号正好是 9 位数字。',
+            'uz_person_length' => '乌兹别克斯坦个人税号为 9 位数字，个人识别号（PINFL）为 14 位数字。',
             'length' => '纳税人识别号需包含 6 到 15 位数字。',
         ],
 
         'company' => [
             'fill_first' => '请先填写公司资料',
             'name_required' => '请填写公司名称',
+            'person_name_required' => '请填写合作伙伴看到的名称',
             'type_required' => '请选择公司类型',
             'country_required' => '请选择国家',
             'city_required' => '请选择城市',

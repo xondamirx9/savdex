@@ -175,6 +175,23 @@ return [
         'tin_label' => 'Vergi numarası',
         'tin_placeholder' => '123456789',
         'tin_hint' => '«Doğrulandı» rozeti için gerekli. Daha sonra da doldurabilirsiniz.',
+        'account_type_legend' => 'Siz kimsiniz?',
+        'account_legal' => 'Tüzel kişi',
+        'account_legal_desc' => 'Şirket, şahıs işletmesi veya kayıtlı kuruluş',
+        'account_individual' => 'Gerçek kişi',
+        'account_individual_desc' => 'Kendi adınıza alım veya satım yapıyorsunuz',
+        'account_freelancer' => 'Serbest çalışan',
+        'account_freelancer_desc' => 'Uzman olarak hizmet veriyor ve sipariş alıyorsunuz',
+        'person_title' => 'Profiliniz',
+        'person_subheading' => 'Ortaklar sizi platformda böyle görecek. Eksiksiz profil daha fazla talep alır.',
+        'person_name_label' => 'Ortakların göreceği ad',
+        'person_name_placeholder' => 'Alisher Karimov',
+        'freelancer_name_placeholder' => 'Alisher Karimov — tasarımcı',
+        'person_tin_label' => 'Vergi no veya PINFL',
+        'person_tin_placeholder' => '9 veya 14 hane',
+        'person_tin_hint' => 'İsteğe bağlı. «Doğrulandı» rozeti için gerekli — daha sonra ekleyebilirsiniz.',
+        'person_type_label' => 'Alan (isteğe bağlı)',
+        'person_type_none' => 'Belirtme',
         'role_legend' => 'Platformda ne yapıyorsunuz',
         'role_supplier' => 'Satıyorum',
         'role_supplier_desc' => 'Malıma alıcı arıyorum',
@@ -1948,6 +1965,12 @@ return [
         'made_with' => 'Altyapı:',
     ],
 
+    'legal_form' => [
+        'legal' => 'Tüzel kişi',
+        'individual' => 'Gerçek kişi',
+        'freelancer' => 'Serbest çalışan',
+    ],
+
     'messages' => [
         'site' => [
             'saved' => 'Taslak kaydedildi',
@@ -2014,18 +2037,21 @@ return [
             'password_numbers' => 'Parolaya en az bir rakam ekleyin',
             'password_leaked' => 'Bu parola veri sızıntılarında geçiyor. Başka bir tane belirleyin',
             'terms' => 'Sözleşmeyi ve gizlilik politikasını kabul etmeniz gerekir',
+            'account_type' => 'Kim olduğunuzu seçin: tüzel kişi, gerçek kişi veya serbest çalışan',
         ],
 
         'tin' => [
             'digits_only' => 'Vergi numarası yalnızca rakamlardan oluşur.',
             'invalid' => 'Geçersiz bir vergi numarası girildi.',
             'uz_length' => 'Özbekistan’da vergi numarası tam olarak 9 rakamdır.',
+            'uz_person_length' => 'Özbekistan’da gerçek kişinin vergi numarası 9, PINFL’si 14 hanedir.',
             'length' => 'Vergi numarası 9 ile 15 arasında rakam içermelidir.',
         ],
 
         'company' => [
             'fill_first' => 'Önce şirket bilgilerinizi doldurun',
             'name_required' => 'Şirket adını girin',
+            'person_name_required' => 'Ortakların göreceği adı girin',
             'type_required' => 'Şirket türünü seçin',
             'country_required' => 'Bir ülke seçin',
             'city_required' => 'Bir şehir seçin',

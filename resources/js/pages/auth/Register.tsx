@@ -24,6 +24,16 @@ function scorePassword(v: string): number {
     return Math.min(s, 4);
 }
 
+/**
+ * Кто регистрируется. Функция, а не константа модуля: подписи берутся
+ * из словаря, а он приходит с сервером после загрузки файла.
+ */
+const accountTypes = (): [string, string, string][] => [
+    ['legal', t('auth.account_legal'), t('auth.account_legal_desc')],
+    ['individual', t('auth.account_individual'), t('auth.account_individual_desc')],
+    ['freelancer', t('auth.account_freelancer'), t('auth.account_freelancer_desc')],
+];
+
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
@@ -35,6 +45,9 @@ export default function Register() {
         password: '',
         password_confirmation: '',
         terms: false as boolean,
+        // Юрлицо — по умолчанию: площадка B2B, и большинство
+        // регистрируются от компании
+        account_type: 'legal',
     });
 
     /**
@@ -77,6 +90,33 @@ export default function Register() {
             subheading={t('auth.register_subheading')}
         >
             <form onSubmit={submit} className="space-y-5" noValidate>
+                {/* Кто вы: от выбора зависит второй шаг — профиль компании
+                    или профиль человека без названия и типа бизнеса */}
+                <fieldset style={{ border: 'none' }}>
+                    <legend className="label" style={{ marginBottom: 8 }}>
+                        {t('auth.account_type_legend')} <span className="req">*</span>
+                    </legend>
+                    <div className="radio-cards">
+                        {accountTypes().map(([value, title, desc]) => (
+                            <label key={value} className="radio-card">
+                                <input
+                                    type="radio"
+                                    name="account_type"
+                                    checked={data.account_type === value}
+                                    onChange={() => update('account_type', value)}
+                                />
+                                <div className="radio-card-body">
+                                    <div className="radio-card-title">{title}</div>
+                                    <div className="radio-card-desc">{desc}</div>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                    {errors.account_type && (
+                        <p className="text-danger mt-1.5 text-[13px]">{errors.account_type}</p>
+                    )}
+                </fieldset>
+
                 <TextInput
                     label={t('auth.email_label')}
                     type="email"

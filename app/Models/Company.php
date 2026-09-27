@@ -28,7 +28,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'slug', 'name', 'legal_name', 'tin',
     'country_id', 'city_id', 'address', 'lat', 'lng',
-    'type', 'primary_role', 'is_it_provider', 'it_specializations', 'custom_category', 'description', 'source_note', 'logo_path', 'cover_path', 'website',
+    'type', 'legal_form', 'primary_role', 'is_it_provider', 'it_specializations', 'custom_category', 'description', 'source_note', 'logo_path', 'cover_path', 'website',
     'phone', 'email', 'telegram', 'whatsapp', 'contact_person',
     'founded_year', 'employees_range', 'turnover_range',
     'verification_level', 'verified_at', 'verified_by',
@@ -79,6 +79,31 @@ class Company extends Model
         return $fromDirectory !== [] ? $fromDirectory : self::FALLBACK_TYPES;
     }
 
+    /**
+     * Правовая форма профиля. Юрлицо — компания с названием и типом
+     * бизнеса; физлицо и фрилансер выступают от своего имени, и типа
+     * бизнеса у них может не быть — витрина подписывает их формой.
+     */
+    public const LEGAL_ENTITY = 'legal';
+
+    public const LEGAL_INDIVIDUAL = 'individual';
+
+    public const LEGAL_FREELANCER = 'freelancer';
+
+    public const LEGAL_FORMS = [self::LEGAL_ENTITY, self::LEGAL_INDIVIDUAL, self::LEGAL_FREELANCER];
+
+    /** Физлицо или фрилансер — профиль человека, а не организации. */
+    public function isPerson(): bool
+    {
+        return in_array($this->legal_form, [self::LEGAL_INDIVIDUAL, self::LEGAL_FREELANCER], true);
+    }
+
+    /** Подпись правовой формы на языке посетителя. */
+    public function legalFormLabel(): string
+    {
+        return __('ui.legal_form.'.(in_array($this->legal_form, self::LEGAL_FORMS, true) ? $this->legal_form : self::LEGAL_ENTITY));
+    }
+
     public const FALLBACK_TYPES = [
         'manufacturer' => 'Производитель',
         'importer' => 'Импортёр',
@@ -90,9 +115,13 @@ class Company extends Model
     /** Человеческое название типа этой компании. */
     public function typeLabel(): ?string
     {
-        return $this->type !== null
-            ? (self::typeOptions()[$this->type] ?? $this->type)
-            : null;
+        if ($this->type !== null) {
+            return self::typeOptions()[$this->type] ?? $this->type;
+        }
+
+        // У физлица и фрилансера типа бизнеса может не быть —
+        // вместо пустоты карточка говорит, кто это
+        return $this->isPerson() ? $this->legalFormLabel() : null;
     }
 
     public const STATUS_PENDING = 'pending';
@@ -346,6 +375,8 @@ class Company extends Model
             'tin' => $this->tin,
             'type' => $this->type,
             'type_label' => $this->typeLabel(),
+            'legal_form' => $this->legal_form ?? self::LEGAL_ENTITY,
+            'legal_form_label' => $this->legalFormLabel(),
             // Свободный текст компании — на языке посетителя, пока
             // перевода нет — как написан (ContentTranslation)
             'custom_category' => ContentTranslation::text($this->custom_category),
@@ -482,7 +513,7 @@ class Company extends Model
     {
         $checks = [
             'name' => filled($this->name),
-            'type' => filled($this->type),
+            'type' => filled($this->type) || $this->isPerson(),
             'city' => filled($this->city_id),
             'phone' => filled($this->phone),
             'email' => filled($this->email),

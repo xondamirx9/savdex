@@ -82,6 +82,9 @@ interface ServiceTile {
     tasks: number;
 }
 
+/** Адрес раздела «Другое» в каталоге (CategorySeeder) */
+const OTHER_CATEGORY_SLUG = 'drugoe';
+
 const SERVICE_ICONS: Record<string, typeof Package> = {
     it: Code2,
     logistics: Truck,
@@ -92,6 +95,7 @@ const SERVICE_ICONS: Record<string, typeof Package> = {
 
 interface CategoryTile {
     id: number;
+    slug: string;
     name: string;
     icon: string | null;
     listings: number;
@@ -360,6 +364,33 @@ export default function Home({
         [Handshake, 'stat-ico-violet', stats.categories, t('home.stat_categories'), routes.catalog],
     ];
 
+    // Раздел «Другое» ничего не говорит о товаре, поэтому стоит
+    // в конце ряда, после плиток услуг
+    const otherCategory = categories.find((c) => c.slug === OTHER_CATEGORY_SLUG);
+    const mainCategories = categories
+        .filter((c) => c !== otherCategory)
+        .slice(0, Math.max(0, 6 - services.length - (otherCategory ? 1 : 0)));
+
+    // Цвет плитки — по месту раздела в каталоге: у «Другого» он
+    // не меняется от того, что плитка переехала в конец ряда
+    const categoryTile = (c: CategoryTile) => {
+        const Icon = categoryIcon(c.icon);
+
+        return (
+            <Link key={c.id} href={`${routes.catalog}?category=${c.id}`} className="cat-card">
+                <span className={cn('cat-thumb', `cat-g-${(categories.indexOf(c) % 8) + 1}`)}>
+                    <Icon aria-hidden />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                    <span className="cat-name">{c.name}</span>
+                    <span className="cat-count" style={{ display: 'block' }}>
+                        {tChoice('home.categories_count', c.listings)}
+                    </span>
+                </span>
+            </Link>
+        );
+    };
+
     return (
         <PublicLayout
             /*
@@ -451,24 +482,9 @@ export default function Home({
                             </Link>
                         </div>
                         <div className="cat-grid" data-reveal-stagger>
-                            {/* Ряд — шесть плиток: услуги занимают последние места */}
-                            {categories.slice(0, 6 - services.length).map((c, i) => {
-                                const Icon = categoryIcon(c.icon);
-
-                                return (
-                                    <Link key={c.id} href={`${routes.catalog}?category=${c.id}`} className="cat-card">
-                                        <span className={cn('cat-thumb', `cat-g-${(i % 8) + 1}`)}>
-                                            <Icon aria-hidden />
-                                        </span>
-                                        <span style={{ minWidth: 0 }}>
-                                            <span className="cat-name">{c.name}</span>
-                                            <span className="cat-count" style={{ display: 'block' }}>
-                                                {tChoice('home.categories_count', c.listings)}
-                                            </span>
-                                        </span>
-                                    </Link>
-                                );
-                            })}
+                            {/* Ряд — шесть плиток: разделы каталога, за ними
+                                услуги, «Другое» — последним */}
+                            {mainCategories.map(categoryTile)}
                             {services.map((svc, i) => {
                                 const Icon = SERVICE_ICONS[svc.type] ?? Briefcase;
 
@@ -490,6 +506,7 @@ export default function Home({
                                     </Link>
                                 );
                             })}
+                            {otherCategory && categoryTile(otherCategory)}
                         </div>
                     </div>
                 </section>

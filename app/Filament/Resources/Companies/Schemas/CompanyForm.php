@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Companies\Schemas;
 
+use App\Filament\Resources\Companies\Tables\CompaniesTable;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
@@ -46,6 +47,13 @@ class CompanyForm
                         ->required()
                         ->maxLength(190)
                         ->columnSpan(2),
+
+                    Select::make('legal_form')
+                        ->label('Правовая форма')
+                        ->options(CompaniesTable::LEGAL_FORMS)
+                        ->default(Company::LEGAL_ENTITY)
+                        ->selectablePlaceholder(false)
+                        ->helperText('Выбирается при регистрации. У физлица и фрилансера тип бизнеса необязателен.'),
 
                     TextInput::make('legal_name')
                         ->label('Юридическое название')
