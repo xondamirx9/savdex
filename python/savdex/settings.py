@@ -20,10 +20,50 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Секреты и режим ─────────────────────────────────────────────────
 
-# Своё имя, не APP_KEY: ключ Laravel подписывает куки сессий, и общий
-# секрет на два разных алгоритма подписи — способ однажды разлогинить
-# всех и не понять почему
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "небезопасный-ключ-для-разработки")
+
+def _app_key() -> bytes | None:
+    """APP_KEY Laravel байтами — так же, как его читает Encrypter::parseKey."""
+    raw = os.environ.get("APP_KEY", "")
+
+    if raw.startswith("base64:"):
+        import base64
+        import binascii
+
+        try:
+            return base64.b64decode(raw[7:], validate=True)
+        except (binascii.Error, ValueError):
+            return None
+
+    return raw.encode() if raw else None
+
+
+def _derived(label: str) -> str | None:
+    """
+    Отдельный ключ под отдельную задачу, выведенный из APP_KEY.
+
+    Не сам APP_KEY: ключ Laravel шифрует его куки, и общий секрет на
+    два разных алгоритма — способ однажды разлогинить всех и не понять
+    почему. HMAC с меткой даёт независимый ключ, а заводить на Render
+    ещё одну секретную переменную не нужно: APP_KEY там уже есть.
+    """
+    import hashlib
+    import hmac
+
+    key = _app_key()
+
+    return hmac.new(key, label.encode(), hashlib.sha256).hexdigest() if key else None
+
+
+#: Подписывает куку входа в Django-админку. Своя переменная сильнее,
+#: иначе — выведенный из APP_KEY; без обоих — ключ разработчика,
+#: и тогда вход в админку отключён (savdex/bridge.py): подпись известным
+#: всем ключом подделал бы кто угодно
+SECRET_KEY = (
+    os.environ.get("DJANGO_SECRET_KEY")
+    or _derived("savdex-django-secret-key-v1")
+    or "небезопасный-ключ-для-разработки"
+)
+SECRET_KEY_IS_REAL = bool(os.environ.get("DJANGO_SECRET_KEY") or _app_key())
 
 DEBUG = os.environ.get("APP_ENV", "local") not in ("production", "staging")
 
@@ -90,7 +130,20 @@ INSTALLED_APPS = [
     "savdex.apps.SavdexConfig",
 ]
 
-MIDDLEWARE: list[str] = []
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    # Кто открыл раздел админки на Django (вход — пропуском из Laravel)
+    "savdex.adminpanel.AdminMiddleware",
+]
+
+# Кука CSRF — только для адресов Django и со своим именем: у Laravel
+# своя (XSRF-TOKEN), делить им нечего
+CSRF_COOKIE_NAME = "savdex_py_csrf"
+CSRF_COOKIE_PATH = "/py/"
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "Lax"
 
 ROOT_URLCONF = "savdex.urls"
 WSGI_APPLICATION = "savdex.wsgi.application"

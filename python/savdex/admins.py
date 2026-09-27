@@ -33,27 +33,16 @@ from typing import TYPE_CHECKING
 import bcrypt
 from django.db import transaction
 
+from savdex import access
 from savdex.guards import allowed_writes
 
 if TYPE_CHECKING:
     from django.db.backends.base.base import BaseDatabaseWrapper
 
-SUPERADMIN = "superadmin"
-MODERATOR = "moderator"
-
-#: Роли админки и их названия — копия AdminAccess::ROLES. Совпадение
-#: с PHP проверяется тестом, который читает константу из PHP.
-ROLES: dict[str, str] = {
-    "superadmin": "Суперадмин",
-    "admin": "Администратор",
-    "sales": "Отдел продаж",
-    "supplier_manager": "Менеджер поставщиков",
-    "buyer_manager": "Менеджер покупателей",
-    "moderator": "Модератор",
-    "finance": "Финансы",
-    "support": "Поддержка",
-    "content_manager": "Контент-менеджер",
-}
+# Роли — из общей копии AdminAccess
+SUPERADMIN = access.SUPERADMIN
+MODERATOR = access.MODERATOR
+ROLES = access.ROLES
 
 # ── Почта ───────────────────────────────────────────────────────────
 
