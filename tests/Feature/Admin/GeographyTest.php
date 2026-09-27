@@ -5,10 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Exceptions\RecordIsReferenced;
-use App\Filament\Resources\Cities\CityResource;
-use App\Filament\Resources\Cities\Pages\CreateCity;
-use App\Filament\Resources\Cities\Pages\EditCity;
-use App\Filament\Resources\Cities\Pages\ListCities;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
@@ -17,7 +13,6 @@ use App\Support\AdminAccess;
 use Database\Seeders\GeoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -28,9 +23,10 @@ use Tests\TestCase;
  * направление работы ждало разработчика. Теперь страну и город заводят
  * из панели, и она же не даёт снести страну, на которой стоят компании.
  *
- * Страны с этапа 2 переноса правятся в разделе на Python
- * (python/savdex/geo/admin.py, проверки — python/tests/test_countries_admin.py).
- * Здесь остались правила модели и пункт меню, который туда ведёт.
+ * Страны и города с этапа 2 переноса правятся в разделе на Python
+ * (python/savdex/geo/admin.py, проверки — python/tests/test_countries_admin.py
+ * и test_cities_admin.py). Здесь остались правила моделей и пункты меню,
+ * которые туда ведут.
  */
 class GeographyTest extends TestCase
 {
@@ -38,6 +34,9 @@ class GeographyTest extends TestCase
 
     /** Пункт меню «Страны» — вход в раздел на Python через пропуск. */
     private const COUNTRIES_LINK = '/admin/python?next=/py/admin/geo/country/';
+
+    /** Пункт меню «Города» — туда же. */
+    private const CITIES_LINK = '/admin/python?next=/py/admin/geo/city/';
 
     private function admin(string $role): User
     {
@@ -70,9 +69,9 @@ class GeographyTest extends TestCase
         foreach ([AdminAccess::SUPERADMIN, AdminAccess::ADMIN] as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->get('/admin')->assertSee(self::COUNTRIES_LINK, false);
-            $this->assertTrue(CityResource::canViewAny(), "{$role} должен видеть города");
-            $this->assertTrue(CityResource::canCreate(), "{$role} должен заводить города");
+            $this->get('/admin')
+                ->assertSee(self::COUNTRIES_LINK, false)
+                ->assertSee(self::CITIES_LINK, false);
         }
     }
 
@@ -83,35 +82,24 @@ class GeographyTest extends TestCase
         foreach ([AdminAccess::SALES, AdminAccess::FINANCE, AdminAccess::SUPPORT] as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->get('/admin')->assertDontSee(self::COUNTRIES_LINK, false);
-            $this->assertFalse(CityResource::canViewAny(), "{$role} не должен видеть города");
+            $this->get('/admin')
+                ->assertDontSee(self::COUNTRIES_LINK, false)
+                ->assertDontSee(self::CITIES_LINK, false);
         }
     }
 
-    /** Модератору справочники выданы только на чтение. */
+    /**
+     * Модератору справочники выданы только на чтение — пункты меню он
+     * видит, а запрет правки проверяется на стороне Python.
+     */
     #[Test]
-    public function модератор_смотрит_но_не_правит(): void
+    public function модератор_видит_справочники(): void
     {
         $this->actingAs($this->admin(AdminAccess::MODERATOR));
 
-        $this->get('/admin')->assertSee(self::COUNTRIES_LINK, false);
-        $this->assertFalse(CityResource::canCreate());
-    }
-
-    // ── Экраны ──────────────────────────────────────────────────────
-
-    #[Test]
-    public function списки_открываются_с_данными(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::ADMIN));
-
-        $uz = $this->country('uz');
-        $city = City::query()->create(['country_id' => $uz->id, 'slug' => 'tashkent', 'is_active' => true]);
-        $city->translations()->create(['locale' => 'ru', 'name' => 'Ташкент']);
-
-        Livewire::test(ListCities::class)
-            ->assertOk()
-            ->assertCanSeeTableRecords([$city]);
+        $this->get('/admin')
+            ->assertSee(self::COUNTRIES_LINK, false)
+            ->assertSee(self::CITIES_LINK, false);
     }
 
     // ── Заведение страны ────────────────────────────────────────────
@@ -219,6 +207,28 @@ class GeographyTest extends TestCase
         $this->assertDatabaseHas('cities', ['id' => $city->id]);
     }
 
+    /** Резюме держат город так же, как компании: иначе у них обнулился бы город. */
+    #[Test]
+    public function город_с_резюме_не_удаляется(): void
+    {
+        $country = $this->country('uz');
+        $city = City::query()->create(['country_id' => $country->id, 'slug' => 'samarkand']);
+        $user = User::factory()->create();
+        DB::table('resumes')->insert([
+            'user_id' => $user->id, 'title' => 'Инженер', 'city_id' => $city->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        try {
+            $city->delete();
+            $this->fail('город с резюме удалился — у резюме город обнулился бы');
+        } catch (RecordIsReferenced $e) {
+            $this->assertSame(['резюме' => 1], $e->references);
+        }
+
+        $this->assertDatabaseHas('resumes', ['city_id' => $city->id]);
+    }
+
     /** Ошибочно заведённую запись надо уметь убрать — иначе мусор навсегда. */
     #[Test]
     public function пустая_страна_удаляется(): void
@@ -260,50 +270,6 @@ class GeographyTest extends TestCase
         $this->assertSame($country->id, $company->fresh()->country_id, 'у компании страна обязана остаться');
     }
 
-    // ── Формы ───────────────────────────────────────────────────────
-
-    #[Test]
-    public function город_заводится_через_форму_админки(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::ADMIN));
-
-        $country = $this->country('kg');
-
-        Livewire::test(CreateCity::class)
-            ->fillForm([
-                'country_id' => $country->id,
-                'slug' => 'bishkek',
-                'sort' => 0,
-                'is_active' => true,
-                'translations' => [
-                    ['locale' => 'ru', 'name' => 'Бишкек'],
-                ],
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $city = City::query()->where('slug', 'bishkek')->with('translations')->first();
-
-        $this->assertNotNull($city, 'город должен был создаться');
-        $this->assertSame('Бишкек', $city->name('ru'));
-        $this->assertSame($country->id, $city->country_id);
-    }
-
-    /** Экран правки обязан открываться на существующей записи. */
-    #[Test]
-    public function формы_правки_открываются(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::ADMIN));
-
-        $country = $this->country('uz');
-        $city = City::query()->create(['country_id' => $country->id, 'slug' => 'tashkent']);
-        $city->translations()->create(['locale' => 'ru', 'name' => 'Ташкент']);
-
-        Livewire::test(EditCity::class, ['record' => $city->getRouteKey()])
-            ->assertOk()
-            ->assertFormSet(['slug' => 'tashkent']);
-    }
-
     /**
      * Деплой не откатывает правки стран.
      *
@@ -329,6 +295,27 @@ class GeographyTest extends TestCase
         $this->assertSame(42, $uz->sort);
         $this->assertSame('Республика Узбекистан', $uz->name('ru'));
         $this->assertSame($count, Country::count(), 'дублей нет');
+    }
+
+    /** То же для городов: порядок, «показывать», координаты и названия переживают деплой. */
+    #[Test]
+    public function сидер_не_откатывает_правки_городов(): void
+    {
+        $this->seed(GeoSeeder::class);
+
+        $city = City::query()->where('slug', 'tashkent')->firstOrFail();
+        $city->update(['is_active' => false, 'sort' => 42, 'lat' => 41.5]);
+        $city->translations()->where('locale', 'ru')->update(['name' => 'Столица']);
+        $count = City::count();
+
+        $this->seed(GeoSeeder::class);
+
+        $city->refresh()->load('translations');
+        $this->assertFalse($city->is_active);
+        $this->assertSame(42, $city->sort);
+        $this->assertEqualsWithDelta(41.5, (float) $city->lat, 0.0000001);
+        $this->assertSame('Столица', $city->name('ru'));
+        $this->assertSame($count, City::count(), 'дублей нет');
     }
 
     /** На свежей базе сидер по-прежнему заводит страны со всеми названиями. */

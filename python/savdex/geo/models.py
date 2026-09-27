@@ -1,5 +1,5 @@
 """
-Страны — первая таблица, хозяином которой стал Django (этап 2).
+Страны и города — первые таблицы, хозяином которых стал Django (этап 2).
 
 Модели описывают таблицы, созданные миграциями Laravel
 (database/migrations/2026_07_28_100000_create_countries_and_cities_tables.php):
@@ -35,7 +35,10 @@ LOCALES: dict[str, str] = {
 
 #: Что удерживает страну от удаления: таблица → как назвать в подсказке.
 #: Резюме в PHP-версии не учитывались — удаление страны обнуляло её
-#: у резюме молча; исправлено в обеих половинах
+#: у резюме молча; исправлено в обеих половинах. Удалённые в корзину
+#: компании, объявления и резюме тоже считаются (PHP их пропускает):
+#: внешний ключ задел бы и их, и восстановленная запись вернулась бы
+#: без страны
 REFERENCES: dict[str, str] = {
     "cities": "города",
     "companies": "компании",
@@ -134,6 +137,120 @@ class CountryTranslation(models.Model):
         managed = False
         db_table = "country_translations"
         unique_together = (("country", "locale"),)
+        verbose_name = "название"
+        verbose_name_plural = "названия на языках"
+
+    def __str__(self) -> str:
+        return f"{self.locale}: {self.name}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        now = _now()
+
+        if self._state.adding and self.created_at is None:
+            self.created_at = now
+
+        self.updated_at = now
+        super().save(*args, **kwargs)
+
+
+#: Что удерживает город от удаления. Резюме в PHP-версии не учитывались —
+#: удаление города молча обнуляло его у резюме; исправлено в обеих половинах.
+#: Удалённые в корзину считаются — как у стран
+CITY_REFERENCES: dict[str, str] = {
+    "companies": "компании",
+    "listings": "объявления",
+    "resumes": "резюме",
+}
+
+
+class City(models.Model):
+    """
+    Город — копия правил App\\Models\\City.
+
+    Запрет удаления при ссылках — как у страны (RefusesDeletionWhenReferenced).
+    """
+
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.CASCADE,
+        related_name="cities",
+        db_column="country_id",
+        verbose_name="страна",
+    )
+    slug = models.CharField("адрес (slug)", max_length=190)
+    lat = models.DecimalField("широта", max_digits=10, decimal_places=7, null=True, blank=True)
+    lng = models.DecimalField("долгота", max_digits=10, decimal_places=7, null=True, blank=True)
+    sort = models.PositiveSmallIntegerField("порядок", default=0)
+    is_active = models.BooleanField("показывать при регистрации", default=True)
+    created_at = models.DateTimeField(null=True, editable=False)
+    updated_at = models.DateTimeField(null=True, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "cities"
+        ordering = ("sort", "slug")
+        verbose_name = "город"
+        verbose_name_plural = "города"
+
+    def __str__(self) -> str:
+        return self.name() if self.pk else "новый город"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        now = _now()
+
+        if self._state.adding and self.created_at is None:
+            self.created_at = now
+
+        self.updated_at = now
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        references = self.references()
+
+        if references:
+            parts = ", ".join(f"{what} — {count}" for what, count in references.items())
+
+            raise RecordIsReferencedError(f"Удалить нельзя, на город ссылаются: {parts}.")
+
+        return super().delete(*args, **kwargs)
+
+    def name(self, locale: str = "ru") -> str:
+        """City::name(): название на языке, с откатом на русский и на slug."""
+        names = {t.locale: t.name for t in self.translations.all()}
+
+        return names.get(locale) or names.get("ru") or self.slug
+
+    def references(self) -> dict[str, int]:
+        """City::references(): кто ссылается на город; пусто — удалять можно."""
+        if self.pk is None:
+            return {}
+
+        counts: dict[str, int] = {}
+
+        with connection.cursor() as cursor:
+            for table, label in CITY_REFERENCES.items():
+                cursor.execute(f"select count(*) from {table} where city_id = %s", [self.pk])
+                row = cursor.fetchone()
+
+                if row and row[0]:
+                    counts[label] = int(row[0])
+
+        return counts
+
+
+class CityTranslation(models.Model):
+    city = models.ForeignKey(
+        City, on_delete=models.CASCADE, related_name="translations", db_column="city_id"
+    )
+    locale = models.CharField("язык", max_length=5, choices=list(LOCALES.items()))
+    name = models.CharField("название", max_length=190)
+    created_at = models.DateTimeField(null=True, editable=False)
+    updated_at = models.DateTimeField(null=True, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "city_translations"
+        unique_together = (("city", "locale"),)
         verbose_name = "название"
         verbose_name_plural = "названия на языках"
 

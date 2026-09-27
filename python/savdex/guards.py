@@ -53,6 +53,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # существующие страны больше не перезаписывает
         "countries",
         "country_translations",
+        # Этап 2: города — то же для City и GeoSeeder (города он тоже
+        # больше не перезаписывает)
+        "cities",
+        "city_translations",
     }
 )
 

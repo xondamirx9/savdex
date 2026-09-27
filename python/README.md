@@ -67,7 +67,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/bridge.py`, `savdex/adminpanel.py` | Вход в админку Django по пропуску из Laravel |
 | `savdex/adminsite.py` | Админка Django без своих таблиц: права, журнал, заголовки |
 | `savdex/audit.py` | Журнал действий — копия AdminLog, пишет в общий `admin_actions` |
-| `savdex/geo/` | Страны — первая таблица, которой владеет Django |
+| `savdex/geo/` | Страны и города — первые таблицы, которыми владеет Django |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |
 | `conftest.py` | Подмена базы на SQLite для проверок |

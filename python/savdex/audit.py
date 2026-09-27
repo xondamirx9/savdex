@@ -137,7 +137,10 @@ def record(
                     subject_type,
                     subject_id,
                     subject_label,
-                    json.dumps(cleaned, ensure_ascii=False) if cleaned else None,
+                    # default=str: значение, которое JSON не знает (дата, число
+                    # с фиксированной точкой), пишется строкой, а не губит строку
+                    # журнала целиком — так уже было со справочниками в PHP
+                    json.dumps(cleaned, ensure_ascii=False, default=str) if cleaned else None,
                     note,
                     ip,
                     datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
