@@ -166,7 +166,7 @@ jobs:
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
-          for page in it-services/nothing resume/nothing; do
+          for page in it-services/nothing resume/nothing company/nothing; do
             curl -s -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done

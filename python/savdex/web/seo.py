@@ -149,13 +149,27 @@ class Seo:
         return php_json(data, unescaped_unicode=True, hex_tags=True)
 
 
+def _php_numbers(data: Any) -> Any:  # noqa: ANN401
+    """Без JSON_PRESERVE_ZERO_FRACTION целое дробное PHP пишет без «.0»: 4.0 → 4."""
+    if isinstance(data, float) and data.is_integer() and abs(data) < 1e15:
+        return int(data)
+
+    if isinstance(data, dict):
+        return {k: _php_numbers(v) for k, v in data.items()}
+
+    if isinstance(data, list | tuple):
+        return [_php_numbers(v) for v in data]
+
+    return data
+
+
 def php_json(data: Any, *, unescaped_unicode: bool = False, hex_tags: bool = False) -> str:  # noqa: ANN401
     """
     json_encode PHP: «/» экранируется как «\\/»; без флага — и юникод
     (\\uXXXX). JSON_HEX_TAG | AMP | QUOT | APOS — «<», «>», «&», «"», «'»
     внутри строк как \\u003C и т. д.
     """
-    text = json.dumps(data, ensure_ascii=not unescaped_unicode, separators=(",", ":"))
+    text = json.dumps(_php_numbers(data), ensure_ascii=not unescaped_unicode, separators=(",", ":"))
 
     if hex_tags:
         # Экранировать нужно только внутри строк; вне строк этих знаков

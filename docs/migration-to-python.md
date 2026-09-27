@@ -857,7 +857,7 @@ Laravel. Django получает только читающие запросы (G
 | `reviews` ✅ | `/reviews` (форма `/reviews/new` — Laravel) | `tests/test_web_reviews.py` |
 | `tenders` ✅ | `/tenders` — 301 в каталог, `/tenders/<адрес>`, `/catalog?type=tender` (этап 4) | `tests/test_web_throttle.py`, `tests/test_web_tenders.py` |
 | `services` ✅ | `/resumes`, `/it-services` и их страницы (этап 4) | `tests/test_web_resumes.py`, `tests/test_web_it_tasks.py` |
-| `companies` ✅ | `/companies` (этап 4) | `tests/test_web_companies.py` |
+| `companies` ✅ | `/companies`, `/company/<адрес>` (этап 4) | `tests/test_web_companies.py`, `tests/test_web_company.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -1001,6 +1001,23 @@ increment у Laravel не вызывает, кроме `updated`, на кото�
 отклик остаются у Laravel. В сверке такие страницы обнуляют счётчик
 перед каждой стороной (`сверить(…, перед=…)`): иначе Laravel видел бы
 просмотр, только что засчитанный Django.
+
+**Шаг 6 — визитка компании** `/company/<адрес>` (группа `companies`,
+`throttle:120,1`). Шапка, контакты (своей компании и заплатившим —
+открыты, остальным — маской, кроме сайта), файлы, отзывы и право
+оставить свой, остаток на счету смотрящего. Пишет «Кто мной
+интересуется» (`StatsRecorder::companyView`): вошедший с компанией —
+строка в `audience_views`, не чаще раза в полчаса. Повтор отсеивается
+дважды, как у Laravel: ключом `stats:cview:<сессия>:<компания>` в
+файловом кэше (общий — Django ставит, Laravel видит) и проверкой по
+самой таблице. У `savdex_django` право на вставку, и только в неё.
+
+Попутно две мелочи Laravel с неустойчивым порядком: файлы на визитке и
+«похожие» закупки, резюме и задачи отдавались без хвоста сортировки, и
+Postgres менял местами записи с одинаковой датой — теперь хвост по `id`
+в обеих половинах. И `php_json` для разметки в `<head>` пишет целое
+дробное без «.0», как `json_encode` без `JSON_PRESERVE_ZERO_FRACTION`
+(рейтинг `4.0` → `4`).
 
 ### Этап 5. Кабинет (10–12 недель)
 
