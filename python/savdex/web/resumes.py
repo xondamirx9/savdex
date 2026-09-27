@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from django.db import connection
@@ -26,7 +27,7 @@ from savdex.web.directory import _TRIM, _named
 from savdex.web.home import _utc
 from savdex.web.phpquery import laravel_input, php_int, text
 from savdex.web.request import context
-from savdex.web.seo import Seo
+from savdex.web.seo import Seo, _limit
 from savdex.web.shared import Context, public_url
 
 PER_PAGE = 20
@@ -39,6 +40,9 @@ FIELDS = (
 )  # fmt: skip
 EMPLOYMENT = ("full", "part", "project", "internship")
 EXPERIENCE_STEPS = {"none": 0, "from1": 12, "from3": 36, "from6": 72}
+SCHEDULE = ("full_day", "shift", "flexible", "remote", "rotational")
+LANGUAGE_LEVELS = ("basic", "intermediate", "advanced", "native")
+EDUCATION_LEVELS = ("secondary", "vocational", "bachelor", "master", "phd")
 
 #: ItTask::SERVICE_SECTIONS — порядок здесь — порядок в панели фильтра
 SERVICE_SECTIONS: dict[str, list[str]] = {
@@ -256,6 +260,122 @@ def index(request: HttpRequest) -> HttpResponse:
             "cities": _cities(ctx.locale),
             "total": total,
             "types": section_tree(ctx),
+        },
+        seo,
+    )
+
+
+def localized_jobs(row: dict[str, Any], locale: str) -> list[Any]:
+    """Resume::localizedJobs: перевод годится, только пока мест столько же."""
+    jobs: list[Any] = row["jobs"] or []
+    translated = (row["jobs_i18n"] or {}).get(locale)
+
+    if not isinstance(translated, list) or len(translated) != len(jobs):
+        return jobs
+
+    return [
+        {
+            **job,
+            "position": tr["position"] if _filled(tr.get("position")) else job.get("position", ""),
+            "duties": tr["duties"] if _filled(tr.get("duties")) else job.get("duties", ""),
+        }
+        for job, tr in zip(jobs, translated, strict=True)
+    ]
+
+
+def _contacts(row: dict[str, Any]) -> dict[str, Any] | list[Any]:
+    """array_filter контактов: пустое выпадает; ничего не осталось — []."""
+    values = {
+        "name": _name(row),
+        "phone": row["contact_phone"] if row["show_phone"] else None,
+        "email": row["contact_email"] if row["show_email"] else None,
+    }
+
+    return {k: v for k, v in values.items() if v not in (None, "", "0")} or []
+
+
+def count_view(table: str, row_id: int) -> None:
+    """$model->increment('views_count'): +1 и updated_at, без событий сохранения."""
+    from savdex.guards import allowed_writes
+
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+    with allowed_writes(table), connection.cursor() as cursor:
+        cursor.execute(
+            f"update {table} set views_count = views_count + 1, updated_at = %s where id = %s",
+            [now, row_id],
+        )
+
+
+def show(request: HttpRequest, slug: str) -> HttpResponse:
+    """ResumeController::show; просмотр не владельца — +1 к счётчику."""
+    from savdex.web.views import not_found
+
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    select = (
+        "select r.*, u.name as user_name from resumes r "
+        "left join users u on u.id = r.user_id and u.deleted_at is null "
+        "where r.status = 'published' and r.deleted_at is null"
+    )
+    found = _rows(f"{select} and r.slug = %s limit 1", [slug])
+
+    if not found:
+        return not_found(ctx)
+
+    row = found[0]
+
+    if ctx.visitor.user_id != row["user_id"]:
+        count_view("resumes", row["id"])
+        row["views_count"] += 1
+
+    locale = ctx.locale
+    cities = _named("cities", locale)
+    countries = _named("countries", locale)
+    about = _localized(row, "about", locale)
+    description = _limit((about or "").strip(_TRIM), 160, "...")
+
+    seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", locale)
+    seo.title(_localized(row, "title", locale) or row["title"])
+    seo.description(description if description != "" else ctx.t("resume.meta_description"))
+    seo.canonical(ctx.url(f"resume/{row['slug']}"))
+
+    params: list[Any] = [row["id"]]
+    same_field = ""
+
+    if row["field"] not in (None, "", "0"):
+        same_field = " and r.field = %s"
+        params.append(row["field"])
+
+    similar = _rows(
+        f"{select} and r.id != %s{same_field} order by r.published_at desc limit 4", params
+    )
+
+    return inertia.render(
+        ctx,
+        "resumes/Show",
+        {
+            "resume": {
+                **card(row, locale, cities, countries),
+                "about": about,
+                "jobs": localized_jobs(row, locale),
+                "education": row["education"] or [],
+                "languages": row["languages"] or [],
+                "schedule": row["schedule"] or [],
+                "views": row["views_count"],
+                "contacts": None if ctx.user is None else _contacts(row),
+            },
+            "options": {
+                "fields": labels(ctx, "field", FIELDS),
+                "employment": labels(ctx, "employment", EMPLOYMENT),
+                "schedule": labels(ctx, "schedule", SCHEDULE),
+                "language_levels": labels(ctx, "language_level", LANGUAGE_LEVELS),
+                "education_levels": labels(ctx, "education_level", EDUCATION_LEVELS),
+            },
+            "similar": [card(r, locale, cities, countries) for r in similar],
         },
         seo,
     )

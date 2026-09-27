@@ -981,7 +981,7 @@ Apache отдаёт Django, только когда `type=tender` в адрес�
 каталога: `$tender->increment('views_count')`. Запись заявлена в
 `guards.SHARED_WRITES`, а у роли `savdex_django` право на правку только
 двух столбцов — `views_count` и `updated_at` (миграция
-`2026_09_30_100000_grant_django_tender_views`). Событий сохранения
+`2026_09_30_100000_grant_django_view_counters`). Событий сохранения
 increment у Laravel не вызывает, кроме `updated`, на котором
 `AuditObserver` пишет строку журнала, если закупку открыл
 администратор, — Django пишет ту же строку (`tests/test_web_tenders.py`

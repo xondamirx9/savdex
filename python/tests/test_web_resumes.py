@@ -16,8 +16,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, нужна_база, свежая_база
-from .web_site import laravel, сверить, страница
+from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .web_site import laravel, войти, из_django, из_laravel, пользователь, сверить, страница
 
 pytestmark = нужна_база
 
@@ -149,3 +149,61 @@ def test_поиск_находит(сайт, path, найдено):
     д, _ = сверить(сайт, path)
 
     assert страница(д["body"])["props"]["total"] == найдено
+
+
+def test_страница_резюме(сайт):
+    # С переводом, фото и местами работы; без контактного имени; с «0»
+    for slug, prefix in (
+        ("resume-4", ""),
+        ("resume-4", "/en"),
+        ("resume-8", "/uz"),
+        ("resume-9", "/zh"),
+        ("resume-3", "/tr"),
+    ):
+        сверить(сайт, f"{prefix}/resume/{slug}")
+
+
+def test_переведённые_места_работы(сайт):
+    sql(
+        "update resumes set jobs_i18n = %s::json where slug = 'resume-12'",
+        ['{"en": [{"position": "Supply clerk", "duties": ""}], "uz": [{}, {}]}'],
+    )
+    for prefix in ("/en", "/uz"):
+        сверить(сайт, f"{prefix}/resume/resume-12")
+
+
+def test_нет_резюме(сайт):
+    for slug in ("nothing", "resume-48", "resume-49"):
+        д, _ = сверить(сайт, f"/resume/{slug}")
+        assert д["status"] == 404
+
+
+def test_контакты_вошедшему_и_просмотры(сайт):
+    пользователь("buyer@savdex.uz")
+    куки = войти(сайт, "buyer@savdex.uz")
+    было = sql("select views_count from resumes where slug = 'resume-5'")[0][0]
+
+    д, _ = сверить(сайт, "/resume/resume-5", куки)
+    props = страница(д["body"])["props"]["resume"]
+
+    assert props["contacts"] is not None
+    assert props["views"] == было + 1
+    assert sql("select views_count from resumes where slug = 'resume-5'")[0][0] == было + 2
+
+
+def test_свой_просмотр_не_считается(сайт):
+    email = sql(
+        "select u.email from users u join resumes r on r.user_id = u.id where r.slug = 'resume-6'"
+    )[0][0]
+    sql(
+        "update users set password = (select password from users where email = 'buyer@savdex.uz') "
+        "where email = %s",
+        [email],
+    )
+    куки = войти(сайт, email)
+    было = sql("select views_count from resumes where slug = 'resume-6'")[0][0]
+
+    из_django(сайт, "/resume/resume-6", куки)
+    из_laravel(сайт, "/resume/resume-6", куки)
+
+    assert sql("select views_count from resumes where slug = 'resume-6'")[0][0] == было

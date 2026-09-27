@@ -161,13 +161,17 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/page.h
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=supply' | grep -qi '^x-powered-by: php'
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender&type=supply' | grep -qi '^x-powered-by: php'
-          # «Резюме», «IT-услуги» и каталог компаний — Django; страница
-          # задачи — Laravel
+          # «Резюме», «IT-услуги» (со страницами) и каталог компаний — Django
           for page in resumes it-services companies; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/nothing | grep -qi '^x-powered-by: php'
+          for page in it-services/nothing resume/nothing; do
+            curl -s -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
+            ! grep -qi '^x-powered-by: php' /tmp/page.h
+          done
+          # Файл задачи — Laravel (проверка доступа)
+          curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/files/1 | grep -qi '^x-powered-by: php'
           # Форма «Оцените SavdEx» — Laravel (гостя уводит на вход)
           curl -s -D - -o /dev/null http://127.0.0.1:18080/reviews/new | grep -qi '^x-powered-by: php'
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)

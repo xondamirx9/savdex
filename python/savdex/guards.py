@@ -125,6 +125,16 @@ SHARED_WRITES: dict[str, str] = {
         "(перевод, search_text) increment не вызывает, строку журнала для "
         "администратора пишет savdex/audit.py"
     ),
+    "resumes": (
+        "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "
+        "$resume->increment('views_count'), не владельцу; событий сохранения "
+        "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
+    ),
+    "it_tasks": (
+        "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
+        "$task->increment('views_count'), не заказчику; просмотр "
+        "администратора — строка журнала (раздел ittasks), как AuditObserver"
+    ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
