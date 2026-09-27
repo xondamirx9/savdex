@@ -199,6 +199,12 @@ class Company extends Model
         return $this->hasOne(CompanySite::class);
     }
 
+    /** Товары, заведённые прямо на мини-сайте, — в порядке показа. */
+    public function siteProducts(): HasMany
+    {
+        return $this->hasMany(CompanySiteProduct::class)->orderBy('sort')->orderByDesc('id');
+    }
+
     public function wallet(): HasOne
     {
         return $this->hasOne(Wallet::class);

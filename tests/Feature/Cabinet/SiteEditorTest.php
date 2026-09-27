@@ -6,10 +6,13 @@ namespace Tests\Feature\Cabinet;
 
 use App\Models\Company;
 use App\Models\CompanySite;
+use App\Models\CompanySiteProduct;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -33,6 +36,7 @@ class SiteEditorTest extends TestCase
         'heading_font' => 'montserrat',
         'body_font' => 'rubik',
         'radius' => 'round',
+        'hero_image' => null,
     ];
 
     protected function setUp(): void
@@ -187,5 +191,115 @@ class SiteEditorTest extends TestCase
         $this->actingAs($this->user)->post('/cabinet/site/unpublish');
 
         $this->assertFalse($site->refresh()->isPublished());
+    }
+
+    // ── Фон первого экрана ───────────────────────────────────
+
+    #[Test]
+    public function фон_попадает_в_черновик_и_на_сайт_после_публикации(): void
+    {
+        Storage::fake('public');
+        $this->subscribe();
+        $this->actingAs($this->user)->patch('/cabinet/site', ['subdomain' => 'acme', 'theme' => self::THEME]);
+
+        $this->actingAs($this->user)
+            ->post('/cabinet/site/hero', ['hero' => UploadedFile::fake()->image('hero.jpg', 1920, 1080)])
+            ->assertSessionHas('success');
+
+        $site = CompanySite::firstOrFail();
+        $path = $site->draftTheme()['hero_image'];
+
+        $this->assertMatchesRegularExpression('#^sites/'.$this->company->id.'/#', (string) $path);
+        Storage::disk('public')->assertExists((string) $path);
+        $this->assertNull($site->publishedTheme()['hero_image']);
+
+        $site->publish();
+        $this->assertSame($path, $site->refresh()->publishedTheme()['hero_image']);
+    }
+
+    /** Фон нельзя подставить через форму оформления — только загрузкой. */
+    #[Test]
+    public function фон_из_формы_не_принимается(): void
+    {
+        $this->subscribe();
+
+        $this->actingAs($this->user)->patch('/cabinet/site', [
+            'subdomain' => 'acme',
+            'theme' => [...self::THEME, 'hero_image' => 'sites/999/чужой.jpg'],
+        ]);
+
+        $this->assertNull(CompanySite::firstOrFail()->draftTheme()['hero_image']);
+    }
+
+    #[Test]
+    public function замена_фона_удаляет_прежний_файл_если_он_не_на_сайте(): void
+    {
+        Storage::fake('public');
+        $this->subscribe();
+        $this->actingAs($this->user)->patch('/cabinet/site', ['subdomain' => 'acme', 'theme' => self::THEME]);
+
+        $this->actingAs($this->user)->post('/cabinet/site/hero', ['hero' => UploadedFile::fake()->image('a.jpg', 800, 400)]);
+        $first = CompanySite::firstOrFail()->draftTheme()['hero_image'];
+
+        $this->actingAs($this->user)->post('/cabinet/site/hero', ['hero' => UploadedFile::fake()->image('b.jpg', 800, 400)]);
+
+        Storage::disk('public')->assertMissing((string) $first);
+    }
+
+    // ── Товары сайта ─────────────────────────────────────────
+
+    #[Test]
+    public function товар_заводится_с_фото_и_виден_в_редакторе(): void
+    {
+        Storage::fake('public');
+        $this->subscribe();
+
+        $this->actingAs($this->user)
+            ->post('/cabinet/site/products', [
+                'title' => 'Цемент М500',
+                'price' => '850000',
+                'currency' => 'UZS',
+                'unit' => 'т',
+                'image' => UploadedFile::fake()->image('p.jpg', 800, 800),
+            ])
+            ->assertSessionHas('success');
+
+        $product = CompanySiteProduct::firstOrFail();
+        $this->assertSame($this->company->id, $product->company_id);
+        Storage::disk('public')->assertExists((string) $product->thumb_path);
+
+        $this->actingAs($this->user)
+            ->get('/cabinet/site')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('products.0.title', 'Цемент М500')
+                ->where('products.0.price', 850000));
+    }
+
+    #[Test]
+    public function без_тарифа_товар_не_заводится(): void
+    {
+        $this->actingAs($this->user)
+            ->post('/cabinet/site/products', ['title' => 'Цемент', 'currency' => 'UZS'])
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseCount('company_site_products', 0);
+    }
+
+    #[Test]
+    public function чужой_товар_не_изменить_и_не_удалить(): void
+    {
+        $this->subscribe();
+        $other = CompanySiteProduct::create([
+            'company_id' => Company::factory()->create()->id,
+            'title' => 'Чужой',
+            'currency' => 'UZS',
+        ]);
+
+        $this->actingAs($this->user)
+            ->post("/cabinet/site/products/{$other->id}", ['title' => 'Моё', 'currency' => 'UZS'])
+            ->assertNotFound();
+        $this->actingAs($this->user)->delete("/cabinet/site/products/{$other->id}")->assertNotFound();
+
+        $this->assertSame('Чужой', $other->refresh()->title);
     }
 }

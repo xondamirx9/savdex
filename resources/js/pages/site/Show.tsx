@@ -27,6 +27,8 @@ export type SiteTheme = {
     heading_font: string;
     body_font: string;
     radius: 'sharp' | 'soft' | 'round';
+    /** Загруженный фон первого экрана: путь в хранилище */
+    hero_image: string | null;
 };
 
 /** Сообщение редактора предпросмотру. */
@@ -56,18 +58,18 @@ type Contact = {
     href: string | null;
 };
 
-type SiteListing = {
-    id: number;
+/** Товар сайта: заведённый на самом сайте или объявление компании. */
+type SiteProduct = {
+    key: string;
     title: string;
     excerpt: string;
-    type: 'supply' | 'demand';
     cover: string | null;
     price: number | null;
     currency: string;
     unit: string | null;
     negotiable: boolean;
-    min_order: number | null;
     category: string | null;
+    /** Объявление ведёт на площадку; у товара сайта ссылки нет */
     url: string | null;
 };
 
@@ -90,12 +92,14 @@ type Props = {
     theme: SiteTheme;
     vars: Record<string, string>;
     fonts: string;
+    /** Адрес фона первого экрана; null — фона нет */
+    hero: string | null;
     preview: boolean;
     site: { url: string; marketplace: string };
     company: Company;
     initials: string;
     contacts: Contact[];
-    listings: SiteListing[];
+    products: SiteProduct[];
     files: SiteFile[];
     reviews: Reviews;
 };
@@ -109,7 +113,7 @@ const CONTACT_ICONS: Record<string, typeof Phone> = {
 };
 
 export default function SiteShow(props: Props) {
-    const { theme, vars, fonts, preview, company, listings, files, reviews, contacts } = props;
+    const { theme, vars, fonts, preview, company, products, files, reviews, contacts } = props;
 
     usePreviewBridge(preview);
 
@@ -121,13 +125,14 @@ export default function SiteShow(props: Props) {
         if (link instanceof HTMLLinkElement && link.href !== fonts) link.href = fonts;
     }, [fonts]);
 
+    // Меню — три раздела, которые нужны покупателю: кто это, что
+    // продают и как связаться. Документы и отзывы остаются на
+    // странице ниже, но в меню их нет, чтобы оно не разрасталось
     const sections = [
-        { id: 'about', label: t('site.nav.about'), show: true },
-        { id: 'products', label: t('site.nav.products'), show: listings.length > 0 },
-        { id: 'documents', label: t('site.nav.documents'), show: files.length > 0 },
-        { id: 'reviews', label: t('site.nav.reviews'), show: reviews.latest.length > 0 },
-        { id: 'contacts', label: t('site.nav.contacts'), show: true },
-    ].filter((s) => s.show);
+        { id: 'about', label: t('site.nav.about') },
+        { id: 'products', label: t('site.nav.products') },
+        { id: 'contacts', label: t('site.nav.contacts') },
+    ];
 
     return (
         <div className={`ms-root ms-tpl-${theme.template} ms-mode-${theme.mode}`} style={vars as CSSProperties}>
@@ -166,15 +171,17 @@ export default function SiteShow(props: Props) {
                     </div>
                 </Section>
 
-                {listings.length > 0 && (
-                    <Section id="products" title={t('site.products.title')} tinted>
+                <Section id="products" title={t('site.products.title')} tinted>
+                    {products.length > 0 ? (
                         <div className="ms-grid">
-                            {listings.map((l) => (
-                                <ProductTile key={l.id} listing={l} />
+                            {products.map((p) => (
+                                <ProductTile key={p.key} product={p} />
                             ))}
                         </div>
-                    </Section>
-                )}
+                    ) : (
+                        <p className="ms-muted">{t('site.products.empty')}</p>
+                    )}
+                </Section>
 
                 {files.length > 0 && (
                     <Section id="documents" title={t('site.documents.title')}>
@@ -254,7 +261,7 @@ function usePreviewBridge(preview: boolean) {
             timer.current = window.setTimeout(() => {
                 router.reload({
                     data: { theme: JSON.stringify(data.theme) },
-                    only: ['theme', 'vars', 'fonts'],
+                    only: ['theme', 'vars', 'fonts', 'hero'],
                 });
             }, 200);
         };
@@ -278,29 +285,32 @@ function Logo({ company, initials }: { company: Company; initials: string }) {
     );
 }
 
-function Hero({ theme, company, initials, listings }: Props) {
+function Hero({ theme, company, initials, products, hero }: Props) {
     const subtitle = [company.custom_category || company.type_label, company.city || company.country]
         .filter(Boolean)
         .join(' · ');
 
     const lead = company.description?.split(/\n/)[0] ?? '';
 
-    // Обложка — фоном только у классического шаблона; в «ярком»
-    // фон — фирменный цвет, в «минимальном» картинок нет совсем
-    const cover = theme.template === 'classic' && company.cover ? company.cover : null;
+    // Загруженный фон — в любом шаблоне. Без него классический шаблон
+    // берёт обложку компании, остальные обходятся без картинки
+    const photo = hero ?? (theme.template === 'classic' ? company.cover : null);
 
     return (
-        <section className="ms-hero" style={cover ? { backgroundImage: `url("${cover}")` } : undefined}>
+        <section
+            className={photo ? 'ms-hero ms-hero-photo' : 'ms-hero'}
+            style={photo ? { backgroundImage: `url("${photo}")` } : undefined}
+        >
             <div className="ms-container ms-hero-inner">
                 {theme.template !== 'minimal' && <Logo company={company} initials={initials} />}
                 <h1 className="ms-hero-title">{company.name}</h1>
                 {subtitle !== '' && <p className="ms-hero-sub">{subtitle}</p>}
                 {lead !== '' && <p className="ms-hero-lead">{lead}</p>}
                 <div className="ms-hero-actions">
-                    <a href="#contacts" className="ms-btn ms-btn-accent">
+                    <a href="#contacts" className="ms-btn ms-btn-accent ms-btn-cta">
                         {t('site.contact_us')}
                     </a>
-                    {listings.length > 0 && (
+                    {products.length > 0 && (
                         <a href="#products" className="ms-btn ms-btn-ghost">
                             {t('site.products.cta')}
                         </a>
@@ -351,28 +361,29 @@ function Facts({ company }: { company: Company }) {
     );
 }
 
-function ProductTile({ listing: l }: { listing: SiteListing }) {
-    const unit = unitLabel(l.unit);
+function ProductTile({ product: p }: { product: SiteProduct }) {
+    const unit = unitLabel(p.unit);
     const price =
-        l.negotiable || l.price === null
+        p.negotiable || p.price === null
             ? t('site.products.negotiable')
-            : money(l.price, l.currency) + (unit ? ` / ${unit}` : '');
+            : money(p.price, p.currency) + (unit ? ` / ${unit}` : '');
 
     const body = (
         <>
             <div className="ms-tile-cover">
-                {l.cover ? <img src={l.cover} alt="" loading="lazy" /> : <Package aria-hidden className="size-8" />}
+                {p.cover ? <img src={p.cover} alt="" loading="lazy" /> : <Package aria-hidden className="size-8" />}
             </div>
             <div className="ms-tile-body">
-                {l.category && <p className="ms-tile-cat">{l.category}</p>}
-                <h3 className="ms-tile-title">{l.title}</h3>
+                {p.category && <p className="ms-tile-cat">{p.category}</p>}
+                <h3 className="ms-tile-title">{p.title}</h3>
+                {!p.url && p.excerpt !== '' && <p className="ms-tile-excerpt">{p.excerpt}</p>}
                 <p className="ms-tile-price">{price}</p>
             </div>
         </>
     );
 
-    return l.url ? (
-        <a href={l.url} target="_blank" rel="noopener" className="ms-card ms-tile">
+    return p.url ? (
+        <a href={p.url} target="_blank" rel="noopener" className="ms-card ms-tile">
             {body}
         </a>
     ) : (

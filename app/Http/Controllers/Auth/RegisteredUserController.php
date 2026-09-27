@@ -6,9 +6,12 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Models\Plan;
 use App\Models\User;
+use App\Support\Locales;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -16,8 +19,21 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        /*
+         * Пришёл со страницы тарифов кнопкой «Выбрать»: после регистрации
+         * и подтверждения почты он должен попасть на оплату этого тарифа,
+         * а не в пустой кабинет, где тариф придётся искать заново.
+         * Код проверяется по справочнику — в адрес перехода попадает
+         * только существующий платный тариф.
+         */
+        $plan = $request->string('plan')->toString();
+
+        if ($plan !== '' && $plan !== Plan::FREE && Plan::query()->where('code', $plan)->where('is_active', true)->exists()) {
+            redirect()->setIntendedUrl(Locales::url('/cabinet/billing?plan='.$plan));
+        }
+
         return Inertia::render('auth/Register');
     }
 

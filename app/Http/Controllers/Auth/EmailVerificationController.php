@@ -25,8 +25,13 @@ class EmailVerificationController extends Controller
 {
     public function notice(Request $request): RedirectResponse|Response
     {
+        /*
+         * Дальше — туда, куда человек шёл до регистрации (например,
+         * на оплату тарифа, выбранного на странице тарифов), иначе
+         * в кабинет. То же после подтверждения ниже.
+         */
         if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->route('cabinet');
+            return redirect()->intended(route('cabinet'));
         }
 
         return Inertia::render('auth/VerifyEmail', [
@@ -44,7 +49,7 @@ class EmailVerificationController extends Controller
 
         $request->fulfill();
 
-        return redirect()->route('cabinet')->with('success', __('ui.messages.auth.verified'));
+        return redirect()->intended(route('cabinet'))->with('success', __('ui.messages.auth.verified'));
     }
 
     /**
@@ -76,7 +81,7 @@ class EmailVerificationController extends Controller
             event(new Verified($request->user()));
         }
 
-        return redirect()->route('cabinet')->with('success', __('ui.messages.auth.verified'));
+        return redirect()->intended(route('cabinet'))->with('success', __('ui.messages.auth.verified'));
     }
 
     public function send(Request $request): RedirectResponse

@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Check, Ticket, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
@@ -6,6 +6,7 @@ import { formatNumber } from '@/components/cabinet';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
+import type { SharedProps } from '@/types';
 
 interface PricingPlan {
     code: string;
@@ -198,6 +199,22 @@ function features(p: PricingPlan): [string, boolean][] {
     ];
 }
 
+/**
+ * Куда ведёт «Выбрать».
+ *
+ * Вошедший — в кабинет, на оплату выбранного тарифа. Гость — на
+ * регистрацию, которая запоминает тариф: после подтверждения почты
+ * человек попадает на ту же оплату. Бесплатный тариф не покупают:
+ * вошедшему он открывает кабинетный раздел тарифов, гостю — регистрацию.
+ */
+function chooseHref(code: string, signedIn: boolean): string {
+    const paid = code !== 'free';
+
+    if (signedIn) return paid ? `${routes.cabinetBilling}?plan=${code}` : routes.cabinetBilling;
+
+    return paid ? `${routes.register}?plan=${code}` : routes.register;
+}
+
 export default function Pricing({
     plans,
     promo = null,
@@ -207,6 +224,8 @@ export default function Pricing({
     promo?: PricingPromo | null;
     promoError?: string | null;
 }) {
+    const signedIn = Boolean(usePage<SharedProps>().props.auth?.user);
+
     return (
         <PublicLayout title={t('seo.pricing_title')} description={t('seo.pricing_description')}>
             <section className="section--tight" style={{ background: 'var(--primary-50)' }}>
@@ -305,7 +324,7 @@ export default function Pricing({
                                         </>
                                     ) : (
                                         <Link
-                                            href={routes.register}
+                                            href={chooseHref(p.code, signedIn)}
                                             className={`btn btn-block ${highlighted ? 'btn-primary' : 'btn-secondary'}`}
                                         >
                                             {t('pricing.choose')}

@@ -66,7 +66,13 @@ final class SiteTheme
         'heading_font' => 'manrope',
         'body_font' => 'manrope',
         'radius' => 'soft',
+        // Фон первого экрана: путь в публичном хранилище. Меняется только
+        // загрузкой через кабинет, из формы оформления не принимается
+        'hero_image' => null,
     ];
+
+    /** Где лежат загруженные фоны: sites/{id компании}/файл. */
+    public const HERO_PATTERN = '#^sites/\d+/[A-Za-z0-9._-]+$#';
 
     /**
      * Готовые сочетания — отправная точка. Большинство компаний не
@@ -92,12 +98,15 @@ final class SiteTheme
     /** Порог WCAG AA для обычного текста. */
     private const MIN_CONTRAST = 4.5;
 
+    /** Насколько кнопка должна отличаться от фона, чтобы её было видно. */
+    private const MIN_CTA_CONTRAST = 1.6;
+
     /**
      * Проверенное оформление: неизвестные поля отброшены, недопустимые
      * значения заменены значениями по умолчанию.
      *
      * @param  array<mixed>|null  $input
-     * @return array<string, string>
+     * @return array<string, string|null>
      */
     public static function normalize(?array $input): array
     {
@@ -128,6 +137,10 @@ final class SiteTheme
             $theme['radius'] = $input['radius'];
         }
 
+        if (is_string($input['hero_image'] ?? null) && preg_match(self::HERO_PATTERN, $input['hero_image']) === 1) {
+            $theme['hero_image'] = $input['hero_image'];
+        }
+
         return $theme;
     }
 
@@ -156,7 +169,7 @@ final class SiteTheme
      * CSS-переменные оформления. Имена начинаются с --ms-, чтобы
      * не пересечься с токенами витрины.
      *
-     * @param  array<string, string>  $theme  результат normalize()
+     * @param  array<string, string|null>  $theme  результат normalize()
      * @return array<string, string>
      */
     public static function variables(array $theme): array
@@ -179,6 +192,15 @@ final class SiteTheme
             '--ms-primary-soft' => self::mix($theme['primary'], $s['bg'], 0.88),
             '--ms-accent' => $theme['accent'],
             '--ms-on-accent' => self::readableOn($theme['accent']),
+            // Кнопка на фирменном фоне (шаблон «Яркий»): акцент, близкий
+            // к фирменному цвету, сливался с фоном, и кнопка пропадала —
+            // тогда она белая или тёмная, что читается на фоне
+            '--ms-hero-cta' => self::contrast($theme['accent'], $theme['primary']) >= self::MIN_CTA_CONTRAST
+                ? $theme['accent']
+                : self::readableOn($theme['primary']),
+            '--ms-on-hero-cta' => self::contrast($theme['accent'], $theme['primary']) >= self::MIN_CTA_CONTRAST
+                ? self::readableOn($theme['accent'])
+                : $theme['primary'],
             '--ms-radius' => self::RADII[$theme['radius']],
             '--ms-font-heading' => "'{$heading['name']}', {$heading['fallback']}",
             '--ms-font-body' => "'{$body['name']}', {$body['fallback']}",
