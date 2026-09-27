@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Listing;
 use App\Models\Promotion;
 use App\Models\PromotionType;
+use App\Support\ContentTranslation;
 use App\Support\Notifier;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +50,7 @@ class PromotionController extends Controller
                 'id' => $p->id,
                 'listing' => $p->listing?->title,
                 'type' => $p->type?->name,
-                'badge' => $p->type?->badge,
+                'badge' => ContentTranslation::text($p->type?->badge),
                 'ends_at' => $p->ends_at?->translatedFormat('d.m.Y'),
                 'before' => $p->impressions_before,
                 'after' => $p->impressions_after,
@@ -63,9 +64,9 @@ class PromotionController extends Controller
             ->map(fn (PromotionType $t): array => [
                 'id' => $t->id,
                 'code' => $t->code,
-                'name' => $t->name,
-                'description' => $t->description,
-                'effect_hint' => $t->effect_hint,
+                'name' => ContentTranslation::text($t->name),
+                'description' => ContentTranslation::text($t->description),
+                'effect_hint' => ContentTranslation::text($t->effect_hint),
                 'cost' => $t->cost_units,
                 'cost_label' => $t->costLabel(),
                 'icon' => $t->icon,

@@ -9,6 +9,7 @@ use App\Models\City;
 use App\Models\Company;
 use App\Models\ItTask;
 use App\Models\ItTaskFile;
+use App\Support\ContentTranslation;
 use App\Support\DateHelper;
 use App\Support\Seo;
 use Illuminate\Database\Eloquent\Builder;
@@ -131,7 +132,7 @@ class ItTaskController extends Controller
         return Inertia::render('it-tasks/Show', [
             'task' => [
                 ...$this->card($task),
-                'description' => preg_split('/\R{2,}/u', trim($task->description)) ?: [],
+                'description' => ContentTranslation::paragraphs($task->description),
                 'files' => $task->files->map(fn (ItTaskFile $f): array => [
                     'id' => $f->id,
                     'title' => $f->title,
@@ -175,8 +176,8 @@ class ItTaskController extends Controller
         return [
             'id' => $task->id,
             'slug' => $task->slug,
-            'title' => $task->title,
-            'excerpt' => Str::limit(trim($task->description), 180),
+            'title' => ContentTranslation::text($task->title),
+            'excerpt' => Str::limit(trim((string) ContentTranslation::text($task->description)), 180),
             'service_type' => $task->service_type,
             'service_label' => __('ui.it_tasks.types.'.$task->service_type),
             'stack' => $task->stack ?? [],
