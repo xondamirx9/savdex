@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
 
 from .pg_admin import sql, нужна_база, свежая_база
-from .web_site import laravel, войти, гость, из_django, из_laravel, пользователь, страница, шапка
+from .web_site import laravel, войти, гость, из_django, из_laravel, пользователь, сверить, страница
 
 pytestmark = нужна_база
 
@@ -33,44 +32,6 @@ def сайт() -> Iterator[str]:
 
     with laravel() as root:
         yield root
-
-
-def сверить(
-    сайт: str,
-    path: str,
-    cookies: dict[str, str] | None = None,
-    headers: dict[str, str] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Django, затем Laravel; статус, страница и шапка должны совпасть."""
-    д = из_django(сайт, path, cookies, headers)
-    л = из_laravel(сайт, path, cookies, headers)
-
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
-
-    if л["status"] in (301, 302, 409):
-        for header in ("location", "x-inertia-location"):
-            assert д["headers"].get(header) == л["headers"].get(header), header
-
-        return д, л
-
-    стр_д, стр_л = страница(д["body"]), страница(л["body"])
-
-    for key in ("component", "url", "version", "sharedProps"):
-        assert стр_д.get(key) == стр_л.get(key), key
-
-    for prop in стр_л["props"]:
-        assert стр_д["props"].get(prop) == стр_л["props"][prop], f"проп {prop}"
-
-    assert list(стр_д["props"]) == list(стр_л["props"])
-    assert set(стр_д) == set(стр_л)
-
-    if "<head>" in л["body"]:
-        assert шапка(д["body"]) == шапка(л["body"])
-        assert д["headers"].get("link") == л["headers"].get("link")
-
-    assert д["headers"].get("vary") == л["headers"].get("vary")
-
-    return д, л
 
 
 @pytest.mark.parametrize(

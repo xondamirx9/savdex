@@ -80,6 +80,11 @@ class Seo:
 
         return self
 
+    def image(self, url: str | None) -> Seo:
+        self._image = url
+
+        return self
+
     def bare(self) -> Seo:
         self.bare_page = True
         self.noindex = True

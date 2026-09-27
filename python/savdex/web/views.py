@@ -209,3 +209,126 @@ def not_found(ctx: Context) -> HttpResponse:
     }
 
     return inertia.render(ctx, "Error", props, seo, status=404)
+
+
+# ── «О компании» и «Контакты» ───────────────────────────────────────
+
+
+def _count(query: str, params: list[Any] | None = None) -> int:
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        cursor.execute(query, params or [])
+
+        return int(cursor.fetchone()[0])
+
+
+def stats(locale: str) -> dict[str, int]:
+    """PageController::stats — счётчики витрины, все из базы."""
+    listings = "select count(*) from listings where status = 'active' and deleted_at is null"
+    params: list[Any] = []
+
+    if locale != locales.DEFAULT:
+        # Listing::scopeVisibleIn: импортированное — только с заголовком на языке
+        listings += " and (source != 'import' or coalesce((title_i18n)::jsonb ? %s, false))"
+        params.append(locale)
+
+    return {
+        "companies": _count(
+            "select count(*) from companies where status = 'active' and deleted_at is null"
+        ),
+        "listings": _count(listings, params),
+        "categories": _count(
+            "select count(*) from categories where is_active and parent_id is not null"
+        ),
+        "countries": _count(
+            "select count(*) from countries c where c.is_active and exists (select 1 from "
+            "companies m where m.country_id = c.id and m.status = 'active' "
+            "and m.deleted_at is null)"
+        ),
+    }
+
+
+def about(request: HttpRequest) -> HttpResponse:
+    """PageController::about."""
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    pages = {p.key: p for p in Page.objects.filter(key__in=["about", "contacts"])}
+    about_page = pages.get("about")
+    translations = content.Translations(ctx.locale)
+    values = settings_values()
+    seo = _seo(ctx)
+    meta_title = (about_page.meta_title or "").strip() if about_page else ""
+    meta_description = (about_page.meta_description or "").strip() if about_page else ""
+
+    if about_page is not None and meta_title:
+        seo.title(
+            _meta(about_page, "meta_title", translations)
+            or content.localized(about_page, "title", translations)
+        )
+    else:
+        seo.title(ctx.t("seo.about_title"))
+
+    if about_page is not None and meta_description:
+        seo.description(
+            _meta(about_page, "meta_description", translations)
+            or content.localized(about_page, "excerpt", translations)
+        )
+    else:
+        seo.description(ctx.t("seo.about_description"))
+
+    seo.canonical(ctx.url("about"))
+    office_ = office(values)
+
+    if office_ is not None:
+        details: dict[str, Any] = {
+            "legalName": setting(values, "legal_name"),
+            "email": setting(values, "support_email"),
+            "telephone": setting(values, "support_phone"),
+            "address": {
+                "@type": "PostalAddress",
+                "streetAddress": office_["address"],
+                "addressCountry": "UZ",
+            }
+            if office_["address"] != ""
+            else None,
+            "geo": {
+                "@type": "GeoCoordinates",
+                "latitude": office_["lat"],
+                "longitude": office_["lng"],
+            }
+            if office_["lat"] is not None
+            else None,
+        }
+        # array_filter: пустые поля не размечаются
+        seo.organization_details = {k: v for k, v in details.items() if v}
+
+    return inertia.render(
+        ctx,
+        "About",
+        {
+            "stats": stats(ctx.locale),
+            "office": office_,
+            "page": _card(about_page, translations) if about_page else None,
+            "contacts": _card(pages["contacts"], translations) if "contacts" in pages else None,
+            "nav": docs_nav(ctx, office_, translations),
+        },
+        seo,
+    )
+
+
+def contacts(request: HttpRequest) -> HttpResponse:
+    """PageController::contacts — /contact (без «s»)."""
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    seo = _seo(ctx)
+    seo.title(ctx.t("seo.contacts_title")).description(ctx.t("seo.contacts_description"))
+    seo.canonical(ctx.url("contact"))
+
+    return inertia.render(ctx, "Contacts", {}, seo)
