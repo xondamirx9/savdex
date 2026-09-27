@@ -227,14 +227,15 @@ class PageController extends Controller
         ]);
     }
 
-    /** Сколько компаний страны показывать сразу и подгружать за одно нажатие «Показать ещё». */
+    /** Сколько компаний страны показывать сразу; остальные — по «Показать ещё». */
     private const COMPANIES_PER_COUNTRY = 12;
 
     /**
-     * Следующая порция компаний страны для кнопки «Показать ещё».
+     * Все оставшиеся компании страны для кнопки «Показать ещё».
      *
-     * Отдаёт JSON: страница стран подгружает компании по нажатию,
-     * чтобы не тянуть сразу больше тысячи карточек.
+     * Отдаёт JSON: страница стран сразу показывает только первые
+     * компании, остальные подгружает одним нажатием — чтобы при
+     * открытии не тянуть больше тысячи карточек.
      */
     public function countryCompanies(Request $request, string $code): JsonResponse
     {
@@ -250,14 +251,13 @@ class PageController extends Controller
             ->orderByDesc('verification_level')
             ->orderByDesc('rating')
             ->orderBy('id')
+            // OFFSET без LIMIT в SQL не пишется: берём с запасом «всё»
             ->offset($offset)
-            // На одну больше — узнать, осталось ли что-то ещё
-            ->limit(self::COMPANIES_PER_COUNTRY + 1)
+            ->limit(PHP_INT_MAX)
             ->get();
 
         return response()->json([
-            'items' => $companies->take(self::COMPANIES_PER_COUNTRY)->map($this->countryCompanyCard(...))->values(),
-            'has_more' => $companies->count() > self::COMPANIES_PER_COUNTRY,
+            'items' => $companies->map($this->countryCompanyCard(...))->values(),
         ]);
     }
 
