@@ -834,7 +834,7 @@ Django не переписывает: их выгружает сам Laravel к�
 сессии, скрытая страница (404), машинный перевод, SEO-робот.
 
 **Включение и откат.** Адреса страницы доходят до Django, только если
-её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs`,
+её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory`,
 `docker/apache-python.conf`). Откат без выкладки: в настройках Render
 задать `SAVDEX_PY_PAGES` пустой и перезапустить — страницы снова отдаёт
 Laravel. Django получает только читающие запросы (GET, HEAD) основного
@@ -849,6 +849,7 @@ Laravel. Django получает только читающие запросы (G
 | `docs` ✅ | `/help`, `/guide`, `/rules` | `tests/test_web_parity.py` |
 | `news` ✅ | `/news`, `/news/<адрес>` | `tests/test_web_news.py` |
 | `about` ✅ | `/about`, `/contact` | `tests/test_web_about.py` |
+| `directory` ✅ | `/countries`, `/partners` | `tests/test_web_directory.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.

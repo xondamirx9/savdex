@@ -137,8 +137,8 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/help.h
           grep -q '"component":"DocPage"' /tmp/help.html
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
-          # Новости и «О компании» — тоже Django
-          for page in news about contact; do
+          # Новости, «О компании», страны и партнёры — тоже Django
+          for page in news about contact countries partners; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
