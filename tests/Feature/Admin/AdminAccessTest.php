@@ -18,7 +18,6 @@ use App\Filament\Resources\Plans\PlanResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Resumes\ResumeResource;
 use App\Filament\Resources\Reviews\ReviewResource;
-use App\Filament\Resources\Settings\SettingResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Resources\Tenders\TenderResource;
 use App\Filament\Resources\Users\UserResource;
@@ -64,7 +63,6 @@ class AdminAccessTest extends TestCase
         NewsPostResource::class,
         LandingBlockResource::class,
         BroadcastResource::class,
-        SettingResource::class,
     ];
 
     private function admin(string $role): User
