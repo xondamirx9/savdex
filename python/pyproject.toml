@@ -12,6 +12,8 @@ dependencies = [
     "bcrypt>=4.2",
     "gunicorn>=23",
     "whitenoise>=6.7",
+    # Картинки баннеров: пересборка в WebP по рамке, как ImageStore у Laravel
+    "pillow>=11",
 ]
 
 [dependency-groups]

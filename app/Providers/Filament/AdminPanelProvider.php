@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\DownloadExportController;
 use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
+use App\Models\Banner;
 use App\Support\AdminAccess;
 use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
@@ -120,6 +121,14 @@ class AdminPanelProvider extends PanelProvider
             // ведёт через пропуск (/admin/python) в раздел на Python.
             // Видимость — по тем же правам AdminAccess, что и у раздела
             ->navigationItems([
+                NavigationItem::make('Баннеры')
+                    ->url('/admin/python?next=/py/admin/site/banner/')
+                    ->icon('heroicon-o-megaphone')
+                    ->group('Контент')
+                    ->sort(5)
+                    // Значок считает висящие сейчас, а не все заведённые
+                    ->badge(fn (): ?string => ($live = Banner::query()->live()->count()) > 0 ? (string) $live : null)
+                    ->visible(fn (): bool => AdminAccess::allows('content.view')),
                 NavigationItem::make('Настройки')
                     ->url('/admin/python?next=/py/admin/site/setting/')
                     ->icon('heroicon-o-adjustments-horizontal')

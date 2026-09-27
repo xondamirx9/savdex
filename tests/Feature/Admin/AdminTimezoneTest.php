@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Banners\Pages\CreateBanner;
 use App\Models\AdminAction;
 use App\Models\Banner;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -30,6 +26,10 @@ use Tests\TestCase;
  *
  * Тем же страдали все девять полей даты-времени в админке: срок
  * объявления, дедлайн тендера, публикация новости, задачи CRM.
+ *
+ * Форма баннеров с этапа 2 переноса — на Python; то, что ташкентское
+ * время из неё ложится в базу в UTC, проверяет
+ * python/tests/test_banners_admin.py. Здесь остались миграции.
  */
 class AdminTimezoneTest extends TestCase
 {
@@ -46,68 +46,6 @@ class AdminTimezoneTest extends TestCase
             'admin_role' => AdminAccess::SUPERADMIN,
             'status' => 'active',
         ]));
-    }
-
-    private function createBanner(array $dates): Banner
-    {
-        Livewire::test(CreateBanner::class)
-            ->fillForm([
-                'name' => 'Осенняя акция',
-                'placement' => Banner::PLACEMENT_HOME,
-                'alt' => 'Скидка 30%',
-                'sort' => 0,
-                'image_path' => UploadedFile::fake()->image('banner.jpg', 2400, 800),
-                ...$dates,
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        return Banner::query()->firstOrFail();
-    }
-
-    #[Test]
-    public function баннер_с_сейчас_появляется_сразу(): void
-    {
-        Carbon::setTestNow('2026-09-26 11:00:00'); // 16:00 в Ташкенте
-
-        // Администратор смотрит на свои часы: 16:00
-        $banner = $this->createBanner([
-            'starts_at' => '2026-09-26 16:00:00',
-            'ends_at' => '2026-10-01 00:00:00',
-        ]);
-
-        $this->assertTrue($banner->isLive(), 'Баннер, заведённый «с сейчас», не показывается');
-
-        $this->get('/')->assertInertia(
-            fn ($page) => $page->where('banner.alt', 'Скидка 30%'),
-        );
-    }
-
-    #[Test]
-    public function в_базу_ложится_utc(): void
-    {
-        $banner = $this->createBanner([
-            'starts_at' => '2026-10-01 09:00:00',
-            'ends_at' => '2026-10-07 23:59:00',
-        ]);
-
-        // 09:00 в Ташкенте — это 04:00 UTC
-        $this->assertSame('2026-10-01 04:00:00', $banner->getRawOriginal('starts_at'));
-        $this->assertSame('2026-10-07 18:59:00', $banner->getRawOriginal('ends_at'));
-    }
-
-    #[Test]
-    public function акция_кончается_вовремя_а_не_на_пять_часов_позже(): void
-    {
-        $this->createBanner([
-            'starts_at' => '2026-09-01 00:00:00',
-            'ends_at' => '2026-10-01 00:00:00', // полночь по Ташкенту
-        ]);
-
-        // 00:30 по Ташкенту, первое октября: акция уже кончилась
-        Carbon::setTestNow('2026-09-30 19:30:00');
-
-        $this->assertFalse(Banner::query()->firstOrFail()->isLive());
     }
 
     /**

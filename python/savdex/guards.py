@@ -74,6 +74,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # кэш настроек Laravel (savdex/laravel_cache.py); настройки,
         # которые читает код, не удаляются
         "settings",
+        # Этап 2: баннеры. Картинки пересобираются как ImageStore
+        # (savdex/images.py), прежние файлы удаляются после записи
+        "banners",
+        "banner_images",
     }
 )
 
