@@ -224,35 +224,24 @@ class PageController extends Controller
         ]);
     }
 
-    /** Сколько компаний показывать под страной; остальные — по ссылке в каталог. */
-    private const COMPANIES_PER_COUNTRY = 8;
-
     /**
-     * Компании под каждой страной на странице «Страны».
+     * Компании под каждой страной на странице «Страны» — все до одной.
      *
-     * Верхушка по проверке и рейтингу — в том же порядке, что каталог
-     * компаний, чтобы «Все компании страны» продолжали тот же список.
-     * Отбор одним запросом через row_number: компаний больше тысячи,
-     * и тянуть их все ради восьми на страну незачем.
+     * Порядок тот же, что в каталоге компаний: сначала проверенные,
+     * затем по рейтингу.
      *
      * @return array<int, list<array<string, mixed>>> по country_id
      */
     private function companiesByCountry(): array
     {
-        $ranked = Company::query()
-            ->select('companies.*')
-            ->selectRaw('row_number() over (partition by country_id order by verification_level desc, rating desc, id) as country_rank')
-            // Счётчик — во внутреннем запросе: на подзапрос во FROM
-            // withCount не навешивается
+        return Company::query()
+            ->with(['city.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
-            ->whereNotNull('country_id');
-
-        return Company::query()
-            ->fromSub($ranked, 'companies')
-            ->with(['city.translations'])
-            ->where('country_rank', '<=', self::COMPANIES_PER_COUNTRY)
-            ->orderBy('country_rank')
+            ->whereNotNull('country_id')
+            ->orderByDesc('verification_level')
+            ->orderByDesc('rating')
+            ->orderBy('id')
             ->get()
             ->groupBy('country_id')
             ->map(fn ($companies) => $companies->map(fn (Company $c): array => [

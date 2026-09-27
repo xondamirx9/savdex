@@ -178,18 +178,18 @@ class CountryListTest extends TestCase
                 ->all() === [$own->slug]));
     }
 
-    /** Под страной не больше восьми компаний: остальные — в каталоге. */
+    /** Под страной показаны все её компании, без ограничения. */
     #[Test]
-    public function под_страной_не_больше_восьми_компаний(): void
+    public function под_страной_показаны_все_компании(): void
     {
-        Company::factory()->count(10)->create([
+        Company::factory()->count(12)->create([
             'status' => Company::STATUS_ACTIVE,
             'country_id' => Country::where('code', 'pl')->value('id'),
         ]);
 
         $this->get('/countries')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('countries.0.companies', 10)
-            ->has('countries.0.items', 8));
+            ->where('countries.0.companies', 12)
+            ->has('countries.0.items', 12));
     }
 
     /**
