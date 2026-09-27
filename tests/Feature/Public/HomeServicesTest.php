@@ -51,7 +51,7 @@ class HomeServicesTest extends TestCase
             ->has('services', 2)
             ->where('services.0.type', 'accounting')
             ->where('services.0.tasks', 3)
-            ->where('services.1.type', 'hr')
+            ->where('services.1.type', 'hr_services')
             ->where('services.1.tasks', 2));
     }
 }

@@ -71,7 +71,7 @@ interface ServiceTile {
 const SERVICE_ICONS: Record<string, typeof Package> = {
     it: Code2,
     logistics: Truck,
-    hr: UserSearch,
+    hr_services: UserSearch,
     customs: FileCheck2,
     accounting: Calculator,
 };
