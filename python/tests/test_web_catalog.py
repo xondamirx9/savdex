@@ -128,7 +128,9 @@ def статистика() -> tuple[object, ...]:
 
 
 @pytest.mark.parametrize(
-    "path", ["/catalog?page=2", "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20M400"]
+    # «М400» — кириллицей, как в заголовках
+    "path",
+    ["/catalog?page=2", "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20%D0%9C400"],
 )
 def test_статистика_как_у_laravel(сайт, path):
     обнулить()
@@ -146,12 +148,14 @@ def test_повтор_показа_отсеивает_общий_кэш(сайт
     """Одна сессия: Laravel засчитал показы — Django в течение получаса их не считает."""
     import httpx
 
-    файловый = {"CACHE_STORE": "file"}
+    # Сессия — в базе, чтобы Django её узнал; кэш — файловый, общий
+    файловый = {"CACHE_STORE": "file", "SESSION_DRIVER": "database"}
 
     with laravel(**файловый) as root:
         обнулить()
         ответ = httpx.get(root + "/catalog", timeout=30)
-        куки = {"laravel_session": ответ.cookies["laravel_session"]}
+        куки = {k: v for k, v in ответ.cookies.items() if k.endswith("-session")}
+        assert куки
         assert sql("select sum(impressions_count) from listings")[0][0] > 0
 
         sql("update listings set impressions_count = 0")
@@ -161,4 +165,3 @@ def test_повтор_показа_отсеивает_общий_кэш(сайт
         # Другая страница — другие объявления, их Django засчитывает
         из_django(root, "/catalog?page=2", куки, env=файловый)
         assert sql("select sum(impressions_count) from listings")[0][0] > 0
-

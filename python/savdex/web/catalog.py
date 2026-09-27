@@ -223,9 +223,10 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     verified = string("verified").strip().lower() in _TRUE
     with_price = string("with_price").strip().lower() in _TRUE
 
+    # Условие языка — первым: его параметр идёт первым в списке
     visible, params = visible_in(ctx.locale)
     where = [
-        "l.status = 'active'",
+        "l.status = 'active'" + visible,
         "l.deleted_at is null",
         "c.status = 'active'",
         "c.deleted_at is null",
@@ -253,7 +254,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     if with_price:
         where.append("l.price is not null and l.price_negotiable = false")
 
-    condition = " and ".join(where) + visible
+    condition = " and ".join(where)
     source = "from listings l join companies c on c.id = l.company_id"
     total = _rows(f"select count(*) as n {source} where {condition}", params)[0]["n"]
     current, offset = paginator.offset(ctx, PER_PAGE)

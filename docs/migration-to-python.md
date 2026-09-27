@@ -858,6 +858,7 @@ Laravel. Django получает только читающие запросы (G
 | `tenders` ✅ | `/tenders` — 301 в каталог, `/tenders/<адрес>`, `/catalog?type=tender` (этап 4) | `tests/test_web_throttle.py`, `tests/test_web_tenders.py` |
 | `services` ✅ | `/resumes`, `/it-services` и их страницы (этап 4) | `tests/test_web_resumes.py`, `tests/test_web_it_tasks.py` |
 | `companies` ✅ | `/companies`, `/company/<адрес>` (этап 4) | `tests/test_web_companies.py`, `tests/test_web_company.py` |
+| `catalog` ✅ | `/catalog` — объявления и вкладка тендеров (этап 4) | `tests/test_web_catalog.py`, `tests/test_web_tenders.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -1018,6 +1019,29 @@ Postgres менял местами записи с одинаковой дато
 в обеих половинах. И `php_json` для разметки в `<head>` пишет целое
 дробное без «.0», как `json_encode` без `JSON_PRESERVE_ZERO_FRACTION`
 (рейтинг `4.0` → `4`).
+
+**Шаг 7 — каталог объявлений** `/catalog` (группа `catalog`). Выдача,
+фильтры, сортировки («подходящие» — продвинутые выше) и статистика, как
+`StatsRecorder`: показы (`listings.impressions_count` и дневная строка
+`listing_stats`) — не чаще раза в полчаса на посетителя, ключ
+`stats:imp:<посетитель>:<объявление>` в общем файловом кэше; поисковые
+запросы (`search_hits`) — каждой показанной компании, без отсева, как у
+Laravel. Сверка сравнивает саму записанную статистику: после страницы
+Django в таблицах ровно то же, что после Laravel.
+
+Одно отступление. Посетитель для отсева повторов у Laravel — сессия, а
+гостю, который ходит только по страницам Django, её никто не выдаст
+(сессию до этапа 5 пишет Laravel). Без сессии каждое обновление
+страницы засчитывалось бы показом, поэтому Django метит такого гостя
+своей кукой `savdex_visitor` (ключ кэша `stats:imp:py-<кука>:…`).
+Вошедшего и гостя с сессией Laravel Django считает по ней — общий ключ
+с Laravel (`tests/test_web_catalog.py`). Страница объявления
+`/listing/<адрес>` — последний шаг этапа.
+
+Права `savdex_django` на счётчики — отдельными миграциями
+(`2026_09_30_110000_grant_django_audience_views`,
+`2026_09_30_120000_grant_django_catalog_stats`): уже влитую миграцию
+не правим — на боевом она могла выполниться.
 
 ### Этап 5. Кабинет (10–12 недель)
 
