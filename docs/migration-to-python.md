@@ -856,7 +856,7 @@ Laravel. Django получает только читающие запросы (G
 | `home` ✅ | `/`, `/uz`, `/en` … | `tests/test_web_home.py` |
 | `reviews` ✅ | `/reviews` (форма `/reviews/new` — Laravel) | `tests/test_web_reviews.py` |
 | `tenders` ✅ | `/tenders` — 301 в каталог, `/tenders/<адрес>`, `/catalog?type=tender` (этап 4) | `tests/test_web_throttle.py`, `tests/test_web_tenders.py` |
-| `services` ✅ | `/resumes`, `/it-services` (этап 4) | `tests/test_web_resumes.py`, `tests/test_web_it_tasks.py` |
+| `services` ✅ | `/resumes`, `/it-services` и их страницы (этап 4) | `tests/test_web_resumes.py`, `tests/test_web_it_tasks.py` |
 | `companies` ✅ | `/companies` (этап 4) | `tests/test_web_companies.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
@@ -991,6 +991,16 @@ increment у Laravel не вызывает, кроме `updated`, на кото�
 (`LocalizeUrl` берёт `getQueryString()`), поэтому в ссылках
 переключателя языка параметры упорядочены, а без префикса — нет
 (`Context.request_uri`).
+
+**Шаг 5 — страницы резюме и IT-задачи** (`/resume/<адрес>`,
+`/it-services/<адрес>`, группа `services`). Обе считают просмотры не
+владельцу — тем же `increment` и с тем же правом на два столбца; просмотр
+задачи администратором — строка журнала (раздел `ittasks`), резюме в
+журнал не пишутся (их нет в разделах `AuditObserver`). Закрытую задачу
+без результата видит только заказчик. Файлы задач (проверка доступа) и
+отклик остаются у Laravel. В сверке такие страницы обнуляют счётчик
+перед каждой стороной (`сверить(…, перед=…)`): иначе Laravel видел бы
+просмотр, только что засчитанный Django.
 
 ### Этап 5. Кабинет (10–12 недель)
 

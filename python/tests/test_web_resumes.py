@@ -160,7 +160,12 @@ def test_страница_резюме(сайт):
         ("resume-9", "/zh"),
         ("resume-3", "/tr"),
     ):
-        сверить(сайт, f"{prefix}/resume/{slug}")
+        сверить(сайт, f"{prefix}/resume/{slug}", перед=обнулить)
+
+
+def обнулить() -> None:
+    """Счётчик просмотров — с нуля перед каждой стороной сверки."""
+    sql("update resumes set views_count = 0")
 
 
 def test_переведённые_места_работы(сайт):
@@ -169,7 +174,7 @@ def test_переведённые_места_работы(сайт):
         ['{"en": [{"position": "Supply clerk", "duties": ""}], "uz": [{}, {}]}'],
     )
     for prefix in ("/en", "/uz"):
-        сверить(сайт, f"{prefix}/resume/resume-12")
+        сверить(сайт, f"{prefix}/resume/resume-12", перед=обнулить)
 
 
 def test_нет_резюме(сайт):
@@ -181,13 +186,17 @@ def test_нет_резюме(сайт):
 def test_контакты_вошедшему_и_просмотры(сайт):
     пользователь("buyer@savdex.uz")
     куки = войти(сайт, "buyer@savdex.uz")
-    было = sql("select views_count from resumes where slug = 'resume-5'")[0][0]
-
-    д, _ = сверить(сайт, "/resume/resume-5", куки)
+    д, _ = сверить(сайт, "/resume/resume-5", куки, перед=обнулить)
     props = страница(д["body"])["props"]["resume"]
 
     assert props["contacts"] is not None
-    assert props["views"] == было + 1
+    # Своя сторона видит свой просмотр
+    assert props["views"] == 1
+    assert sql("select views_count from resumes where slug = 'resume-5'")[0][0] == 1
+
+    было = 1
+    из_django(сайт, "/resume/resume-5")
+    из_laravel(сайт, "/resume/resume-5")
     assert sql("select views_count from resumes where slug = 'resume-5'")[0][0] == было + 2
 
 

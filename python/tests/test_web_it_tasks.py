@@ -133,18 +133,23 @@ def test_страница_задачи(сайт):
         "insert into it_task_files (it_task_id, title, file_path, file_size, mime, created_at, "
         "updated_at) select id, t, p, s, 'application/pdf', now(), now() from it_tasks, "
         "(values ('ТЗ.PDF', 'it/a.pdf', 1536000), ('схема', 'it/b.Docx', 300), "
-        "('архив.tar.gz', 'it/c', null)) as f(t, p, s) where slug = %s",
+        "('архив.tar.gz', 'it/c', 0)) as f(t, p, s) where slug = %s",
         [открытая],
     )
 
     for prefix in ("", "/en", "/uz"):
-        сверить(сайт, f"{prefix}/it-services/{открытая}")
+        сверить(сайт, f"{prefix}/it-services/{открытая}", перед=обнулить)
 
     # Выполненная с результатом; задача заблокированной компании
     выполненная = адрес("status = 'completed'")
     чужая = адрес("company_id = (select max(id) from companies)")
-    сверить(сайт, f"/zh/it-services/{выполненная}")
-    сверить(сайт, f"/it-services/{чужая}")
+    сверить(сайт, f"/zh/it-services/{выполненная}", перед=обнулить)
+    сверить(сайт, f"/it-services/{чужая}", перед=обнулить)
+
+
+def обнулить() -> None:
+    """Счётчик просмотров — с нуля перед каждой стороной сверки."""
+    sql("update it_tasks set views_count = 0")
 
 
 def test_закрытая_видна_только_заказчику(сайт):
@@ -159,12 +164,10 @@ def test_закрытая_видна_только_заказчику(сайт):
         [закрытая],
     )
     куки = войти(сайт, "owner@savdex.uz")
-    было = sql("select views_count from it_tasks where slug = %s", [закрытая])[0][0]
-
-    д, _ = сверить(сайт, f"/it-services/{закрытая}", куки)
+    д, _ = сверить(сайт, f"/it-services/{закрытая}", куки, перед=обнулить)
     assert страница(д["body"])["props"]["respond"]["owner"] is True
     # Свой просмотр не считается
-    assert sql("select views_count from it_tasks where slug = %s", [закрытая])[0][0] == было
+    assert sql("select views_count from it_tasks where slug = %s", [закрытая])[0][0] == 0
 
 
 def test_нет_задачи(сайт):
