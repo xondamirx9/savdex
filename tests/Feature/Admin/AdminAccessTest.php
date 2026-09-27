@@ -9,7 +9,6 @@ use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Broadcasts\BroadcastResource;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
-use App\Filament\Resources\CreditPacks\CreditPackResource;
 use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\LandingBlocks\LandingBlockResource;
 use App\Filament\Resources\Listings\ListingResource;
@@ -61,7 +60,6 @@ class AdminAccessTest extends TestCase
         SubscriptionResource::class,
         PlanResource::class,
         PromoCodeResource::class,
-        CreditPackResource::class,
         PageResource::class,
         NewsPostResource::class,
         LandingBlockResource::class,
@@ -119,7 +117,7 @@ class AdminAccessTest extends TestCase
 
             'финансы' => [AdminAccess::FINANCE, [
                 CompanyResource::class, Invoices::class, SubscriptionResource::class,
-                PlanResource::class, PromoCodeResource::class, CreditPackResource::class,
+                PlanResource::class, PromoCodeResource::class,
             ]],
 
             'поддержка' => [AdminAccess::SUPPORT, [
