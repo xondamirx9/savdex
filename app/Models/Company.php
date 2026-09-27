@@ -45,6 +45,19 @@ class Company extends Model
 
     public const VERIFICATION_CONTACTS = 1;
 
+    /**
+     * Партнёрство с площадкой. Назначает администратор действием
+     * «Партнёрство» в админке; на странице «Партнёры» — две вкладки.
+     */
+    public const PARTNER_GENERAL = 'general';
+
+    public const PARTNER_REGULAR = 'partner';
+
+    public const PARTNER_TIERS = [
+        self::PARTNER_GENERAL => 'Генеральный партнёр',
+        self::PARTNER_REGULAR => 'Партнёр',
+    ];
+
     public const VERIFICATION_COMPANY = 2;
 
     public const VERIFICATION_EXTENDED = 3;

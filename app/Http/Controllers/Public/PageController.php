@@ -12,6 +12,7 @@ use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\FaqItem;
+use App\Models\ItTask;
 use App\Models\Listing;
 use App\Models\Page;
 use App\Models\Plan;
@@ -95,6 +96,8 @@ class PageController extends Controller
             // было видно целиком — без обрезки и без поля под кадром
             'heroRatio' => Appearance::heroImageRatio(),
             'categories' => $this->popularCategories(),
+            // Две плитки «Доп. услуг» рядом с категориями товаров
+            'services' => $this->popularServices(),
             // Лента товаров первого экрана: только предложения —
             // запросы идут отдельной лентой ниже
             'latest' => $this->latestListings(),
@@ -459,34 +462,39 @@ class PageController extends Controller
             ->description(__('ui.seo.partners_description'))
             ->canonical(url('/partners'));
 
-        $partners = Company::query()
+        /*
+         * Партнёров назначает администратор (действие «Партнёрство»
+         * в админке): это договорённость с площадкой, а не уровень
+         * проверки. Две вкладки — генеральные и обычные партнёры.
+         */
+        $rows = Company::query()
             ->with(['city.translations', 'country.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
-            ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
-            ->orderByDesc('verification_level')
+            ->whereIn('partner_tier', array_keys(Company::PARTNER_TIERS))
+            ->orderBy('partner_sort')
             ->orderByDesc('rating')
             ->orderBy('id')
-            ->limit(24)
-            ->get()
-            ->map(fn (Company $c): array => [
-                'slug' => $c->slug,
-                'name' => $c->name,
-                'type_label' => $c->typeLabel(),
-                'city' => $c->city?->name(),
-                'country' => $c->country?->name(),
-                'verification_level' => $c->verification_level,
-                'rating' => (float) $c->rating,
-                'reviews_count' => $c->reviews_count,
-                // Объявления вместо «сделок»: измеримая величина
-                'listings_count' => (int) $c->listings_count,
-                'initials' => $c->initials(),
-                'logo' => $c->logoUrl(),
-            ])
-            ->all();
+            ->get();
+
+        $present = fn (Company $c): array => [
+            'slug' => $c->slug,
+            'name' => $c->name,
+            'type_label' => $c->typeLabel(),
+            'city' => $c->city?->name(),
+            'country' => $c->country?->name(),
+            'verification_level' => $c->verification_level,
+            'rating' => (float) $c->rating,
+            'reviews_count' => $c->reviews_count,
+            // Объявления вместо «сделок»: измеримая величина
+            'listings_count' => (int) $c->listings_count,
+            'initials' => $c->initials(),
+            'logo' => $c->logoUrl(),
+        ];
 
         return Inertia::render('Partners', [
-            'partners' => $partners,
+            'general' => $rows->where('partner_tier', Company::PARTNER_GENERAL)->map($present)->values()->all(),
+            'partners' => $rows->where('partner_tier', Company::PARTNER_REGULAR)->map($present)->values()->all(),
             'stats' => [
                 'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
                 'verified' => Company::where('status', Company::STATUS_ACTIVE)
@@ -607,6 +615,54 @@ class PageController extends Controller
             ->filter(fn (array $c): bool => $c['listings'] > 0)
             ->values()
             ->all();
+    }
+
+    /** Направления «Доп. услуг» по умолчанию, пока задач нет или их поровну. */
+    private const DEFAULT_SERVICES = ['it', 'logistics'];
+
+    /**
+     * Две популярные услуги площадки для плитки «Популярные категории».
+     *
+     * Направления «Доп. услуг» (IT-услуги, HR-услуги, логистика…)
+     * ранжируются по числу активных задач. «Другое» не показываем:
+     * плитка «Другое» ничего не говорит о том, что за ней. Пока задач
+     * мало, недостающие места занимают IT-услуги и логистика — плитки
+     * видны всегда, это витрина раздела, а не счётчик.
+     *
+     * @return list<array{type: string, name: string, tasks: int}>
+     */
+    private function popularServices(): array
+    {
+        $counts = ItTask::query()
+            ->active()
+            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->selectRaw('service_type, count(*) as total')
+            ->groupBy('service_type')
+            ->pluck('total', 'service_type');
+
+        $sections = array_diff(array_keys(ItTask::SERVICE_SECTIONS), ['other']);
+
+        return collect($sections)
+            ->map(fn (string $section): array => [
+                'type' => $section,
+                'name' => __('ui.it_tasks.types.'.$section),
+                'tasks' => (int) collect(ItTask::typesUnder($section))->sum(fn (string $t): int => (int) ($counts[$t] ?? 0)),
+            ])
+            // При равенстве выше те, что по умолчанию, дальше — порядок разделов
+            ->sortBy([
+                ['tasks', 'desc'],
+                fn (array $a, array $b): int => $this->defaultServiceRank($a['type']) <=> $this->defaultServiceRank($b['type']),
+            ])
+            ->take(2)
+            ->values()
+            ->all();
+    }
+
+    private function defaultServiceRank(string $section): int
+    {
+        $rank = array_search($section, self::DEFAULT_SERVICES, true);
+
+        return $rank === false ? count(self::DEFAULT_SERVICES) : $rank;
     }
 
     /**

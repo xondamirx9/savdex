@@ -31,11 +31,20 @@ export function Modal({
 }) {
     const ref = useRef<HTMLDivElement>(null);
 
+    /*
+     * onClose — свежая функция на каждой перерисовке родителя. Будь она
+     * в зависимостях эффекта ниже, эффект перезапускался бы на каждую
+     * набранную букву и снова ставил фокус на первый элемент окна —
+     * крестик: в поле формы можно было ввести только один символ.
+     */
+    const closeRef = useRef(onClose);
+    closeRef.current = onClose;
+
     useEffect(() => {
         if (!open) return;
 
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') closeRef.current();
 
             // Фокус не должен уходить на элементы под окном:
             // иначе Tab уводит в фоновую страницу и человек теряется
@@ -62,13 +71,18 @@ export function Modal({
         document.addEventListener('keydown', onKey);
         document.body.style.overflow = 'hidden';
 
-        ref.current?.querySelector<HTMLElement>('select, input, button')?.focus();
+        // Сначала поле ввода, а не крестик в шапке: окно с формой
+        // открывают, чтобы в неё писать
+        (
+            ref.current?.querySelector<HTMLElement>('input:not([type="file"]), select, textarea') ??
+            ref.current?.querySelector<HTMLElement>('button')
+        )?.focus();
 
         return () => {
             document.removeEventListener('keydown', onKey);
             document.body.style.overflow = '';
         };
-    }, [open, onClose]);
+    }, [open]);
 
     if (!open) return null;
 
