@@ -12,6 +12,7 @@ use App\Models\CompanyContact;
 use App\Models\Listing;
 use App\Models\Tender;
 use App\Support\BannerCard;
+use App\Support\ContentTranslation;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
 use App\Support\PriceDisplay;
@@ -408,11 +409,11 @@ class CatalogController extends Controller
                  * Ключ без описания в справочнике остаётся как записан.
                  */
                 'attributes' => $listing->attributes->map(fn ($a): array => [
-                    'key' => $listing->category?->fields
-                        ->firstWhere('key', $a->key)?->label ?? $a->key,
-                    'value' => $a->value,
+                    'key' => ContentTranslation::text($listing->category?->fields
+                        ->firstWhere('key', $a->key)?->label ?? $a->key),
+                    'value' => ContentTranslation::text($a->value),
                 ]),
-                'badges' => $listing->activePromotions->map(fn ($p): ?string => $p->type?->badge)->filter()->values(),
+                'badges' => $listing->activePromotions->map(fn ($p): ?string => ContentTranslation::text($p->type?->badge))->filter()->values(),
                 'promoted' => $listing->activePromotions->isNotEmpty(),
 
                 // Теги — автоматически из заголовка, категории

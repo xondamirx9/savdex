@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Jobs\TranslateNewsPost;
+use App\Services\MachineTranslator;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -101,6 +102,31 @@ class NewsPost extends Model
         return trim((string) ($translations[$locale] ?? '')) !== ''
             ? $translations[$locale]
             : $original;
+    }
+
+    /**
+     * Новости, которым не хватает перевода хотя бы на один язык.
+     *
+     * Проверяется каждое поле и каждый язык, а не «пусто ли всё»:
+     * заголовок мог перевестись, а длинный текст — нет, и такая
+     * новость навсегда оставалась бы с русским текстом под
+     * переведённым заголовком. Проверка ключей JSON работает
+     * одинаково в SQLite и PostgreSQL — сравнение json-столбца
+     * со строкой '[]' PostgreSQL не умеет вовсе.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeLackingTranslations(Builder $query): void
+    {
+        $query->where(function (Builder $q): void {
+            foreach (MachineTranslator::TARGETS as $locale) {
+                $q->orWhereJsonDoesntContainKey('title_i18n->'.$locale)
+                    ->orWhere(fn (Builder $e) => $e->whereNotNull('excerpt')->where('excerpt', '!=', '')
+                        ->whereJsonDoesntContainKey('excerpt_i18n->'.$locale))
+                    ->orWhere(fn (Builder $b) => $b->whereNotNull('body')->where('body', '!=', '')
+                        ->whereJsonDoesntContainKey('body_i18n->'.$locale));
+            }
+        });
     }
 
     public function author(): BelongsTo
