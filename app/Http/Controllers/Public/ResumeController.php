@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\City;
+use App\Models\ItTask;
 use App\Models\Resume;
 use App\Support\ResumeOptions;
 use App\Support\Seo;
@@ -72,6 +73,9 @@ class ResumeController extends Controller
             ],
             'cities' => $this->cities(),
             'total' => $resumes->total(),
+            // Резюме — пункт HR-услуг в разделе «Доп. услуги»: слева та же
+            // панель направлений, что и в ленте задач
+            'types' => ItTask::sectionTree(),
         ]);
     }
 

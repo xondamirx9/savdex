@@ -77,8 +77,12 @@ function menu(): MenuItem[] {
                 path.startsWith(routes.catalog)
                 && (search.includes('type=demand') || search.includes('type=tender')),
         },
-        { href: routes.itTasks, label: t('nav.it_services') },
-        { href: routes.resumes, label: t('nav.resumes') },
+        {
+            href: routes.itTasks,
+            label: t('nav.it_services'),
+            // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет
+            match: (path) => path.startsWith(routes.itTasks) || path.startsWith('/resume'),
+        },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },
