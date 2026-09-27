@@ -141,6 +141,12 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Система')
                     ->sort(3)
                     ->visible(fn (): bool => AdminAccess::allows('settings.view')),
+                NavigationItem::make('Тарифы')
+                    ->url('/admin/python?next=/py/admin/billing/plan/')
+                    ->icon('heroicon-o-currency-dollar')
+                    ->group('Монетизация')
+                    ->sort(1)
+                    ->visible(fn (): bool => AdminAccess::allows('plans.view')),
                 NavigationItem::make('Пакеты контактов')
                     ->url('/admin/python?next=/py/admin/billing/creditpack/')
                     ->icon('heroicon-o-ticket')

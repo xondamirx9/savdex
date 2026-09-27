@@ -83,6 +83,9 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # только эти столбцы. Django их не пишет, кроме сброса перевода
         # изменённого поля (savdex/site/models.py, NewsPost)
         "news_posts",
+        # Этап 2: тарифы. Цены и лимиты задаёт админка (решение
+        # заказчика): PlanSeeder на деплое только досоздаёт недостающие
+        "plans",
     }
 )
 
