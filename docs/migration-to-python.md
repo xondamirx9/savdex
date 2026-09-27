@@ -834,7 +834,7 @@ Django не переписывает: их выгружает сам Laravel к�
 сессии, скрытая страница (404), машинный перевод, SEO-робот.
 
 **Включение и откат.** Адреса страницы доходят до Django, только если
-её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal`,
+её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing`,
 `docker/apache-python.conf`). Откат без выкладки: в настройках Render
 задать `SAVDEX_PY_PAGES` пустой и перезапустить — страницы снова отдаёт
 Laravel. Django получает только читающие запросы (GET, HEAD) основного
@@ -851,6 +851,7 @@ Laravel. Django получает только читающие запросы (G
 | `about` ✅ | `/about`, `/contact` | `tests/test_web_about.py` |
 | `directory` ✅ | `/countries`, `/partners` | `tests/test_web_directory.py` |
 | `legal` ✅ | `/terms`, `/payment`, `/security`, `/privacy`, `/refunds` | `tests/test_web_legal.py` |
+| `pricing` ✅ | `/pricing` (с `?promo=` — Laravel) | `tests/test_web_pricing.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -858,6 +859,12 @@ Laravel. Django получает только читающие запросы (G
 Тексты юридических документов — редакция юриста — не переписаны в
 Python: оба сайта читают один файл `resources/legal/documents.json`
 (наименование, почта и реквизиты подставляются из настроек).
+
+Курс доллара для тарифов Django читает из файлового кэша Laravel (на
+боевом `CACHE_STORE=file`, та же служба): таблицу курсов ЦБ туда
+кладёт планировщик Laravel. Сам Django к ЦБ не ходит и в кэш не
+пишет — нет свежей таблицы, берёт последнюю удачную или запасной курс,
+как Laravel при сбое ЦБ (`python/savdex/web/currency.py`).
 
 Чего Django на своих страницах не делает — записи сессии (до этапа 5):
 язык из префикса Laravel запомнит на ближайшей своей странице, а срок

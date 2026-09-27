@@ -294,7 +294,7 @@ runuser -u www-data -- php artisan savdex:export-ui \
 # Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
 # все снова отдаёт Laravel: это откат без выкладки, через переменную в
 # настройках Render и перезапуск.
-export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal}"
+export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing}"
 # Основной домен (хост из APP_URL): только его страницы отдаёт Django
 export SAVDEX_HOST="$(printf '%s' "${APP_URL:-}" | sed -E 's#^[a-z]+://##; s#/.*$##')"
 

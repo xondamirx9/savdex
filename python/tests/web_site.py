@@ -103,17 +103,22 @@ def _манифест() -> Iterator[None]:
 
 
 @contextmanager
-def laravel() -> Iterator[str]:
-    """Laravel на своём порту; адрес сайта — http://127.0.0.1:<порт>."""
-    with _манифест(), _сервер() as root:
+def laravel(**окружение: str) -> Iterator[str]:
+    """
+    Laravel на своём порту; адрес сайта — http://127.0.0.1:<порт>.
+
+    Окружение сверх САЙТ (например, CACHE_STORE=file) — то же надо
+    передать и в сверить(), чтобы Django работал с теми же настройками.
+    """
+    with _манифест(), _сервер(окружение) as root:
         yield root
 
 
 @contextmanager
-def _сервер() -> Iterator[str]:
+def _сервер(окружение: dict[str, str]) -> Iterator[str]:
     port = _порт()
     root = f"http://127.0.0.1:{port}"
-    env = {**ОКРУЖЕНИЕ, **САЙТ, "APP_URL": root}
+    env = {**ОКРУЖЕНИЕ, **САЙТ, **окружение, "APP_URL": root}
     subprocess.run(
         ["php", "artisan", "savdex:export-ui"], cwd=КОРЕНЬ, env=env, check=True, capture_output=True
     )
@@ -197,6 +202,7 @@ def из_django(
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     host = root.removeprefix("http://")
     вывод = subprocess.run(
@@ -212,6 +218,7 @@ def из_django(
         env={
             **ОКРУЖЕНИЕ,
             **САЙТ,
+            **(env or {}),
             "APP_URL": root,
             "DJANGO_SETTINGS_MODULE": "savdex.settings",
             "PYTHONPATH": str(PYTHON),
@@ -256,9 +263,10 @@ def сверить(
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Django, затем Laravel; статус, страница и шапка должны совпасть."""
-    д = из_django(сайт, path, cookies, headers)
+    д = из_django(сайт, path, cookies, headers, env)
     л = из_laravel(сайт, path, cookies, headers)
 
     assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])

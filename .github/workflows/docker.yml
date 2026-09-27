@@ -137,11 +137,13 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/help.h
           grep -q '"component":"DocPage"' /tmp/help.html
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
-          # Новости, «О компании», страны, партнёры и документы — тоже Django
-          for page in news about contact countries partners terms privacy; do
+          # Новости, «О компании», страны, партнёры, документы и тарифы — тоже Django
+          for page in news about contact countries partners terms privacy pricing; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
+          # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
 
       - name: Журнал контейнера
         if: always()
