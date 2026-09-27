@@ -5,65 +5,57 @@
 (database/migrations/2026_07_28_100000_create_countries_and_cities_tables.php):
 managed = False, схему по-прежнему меняет только Laravel.
 
-Правила, которые в Laravel жили в модели App\\Models\\Country и которые
-иначе обошёл бы новый код (раздел 5 документа переноса):
+Правила, которые в Laravel жили в моделях App\\Models\\Country и City
+и которые иначе обошёл бы новый код (раздел 5 документа переноса):
 
 - код страны — всегда строчными и без пробелов по краям: уникальность
   в базе регистрозависима, и «UZ» рядом с «uz» уже однажды завёл
   второй Узбекистан, в который уехала половина компаний;
 - страна не удаляется, пока на неё ссылаются города, компании,
-  тендеры или резюме: внешние ключи удалению не мешают, а увели бы
-  города каскадом и молча обнулили бы страну у остальных.
+  тендеры или резюме, город — пока на него ссылаются компании,
+  объявления или резюме: внешние ключи удалению не мешают, а увели бы
+  города каскадом и молча обнулили бы ссылку у остальных.
+
+Общее у всех справочников (время правки, названия, запрет удаления) —
+в savdex/catalog.py.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
-from django.db import connection, models
-from django.utils import timezone
+from django.db import models
 
-#: Языки площадки — App\\Support\\Locales::ALL
-LOCALES: dict[str, str] = {
-    "ru": "Русский",
-    "uz": "O‘zbekcha",
-    "en": "English",
-    "zh": "中文",
-    "tr": "Türkçe",
-}
+from savdex.catalog import LOCALES, Catalog, RecordIsReferencedError, Reference, Translation
 
-#: Что удерживает страну от удаления: таблица → как назвать в подсказке.
-#: Резюме в PHP-версии не учитывались — удаление страны обнуляло её
-#: у резюме молча; исправлено в обеих половинах. Удалённые в корзину
-#: компании, объявления и резюме тоже считаются (PHP их пропускает):
-#: внешний ключ задел бы и их, и восстановленная запись вернулась бы
-#: без страны
-REFERENCES: dict[str, str] = {
-    "cities": "города",
-    "companies": "компании",
-    "tenders": "тендеры",
-    "resumes": "резюме",
-}
+__all__ = [
+    "LOCALES",
+    "City",
+    "CityTranslation",
+    "Country",
+    "CountryTranslation",
+    "RecordIsReferencedError",
+]
 
 
-class RecordIsReferencedError(RuntimeError):
-    """App\\Exceptions\\RecordIsReferenced: на запись ссылаются, удалять нельзя."""
+class Country(Catalog):
+    #: Резюме в PHP-версии не учитывались — удаление страны обнуляло её
+    #: у резюме молча; исправлено в обеих половинах
+    REFERENCES: ClassVar[tuple[Reference, ...]] = (
+        Reference("cities", "country_id", "города"),
+        Reference("companies", "country_id", "компании"),
+        Reference("tenders", "country_id", "тендеры"),
+        Reference("resumes", "country_id", "резюме"),
+    )
+    NAME_FALLBACK = "code"
+    HELD_AS = "на страну"
+    INSTEAD = "Выключите её вместо удаления."
 
-
-def _now() -> datetime:
-    # Как Laravel: время в UTC, до секунды (столбцы timestamp(0))
-    return timezone.now().replace(microsecond=0)
-
-
-class Country(models.Model):
     code = models.CharField("код страны", max_length=2, unique=True)
     phone_code = models.CharField("телефонный код", max_length=8)
     currency_code = models.CharField("валюта", max_length=3)
     sort = models.PositiveSmallIntegerField("порядок", default=0)
     is_active = models.BooleanField("показывать при регистрации", default=True)
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
 
     class Meta:
         managed = False
@@ -78,60 +70,13 @@ class Country(models.Model):
     def save(self, *args: Any, **kwargs: Any) -> None:
         # Country::booted(): код строчными и без пробелов — всегда, кто бы ни сохранял
         self.code = (self.code or "").strip().lower()
-        now = _now()
-
-        if self._state.adding and self.created_at is None:
-            self.created_at = now
-
-        self.updated_at = now
         super().save(*args, **kwargs)
 
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        """
-        RefusesDeletionWhenReferenced: проверка в модели, а не в кнопке —
-        кнопку обходит любой будущий код, а модель нет.
-        """
-        references = self.references()
 
-        if references:
-            parts = ", ".join(f"{what} — {count}" for what, count in references.items())
-
-            raise RecordIsReferencedError(f"Удалить нельзя, на страну ссылаются: {parts}.")
-
-        return super().delete(*args, **kwargs)
-
-    def name(self, locale: str = "ru") -> str:
-        """Country::name(): название на языке, с откатом на русский и на код."""
-        names = {t.locale: t.name for t in self.translations.all()}
-
-        return names.get(locale) or names.get("ru") or self.code
-
-    def references(self) -> dict[str, int]:
-        """Country::references(): кто ссылается на страну; пусто — удалять можно."""
-        if self.pk is None:
-            return {}
-
-        counts: dict[str, int] = {}
-
-        with connection.cursor() as cursor:
-            for table, label in REFERENCES.items():
-                cursor.execute(f"select count(*) from {table} where country_id = %s", [self.pk])
-                row = cursor.fetchone()
-
-                if row and row[0]:
-                    counts[label] = int(row[0])
-
-        return counts
-
-
-class CountryTranslation(models.Model):
+class CountryTranslation(Translation):
     country = models.ForeignKey(
         Country, on_delete=models.CASCADE, related_name="translations", db_column="country_id"
     )
-    locale = models.CharField("язык", max_length=5, choices=list(LOCALES.items()))
-    name = models.CharField("название", max_length=190)
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
 
     class Meta:
         managed = False
@@ -140,35 +85,20 @@ class CountryTranslation(models.Model):
         verbose_name = "название"
         verbose_name_plural = "названия на языках"
 
-    def __str__(self) -> str:
-        return f"{self.locale}: {self.name}"
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        now = _now()
+class City(Catalog):
+    """Город — копия правил App\\Models\\City."""
 
-        if self._state.adding and self.created_at is None:
-            self.created_at = now
-
-        self.updated_at = now
-        super().save(*args, **kwargs)
-
-
-#: Что удерживает город от удаления. Резюме в PHP-версии не учитывались —
-#: удаление города молча обнуляло его у резюме; исправлено в обеих половинах.
-#: Удалённые в корзину считаются — как у стран
-CITY_REFERENCES: dict[str, str] = {
-    "companies": "компании",
-    "listings": "объявления",
-    "resumes": "резюме",
-}
-
-
-class City(models.Model):
-    """
-    Город — копия правил App\\Models\\City.
-
-    Запрет удаления при ссылках — как у страны (RefusesDeletionWhenReferenced).
-    """
+    #: Резюме в PHP-версии не учитывались — удаление города молча
+    #: обнуляло его у резюме; исправлено в обеих половинах
+    REFERENCES: ClassVar[tuple[Reference, ...]] = (
+        Reference("companies", "city_id", "компании"),
+        Reference("listings", "city_id", "объявления"),
+        Reference("resumes", "city_id", "резюме"),
+    )
+    NAME_FALLBACK = "slug"
+    HELD_AS = "на город"
+    INSTEAD = "Выключите его вместо удаления."
 
     country = models.ForeignKey(
         Country,
@@ -182,8 +112,6 @@ class City(models.Model):
     lng = models.DecimalField("долгота", max_digits=10, decimal_places=7, null=True, blank=True)
     sort = models.PositiveSmallIntegerField("порядок", default=0)
     is_active = models.BooleanField("показывать при регистрации", default=True)
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
 
     class Meta:
         managed = False
@@ -195,57 +123,11 @@ class City(models.Model):
     def __str__(self) -> str:
         return self.name() if self.pk else "новый город"
 
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        now = _now()
 
-        if self._state.adding and self.created_at is None:
-            self.created_at = now
-
-        self.updated_at = now
-        super().save(*args, **kwargs)
-
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        references = self.references()
-
-        if references:
-            parts = ", ".join(f"{what} — {count}" for what, count in references.items())
-
-            raise RecordIsReferencedError(f"Удалить нельзя, на город ссылаются: {parts}.")
-
-        return super().delete(*args, **kwargs)
-
-    def name(self, locale: str = "ru") -> str:
-        """City::name(): название на языке, с откатом на русский и на slug."""
-        names = {t.locale: t.name for t in self.translations.all()}
-
-        return names.get(locale) or names.get("ru") or self.slug
-
-    def references(self) -> dict[str, int]:
-        """City::references(): кто ссылается на город; пусто — удалять можно."""
-        if self.pk is None:
-            return {}
-
-        counts: dict[str, int] = {}
-
-        with connection.cursor() as cursor:
-            for table, label in CITY_REFERENCES.items():
-                cursor.execute(f"select count(*) from {table} where city_id = %s", [self.pk])
-                row = cursor.fetchone()
-
-                if row and row[0]:
-                    counts[label] = int(row[0])
-
-        return counts
-
-
-class CityTranslation(models.Model):
+class CityTranslation(Translation):
     city = models.ForeignKey(
         City, on_delete=models.CASCADE, related_name="translations", db_column="city_id"
     )
-    locale = models.CharField("язык", max_length=5, choices=list(LOCALES.items()))
-    name = models.CharField("название", max_length=190)
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
 
     class Meta:
         managed = False
@@ -253,15 +135,3 @@ class CityTranslation(models.Model):
         unique_together = (("city", "locale"),)
         verbose_name = "название"
         verbose_name_plural = "названия на языках"
-
-    def __str__(self) -> str:
-        return f"{self.locale}: {self.name}"
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        now = _now()
-
-        if self._state.adding and self.created_at is None:
-            self.created_at = now
-
-        self.updated_at = now
-        super().save(*args, **kwargs)

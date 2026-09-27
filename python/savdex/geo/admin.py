@@ -30,23 +30,12 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import admin
-from django.db.models import Count, Q, QuerySet
-from django.db.models.expressions import RawSQL
+from django.db.models import QuerySet
 from django.http import HttpRequest
 
-from savdex.adminsite import SavdexModelAdmin, register
-from savdex.geo.models import LOCALES, City, CityTranslation, Country, CountryTranslation
-
-
-def _referenced_by(table: str, column: str, owner: str) -> RawSQL:
-    """
-    Сколько строк таблицы ссылается на запись — подзапросом в списке.
-
-    Считает так же, как references() моделей (вместе с удалёнными в
-    корзину), но одним запросом на страницу: через references() список
-    из 50 городов стоил бы 300 запросов. Имена — из кода, не от человека.
-    """
-    return RawSQL(f"select count(*) from {table} where {table}.{column} = {owner}.id", ())
+from savdex.adminsite import register
+from savdex.catalog_admin import CatalogAdmin, TranslationsInline
+from savdex.geo.models import City, CityTranslation, Country, CountryTranslation
 
 
 class CountryForm(forms.ModelForm):  # type: ignore[type-arg]
@@ -93,62 +82,18 @@ class CountryForm(forms.ModelForm):  # type: ignore[type-arg]
         super().validate_unique()
 
 
-class TranslationsFormSet(forms.BaseInlineFormSet):  # type: ignore[type-arg]
-    def clean(self) -> None:
-        super().clean()
-
-        locales = [
-            form.cleaned_data.get("locale")
-            for form in self.forms
-            if form.cleaned_data and not form.cleaned_data.get("DELETE")
-        ]
-
-        if "ru" not in locales:
-            raise forms.ValidationError(
-                "Нужно русское название — оно подставляется, если перевода нет."
-            )
-
-
-class TranslationsInline(admin.TabularInline):  # type: ignore[type-arg]
-    """Названия на языках — часть записи: права на них — права на саму запись."""
-
-    formset = TranslationsFormSet
-    fields = ("locale", "name")
-    extra = 0
-    min_num = 1
-    max_num = len(LOCALES)
-    verbose_name = "название"
-    verbose_name_plural = "Названия на языках"
-
-    #: Модель-владелец в правах Django: «country», «city»
-    parent: ClassVar[str]
-
-    # Без этого Django искал бы отдельное право на «переводы» и молча
-    # не сохранял их
-    def has_view_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        return bool(request.user.has_perm(f"geo.view_{self.parent}"))
-
-    def has_add_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        return bool(request.user.has_perm(f"geo.{'change' if obj else 'add'}_{self.parent}"))
-
-    def has_change_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        return bool(request.user.has_perm(f"geo.{'change' if obj else 'add'}_{self.parent}"))
-
-    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        return bool(request.user.has_perm(f"geo.{'change' if obj else 'add'}_{self.parent}"))
-
-
 class CountryTranslationsInline(TranslationsInline):
     model = CountryTranslation
-    parent = "country"
 
 
 @register(Country, section="catalogs")
-class CountryAdmin(SavdexModelAdmin):
+class CountryAdmin(CatalogAdmin):
     laravel_model = "App\\Models\\Country"
     title_list = "Страны"
     title_add = "Новая страна"
     title_change = "Страна"
+    COUNTED: ClassVar[dict[str, str]] = {"_cities": "города", "_companies": "компании"}
+    search_fields = ("code",)
 
     form = CountryForm
     inlines = (CountryTranslationsInline,)
@@ -156,7 +101,6 @@ class CountryAdmin(SavdexModelAdmin):
         ("Страна", {"fields": ("code", "phone_code", "currency_code", "sort", "is_active")}),
         ("Удаление", {"fields": ("held",)}),
     )
-    readonly_fields = ("held",)
     list_display = (
         "title",
         "phone_code",
@@ -168,44 +112,11 @@ class CountryAdmin(SavdexModelAdmin):
         "is_active",
     )
     list_filter = ("is_active",)
-    search_fields = ("code", "translations__name")
     ordering = ("sort", "code")
-    list_per_page = 50
-
-    def get_queryset(self, request: HttpRequest) -> QuerySet[Country]:
-        # Переводы и их число — одним запросом на страницу, а не на строку
-        queryset: QuerySet[Country] = super().get_queryset(request)
-
-        return queryset.prefetch_related("translations").annotate(
-            _translations=Count("translations", distinct=True),
-            _cities=_referenced_by("cities", "country_id", "countries"),
-            _companies=_referenced_by("companies", "country_id", "countries"),
-        )
-
-    def get_search_results(
-        self, request: HttpRequest, queryset: QuerySet[Country], search_term: str
-    ) -> tuple[QuerySet[Country], bool]:
-        if not search_term:
-            return queryset, False
-
-        return (
-            queryset.filter(
-                Q(code__icontains=search_term) | Q(translations__name__icontains=search_term)
-            ).distinct(),
-            True,
-        )
-
-    # ── Колонки ──
 
     @admin.display(description="Страна", ordering="code")
     def title(self, obj: Country) -> str:
         return f"{obj.name()} · {obj.code.upper()}"
-
-    @admin.display(description="Переводов")
-    def translations_count(self, obj: Country) -> str:
-        count = getattr(obj, "_translations", 0)
-
-        return f"{count} из {len(LOCALES)}" + ("" if count >= len(LOCALES) else " ⚠")
 
     @admin.display(description="Городов")
     def cities_count(self, obj: Country) -> int:
@@ -214,40 +125,6 @@ class CountryAdmin(SavdexModelAdmin):
     @admin.display(description="Компаний")
     def companies_count(self, obj: Country) -> int:
         return int(getattr(obj, "_companies", 0))
-
-    @admin.display(description="Можно ли удалить")
-    def held(self, obj: Country | None) -> str:
-        if obj is None or obj.pk is None:
-            return "—"
-
-        references = obj.references()
-
-        if not references:
-            return "Можно: на страну никто не ссылается."
-
-        parts = ", ".join(f"{what} — {count}" for what, count in references.items())
-
-        return f"Нельзя, на страну ссылаются: {parts}. Выключите её вместо удаления."
-
-    # ── Удаление ──
-
-    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        """Страна, на которую ссылаются, не удаляется, — её выключают."""
-        if not super().has_delete_permission(request, obj):
-            return False
-
-        return obj is None or not obj.references()
-
-    # ── Журнал ──
-
-    def snapshot(self, obj: Any) -> dict[str, Any]:  # noqa: ANN401
-        """Поля страны и её названия: переименование — тоже правка страны."""
-        names = {
-            f"name:{t.locale}": t.name
-            for t in CountryTranslation.objects.filter(country_id=obj.pk).order_by("locale")
-        }
-
-        return {**self.attributes(obj), **names}
 
 
 # ── Города ──────────────────────────────────────────────────────────
@@ -327,7 +204,6 @@ class CityForm(forms.ModelForm):  # type: ignore[type-arg]
 
 class CityTranslationsInline(TranslationsInline):
     model = CityTranslation
-    parent = "city"
 
 
 class CountryFilter(admin.SimpleListFilter):
@@ -347,11 +223,13 @@ class CountryFilter(admin.SimpleListFilter):
 
 
 @register(City, section="catalogs")
-class CityAdmin(SavdexModelAdmin):
+class CityAdmin(CatalogAdmin):
     laravel_model = "App\\Models\\City"
     title_list = "Города"
     title_add = "Новый город"
     title_change = "Город"
+    COUNTED: ClassVar[dict[str, str]] = {"_companies": "компании", "_listings": "объявления"}
+    search_fields = ("slug",)
 
     form = CityForm
     inlines = (CityTranslationsInline,)
@@ -367,7 +245,6 @@ class CityAdmin(SavdexModelAdmin):
         ),
         ("Удаление", {"fields": ("held",)}),
     )
-    readonly_fields = ("held",)
     list_display = (
         "title",
         "country_name",
@@ -379,36 +256,11 @@ class CityAdmin(SavdexModelAdmin):
     )
     list_filter = (CountryFilter, "is_active")
     ordering = ("sort", "slug")
-    list_per_page = 50
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[City]:
         queryset: QuerySet[City] = super().get_queryset(request)
 
-        return (
-            queryset.select_related("country")
-            .prefetch_related("translations", "country__translations")
-            .annotate(
-                _translations=Count("translations", distinct=True),
-                _companies=_referenced_by("companies", "city_id", "cities"),
-                _listings=_referenced_by("listings", "city_id", "cities"),
-            )
-        )
-
-    def get_search_results(
-        self, request: HttpRequest, queryset: QuerySet[City], search_term: str
-    ) -> tuple[QuerySet[City], bool]:
-        if not search_term:
-            return queryset, False
-
-        return (
-            queryset.filter(
-                Q(slug__icontains=search_term) | Q(translations__name__icontains=search_term)
-            ).distinct(),
-            True,
-        )
-
-    # «Найти» показывается, только если есть поля поиска
-    search_fields = ("slug",)
+        return queryset.select_related("country").prefetch_related("country__translations")
 
     @admin.display(description="Город", ordering="slug")
     def title(self, obj: City) -> str:
@@ -418,12 +270,6 @@ class CityAdmin(SavdexModelAdmin):
     def country_name(self, obj: City) -> str:
         return obj.country.name()
 
-    @admin.display(description="Переводов")
-    def translations_count(self, obj: City) -> str:
-        count = getattr(obj, "_translations", 0)
-
-        return f"{count} из {len(LOCALES)}" + ("" if count >= len(LOCALES) else " ⚠")
-
     @admin.display(description="Компаний")
     def companies_count(self, obj: City) -> int:
         return int(getattr(obj, "_companies", 0))
@@ -431,31 +277,3 @@ class CityAdmin(SavdexModelAdmin):
     @admin.display(description="Объявлений")
     def listings_count(self, obj: City) -> int:
         return int(getattr(obj, "_listings", 0))
-
-    @admin.display(description="Можно ли удалить")
-    def held(self, obj: City | None) -> str:
-        if obj is None or obj.pk is None:
-            return "—"
-
-        references = obj.references()
-
-        if not references:
-            return "Можно: на город никто не ссылается."
-
-        parts = ", ".join(f"{what} — {count}" for what, count in references.items())
-
-        return f"Нельзя, на город ссылаются: {parts}. Выключите его вместо удаления."
-
-    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        if not super().has_delete_permission(request, obj):
-            return False
-
-        return obj is None or not obj.references()
-
-    def snapshot(self, obj: Any) -> dict[str, Any]:  # noqa: ANN401
-        names = {
-            f"name:{t.locale}": t.name
-            for t in CityTranslation.objects.filter(city_id=obj.pk).order_by("locale")
-        }
-
-        return {**self.attributes(obj), **names}

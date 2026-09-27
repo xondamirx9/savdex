@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\CompanyTypes\Pages\ListCompanyTypes;
+use App\Exceptions\RecordIsReferenced;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\Company;
@@ -93,19 +93,34 @@ class AdminActionsTest extends TestCase
     /**
      * Тип с компаниями удалять нельзя: у них останется ссылка на
      * несуществующее значение, и в карточке вместо типа появится код.
+     *
+     * Раздел переехал на Python; запрет теперь в модели, а не в кнопке.
      */
     #[Test]
     public function используемый_тип_компании_не_удаляется(): void
     {
-        $this->actingAs($this->admin(User::ADMIN_SUPERADMIN));
-
         $type = CompanyType::where('code', 'manufacturer')->firstOrFail();
         Company::factory()->create(['type' => 'manufacturer']);
 
-        Livewire::test(ListCompanyTypes::class)
-            ->callAction(TestAction::make('delete')->table($type));
+        try {
+            $type->delete();
+            $this->fail('тип с компаниями удалился');
+        } catch (RecordIsReferenced $e) {
+            $this->assertSame(['компании' => 1], $e->references);
+        }
 
         $this->assertModelExists($type);
+    }
+
+    /** Ошибочно заведённый тип убирается — иначе мусор в выборе навсегда. */
+    #[Test]
+    public function неиспользуемый_тип_удаляется(): void
+    {
+        $type = CompanyType::create(['code' => 'logistics']);
+
+        $type->delete();
+
+        $this->assertModelMissing($type);
     }
 
     /** Справочник наполнен миграцией: пустой список сломал бы регистрацию. */

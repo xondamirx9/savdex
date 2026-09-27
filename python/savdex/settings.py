@@ -132,6 +132,7 @@ INSTALLED_APPS = [
     # предохранители переноса (см. savdex/apps.py)
     "savdex.apps.SavdexConfig",
     "savdex.geo.apps.GeoConfig",
+    "savdex.catalogs.apps.CatalogsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
