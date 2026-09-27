@@ -73,8 +73,13 @@ def _expects_json(request: HttpRequest) -> bool:
     return (ajax and not pjax and any_type) or wants_json
 
 
-def context(request: HttpRequest) -> Context | HttpResponse:
-    """Контекст страницы или готовый ответ (отказ роботу, переход на язык)."""
+def context(request: HttpRequest, redirect: bool = True) -> Context | HttpResponse:
+    """
+    Контекст страницы или готовый ответ (отказ роботу, переход на язык).
+
+    redirect=False — без перехода на запомненный язык: так контекст
+    нужен ограничению частоты, которое у Laravel стоит раньше SetLocale.
+    """
     agent = request.headers.get("User-Agent", "")
 
     if agent and any(c.lower() in agent.lower() for c in CRAWLERS):
@@ -96,7 +101,8 @@ def context(request: HttpRequest) -> Context | HttpResponse:
         locale = stored or locales.DEFAULT
 
         if (
-            stored is not None
+            redirect
+            and stored is not None
             and stored != locales.DEFAULT
             and request.method == "GET"
             and not _expects_json(request)

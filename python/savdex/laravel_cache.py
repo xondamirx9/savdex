@@ -22,15 +22,18 @@ Laravel кэширует то, что читает на каждой стран�
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import logging
 import os
+import time
 from pathlib import Path
 
 from django.conf import settings
 from django.db import DatabaseError, connection, transaction
 
 from savdex.guards import allowed_writes
+from savdex.web.currency import unserialize
 
 #: FLEXIBLE_CREATED_KEY_PREFIX: Cache::flexible() хранит рядом метку
 #: создания, и FileStore::forget() удаляет её тоже
@@ -86,3 +89,139 @@ def forget(key: str) -> bool:
         return False
 
     return True
+
+
+# ── Файловое хранилище: чтение и запись, как FileStore ──────────────
+#
+# Нужно для общих с Laravel счётчиков (ограничение частоты, пометки
+# «уже посчитан» у статистики): одна запись — один файл, первые 10 знаков
+# — срок жизни (время Unix), дальше — значение в serialize() PHP.
+
+#: FileStore::expiration: «навсегда» — 9999999999
+FOREVER = 9_999_999_999
+
+
+def is_file_store() -> bool:
+    return _store() == "file"
+
+
+def _serialize(value: int | bool) -> bytes:
+    """serialize() PHP для того, что пишут счётчики: целое или логическое."""
+    if isinstance(value, bool):
+        return b"b:1;" if value else b"b:0;"
+
+    return f"i:{int(value)};".encode()
+
+
+def _expiration(seconds: int) -> int:
+    at = int(time.time()) + seconds
+
+    return FOREVER if seconds == 0 or at > FOREVER else at
+
+
+def _payload(raw: bytes) -> tuple[object, int] | None:
+    """(значение, срок) из содержимого файла; истёк или испорчен — None."""
+    try:
+        expire = int(raw[:10])
+        value = unserialize(raw[10:])
+    except ValueError:
+        return None
+
+    return None if time.time() >= expire else (value, expire)
+
+
+def get(key: str) -> object:
+    """Cache::get($key): значение или None — нет, истёк, не файловое хранилище."""
+    if not is_file_store():
+        return None
+
+    try:
+        payload = _payload(file_path(key).read_bytes())
+    except OSError:
+        return None
+
+    return None if payload is None else payload[0]
+
+
+def _write(path: Path, content: bytes) -> None:
+    """Files::put(…, lock: true): запись под исключительной блокировкой."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # «a+b»: открыть, не обрезая, — обрезка только под блокировкой
+    with open(path, "a+b") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(content)
+        handle.flush()
+        fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def put(key: str, value: int | bool, seconds: int) -> None:
+    """Cache::put: перезаписать значение со сроком."""
+    _write(file_path(key), str(_expiration(seconds)).rjust(10, "0").encode() + _serialize(value))
+
+
+def add(key: str, value: int | bool, seconds: int) -> bool:
+    """
+    Cache::add: записать, только если записи нет или она истекла.
+
+    Как FileStore::add — файл открывается без обрезки, под исключительной
+    блокировкой читается срок, и только потом решается, писать ли.
+    """
+    path = file_path(key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "a+b") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        expire = handle.read(10)
+
+        try:
+            alive = expire != b"" and time.time() < int(expire)
+        except ValueError:
+            alive = False
+
+        if not alive:
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(_expiration(seconds)).rjust(10, "0").encode() + _serialize(value))
+            handle.flush()
+
+        fcntl.flock(handle, fcntl.LOCK_UN)
+
+    return not alive
+
+
+def increment(key: str, amount: int = 1) -> int:
+    """
+    FileStore::increment: прочитать, прибавить, записать с тем же сроком.
+
+    Без блокировки между чтением и записью — как у Laravel: счётчик
+    частоты допускает гонку в одну единицу.
+    """
+    try:
+        payload = _payload(file_path(key).read_bytes())
+    except OSError:
+        payload = None
+
+    current, expire = payload if payload is not None else (0, None)
+    value = _to_int(current) + amount
+    seconds = 0 if expire is None else max(0, expire - int(time.time()))
+    put(key, value, seconds)
+
+    return value
+
+
+def _to_int(value: object) -> int:
+    """(int) PHP для значения из кэша."""
+    if isinstance(value, bool):
+        return int(value)
+
+    if isinstance(value, int | float):
+        return int(value)
+
+    try:
+        return int(float(str(value)))
+    except ValueError:
+        return 0

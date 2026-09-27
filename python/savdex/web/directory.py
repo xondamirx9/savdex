@@ -11,15 +11,18 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 from django.db import connection
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponsePermanentRedirect
 
 from savdex import laravel_storage
-from savdex.web import inertia
+from savdex.web import inertia, locales
+from savdex.web.phpquery import php_int
 from savdex.web.request import context
-from savdex.web.seo import Seo
+from savdex.web.seo import Seo, php_json
 from savdex.web.shared import Context, initials
+from savdex.web.throttle import throttled
 
 #: PageController::COMPANIES_PER_COUNTRY
 COMPANIES_PER_COUNTRY = 12
@@ -34,6 +37,9 @@ FALLBACK_TYPES = {
 }
 
 LEGAL_FORMS = ("legal", "individual", "freelancer")
+
+#: trim() PHP
+_TRIM = " \t\n\r\0\x0b"
 
 
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
@@ -136,6 +142,30 @@ def listed_countries(locale: str) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: (r["sort"], rank[r["name"]]))
 
 
+#: Компания с числом живых объявлений — как withCount у PageController
+_WITH_LISTINGS = (
+    "(select count(*) from listings l where l.company_id = m.id and l.status = 'active' "
+    "and l.deleted_at is null) as listings_count"
+)
+
+
+def _country_card(
+    ctx: Context, c: dict[str, Any], options: dict[str, str], cities: dict[int, str]
+) -> dict[str, Any]:
+    """PageController::countryCompanyCard."""
+    return {
+        "slug": c["slug"],
+        "name": c["name"],
+        "type_label": type_label(ctx, c, options),
+        "city": cities.get(c["city_id"]) if c["city_id"] else None,
+        "verification_level": c["verification_level"],
+        "rating": _rating(c["rating"]),
+        "listings_count": int(c["listings_count"]),
+        "initials": initials(c["name"]),
+        "logo": logo_url(ctx, c["logo_path"]),
+    }
+
+
 def countries(request: HttpRequest) -> HttpResponse:
     """PageController::countries."""
     ctx = context(request)
@@ -162,19 +192,7 @@ def countries(request: HttpRequest) -> HttpResponse:
         "and m.country_id is not null) companies where country_rank <= %s order by country_rank",
         [COMPANIES_PER_COUNTRY],
     ):
-        showcase.setdefault(c["country_id"], []).append(
-            {
-                "slug": c["slug"],
-                "name": c["name"],
-                "type_label": type_label(ctx, c, options),
-                "city": cities.get(c["city_id"]) if c["city_id"] else None,
-                "verification_level": c["verification_level"],
-                "rating": _rating(c["rating"]),
-                "listings_count": int(c["listings_count"]),
-                "initials": initials(c["name"]),
-                "logo": logo_url(ctx, c["logo_path"]),
-            }
-        )
+        showcase.setdefault(c["country_id"], []).append(_country_card(ctx, c, options, cities))
 
     listed = [
         {
@@ -257,3 +275,61 @@ def partners(request: HttpRequest) -> HttpResponse:
         },
         _seo(ctx, "partners", "partners"),
     )
+
+
+def country_companies(request: HttpRequest, code: str) -> HttpResponse:
+    """
+    PageController::countryCompanies — «Показать ещё» на странице стран:
+    все компании страны после первых offset, JSON. Под throttle:60,1.
+    """
+    from savdex.web.views import not_found
+
+    def respond(ctx: Context) -> HttpResponse:
+        country = _rows("select id from countries where code = %s and is_active", [code.lower()])
+
+        if not country:
+            return not_found(ctx)
+
+        offset = max(0, php_int(request.GET.get("offset"), 0))
+        options = type_options(ctx.locale)
+        cities = _named("cities", ctx.locale)
+        rows = _rows(
+            f"select m.*, {_WITH_LISTINGS} from companies m where m.status = 'active' "
+            "and m.deleted_at is null and m.country_id = %s "
+            "order by m.verification_level desc, m.rating desc, m.id offset %s",
+            [country[0]["id"], offset],
+        )
+
+        return HttpResponse(
+            php_json({"items": [_country_card(ctx, c, options, cities) for c in rows]}),
+            content_type="application/json",
+        )
+
+    return throttled(request, 60, respond)
+
+
+def tenders_redirect(request: HttpRequest) -> HttpResponse:
+    """
+    TenderController::index — старый адрес раздела закупок: постоянный
+    редирект на вкладку каталога с теми же отборами.
+    """
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    get = request.GET.get
+    closed = (get("closed") or "").strip(_TRIM).lower()
+    query = {
+        "type": "tender",
+        "q": (get("q") or "").strip(_TRIM),
+        "category": php_int(get("category"), 0) or None,
+        # $request->boolean(): FILTER_VALIDATE_BOOLEAN
+        "closed": 1 if closed in ("1", "true", "on", "yes") else None,
+    }
+    kept = {k: v for k, v in query.items() if v is not None and v != ""}
+    # http_build_query: urlencode PHP — «~» тоже кодируется
+    qs = urlencode(kept).replace("~", "%7E")
+
+    # url() у Laravel — с языковым префиксом текущей страницы
+    return HttpResponsePermanentRedirect(locales.url(ctx.root, "/catalog?" + qs, ctx.locale))

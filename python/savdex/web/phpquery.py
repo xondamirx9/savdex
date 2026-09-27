@@ -14,6 +14,7 @@ http_build_query: «?type=platform&page=2» становится «?page=2&type=
 
 from __future__ import annotations
 
+import math
 import re
 from functools import cmp_to_key
 from typing import Union
@@ -185,3 +186,22 @@ def full_path(path: str, qs: str) -> str:
         return path
 
     return path + ("/?" if path == "" else "?") + query
+
+
+#: (int) у PHP для строки: ведущие пробелы, знак, цифры, дробь и порядок
+_PHP_NUMBER = re.compile(r"^[ \t\n\r\v\f]*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)")
+
+
+def php_int(value: str | None, default: int) -> int:
+    """(int) $request->query(...): не число — 0, «2abc» — 2, «1e2» — 100."""
+    if value is None:
+        return default
+
+    match = _PHP_NUMBER.match(value)
+
+    if match is None:
+        return 0
+
+    number = float(match.group(1))
+
+    return int(number) if math.isfinite(number) and abs(number) < 2**63 else 0

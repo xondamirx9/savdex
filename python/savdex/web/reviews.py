@@ -19,6 +19,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex.web import content, inertia, ui
+from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo
 from savdex.web.shared import initials
@@ -185,25 +186,6 @@ def platform_summary(locale: str) -> dict[str, Any]:
         "stars": [{"star": star, "count": stars.get(star, 0)} for star in (5, 4, 3, 2, 1)],
         "criteria": criteria,
     }
-
-
-#: (int) у PHP для строки: ведущие пробелы, знак, цифры, дробь и порядок
-_PHP_NUMBER = re.compile(r"^[ \t\n\r\v\f]*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)")
-
-
-def php_int(value: str | None, default: int) -> int:
-    """(int) $request->query(...): не число — 0, «2abc» — 2, «1e2» — 100."""
-    if value is None:
-        return default
-
-    match = _PHP_NUMBER.match(value)
-
-    if match is None:
-        return 0
-
-    number = float(match.group(1))
-
-    return int(number) if math.isfinite(number) and abs(number) < 2**63 else 0
 
 
 def index(request: HttpRequest) -> HttpResponse:

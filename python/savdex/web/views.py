@@ -185,15 +185,20 @@ def doc(request: HttpRequest, key: str) -> HttpResponse:
 # ── Ошибки ──────────────────────────────────────────────────────────
 
 
-def not_found(ctx: Context) -> HttpResponse:
+def error(ctx: Context, status: int, bare: bool = False) -> HttpResponse:
     """
-    Страница 404 в оформлении сайта — как обработчик исключений в
+    Страница ошибки в оформлении сайта — как обработчик исключений в
     bootstrap/app.php: Error с языком, словарём и ссылками языков.
     """
     seo = _seo(ctx)
-    seo.title(ui.t("errors.not_found", ctx.locale)).bare()
+    title = (
+        ui.t("errors.not_found", ctx.locale)
+        if status == 404
+        else ui.t("errors.generic", ctx.locale, status=status)
+    )
+    seo.title(title).bare()
     props = {
-        "status": 404,
+        "status": status,
         "reference": None,
         "locale": ctx.locale,
         "translations": ui.translations(ctx.locale),
@@ -208,7 +213,14 @@ def not_found(ctx: Context) -> HttpResponse:
         ],
     }
 
-    return inertia.render(ctx, "Error", props, seo, status=404)
+    if bare:
+        return inertia.render_bare(ctx, "Error", props, seo, status)
+
+    return inertia.render(ctx, "Error", props, seo, status=status)
+
+
+def not_found(ctx: Context) -> HttpResponse:
+    return error(ctx, 404)
 
 
 # ── «О компании» и «Контакты» ───────────────────────────────────────
