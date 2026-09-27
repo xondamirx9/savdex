@@ -709,6 +709,9 @@ class PageController extends Controller
                     ->whereRelation('plan', 'code', Plan::VIP)))
             ->orderByDesc('boosted')
             ->latest('published_at')
+            // При одинаковой дате — новее по номеру: без второго ключа
+            // порядок таких объявлений менялся от запроса к запросу
+            ->orderByDesc('id')
             ->limit(12)
             ->get()
             ->map(fn (Listing $l): array => ListingCard::present($l))
@@ -733,6 +736,7 @@ class PageController extends Controller
             ->where('type', Listing::TYPE_DEMAND)
             ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
             ->latest('published_at')
+            ->orderByDesc('id')
             ->limit(8)
             ->get()
             ->map(fn (Listing $l): array => ListingCard::present($l))

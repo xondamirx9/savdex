@@ -112,6 +112,11 @@ def сайт() -> Iterator[str]:
         "App\\Models\\Listing::factory()->create(['company_id' => $companies[1]->id, "
         "'type' => 'demand', 'price' => 99, 'currency' => 'EUR', "
         "'published_at' => now()->subDays(2)]);"
+        # Одинаковая дата у нескольких объявлений: порядок решает номер
+        "$same = now()->subDays(2)->startOfMinute();"
+        "foreach (range(1, 6) as $i) { App\\Models\\Listing::factory()->create(["
+        "'company_id' => $companies[$i % 2]->id, 'published_at' => $same, "
+        "'type' => $i % 3 ? 'supply' : 'demand']); }"
         "foreach (range(0, 3) as $i) { App\\Models\\Review::factory()->create(["
         "'company_id' => $companies[$i]->id, 'author_company_id' => $companies[$i + 1]->id, "
         "'created_at' => now()->subDays($i)]); }"

@@ -284,7 +284,7 @@ def latest_listings(cards: Cards) -> list[dict[str, Any]]:
             "and (s.ends_at is null or s.ends_at > now()) and p.code = 'vip')",
             params,
             "(select count(*) from promotions p where p.listing_id = l.id "
-            "and p.status = 'active') desc, l.published_at desc",
+            "and p.status = 'active') desc, l.published_at desc, l.id desc",
             12,
         )
     )
@@ -295,7 +295,7 @@ def latest_requests(cards: Cards) -> list[dict[str, Any]]:
     visible, params = visible_in(cards.locale)
 
     return cards.present(
-        _listings(f"{visible} and l.type = 'demand'", params, "l.published_at desc", 8)
+        _listings(f"{visible} and l.type = 'demand'", params, "l.published_at desc, l.id desc", 8)
     )
 
 
