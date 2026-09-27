@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\RefusesDeletionWhenReferenced;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +15,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Цена задаётся в долларах и пересчитывается по курсу ЦБ — подход
  * InvestIn. При скачке курса не нужно править каждый тариф вручную.
  * price_uzs перекрывает расчёт, когда витринную цену зафиксировали.
+ *
+ * С этапа 2 переноса тарифы правятся в разделе на Python
+ * (python/savdex/billing/), и цены с лимитами задаёт админка:
+ * PlanSeeder существующие не трогает.
  */
 #[Fillable([
     'code', 'name', 'price_usd', 'price_uzs', 'period_days', 'listing_days',
@@ -22,6 +27,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Plan extends Model
 {
+    use RefusesDeletionWhenReferenced;
+
     public const FREE = 'free';
 
     /** Высший тариф: его объявления ведут ленту главной. */
@@ -36,6 +43,25 @@ class Plan extends Model
             'has_microsite' => 'boolean',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Что удерживает тариф от удаления.
+     *
+     * Промокоды на тариф уходили бы каскадом, у счетов обнулялся бы
+     * тариф, а free и vip читает код — без них ломаются лимиты компаний
+     * без подписки и лента главной.
+     *
+     * @return array<string, int>
+     */
+    public function references(): array
+    {
+        return array_filter([
+            'код площадки' => in_array($this->code, [self::FREE, self::VIP], true) ? 1 : 0,
+            'подписки' => $this->subscriptions()->count(),
+            'счета' => Payment::query()->where('plan_id', $this->id)->count(),
+            'промокоды' => PromoCode::query()->where('plan_id', $this->id)->count(),
+        ]);
     }
 
     public function subscriptions(): HasMany

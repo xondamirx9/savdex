@@ -1,5 +1,8 @@
 """
-Раздел «Пакеты контактов» админки на Django — вместо Filament CreditPackResource.
+Разделы «Пакеты контактов» и «Тарифы» админки на Django — вместо Filament
+CreditPackResource и PlanResource. Про тарифы — у PlanAdmin ниже.
+
+Пакеты контактов.
 
 Всё, что было в Filament, и то, что там было неправильно:
 
@@ -30,7 +33,7 @@ from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
 
 from savdex.adminsite import register
-from savdex.billing.models import CreditPack
+from savdex.billing.models import CreditPack, Plan
 from savdex.catalog_admin import GuardedAdmin
 
 #: Код пакета: как у трёх пакетов из миграции — pack_10, pack_30, pack_100
@@ -153,3 +156,202 @@ class CreditPackAdmin(GuardedAdmin):
     @admin.display(description="Продано")
     def sold(self, obj: CreditPack) -> int:
         return int(getattr(obj, "_sold", 0))
+
+
+# ── Тарифы ──────────────────────────────────────────────────────────
+
+
+class PlanForm(forms.ModelForm):  # type: ignore[type-arg]
+    class Meta:
+        model = Plan
+        fields = (
+            "code",
+            "name",
+            "sort",
+            "price_usd",
+            "price_uzs",
+            "period_days",
+            "listing_days",
+            "listings_limit",
+            "contacts_limit",
+            "responses_limit",
+            "promo_units",
+            "verification_days",
+            "advanced_analytics",
+            "sees_interested_names",
+            "has_microsite",
+            "is_active",
+        )
+        help_texts: ClassVar[dict[str, str]] = {
+            "code": "Латиницей. После создания не меняется — на код ссылаются подписки "
+            "и код приложения",
+            "sort": "Меньше — левее на странице тарифов",
+            "price_usd": "Пересчитывается в сумы по курсу ЦБ. У бесплатного — 0",
+            "price_uzs": "Заполните, только если цену зафиксировали — тогда курс не применяется",
+            "period_days": "Сколько действует одна оплата",
+            "listing_days": "Сколько висит объявление до продления",
+            "listings_limit": "Пусто — без ограничений",
+            "contacts_limit": "Пусто — без ограничений. Сверх лимита списываются кредиты",
+            "responses_limit": "Пусто — без ограничений. Пока витринный лимит: "
+            "показывается в карточке тарифа",
+            "promo_units": "Начисляются при активации тарифа",
+            "verification_days": "За сколько дней проверяем компанию",
+            "is_active": "Выключенный тариф исчезает с витрины, "
+            "но у купивших продолжает действовать",
+        }
+
+    def clean_code(self) -> str:
+        code = str(self.cleaned_data.get("code") or "").strip().lower()
+
+        if not CODE.fullmatch(code):
+            raise forms.ValidationError("Только латиница, цифры, дефис и подчёркивание: business.")
+
+        if Plan.objects.filter(code=code).exists():
+            raise forms.ValidationError("Тариф с таким кодом уже есть.")
+
+        return code
+
+    def clean_price_usd(self) -> Decimal:
+        price = self.cleaned_data.get("price_usd")
+
+        if price is None or price < 0:
+            raise forms.ValidationError("Цена не может быть меньше нуля.")
+
+        return Decimal(price)
+
+    def clean_price_uzs(self) -> int | None:
+        price = self.cleaned_data.get("price_uzs")
+
+        if price is not None and price <= 0:
+            raise forms.ValidationError("Больше нуля — или оставьте пустым.")
+
+        return price
+
+    def _at_least_one(self, field: str) -> int:
+        value = self.cleaned_data.get(field)
+
+        if value is None or value < 1:
+            raise forms.ValidationError("Хотя бы один день.")
+
+        return int(value)
+
+    def clean_period_days(self) -> int:
+        return self._at_least_one("period_days")
+
+    def clean_listing_days(self) -> int:
+        return self._at_least_one("listing_days")
+
+    def validate_unique(self) -> None:
+        if "code" in self.cleaned_data:
+            self.instance.code = self.cleaned_data["code"]
+        super().validate_unique()
+
+
+@register(Plan, section="plans")
+class PlanAdmin(GuardedAdmin):
+    """
+    Раздел «Тарифы» — вместо Filament PlanResource.
+
+    Что изменилось против Filament:
+
+    - цены и лимиты задаёт админка: PlanSeeder больше не возвращает их
+      из кода на каждом деплое;
+    - удаление защищено: тариф с подписками, счетами или промокодами не
+      удаляется (промокоды уходили каскадом, тариф с подписками падал на
+      внешнем ключе), free и vip — никогда;
+    - цена не бывает отрицательной, сроки — меньше дня.
+    """
+
+    laravel_model = "App\\Models\\Plan"
+    title_list = "Тарифы"
+    title_add = "Новый тариф"
+    title_change = "Тариф"
+    COUNTED: ClassVar[dict[str, str]] = {"_subscriptions": "подписки"}
+
+    form = PlanForm
+    fieldsets = (
+        ("Тариф", {"fields": ("code", "name", "sort")}),
+        (
+            "Цена и сроки",
+            {"fields": ("price_usd", "price_uzs", "period_days", "listing_days")},
+        ),
+        (
+            "Лимиты",
+            {
+                "fields": (
+                    "listings_limit",
+                    "contacts_limit",
+                    "responses_limit",
+                    "promo_units",
+                    "verification_days",
+                )
+            },
+        ),
+        (
+            "Возможности",
+            {
+                "fields": (
+                    "advanced_analytics",
+                    "sees_interested_names",
+                    "has_microsite",
+                    "is_active",
+                )
+            },
+        ),
+        ("Удаление", {"fields": ("held",)}),
+    )
+    list_display = (
+        "title",
+        "price",
+        "active_companies",
+        "listings",
+        "contacts",
+        "promo_units",
+        "is_active",
+    )
+    ordering = ("sort", "code")
+
+    def annotate(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        active: QuerySet[Any] = queryset.annotate(
+            _active=RawSQL(
+                "select count(*) from subscriptions "
+                "where subscriptions.plan_id = plans.id and subscriptions.status = 'active'",
+                (),
+            )
+        )
+
+        return active
+
+    def get_readonly_fields(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        """Код после создания не меняется: на него ссылаются подписки и код приложения."""
+        return ("code", "held") if obj is not None else ("held",)
+
+    @admin.display(description="Тариф", ordering="name")
+    def title(self, obj: Plan) -> str:
+        return f"{obj.name} · {obj.code}"
+
+    @admin.display(description="Цена")
+    def price(self, obj: Plan) -> str:
+        if obj.price_uzs is not None:
+            price = f"{obj.price_uzs:,} сум".replace(",", " ")
+        else:
+            usd = obj.price_usd
+            price = f"${int(usd) if usd == usd.to_integral_value() else usd}"
+
+        return f"{price} за {obj.period_days} дн."
+
+    @admin.display(description="Компаний")
+    def active_companies(self, obj: Plan) -> int:
+        return int(getattr(obj, "_active", 0))
+
+    @staticmethod
+    def _limit(value: int | None) -> str:
+        return "без ограничений" if value is None else str(value)
+
+    @admin.display(description="Объявлений")
+    def listings(self, obj: Plan) -> str:
+        return self._limit(obj.listings_limit)
+
+    @admin.display(description="Контактов")
+    def contacts(self, obj: Plan) -> str:
+        return self._limit(obj.contacts_limit)

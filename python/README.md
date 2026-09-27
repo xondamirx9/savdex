@@ -69,7 +69,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/audit.py` | Журнал действий — копия AdminLog, пишет в общий `admin_actions` |
 | `savdex/geo/` | Страны и города — первые таблицы, которыми владеет Django |
 | `savdex/catalogs/` | Типы компаний и категории — и дальше остальные справочники |
-| `savdex/billing/` | Пакеты контактов — и дальше тарифы и промокоды |
+| `savdex/billing/` | Пакеты контактов и тарифы |
 | `savdex/site/` | Настройки площадки, баннеры (с предпросмотром), новости |
 | `savdex/laravel_cache.py`, `savdex/laravel_storage.py`, `savdex/images.py` | Общее с Laravel: сброс его кэша, его публичный диск, пересборка картинок как ImageStore |
 | `savdex/catalog.py`, `savdex/catalog_admin.py` | Общее у справочников: названия на языках, запрет удаления при ссылках, раздел админки |

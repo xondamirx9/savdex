@@ -13,7 +13,6 @@ use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\LandingBlocks\LandingBlockResource;
 use App\Filament\Resources\Listings\ListingResource;
 use App\Filament\Resources\Pages\PageResource;
-use App\Filament\Resources\Plans\PlanResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Resumes\ResumeResource;
 use App\Filament\Resources\Reviews\ReviewResource;
@@ -56,7 +55,6 @@ class AdminAccessTest extends TestCase
         Complaints::class,
         Invoices::class,
         SubscriptionResource::class,
-        PlanResource::class,
         PromoCodeResource::class,
         PageResource::class,
         LandingBlockResource::class,
@@ -113,7 +111,7 @@ class AdminAccessTest extends TestCase
 
             'финансы' => [AdminAccess::FINANCE, [
                 CompanyResource::class, Invoices::class, SubscriptionResource::class,
-                PlanResource::class, PromoCodeResource::class,
+                PromoCodeResource::class,
             ]],
 
             'поддержка' => [AdminAccess::SUPPORT, [
