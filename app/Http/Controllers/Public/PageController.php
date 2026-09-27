@@ -21,6 +21,9 @@ use App\Support\ListingCard;
 use App\Support\NewsRepository;
 use App\Support\OfficeLocation;
 use App\Support\Seo;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -224,38 +227,94 @@ class PageController extends Controller
         ]);
     }
 
+    /** Сколько компаний страны показывать сразу и подгружать за одно нажатие «Показать ещё». */
+    private const COMPANIES_PER_COUNTRY = 12;
+
     /**
-     * Компании под каждой страной на странице «Страны» — все до одной.
+     * Следующая порция компаний страны для кнопки «Показать ещё».
+     *
+     * Отдаёт JSON: страница стран подгружает компании по нажатию,
+     * чтобы не тянуть сразу больше тысячи карточек.
+     */
+    public function countryCompanies(Request $request, string $code): JsonResponse
+    {
+        $country = Country::query()
+            ->where('code', mb_strtolower($code))
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $offset = max(0, (int) $request->query('offset', 0));
+
+        $companies = $this->countryCompanyQuery()
+            ->where('country_id', $country->id)
+            ->orderByDesc('verification_level')
+            ->orderByDesc('rating')
+            ->orderBy('id')
+            ->offset($offset)
+            // На одну больше — узнать, осталось ли что-то ещё
+            ->limit(self::COMPANIES_PER_COUNTRY + 1)
+            ->get();
+
+        return response()->json([
+            'items' => $companies->take(self::COMPANIES_PER_COUNTRY)->map($this->countryCompanyCard(...))->values(),
+            'has_more' => $companies->count() > self::COMPANIES_PER_COUNTRY,
+        ]);
+    }
+
+    /**
+     * Первая порция компаний под каждой страной на странице «Страны».
      *
      * Порядок тот же, что в каталоге компаний: сначала проверенные,
-     * затем по рейтингу.
+     * затем по рейтингу. Остальные подгружает «Показать ещё»
+     * (countryCompanies). Отбор одним запросом через row_number:
+     * компаний больше тысячи, и тянуть их все незачем.
      *
      * @return array<int, list<array<string, mixed>>> по country_id
      */
     private function companiesByCountry(): array
     {
+        $ranked = Company::query()
+            ->select('companies.*')
+            ->selectRaw('row_number() over (partition by country_id order by verification_level desc, rating desc, id) as country_rank')
+            // Счётчик — во внутреннем запросе: на подзапрос во FROM
+            // withCount не навешивается
+            ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->whereNotNull('country_id');
+
+        return Company::query()
+            ->fromSub($ranked, 'companies')
+            ->with(['city.translations'])
+            ->where('country_rank', '<=', self::COMPANIES_PER_COUNTRY)
+            ->orderBy('country_rank')
+            ->get()
+            ->groupBy('country_id')
+            ->map(fn ($companies) => $companies->map($this->countryCompanyCard(...))->values()->all())
+            ->all();
+    }
+
+    private function countryCompanyQuery(): Builder
+    {
         return Company::query()
             ->with(['city.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
-            ->where('status', Company::STATUS_ACTIVE)
-            ->whereNotNull('country_id')
-            ->orderByDesc('verification_level')
-            ->orderByDesc('rating')
-            ->orderBy('id')
-            ->get()
-            ->groupBy('country_id')
-            ->map(fn ($companies) => $companies->map(fn (Company $c): array => [
-                'slug' => $c->slug,
-                'name' => $c->name,
-                'type_label' => $c->typeLabel(),
-                'city' => $c->city?->name(),
-                'verification_level' => $c->verification_level,
-                'rating' => (float) $c->rating,
-                'listings_count' => (int) $c->listings_count,
-                'initials' => $c->initials(),
-                'logo' => $c->logoUrl(),
-            ])->values()->all())
-            ->all();
+            ->where('status', Company::STATUS_ACTIVE);
+    }
+
+    /** @return array<string, mixed> */
+    private function countryCompanyCard(Company $c): array
+    {
+        return [
+            'slug' => $c->slug,
+            'name' => $c->name,
+            'type_label' => $c->typeLabel(),
+            'city' => $c->city?->name(),
+            'verification_level' => $c->verification_level,
+            'rating' => (float) $c->rating,
+            'listings_count' => (int) $c->listings_count,
+            'initials' => $c->initials(),
+            'logo' => $c->logoUrl(),
+        ];
     }
 
     /**

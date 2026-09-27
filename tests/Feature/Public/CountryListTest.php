@@ -178,18 +178,44 @@ class CountryListTest extends TestCase
                 ->all() === [$own->slug]));
     }
 
-    /** Под страной показаны все её компании, без ограничения. */
+    /**
+     * Под страной сразу первые двенадцать компаний, остальные
+     * подгружает «Показать ещё» — пока не покажутся все.
+     */
     #[Test]
-    public function под_страной_показаны_все_компании(): void
+    public function показать_ещё_подгружает_остальные_компании(): void
     {
-        Company::factory()->count(12)->create([
+        $companies = Company::factory()->count(15)->create([
             'status' => Company::STATUS_ACTIVE,
             'country_id' => Country::where('code', 'pl')->value('id'),
         ]);
 
         $this->get('/countries')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('countries.0.companies', 12)
+            ->where('countries.0.companies', 15)
             ->has('countries.0.items', 12));
+
+        $shown = collect($this->get('/countries')->viewData('page')['props']['countries'][0]['items'])->pluck('slug');
+
+        $more = $this->getJson('/countries/pl/companies?offset=12')
+            ->assertOk()
+            ->assertJsonCount(3, 'items')
+            ->assertJsonPath('has_more', false)
+            ->json('items');
+
+        $this->assertEqualsCanonicalizing(
+            $companies->pluck('slug')->all(),
+            $shown->merge(collect($more)->pluck('slug'))->all(),
+        );
+
+        $this->getJson('/countries/pl/companies?offset=0')
+            ->assertJsonCount(12, 'items')
+            ->assertJsonPath('has_more', true);
+    }
+
+    #[Test]
+    public function показать_ещё_для_неизвестной_страны_404(): void
+    {
+        $this->getJson('/countries/xx/companies')->assertNotFound();
     }
 
     /**

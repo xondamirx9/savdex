@@ -84,6 +84,11 @@ Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/countries', [PageController::class, 'countries'])->name('countries');
+// «Показать ещё» на странице стран: следующая порция компаний страны
+Route::get('/countries/{code}/companies', [PageController::class, 'countryCompanies'])
+    ->where('code', '[A-Za-z]{2}')
+    ->middleware('throttle:60,1')
+    ->name('countries.companies');
 Route::get('/partners', [PageController::class, 'partners'])->name('partners');
 Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
 
