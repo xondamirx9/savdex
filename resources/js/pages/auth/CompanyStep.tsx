@@ -13,6 +13,10 @@ interface Props {
     categories: { id: number; slug: string; name: string }[];
     serviceCategories: { id: number; slug: string; name: string }[];
     types: Record<string, string>;
+    /** Выбор с первого шага: юрлицо, физлицо или фрилансер. */
+    accountType?: 'legal' | 'individual' | 'freelancer';
+    /** Имя из регистрации — готовое имя профиля физлица и фрилансера. */
+    personName?: string;
 }
 
 /**
@@ -25,6 +29,11 @@ const roles = (): [string, string, string][] => [
     ['both', t('auth.role_both'), t('auth.role_both_desc')],
 ];
 
+/** Код типа «Услуги» из справочника — он заводится в админке. */
+function serviceTypeKey(types: Record<string, string>): string {
+    return ['service', 'services', 'uslugi'].find((k) => k in types) ?? '';
+}
+
 /**
  * Второй шаг регистрации — данные компании.
  *
@@ -32,7 +41,19 @@ const roles = (): [string, string, string][] => [
  * незаполненного ИНН нельзя. Но заполнить его выгодно, и об этом
  * сказано числом, а не уговорами.
  */
-export default function CompanyStep({ countries, cities, categories, serviceCategories, types }: Props) {
+export default function CompanyStep({
+    countries,
+    cities,
+    categories,
+    serviceCategories,
+    types,
+    accountType = 'legal',
+    personName = '',
+}: Props) {
+    // Физлицо и фрилансер выступают от своего имени: без названия
+    // компании и обязательного типа бизнеса, ИНН или ПИНФЛ — по желанию
+    const person = accountType !== 'legal';
+
     const { data, setData, post, processing, errors } = useForm<{
         name: string;
         type: string;
@@ -43,8 +64,9 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
         categories: number[];
         custom_category: string;
     }>({
-        name: '',
-        type: 'distributor',
+        name: person ? personName : '',
+        // Фрилансер оказывает услуги — сразу открываем их направления
+        type: accountType === 'freelancer' ? serviceTypeKey(types) : person ? '' : 'distributor',
         country_id: countries[0]?.id ?? null,
         city_id: null,
         tin: '',
@@ -88,16 +110,22 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
     return (
         <AuthLayout
-            title={t('auth.company_title')}
-            heading={t('auth.company_title')}
-            subheading={t('auth.company_subheading')}
+            title={person ? t('auth.person_title') : t('auth.company_title')}
+            heading={person ? t('auth.person_title') : t('auth.company_title')}
+            subheading={person ? t('auth.person_subheading') : t('auth.company_subheading')}
         >
             <form onSubmit={submit} className="space-y-5" noValidate>
                 <TextInput
-                    label={t('auth.company_name_label')}
+                    label={person ? t('auth.person_name_label') : t('auth.company_name_label')}
                     name="name"
                     required
-                    placeholder={t('auth.company_name_placeholder')}
+                    placeholder={
+                        accountType === 'freelancer'
+                            ? t('auth.freelancer_name_placeholder')
+                            : person
+                              ? t('auth.person_name_placeholder')
+                              : t('auth.company_name_placeholder')
+                    }
                     value={data.name}
                     onChange={(e) => setData('name', e.target.value)}
                     error={errors.name}
@@ -106,14 +134,18 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
 
                 <div className="field">
                     <label className="label" htmlFor="c-type">
-                        {t('auth.company_type_label')} <span className="req">*</span>
+                        {person ? t('auth.person_type_label') : t('auth.company_type_label')}
+                        {!person && <span className="req"> *</span>}
                     </label>
                     <SelectField
                         id="c-type"
-                        ariaLabel={t('auth.company_type_label')}
+                        ariaLabel={person ? t('auth.person_type_label') : t('auth.company_type_label')}
                         value={data.type}
                         onChange={(value) => setData('type', value)}
-                        options={Object.entries(types).map(([key, label]) => ({ value: key, label }))}
+                        options={[
+                            ...(person ? [{ value: '', label: t('auth.person_type_none') }] : []),
+                            ...Object.entries(types).map(([key, label]) => ({ value: key, label })),
+                        ]}
                     />
                     {errors.type && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.type}</p>}
                 </div>
@@ -173,14 +205,14 @@ export default function CompanyStep({ countries, cities, categories, serviceCate
                 </div>
 
                 <TextInput
-                    label={t('auth.tin_label')}
+                    label={person ? t('auth.person_tin_label') : t('auth.tin_label')}
                     name="tin"
                     inputMode="numeric"
-                    placeholder={t('auth.tin_placeholder')}
+                    placeholder={person ? t('auth.person_tin_placeholder') : t('auth.tin_placeholder')}
                     value={data.tin}
                     onChange={(e) => setData('tin', e.target.value)}
                     error={errors.tin}
-                    hint={t('auth.tin_hint')}
+                    hint={person ? t('auth.person_tin_hint') : t('auth.tin_hint')}
                 />
 
                 <fieldset style={{ border: 'none' }}>

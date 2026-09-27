@@ -175,6 +175,23 @@ return [
         'tin_label' => 'TIN',
         'tin_placeholder' => '123456789',
         'tin_hint' => 'Needed for the Verified badge. You can fill it in later.',
+        'account_type_legend' => 'Who are you?',
+        'account_legal' => 'Legal entity',
+        'account_legal_desc' => 'A company, sole proprietor or organisation with registration details',
+        'account_individual' => 'Individual',
+        'account_individual_desc' => 'You buy or sell on your own behalf',
+        'account_freelancer' => 'Freelancer',
+        'account_freelancer_desc' => 'You provide services and take orders as a specialist',
+        'person_title' => 'Your profile',
+        'person_subheading' => 'This is how partners will see you on the platform. A complete profile gets more enquiries.',
+        'person_name_label' => 'Name partners will see',
+        'person_name_placeholder' => 'Alisher Karimov',
+        'freelancer_name_placeholder' => 'Alisher Karimov — designer',
+        'person_tin_label' => 'TIN or PINFL',
+        'person_tin_placeholder' => '9 or 14 digits',
+        'person_tin_hint' => 'Optional. Required for the “Verified” badge — you can add it later.',
+        'person_type_label' => 'Field (optional)',
+        'person_type_none' => 'Not specified',
         'role_legend' => 'What you do on the platform',
         'role_supplier' => 'I sell',
         'role_supplier_desc' => 'Looking for buyers for my goods',
@@ -2022,6 +2039,12 @@ return [
         'made_with' => 'Powered by',
     ],
 
+    'legal_form' => [
+        'legal' => 'Legal entity',
+        'individual' => 'Individual',
+        'freelancer' => 'Freelancer',
+    ],
+
     'messages' => [
         'site' => [
             'saved' => 'Draft saved',
@@ -2088,18 +2111,21 @@ return [
             'password_numbers' => 'Add at least one digit to the password',
             'password_leaked' => 'This password appears in data leaks. Choose another',
             'terms' => 'You need to accept the offer and the privacy policy',
+            'account_type' => 'Choose who you are: legal entity, individual or freelancer',
         ],
 
         'tin' => [
             'digits_only' => 'A TIN consists of digits only.',
             'invalid' => 'The TIN is not valid.',
             'uz_length' => 'A TIN in Uzbekistan is exactly 9 digits.',
+            'uz_person_length' => 'For an individual in Uzbekistan the TIN has 9 digits and the PINFL has 14.',
             'length' => 'A TIN must contain 6 to 15 digits.',
         ],
 
         'company' => [
             'fill_first' => 'Fill in your company details first',
             'name_required' => 'Enter the company name',
+            'person_name_required' => 'Enter the name partners will see',
             'type_required' => 'Choose the company type',
             'country_required' => 'Choose a country',
             'city_required' => 'Choose a city',

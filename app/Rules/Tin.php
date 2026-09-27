@@ -20,7 +20,15 @@ class Tin implements ValidationRule
     /** Очевидно ненастоящие последовательности. */
     private const FAKE = ['123456789', '987654321', '123123123'];
 
-    public function __construct(private readonly ?string $countryCode = null) {}
+    /**
+     * @param  bool  $person  физлицо или фрилансер: в Узбекистане у человека
+     *                        кроме ИНН (9 цифр) есть ПИНФЛ (14 цифр), и многие
+     *                        знают только его — принимаем оба
+     */
+    public function __construct(
+        private readonly ?string $countryCode = null,
+        private readonly bool $person = false,
+    ) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
@@ -40,8 +48,12 @@ class Tin implements ValidationRule
         }
 
         if ($this->countryCode === null || $this->countryCode === 'uz') {
+            if ($this->person && strlen($tin) === 14) {
+                return;
+            }
+
             if (strlen($tin) !== 9) {
-                $fail(__('ui.messages.tin.uz_length'));
+                $fail(__($this->person ? 'ui.messages.tin.uz_person_length' : 'ui.messages.tin.uz_length'));
             }
 
             return;

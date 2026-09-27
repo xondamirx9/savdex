@@ -40,6 +40,13 @@ use Illuminate\Support\Facades\Auth;
  */
 class CompaniesTable
 {
+    /** Правовая форма: выбирается при регистрации. */
+    public const LEGAL_FORMS = [
+        Company::LEGAL_ENTITY => 'Юрлицо',
+        Company::LEGAL_INDIVIDUAL => 'Физлицо',
+        Company::LEGAL_FREELANCER => 'Фрилансер',
+    ];
+
     private const LEVELS = [
         Company::VERIFICATION_NONE => 'Не проверена',
         Company::VERIFICATION_CONTACTS => 'Контакты подтверждены',
@@ -84,6 +91,17 @@ class CompaniesTable
                     ->searchable()
                     ->description(fn (Company $record): string => $record->tin ? "ИНН {$record->tin}" : 'ИНН не указан')
                     ->wrap(),
+
+                TextColumn::make('legal_form')
+                    ->label('Форма')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => self::LEGAL_FORMS[$state ?? Company::LEGAL_ENTITY] ?? (string) $state)
+                    ->color(fn (?string $state): string => match ($state) {
+                        Company::LEGAL_INDIVIDUAL => 'info',
+                        Company::LEGAL_FREELANCER => 'warning',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
 
                 TextColumn::make('city_id')
                     ->label('Город')
@@ -135,6 +153,7 @@ class CompaniesTable
             ->filters([
                 SelectFilter::make('verification_level')->label('Верификация')->options(self::LEVELS),
                 SelectFilter::make('partner_tier')->label('Партнёрство')->options(Company::PARTNER_TIERS),
+                SelectFilter::make('legal_form')->label('Форма')->options(self::LEGAL_FORMS),
                 SelectFilter::make('status')->label('Статус')->options([
                     'active' => 'Активна',
                     'blocked' => 'Заблокирована',

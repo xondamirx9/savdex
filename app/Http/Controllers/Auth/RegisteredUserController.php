@@ -48,6 +48,9 @@ class RegisteredUserController extends Controller
                 'phone' => $request->string('phone')->toString(),
                 'password' => $request->string('password')->toString(),
                 'locale' => $request->string('locale', 'ru')->toString(),
+                // Юрлицо, физлицо или фрилансер: от выбора зависит
+                // форма следующего шага — профиля на площадке
+                'account_type' => $request->string('account_type')->toString() ?: 'legal',
                 'company_role' => User::ROLE_OWNER,
             ]);
         });
