@@ -130,6 +130,10 @@ def test_общий_счётчик_частоты(сайт):
     д, л = сверить(сайт, path, headers=ip, env=ФАЙЛОВЫЙ)
     assert д["status"] == л["status"] == 429
 
+    # Страница ошибки Inertia у Laravel теряет заголовки исключения
+    for header in ("retry-after", "x-ratelimit-limit", "x-ratelimit-reset"):
+        assert header not in д["headers"] and header not in л["headers"], header
+
     # Другой посетитель считается отдельно
     д = из_django(сайт, path, headers={"X-Forwarded-For": "203.0.113.78"}, env=ФАЙЛОВЫЙ)
     assert (д["status"], д["headers"]["x-ratelimit-remaining"]) == (200, "59")

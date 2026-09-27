@@ -99,7 +99,9 @@ def throttled(
 
     if too_many(key, max_attempts):
         bare = replace(first, locale=first.url_locale or locales.DEFAULT)
-
+        # Заголовков Retry-After и X-RateLimit-* у отказа нет: Laravel
+        # собирает страницу ошибки Inertia заново, и заголовки исключения
+        # теряются — Django повторяет
         return error(bare, 429, bare=True)
 
     hit(key)
