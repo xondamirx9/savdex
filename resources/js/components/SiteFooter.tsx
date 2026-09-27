@@ -30,14 +30,14 @@ function columns() {
                 { href: routes.about, label: t('nav.about_us') },
                 { href: routes.contacts, label: t('nav.contacts') },
                 { href: routes.news, label: t('nav.news') },
-                { href: `${routes.about}#help`, label: t('nav.help') },
-                { href: `${routes.about}#guide`, label: t('footer.guide') },
+                { href: routes.help, label: t('nav.help') },
+                { href: routes.guide, label: t('footer.guide') },
             ],
         },
         {
             title: t('footer.documents'),
             links: [
-                { href: `${routes.about}#rules`, label: t('nav.rules') },
+                { href: routes.rules, label: t('nav.rules') },
                 { href: routes.terms, label: t('footer.terms') },
                 { href: routes.payment, label: t('footer.payment') },
                 { href: routes.security, label: t('footer.security') },

@@ -955,10 +955,6 @@ return [
             'rules' => 'Posting rules',
         ],
 
-        'lead' => 'SAVDEX is a marketplace where suppliers and buyers find each other directly.',
-        'text_1' => 'We work in Uzbekistan and Central Asia. Companies publish what they can supply or what they want to buy, find a partner and agree between themselves. The platform takes no part in the talks, takes no percentage of the deal and never handles the money.',
-        'text_2' => 'We earn from subscriptions and access to contacts. Our income does not depend on the size of your contract.',
-
         'stats' => [
             'companies' => 'companies',
             'listings' => 'listings',
@@ -986,53 +982,6 @@ return [
         'reach_us' => 'How to reach us',
         'support_hint' => 'Support, reply within 4 hours',
         'telegram_hint' => 'Telegram, around the clock',
-
-        'office_text' => 'Come over if a question is easier to settle in person. We also accept contracts and documents by post — there is no need to travel just for a signature.',
-
-        'faq' => [
-            'q1' => 'How much does posting a listing cost?',
-            'a1' => 'Posting is free on every plan. The free plan gives 4 active listings and 3 contact unlocks per month.',
-            'q2' => 'Why are contacts paid?',
-            'a2' => 'We take no percentage of deals, so access to contacts is the platform’s only source of income. Unlock a company’s contact once and you keep it for good, across all of its listings.',
-            'q3' => 'What if a contact does not work?',
-            'a3' => 'Press “Report contact” in the “My contacts” section. We check within 2 business days; if confirmed, we return the credit and lower the company’s responsiveness score.',
-            'q4' => 'How do I get the “Verified” badge?',
-            'a4' => 'Upload the certificate of registration and confirm the tax ID. A moderator checks it: up to 5 business days on Free and Flash, 1 business day on Business and Premium. The badge is not for sale.',
-            'q5' => 'Which cards can I pay with?',
-            'a5' => 'Uzcard, Humo, Visa and Mastercard through Uzum Bank online acquiring, in soum. The payment is confirmed by a 3-D Secure code. Details are on the “Payment methods” page.',
-        ],
-
-        'supplier_title' => 'If you are a supplier',
-        'supplier' => [
-            'step_1' => 'Sign up and confirm your email.',
-            'hint_1' => 'The dashboard works before confirmation, but publishing does not.',
-            'step_2' => 'Fill in your company profile.',
-            'hint_2' => 'A complete profile gets three times more enquiries.',
-            'step_3' => 'Post a listing.',
-            'hint_3' => 'Give the exact grade and volume — that is what people search by. Listings with a price are viewed 2.4 times more often.',
-            'step_4' => 'Watch your incoming requests.',
-            'hint_4' => 'You see which company unlocked your contacts and from which listing.',
-        ],
-
-        'buyer_title' => 'If you are a buyer',
-        'buyer' => [
-            'step_1' => 'Search the catalogue or post a request.',
-            'hint_1' => 'The whole catalogue is visible without paying.',
-            'step_2' => 'Study the company before you call.',
-            'hint_2' => 'Documents, rating, reviews, time on the platform — all of it is open.',
-            'step_3' => 'Unlock the contact.',
-            'hint_3' => 'A credit is spent per company, not per listing.',
-        ],
-
-        'rules_warning_title' => 'Contact details in the listing text are not allowed.',
-        'rules_warning_text' => 'Phone numbers, emails, links and messenger handles are hidden automatically. Contacts are passed only through contact unlocking — that is what the platform runs on.',
-        'must_title' => 'What is required',
-        'must' => [
-            'item_1' => 'A truthful company name, tax ID and address',
-            'item_2' => 'A listing in the right category',
-            'item_3' => 'Real terms of delivery, payment and volume',
-            'item_4' => 'Taking the listing down when the goods run out',
-        ],
     ],
 
     // ── Company card ─────────────────────────────────────────

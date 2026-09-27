@@ -48,6 +48,7 @@ use App\Http\Controllers\Public\TenderController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\RequirePasswordChange;
+use App\Models\Page;
 use App\Support\Microsite\SiteHost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +84,11 @@ if (SiteHost::usesSubdomains()) {
 
 Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/about', [PageController::class, 'about'])->name('about');
+// Помощь, инструкция и правила — отдельными страницами с текстом из
+// админки (раньше — разделы /about#help и т. п.)
+foreach (Page::DOCS as $doc) {
+    Route::get('/'.$doc, [PageController::class, 'doc'])->defaults('key', $doc)->name('docs.'.$doc);
+}
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/countries', [PageController::class, 'countries'])->name('countries');
 // «Показать ещё» на странице стран: следующая порция компаний страны

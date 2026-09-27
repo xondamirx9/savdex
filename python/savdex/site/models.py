@@ -1,5 +1,6 @@
 """
-Настройки площадки, баннеры и новости — перешли к Django (этап 2).
+Настройки площадки, баннеры, новости и страницы — перешли к Django
+(этап 2).
 
 Таблица создана миграцией Laravel
 (database/migrations/2026_07_29_100300_create_cms_tables.php):
@@ -416,3 +417,88 @@ class NewsPost(Timestamped):
         _forget_files_later(cover)
 
         return result
+
+
+# ── Страницы и вопросы помощи ───────────────────────────────────────
+
+#: Page::KEYS — набор страниц задан кодом: у каждой свой адрес и своя
+#: вёрстка, админка правит только текст
+PAGE_ADDRESSES: dict[str, str] = {
+    "about": "/about",
+    "contacts": "/about#contacts",
+    "help": "/help",
+    "guide": "/guide",
+    "rules": "/rules",
+}
+
+#: Page::DOCS — страницы со своим адресом: их можно скрыть
+PAGE_DOCS: frozenset[str] = frozenset({"help", "guide", "rules"})
+
+
+class Page(Timestamped):
+    """
+    Страница о площадке — копия правил App\\Models\\Page.
+
+    Русский текст — в основных столбцах, остальные языки — в *_i18n
+    ({"uz": "...", "en": "..."}), и их пишет администратор (в отличие
+    от новостей, где *_i18n — машинный перевод). Незаполненный язык
+    сайт показывает машинным переводом русского текста.
+
+    Страницы не заводятся и не удаляются: их набор задан кодом сайта.
+    """
+
+    key = models.CharField("ключ", max_length=190, unique=True, editable=False)
+    slug = models.CharField("адрес", max_length=190, unique=True, editable=False)
+    title = models.CharField("заголовок", max_length=190)
+    title_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    excerpt = models.TextField("подзаголовок", null=True, blank=True)
+    excerpt_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    body = models.TextField("текст", null=True, blank=True)
+    body_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    meta_title = models.CharField("заголовок в поиске", max_length=190, null=True, blank=True)
+    meta_description = models.CharField("описание в поиске", max_length=255, null=True, blank=True)
+    is_published = models.BooleanField("опубликована", default=True)
+    sort = models.PositiveSmallIntegerField("порядок", default=0)
+
+    class Meta:
+        managed = False
+        db_table = "pages"
+        ordering = ("sort", "id")
+        verbose_name = "страница"
+        verbose_name_plural = "страницы и FAQ"
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def address(self) -> str:
+        return PAGE_ADDRESSES.get(self.key, f"/{self.slug}")
+
+    @property
+    def can_hide(self) -> bool:
+        """«О компании» и «Контакты» скрыть нельзя: это одна страница /about."""
+        return self.key in PAGE_DOCS
+
+
+class FaqItem(Timestamped):
+    """Вопрос-ответ на странице «Помощь» — языки как у Page."""
+
+    page = models.ForeignKey(
+        Page, on_delete=models.CASCADE, related_name="faq_items", null=True, db_column="page_id"
+    )
+    question = models.CharField("вопрос", max_length=190)
+    question_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    answer = models.TextField("ответ")
+    answer_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    sort = models.PositiveSmallIntegerField("порядок", default=0)
+    is_published = models.BooleanField("показывать", default=True)
+
+    class Meta:
+        managed = False
+        db_table = "faq_items"
+        ordering = ("sort", "id")
+        verbose_name = "вопрос"
+        verbose_name_plural = "Вопросы и ответы"
+
+    def __str__(self) -> str:
+        return self.question

@@ -958,10 +958,6 @@ return [
             'rules' => 'Joylashtirish qoidalari',
         ],
 
-        'lead' => 'SAVDEX — yetkazib beruvchilar va xaridorlar bir-birini to‘g‘ridan-to‘g‘ri topadigan maydon.',
-        'text_1' => 'Biz O‘zbekiston va Markaziy Osiyoda ishlaymiz. Kompaniyalar nimani yetkazib bera olishini yoki nimani sotib olmoqchi ekanini e’lon qiladi, hamkor topadi va o‘zaro kelishadi. Maydon muzokaralarda qatnashmaydi, bitimdan foiz olmaydi va pulni o‘zi orqali o‘tkazmaydi.',
-        'text_2' => 'Biz obuna va kontaktlarga kirishdan daromad olamiz. Daromadimiz shartnomangiz summasiga bog‘liq emas.',
-
         'stats' => [
             'companies' => 'kompaniya',
             'listings' => 'e’lon',
@@ -989,53 +985,6 @@ return [
         'reach_us' => 'Biz bilan qanday bog‘lanish mumkin',
         'support_hint' => 'Qo‘llab-quvvatlash, javob 4 soat ichida',
         'telegram_hint' => 'Telegram, kechayu kunduz',
-
-        'office_text' => 'Savolni shaxsan hal qilish osonroq bo‘lsa, kelavering. Shartnoma va hujjatlarni pochta orqali ham qabul qilamiz — imzo uchun kelish shart emas.',
-
-        'faq' => [
-            'q1' => 'E’lon joylashtirish qancha turadi?',
-            'a1' => 'Joylashtirish barcha tariflarda bepul. Bepul tarif oyiga 4 ta faol e’lon va 3 marta kontakt ochish imkonini beradi.',
-            'q2' => 'Nega kontaktlar pullik?',
-            'a2' => 'Biz bitimlardan foiz olmaymiz, shuning uchun kontaktlarga kirish — maydonning yagona daromad manbai. Kompaniya kontaktini bir marta ochsangiz, uning barcha e’lonlarida umrbod ko‘rinadi.',
-            'q3' => 'Kontakt ishlamasa nima qilish kerak?',
-            'a3' => '«Mening kontaktlarim» bo‘limida «Kontakt haqida shikoyat» tugmasini bosing. 2 ish kunida tekshiramiz; tasdiqlansa, kreditni qaytaramiz va kompaniyaning javob berish ko‘rsatkichini pasaytiramiz.',
-            'q4' => '«Tekshirilgan» belgisini qanday olish mumkin?',
-            'a4' => 'Ro‘yxatdan o‘tish guvohnomasini yuklang va STIRni tasdiqlang. Moderator tekshiradi: Free va Flash tariflarida 5 ish kunigacha, Business va Premiumda 1 ish kuni. Belgi sotilmaydi.',
-            'q5' => 'Qaysi kartalar bilan to‘lash mumkin?',
-            'a5' => 'Uzcard, Humo, Visa va Mastercard kartalari bilan Uzum Bank internet-ekvayringi orqali, so‘mda. To‘lov 3-D Secure kodi bilan tasdiqlanadi. Batafsil — «To‘lov usullari» sahifasida.',
-        ],
-
-        'supplier_title' => 'Agar siz yetkazib beruvchi bo‘lsangiz',
-        'supplier' => [
-            'step_1' => 'Ro‘yxatdan o‘ting va pochtani tasdiqlang.',
-            'hint_1' => 'Tasdiqlanmaguncha kabinet ochiq, lekin e’lon joylashtirib bo‘lmaydi.',
-            'step_2' => 'Kompaniya kartasini to‘ldiring.',
-            'hint_2' => 'To‘ldirilgan profil uch barobar ko‘p murojaat oladi.',
-            'step_3' => 'E’lon joylashtiring.',
-            'hint_3' => 'Aniq marka va hajmni ko‘rsating — qidiruv shular bo‘yicha boradi. Narxi ko‘rsatilgan e’lonlar 2,4 barobar ko‘p ochiladi.',
-            'step_4' => 'Kiruvchi murojaatlarni kuzating.',
-            'hint_4' => 'Qaysi kompaniya kontaktlaringizni va qaysi e’lon bo‘yicha ochgani ko‘rinadi.',
-        ],
-
-        'buyer_title' => 'Agar siz xaridor bo‘lsangiz',
-        'buyer' => [
-            'step_1' => 'Katalogdan toping yoki so‘rov joylashtiring.',
-            'hint_1' => 'Katalog to‘liq, to‘lovsiz ko‘rinadi.',
-            'step_2' => 'Qo‘ng‘iroqdan oldin kompaniyani o‘rganing.',
-            'hint_2' => 'Hujjatlar, reyting, sharhlar, maydondagi muddat — hammasi ochiq.',
-            'step_3' => 'Kontaktni oching.',
-            'hint_3' => 'Kredit e’lon uchun emas, kompaniya uchun yechiladi.',
-        ],
-
-        'rules_warning_title' => 'E’lon matnida aloqa ma’lumotlari taqiqlanadi.',
-        'rules_warning_text' => 'Telefon, pochta, havolalar va messenjerdagi nomlar avtomatik yashiriladi. Kontaktlar faqat kontakt ochish orqali beriladi — maydon shunga asoslanadi.',
-        'must_title' => 'Nima majburiy',
-        'must' => [
-            'item_1' => 'Kompaniyaning haqiqiy nomi, STIRi va manzili',
-            'item_2' => 'Mos toifadagi e’lon',
-            'item_3' => 'Yetkazib berish, to‘lov va hajmning haqiqiy shartlari',
-            'item_4' => 'Tovar tugaganda e’lonni olib tashlash',
-        ],
     ],
 
     // ── Kompaniya kartasi ────────────────────────────────────

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Pages\PageResource;
 use App\Models\NewsPost;
 use App\Models\Page;
 use App\Support\AdminAccess;
@@ -30,6 +29,9 @@ class ContentDrafts extends StatsOverviewWidget
 
     /** Раздел новостей на Python — через пропуск, с фильтром статуса. */
     private const NEWS = '/admin/python?next=/py/admin/site/newspost/';
+
+    /** Страницы — тоже на Python, сразу со скрытыми. */
+    private const PAGES = '/admin/python?next=/py/admin/site/page/';
 
     protected function getStats(): array
     {
@@ -60,7 +62,7 @@ class ContentDrafts extends StatsOverviewWidget
                 ->icon('heroicon-o-document')
                 ->description($hiddenPages > 0 ? 'не видны посетителям' : 'все страницы открыты')
                 ->color($hiddenPages > 0 ? 'gray' : 'success')
-                ->url(PageResource::getUrl()),
+                ->url(self::PAGES.urlencode('?is_published__exact=0')),
         ];
     }
 }

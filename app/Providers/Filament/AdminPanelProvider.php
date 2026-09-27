@@ -127,6 +127,12 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Контент')
                     ->sort(2)
                     ->visible(fn (): bool => AdminAccess::allows('content.view')),
+                NavigationItem::make('Страницы и FAQ')
+                    ->url('/admin/python?next=/py/admin/site/page/')
+                    ->icon('heroicon-o-document-text')
+                    ->group('Контент')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('content.view')),
                 NavigationItem::make('Баннеры')
                     ->url('/admin/python?next=/py/admin/site/banner/')
                     ->icon('heroicon-o-megaphone')

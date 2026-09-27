@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\ItTask;
 use App\Models\Listing;
 use App\Models\NewsPost;
+use App\Models\Page;
 use App\Models\Tender;
 use App\Support\Locales;
 use Illuminate\Http\Response;
@@ -149,6 +150,15 @@ class SitemapController extends Controller
      */
     private function static(): array
     {
+        // Помощь, инструкция и правила — если не скрыты в админке
+        $docs = Page::query()
+            ->whereIn('key', Page::DOCS)
+            ->where('is_published', true)
+            ->orderBy('sort')
+            ->pluck('key')
+            ->map(fn (string $key): array => ['loc' => url('/'.$key), 'priority' => '0.4', 'changefreq' => 'monthly'])
+            ->all();
+
         return [
             ['loc' => url('/'), 'priority' => '1.0', 'changefreq' => 'daily'],
             ['loc' => url('/catalog'), 'priority' => '0.9', 'changefreq' => 'hourly'],
@@ -163,6 +173,7 @@ class SitemapController extends Controller
             ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/partners'), 'priority' => '0.4', 'changefreq' => 'monthly'],
             ['loc' => url('/contact'), 'priority' => '0.4', 'changefreq' => 'yearly'],
+            ...$docs,
             // Оферту и политику ищут по названию площадки перед оплатой;
             // приоритет низкий, но в индексе они быть должны
             ['loc' => url('/terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],

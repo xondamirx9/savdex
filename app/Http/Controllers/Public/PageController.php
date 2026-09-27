@@ -11,8 +11,10 @@ use App\Models\Category;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
+use App\Models\FaqItem;
 use App\Models\ItTask;
 use App\Models\Listing;
+use App\Models\Page;
 use App\Models\Plan;
 use App\Models\Review;
 use App\Models\Setting;
@@ -32,6 +34,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Публичные страницы: главная, о компании, тарифы, страны, контакты.
@@ -117,9 +120,14 @@ class PageController extends Controller
 
     public function about(): Response
     {
+        $pages = Page::query()->whereIn('key', ['about', 'contacts'])->get()->keyBy('key');
+        $about = $pages->get('about');
+
+        // Заголовок для поисковика из админки — если его вписали;
+        // иначе прежний, из словаря
         app(Seo::class)
-            ->title(__('ui.seo.about_title'))
-            ->description(__('ui.seo.about_description'))
+            ->title(filled($about?->meta_title) ? $about->seoTitle() : __('ui.seo.about_title'))
+            ->description(filled($about?->meta_description) ? $about->seoDescription() : __('ui.seo.about_description'))
             ->canonical(url('/about'));
 
         $office = OfficeLocation::current();
@@ -153,6 +161,53 @@ class PageController extends Controller
             // Офис приходит с сервера, а не жёстко лежит в вёрстке:
             // адрес и точку на карте меняет администратор в настройках
             'office' => $office,
+            // Тексты — из админки («Страницы и FAQ»), на языке посетителя
+            'page' => $about?->card(),
+            // Текст «Контактов» — под заголовком, текст раздела офиса — ниже
+            'contacts' => $pages->get('contacts')?->card(),
+            'nav' => $this->docsNav($office),
+        ]);
+    }
+
+    /**
+     * «Помощь», «Инструкция», «Правила» — каждая по своему адресу.
+     *
+     * Раньше это были разделы /about#help и т. п. с текстом из словаря;
+     * старые ссылки с якорем переводит сюда страница /about.
+     */
+    public function doc(string $key): Response
+    {
+        $page = Page::query()->where('key', $key)->where('is_published', true)->first()
+            ?? throw new NotFoundHttpException;
+
+        $faq = $key === 'help'
+            ? $page->faq->map(fn (FaqItem $item): array => [
+                'question' => $item->localized('question'),
+                'answer' => $item->localized('answer'),
+            ])->all()
+            : [];
+
+        app(Seo::class)
+            ->title($page->seoTitle())
+            ->description($page->seoDescription())
+            ->canonical(url('/'.$key));
+
+        // Вопросы помощи — ещё и раскрывающимися ответами в выдаче Google
+        if ($faq !== []) {
+            app(Seo::class)->schema([
+                '@type' => 'FAQPage',
+                'mainEntity' => array_map(fn (array $item): array => [
+                    '@type' => 'Question',
+                    'name' => $item['question'],
+                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => $item['answer']],
+                ], $faq),
+            ]);
+        }
+
+        return Inertia::render('DocPage', [
+            'page' => $page->card(),
+            'faq' => $faq,
+            'nav' => $this->docsNav(OfficeLocation::current()),
         ]);
     }
 
@@ -461,6 +516,38 @@ class PageController extends Controller
             ->canonical(url('/contact'));
 
         return Inertia::render('Contacts');
+    }
+
+    /**
+     * Оглавление страниц о площадке: «О компании» с контактами и офисом,
+     * затем отдельные «Помощь», «Инструкция», «Правила» — скрытые
+     * в админке сюда не попадают.
+     *
+     * @param  array<string, mixed>|null  $office
+     * @return list<array{key: string, href: string, label: string}>
+     */
+    private function docsNav(?array $office): array
+    {
+        $pages = Page::query()->whereIn('key', ['contacts', ...Page::DOCS])->get()->keyBy('key');
+        $nav = [['key' => 'about', 'href' => '/about', 'label' => __('ui.about.nav.about')]];
+
+        if ($contacts = $pages->get('contacts')) {
+            $nav[] = ['key' => 'contacts', 'href' => '/about#contacts', 'label' => $contacts->localized('title')];
+        }
+
+        if ($office !== null) {
+            $nav[] = ['key' => 'office', 'href' => '/about#office', 'label' => __('ui.about.nav.office')];
+        }
+
+        foreach (Page::DOCS as $key) {
+            $page = $pages->get($key);
+
+            if ($page !== null && $page->is_published) {
+                $nav[] = ['key' => $key, 'href' => '/'.$key, 'label' => $page->localized('title')];
+            }
+        }
+
+        return $nav;
     }
 
     /**
