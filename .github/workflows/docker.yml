@@ -138,7 +138,7 @@ jobs:
           grep -q '"component":"DocPage"' /tmp/help.html
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
           # Новости, «О компании», страны, партнёры, документы и тарифы — тоже Django
-          for page in news about contact countries partners terms privacy pricing; do
+          for page in news about contact countries partners terms privacy pricing reviews; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
@@ -146,6 +146,8 @@ jobs:
           curl -fsS -D /tmp/home.h -o /tmp/home.html http://127.0.0.1:18080/
           ! grep -qi '^x-powered-by: php' /tmp/home.h
           grep -q '"component":"Home"' /tmp/home.html
+          # Форма «Оцените SavdEx» — Laravel (гостя уводит на вход)
+          curl -s -D - -o /dev/null http://127.0.0.1:18080/reviews/new | grep -qi '^x-powered-by: php'
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
 

@@ -37,6 +37,7 @@ import { NewsCover } from '@/components/NewsCover';
 import { BannerSlot, type BannerData } from '@/components/BannerSlot';
 import { CardRow } from '@/components/CardRow';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
+import { ReviewCard, type FeedReview } from '@/components/ReviewCard';
 import { SelectField } from '@/components/SelectField';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { formatNumber } from '@/components/cabinet';
@@ -133,16 +134,6 @@ interface NewsCard {
     image: string | null;
 }
 
-interface ReviewRow {
-    id: number;
-    author: string;
-    initials: string;
-    rating: number;
-    body: string;
-    when: string;
-    company_name: string;
-    company_slug: string;
-}
 
 /**
  * Значок раздела каталога.
@@ -342,7 +333,7 @@ export default function Home({
     heroImage: string;
     /** Пропорции кадра (ширина/высота); null — фон из коробки */
     heroRatio: number | null;
-    reviews: ReviewRow[];
+    reviews: FeedReview[];
     /** Баннер акции под первым экраном; null — сейчас ничего не идёт */
     banner: BannerData | null;
 }) {
@@ -612,48 +603,20 @@ export default function Home({
             )}
 
             {/* ── Отзывы пользователей: живые, из базы — выдуманные
-                 цитаты на витрине недопустимы, как и счётчики ── */}
+                 цитаты на витрине недопустимы, как и счётчики. Три
+                 свежих — о компаниях и о площадке; остальные — на /reviews ── */}
             {shown('reviews') && reviews.length > 0 && (
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
                             <h2>{block('reviews').heading}</h2>
+                            <Link href={routes.reviews} className="section-bar-link">
+                                {t('home.reviews_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                            </Link>
                         </div>
                         <div className="review-grid" data-reveal-stagger>
                             {reviews.map((r) => (
-                                <article key={r.id} className="review-card">
-                                    <span className="row" style={{ gap: 2 }} aria-label={`${r.rating}/5`}>
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                            <Star
-                                                key={i}
-                                                aria-hidden
-                                                className="size-4"
-                                                fill={i <= r.rating ? 'var(--warning)' : 'none'}
-                                                color={i <= r.rating ? 'var(--warning)' : 'var(--border-strong)'}
-                                            />
-                                        ))}
-                                    </span>
-                                    <p className="review-body">{r.body}</p>
-                                    <div className="review-foot">
-                                        <span className="avatar-sm" aria-hidden>
-                                            {r.initials}
-                                        </span>
-                                        <span style={{ minWidth: 0 }}>
-                                            <b className="t-sm" style={{ display: 'block' }}>
-                                                {r.author}
-                                            </b>
-                                            <Link
-                                                href={routes.company(r.company_slug)}
-                                                className="review-company"
-                                            >
-                                                {t('home.reviews_about', { name: r.company_name })}
-                                            </Link>
-                                        </span>
-                                        <span className="t-xs" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-                                            {r.when}
-                                        </span>
-                                    </div>
-                                </article>
+                                <ReviewCard key={`${r.kind}-${r.id}`} review={r} />
                             ))}
                         </div>
                     </div>

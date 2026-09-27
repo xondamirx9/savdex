@@ -468,7 +468,13 @@ class Company extends Model
      */
     public function initials(): string
     {
-        $words = preg_split('/[\s«»"\']+/u', (string) $this->name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return self::initialsOf((string) $this->name);
+    }
+
+    /** Буквы на плашку для любого имени: компании или человека. */
+    public static function initialsOf(string $name): string
+    {
+        $words = preg_split('/[\s«»"\']+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         // Организационно-правовая форма ничего не говорит о компании,
         // а «ОО» вместо «СБ» на плашке выглядит одинаково у половины базы

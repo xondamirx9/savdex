@@ -15,7 +15,7 @@ from typing import Any
 
 from django.http import HttpResponse, JsonResponse
 
-from savdex.web import locales, vite
+from savdex.web import locales, phpquery, vite
 from savdex.web.seo import Seo, php_json
 from savdex.web.shared import Context, appearance_logo, settings_values, shared
 
@@ -33,23 +33,14 @@ def php_escape(text: object) -> str:
 
 
 def full_url(ctx: Context) -> str:
-    """
-    Request::fullUrl: путь без «/» в конце — у корня тоже, но корень
-    с параметрами — «/?…», как у Symfony.
-    """
-    path, _, query = ctx.request_uri.partition("?")
-    url = ctx.root + path.rstrip("/")
-
-    if not query:
-        return url
-
-    return url + ("/?" if path in ("", "/") else "?") + query
+    """Request::fullUrl: строка запроса разобрана и собрана заново (phpquery)."""
+    return ctx.root + phpquery.full_path(ctx.path, ctx.query)
 
 
 def page_url(ctx: Context) -> str:
-    """HandleInertiaRequests::urlResolver — адрес с языковым префиксом."""
+    """HandleInertiaRequests::urlResolver — fullUrl без хоста, с языковым префиксом."""
     prefix = locales.prefix(ctx.locale)
-    uri = ctx.request_uri
+    uri = phpquery.full_path(ctx.path, ctx.query) or "/"
 
     return prefix if uri == "/" and prefix else prefix + uri
 

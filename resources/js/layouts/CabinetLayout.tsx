@@ -1,22 +1,23 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import {
-    FileUser,
     BarChart3,
     Building2,
     Code2,
     CreditCard,
     Eye,
+    FileUser,
     Globe,
     LayoutDashboard,
     MailWarning,
-    TriangleAlert,
     MessageSquareText,
     Package,
     Plus,
     Rocket,
     Settings,
     Star,
+    ThumbsUp,
+    TriangleAlert,
     Users,
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
@@ -84,6 +85,7 @@ function groups(): NavGroup[] {
                 { href: routes.cabinetSite, label: t('cabinet.nav.site'), icon: Globe },
                 { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
                 { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
+                { href: routes.reviewsNew, label: t('platform_reviews.title'), icon: ThumbsUp },
             ],
         },
     ];

@@ -193,10 +193,11 @@ php artisan db:seed --class=GeoSeeder --force
 php artisan db:seed --class=SettingSeeder --force
 
 # Наполнение витрины: описания пустым карточкам компаний и картинки
-# объявлениям без фото. Только дополняет — заполненное не перезаписывает.
-# Выключается переменной SEED_SHOWCASE=false, когда живого контента
-# станет достаточно.
-if [ "${SEED_SHOWCASE:-true}" = "true" ]; then
+# объявлениям без фото. По умолчанию выключено: на живом сайте это
+# тексты и картинки, которых компании не писали и не загружали
+# (сделанное раньше убрала миграция remove_showcase_fill). Только для
+# демо-стенда — SEED_SHOWCASE=true.
+if [ "${SEED_SHOWCASE:-false}" = "true" ]; then
     php artisan db:seed --class=ShowcaseSeeder --force
 fi
 
@@ -294,7 +295,7 @@ runuser -u www-data -- php artisan savdex:export-ui \
 # Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
 # все снова отдаёт Laravel: это откат без выкладки, через переменную в
 # настройках Render и перезапуск.
-export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing,home}"
+export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing,home,reviews}"
 # Основной домен (хост из APP_URL): только его страницы отдаёт Django
 export SAVDEX_HOST="$(printf '%s' "${APP_URL:-}" | sed -E 's#^[a-z]+://##; s#/.*$##')"
 

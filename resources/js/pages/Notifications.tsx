@@ -33,6 +33,9 @@ interface Row {
 const ICONS: Record<string, ComponentType<{ className?: string; 'aria-hidden'?: boolean }>> = {
     contact_unlocked: Eye,
     new_review: Star,
+    review: Star,
+    review_ask: Star,
+    platform_review_ask: Star,
     moderation: FileText,
     listing_expiring: Clock,
     payment: CreditCard,
