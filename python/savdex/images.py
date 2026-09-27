@@ -54,6 +54,9 @@ class Frame:
 #: ImageStore::BANNER — баннер во всю ширину
 BANNER = Frame(2400, 1200, 82)
 
+#: ImageStore::COVER — широкая обложка: визитка компании, новость
+COVER = Frame(2000, 2000, 80)
+
 #: ImageStore::BANNER_MOBILE — тот же баннер для телефона
 BANNER_MOBILE = Frame(1000, 1400, 80)
 

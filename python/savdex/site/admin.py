@@ -1,6 +1,7 @@
 """
-Разделы «Настройки площадки» и «Баннеры» админки на Django — вместо
-Filament SettingResource и BannerResource. Про баннеры — у BannerAdmin ниже.
+Разделы «Настройки площадки», «Баннеры» и «Новости» админки на Django —
+вместо Filament SettingResource, BannerResource и NewsPostResource. Про
+баннеры и новости — у BannerAdmin и NewsPostAdmin ниже.
 
 Настройки.
 
@@ -28,23 +29,25 @@ from decimal import Decimal
 from typing import Any, ClassVar
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Q, QuerySet
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from savdex import images, laravel_storage
+from savdex import audit, images, laravel_storage
 from savdex.adminsite import SavdexModelAdmin, register
 from savdex.catalog import LOCALES
 from savdex.site.models import (
     DISMISS_DAYS,
     GROUPS,
+    NEWS_CATEGORIES,
     PLACEMENTS,
     TYPES,
     Banner,
     BannerImage,
+    NewsPost,
     Setting,
 )
 
@@ -746,3 +749,322 @@ class BannerAdmin(SavdexModelAdmin):
         count = len(obj.images.all())
 
         return "одна на все" if count == 0 else f"+{count}"
+
+
+# ── Новости ─────────────────────────────────────────────────────────
+
+#: Адрес новости: латиница, цифры, дефис — /news/адрес
+NEWS_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+
+#: Обложка новости — до 4 МБ, как было в Filament
+NEWS_COVER_BYTES = 4096 * 1024
+
+_STATUS = {"draft": "Черновик", "scheduled": "Выйдет", "published": "Опубликована"}
+
+
+class NewsPostForm(forms.ModelForm):  # type: ignore[type-arg]
+    cover_upload = forms.FileField(
+        label="Обложка",
+        required=False,
+        help_text="Необязательно: без картинки покажем градиент по рубрике. "
+        "От 1200 px по ширине, до 4 МБ",
+        widget=forms.ClearableFileInput(attrs={"accept": "image/jpeg,image/png,image/webp"}),
+    )
+    cover_clear = forms.BooleanField(label="Убрать обложку", required=False)
+    category = forms.ChoiceField(
+        label="Рубрика",
+        choices=[(c, c) for c in NEWS_CATEGORIES],
+        help_text="Задаёт оформление обложки, если картинки нет",
+    )
+
+    class Meta:
+        model = NewsPost
+        fields = (
+            "title",
+            "slug",
+            "category",
+            "read_time",
+            "excerpt",
+            "body",
+            "is_published",
+            "published_at",
+            "sort",
+        )
+        help_texts: ClassVar[dict[str, str]] = {
+            "slug": "Часть ссылки: /news/адрес. Подставляется из заголовка; "
+            "после публикации лучше не менять — внешние ссылки перестанут работать",
+            "read_time": "Например, «4 мин». Пусто — посчитаем по объёму текста",
+            "excerpt": "Видно в ленте новостей и в поисковой выдаче",
+            "body": "Абзацы разделяйте пустой строкой",
+            "is_published": "Черновик виден только здесь",
+            "published_at": "Время ташкентское. Дата в будущем — новость появится позже сама",
+            "sort": "Больше — выше в ленте при одинаковой дате",
+        }
+        widgets: ClassVar[dict[str, Any]] = {
+            "excerpt": forms.Textarea(attrs={"rows": 3, "maxlength": 500}),
+            "body": forms.Textarea(attrs={"rows": 16}),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+        if not self.instance.image_path:
+            self.fields.pop("cover_clear", None)
+
+        # Рубрика, заведённая до списка, остаётся выбираемой
+        current = self.instance.category
+        category: Any = self.fields["category"]
+
+        if current and current not in NEWS_CATEGORIES:
+            category.choices = [*category.choices, (current, current)]
+
+        old: Any = self.fields["published_at"]
+        self.fields["published_at"] = forms.DateTimeField(
+            label=old.label,
+            required=False,
+            help_text=old.help_text,
+            initial=timezone.localtime().replace(second=0, microsecond=0),
+            input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M"],
+            widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        )
+
+    def clean_slug(self) -> str:
+        slug = str(self.cleaned_data.get("slug") or "").strip()
+
+        if not NEWS_SLUG.fullmatch(slug):
+            raise forms.ValidationError(
+                "Только латиница в нижнем регистре, цифры и дефис: novye-tarify."
+            )
+
+        return slug
+
+    def clean_excerpt(self) -> str:
+        excerpt = str(self.cleaned_data.get("excerpt") or "")
+
+        if len(excerpt) > 500:
+            raise forms.ValidationError("Не больше 500 знаков.")
+
+        return excerpt
+
+    def clean_read_time(self) -> str | None:
+        return str(self.cleaned_data.get("read_time") or "").strip() or None
+
+    def clean_cover_upload(self) -> bytes | None:
+        upload = self.cleaned_data.get("cover_upload")
+
+        if not upload:
+            return None
+
+        if upload.size and upload.size > NEWS_COVER_BYTES:
+            raise forms.ValidationError("Файл больше 4 МБ.")
+
+        try:
+            return images.prepare(upload, images.COVER)
+        except images.NotAnImageError as error:
+            raise forms.ValidationError(str(error)) from error
+
+    def save(self, commit: bool = True) -> Any:  # noqa: ANN401
+        cover = self.cleaned_data.get("cover_upload")
+
+        if cover:
+            self.instance.image_path = images.write(cover, "news")
+        elif self.cleaned_data.get("cover_clear"):
+            self.instance.image_path = None
+
+        return super().save(commit)
+
+
+class NewsStatusFilter(admin.SimpleListFilter):
+    """Черновик, выйдет по расписанию, опубликована — три разных состояния."""
+
+    title = "статус"
+    parameter_name = "status"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [
+            ("draft", "Черновики"),
+            ("scheduled", "Выйдут по расписанию"),
+            ("published", "Опубликованы"),
+        ]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        now = timezone.now()
+        value = self.value()
+
+        if value == "draft":
+            return queryset.filter(is_published=False)
+        if value == "scheduled":
+            return queryset.filter(is_published=True, published_at__gt=now)
+        if value == "published":
+            return queryset.filter(is_published=True).exclude(published_at__gt=now)
+
+        return queryset
+
+
+@register(NewsPost, section="content")
+class NewsPostAdmin(SavdexModelAdmin):
+    """
+    Раздел «Новости» — вместо Filament NewsPostResource.
+
+    Что изменилось против Filament:
+
+    - правка текста опубликованной новости сбрасывает перевод этого
+      поля — раньше исправленная новость навсегда оставалась на других
+      языках со старым переводом (см. NewsPost);
+    - обложка пересобирается в WebP без метаданных съёмки, прежняя
+      удаляется с диска при замене и вместе с новостью — раньше файлы
+      копились;
+    - у новости записывается автор — тот, кто её завёл.
+    """
+
+    laravel_model = "App\\Models\\NewsPost"
+    title_list = "Новости"
+    title_add = "Новая новость"
+    title_change = "Новость"
+    change_form_template = "admin/site/newspost/change_form.html"
+
+    form = NewsPostForm
+    fieldsets = (
+        ("Публикация", {"fields": ("title", "slug", "category", "read_time")}),
+        ("Содержание", {"fields": ("excerpt", "body", "cover_upload", "cover_clear")}),
+        ("Видимость", {"fields": ("is_published", "published_at", "sort")}),
+    )
+    list_display = ("cover", "headline", "category", "state", "date", "actions_column")
+    list_display_links = ("cover", "headline")
+    list_filter = (NewsStatusFilter, "category")
+    search_fields = ("title", "excerpt", "category")
+    ordering = ("-published_at", "-sort", "-id")
+    list_per_page = 50
+
+    def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        if obj is not None and obj.image_path:
+            return self.fieldsets
+
+        what, box = self.fieldsets[1]
+
+        return (
+            self.fieldsets[0],
+            (what, {**box, "fields": tuple(f for f in box["fields"] if f != "cover_clear")}),
+            self.fieldsets[2],
+        )
+
+    def save_model(self, request: HttpRequest, obj: Any, form: Any, change: bool) -> None:  # noqa: ANN401
+        if not change:
+            obj.author_id = getattr(request, "admin", None) and request.admin.id  # type: ignore[attr-defined]
+
+        super().save_model(request, obj, form, change)
+
+    def snapshot(self, obj: Any) -> dict[str, Any]:  # noqa: ANN401
+        """Машинный перевод — не правка администратора: в журнал не идёт."""
+        attributes = self.attributes(obj)
+
+        for column in ("title_i18n", "excerpt_i18n", "body_i18n"):
+            attributes.pop(column, None)
+
+        return attributes
+
+    # ── Публикация одной кнопкой ──
+
+    def get_urls(self) -> list[Any]:
+        from django.urls import path
+
+        return [
+            path(
+                "<path:object_id>/publish/",
+                self.admin_site.admin_view(self.publish_view),
+                name="site_newspost_publish",
+            ),
+            *super().get_urls(),
+        ]
+
+    def publish_view(self, request: HttpRequest, object_id: str) -> Any:  # noqa: ANN401
+        """«Опубликовать» / «Снять» — с подтверждением, как в Filament."""
+        from django.shortcuts import get_object_or_404, redirect
+        from django.template.response import TemplateResponse
+
+        post = get_object_or_404(NewsPost, pk=object_id)
+
+        if not self.has_change_permission(request, post):
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied
+
+        if request.method == "POST":
+            before = self.snapshot(post)
+            post.is_published = not post.is_published
+            post.published_at = post.published_at or timezone.now().replace(microsecond=0)
+            post.save()
+            after = self.snapshot(post)
+            changed = {k: v for k, v in after.items() if before.get(k) != v}
+
+            if {k for k in changed if k not in audit.NOISE}:
+                self.journal(
+                    request,
+                    "updated",
+                    post,
+                    {"before": {k: before.get(k) for k in changed}, "after": changed},
+                )
+
+            done = "Новость опубликована" if post.is_published else "Новость снята"
+            messages.success(request, f"{done}: {post.title}")
+
+            return redirect("savdex_admin:site_newspost_changelist")
+
+        return TemplateResponse(
+            request,
+            "admin/site/newspost/publish.html",
+            {
+                **self.admin_site.each_context(request),
+                "title": "Снять новость" if post.is_published else "Опубликовать новость",
+                "post": post,
+                "opts": self.model._meta,
+            },
+        )
+
+    # ── Колонки ──
+
+    @admin.display(description="")
+    def cover(self, obj: NewsPost) -> Any:  # noqa: ANN401
+        if not obj.image_path:
+            return ""
+
+        return format_html(
+            '<img src="{}" alt="" style="height:40px;width:64px;object-fit:cover">',
+            _image_url(obj.image_path),
+        )
+
+    @admin.display(description="Заголовок", ordering="title")
+    def headline(self, obj: NewsPost) -> Any:  # noqa: ANN401
+        excerpt = obj.excerpt if len(obj.excerpt) <= 90 else obj.excerpt[:90] + "…"
+
+        return format_html("{}<br><small>{}</small>", obj.title, excerpt)
+
+    @admin.display(description="Статус")
+    def state(self, obj: NewsPost) -> Any:  # noqa: ANN401
+        status = obj.status()
+        text = _STATUS[status]
+        colour = {"draft": "#6b7280", "scheduled": "#d97706", "published": "#16a34a"}[status]
+
+        if status == "scheduled" and obj.published_at is not None:
+            text = f"Выйдет {timezone.localtime(obj.published_at):%d.%m.%Y}"
+
+        return format_html('<span style="color:{};font-weight:600">{}</span>', colour, text)
+
+    @admin.display(description="Дата", ordering="published_at")
+    def date(self, obj: NewsPost) -> str:
+        return f"{timezone.localtime(obj.published_at):%d.%m.%Y}" if obj.published_at else "—"
+
+    @admin.display(description="")
+    def actions_column(self, obj: NewsPost) -> Any:  # noqa: ANN401
+        toggle = format_html(
+            '<a href="{}">{}</a>',
+            reverse("savdex_admin:site_newspost_publish", args=[obj.pk]),
+            "Снять" if obj.is_published else "Опубликовать",
+        )
+
+        if obj.status() != "published":
+            return toggle
+
+        return format_html(
+            '{} · <a href="/news/{}" target="_blank" rel="noopener">Открыть ↗</a>', toggle, obj.slug
+        )

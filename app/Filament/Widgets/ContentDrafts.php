@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\NewsPosts\NewsPostResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Models\NewsPost;
 use App\Models\Page;
@@ -29,6 +28,9 @@ class ContentDrafts extends StatsOverviewWidget
         return AdminAccess::allows('content.edit');
     }
 
+    /** Раздел новостей на Python — через пропуск, с фильтром статуса. */
+    private const NEWS = '/admin/python?next=/py/admin/site/newspost/';
+
     protected function getStats(): array
     {
         $drafts = NewsPost::where('is_published', false)->count();
@@ -43,7 +45,8 @@ class ContentDrafts extends StatsOverviewWidget
                 ->icon('heroicon-o-pencil-square')
                 ->description($drafts > 0 ? 'ждут публикации' : 'всё опубликовано')
                 ->color($drafts > 0 ? 'warning' : 'success')
-                ->url(NewsPostResource::getUrl()),
+                // Новости с этапа 2 переноса — в разделе на Python
+                ->url(self::NEWS.urlencode('?status=draft')),
 
             Stat::make('Выйдут по расписанию', (string) $scheduled)
                 ->icon('heroicon-o-calendar')
@@ -51,7 +54,7 @@ class ContentDrafts extends StatsOverviewWidget
                 // читателю: это третье состояние, а не второе
                 ->description($scheduled > 0 ? 'уже назначены' : 'ничего не запланировано')
                 ->color('info')
-                ->url(NewsPostResource::getUrl()),
+                ->url(self::NEWS.urlencode('?status=scheduled')),
 
             Stat::make('Скрытые страницы', (string) $hiddenPages)
                 ->icon('heroicon-o-document')

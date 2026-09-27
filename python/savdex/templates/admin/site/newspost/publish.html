@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <p>
+    {% if post.is_published %}
+      Снять новость «{{ post.title }}» с сайта? Она останется здесь черновиком.
+    {% else %}
+      Опубликовать новость «{{ post.title }}»?
+      {% if not post.published_at %}Датой публикации станет текущее время.{% endif %}
+    {% endif %}
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="submit" value="{% if post.is_published %}Снять{% else %}Опубликовать{% endif %}">
+    <a href="../../" class="button cancel-link">Отмена</a>
+  </form>
+{% endblock %}

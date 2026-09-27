@@ -78,6 +78,11 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # (savdex/images.py), прежние файлы удаляются после записи
         "banners",
         "banner_images",
+        # Этап 2: новости. Два писателя по столбцам: текст — Django,
+        # машинный перевод (*_i18n) — задача Laravel TranslateNewsPost,
+        # только эти столбцы. Django их не пишет, кроме сброса перевода
+        # изменённого поля (savdex/site/models.py, NewsPost)
+        "news_posts",
     }
 )
 

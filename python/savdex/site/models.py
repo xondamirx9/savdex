@@ -1,5 +1,5 @@
 """
-Настройки площадки и баннеры — перешли к Django (этап 2).
+Настройки площадки, баннеры и новости — перешли к Django (этап 2).
 
 Таблица создана миграцией Laravel
 (database/migrations/2026_07_29_100300_create_cms_tables.php):
@@ -23,7 +23,7 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from savdex import laravel_cache
-from savdex.catalog import LOCALES, Timestamped, UTCDateTimeField
+from savdex.catalog import LOCALES, LaravelJSONField, Timestamped, UTCDateTimeField
 from savdex.text import plural
 
 #: Setting::CACHE_KEY
@@ -92,23 +92,6 @@ SYSTEM_KEYS: frozenset[str] = frozenset(
         "display_currency_tr",
     }
 )
-
-
-class LaravelJSONField(models.JSONField):
-    """
-    Столбец json (не jsonb), как его заводит Laravel.
-
-    Для jsonb Django просит драйвер отдавать текст и разбирает его сам;
-    для json драйвер psycopg разбирает значение сам, и Django разбирал
-    бы его второй раз — строка «SAVDEX» падала бы как недопустимый JSON.
-    Поэтому столбец читается текстом, а разбирает только Django.
-    """
-
-    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:  # noqa: ANN401
-        if compiler.connection.vendor == "postgresql":
-            return f"({sql})::text", params
-
-        return super().select_format(compiler, sql, params)
 
 
 class RecordIsSystemError(RuntimeError):
@@ -331,5 +314,105 @@ class BannerImage(Timestamped):
         paths = (self.image_path, self.image_mobile_path)
         result = super().delete(*args, **kwargs)
         _forget_files_later(*paths)
+
+        return result
+
+
+# ── Новости ─────────────────────────────────────────────────────────
+
+#: NewsPost::CATEGORIES — рубрики задают оформление обложки
+NEWS_CATEGORIES: tuple[str, ...] = (
+    "Обновления сервиса",
+    "Тарифы и оплата",
+    "Аналитика рынка",
+    "Полезное",
+)
+
+#: Текст и его машинный перевод: правка текста делает перевод неверным
+_TRANSLATED = {"title": "title_i18n", "excerpt": "excerpt_i18n", "body": "body_i18n"}
+
+
+class NewsPost(Timestamped):
+    """
+    Новость — копия правил App\\Models\\NewsPost.
+
+    У таблицы два писателя, по столбцам: текст правит Django, а
+    машинный перевод (*_i18n) пишет задача Laravel TranslateNewsPost —
+    только эти столбцы и только их. Поэтому:
+
+    - Django не пишет столбцы перевода при обычном сохранении, чтобы
+      не затереть перевод, который задача успела записать, пока форма
+      была открыта;
+    - правка заголовка, описания или текста сбрасывает перевод этого
+      поля. Laravel переводил новость один раз и больше на текст не
+      смотрел: исправленная новость навсегда оставалась на других
+      языках со старым переводом. Сброшенный перевод подбирает задача
+      news-translate-catchup (routes/console.php) в течение пяти минут.
+    """
+
+    slug = models.CharField("адрес", max_length=190, unique=True)
+    category = models.CharField("рубрика", max_length=190)
+    title = models.CharField("заголовок", max_length=190)
+    title_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    excerpt = models.TextField("краткое описание")
+    excerpt_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    body = models.TextField("текст")
+    body_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    image_path = models.CharField("обложка", max_length=190, null=True, blank=True)
+    read_time = models.CharField("время чтения", max_length=20, null=True, blank=True)
+    is_published = models.BooleanField("опубликована", default=False)
+    published_at = UTCDateTimeField("дата публикации", null=True, blank=True)
+    sort = models.PositiveSmallIntegerField("порядок", default=0)
+    # Ссылка на users без модели: таблица пользователей — Laravel
+    author_id = models.BigIntegerField(null=True, blank=True, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "news_posts"
+        ordering = ("-published_at", "-sort", "-id")
+        verbose_name = "новость"
+        verbose_name_plural = "новости"
+
+    def __str__(self) -> str:
+        return self.title if self.pk else "новая новость"
+
+    def status(self, now: datetime | None = None) -> str:
+        """Три состояния, а не два: «опубликована» и «выйдет 5 августа» — разное."""
+        if not self.is_published:
+            return "draft"
+
+        if self.published_at is not None and self.published_at > (now or timezone.now()):
+            return "scheduled"
+
+        return "published"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if self._state.adding or kwargs.get("update_fields") is not None:
+            super().save(*args, **kwargs)
+            return
+
+        old = NewsPost.objects.filter(pk=self.pk).values(*_TRANSLATED, "image_path").first() or {}
+        changed = [
+            i18n for text, i18n in _TRANSLATED.items() if old.get(text) != getattr(self, text)
+        ]
+
+        for i18n in changed:
+            setattr(self, i18n, None)
+
+        own = [
+            f.attname
+            for f in self._meta.concrete_fields
+            if not f.primary_key and f.attname not in _TRANSLATED.values()
+        ]
+        super().save(*args, update_fields=[*own, *changed], **kwargs)
+
+        # Заменённая или снятая обложка — с диска, после записи
+        if old.get("image_path") and old["image_path"] != self.image_path:
+            _forget_files_later(old["image_path"])
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        cover = self.image_path
+        result = super().delete(*args, **kwargs)
+        _forget_files_later(cover)
 
         return result

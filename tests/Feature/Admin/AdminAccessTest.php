@@ -12,7 +12,6 @@ use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
 use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\LandingBlocks\LandingBlockResource;
 use App\Filament\Resources\Listings\ListingResource;
-use App\Filament\Resources\NewsPosts\NewsPostResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\Plans\PlanResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
@@ -60,7 +59,6 @@ class AdminAccessTest extends TestCase
         PlanResource::class,
         PromoCodeResource::class,
         PageResource::class,
-        NewsPostResource::class,
         LandingBlockResource::class,
         BroadcastResource::class,
     ];
@@ -88,7 +86,7 @@ class AdminAccessTest extends TestCase
                 UserResource::class, CompanyResource::class, ListingResource::class,
                 TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
                 ResumeResource::class, ReviewResource::class, Complaints::class,
-                PageResource::class, NewsPostResource::class, LandingBlockResource::class,
+                PageResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
 
@@ -125,7 +123,7 @@ class AdminAccessTest extends TestCase
             ]],
 
             'контент' => [AdminAccess::CONTENT_MANAGER, [
-                PageResource::class, NewsPostResource::class, LandingBlockResource::class,
+                PageResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
         ];

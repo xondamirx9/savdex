@@ -58,6 +58,23 @@ class UTCDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
         return value
 
 
+class LaravelJSONField(models.JSONField):
+    """
+    Столбец json (не jsonb), как его заводит Laravel.
+
+    Для jsonb Django просит драйвер отдавать текст и разбирает его сам;
+    для json драйвер psycopg разбирает значение сам, и Django разбирал
+    бы его второй раз — строка «SAVDEX» падала бы как недопустимый JSON.
+    Поэтому столбец читается текстом, а разбирает только Django.
+    """
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:  # noqa: ANN401
+        if compiler.connection.vendor == "postgresql":
+            return f"({sql})::text", params
+
+        return super().select_format(compiler, sql, params)
+
+
 class Timestamped(models.Model):
     """created_at и updated_at, которые Eloquent ставит сам."""
 
