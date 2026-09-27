@@ -100,9 +100,19 @@ class ResumeSectionTest extends TestCase
     public function поиск_и_фильтры_работают(): void
     {
         $this->resume(['title' => 'Менеджер по снабжению', 'field' => 'procurement']);
-        $this->resume(['title' => 'Водитель-экспедитор', 'field' => 'logistics', 'jobs' => []]);
+        $this->resume(['title' => 'Водитель-экспедитор', 'field' => 'logistics', 'jobs' => [], 'skills' => ['AutoCAD']]);
 
         $this->get('/resumes?q=снабжен')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('total', 1));
+
+        // Навыки — колонка json: на PostgreSQL поиск по ней падал с 500
+        // (сверка на PostgreSQL — python/tests/test_web_resumes.py)
+        // Без контактного имени карточка берёт имя учётной записи —
+        // загруженной заранее, а не по запросу на каждое резюме
+        Resume::query()->update(['contact_name' => null]);
+        $this->get('/resumes')->assertOk();
+
+        $this->get('/resumes?q=autocad')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('total', 1));
 
         $this->get('/resumes?field=logistics')

@@ -34,8 +34,10 @@ class ResumeController extends Controller
         $field = $request->string('field')->toString();
         $experience = $request->string('experience')->toString();
 
+        // user — имя на карточке, когда контактное не указано: без него
+        // по запросу на каждое резюме (а при запрете ленивой загрузки — 500)
         $resumes = Resume::query()
-            ->with(['city.translations', 'country.translations'])
+            ->with(['city.translations', 'country.translations', 'user'])
             ->published()
             ->when($query !== '', fn (Builder $q) => $q->search($query))
             ->when(in_array($field, ResumeOptions::FIELDS, true), fn (Builder $q) => $q->where('field', $field))
@@ -129,7 +131,7 @@ class ResumeController extends Controller
                 'education_levels' => ResumeOptions::educationLevels(),
             ],
             'similar' => Resume::query()
-                ->with(['city.translations', 'country.translations'])
+                ->with(['city.translations', 'country.translations', 'user'])
                 ->published()
                 ->where('id', '!=', $resume->id)
                 ->when($resume->field, fn (Builder $q, string $field) => $q->where('field', $field))

@@ -14,7 +14,7 @@ import subprocess
 
 import pytest
 
-from savdex.web.phpquery import full_path, normalize
+from savdex.web.phpquery import build_query, full_path, laravel_input, normalize
 
 from .pg_admin import КОРЕНЬ
 
@@ -64,3 +64,47 @@ def test_путь_как_в_full_url():
     assert full_path("/", "") == ""
     assert full_path("/", "b=1&a=2") == "/?a=2&b=1"
     assert full_path("/reviews/", "type=platform&page=2") == "/reviews?page=2&type=platform"
+
+
+#: Для laravel_input: пробелы Юникода, невидимые знаки, пустые, пароль
+ВВОД = [
+    *СЛУЧАИ,
+    "q=%20%20Excel%C2%A0&e=&page=%202%20",
+    "q=%E2%80%8B%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%E3%80%80",
+    "a[]=%20x&a[]=&b[c]=%09y%0A",
+    "password=%20p%20&current_password=%20&name=%20",
+    "bad=%FF%20&ok=%20%20",
+    # имена, которые parse_str самого PHP портит, а Symfony — нет
+    "a[b.c d=1&x[=2&a.b[c.d]=3&[z]=4&a]b=5&a.b[=6",
+]
+
+PHP_ВВОД = (
+    "require 'vendor/autoload.php';"
+    "use Illuminate\\Foundation\\Http\\Middleware as M;"
+    "echo json_encode(array_map(function ($q) {"
+    " $r = Illuminate\\Http\\Request::create('/x?'.$q);"
+    " (new M\\TrimStrings)->handle($r, fn ($r) => $r);"
+    " (new M\\ConvertEmptyStringsToNull)->handle($r, fn ($r) => $r);"
+    " $nulls = array_keys(array_filter($r->query(), 'is_null'));"
+    " return [Illuminate\\Support\\Arr::query($r->query()), array_map('strval', $nulls)];"
+    "}, json_decode($argv[1], true)));"
+)
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
+def test_ввод_после_trim_strings():
+    вывод = subprocess.run(
+        ["php", "-r", PHP_ВВОД, json.dumps(ВВОД)],
+        cwd=КОРЕНЬ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    expected = json.loads(вывод.stdout)
+    got = []
+
+    for q in ВВОД:
+        data = laravel_input(q)
+        got.append([build_query(data), [str(k) for k, v in data.items() if v is None]])
+
+    assert got == expected

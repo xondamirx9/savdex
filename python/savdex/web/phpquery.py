@@ -20,8 +20,9 @@ from functools import cmp_to_key
 from typing import Union
 from urllib.parse import quote_from_bytes, unquote_to_bytes
 
-#: Значение после parse_str: строка или массив PHP (ключи — int или str)
-Value = Union[str, "Array"]
+#: Значение после parse_str: строка или массив PHP (ключи — int или str);
+#: None — после ConvertEmptyStringsToNull (laravel_input)
+Value = Union[str, None, "Array"]
 Array = dict[int | str, Value]
 
 _INT_KEY = re.compile(r"^(0|-?[1-9][0-9]*)$")
@@ -99,8 +100,34 @@ def _path(name: str) -> list[str | None] | None:
     return parts
 
 
-def parse_query(qs: str) -> Array:
-    """HeaderUtils::parseQuery: пары через «&», повтор — последний."""
+_MANGLE = str.maketrans({" ": "_", ".": "_"})
+_MANGLE_TAIL = str.maketrans({" ": "_", ".": "_", "[": "_"})
+
+
+def _native_name(name: str) -> str:
+    """
+    Имя параметра, как его портит parse_str самого PHP ($_GET): в имени
+    до «[» пробел и точка становятся «_»; незакрытая первая «[» — тоже
+    «_», и в остатке ещё и «[». Symfony (parseQuery) имена не портит.
+    """
+    start = name.find("[")
+    base = (name if start < 0 else name[:start]).translate(_MANGLE)
+
+    if start < 0:
+        return base
+
+    if "]" not in name[start:]:
+        return base + "_" + name[start + 1 :].translate(_MANGLE_TAIL)
+
+    return base + name[start:]
+
+
+def parse_query(qs: str, native: bool = False) -> Array:
+    """
+    HeaderUtils::parseQuery: пары через «&», повтор — последний.
+    native=True — как parse_str самого PHP, то есть $_GET и
+    $request->query() (имена параметров портятся, см. _native_name).
+    """
     result: Array = {}
 
     for pair in qs.split("&"):
@@ -110,6 +137,9 @@ def parse_query(qs: str) -> Array:
 
         if key == "":
             continue
+
+        if native:
+            key = _native_name(key)
 
         path = _path(key)
 
@@ -160,7 +190,8 @@ def build_query(array: Array) -> str:
         if isinstance(value, dict):
             for key, child in value.items():
                 walk(f"{prefix}%5B{_encode(str(key))}%5D", child)
-        else:
+        elif value is not None:
+            # null http_build_query пропускает
             out.append(f"{prefix}={_encode(value)}")
 
     for key, value in array.items():
@@ -205,3 +236,63 @@ def php_int(value: str | None, default: int) -> int:
     number = float(match.group(1))
 
     return int(number) if math.isfinite(number) and abs(number) < 2**63 else 0
+
+
+#: Str::trim: \s с /u (Юникод), невидимые символы и trim() по умолчанию
+_INVISIBLE = (
+    "\u0009\u0020\u00a0\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u200b\u200c\u200d\u200e\u200f\u202f\u205f\u2060\u2061\u2062\u2063"
+    "\u2064\u2065\u206a\u206b\u206c\u206d\u206e\u206f\u3000\u2800\u3164"
+    "\ufeff\uffa0\U0001d159\U0001d173\U0001d174\U0001d175\U0001d176\U0001d177"
+    "\U0001d178\U0001d179\U0001d17a\U000e0020"
+)
+_STR_TRIM = re.compile(f"^[\\s{_INVISIBLE} \n\r\t\v\0]+|[\\s{_INVISIBLE} \n\r\t\v\0]+$")
+
+#: TrimStrings::$except
+_NEVER_TRIM = ("current_password", "password", "password_confirmation")
+
+
+def text(value: str) -> str:
+    """Строка PHP (байты в виде latin-1) → текст UTF-8."""
+    return value.encode("latin-1").decode("utf-8", errors="replace")
+
+
+def str_trim(value: str) -> str:
+    """
+    Str::trim без списка символов — над строкой PHP (байты в виде
+    latin-1). Не UTF-8 — preg_replace с /u отказывает, и Laravel
+    берёт обычный trim().
+    """
+    try:
+        decoded = value.encode("latin-1").decode("utf-8")
+    except UnicodeDecodeError:
+        return value.strip(" \t\n\r\0\x0b")
+
+    return _STR_TRIM.sub("", decoded).encode("utf-8").decode("latin-1")
+
+
+def laravel_input(qs: str) -> Array:
+    """
+    $request->query() после TrimStrings и ConvertEmptyStringsToNull:
+    строки обрезаны (Str::trim), пустые — null. Этот массив видят
+    контроллеры и withQueryString() постраничного вывода.
+    """
+
+    def clean(data: Array, prefix: str) -> Array:
+        out: Array = {}
+
+        for key, value in data.items():
+            name = f"{prefix}{key}"
+
+            if isinstance(value, dict):
+                out[key] = clean(value, name + ".")
+            elif isinstance(value, str):
+                trimmed = value if name in _NEVER_TRIM else str_trim(value)
+                out[key] = trimmed if trimmed != "" else None
+            else:
+                out[key] = value
+
+        return out
+
+    return clean(parse_query(qs, native=True), "")
