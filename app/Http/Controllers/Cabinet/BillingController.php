@@ -53,6 +53,7 @@ class BillingController extends Controller
                 'checkout' => false,
                 // Тариф выдаётся на компанию: без неё промокод активировать не на что
                 'promoAllowed' => false,
+                'selected' => null,
             ]);
         }
 
@@ -151,6 +152,14 @@ class BillingController extends Controller
                 ]),
 
             'requisites' => self::requisites(),
+
+            /*
+             * Тариф, выбранный на странице тарифов (?plan=business):
+             * страница сразу предлагает его оплатить. Сам заказ —
+             * по-прежнему POST из окна подтверждения: переход по ссылке
+             * не должен выставлять счёт, ссылки открывают и роботы.
+             */
+            'selected' => $request->string('plan')->toString() ?: null,
 
             // Включена ли онлайн-касса: от этого зависят подписи кнопок
             // («Оплатить» против «Выставить счёт») и кнопка оплаты на счетах
