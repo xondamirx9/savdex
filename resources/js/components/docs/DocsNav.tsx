@@ -1,4 +1,4 @@
-import { t } from "@/lib/i18n";
+import { t } from '@/lib/i18n';
 
 export interface DocsNavItem {
     key: string;
@@ -16,32 +16,20 @@ export interface DocsNavItem {
  */
 /** На самой странице «О компании» её пункты — якоря: прокрутка без перехода. */
 function localHref(href: string): string {
-    if (href === "/about") return "#about";
+    if (href === '/about') return '#about';
 
-    return href.startsWith("/about#") ? href.slice("/about".length) : href;
+    return href.startsWith('/about#') ? href.slice('/about'.length) : href;
 }
 
-export function DocsNav({
-    items,
-    active,
-    onAbout = false,
-}: {
-    items: DocsNavItem[];
-    active: string;
-    onAbout?: boolean;
-}) {
+export function DocsNav({ items, active, onAbout = false }: { items: DocsNavItem[]; active: string; onAbout?: boolean }) {
     return (
         <aside>
-            <nav
-                className="doc-nav card"
-                style={{ padding: 10 }}
-                aria-label={t("about.sections")}
-            >
+            <nav className="doc-nav card" style={{ padding: 10 }} aria-label={t('about.sections')}>
                 {items.map((item) => (
                     <a
                         key={item.key}
                         href={onAbout ? localHref(item.href) : item.href}
-                        aria-current={active === item.key ? "true" : undefined}
+                        aria-current={active === item.key ? 'true' : undefined}
                     >
                         {item.label}
                     </a>

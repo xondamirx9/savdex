@@ -162,6 +162,17 @@ class DocPagesTest extends TestCase
             ->where('nav', fn ($nav) => collect($nav)->pluck('href')->all() === ['/about', '/about#contacts', '/help', '/guide', '/rules']));
     }
 
+    /** Счётчик объявлений на «О компании» был вписан нулём, хотя сервер его считает. */
+    #[Test]
+    public function счётчик_объявлений_не_ноль_из_вёрстки(): void
+    {
+        $this->get('/about')->assertInertia(fn (AssertableInertia $page) => $page->has('stats.listings'));
+
+        $about = (string) file_get_contents(resource_path('js/pages/About.tsx'));
+        $this->assertStringContainsString('{stats.listings}', $about);
+        $this->assertStringNotContainsString('<div className="t-num">0</div>', $about);
+    }
+
     #[Test]
     public function подвал_ведёт_на_новые_адреса(): void
     {
