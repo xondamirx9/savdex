@@ -577,6 +577,7 @@ return [
         'planned_title' => 'Ishlanayotgan yo‘nalishlar',
         'planned_lead' => 'Bu mamlakatlar kompaniyalarini hozir ulayapmiz. Birinchilari paydo bo‘lishi bilan mamlakat faol bo‘ladi.',
         'planned_badge' => 'tez orada',
+        'all_companies' => 'Mamlakatdagi barcha kompaniyalar',
     ],
 
     'partners' => [

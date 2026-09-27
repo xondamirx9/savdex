@@ -202,11 +202,14 @@ class PageController extends Controller
             ->groupBy('country_id')
             ->pluck('total', 'country_id');
 
+        $showcase = $this->companiesByCountry();
+
         $countries = Country::listed()
             ->map(fn (Country $c): array => [
                 'code' => $c->code,
                 'name' => $c->name(),
                 'companies' => (int) ($companyCounts[$c->id] ?? 0),
+                'items' => $showcase[$c->id] ?? [],
             ])
             ->sortByDesc('companies')
             ->values();
@@ -220,6 +223,40 @@ class PageController extends Controller
             'countries' => $countries->filter(fn (array $c): bool => $c['companies'] > 0)->values()->all(),
             'planned' => $countries->filter(fn (array $c): bool => $c['companies'] === 0)->values()->all(),
         ]);
+    }
+
+    /**
+     * Компании под каждой страной на странице «Страны» — все до одной.
+     *
+     * Порядок тот же, что в каталоге компаний: сначала проверенные,
+     * затем по рейтингу.
+     *
+     * @return array<int, list<array<string, mixed>>> по country_id
+     */
+    private function companiesByCountry(): array
+    {
+        return Company::query()
+            ->with(['city.translations'])
+            ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->whereNotNull('country_id')
+            ->orderByDesc('verification_level')
+            ->orderByDesc('rating')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('country_id')
+            ->map(fn ($companies) => $companies->map(fn (Company $c): array => [
+                'slug' => $c->slug,
+                'name' => $c->name,
+                'type_label' => $c->typeLabel(),
+                'city' => $c->city?->name(),
+                'verification_level' => $c->verification_level,
+                'rating' => (float) $c->rating,
+                'listings_count' => (int) $c->listings_count,
+                'initials' => $c->initials(),
+                'logo' => $c->logoUrl(),
+            ])->values()->all())
+            ->all();
     }
 
     /**
