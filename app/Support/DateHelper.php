@@ -29,7 +29,11 @@ class DateHelper
         }
 
         if (app()->getLocale() !== 'ru') {
-            return $date->isoFormat('MMMM YYYY');
+            // Язык — на самой дате: месяц без числа Carbon берёт из
+            // «самостоятельных» названий, у английского, узбекского,
+            // турецкого и китайского их нет, и с общим языком сайта он
+            // брал запасной русский — «June» выходил «июнь»
+            return $date->copy()->locale(app()->getLocale())->isoFormat('MMMM YYYY');
         }
 
         return self::MONTHS_GENITIVE[$date->month].' '.$date->year;
