@@ -15,8 +15,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, нужна_база, свежая_база
-from .web_site import laravel, войти, пользователь, сверить, страница
+from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .web_site import laravel, войти, из_django, из_laravel, пользователь, сверить, страница
 
 pytestmark = нужна_база
 
@@ -121,3 +121,72 @@ def test_вошедший_исполнитель(сайт):
     д, _ = сверить(сайт, "/it-services", куки)
 
     assert страница(д["body"])["props"]["viewer"] == {"guest": False, "provider": True}
+
+
+def адрес(условие: str) -> str:
+    return str(sql(f"select slug from it_tasks where {условие} order by id limit 1")[0][0])
+
+
+def test_страница_задачи(сайт):
+    открытая = адрес("status = 'active'")
+    sql(
+        "insert into it_task_files (it_task_id, title, file_path, file_size, mime, created_at, "
+        "updated_at) select id, t, p, s, 'application/pdf', now(), now() from it_tasks, "
+        "(values ('ТЗ.PDF', 'it/a.pdf', 1536000), ('схема', 'it/b.Docx', 300), "
+        "('архив.tar.gz', 'it/c', 0)) as f(t, p, s) where slug = %s",
+        [открытая],
+    )
+
+    for prefix in ("", "/en", "/uz"):
+        сверить(сайт, f"{prefix}/it-services/{открытая}", перед=обнулить)
+
+    # Выполненная с результатом; задача заблокированной компании
+    выполненная = адрес("status = 'completed'")
+    чужая = адрес("company_id = (select max(id) from companies)")
+    сверить(сайт, f"/zh/it-services/{выполненная}", перед=обнулить)
+    сверить(сайт, f"/it-services/{чужая}", перед=обнулить)
+
+
+def обнулить() -> None:
+    """Счётчик просмотров — с нуля перед каждой стороной сверки."""
+    sql("update it_tasks set views_count = 0")
+
+
+def test_закрытая_видна_только_заказчику(сайт):
+    закрытая = адрес("status = 'closed'")
+    д, _ = сверить(сайт, f"/it-services/{закрытая}")
+    assert д["status"] == 404
+
+    пользователь("owner@savdex.uz")
+    sql(
+        "update users set company_id = (select company_id from it_tasks where slug = %s) "
+        "where email = 'owner@savdex.uz'",
+        [закрытая],
+    )
+    куки = войти(сайт, "owner@savdex.uz")
+    д, _ = сверить(сайт, f"/it-services/{закрытая}", куки, перед=обнулить)
+    assert страница(д["body"])["props"]["respond"]["owner"] is True
+    # Свой просмотр не считается
+    assert sql("select views_count from it_tasks where slug = %s", [закрытая])[0][0] == 0
+
+
+def test_нет_задачи(сайт):
+    д, _ = сверить(сайт, "/it-services/nothing")
+    assert д["status"] == 404
+
+
+def test_просмотр_администратора_в_журнале(сайт):
+    пользователь("boss@savdex.uz", is_admin=True, admin_role="superadmin")
+    куки = войти(сайт, "boss@savdex.uz")
+    slug = адрес("status = 'active'")
+    sql("delete from admin_actions")
+
+    из_laravel(сайт, f"/it-services/{slug}", куки)
+    из_django(сайт, f"/it-services/{slug}", куки)
+
+    л, д = sql(
+        "select user_name, action, section, subject_type, subject_id, subject_label, "
+        "changes::jsonb from admin_actions order by id"
+    )
+    assert л[:6] == д[:6] and л[2] == "ittasks"
+    assert д[6]["after"]["views_count"] == л[6]["after"]["views_count"] + 1

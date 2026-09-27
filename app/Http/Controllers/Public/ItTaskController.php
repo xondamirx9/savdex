@@ -124,6 +124,9 @@ class ItTaskController extends Controller
             ->where('id', '!=', $task->id)
             ->where('service_type', $task->service_type)
             ->orderByDesc('published_at')
+            // Хвост сортировки: при равной дате публикации Postgres
+            // отдавал «похожие» то в одном порядке, то в другом
+            ->orderByDesc('id')
             ->limit(3)
             ->get();
 

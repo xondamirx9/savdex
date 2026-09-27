@@ -118,6 +118,23 @@ SHARED_WRITES: dict[str, str] = {
         "выдача прав администратора (команда admin, неделя 5): у модели "
         "User нет событий, PHP-команда пишет те же поля простым save()"
     ),
+    "tenders": (
+        "счётчик просмотров закупки (этап 4): страница /tenders/<адрес> на "
+        "Django, как $tender->increment('views_count') у Laravel, — только "
+        "update views_count = views_count + 1 и updated_at; событий сохранения "
+        "(перевод, search_text) increment не вызывает, строку журнала для "
+        "администратора пишет savdex/audit.py"
+    ),
+    "resumes": (
+        "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "
+        "$resume->increment('views_count'), не владельцу; событий сохранения "
+        "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
+    ),
+    "it_tasks": (
+        "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
+        "$task->increment('views_count'), не заказчику; просмотр "
+        "администратора — строка журнала (раздел ittasks), как AuditObserver"
+    ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "

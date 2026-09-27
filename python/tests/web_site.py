@@ -17,7 +17,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 from urllib.parse import unquote
@@ -258,15 +258,57 @@ def шапка(body: str) -> list[str]:
     return cleaned
 
 
+def разница(д: Any, л: Any, путь: str = "") -> list[str]:
+    """Где расходятся два значения JSON: «путь: Django | Laravel»."""
+    числа = (int, float)
+
+    if type(д) is not type(л) and not (isinstance(д, числа) and isinstance(л, числа)):
+        return [f"{путь}: {д!r:.200} | {л!r:.200}"]
+
+    if isinstance(д, dict):
+        строки = []
+
+        for key in list(л) + [k for k in д if k not in л]:
+            if key not in д or key not in л:
+                строки.append(f"{путь}/{key}: есть у Django — {key in д}, у Laravel — {key in л}")
+            else:
+                строки += разница(д[key], л[key], f"{путь}/{key}")
+
+        return строки
+
+    if isinstance(д, list):
+        строки = [f"{путь}: длина {len(д)} | {len(л)}"] if len(д) != len(л) else []
+
+        for i, (x, y) in enumerate(zip(д, л, strict=False)):
+            строки += разница(x, y, f"{путь}[{i}]")
+
+        return строки
+
+    return [] if д == л else [f"{путь}: {д!r:.200} | {л!r:.200}"]
+
+
 def сверить(
     сайт: str,
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
+    перед: Callable[[], object] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Django, затем Laravel; статус, страница и шапка должны совпасть."""
+    """
+    Django, затем Laravel; статус, страница и шапка должны совпасть.
+
+    перед — вызывается перед каждой из сторон: страницы, которые пишут
+    (счётчик просмотров), иначе видели бы запись друг друга.
+    """
+    if перед is not None:
+        перед()
+
     д = из_django(сайт, path, cookies, headers, env)
+
+    if перед is not None:
+        перед()
+
     л = из_laravel(сайт, path, cookies, headers)
 
     assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
@@ -283,7 +325,9 @@ def сверить(
         assert стр_д.get(key) == стр_л.get(key), key
 
     for prop in стр_л["props"]:
-        assert стр_д["props"].get(prop) == стр_л["props"][prop], f"проп {prop}"
+        assert стр_д["props"].get(prop) == стр_л["props"][prop], f"проп {prop}:\n" + "\n".join(
+            разница(стр_д["props"].get(prop), стр_л["props"][prop])[:20]
+        )
 
     assert list(стр_д["props"]) == list(стр_л["props"])
     assert set(стр_д) == set(стр_л)

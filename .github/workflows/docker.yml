@@ -153,13 +153,25 @@ jobs:
             = "301 http://127.0.0.1:18080/catalog?type=tender&closed=1"
           curl -s -D /tmp/tenders.h -o /dev/null http://127.0.0.1:18080/tenders
           ! grep -qi '^x-powered-by: php' /tmp/tenders.h
-          # «Резюме», «IT-услуги» и каталог компаний — Django; страница
-          # задачи — Laravel
+          # Вкладка «Тендеры» каталога и страница закупки — Django, другие
+          # вкладки каталога — Laravel
+          curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender'
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/tenders/nothing
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=supply' | grep -qi '^x-powered-by: php'
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender&type=supply' | grep -qi '^x-powered-by: php'
+          # «Резюме», «IT-услуги» (со страницами) и каталог компаний — Django
           for page in resumes it-services companies; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/nothing | grep -qi '^x-powered-by: php'
+          for page in it-services/nothing resume/nothing; do
+            curl -s -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
+            ! grep -qi '^x-powered-by: php' /tmp/page.h
+          done
+          # Файл задачи — Laravel (проверка доступа)
+          curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/files/1 | grep -qi '^x-powered-by: php'
           # Форма «Оцените SavdEx» — Laravel (гостя уводит на вход)
           curl -s -D - -o /dev/null http://127.0.0.1:18080/reviews/new | grep -qi '^x-powered-by: php'
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)

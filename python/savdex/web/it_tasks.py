@@ -16,6 +16,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
+from savdex import audit
 from savdex.web import content, inertia, paginator, search_text
 from savdex.web.directory import _named, logo_url
 from savdex.web.home import _utc
@@ -129,7 +130,9 @@ def card(
         "contractor": _company(ctx, row, "contractor", cities)
         if completed and row["contractor_name"] is not None
         else None,
-        "company": _company(ctx, row, "company", cities),
+        "company": _company(ctx, row, "company", cities)
+        if row["company_name"] is not None
+        else None,
     }
 
 
@@ -266,6 +269,167 @@ def index(request: HttpRequest) -> HttpResponse:
             "cities": _cities(ctx.locale),
             "total": total,
             "viewer": _viewer(ctx),
+        },
+        seo,
+    )
+
+
+_SELECT = (
+    "select t.*, c.name as company_name, c.slug as company_slug, "
+    "c.logo_path as company_logo, c.verification_level as company_verification, "
+    "c.city_id as company_city, k.name as contractor_name, k.slug as contractor_slug, "
+    "k.logo_path as contractor_logo from it_tasks t "
+    "left join companies c on c.id = t.company_id and c.deleted_at is null "
+    "left join companies k on k.id = t.contractor_company_id and k.deleted_at is null"
+)
+
+
+def number_format(value: float, decimals: int) -> str:
+    """number_format($v, $d, ',', ' '): половина — от нуля."""
+    from savdex.web.home import php_round
+
+    rounded = php_round(value, decimals)
+    whole, _, fraction = f"{abs(rounded):.{decimals}f}".partition(".")
+    grouped = f"{int(whole):,}".replace(",", " ")
+    sign = "-" if rounded < 0 else ""
+
+    return sign + grouped + ("," + fraction if decimals else "")
+
+
+def size_label(size: int | None) -> str:
+    """ItTaskFile::sizeLabel."""
+    kb = (size or 0) / 1024
+
+    if kb >= 1024:
+        return number_format(kb / 1024, 1) + " МБ"
+
+    return number_format(max(1, kb), 0) + " КБ"
+
+
+def _extension(path: str) -> str:
+    """pathinfo(PATHINFO_EXTENSION): после последней точки имени файла."""
+    name = path.rstrip("/").rsplit("/", 1)[-1]
+
+    return name.rsplit(".", 1)[1] if "." in name else ""
+
+
+def extension(title: str, file_path: str) -> str:
+    """ItTaskFile::extension: по названию, иначе по пути; strtolower — только ASCII."""
+    ext = _extension(title) or _extension(file_path)
+
+    return "".join(c.lower() if c.isascii() else c for c in ext)
+
+
+def paragraphs(text_: str | None) -> list[str]:
+    """ContentTranslation::paragraphs (перевод уже подставлен): абзацы без пустых."""
+    import re
+
+    trimmed = (text_ or "").strip(" \t\n\r\0\x0b")
+
+    if trimmed == "":
+        return []
+
+    parts = re.split(r"(?:\r\n|\n|\r|\x0b|\x0c|\x85|\u2028|\u2029){2,}", trimmed)
+
+    return [p.strip(" \t\n\r\0\x0b") for p in parts if p.strip(" \t\n\r\0\x0b") != ""]
+
+
+def show(request: HttpRequest, slug: str) -> HttpResponse:
+    """ItTaskController::show; просмотр не заказчика — +1 к счётчику."""
+    from savdex.web.resumes import count_view
+    from savdex.web.tenders import _admin
+    from savdex.web.views import not_found
+
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    found = _rows(f"{_SELECT} where t.slug = %s limit 1", [slug])
+
+    if not found:
+        return not_found(ctx)
+
+    row = found[0]
+    user = ctx.user
+    viewer_company = user["company_id"] if user is not None else None
+    owner = viewer_company is not None and viewer_company == row["company_id"]
+
+    # Закрытую без результата видит только заказчик
+    if row["status"] not in ("active", "completed") and not owner:
+        return not_found(ctx)
+
+    if not owner:
+        count_view("it_tasks", row["id"])
+        before = row["views_count"]
+        row["views_count"] += 1
+        admin = _admin(ctx)
+
+        if admin is not None:
+            audit.record(
+                connection,
+                action="updated",
+                section="ittasks",
+                actor=admin,
+                subject_type="App\\Models\\ItTask",
+                subject_id=row["id"],
+                subject_label=audit.label(row, "ItTask", row["id"]),
+                changes={"before": {"views_count": before}, "after": {"views_count": before + 1}},
+                ip=audit.client_ip(ctx.request),
+            )
+
+    translations = content.Translations(ctx.locale)
+    cities = _named("cities", ctx.locale)
+
+    seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
+    seo.title(row["title"]).description(_limit(row["description"] or "", 160, "..."))
+    seo.canonical(ctx.url(f"it-services/{row['slug']}"))
+    seo.noindex = row["status"] != "active"
+
+    similar = _rows(
+        f"{_SELECT} where t.status = 'active' and t.id != %s and t.service_type = %s "
+        "order by t.published_at desc, t.id desc limit 3",
+        [row["id"], row["service_type"]],
+    )
+    files = _rows(
+        "select id, title, file_path, file_size from it_task_files where it_task_id = %s "
+        "order by id",
+        [row["id"]],
+    )
+    company = None
+
+    if viewer_company is not None:
+        found_company = _rows(
+            "select is_it_provider from companies where id = %s and deleted_at is null",
+            [viewer_company],
+        )
+        company = found_company[0] if found_company else None
+
+    return inertia.render(
+        ctx,
+        "it-tasks/Show",
+        {
+            "task": {
+                **card(ctx, row, translations, cities),
+                "description": paragraphs(translations.text(row["description"])),
+                "files": [
+                    {
+                        "id": f["id"],
+                        "title": f["title"],
+                        "size": size_label(f["file_size"]),
+                        "ext": extension(f["title"], f["file_path"]),
+                    }
+                    for f in files
+                ],
+                "views": row["views_count"],
+            },
+            "respond": {
+                "guest": user is None,
+                "owner": owner,
+                "no_company": user is not None and company is None,
+                "provider": bool(company and company["is_it_provider"]),
+            },
+            "similar": [card(ctx, t, translations, cities) for t in similar],
         },
         seo,
     )

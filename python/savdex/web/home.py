@@ -379,11 +379,11 @@ def landing_cards(translations: content.Translations) -> dict[str, Any]:
     return cards
 
 
-def banner(ctx: Context) -> dict[str, Any] | None:
-    """BannerCard::forPlacement('home')."""
+def banner(ctx: Context, placement: str = "home") -> dict[str, Any] | None:
+    """BannerCard::forPlacement: главная, каталог."""
     now = datetime.now(UTC)
     found = (
-        Banner.objects.filter(is_active=True, placement="home")
+        Banner.objects.filter(is_active=True, placement=placement)
         .exclude(starts_at__gt=now)
         .exclude(ends_at__lte=now)
         .order_by("sort", "-id")

@@ -16,7 +16,18 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
-from savdex.web import companies, directory, home, it_tasks, legal, news, pricing, resumes, reviews
+from savdex.web import (
+    companies,
+    directory,
+    home,
+    it_tasks,
+    legal,
+    news,
+    pricing,
+    resumes,
+    reviews,
+    tenders,
+)
 from savdex.web import views as web
 
 
@@ -43,8 +54,12 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?resume/(?P<slug>[^/]+)$", resumes.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services$", it_tasks.index),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<slug>[^/]+)$", it_tasks.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", tenders.catalog),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders/(?P<slug>[^/]+)$", tenders.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners),
     re_path(
