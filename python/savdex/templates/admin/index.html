@@ -27,7 +27,7 @@
         <span>Этап {{ p.stage.number }}. {{ p.stage.title }}</span>
         <span class="savdex-stage-state">
           {% if p.state == "done" %}сделан{% elif p.state == "active" %}идёт{% else %}впереди{% endif %}
-          {% if p.total %}· {{ p.done }} из {{ p.total }}{% if p.stage.commands %} команд{% endif %}{% endif %}
+          {% if p.total %}· {{ p.done }} из {{ p.total }}{% if p.stage.commands %} команд{% elif p.stage.steps %} шагов{% endif %}{% endif %}
         </span>
       </div>
       {% if p.total %}

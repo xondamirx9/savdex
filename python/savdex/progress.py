@@ -48,6 +48,10 @@ class Stage:
     #: или переезжают позже — с причиной
     kept: dict[str, str] = field(default_factory=dict)
     note: str = ""
+    #: Этап без своих таблиц (3) считается по шагам: названия и сколько
+    #: из них сделано
+    steps: tuple[str, ...] = ()
+    steps_done: int = 0
 
 
 STAGES: tuple[Stage, ...] = (
@@ -97,8 +101,14 @@ STAGES: tuple[Stage, ...] = (
     Stage(
         3,
         "Публичные страницы, только чтение",
-        note="Своих таблиц нет: сначала Django учится читать сессию Laravel "
-        "(кто вошёл), потом отдаёт страницы сайта.",
+        note="Своих таблиц нет — считается по шагам. Django уже узнаёт, кто "
+        "вошёл на сайте (проверка — /py/whoami); дальше первые страницы сайта.",
+        steps=(
+            "Django узнаёт, кто вошёл на сайте",
+            "Первая страница сайта отдаётся Django",
+            "Остальные страницы только для чтения",
+        ),
+        steps_done=1,
     ),
     Stage(
         4,
@@ -211,6 +221,8 @@ def stage_progress(owned: frozenset[str] = OWNED_TABLES) -> list[StageProgress]:
     for stage in STAGES:
         if stage.commands:
             done = total = len(stage.commands)
+        elif stage.steps:
+            done, total = stage.steps_done, len(stage.steps)
         else:
             planned = [t for t in stage.tables if t not in stage.kept]
             done, total = sum(t in owned for t in planned), len(planned)

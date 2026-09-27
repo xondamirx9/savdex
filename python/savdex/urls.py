@@ -15,7 +15,7 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 
-from savdex import adminpanel, adminsite
+from savdex import adminpanel, adminsite, visitor
 
 
 def up(request: HttpRequest) -> HttpResponse:
@@ -30,4 +30,6 @@ urlpatterns = [
     path("py/login", adminpanel.login),
     path("py/logout", adminpanel.logout),
     path("py/admin/", adminsite.site.urls),
+    # Кто вошёл на сайт — по сессии Laravel (этап 3, savdex/visitor.py)
+    path("py/whoami", visitor.whoami),
 ]
