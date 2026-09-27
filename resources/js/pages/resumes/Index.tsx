@@ -2,12 +2,14 @@ import { router } from '@inertiajs/react';
 import { Users } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from '@/components/ui/Link';
+import { BoardFilter } from '@/components/BoardFilter';
 import { ResumeCard, type ResumeRow } from '@/components/ResumeCard';
 import { SelectField } from '@/components/SelectField';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
+import { openServiceSection, RESUMES_OPTION, serviceFilterOptions, type ServiceSection } from '@/lib/serviceSections';
 
 interface Props {
     resumes: {
@@ -30,16 +32,21 @@ interface Props {
     };
     cities: { id: number; name: string }[];
     total: number;
+    /** Направления «Доп. услуг» — резюме стоит внутри HR-услуг */
+    types: ServiceSection[];
 }
 
 /**
  * Раздел «Резюме»: кого можно нанять.
  *
+ * Живёт внутри «Доп. услуг», пунктом HR-услуг: слева та же панель
+ * направлений, что и в ленте задач, с выбранным «Резюме».
+ *
  * Бесплатный с обеих сторон — ни соискатель не платит за публикацию,
  * ни компания за просмотр. Контакты открыты вошедшим: отдавать
  * телефон живого человека анониму площадка не будет.
  */
-export default function ResumesIndex({ resumes, filters, options, cities, total }: Props) {
+export default function ResumesIndex({ resumes, filters, options, cities, total, types }: Props) {
     const [q, setQ] = useState(filters.q);
 
     function apply(next: Partial<Props['filters']>) {
@@ -66,113 +73,126 @@ export default function ResumesIndex({ resumes, filters, options, cities, total 
                     <p className="t-body muted">{t('resume.lead')}</p>
                 </div>
 
-                <div className="toolbar">
-                    <div className="board-search">
-                        <label htmlFor="resume-q" className="sr-only">{t('resume.search_label')}</label>
-                        <input
-                            id="resume-q"
-                            className="input"
-                            type="search"
-                            placeholder={t('resume.search_placeholder')}
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
-                        />
-                    </div>
-                </div>
-
-                <div className="row wrap" style={{ gap: 8, margin: '16px 0' }}>
-                    <SelectField
-                        className="select-field--auto"
-                        ariaLabel={t('resume.field')}
-                        placeholder={t('resume.field_any')}
-                        value={filters.field ?? ''}
-                        onChange={(v) => apply({ field: v === '' ? null : v })}
-                        options={Object.entries(options.fields).map(([value, label]) => ({ value, label }))}
+                <div className="board-layout">
+                    <BoardFilter
+                        title={t('it_tasks.filters')}
+                        value={RESUMES_OPTION}
+                        onPick={(id) =>
+                            openServiceSection(id, (type) => router.get(routes.itTasks, type === '' ? {} : { type }))
+                        }
+                        options={serviceFilterOptions(types)}
                     />
 
-                    <SelectField
-                        className="select-field--auto"
-                        ariaLabel={t('resume.experience_filter')}
-                        placeholder={t('resume.experience_any')}
-                        value={filters.experience ?? ''}
-                        onChange={(v) => apply({ experience: v === '' ? null : v })}
-                        options={Object.entries(options.experience).map(([value, label]) => ({ value, label }))}
-                    />
-
-                    <SelectField
-                        className="select-field--auto"
-                        ariaLabel={t('resume.employment_filter')}
-                        placeholder={t('resume.employment_any')}
-                        value={filters.employment ?? ''}
-                        onChange={(v) => apply({ employment: v === '' ? null : v })}
-                        options={Object.entries(options.employment).map(([value, label]) => ({ value, label }))}
-                    />
-
-                    {cities.length > 0 && (
-                        <SelectField
-                            className="select-field--auto"
-                            ariaLabel={t('resume.city')}
-                            placeholder={t('resume.city_any')}
-                            value={filters.city === null ? '' : String(filters.city)}
-                            onChange={(v) => apply({ city: v === '' ? null : Number(v) })}
-                            options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
-                        />
-                    )}
-
-                    {hasFilters && (
-                        <button
-                            type="button"
-                            className="chip"
-                            onClick={() => router.get(routes.resumes, filters.q ? { q: filters.q } : {})}
-                        >
-                            {t('resume.reset')}
-                        </button>
-                    )}
-
-                    <span className="t-sm muted board-count">{tChoice('resume.found', total)}</span>
-                </div>
-
-                {resumes.data.length === 0 ? (
-                    <div className="card empty">
-                        <div className="empty-icon">
-                            <Users aria-hidden className="size-7" />
+                    <div className="board-main">
+                        <div className="toolbar">
+                            <div className="board-search">
+                                <label htmlFor="resume-q" className="sr-only">{t('resume.search_label')}</label>
+                                <input
+                                    id="resume-q"
+                                    className="input"
+                                    type="search"
+                                    placeholder={t('resume.search_placeholder')}
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
+                                />
+                            </div>
                         </div>
-                        <p className="t-h4">{t('resume.empty_title')}</p>
-                        <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
-                            {t('resume.empty_text')}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="grid grid-3" data-reveal-stagger>
-                        {resumes.data.map((row) => (
-                            <ResumeCard key={row.id} row={row} fields={options.fields} />
-                        ))}
-                    </div>
-                )}
 
-                {resumes.last_page > 1 && (
-                    <nav className="pagination mt-32" aria-label={t('resume.pages')}>
-                        {resumes.links.map((link, i) =>
-                            link.url ? (
-                                <Link
-                                    key={i}
-                                    href={link.url}
-                                    className={cn('page-link', link.active && 'is-active')}
-                                    aria-current={link.active ? 'page' : undefined}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                        <div className="row wrap" style={{ gap: 8, margin: '16px 0' }}>
+                            <SelectField
+                                className="select-field--auto"
+                                ariaLabel={t('resume.field')}
+                                placeholder={t('resume.field_any')}
+                                value={filters.field ?? ''}
+                                onChange={(v) => apply({ field: v === '' ? null : v })}
+                                options={Object.entries(options.fields).map(([value, label]) => ({ value, label }))}
+                            />
+
+                            <SelectField
+                                className="select-field--auto"
+                                ariaLabel={t('resume.experience_filter')}
+                                placeholder={t('resume.experience_any')}
+                                value={filters.experience ?? ''}
+                                onChange={(v) => apply({ experience: v === '' ? null : v })}
+                                options={Object.entries(options.experience).map(([value, label]) => ({ value, label }))}
+                            />
+
+                            <SelectField
+                                className="select-field--auto"
+                                ariaLabel={t('resume.employment_filter')}
+                                placeholder={t('resume.employment_any')}
+                                value={filters.employment ?? ''}
+                                onChange={(v) => apply({ employment: v === '' ? null : v })}
+                                options={Object.entries(options.employment).map(([value, label]) => ({ value, label }))}
+                            />
+
+                            {cities.length > 0 && (
+                                <SelectField
+                                    className="select-field--auto"
+                                    ariaLabel={t('resume.city')}
+                                    placeholder={t('resume.city_any')}
+                                    value={filters.city === null ? '' : String(filters.city)}
+                                    onChange={(v) => apply({ city: v === '' ? null : Number(v) })}
+                                    options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
                                 />
-                            ) : (
-                                <span
-                                    key={i}
-                                    className="page-link is-disabled"
-                                    aria-disabled="true"
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
-                            ),
+                            )}
+
+                            {hasFilters && (
+                                <button
+                                    type="button"
+                                    className="chip"
+                                    onClick={() => router.get(routes.resumes, filters.q ? { q: filters.q } : {})}
+                                >
+                                    {t('resume.reset')}
+                                </button>
+                            )}
+
+                            <span className="t-sm muted board-count">{tChoice('resume.found', total)}</span>
+                        </div>
+
+                        {resumes.data.length === 0 ? (
+                            <div className="card empty">
+                                <div className="empty-icon">
+                                    <Users aria-hidden className="size-7" />
+                                </div>
+                                <p className="t-h4">{t('resume.empty_title')}</p>
+                                <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
+                                    {t('resume.empty_text')}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-3" data-reveal-stagger>
+                                {resumes.data.map((row) => (
+                                    <ResumeCard key={row.id} row={row} fields={options.fields} />
+                                ))}
+                            </div>
                         )}
-                    </nav>
-                )}
+
+                        {resumes.last_page > 1 && (
+                            <nav className="pagination mt-32" aria-label={t('resume.pages')}>
+                                {resumes.links.map((link, i) =>
+                                    link.url ? (
+                                        <Link
+                                            key={i}
+                                            href={link.url}
+                                            className={cn('page-link', link.active && 'is-active')}
+                                            aria-current={link.active ? 'page' : undefined}
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
+                                    ) : (
+                                        <span
+                                            key={i}
+                                            className="page-link is-disabled"
+                                            aria-disabled="true"
+                                            dangerouslySetInnerHTML={{ __html: link.label }}
+                                        />
+                                    ),
+                                )}
+                            </nav>
+                        )}
+                    </div>
+                </div>
             </div>
         </PublicLayout>
     );

@@ -878,6 +878,7 @@ return [
         'done_empty_text' => 'Bu yerda natijaga havola bilan topshirilgan loyihalar paydo bo‘ladi — bo‘lim portfoliosi',
         'types' => [
             'it' => 'IT xizmatlar',
+            'hr_services' => 'HR xizmatlar',
             'web' => 'Saytlar va veb-ilovalar',
             'mobile' => 'Mobil ilovalar',
             'erp' => '1C, hisob va ERP',

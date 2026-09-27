@@ -78,6 +78,25 @@ class ResumeSectionTest extends TestCase
     }
 
     #[Test]
+    public function резюме_стоит_внутри_hr_услуг(): void
+    {
+        // Панель направлений та же, что в «Доп. услугах»: HR-услуги
+        // идут сразу за IT, «Подбор персонала» — внутри них
+        $this->get('/resumes')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('types.0.code', 'it')
+                ->where('types.1.code', 'hr_services')
+                ->where('types.1.children.0.code', 'hr'));
+
+        $this->get('/it-services?type=hr_services')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('filters.type', 'hr_services')
+                ->where('types.1.code', 'hr_services'));
+    }
+
+    #[Test]
     public function поиск_и_фильтры_работают(): void
     {
         $this->resume(['title' => 'Менеджер по снабжению', 'field' => 'procurement']);

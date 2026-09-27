@@ -87,7 +87,7 @@ class ItTaskController extends Controller
                 'verified' => $verified,
                 'with_budget' => $withBudget,
             ],
-            'types' => $this->types(),
+            'types' => ItTask::sectionTree(),
             'cities' => $this->cities(),
             'total' => $tasks->total(),
             'viewer' => $this->viewer($request),
@@ -211,24 +211,6 @@ class ItTaskController extends Controller
                 'city' => $task->company->city?->name(),
             ],
         ];
-    }
-
-    /** @return list<array{code: string, label: string}> */
-    /**
-     * Дерево направлений для панели фильтра.
-     *
-     * @return list<array{code: string, label: string, children: list<array{code: string, label: string}>}>
-     */
-    private function types(): array
-    {
-        return array_map(fn (string $code): array => [
-            'code' => $code,
-            'label' => __('ui.it_tasks.types.'.$code),
-            'children' => array_map(fn (string $child): array => [
-                'code' => $child,
-                'label' => __('ui.it_tasks.types.'.$child),
-            ], ItTask::SERVICE_SECTIONS[$code]),
-        ], array_keys(ItTask::SERVICE_SECTIONS));
     }
 
     /**
