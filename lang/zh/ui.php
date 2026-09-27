@@ -211,7 +211,7 @@ return [
         'rules' => '发布规则',
         'pricing' => '价格',
         'products' => '产品',
-        'rfq' => '询价 (RFQ)',
+        'rfq' => '询价',
         'tenders' => '招标',
         'resumes' => '简历',
         'it_services' => '附加服务',
