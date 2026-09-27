@@ -875,6 +875,7 @@ return [
         'done_empty_text' => 'Delivered projects with links to the result will appear here — the section’s portfolio',
         'types' => [
             'it' => 'IT services',
+            'hr_services' => 'HR services',
             'web' => 'Websites and web apps',
             'mobile' => 'Mobile apps',
             'erp' => '1C, accounting and ERP',

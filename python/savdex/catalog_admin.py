@@ -21,7 +21,7 @@ from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
 
 from savdex.adminsite import SavdexModelAdmin
-from savdex.catalog import LOCALES, Catalog
+from savdex.catalog import LOCALES, Catalog, Guarded
 
 
 class TranslationsFormSet(forms.BaseInlineFormSet):  # type: ignore[type-arg]
@@ -69,8 +69,8 @@ class TranslationsInline(admin.TabularInline):  # type: ignore[type-arg]
         return self._parent_perm(request, "change" if obj else "add")
 
 
-class CatalogAdmin(SavdexModelAdmin):
-    """Раздел справочника: записи с названиями и запретом удаления при ссылках."""
+class GuardedAdmin(SavdexModelAdmin):
+    """Раздел записей, которые не удаляются, пока на них ссылаются."""
 
     #: Какие ссылки считать в списке: имя аннотации → подпись Reference
     COUNTED: ClassVar[dict[str, str]] = {}
@@ -80,24 +80,57 @@ class CatalogAdmin(SavdexModelAdmin):
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
         """
-        Названия, их число и счётчики ссылок — одним запросом на страницу.
+        Счётчики ссылок — одним запросом на страницу.
 
         Через references() каждой записи список из 50 городов стоил бы
         300 запросов.
         """
-        queryset: QuerySet[Any] = super().get_queryset(request)
-        model: type[Catalog] = self.model
+        # Как ModelAdmin.get_queryset, но порядок — после подсчётов и
+        # annotate(): раздел может сортировать по вычисленному (дерево
+        # категорий), а order_by по ещё не объявленному полю — ошибка
+        model: type[Guarded] = self.model
+        queryset = self.annotate(model._default_manager.get_queryset())
         refs = {ref.label: ref for ref in model.REFERENCES}
         counted = {
             name: RawSQL(refs[label].subquery(model._meta.db_table), ())
             for name, label in self.COUNTED.items()
         }
 
-        annotated: QuerySet[Any] = queryset.prefetch_related("translations").annotate(
-            _translations=Count("translations", distinct=True), **counted
+        annotated: QuerySet[Any] = self.enrich(queryset.annotate(**counted))
+        ordering = self.get_ordering(request)
+
+        return annotated.order_by(*ordering) if ordering else annotated
+
+    def annotate(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        """Что разделу нужно в списке сверх счётчиков."""
+        return queryset
+
+    def enrich(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        """Общее для семейства разделов (у справочников — названия)."""
+        return queryset
+
+    @admin.display(description="Можно ли удалить")
+    def held(self, obj: Guarded | None) -> str:
+        return "—" if obj is None or obj.pk is None else obj.held()
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
+        """Запись, на которую ссылаются, не удаляется, — её выключают."""
+        if not super().has_delete_permission(request, obj):
+            return False
+
+        return obj is None or not obj.references()
+
+
+class CatalogAdmin(GuardedAdmin):
+    """Раздел справочника: записи с названиями и запретом удаления при ссылках."""
+
+    def enrich(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        """Названия и их число — тоже одним запросом на страницу."""
+        with_names: QuerySet[Any] = queryset.prefetch_related("translations").annotate(
+            _translations=Count("translations", distinct=True)
         )
 
-        return annotated
+        return with_names
 
     def get_search_results(
         self, request: HttpRequest, queryset: QuerySet[Any], search_term: str
@@ -118,17 +151,6 @@ class CatalogAdmin(SavdexModelAdmin):
         count = getattr(obj, "_translations", 0)
 
         return f"{count} из {len(LOCALES)}" + ("" if count >= len(LOCALES) else " ⚠")
-
-    @admin.display(description="Можно ли удалить")
-    def held(self, obj: Catalog | None) -> str:
-        return "—" if obj is None or obj.pk is None else obj.held()
-
-    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
-        """Запись, на которую ссылаются, не удаляется, — её выключают."""
-        if not super().has_delete_permission(request, obj):
-            return False
-
-        return obj is None or not obj.references()
 
     def snapshot(self, obj: Any) -> dict[str, Any]:  # noqa: ANN401
         """Поля записи и её названия: переименование — тоже правка записи."""

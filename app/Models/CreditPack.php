@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\RefusesDeletionWhenReferenced;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,13 +17,33 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Цена, как у тарифов, в долларах с пересчётом по курсу ЦБ. Поле
  * в сумах перекрывает расчёт, когда витринную цену зафиксировали.
+ *
+ * С этапа 2 переноса пакеты правятся в разделе на Python
+ * (python/savdex/billing/), здесь остались правила модели.
  */
 #[Fillable(['code', 'name', 'credits', 'price_usd', 'price_uzs', 'sort', 'is_active'])]
 class CreditPack extends Model
 {
+    use RefusesDeletionWhenReferenced;
+
     protected function casts(): array
     {
         return ['price_usd' => 'decimal:2', 'is_active' => 'boolean'];
+    }
+
+    /**
+     * Что удерживает пакет от удаления — выставленные на него счета.
+     *
+     * Кредиты при оплате начисляются по пакету (OrderService::grantCredits):
+     * удалённый пакет обнулился бы у счёта, и оплаченный после этого счёт
+     * не начислил бы ни одного кредита. В Filament удаление было доступно
+     * со страницы правки.
+     *
+     * @return array<string, int>
+     */
+    public function references(): array
+    {
+        return array_filter(['счета' => Payment::query()->where('credit_pack_id', $this->id)->count()]);
     }
 
     /** Цена в сумах: зафиксированная либо пересчитанная по курсу. */

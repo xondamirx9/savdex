@@ -874,6 +874,7 @@ return [
         'done_empty_text' => '已交付并附有成果链接的项目将显示在这里，作为本栏目的作品集',
         'types' => [
             'it' => 'IT服务',
+            'hr_services' => '人力资源服务',
             'web' => '网站与网页应用',
             'mobile' => '移动应用',
             'erp' => '1C、核算与ERP',

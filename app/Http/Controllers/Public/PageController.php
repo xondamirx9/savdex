@@ -16,6 +16,7 @@ use App\Models\Review;
 use App\Models\Setting;
 use App\Support\Appearance;
 use App\Support\BannerCard;
+use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
@@ -477,7 +478,7 @@ class PageController extends Controller
                 'author' => $r->authorCompany->name,
                 'initials' => $r->authorCompany->initials(),
                 'rating' => (int) $r->rating,
-                'body' => $r->body,
+                'body' => ContentTranslation::text($r->body),
                 'when' => $r->created_at->translatedFormat('d.m.Y'),
                 'company_name' => $r->company->name,
                 'company_slug' => $r->company->slug,

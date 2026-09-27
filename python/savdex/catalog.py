@@ -93,19 +93,15 @@ class Reference:
         )
 
 
-class Catalog(Timestamped):
+class Guarded(Timestamped):
     """
-    Запись справочника с названиями на языках.
+    Запись, которая не удаляется, пока на неё ссылаются.
 
-    Наследник объявляет REFERENCES, NAME_FALLBACK, HELD_AS и INSTEAD, а связь
-    с переводами называет related_name="translations".
+    Наследник объявляет REFERENCES, HELD_AS и INSTEAD.
     """
 
     #: Кто удерживает запись от удаления
     REFERENCES: ClassVar[tuple[Reference, ...]] = ()
-
-    #: Поле, которое показывается, если названия нет ни на одном языке
-    NAME_FALLBACK: ClassVar[str] = "id"
 
     #: «на страну», «на город» — для отказа в удалении
     HELD_AS: ClassVar[str] = "на запись"
@@ -115,12 +111,6 @@ class Catalog(Timestamped):
 
     class Meta:
         abstract = True
-
-    def name(self, locale: str = "ru") -> str:
-        """name(): название на языке, с откатом на русский и на код."""
-        names = {t.locale: t.name for t in self.translations.all()}  # type: ignore[attr-defined]
-
-        return names.get(locale) or names.get("ru") or str(getattr(self, self.NAME_FALLBACK))
 
     def references(self) -> dict[str, int]:
         """references(): кто ссылается на запись; пусто — удалять можно."""
@@ -155,6 +145,27 @@ class Catalog(Timestamped):
             raise RecordIsReferencedError(f"Удалить нельзя, {self.HELD_AS} ссылаются: {parts}.")
 
         return super().delete(*args, **kwargs)
+
+
+class Catalog(Guarded):
+    """
+    Запись справочника с названиями на языках.
+
+    Сверх Guarded наследник объявляет NAME_FALLBACK, а связь с
+    переводами называет related_name="translations".
+    """
+
+    #: Поле, которое показывается, если названия нет ни на одном языке
+    NAME_FALLBACK: ClassVar[str] = "id"
+
+    class Meta:
+        abstract = True
+
+    def name(self, locale: str = "ru") -> str:
+        """name(): название на языке, с откатом на русский и на код."""
+        names = {t.locale: t.name for t in self.translations.all()}  # type: ignore[attr-defined]
+
+        return names.get(locale) or names.get("ru") or str(getattr(self, self.NAME_FALLBACK))
 
 
 class Translation(Timestamped):

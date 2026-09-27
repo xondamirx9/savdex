@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\ContentTranslation;
 use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -332,15 +333,17 @@ class Company extends Model
             'tin' => $this->tin,
             'type' => $this->type,
             'type_label' => $this->typeLabel(),
-            'custom_category' => $this->custom_category,
+            // Свободный текст компании — на языке посетителя, пока
+            // перевода нет — как написан (ContentTranslation)
+            'custom_category' => ContentTranslation::text($this->custom_category),
             'country' => $this->country?->name(),
             'city' => $this->city?->name(),
             'address' => $this->address,
             'coords' => $this->lat && $this->lng ? ['lat' => (float) $this->lat, 'lng' => (float) $this->lng] : null,
-            'description' => $this->description,
+            'description' => ContentTranslation::text($this->description),
             // Пометка об источнике данных: заполняется для карточек,
             // заведённых площадкой; правится в админке
-            'source_note' => $this->source_note,
+            'source_note' => ContentTranslation::text($this->source_note),
             'website' => $this->websiteUrl(),
             'founded_year' => $this->founded_year,
             'employees_range' => $this->employees_range,

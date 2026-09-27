@@ -68,7 +68,8 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/adminsite.py` | Админка Django без своих таблиц: права, журнал, заголовки |
 | `savdex/audit.py` | Журнал действий — копия AdminLog, пишет в общий `admin_actions` |
 | `savdex/geo/` | Страны и города — первые таблицы, которыми владеет Django |
-| `savdex/catalogs/` | Типы компаний — и дальше остальные справочники |
+| `savdex/catalogs/` | Типы компаний и категории — и дальше остальные справочники |
+| `savdex/billing/` | Пакеты контактов — и дальше тарифы и промокоды |
 | `savdex/catalog.py`, `savdex/catalog_admin.py` | Общее у справочников: названия на языках, запрет удаления при ссылках, раздел админки |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |

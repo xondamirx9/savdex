@@ -875,6 +875,7 @@ return [
         'done_empty_text' => 'Sonuca bağlantılı teslim edilmiş projeler burada görünecek — bölümün portföyü',
         'types' => [
             'it' => 'BT hizmetleri',
+            'hr_services' => 'İK hizmetleri',
             'web' => 'Web siteleri ve web uygulamaları',
             'mobile' => 'Mobil uygulamalar',
             'erp' => '1C, muhasebe ve ERP',

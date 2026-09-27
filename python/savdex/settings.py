@@ -133,6 +133,7 @@ INSTALLED_APPS = [
     "savdex.apps.SavdexConfig",
     "savdex.geo.apps.GeoConfig",
     "savdex.catalogs.apps.CatalogsConfig",
+    "savdex.billing.apps.BillingConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

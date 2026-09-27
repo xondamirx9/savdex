@@ -9,6 +9,7 @@ import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { getLocale } from '@/lib/locale';
+import { openServiceSection, serviceFilterOptions, type ServiceSection } from '@/lib/serviceSections';
 import { routes } from '@/routes';
 
 export interface TaskRow {
@@ -58,8 +59,8 @@ interface Props {
         verified: boolean;
         with_budget: boolean;
     };
-    /** Направления услуг: у IT есть виды внутри, у остальных — нет */
-    types: { code: string; label: string; children: { code: string; label: string }[] }[];
+    /** Направления услуг: у IT и HR есть виды внутри, у остальных — нет */
+    types: ServiceSection[];
     /** Только города, где задачи действительно есть */
     cities: { id: number; name: string }[];
     total: number;
@@ -212,15 +213,8 @@ export default function ItTasksIndex({ tasks, filters, types, cities, total, vie
                     <BoardFilter
                         title={t('it_tasks.filters')}
                         value={filters.type}
-                        onPick={(type) => apply({ type })}
-                        options={[
-                            { id: '', label: t('it_tasks.all_types') },
-                            ...types.map((type) => ({
-                                id: type.code,
-                                label: type.label,
-                                children: type.children.map((child) => ({ id: child.code, label: child.label })),
-                            })),
-                        ]}
+                        onPick={(id) => openServiceSection(id, (type) => apply({ type }))}
+                        options={serviceFilterOptions(types)}
                     >
                         {cities.length > 0 && (
                             <div className="board-group">

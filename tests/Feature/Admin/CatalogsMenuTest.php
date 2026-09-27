@@ -12,19 +12,22 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Пункт меню «Типы компаний».
+ * Пункты меню «Категории» и «Типы компаний».
  *
- * Раздел с этапа 2 переноса работает на Python
+ * Разделы с этапа 2 переноса работают на Python
  * (python/savdex/catalogs/admin.py, проверки —
- * python/tests/test_company_types_admin.py). Из Filament туда ведёт
- * пункт меню через пропуск, и видеть его должны те же роли, что
- * видели прежний раздел, — у кого есть справочники.
+ * python/tests/test_categories_admin.py и test_company_types_admin.py).
+ * Из Filament туда ведут пункты меню через пропуск, и видеть их должны
+ * те же роли, что видели прежние разделы, — у кого есть справочники.
  */
-class CompanyTypesMenuTest extends TestCase
+class CatalogsMenuTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const LINK = '/admin/python?next=/py/admin/catalogs/companytype/';
+    private const LINKS = [
+        '/admin/python?next=/py/admin/catalogs/category/',
+        '/admin/python?next=/py/admin/catalogs/companytype/',
+    ];
 
     /** @return array<string, array{string, bool}> */
     public static function роли(): array
@@ -42,7 +45,7 @@ class CompanyTypesMenuTest extends TestCase
 
     #[Test]
     #[DataProvider('роли')]
-    public function пункт_видят_роли_со_справочниками(string $role, bool $sees): void
+    public function пункты_видят_роли_со_справочниками(string $role, bool $sees): void
     {
         $this->actingAs(User::factory()->create([
             'is_admin' => true,
@@ -52,8 +55,10 @@ class CompanyTypesMenuTest extends TestCase
 
         $response = $this->get('/admin');
 
-        $sees
-            ? $response->assertSee(self::LINK, false)
-            : $response->assertDontSee(self::LINK, false);
+        foreach (self::LINKS as $link) {
+            $sees
+                ? $response->assertSee($link, false)
+                : $response->assertDontSee($link, false);
+        }
     }
 }

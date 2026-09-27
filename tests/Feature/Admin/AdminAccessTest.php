@@ -7,10 +7,8 @@ namespace Tests\Feature\Admin;
 use App\Filament\Pages\Complaints;
 use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Broadcasts\BroadcastResource;
-use App\Filament\Resources\Categories\CategoryResource;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
-use App\Filament\Resources\CreditPacks\CreditPackResource;
 use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\LandingBlocks\LandingBlockResource;
 use App\Filament\Resources\Listings\ListingResource;
@@ -62,8 +60,6 @@ class AdminAccessTest extends TestCase
         SubscriptionResource::class,
         PlanResource::class,
         PromoCodeResource::class,
-        CreditPackResource::class,
-        CategoryResource::class,
         PageResource::class,
         NewsPostResource::class,
         LandingBlockResource::class,
@@ -94,7 +90,6 @@ class AdminAccessTest extends TestCase
                 UserResource::class, CompanyResource::class, ListingResource::class,
                 TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
                 ResumeResource::class, ReviewResource::class, Complaints::class,
-                CategoryResource::class,
                 PageResource::class, NewsPostResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
@@ -118,12 +113,11 @@ class AdminAccessTest extends TestCase
                 CompanyResource::class, ListingResource::class, TenderResource::class,
                 ItTaskResource::class, CompanyDocumentResource::class,
                 ResumeResource::class, ReviewResource::class, Complaints::class,
-                CategoryResource::class,
             ]],
 
             'финансы' => [AdminAccess::FINANCE, [
                 CompanyResource::class, Invoices::class, SubscriptionResource::class,
-                PlanResource::class, PromoCodeResource::class, CreditPackResource::class,
+                PlanResource::class, PromoCodeResource::class,
             ]],
 
             'поддержка' => [AdminAccess::SUPPORT, [
@@ -133,7 +127,6 @@ class AdminAccessTest extends TestCase
             ]],
 
             'контент' => [AdminAccess::CONTENT_MANAGER, [
-                CategoryResource::class,
                 PageResource::class, NewsPostResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
