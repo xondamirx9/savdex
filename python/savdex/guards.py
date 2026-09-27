@@ -67,6 +67,9 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # только сидер
         "categories",
         "category_translations",
+        # Этап 2: пакеты контактов. Запрет удаления пакета со счетами
+        # (в Filament его не было, хотя комментарий обещал)
+        "credit_packs",
     }
 )
 
