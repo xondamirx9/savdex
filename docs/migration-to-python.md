@@ -232,7 +232,7 @@ Django перейдёт в хозяева схемы на последнем э�
 
 ## 6. Карта таблиц: кто хозяин на каждом этапе
 
-74 таблицы. «Хозяин» — сторона, которой разрешена запись. До своего
+78 таблиц. «Хозяин» — сторона, которой разрешена запись. До своего
 этапа таблица принадлежит Laravel, Django её только читает.
 
 ### Общие, хозяин не меняется никогда
@@ -242,6 +242,15 @@ Django перейдёт в хозяева схемы на последнем э�
 механизмы; таблицы Laravel остаются за Laravel до самого конца.
 
 `sessions` (1) — **особый случай**, см. этап 3.
+
+`migrations` — журнал миграций Laravel; `content_translations` — очередь
+машинного перевода: ставят в неё страницы, переводит задача Laravel
+`translations:fill` (2).
+
+Карта в коде — `python/savdex/progress.py`: по ней главная админки на
+Python показывает ход переноса, а `tests/test_progress_schema.py`
+сверяет её с настоящей схемой базы — новая таблица без места в карте
+роняет проверку.
 
 ### Этап 2 — справочники и содержимое (21 таблица)
 
@@ -269,11 +278,11 @@ Django перейдёт в хозяева схемы на последнем э�
 Самая нагруженная часть сайта и самые сложные правила
 (`Listing`, `Tender`, `ItTask`, `Resume` — все с событиями).
 
-### Этап 5 — кабинет (17 таблиц)
+### Этап 5 — кабинет (19 таблиц)
 
 `users`, `login_attempts`, `companies`, `company_attributes`,
 `company_category`, `company_contacts`, `company_documents`,
-`company_invitations`, `reviews`, `contact_unlocks`, `audience_views`,
+`company_invitations`, `company_sites`, `company_site_products`, `reviews`, `contact_unlocks`, `audience_views`,
 `message_threads`, `messages`, `notifications`, `user_notifications`,
 `notification_preferences`, `broadcasts`.
 

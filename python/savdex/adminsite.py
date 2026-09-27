@@ -26,6 +26,7 @@ from django.contrib import admin, messages
 from django.contrib.admin import options
 from django.db import connections, models
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.urls import URLPattern, URLResolver
 
 from savdex import access, audit, bridge
@@ -165,6 +166,12 @@ class SavdexAdminSite(admin.AdminSite):
             for u in super().get_urls()
             if getattr(u, "name", None) not in {"password_change", "password_change_done"}
         ]
+
+    def index(self, request: HttpRequest, extra_context: Any = None) -> TemplateResponse:  # noqa: ANN401
+        """Главная: разделы и ход переноса (savdex/progress.py)."""
+        from savdex import progress
+
+        return super().index(request, {"progress": progress.summary(), **(extra_context or {})})
 
     def each_context(self, request: HttpRequest) -> dict[str, Any]:
         context = super().each_context(request)
