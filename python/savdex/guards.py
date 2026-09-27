@@ -57,6 +57,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # больше не перезаписывает)
         "cities",
         "city_translations",
+        # Этап 2: типы компаний. Запрет удаления используемого типа
+        # перенесён из кнопки Filament в модель (обе половины)
+        "company_types",
+        "company_type_translations",
     }
 )
 
