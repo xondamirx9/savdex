@@ -90,6 +90,60 @@ class PromoCodeService
     }
 
     /**
+     * Проверить код, ничего не погашая, — для страницы тарифов.
+     *
+     * Посетитель вводит код до входа и до выбора тарифа, чтобы увидеть
+     * свою цену. Здесь проверяется только сам код: существует, не
+     * погашен, не просрочен, тариф по нему продаётся. Условия компании
+     * (платила ли раньше, есть ли действующий тариф) проверит активация
+     * в кабинете — у гостя компании ещё нет.
+     *
+     * @return array{code: string, plan_id: int, plan_code: string, discount_percent: int|null, days: int|null}
+     *
+     * @throws PromoCodeRejected
+     */
+    public function preview(string $input): array
+    {
+        $code = PromoCode::normalize($input);
+
+        if ($code === '') {
+            throw new PromoCodeRejected(__('ui.messages.billing.promo_required'));
+        }
+
+        $promo = PromoCode::query()->with('plan')->where('code', $code)->first();
+
+        if ($promo === null) {
+            throw new PromoCodeRejected(__('ui.messages.promo_code.unknown'));
+        }
+
+        $this->assertCodeUsable($promo);
+
+        $plan = $promo->plan;
+
+        if ($plan === null || ! $plan->is_active) {
+            throw new PromoCodeRejected(__('ui.messages.promo_code.plan_gone'));
+        }
+
+        if ($promo->isDiscount()) {
+            $percent = (int) $promo->discount_percent;
+
+            if ($percent < 1 || $percent > 99) {
+                throw new PromoCodeRejected(__('ui.messages.promo_code.no_discount'));
+            }
+        } elseif ($promo->days < 1) {
+            throw new PromoCodeRejected(__('ui.messages.promo_code.no_period'));
+        }
+
+        return [
+            'code' => $promo->code,
+            'plan_id' => $plan->id,
+            'plan_code' => $plan->code,
+            'discount_percent' => $promo->isDiscount() ? (int) $promo->discount_percent : null,
+            'days' => $promo->isDiscount() ? null : (int) $promo->days,
+        ];
+    }
+
+    /**
      * Код на бесплатный период: тариф выдаётся сразу.
      */
     private function redeemFree(PromoCode $promo, Company $company, User $user): Subscription
