@@ -67,12 +67,14 @@ COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
 # Без пакетов разработки (pytest, mypy): на сервере они не нужны.
 # Окружение — python/.venv; владелец root, www-data только читает
 # и запускает. Байт-код собран заранее: писать его в read-only venv
-# при каждом запуске некому.
+# при каждом запуске некому. Стили и скрипты админки Django собираются
+# в python/staticfiles — их отдаёт сам Django (whitenoise) по /py/static/.
 COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 RUN cd python \
     && UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-dev --no-cache --compile-bytecode \
         --python /usr/bin/python3 \
-    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt"
+    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise" \
+    && .venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
 # Распределитель адресов между Laravel и Django (этап 2 переноса)

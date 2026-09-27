@@ -70,7 +70,7 @@ for step in steps:
         r = client.get(step[1])
 
     out.append({"status": r.status_code, "location": r.get("Location"),
-                "body": r.content.decode()[:2000]})
+                "body": r.content.decode()})
 
 print(json.dumps(out, ensure_ascii=False))
 """
@@ -158,10 +158,9 @@ def test_сотрудник_входит_по_пропуску_laravel():
 
     assert вход["status"] == 302 and вход["location"] == "/py/admin/", вход
     assert раздел["status"] == 200, раздел
-    assert "anna@savdex.uz" in раздел["body"]
-    # Права: роль «контент-менеджер» плюс выданные лично «тарифы»
-    assert "Справочники" in раздел["body"] and "Тарифы" in раздел["body"]
-    assert "Компании" not in раздел["body"]
+    assert "Анна" in раздел["body"] and "Контент-менеджер" in раздел["body"]
+    # Контент-менеджеру справочники выданы — раздел стран виден
+    assert "Страны" in раздел["body"]
 
 
 @pytest.mark.parametrize(

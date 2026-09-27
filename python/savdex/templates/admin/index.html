@@ -1,0 +1,12 @@
+{% extends "admin/index.html" %}
+{% comment %}
+  Главная админки на Python.
+
+  «Последние действия» у Django берутся из его журнала
+  (django_admin_log) — такой таблицы нет: журнал общий с Laravel,
+  admin_actions, и смотрят его в админке Laravel.
+{% endcomment %}
+{% block content_subtitle %}
+<p>Разделы переезжают сюда из админки по одному. Правки здесь попадают в тот же журнал действий, что и в основной админке.</p>
+{% endblock %}
+{% block sidebar %}{% endblock %}

@@ -17,6 +17,7 @@ render.yaml
 # Python-половина: окружение собирается в образе заново по uv.lock,
 # локальное (с пакетами разработки и под другую систему) не нужно
 python/.venv
+python/staticfiles
 python/.pytest_cache
 python/.mypy_cache
 python/.ruff_cache

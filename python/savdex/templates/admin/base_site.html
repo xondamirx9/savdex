@@ -1,0 +1,27 @@
+{% extends "admin/base.html" %}
+{% comment %}
+  Шапка админки на Python.
+
+  Ссылки «сменить пароль» нет: паролей у Django нет, они в админке
+  Laravel. «Открыть сайт» ведёт обратно в админку Laravel.
+{% endcomment %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header }}</a> <span style="opacity:.7;font-size:.8em">· разделы на Python</span></div>
+{% endblock %}
+
+{% block usertools %}
+{% if has_permission and savdex_admin %}
+<div id="user-tools">
+  {{ savdex_admin.name }} · {{ savdex_role }} /
+  <a href="{{ site_url }}">Вернуться в админку</a> /
+  <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+    {% csrf_token %}
+    <button type="submit">Выйти</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
