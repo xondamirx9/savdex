@@ -85,8 +85,11 @@ class CatalogAdmin(SavdexModelAdmin):
         Через references() каждой записи список из 50 городов стоил бы
         300 запросов.
         """
-        queryset: QuerySet[Any] = super().get_queryset(request)
+        # Как ModelAdmin.get_queryset, но порядок — после подсчётов и
+        # annotate(): раздел может сортировать по вычисленному (дерево
+        # категорий), а order_by по ещё не объявленному полю — ошибка
         model: type[Catalog] = self.model
+        queryset = self.annotate(model._default_manager.get_queryset())
         refs = {ref.label: ref for ref in model.REFERENCES}
         counted = {
             name: RawSQL(refs[label].subquery(model._meta.db_table), ())
@@ -96,8 +99,13 @@ class CatalogAdmin(SavdexModelAdmin):
         annotated: QuerySet[Any] = queryset.prefetch_related("translations").annotate(
             _translations=Count("translations", distinct=True), **counted
         )
+        ordering = self.get_ordering(request)
 
-        return annotated
+        return annotated.order_by(*ordering) if ordering else annotated
+
+    def annotate(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        """Что разделу нужно в списке сверх названий и счётчиков."""
+        return queryset
 
     def get_search_results(
         self, request: HttpRequest, queryset: QuerySet[Any], search_term: str

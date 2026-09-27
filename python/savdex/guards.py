@@ -61,6 +61,12 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # перенесён из кнопки Filament в модель (обе половины)
         "company_types",
         "company_type_translations",
+        # Этап 2: категории. Запрет удаления при ссылках появился в
+        # обеих половинах, CategorySeeder существующие не перезаписывает.
+        # Поля категорий (category_fields) остаются за Laravel: их правит
+        # только сидер
+        "categories",
+        "category_translations",
     }
 )
 

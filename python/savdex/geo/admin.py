@@ -257,10 +257,12 @@ class CityAdmin(CatalogAdmin):
     list_filter = (CountryFilter, "is_active")
     ordering = ("sort", "slug")
 
-    def get_queryset(self, request: HttpRequest) -> QuerySet[City]:
-        queryset: QuerySet[City] = super().get_queryset(request)
+    def annotate(self, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        with_country: QuerySet[Any] = queryset.select_related("country").prefetch_related(
+            "country__translations"
+        )
 
-        return queryset.select_related("country").prefetch_related("country__translations")
+        return with_country
 
     @admin.display(description="Город", ordering="slug")
     def title(self, obj: City) -> str:
