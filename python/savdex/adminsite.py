@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import admin, messages
@@ -300,9 +301,18 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
         for field in obj._meta.concrete_fields:
             value = getattr(obj, field.attname)
-            values[str(field.column)] = (
-                value.strftime("%Y-%m-%d %H:%M:%S") if hasattr(value, "strftime") else value
-            )
+
+            if hasattr(value, "strftime"):
+                value = value.strftime("%Y-%m-%d %H:%M:%S")
+            elif isinstance(value, Decimal):
+                # Как Eloquent с приведением decimal:7 — строкой, со всеми
+                # знаками столбца. Из формы приходит «39.6542», из базы
+                # «39.6542000»: без выравнивания журнал записал бы правку
+                # координат, которых никто не трогал
+                places = getattr(field, "decimal_places", None)
+                value = str(value if places is None else value.quantize(Decimal(1).scaleb(-places)))
+
+            values[str(field.column)] = value
 
         return values
 

@@ -56,3 +56,13 @@ def test_адрес_как_у_laravel(forwarded, remote, expected):
 
     assert audit.client_ip(request) == expected
     assert audit.client_ip(None) is None
+
+
+def test_значения_вне_json_не_губят_запись():
+    """Число с фиксированной точкой (координаты города) пишется строкой."""
+    import json
+    from decimal import Decimal
+
+    assert json.dumps(audit.clean({"after": {"lat": Decimal("41.2995000")}}), default=str) == (
+        '{"after": {"lat": "41.2995000"}}'
+    )

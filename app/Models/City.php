@@ -59,6 +59,9 @@ class City extends Model
     /**
      * Что удерживает город от удаления.
      *
+     * Резюме тоже: раньше их не считали, и удаление города молча
+     * обнуляло его у резюме (внешний ключ nullOnDelete).
+     *
      * @return array<string, int>
      */
     public function references(): array
@@ -66,6 +69,7 @@ class City extends Model
         $counts = [
             'компании' => $this->companies()->count(),
             'объявления' => $this->listings()->count(),
+            'резюме' => $this->resumes()->count(),
         ];
 
         return array_filter($counts);

@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Categories\Pages\ListCategories;
-use App\Filament\Resources\Cities\Pages\ListCities;
 use App\Models\Category;
-use App\Models\City;
-use App\Models\Country;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Forms\Components\Select;
@@ -23,6 +20,9 @@ use Tests\TestCase;
  * В фильтре «Раздел» стоял список слагов: «stroymaterialy»,
  * «gotovaya-odezhda». Человек, который ищет «Стройматериалы»,
  * в таком списке их не находит — а именно за этим фильтр и открывают.
+ *
+ * Фильтр стран в городах переехал вместе с городами на Python —
+ * проверяется в python/tests/test_cities_admin.py.
  */
 class CatalogFiltersTest extends TestCase
 {
@@ -84,19 +84,5 @@ class CatalogFiltersTest extends TestCase
         $options = $this->filterOptions(ListCategories::class, 'parent_id');
 
         $this->assertArrayNotHasKey($child->id, $options);
-    }
-
-    #[Test]
-    public function фильтр_стран_в_городах_показывает_названия(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        $country = Country::create(['code' => 'uz', 'phone_code' => '+998', 'currency_code' => 'UZS', 'is_active' => true]);
-        $country->translations()->create(['locale' => 'ru', 'name' => 'Узбекистан']);
-        City::create(['country_id' => $country->id, 'slug' => 'tashkent', 'is_active' => true]);
-
-        $options = $this->filterOptions(ListCities::class, 'country_id');
-
-        $this->assertSame(['Узбекистан'], array_values($options));
     }
 }

@@ -574,18 +574,25 @@ class GeoSeeder extends Seeder
      * странах — это два разных города, и искать город по одному
      * только slug значило бы связать сербский Ниш с турецким.
      *
+     * Как и страны, только досоздаются: раньше сидер на каждом деплое
+     * возвращал городу порядок, «показывать», координаты и названия,
+     * и правка из админки жила до следующего деплоя. С этапа 2 переноса
+     * города правятся в разделе на Python и принадлежат ему.
+     *
      * @param  list<array{0: string, 1: float, 2: float, 3: list<string>}>  $rows
      */
     private function cities(Country $country, array $rows): void
     {
         foreach ($rows as $sort => [$slug, $lat, $lng, $names]) {
-            $city = City::updateOrCreate(
+            $city = City::firstOrCreate(
                 ['country_id' => $country->id, 'slug' => $slug],
                 ['lat' => $lat, 'lng' => $lng, 'sort' => $sort, 'is_active' => true],
             );
 
-            foreach (self::LOCALES as $i => $locale) {
-                $city->translations()->updateOrCreate(['locale' => $locale], ['name' => $names[$i]]);
+            if ($city->wasRecentlyCreated) {
+                foreach (self::LOCALES as $i => $locale) {
+                    $city->translations()->create(['locale' => $locale, 'name' => $names[$i]]);
+                }
             }
         }
     }

@@ -126,6 +126,12 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Справочники')
                     ->sort(3)
                     ->visible(fn (): bool => AdminAccess::allows('catalogs.view')),
+                NavigationItem::make('Города')
+                    ->url('/admin/python?next=/py/admin/geo/city/')
+                    ->icon('heroicon-o-building-office-2')
+                    ->group('Справочники')
+                    ->sort(4)
+                    ->visible(fn (): bool => AdminAccess::allows('catalogs.view')),
             ])
             ->middleware([
                 SetAdminLocale::class,
