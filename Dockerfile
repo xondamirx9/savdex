@@ -29,13 +29,14 @@ RUN mkdir -p storage/framework/views && npm run build
 FROM php:8.3-apache
 
 # python3 — для Python-половины площадки (python/, перенос на Django):
-# выгрузка в Excel из админки сверяется ею на боевых данных
+# команды, выгрузка в Excel и страницы, которые Apache отдаёт Django
+# (docker/apache-python.conf); proxy и proxy_http — для этой передачи
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev libpq-dev \
         python3 \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache pdo_pgsql \
-    && a2enmod rewrite headers \
+    && a2enmod rewrite headers proxy proxy_http \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm -rf /var/lib/apt/lists/*
 
@@ -74,6 +75,9 @@ RUN cd python \
     && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt"
 
 COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
+# Распределитель адресов между Laravel и Django (этап 2 переноса)
+COPY docker/apache-python.conf /etc/apache2/conf-available/savdex-python.conf
+RUN a2enconf savdex-python
 COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
 RUN chmod +x /usr/local/bin/render-entrypoint
 

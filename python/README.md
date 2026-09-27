@@ -64,7 +64,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/export/` | Выгрузка в Excel — третья |
 | `savdex/admins.py` | Выдача доступа в админку — четвёртая и первая, что пишет |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
-| `savdex/urls.py` | Пока только `/up` |
+| `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |
 | `conftest.py` | Подмена базы на SQLite для проверок |
 
 ## Проверка базы
@@ -134,6 +134,27 @@ DATABASE_URL=postgres://... uv run python manage.py export_xlsx
 Описание листов (`savdex/export/sheets.py`) сгенерировано из
 PHP-исходника. Правите в одной половине — правьте и в другой:
 тест `test_export.py` заметит расхождение.
+
+## На сервере: за Apache
+
+На Render Django работает в той же службе, что и Laravel: скрипт запуска
+(`docker/render-entrypoint.sh`) поднимает gunicorn на `127.0.0.1:8001`
+и перезапускает его, если тот упал. Снаружи до него не достучаться —
+только через Apache, который передаёт Django пути из
+`docker/apache-python.conf`, а всё остальное отдаёт Laravel.
+
+Отдать Django новый адрес — добавить строку `ProxyPass` в этот файл и
+завести путь в `savdex/urls.py` (Apache передаёт путь целиком, без
+обрезки). Откат — убрать строку и передеплоить. Проверка в CI
+(`.github/workflows/docker.yml`) запускает контейнер целиком и ходит
+в Laravel и в Django через настоящий Apache.
+
+Локально так же, без Apache:
+
+```bash
+uv run gunicorn savdex.wsgi --bind 127.0.0.1:8001
+curl 127.0.0.1:8001/py/up        # ok
+```
 
 ## Выдача доступа в админку
 
