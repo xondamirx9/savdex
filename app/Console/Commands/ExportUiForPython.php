@@ -60,6 +60,7 @@ class ExportUiForPython extends Command
             $data = [
                 'translations' => $locale === Locales::DEFAULT ? $active : array_replace_recursive($base, $active),
                 'ago' => $this->ago($locale),
+                'dates' => $this->dates($locale),
             ];
 
             $path = self::directory()."/{$locale}.json";
@@ -72,6 +73,29 @@ class ExportUiForPython extends Command
         $this->info('Словарь выгружен: '.self::directory());
 
         return self::SUCCESS;
+    }
+
+    /**
+     * «15 сентября 2026» — DateHelper::dayMonthYear на других языках идёт
+     * через Carbon::isoFormat('D MMMM YYYY'): названия месяцев и порядок
+     * слов у каждого языка свои. Шаблон на каждый месяц: {d} и {y} Django
+     * подставит сам.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function dates(string $locale): array
+    {
+        $formats = ['day_month_year' => 'D MMMM YYYY', 'month_year' => 'MMMM YYYY'];
+        $table = [];
+
+        foreach ($formats as $name => $format) {
+            for ($month = 1; $month <= 12; $month++) {
+                $text = Carbon::create(2037, $month, 28, 12, 0, 0, 'UTC')->locale($locale)->isoFormat($format);
+                $table[$name][$month] = str_replace(['2037', '28'], ['{y}', '{d}'], $text);
+            }
+        }
+
+        return $table;
     }
 
     /**

@@ -16,6 +16,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
+from savdex.web import news
 from savdex.web import views as web
 
 
@@ -36,4 +37,8 @@ urlpatterns = [
     # Страницы сайта (этап 3, savdex/web/): адрес доходит сюда, только если
     # его группа включена в SAVDEX_PY_PAGES (docker/apache-python.conf)
     re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<key>help|guide|rules)$", web.doc),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show),
 ]

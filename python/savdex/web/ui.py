@@ -82,3 +82,11 @@ def ago_phrase(locale: str, unit: str, count: int) -> str:
     phrase: str = table[unit][str(count)]
 
     return phrase
+
+
+def date_template(locale: str, name: str, month: int) -> str:
+    """Шаблон даты Carbon::isoFormat для месяца: «{d} сентября {y}»."""
+    table: dict[str, dict[str, str]] = _load(locale)["dates"]
+    template: str = table[name][str(month)]
+
+    return template
