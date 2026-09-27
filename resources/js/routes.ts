@@ -36,6 +36,8 @@ export const routes = {
     pricing: '/pricing',
     countries: '/countries',
     partners: '/partners',
+    reviews: '/reviews',
+    reviewsNew: '/reviews/new',
     contacts: '/contact',
 
     // Избранное

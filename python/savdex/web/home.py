@@ -22,7 +22,7 @@ from PIL import Image
 
 from savdex import laravel_storage
 from savdex.site.models import Banner, LandingBlock
-from savdex.web import content, inertia, locales, news, ui
+from savdex.web import content, inertia, locales, news, reviews, ui
 from savdex.web.currency import CurrencyRate
 from savdex.web.directory import _named, listed_countries, logo_url, type_label, type_options
 from savdex.web.request import context
@@ -558,31 +558,6 @@ def city_options(locale: str) -> list[dict[str, Any]]:
     return sorted(cities, key=lambda c: c["name"])
 
 
-def latest_reviews(translations: content.Translations) -> list[dict[str, Any]]:
-    """PageController::latestReviews: опубликованные, между живыми компаниями."""
-    rows = _rows(
-        "select r.id, r.rating, r.body, r.created_at, a.name as author, c.name as company_name, "
-        "c.slug as company_slug from reviews r join companies c on c.id = r.company_id "
-        "join companies a on a.id = r.author_company_id where r.status = 'published' "
-        "and c.status = 'active' and c.deleted_at is null and a.deleted_at is null "
-        "order by r.created_at desc limit 3"
-    )
-
-    return [
-        {
-            "id": r["id"],
-            "author": r["author"],
-            "initials": initials(r["author"]),
-            "rating": int(r["rating"]),
-            "body": translations.text(r["body"]),
-            "when": r["created_at"].strftime("%d.%m.%Y"),
-            "company_name": r["company_name"],
-            "company_slug": r["company_slug"],
-        }
-        for r in rows
-    ]
-
-
 # ── Страница ────────────────────────────────────────────────────────
 
 
@@ -653,7 +628,8 @@ def home(request: HttpRequest) -> HttpResponse:
             ],
             "cities": city_options(ctx.locale),
             "news": [news.present(p, ctx.locale) for p in news.published()[:4]],
-            "reviews": latest_reviews(translations),
+            # Три свежих отзыва — о компаниях и о площадке (ReviewFeed)
+            "reviews": reviews.take("all", 3, 0, translations),
         },
         seo,
     )

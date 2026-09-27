@@ -232,7 +232,7 @@ Django перейдёт в хозяева схемы на последнем э�
 
 ## 6. Карта таблиц: кто хозяин на каждом этапе
 
-78 таблиц. «Хозяин» — сторона, которой разрешена запись. До своего
+79 таблиц. «Хозяин» — сторона, которой разрешена запись. До своего
 этапа таблица принадлежит Laravel, Django её только читает.
 
 ### Общие, хозяин не меняется никогда
@@ -278,11 +278,12 @@ Python показывает ход переноса, а `tests/test_progress_sch
 Самая нагруженная часть сайта и самые сложные правила
 (`Listing`, `Tender`, `ItTask`, `Resume` — все с событиями).
 
-### Этап 5 — кабинет (19 таблиц)
+### Этап 5 — кабинет (20 таблиц)
 
 `users`, `login_attempts`, `companies`, `company_attributes`,
 `company_category`, `company_contacts`, `company_documents`,
-`company_invitations`, `company_sites`, `company_site_products`, `reviews`, `contact_unlocks`, `audience_views`,
+`company_invitations`, `company_sites`, `company_site_products`, `reviews`, `platform_reviews`,
+`contact_unlocks`, `audience_views`,
 `message_threads`, `messages`, `notifications`, `user_notifications`,
 `notification_preferences`, `broadcasts`.
 
@@ -834,7 +835,7 @@ Django не переписывает: их выгружает сам Laravel к�
 сессии, скрытая страница (404), машинный перевод, SEO-робот.
 
 **Включение и откат.** Адреса страницы доходят до Django, только если
-её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing,home`,
+её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing,home,reviews`,
 `docker/apache-python.conf`). Откат без выкладки: в настройках Render
 задать `SAVDEX_PY_PAGES` пустой и перезапустить — страницы снова отдаёт
 Laravel. Django получает только читающие запросы (GET, HEAD) основного
@@ -853,6 +854,7 @@ Laravel. Django получает только читающие запросы (G
 | `legal` ✅ | `/terms`, `/payment`, `/security`, `/privacy`, `/refunds` | `tests/test_web_legal.py` |
 | `pricing` ✅ | `/pricing` (с `?promo=` — Laravel) | `tests/test_web_pricing.py` |
 | `home` ✅ | `/`, `/uz`, `/en` … | `tests/test_web_home.py` |
+| `reviews` ✅ | `/reviews` (форма `/reviews/new` — Laravel) | `tests/test_web_reviews.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -875,7 +877,15 @@ Laravel: карточка объявления считала «доверие»
 было ниже, чем в кабинете.
 
 **Итог этапа 3.** Django отдаёт все страницы сайта, которые ничего не
-пишут: 7 групп в таблице выше. Визитки компаний (`/companies`,
+пишут: группы в таблице выше. Новая страница «Все отзывы» (`reviews`)
+появилась уже после этапа и сразу переехала вместе с ним: отзывы
+о площадке пишет Laravel (форма `/reviews/new`, модерация), лента
+общая — `ReviewFeed` у Laravel и `savdex/web/reviews.py` у Django.
+
+Адрес страницы в объекте Inertia Laravel берёт из `fullUrl()`, где
+параметры запроса разобраны и собраны заново (`?b=1&a=2` →
+`?a=2&b=1`); Django повторяет это в `savdex/web/phpquery.py`
+(сверка с Symfony — `tests/test_phpquery.py`). Визитки компаний (`/companies`,
 `/company/<адрес>`) и каталог к ним не относятся, хотя в начале этапа
 были в его списке: визитка записывает просмотр компании компанией
 («Кто мной интересуется», `audience_views`) и помечает его в сессии, а
@@ -1182,6 +1192,7 @@ PHP-команда остаётся рядом, пока Python-версией �
 | `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 |
 | `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 |
 | `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 |
+| `reviews:ask` | `user_notifications` | Просьбы оставить отзыв о площадке и о компании — колокольчик переезжает с кабинетом. Этап 5 |
 | `billing:reset-periods` | `wallets`, `subscriptions`, `companies` | Деньги. Этап 7 |
 | `savdex:copy-database` | чужая база | Разовый инструмент переезда на PostgreSQL, переносить незачем |
 

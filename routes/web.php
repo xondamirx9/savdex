@@ -43,6 +43,7 @@ use App\Http\Controllers\Public\NewsController;
 use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\ResumeController as PublicResumeController;
+use App\Http\Controllers\Public\ReviewsController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\TenderController;
 use App\Http\Controllers\TelegramWebhookController;
@@ -141,6 +142,9 @@ Route::get('/sitemap-{part}.xml', [SitemapController::class, 'part'])
 
 Route::get('/news', [NewsController::class, 'index'])->name('news');
 Route::get('/news/{slug}', [NewsController::class, 'show'])->name('news.show');
+
+// Все отзывы: о компаниях и о самой площадке (ReviewFeed)
+Route::get('/reviews', [ReviewsController::class, 'index'])->name('reviews');
 
 /*
  * Тендеры — закупки внешних заказчиков, размещённые площадкой.
@@ -310,6 +314,15 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
         ->whereNumber('id')
         ->middleware('throttle:60,1')
         ->name('favorites.toggle');
+
+    /*
+     * «Оцените SavdEx»: отзыв о самой площадке. Ссылку /reviews/new
+     * можно рассылать — гость попадёт на вход и вернётся к форме.
+     */
+    Route::get('/reviews/new', [ReviewsController::class, 'create'])->name('reviews.create');
+    Route::post('/reviews/new', [ReviewsController::class, 'store'])
+        ->middleware('throttle:10,60')
+        ->name('reviews.store');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');

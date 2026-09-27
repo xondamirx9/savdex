@@ -17,17 +17,16 @@ use App\Models\LandingBlock;
 use App\Models\Listing;
 use App\Models\Page;
 use App\Models\Plan;
-use App\Models\Review;
 use App\Models\Setting;
 use App\Services\OrderService;
 use App\Services\PromoCodeService;
 use App\Support\Appearance;
 use App\Support\BannerCard;
-use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
 use App\Support\OfficeLocation;
+use App\Support\ReviewFeed;
 use App\Support\Seo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -122,8 +121,9 @@ class PageController extends Controller
             // нужно ещё дойти по меню, читают в разы меньше
             'news' => $news->latest(4),
             // Отзывы пользователей: живое социальное доказательство
-            // вместо обещаний площадки о самой себе
-            'reviews' => $this->latestReviews(),
+            // вместо обещаний площадки о самой себе. Три свежих —
+            // о компаниях и о площадке, остальные на /reviews
+            'reviews' => ReviewFeed::take('all', 3),
         ]);
     }
 
@@ -770,39 +770,6 @@ class PageController extends Controller
                 'listings_count' => (int) $c->listings_count,
                 'initials' => $c->initials(),
                 'logo' => $c->logoUrl(),
-            ])
-            ->all();
-    }
-
-    /**
-     * Свежие отзывы для витрины главной.
-     *
-     * Только опубликованные и только между живыми компаниями: отзыв
-     * без автора или об исчезнувшей компании на витрине выглядел бы
-     * выдуманным. Тексты — из базы, как и счётчики: сочинённые
-     * цитаты на витрине недопустимы.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function latestReviews(): array
-    {
-        return Review::query()
-            ->with(['company:id,slug,name', 'authorCompany:id,name'])
-            ->where('status', Review::STATUS_PUBLISHED)
-            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
-            ->whereHas('authorCompany')
-            ->latest()
-            ->limit(3)
-            ->get()
-            ->map(fn (Review $r): array => [
-                'id' => $r->id,
-                'author' => $r->authorCompany->name,
-                'initials' => $r->authorCompany->initials(),
-                'rating' => (int) $r->rating,
-                'body' => ContentTranslation::text($r->body),
-                'when' => $r->created_at->translatedFormat('d.m.Y'),
-                'company_name' => $r->company->name,
-                'company_slug' => $r->company->slug,
             ])
             ->all();
     }

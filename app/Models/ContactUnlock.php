@@ -46,6 +46,12 @@ class ContactUnlock extends Model
         return $this->belongsTo(Company::class);
     }
 
+    /** Сотрудник, который раскрыл контакты. */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function targetCompany(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'target_company_id');

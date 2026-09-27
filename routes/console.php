@@ -60,6 +60,13 @@ Schedule::command('ratings:recalculate')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Просьбы оставить отзыв — днём по Ташкенту, а не ночью: уведомление
+// в колокольчике читают, когда человек на площадке (AskForReviews)
+Schedule::command('reviews:ask')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 /*
  * Курсы ЦБ — заранее, а не первым посетителем: кэш живёт сутки,
  * и без обновления по расписанию тот, кто откроет каталог сразу

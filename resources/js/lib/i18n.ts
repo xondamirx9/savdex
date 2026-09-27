@@ -53,10 +53,11 @@ function lookup(key: string): string | undefined {
 function fill(text: string, values?: Record<string, string | number>): string {
     if (!values) return text;
 
-    return Object.entries(values).reduce(
-        (acc, [name, value]) => acc.replaceAll(`:${name}`, String(value)),
-        text,
-    );
+    // Длинные имена — первыми, как у Laravel: иначе «:page» съедал бы
+    // начало «:pages» и выходило «из 2s»
+    return Object.entries(values)
+        .sort(([a], [b]) => b.length - a.length)
+        .reduce((acc, [name, value]) => acc.replaceAll(`:${name}`, String(value)), text);
 }
 
 export function t(key: string, values?: Record<string, string | number>): string {
