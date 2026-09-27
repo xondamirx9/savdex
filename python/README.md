@@ -73,7 +73,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/site/` | Настройки площадки, баннеры (с предпросмотром), новости, страницы и вопросы помощи, главная (поля под языки — `pages_admin.py`, `landing_admin.py`) |
 | `savdex/laravel_cache.py`, `savdex/laravel_storage.py`, `savdex/images.py` | Общее с Laravel: сброс его кэша, его публичный диск, пересборка картинок как ImageStore |
 | `savdex/laravel_session.py`, `savdex/visitor.py` | Кто вошёл на сайт — по сессии Laravel (этап 3); `/py/whoami` |
-| `savdex/web/` | Страницы сайта на Django (этап 3): каркас и объект страницы Inertia, общие данные, язык, SEO; сверка с Laravel — `tests/test_web_parity.py` |
+| `savdex/web/` | Страницы сайта на Django (этап 3): каркас и объект страницы Inertia, общие данные, язык, SEO, курс ЦБ из кэша Laravel; страницы — главная, документы, новости, «О компании», страны и партнёры, юридические документы, тарифы; сверка с Laravel — `tests/test_web_*.py` |
 | `savdex/progress.py` | Ход переноса по этапам — на главной админки на Python |
 | `savdex/catalog.py`, `savdex/catalog_admin.py` | Общее у справочников: названия на языках, запрет удаления при ссылках, раздел админки |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |

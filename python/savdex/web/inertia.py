@@ -32,6 +32,20 @@ def php_escape(text: object) -> str:
     )
 
 
+def full_url(ctx: Context) -> str:
+    """
+    Request::fullUrl: путь без «/» в конце — у корня тоже, но корень
+    с параметрами — «/?…», как у Symfony.
+    """
+    path, _, query = ctx.request_uri.partition("?")
+    url = ctx.root + path.rstrip("/")
+
+    if not query:
+        return url
+
+    return url + ("/?" if path in ("", "/") else "?") + query
+
+
 def page_url(ctx: Context) -> str:
     """HandleInertiaRequests::urlResolver — адрес с языковым префиксом."""
     prefix = locales.prefix(ctx.locale)
@@ -70,7 +84,7 @@ def render(
     ):
         # Inertia\\Middleware::onVersionChange: полная перезагрузка
         conflict = HttpResponse(status=409)
-        conflict["X-Inertia-Location"] = ctx.root + ctx.request_uri
+        conflict["X-Inertia-Location"] = full_url(ctx)
 
         return conflict
 

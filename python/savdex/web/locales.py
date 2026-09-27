@@ -52,7 +52,8 @@ def url(root: str, path: str, locale: str) -> str:
     _, clean = split(path)
     clean = (prefix(locale) + clean).rstrip("/")
 
-    return root + (clean or "/") + query
+    # url('/') у Laravel — корень без «/» в конце
+    return root + clean + query
 
 
 def switch_url(root: str, path: str, locale: str) -> str:

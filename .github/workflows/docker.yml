@@ -142,6 +142,10 @@ jobs:
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
+          # Главная — тоже Django, со страницей Home
+          curl -fsS -D /tmp/home.h -o /tmp/home.html http://127.0.0.1:18080/
+          ! grep -qi '^x-powered-by: php' /tmp/home.h
+          grep -q '"component":"Home"' /tmp/home.html
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
 
