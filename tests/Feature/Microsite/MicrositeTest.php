@@ -7,6 +7,8 @@ namespace Tests\Feature\Microsite;
 use App\Models\Company;
 use App\Models\CompanyContact;
 use App\Models\CompanySite;
+use App\Models\CompanySiteProduct;
+use App\Models\Listing;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Support\Microsite\SiteHost;
@@ -277,5 +279,32 @@ class MicrositeTest extends TestCase
         $this->site();
 
         $this->get('/s/acme')->assertStatus(301)->assertRedirect(SiteHost::url('acme'));
+    }
+
+    /**
+     * Товары сайта: свои — первыми, за ними объявления компании,
+     * которые попадают на сайт без участия компании.
+     */
+    #[Test]
+    public function свои_товары_и_объявления_вместе(): void
+    {
+        config(['microsite.domain' => null]);
+        $this->subscribe();
+        $this->site();
+
+        CompanySiteProduct::create(['company_id' => $this->company->id, 'title' => 'Свой товар', 'currency' => 'UZS']);
+        Listing::factory()->create([
+            'company_id' => $this->company->id,
+            'title' => 'Объявление',
+            'status' => Listing::STATUS_ACTIVE,
+            'published_at' => now(),
+        ]);
+
+        $this->get('/s/acme')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('products', 2)
+                ->where('products.0.title', 'Свой товар')
+                ->where('products.0.url', null)
+                ->where('products.1.title', 'Объявление'));
     }
 }

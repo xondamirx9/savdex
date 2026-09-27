@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Download, Lock, Plus, Trash2, Wallet } from 'lucide-react';
+import { useEffect } from 'react';
 import { LimitBar, Panel, formatNumber } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { BillingStore, type Invoice, type PackOffer, type PlanOffer } from '@/components/BillingStore';
@@ -37,6 +38,8 @@ interface Props {
     checkout: boolean;
     /** Компания подходит под акцию с промокодом — показывать форму ввода */
     promoAllowed: boolean;
+    /** Код тарифа, выбранного на странице тарифов: сразу предложить оплату */
+    selected: string | null;
 }
 
 /* Только цвет: подпись берётся из словаря по коду статуса */
@@ -47,8 +50,52 @@ const STATUS_CLASS: Record<string, string> = {
     refunded: 'badge-neutral',
 };
 
-export default function Billing({ plan, subscription, wallet, cards, payments, plans, packs, invoices, requisites, checkout, promoAllowed }: Props) {
+export default function Billing({
+    plan,
+    subscription,
+    wallet,
+    cards,
+    payments,
+    plans,
+    packs,
+    invoices,
+    requisites,
+    checkout,
+    promoAllowed,
+    selected,
+}: Props) {
     const { confirm, dialog } = useConfirm();
+
+    /*
+     * Пришли со страницы тарифов кнопкой «Выбрать»: окно оплаты
+     * открывается сразу. Параметр снимается с адреса, чтобы окно не
+     * всплывало снова — после возврата с платёжной страницы или
+     * обновления вкладки.
+     */
+    useEffect(() => {
+        const offer = plans.find((p) => p.code === selected && p.orderable);
+
+        if (!offer) return;
+
+        const url = new URL(window.location.href);
+        url.searchParams.delete('plan');
+        window.history.replaceState(window.history.state, '', url);
+
+        document.getElementById('store')?.scrollIntoView({ block: 'start' });
+
+        const amount = `${formatNumber(offer.price_uzs)} ${t('catalog.currency_uzs')}`;
+
+        confirm({
+            title: t('cabinet.billing.checkout_title', { plan: offer.name }),
+            description: checkout
+                ? t('cabinet.billing.checkout_text', { amount })
+                : t('cabinet.billing.checkout_text_invoice', { amount }),
+            confirmLabel: checkout ? t('cabinet.billing.pay') : t('cabinet.billing.invoice_me'),
+            onConfirm: () =>
+                router.post('/cabinet/billing/order', { kind: 'plan', id: offer.id }, { preserveScroll: true }),
+        });
+        // Один раз при открытии страницы
+    }, []);
 
     if (!plan || !wallet) {
         return (

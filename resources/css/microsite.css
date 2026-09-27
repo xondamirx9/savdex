@@ -218,31 +218,36 @@
     margin-top: 12px;
 }
 
-/* classic: обложка компании фоном под затемнением, текст белый */
-.ms-tpl-classic .ms-hero[style] {
+/* Фото на первом экране — в любом шаблоне: под затемнением, текст
+   белый. Загруженный фон или, у классического шаблона, обложка компании */
+.ms-root .ms-hero-photo {
     position: relative;
     color: #fff;
+    background-color: #111827;
 }
 
-.ms-tpl-classic .ms-hero[style]::before {
+.ms-hero-photo::before {
     content: '';
     position: absolute;
     inset: 0;
     background: linear-gradient(90deg, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.35));
 }
 
-.ms-tpl-classic .ms-hero[style] .ms-hero-inner {
+.ms-hero-photo .ms-hero-inner {
     position: relative;
 }
 
-.ms-tpl-classic .ms-hero[style] .ms-hero-sub,
-.ms-tpl-classic .ms-hero[style] .ms-hero-lead {
+.ms-root .ms-hero-photo .ms-hero-sub,
+.ms-root .ms-hero-photo .ms-hero-lead {
     color: rgb(255 255 255 / 0.88);
 }
 
 /* bold: фирменный цвет во весь экран, крупный заголовок */
 .ms-tpl-bold .ms-hero {
     padding: 104px 0;
+}
+
+.ms-tpl-bold .ms-hero:not(.ms-hero-photo) {
     background: var(--ms-primary);
     color: var(--ms-on-primary);
 }
@@ -260,6 +265,13 @@
     opacity: 0.88;
 }
 
+/* Кнопка на фирменном фоне: цвет подбирает SiteTheme, чтобы она
+   не сливалась с фоном, когда акцент близок к фирменному цвету */
+.ms-root.ms-tpl-bold .ms-hero:not(.ms-hero-photo) .ms-btn-cta {
+    background: var(--ms-hero-cta);
+    color: var(--ms-on-hero-cta);
+}
+
 /* Инициалы на фирменном фоне иначе сливаются с ним */
 .ms-tpl-bold .ms-hero .ms-logo-initials {
     background: var(--ms-on-primary);
@@ -271,9 +283,12 @@
 }
 
 /* minimal: без фона и картинок, тонкие линии */
+.ms-tpl-minimal .ms-hero:not(.ms-hero-photo) {
+    background: none;
+}
+
 .ms-tpl-minimal .ms-hero {
     padding: 96px 0 56px;
-    background: none;
     border-bottom: 1px solid var(--ms-line);
 }
 
@@ -416,6 +431,16 @@ a.ms-tile:hover {
     font-size: 16px;
     font-weight: 600;
     line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.ms-tile-excerpt {
+    margin: 2px 0 0;
+    font-size: 14px;
+    color: var(--ms-muted);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -707,4 +732,64 @@ a.ms-contact:hover {
 .site-frame-mobile {
     max-width: 390px;
     margin: 0 auto;
+}
+
+.site-hero-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 7;
+    object-fit: cover;
+    border-radius: var(--r-btn);
+    border: 1px solid var(--border);
+}
+
+.site-products {
+    display: grid;
+    /* minmax(0, …): длинное название в одну строку иначе распирало
+       строку за край панели */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.site-product {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-btn);
+}
+
+.site-product-thumb {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text-muted);
+}
+
+.site-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.site-product-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.site-product-text b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
