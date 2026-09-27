@@ -121,6 +121,12 @@ class Resume extends Model
      * Ищем по тем же правилам, что объявления: запрос набирают
      * на латинице («snabjenec»), а резюме написано кириллицей.
      *
+     * Навыки и места работы — колонки json: на PostgreSQL lower() от
+     * json не существует, и поиск падал с ошибкой 500. Приводим к
+     * тексту — это работает и на SQLite. Кириллица в них хранится
+     * экранированной (\uXXXX, так пишет json_encode), поэтому по ним
+     * находится только латиница; должность и «о себе» — обычный текст.
+     *
      * @param  Builder<self>  $query
      */
     public function scopeSearch(Builder $query, string $term): void
@@ -133,8 +139,8 @@ class Resume extends Model
 
                 $q->orWhereRaw('lower(title) like ?', [$like])
                     ->orWhereRaw('lower(about) like ?', [$like])
-                    ->orWhereRaw('lower(skills) like ?', [$like])
-                    ->orWhereRaw('lower(jobs) like ?', [$like]);
+                    ->orWhereRaw('lower(cast(skills as text)) like ?', [$like])
+                    ->orWhereRaw('lower(cast(jobs as text)) like ?', [$like]);
             }
         });
     }
