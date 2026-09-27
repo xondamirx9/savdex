@@ -605,6 +605,9 @@ class PageController extends Controller
             ->get()
             ->map(fn (Category $c): array => [
                 'id' => $c->id,
+                // По адресу главная узнаёт раздел «Другое»: он встаёт
+                // последним, после плиток услуг
+                'slug' => $c->slug,
                 'name' => $c->name(),
                 'icon' => $c->icon,
                 'listings' => (int) ($counts[$c->id] ?? 0)
