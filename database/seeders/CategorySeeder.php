@@ -142,24 +142,40 @@ class CategorySeeder extends Seeder
         }
     }
 
-    /** @param list<string> $names */
+    /**
+     * Категория с переводами — только если её ещё нет.
+     *
+     * Сидер гоняется на каждом деплое и раньше перезаписывал
+     * существующие категории: раздел, значок, порядок, «активна» и
+     * названия. Выключенная или переименованная в админке категория
+     * при следующем деплое молча возвращалась как была. С этапа 2
+     * переноса категории правятся в разделе на Python и принадлежат
+     * ему (python/savdex/guards.py, OWNED_TABLES), поэтому сидер только
+     * досоздаёт недостающие.
+     *
+     * @param  list<string>  $names
+     */
     private function make(string $slug, ?string $icon, array $names, int $sort, ?int $parentId): Category
     {
-        $category = Category::updateOrCreate(
+        $category = Category::firstOrCreate(
             ['slug' => $slug],
             ['parent_id' => $parentId, 'icon' => $icon, 'sort' => $sort, 'is_active' => true],
         );
 
-        foreach (self::LOCALES as $i => $locale) {
-            $category->translations()->updateOrCreate(
-                ['locale' => $locale],
-                ['name' => $names[$i]],
-            );
+        if ($category->wasRecentlyCreated) {
+            foreach (self::LOCALES as $i => $locale) {
+                $category->translations()->create(['locale' => $locale, 'name' => $names[$i]]);
+            }
         }
 
         return $category;
     }
 
+    /**
+     * Поля категории. Они остаются за Laravel: в админке их не правят,
+     * источник правды — этот сидер, поэтому здесь по-прежнему
+     * updateOrCreate.
+     */
     private function attachFields(Category $category): void
     {
         foreach (self::FIELDS[$category->slug] ?? [] as $sort => $field) {
