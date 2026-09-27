@@ -404,34 +404,39 @@ class PageController extends Controller
             ->description(__('ui.seo.partners_description'))
             ->canonical(url('/partners'));
 
-        $partners = Company::query()
+        /*
+         * Партнёров назначает администратор (действие «Партнёрство»
+         * в админке): это договорённость с площадкой, а не уровень
+         * проверки. Две вкладки — генеральные и обычные партнёры.
+         */
+        $rows = Company::query()
             ->with(['city.translations', 'country.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
-            ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
-            ->orderByDesc('verification_level')
+            ->whereIn('partner_tier', array_keys(Company::PARTNER_TIERS))
+            ->orderBy('partner_sort')
             ->orderByDesc('rating')
             ->orderBy('id')
-            ->limit(24)
-            ->get()
-            ->map(fn (Company $c): array => [
-                'slug' => $c->slug,
-                'name' => $c->name,
-                'type_label' => $c->typeLabel(),
-                'city' => $c->city?->name(),
-                'country' => $c->country?->name(),
-                'verification_level' => $c->verification_level,
-                'rating' => (float) $c->rating,
-                'reviews_count' => $c->reviews_count,
-                // Объявления вместо «сделок»: измеримая величина
-                'listings_count' => (int) $c->listings_count,
-                'initials' => $c->initials(),
-                'logo' => $c->logoUrl(),
-            ])
-            ->all();
+            ->get();
+
+        $present = fn (Company $c): array => [
+            'slug' => $c->slug,
+            'name' => $c->name,
+            'type_label' => $c->typeLabel(),
+            'city' => $c->city?->name(),
+            'country' => $c->country?->name(),
+            'verification_level' => $c->verification_level,
+            'rating' => (float) $c->rating,
+            'reviews_count' => $c->reviews_count,
+            // Объявления вместо «сделок»: измеримая величина
+            'listings_count' => (int) $c->listings_count,
+            'initials' => $c->initials(),
+            'logo' => $c->logoUrl(),
+        ];
 
         return Inertia::render('Partners', [
-            'partners' => $partners,
+            'general' => $rows->where('partner_tier', Company::PARTNER_GENERAL)->map($present)->values()->all(),
+            'partners' => $rows->where('partner_tier', Company::PARTNER_REGULAR)->map($present)->values()->all(),
             'stats' => [
                 'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
                 'verified' => Company::where('status', Company::STATUS_ACTIVE)
