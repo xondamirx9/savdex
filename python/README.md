@@ -70,8 +70,8 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/geo/` | Страны и города — первые таблицы, которыми владеет Django |
 | `savdex/catalogs/` | Типы компаний и категории — и дальше остальные справочники |
 | `savdex/billing/` | Пакеты контактов — и дальше тарифы и промокоды |
-| `savdex/site/` | Настройки площадки |
-| `savdex/laravel_cache.py`, `savdex/laravel_storage.py` | Общее с Laravel: сброс его кэша, его публичный диск |
+| `savdex/site/` | Настройки площадки и баннеры (с предпросмотром) |
+| `savdex/laravel_cache.py`, `savdex/laravel_storage.py`, `savdex/images.py` | Общее с Laravel: сброс его кэша, его публичный диск, пересборка картинок как ImageStore |
 | `savdex/catalog.py`, `savdex/catalog_admin.py` | Общее у справочников: названия на языках, запрет удаления при ссылках, раздел админки |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |

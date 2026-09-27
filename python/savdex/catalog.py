@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from django.db import connection, models
@@ -42,11 +42,27 @@ def now() -> datetime:
     return timezone.now().replace(microsecond=0)
 
 
+class UTCDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    """
+    Столбец timestamp (без пояса), как его заводит Laravel, — в UTC.
+
+    Django на PostgreSQL рассчитывает на timestamptz и читает timestamp
+    без пояса «наивным» временем, которое не сравнить с текущим. Laravel
+    пишет туда UTC (app.timezone) — так его и читаем.
+    """
+
+    def from_db_value(self, value: Any, expression: Any, connection: Any) -> Any:  # noqa: ANN401
+        if value is not None and timezone.is_naive(value):
+            return timezone.make_aware(value, UTC)
+
+        return value
+
+
 class Timestamped(models.Model):
     """created_at и updated_at, которые Eloquent ставит сам."""
 
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
+    created_at = UTCDateTimeField(null=True, editable=False)
+    updated_at = UTCDateTimeField(null=True, editable=False)
 
     class Meta:
         abstract = True

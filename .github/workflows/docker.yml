@@ -77,7 +77,7 @@ jobs:
       - name: Python в образе
         run: |
           docker run --rm --entrypoint /var/www/html/python/.venv/bin/python savdex:ci \
-            -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise; print('Django', django.get_version())"
+            -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL; print('Django', django.get_version())"
 
       # Ключ одноразовый, живёт только в этом прогоне
       - name: Выгрузка как по кнопке и выдача прав — внутри образа
