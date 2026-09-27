@@ -41,7 +41,7 @@ import os
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
@@ -67,6 +67,8 @@ class Visitor:
     session_id: str | None = None
     #: Узнан по куке «запомнить меня», а не по сессии
     via_remember: bool = False
+    #: Содержимое сессии (язык, сообщения, ошибки форм) — только чтение
+    session: dict[str, Any] = field(default_factory=dict, compare=False, hash=False)
 
     @property
     def authenticated(self) -> bool:
@@ -239,13 +241,14 @@ def identify(cookies: Mapping[str, str], connection: BaseDatabaseWrapper) -> Vis
         return GUEST
 
     session_id = cookie_value(cookie_name(), cookies.get(cookie_name()), key_list)
+    data: dict[str, Any] = {}
 
     if session_id:
-        data = session_data(connection, session_id)
-        user_id = _as_id((data or {}).get(LOGIN_KEY))
+        data = session_data(connection, session_id) or {}
+        user_id = _as_id(data.get(LOGIN_KEY))
 
         if user_id is not None and _live_user(connection, user_id) is not None:
-            return Visitor(user_id, session_id)
+            return Visitor(user_id, session_id, session=data)
 
     recaller = cookie_value(REMEMBER_COOKIE, cookies.get(REMEMBER_COOKIE), key_list)
 
@@ -255,6 +258,6 @@ def identify(cookies: Mapping[str, str], connection: BaseDatabaseWrapper) -> Vis
         row = _live_user(connection, user_id) if user_id is not None and token else None
 
         if row is not None and row[1] and hmac.compare_digest(str(row[1]).encode(), token.encode()):
-            return Visitor(user_id, session_id, via_remember=True)
+            return Visitor(user_id, session_id, via_remember=True, session=data)
 
-    return Visitor(session_id=session_id)
+    return Visitor(session_id=session_id, session=data)

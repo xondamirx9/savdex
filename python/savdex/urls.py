@@ -13,9 +13,10 @@
 from __future__ import annotations
 
 from django.http import HttpRequest, HttpResponse
-from django.urls import path
+from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
+from savdex.web import views as web
 
 
 def up(request: HttpRequest) -> HttpResponse:
@@ -32,4 +33,7 @@ urlpatterns = [
     path("py/admin/", adminsite.site.urls),
     # Кто вошёл на сайт — по сессии Laravel (этап 3, savdex/visitor.py)
     path("py/whoami", visitor.whoami),
+    # Страницы сайта (этап 3, savdex/web/): адрес доходит сюда, только если
+    # его группа включена в SAVDEX_PY_PAGES (docker/apache-python.conf)
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<key>help|guide|rules)$", web.doc),
 ]

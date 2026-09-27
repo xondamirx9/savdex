@@ -15,6 +15,7 @@ dependencies = [
     # Картинки баннеров: пересборка в WebP по рамке, как ImageStore у Laravel
     "pillow>=11",
     "cryptography>=43",
+    "xxhash>=3.4",
 ]
 
 [dependency-groups]

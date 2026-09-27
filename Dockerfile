@@ -79,7 +79,11 @@ RUN cd python \
 COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
 # Распределитель адресов между Laravel и Django (этап 2 переноса)
 COPY docker/apache-python.conf /etc/apache2/conf-available/savdex-python.conf
-RUN a2enconf savdex-python
+# Правила перезаписи из общего конфига (страницы сайта на Django, этап 3)
+# сайт наследует, только если перезапись включена в нём самом
+RUN a2enconf savdex-python \
+    && sed -i 's#</VirtualHost>#\tRewriteEngine On\n</VirtualHost>#' /etc/apache2/sites-available/000-default.conf \
+    && grep -q 'RewriteEngine On' /etc/apache2/sites-available/000-default.conf
 COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
 RUN chmod +x /usr/local/bin/render-entrypoint
 
