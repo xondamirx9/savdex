@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Public;
 
-use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Models\Setting;
-use App\Models\User;
 use App\Support\Appearance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -109,38 +106,6 @@ class HeroImageTest extends TestCase
     public function без_фона_пропорция_не_отдаётся(): void
     {
         $this->get('/')->assertInertia(fn ($page) => $page->where('heroRatio', null));
-    }
-
-    /**
-     * Загрузка идёт отдельным полем формы: у остальных настроек
-     * значение — строка, и общий FileUpload обнулял её.
-     */
-    #[Test]
-    public function картинка_загружается_из_админки(): void
-    {
-        $admin = User::factory()->create([
-            'is_admin' => true,
-            'admin_role' => User::ADMIN_SUPERADMIN,
-            'status' => 'active',
-        ]);
-
-        Storage::fake('public');
-
-        $setting = Setting::query()->where('key', Appearance::KEY_HERO)->firstOrFail();
-
-        Livewire::actingAs($admin)
-            ->test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->fillForm(['value_image' => [UploadedFile::fake()->image('fon.jpg', 1920, 1080)]])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        Setting::flushCache();
-
-        $saved = (string) Setting::get(Appearance::KEY_HERO);
-
-        $this->assertNotSame('', $saved, 'Путь к загруженному файлу должен попасть в настройку');
-        Storage::disk('public')->assertExists($saved);
-        $this->assertStringContainsString('/storage/'.$saved, Appearance::heroImage());
     }
 
     #[Test]

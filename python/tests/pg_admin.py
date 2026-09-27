@@ -57,11 +57,21 @@ import django
 django.setup()
 from django.test import Client
 
+import base64
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 token, steps = sys.argv[1], json.loads(sys.argv[2])
 client = Client(HTTP_X_FORWARDED_FOR="203.0.113.7")
 out = [client.post("/py/login", {"token": token}).status_code]
 
+def upload(value):
+    # Файл в шаге — {"file": имя, "b64": содержимое}
+    if isinstance(value, dict) and "file" in value:
+        return SimpleUploadedFile(value["file"], base64.b64decode(value["b64"]))
+    return value
+
 for method, url, data in steps:
+    data = {k: upload(v) for k, v in (data or {}).items()}
     r = client.get(url) if method == "get" else client.post(url, data)
     body = r.content.decode()
     out.append({"status": r.status_code, "location": r.get("Location"), "body": body})
@@ -133,17 +143,45 @@ def страна(code: str, names: dict[str, str]) -> int:
     return int(pk)
 
 
-def django(uid: int, *steps: tuple[str, str, dict[str, Any] | None]) -> list[Any]:
+def django(
+    uid: int,
+    *steps: tuple[str, str, dict[str, Any] | None],
+    env: dict[str, str] | None = None,
+) -> list[Any]:
     вывод = subprocess.run(
         [sys.executable, "-c", ПРОБА, пропуск(uid), json.dumps(steps)],
         cwd=PYTHON,
-        env={**ОКРУЖЕНИЕ, "DJANGO_SETTINGS_MODULE": "savdex.settings", "PYTHONPATH": str(PYTHON)},
+        env={
+            **ОКРУЖЕНИЕ,
+            **(env or {}),
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
         capture_output=True,
         text=True,
     )
     assert вывод.returncode == 0, вывод.stderr[-3000:]
 
     return json.loads(вывод.stdout)
+
+
+def файл(name: str, content: bytes) -> dict[str, str]:
+    """Загружаемый файл для шага django()."""
+    return {"file": name, "b64": base64.b64encode(content).decode()}
+
+
+def php(code: str, env: dict[str, str] | None = None) -> str:
+    """Выполнить PHP внутри Laravel (tinker) и вернуть вывод."""
+    вывод = subprocess.run(
+        ["php", "artisan", "tinker", "--execute", code],
+        cwd=КОРЕНЬ,
+        env={**ОКРУЖЕНИЕ, **(env or {})},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    return вывод.stdout.strip()
 
 
 def журнал(action: str) -> dict[str, Any]:

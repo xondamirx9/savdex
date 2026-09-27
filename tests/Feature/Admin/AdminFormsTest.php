@@ -6,15 +6,10 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Listings\Pages\EditListing;
-use App\Filament\Resources\Settings\Pages\CreateSetting;
-use App\Filament\Resources\Settings\Pages\EditSetting;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Listing;
-use App\Models\Setting;
 use App\Models\User;
-use App\Support\OfficeLocation;
-use App\Support\PriceDisplay;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -183,115 +178,5 @@ class AdminFormsTest extends TestCase
 
         Livewire::test(EditListing::class, ['record' => $listing->getRouteKey()])
             ->assertSee('Стройматериалы → Кирпич');
-    }
-
-    // ── Настройки площадки ───────────────────────────────────
-
-    /** Часть настроек заводит миграция — поэтому updateOrCreate, а не create. */
-    private function setting(string $key, string $value): Setting
-    {
-        return Setting::updateOrCreate(
-            ['key' => $key],
-            ['group' => 'contacts', 'label' => $key, 'type' => 'string', 'value' => $value],
-        );
-    }
-
-    /** Координаты офиса правятся в админке — ради этого настройка и заведена. */
-    #[Test]
-    public function координаты_офиса_сохраняются_из_админки(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        $setting = $this->setting(OfficeLocation::KEY_COORDS, '41.311081, 69.240562');
-
-        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->assertFormSet(['value' => '41.311081, 69.240562'])
-            ->fillForm(['value' => '39.654620, 66.959720'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $this->assertSame([39.65462, 66.95972], OfficeLocation::coords((string) $setting->refresh()->value));
-    }
-
-    /**
-     * Опечатка в координатах ловится формой. Без проверки карта на
-     * странице «О компании» просто пропадала бы — молча и уже после
-     * сохранения, так что связать пропажу с правкой было бы некому.
-     */
-    #[Test]
-    public function испорченные_координаты_офиса_не_сохраняются(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        $setting = $this->setting(OfficeLocation::KEY_COORDS, '41.311081, 69.240562');
-
-        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->fillForm(['value' => '41,31 69,24'])
-            ->call('save')
-            ->assertHasFormErrors(['value']);
-
-        $this->assertSame('41.311081, 69.240562', $setting->refresh()->value);
-    }
-
-    /** Проверка координат не должна мешать остальным строковым настройкам. */
-    #[Test]
-    public function прочие_настройки_сохраняются_свободным_текстом(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        $setting = $this->setting('support_phone', '+998 71 200-00-00');
-
-        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->fillForm(['value' => '+998 71 300-00-00'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $this->assertSame('+998 71 300-00-00', $setting->refresh()->value);
-    }
-
-    /** Валюта показа выбирается из списка — код мимо списка форма не пропускает. */
-    #[Test]
-    public function валюта_языка_выбирается_из_списка(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        $setting = Setting::query()->where('key', PriceDisplay::key('en'))->firstOrFail();
-
-        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->assertFormSet(['value' => 'USD'])
-            ->fillForm(['value' => 'EUR'])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $this->assertSame('EUR', $setting->refresh()->value);
-        $this->assertSame('EUR', PriceDisplay::currency('en'));
-
-        Livewire::test(EditSetting::class, ['record' => $setting->getRouteKey()])
-            ->fillForm(['value' => 'XXX'])
-            ->call('save')
-            ->assertHasFormErrors(['value']);
-
-        $this->assertSame('EUR', $setting->refresh()->value);
-    }
-
-    /** Удалённую настройку валюты заводят заново — и на создании код тоже из списка. */
-    #[Test]
-    public function валюта_языка_при_создании_настройки_тоже_из_списка(): void
-    {
-        $this->actingAs($this->superadmin());
-
-        Setting::query()->where('key', PriceDisplay::key('tr'))->delete();
-
-        Livewire::test(CreateSetting::class)
-            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'XXX'])
-            ->call('create')
-            ->assertHasFormErrors(['value']);
-
-        Livewire::test(CreateSetting::class)
-            ->fillForm(['label' => 'Валюта на турецкой', 'key' => PriceDisplay::key('tr'), 'group' => 'currency', 'type' => 'string', 'value' => 'EUR'])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $this->assertSame('EUR', PriceDisplay::currency('tr'));
     }
 }
