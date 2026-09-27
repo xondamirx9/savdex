@@ -29,6 +29,12 @@ DEBUG = os.environ.get("APP_ENV", "local") not in ("production", "staging")
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",") if h]
 
+# За Apache и балансировщиком Render: HTTPS снимается снаружи, до Django
+# запрос доходит по HTTP. Какой был исходный протокол, говорит заголовок
+# X-Forwarded-Proto от Render — Apache передаёт его как есть. Без этого
+# Django считал бы каждый запрос небезопасным и строил ссылки на http://
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # ── База ────────────────────────────────────────────────────────────
 
 

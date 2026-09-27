@@ -85,6 +85,13 @@
 и отправляет его либо в старый Laravel, либо в новый Django. **База одна
 и та же.** Оба приложения работают одновременно, сколько понадобится.
 
+> **Как сделано на деле (этап 2).** Отдельного nginx нет: роль прокси
+> играет Apache, который уже стоит в службе Render. Django (gunicorn)
+> запущен в том же контейнере на `127.0.0.1:8001`, и Apache передаёт
+> ему только пути из `docker/apache-python.conf`. Одна служба — нет
+> второй строки в счёте и второй базы настроек; откат — убрать строку
+> из этого файла и передеплоить. Подробно — «Этап 2. Порядок работ».
+
 ```
                     ┌─────────────┐
    посетитель  ───► │    nginx    │
@@ -301,14 +308,15 @@ Django перейдёт в хозяева схемы на последнем э�
 | Этап 0, каркас Django и предохранители | сделано |
 | Этап 0, проверки в CI (`ruff`, `mypy`, `pytest`, PostgreSQL в контейнере) | сделано |
 | Этап 0, проверки в CI для PHP (`pint`, `php artisan test`) | сделано |
-| Этап 0, роль в PostgreSQL без права записи | **ждёт Render** |
+| Этап 0, роль в PostgreSQL для Django | сделано: `savdex_django` читает всё, пишет только нужные столбцы `users` (неделя 5); на Render настроена, `DJANGO_DATABASE_URL` задан |
 | Этап 0, стенд с копией боевой базы | **ждёт Render** |
-| Этап 0, прокси перед сайтом | не начато, нужен к этапу 2 |
+| Этап 0, прокси перед сайтом | сделано: Apache в той же службе передаёт Django пути из `docker/apache-python.conf`; пока только служебный `/py/up` |
 | Этап 1, неделя 1: `savdex:check-postgres` | сделано |
 | Этап 1, неделя 2: `savdex:uzum-ping` | сделано |
 | Этап 1, недели 3–4: `savdex:export-xlsx` | сделано; на боевом сервере **скачиваются книги Python-версии**, PHP-версия в тени для сверки (кнопка в админке) |
 | Python в боевом образе Docker | сделано; сборка проверяется в CI (`docker.yml`) |
-| Этап 1, неделя 5: `savdex:admin` | сделано; Python-команда `admin` сверена с PHP на одной базе. На сервер — вместе с ролью `savdex_django` (**ждёт Render**) |
+| Этап 1, неделя 5: `savdex:admin` | сделано; Python-команда `admin` сверена с PHP на одной базе и проверена на боевом сервере: выданный ею пароль принят при входе в админку |
+| **Этап 1 целиком** | **закрыт**: все четыре команды работают на Python на боевом сервере |
 
 Что выяснилось по дороге:
 
@@ -392,6 +400,34 @@ Django перейдёт в хозяева схемы на последнем э�
 Первый переход хозяина таблиц. Первый настоящий раздел админки Django.
 
 Перед переходом каждой таблицы — перенести её правила из раздела 5.
+
+#### Порядок работ
+
+1. **Распределитель адресов** ✅. Django запущен в той же службе Render
+   (gunicorn на `127.0.0.1:8001`, `docker/render-entrypoint.sh`), Apache
+   передаёт ему пути из `docker/apache-python.conf`. Падение Django
+   видно только на его адресах (503), остальной сайт не замечает;
+   gunicorn поднимается сам через пять секунд. Память: заложено 200 МБ
+   (замер — около 110 МБ на два процесса), это минус три-четыре процесса
+   Apache на тарифе 2 ГБ. Проверка в CI запускает контейнер целиком
+   и ходит в Laravel и в Django через настоящий Apache.
+2. **Вход в админку Django.** Своих таблиц пользователей и сессий у
+   Django нет, чтение сессии Laravel — задача этапа 3. Предложение:
+   пропуск от Laravel. Пункт меню в админке Laravel ведёт на адрес
+   Laravel, тот проверяет права (AdminAccess) и перенаправляет в Django
+   с одноразовым подписанным пропуском на минуту; Django проверяет
+   подпись, заново читает пользователя и его права из базы и заводит
+   свою подписанную куку — без таблиц. Матрица прав — копия AdminAccess,
+   совпадение сверяется тестом с PHP, как список ролей на неделе 5.
+3. **Журнал действий** (раздел 5.1): каждое изменение из админки Django
+   пишется в `admin_actions` так же, как пишет `AuditObserver`.
+4. **Первая таблица — страны** (`countries`, `country_translations`):
+   раздел админки на Django, перенос правил `Country` (раздел 5) и
+   сидера `GeoSeeder`, который скрипт запуска гоняет на каждом деплое;
+   сверка с PHP; затем раздел в Filament убирается, таблица переходит
+   в `OWNED_TABLES`. Отдельно проверить кэши Laravel, где лежат списки
+   стран: после записи из Django они не должны показывать старое.
+5. Остальные 19 таблиц этапа — тем же путём, по одной-две за раз.
 
 ### Этап 3. Публичные страницы, только чтение (6–8 недель)
 
@@ -629,32 +665,56 @@ Django получил узкое, заявленное в `guards.SHARED_WRITES`
 работает, `update users set company_id`, `delete from users` и запись
 в `companies` получают «permission denied».
 
-Выполнить в базе на Render (psql из Shell или «Connect» в панели базы)
-от имени владельца базы; `<база>`, `<владелец>` и пароль — свои:
+Как это сделано на Render — без psql (в образе его нет) и без
+подстановок руками: блок ниже вставляется в Shell службы сайта
+и выполняется через Laravel, от имени владельца базы. Имя базы и
+владельца он берёт сам, пароль генерирует сам и печатает одной короткой
+строкой. Повторный запуск безопасен: заменяет пароль, права не дублирует.
 
-```sql
-CREATE ROLE savdex_django LOGIN PASSWORD '<длинный случайный пароль>';
-GRANT CONNECT ON DATABASE <база> TO savdex_django;
-GRANT USAGE ON SCHEMA public TO savdex_django;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO savdex_django;
--- Новые таблицы из будущих миграций Laravel — тоже на чтение
-ALTER DEFAULT PRIVILEGES FOR ROLE <владелец> IN SCHEMA public
-    GRANT SELECT ON TABLES TO savdex_django;
--- Запись: только столбцы, которые пишет команда admin
-GRANT INSERT (name, email, is_admin, admin_role, status, password,
-              must_change_password, email_verified_at, created_at, updated_at)
-    ON users TO savdex_django;
-GRANT UPDATE (is_admin, admin_role, status, password,
-              must_change_password, email_verified_at, updated_at)
-    ON users TO savdex_django;
-GRANT USAGE ON SEQUENCE users_id_seq TO savdex_django;
+```bash
+php artisan tinker --execute='
+$db = DB::connection();
+$pw = bin2hex(random_bytes(24));
+$exists = $db->scalar("select count(*) from pg_roles where rolname = ?", ["savdex_django"]);
+$db->statement(($exists ? "ALTER" : "CREATE")." ROLE savdex_django LOGIN PASSWORD ".$db->getPdo()->quote($pw));
+$db->statement("GRANT CONNECT ON DATABASE \"".$db->getDatabaseName()."\" TO savdex_django");
+$db->statement("GRANT USAGE ON SCHEMA public TO savdex_django");
+$db->statement("GRANT SELECT ON ALL TABLES IN SCHEMA public TO savdex_django");
+$db->statement("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO savdex_django");
+$db->statement("GRANT INSERT (name, email, is_admin, admin_role, status, password, must_change_password, email_verified_at, created_at, updated_at) ON users TO savdex_django");
+$db->statement("GRANT UPDATE (is_admin, admin_role, status, password, must_change_password, email_verified_at, updated_at) ON users TO savdex_django");
+$db->statement("GRANT USAGE ON SEQUENCE users_id_seq TO savdex_django");
+echo PHP_EOL.$pw.PHP_EOL.PHP_EOL;
+'
 ```
 
-Затем в переменных службы на Render: `DJANGO_DATABASE_URL` =
-`postgres://savdex_django:<пароль>@<хост>:5432/<база>`. Laravel эту
-переменную не читает, Python читает её первой. Выгрузка по кнопке
-по-прежнему идёт под ролью Laravel: она передаёт Python адрес явно,
-иначе не смогла бы разделить с ним снимок базы.
+`ALTER DEFAULT PRIVILEGES` без `FOR ROLE` относится к тому, кто
+выполняет, — то есть к владельцу, который потом и накатывает миграции
+Laravel: новые таблицы сразу видны Django на чтение. Проверено на базе,
+устроенной как на Render (владелец не суперпользователь, с CREATEROLE).
+
+Затем в переменных службы на Render:
+`DJANGO_DATABASE_URL` = `postgres://savdex_django:<пароль>@<хост>/<база>`.
+Хост — тот же, что у Laravel; узнать его без пароля:
+
+```bash
+php artisan tinker --execute='echo parse_url(app(App\Support\DatabaseExports::class)->databaseUrl(), PHP_URL_HOST), PHP_EOL;'
+```
+
+Laravel эту переменную не читает, Python читает её первой. Выгрузка по
+кнопке по-прежнему идёт под ролью Laravel: она передаёт Python адрес
+явно, иначе не смогла бы разделить с ним снимок базы. Проверка —
+`cd python && .venv/bin/python manage.py check_postgres`.
+
+**Что выяснилось при настройке на сервере.** Длинную строку из Shell
+Render не скопировать целиком: терминал переносит её, и в значение
+попадают пробелы и переносы, а дефис на стыке строк теряется. Отсюда
+блок печатает только пароль (48 символов — одна строка, выделяется
+двойным щелчком), а остальное собирается по шаблону. Копирование — правой
+кнопкой: Ctrl+Shift+C в Chrome открывает инструменты разработчика. И
+ещё: без `APP_URL` в панели команда печатала `http://localhost/admin` —
+PHP получает адрес из скрипта запуска (`RENDER_EXTERNAL_URL`), и
+Python теперь идёт тем же путём.
 
 Запуск на сервере (Shell на Render):
 
@@ -703,15 +763,16 @@ PHP-команда остаётся рядом, пока Python-версией �
 
 ## 10. Что нужно решить до старта
 
-1. **Java или Python** — окончательно. Если команда Java-only, план
-   переписывается (раздел 2).
+1. ~~**Java или Python** — окончательно.~~ Решено: Python. Node.js
+   рассматривался отдельно (сентябрь 2026) — остались на Python: готовая
+   админка Django на этапе 6 и уже работающий этап 1.
 2. **Кто ведёт сайт во время переноса.** Полтора года без новых
    возможностей никто не выдержит. Нужен человек на Laravel, который
    держит работающий сайт, пока остальные переносят. Иначе перенос
    бросят в середине, и останутся два недоделанных приложения вместо
    одного работающего.
-3. **Где живёт Django на Render.** Вторая служба в том же Blueprint или
-   отдельная. Влияет на цену и на то, как настраивается прокси.
+3. ~~**Где живёт Django на Render.**~~ Решено: в той же службе, за
+   Apache (этап 2, «Порядок работ»). Без второй строки в счёте.
 4. **Тестовый стенд с копией боевой базы.** Без него этап 3 (сессия)
    и этап 5 (пароли) проверить негде. Нужен до этапа 0.
 5. **Что делать с поиском.** Сейчас это `LIKE` по `search_text`.

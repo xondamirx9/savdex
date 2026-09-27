@@ -34,6 +34,10 @@ sed -ri "s/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-avai
 # Числа при желании переопределяются переменными окружения.
 worker_mb="${APACHE_WORKER_MB:-55}"      # замеренный вес одного процесса
 reserved_mb="${APACHE_RESERVED_MB:-640}" # opcache, queue:work, schedule:work, ОС
+# Django за Apache (docker/apache-python.conf): gunicorn с двумя
+# процессами — замер около 110 МБ, с запасом на рост
+python_mb="${PYTHON_RESERVED_MB:-200}"
+reserved_mb=$(( reserved_mb + python_mb ))
 
 # Сколько памяти у контейнера: cgroup v2, затем v1, затем вся машина.
 if [ -r /sys/fs/cgroup/memory.max ] && [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
@@ -266,6 +270,36 @@ if command -v runuser >/dev/null 2>&1; then
     # и без воркера «Загрузить компании» висело бы «в обработке»
     # вечно. Живёт, пока жив контейнер; после деплоя стартует заново.
     runuser -u www-data -- php artisan queue:work --sleep=3 --tries=3 >/dev/null 2>&1 &
+fi
+
+# ── Django ──────────────────────────────────────────────────────────
+#
+# Вторая половина площадки (python/, перенос на Django). Apache отдаёт
+# ей только адреса из docker/apache-python.conf; остальное — Laravel.
+#
+# Живёт рядом с Apache, как очередь и планировщик. Упал — поднимается
+# снова через пять секунд: на время перезапуска адреса Django отвечают
+# 503, а весь остальной сайт этого не замечает. set +e внутри цикла —
+# иначе первый же ненулевой выход gunicorn унёс бы и цикл (set -e сверху).
+#
+# Слушает только 127.0.0.1: снаружи до Django не достучаться, только
+# через Apache. Два процесса: сейчас через Django идут считанные
+# адреса; больше — PYTHON_WORKERS.
+if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
+    (
+        set +e
+        while true; do
+            runuser -u www-data -- python/.venv/bin/gunicorn savdex.wsgi \
+                --chdir python \
+                --bind 127.0.0.1:8001 \
+                --workers "${PYTHON_WORKERS:-2}" \
+                --timeout 130 \
+                --max-requests 1000 --max-requests-jitter 100 \
+                --error-logfile -
+            echo "ВНИМАНИЕ: Django (gunicorn) остановился, перезапуск через 5 секунд." >&2
+            sleep 5
+        done
+    ) &
 fi
 
 exec "$@"

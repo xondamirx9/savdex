@@ -1,4 +1,5 @@
-# Сборка боевого образа и сквозная проверка выгрузки внутри него.
+# Сборка боевого образа и сквозные проверки внутри него: выгрузка,
+# выдача прав и запуск контейнера целиком (сайт и Django за Apache).
 #
 # Docker на машине разработчика есть не всегда, а ошибка в Dockerfile
 # на Render означает несостоявшийся деплой. Поэтому образ собирается
@@ -99,3 +100,31 @@ jobs:
               BCRYPT_ROUNDS=4 .venv/bin/python manage.py admin ci@savdex.uz --role=support | tee /tmp/admin.txt
               grep -q "Администратор создан" /tmp/admin.txt
             '
+
+      # Контейнер целиком, как его запускает Render: скрипт запуска,
+      # Apache, очередь, планировщик и Django за Apache. Laravel должен
+      # отвечать на своих адресах, Django — на своих (распределитель,
+      # docker/apache-python.conf). База уже подготовлена шагом выше.
+      - name: Контейнер как на Render — сайт и Django за Apache
+        run: |
+          docker run -d --name savdex --network host \
+            -e PORT=18080 \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e DB_CONNECTION=pgsql \
+            -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
+            -e DJANGO_DATABASE_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
+            -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync \
+            savdex:ci
+
+          for i in $(seq 1 90); do
+            curl -fsS -o /dev/null http://127.0.0.1:18080/up && break
+            sleep 2
+          done
+
+          set -x
+          curl -fsS -o /dev/null http://127.0.0.1:18080/up
+          test "$(curl -fsS http://127.0.0.1:18080/py/up)" = ok
+
+      - name: Журнал контейнера
+        if: always()
+        run: docker logs savdex 2>&1 | tail -60 || true
