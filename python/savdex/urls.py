@@ -15,6 +15,8 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 
+from savdex import adminpanel
+
 
 def up(request: HttpRequest) -> HttpResponse:
     """То же, что /up у Laravel."""
@@ -24,4 +26,8 @@ def up(request: HttpRequest) -> HttpResponse:
 urlpatterns = [
     path("up", up),
     path("py/up", up),
+    # Вход в админку на Django — по пропуску из Laravel (savdex/bridge.py)
+    path("py/login", adminpanel.login),
+    path("py/logout", adminpanel.logout),
+    path("py/admin/", adminpanel.home),
 ]

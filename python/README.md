@@ -63,6 +63,8 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/payments/uzum.py` | Прозвон Uzum Checkout — вторая |
 | `savdex/export/` | Выгрузка в Excel — третья |
 | `savdex/admins.py` | Выдача доступа в админку — четвёртая и первая, что пишет |
+| `savdex/access.py` | Права в админке — копия AdminAccess, сверяется с PHP |
+| `savdex/bridge.py`, `savdex/adminpanel.py` | Вход в админку Django по пропуску из Laravel |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |
 | `conftest.py` | Подмена базы на SQLite для проверок |
@@ -155,6 +157,21 @@ PHP-исходника. Правите в одной половине — пра
 uv run gunicorn savdex.wsgi --bind 127.0.0.1:8001
 curl 127.0.0.1:8001/py/up        # ok
 ```
+
+## Вход в админку Django
+
+Разделы админки переезжают на Django по одному (этап 2). Входа своего
+у Django нет: сотрудник входит в админку Laravel и открывает пункт
+«Админка на Python» (`/admin/python`). Laravel (`App\Support\PythonBridge`)
+выдаёт пропуск на минуту, подписанный ключом из `APP_KEY`, и форма
+приносит его в `/py/login`. Django проверяет подпись, сам читает
+пользователя и его права из базы и ставит свою куку на два часа.
+На каждом запросе пользователь перечитывается — блокировка действует
+сразу. Права — `savdex/access.py`, копия AdminAccess; правите матрицу
+в PHP — правьте и здесь, `tests/test_access_parity.py` покажет разницу.
+
+Без `APP_KEY` в окружении вход выключен (503): подпись ключом
+разработчика подделал бы кто угодно.
 
 ## Выдача доступа в админку
 

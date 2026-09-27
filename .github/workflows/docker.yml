@@ -124,6 +124,10 @@ jobs:
           set -x
           curl -fsS -o /dev/null http://127.0.0.1:18080/up
           test "$(curl -fsS http://127.0.0.1:18080/py/up)" = ok
+          # Админка Django без входа уводит за пропуском в Laravel —
+          # значит, ключи из APP_KEY выведены и вход включён
+          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/py/admin/)" \
+            = "302 http://127.0.0.1:18080/admin/python?next=/py/admin/"
 
       - name: Журнал контейнера
         if: always()

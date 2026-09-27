@@ -16,13 +16,16 @@ use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
 use App\Filament\Widgets\SupportQueue;
 use App\Http\Controllers\Admin\DownloadExportController;
+use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
+use App\Models\User;
 use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -113,6 +116,17 @@ class AdminPanelProvider extends PanelProvider
                 ActivationFunnel::class,
                 RegistrationsChart::class,
             ])
+            // Разделы, уже перенесённые на Django (этап 2 переноса).
+            // Пока там только проверка входа — видно одному суперадмину;
+            // по мере переезда разделов пункт откроется всем, кому они выданы
+            ->navigationItems([
+                NavigationItem::make('Админка на Python')
+                    ->url('/admin/python')
+                    ->icon('heroicon-o-beaker')
+                    ->group('Система')
+                    ->sort(99)
+                    ->visible(fn (): bool => auth()->user() instanceof User && auth()->user()->isSuperadmin()),
+            ])
             ->middleware([
                 SetAdminLocale::class,
                 EncryptCookies::class,
@@ -134,6 +148,11 @@ class AdminPanelProvider extends PanelProvider
             ->authenticatedRoutes(function (): void {
                 Route::get('exports/{run}/{file}', DownloadExportController::class)
                     ->name('exports.download');
+
+                // Переход в разделы, которые уже работают на Django
+                // (этап 2 переноса): пропуск вместо общей сессии
+                Route::get('python', PythonBridgeController::class)
+                    ->name('python');
             });
     }
 }
