@@ -1068,3 +1068,8 @@ class NewsPostAdmin(SavdexModelAdmin):
         return format_html(
             '{} · <a href="/news/{}" target="_blank" rel="noopener">Открыть ↗</a>', toggle, obj.slug
         )
+
+
+# Раздел «Страницы и FAQ» — отдельным модулем: у него своя механика
+# полей под языки. Импорт регистрирует его в админке
+from savdex.site import pages_admin  # noqa: E402, F401
