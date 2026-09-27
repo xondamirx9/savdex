@@ -19,7 +19,7 @@ use App\Http\Controllers\Admin\DownloadExportController;
 use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
-use App\Models\User;
+use App\Support\AdminAccess;
 use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -116,16 +116,16 @@ class AdminPanelProvider extends PanelProvider
                 ActivationFunnel::class,
                 RegistrationsChart::class,
             ])
-            // Разделы, уже перенесённые на Django (этап 2 переноса).
-            // Пока там только проверка входа — видно одному суперадмину;
-            // по мере переезда разделов пункт откроется всем, кому они выданы
+            // Разделы, перенесённые на Django (этап 2 переноса): пункт меню
+            // ведёт через пропуск (/admin/python) в раздел на Python.
+            // Видимость — по тем же правам AdminAccess, что и у раздела
             ->navigationItems([
-                NavigationItem::make('Админка на Python')
-                    ->url('/admin/python')
-                    ->icon('heroicon-o-beaker')
-                    ->group('Система')
-                    ->sort(99)
-                    ->visible(fn (): bool => auth()->user() instanceof User && auth()->user()->isSuperadmin()),
+                NavigationItem::make('Страны')
+                    ->url('/admin/python?next=/py/admin/geo/country/')
+                    ->icon('heroicon-o-globe-alt')
+                    ->group('Справочники')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('catalogs.view')),
             ])
             ->middleware([
                 SetAdminLocale::class,

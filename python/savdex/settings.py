@@ -121,21 +121,59 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── Приложения ──────────────────────────────────────────────────────
 
-# Ни contenttypes, ни auth, ни sessions: каждое из них хочет свои
-# таблицы, а таблицы здесь заводит Laravel. Появятся, когда дойдём
-# до этапов 5 и 6.
+# Админка Django (этап 2) — со своими приложениями admin, auth,
+# contenttypes и messages, но без их таблиц: таблицы заводит только
+# Laravel. Пользователь — тот, кто пришёл по пропуску из Laravel
+# (savdex/bridge.py), журнал — admin_actions, а не django_admin_log;
+# места, где админка Django полезла бы в свои таблицы, закрыты
+# в savdex/adminsite.py. Своих сессий нет: вход — подписанная кука.
 INSTALLED_APPS = [
     # Через AppConfig, а не просто "savdex": в его ready() включаются
     # предохранители переноса (см. savdex/apps.py)
     "savdex.apps.SavdexConfig",
+    "savdex.geo.apps.GeoConfig",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Стили и скрипты админки — из самого Django, без отдельного сервера
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # Сообщения «сохранено» живут в куке: таблицы сессий нет
+    "django.contrib.messages.middleware.MessageMiddleware",
     # Кто открыл раздел админки на Django (вход — пропуском из Laravel)
     "savdex.adminpanel.AdminMiddleware",
 ]
+
+MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "savdex" / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# Проверки админки Django требуют промежуточных слоёв входа и сессий
+# Django. Их здесь нет намеренно: вход — пропуском из Laravel, а
+# request.user ставит savdex.adminpanel.AdminMiddleware
+SILENCED_SYSTEM_CHECKS = ["admin.E408", "admin.E410"]
+
+STATIC_URL = "/py/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Кука CSRF — только для адресов Django и со своим именем: у Laravel
 # своя (XSRF-TOKEN), делить им нечего

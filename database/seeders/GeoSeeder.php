@@ -537,12 +537,15 @@ class GeoSeeder extends Seeder
     }
 
     /**
-     * Страна с переводами.
+     * Страна с переводами — только если её ещё нет.
      *
-     * Сидер запускается на каждом деплое, поэтому идемпотентен:
-     * страна ищется по коду, названия обновляются на месте. Без этого
-     * страна, добавленная после прошлого релиза, доезжала бы до прода
-     * только пересозданием базы.
+     * Раньше сидер на каждом деплое перезаписывал существующие страны:
+     * порядок, «показывать» и названия. Страна, выключенная или
+     * переименованная в админке, при следующем деплое молча возвращалась
+     * как была. С этапа 2 переноса страны правятся в разделе на Python
+     * и принадлежат ему (python/savdex/guards.py, OWNED_TABLES), поэтому
+     * сидер только досоздаёт недостающие — на свежей базе и когда в
+     * список добавили новую страну, — а существующих не трогает.
      *
      * @param  array{0: string, 1: string, 2: string, 3: list<string>}  $row
      */
@@ -550,13 +553,15 @@ class GeoSeeder extends Seeder
     {
         [$code, $phone, $currency, $names] = $row;
 
-        $country = Country::updateOrCreate(
+        $country = Country::firstOrCreate(
             ['code' => $code],
             ['phone_code' => $phone, 'currency_code' => $currency, 'sort' => $sort, 'is_active' => true],
         );
 
-        foreach (self::LOCALES as $i => $locale) {
-            $country->translations()->updateOrCreate(['locale' => $locale], ['name' => $names[$i]]);
+        if ($country->wasRecentlyCreated) {
+            foreach (self::LOCALES as $i => $locale) {
+                $country->translations()->create(['locale' => $locale, 'name' => $names[$i]]);
+            }
         }
 
         $this->cities($country, self::CITIES[$code] ?? []);

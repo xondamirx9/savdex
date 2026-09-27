@@ -1,9 +1,9 @@
 """
-Админка на Django: вход, выход и страница «кто вошёл».
+Админка на Django: вход по пропуску, выход и «кто открыл раздел».
 
-Разделы переезжают сюда по одному (этап 2 переноса); первым будет
-справочник стран. Здесь — то, без чего не обойдётся ни один раздел:
-кто этот человек и что ему можно. Сам вход — через Laravel, пропуском
+Разделы переезжают сюда по одному (этап 2 переноса); сами разделы и
+сайт админки — в savdex/adminsite.py. Здесь — то, без чего не обойдётся
+ни один раздел: кто этот человек. Вход — через Laravel, пропуском
 (savdex/bridge.py).
 """
 
@@ -21,12 +21,11 @@ from django.http import (
     HttpResponseForbidden,
     HttpResponseRedirect,
 )
-from django.middleware.csrf import get_token
 from django.utils.html import format_html
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_POST
 
-from savdex import access, bridge
+from savdex import bridge
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +71,10 @@ class AdminMiddleware:
             return _to_laravel(request.get_full_path())
 
         request.admin = admin  # type: ignore[attr-defined]
+        # Админка Django спрашивает права у request.user
+        from savdex.adminsite import StaffUser
+
+        request.user = StaffUser(admin)  # type: ignore[assignment]
 
         return self.get_response(request)
 
@@ -129,31 +132,3 @@ def logout(request: HttpRequest) -> HttpResponseBase:
     response.delete_cookie(bridge.COOKIE, path=bridge.COOKIE_PATH)
 
     return response
-
-
-@require_GET
-def home(request: HttpRequest) -> HttpResponse:
-    """Кто вошёл и что ему можно. Разделы появятся здесь по мере переноса."""
-    admin: access.Admin = request.admin  # type: ignore[attr-defined]
-    sections = [label for section, label in access.SECTIONS.items() if admin.can(f"{section}.view")]
-
-    return HttpResponse(
-        format_html(
-            '<!doctype html><html lang="ru"><meta charset="utf-8">'
-            "<title>Админка на Python</title>"
-            '<body style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 48rem">'
-            "<h1>Админка на Python</h1>"
-            "<p>Вы вошли как <b>{}</b> ({}), роль — {}.</p>"
-            "<p>Доступные разделы: {}.</p>"
-            "<p>Разделы переезжают сюда по одному; пока здесь только проверка входа.</p>"
-            '<form method="post" action="/py/logout">'
-            '<input type="hidden" name="csrfmiddlewaretoken" value="{}">'
-            '<a href="/admin">Вернуться в админку</a> · <button type="submit">Выйти</button>'
-            "</form></body></html>",
-            admin.name,
-            admin.email,
-            admin.role_label,
-            ", ".join(sections) or "нет",
-            get_token(request),
-        )
-    )

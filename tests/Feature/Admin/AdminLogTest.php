@@ -6,7 +6,11 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\AdminActions\AdminActionResource;
 use App\Models\AdminAction;
+use App\Models\Category;
+use App\Models\City;
 use App\Models\Company;
+use App\Models\CompanyType;
+use App\Models\Country;
 use App\Models\User;
 use App\Support\AdminAccess;
 use App\Support\AdminLog;
@@ -122,7 +126,7 @@ class AdminLogTest extends TestCase
 
         Company::factory()->create();
 
-        $entry = AdminAction::where('action', 'created')->sole();
+        $entry = AdminAction::where('subject_type', Company::class)->where('action', 'created')->sole();
 
         $this->assertSame('Пётр Модераторов', $entry->user_name);
         $this->assertSame(AdminAccess::MODERATOR, $entry->user_role);
@@ -151,7 +155,7 @@ class AdminLogTest extends TestCase
 
         $actor->forceDelete();
 
-        $entry = AdminAction::where('action', 'created')->sole();
+        $entry = AdminAction::where('subject_type', Company::class)->where('action', 'created')->sole();
 
         $this->assertSame('Уволенный Сотрудник', $entry->user_name);
         $this->assertSame($actor->id, $entry->user_id, 'ссылка остаётся историческим фактом');
@@ -201,7 +205,7 @@ class AdminLogTest extends TestCase
         $this->actingAs($this->admin());
         Company::factory()->create();
 
-        $entry = AdminAction::sole();
+        $entry = AdminAction::where('subject_type', Company::class)->sole();
 
         $this->expectException(RuntimeException::class);
 
@@ -218,7 +222,7 @@ class AdminLogTest extends TestCase
 
         $this->expectException(RuntimeException::class);
 
-        AdminAction::sole()->delete();
+        AdminAction::where('subject_type', Company::class)->sole()->delete();
     }
 
     /** Ни у кого, включая суперадмина: в панели этих кнопок нет вовсе. */
@@ -228,7 +232,7 @@ class AdminLogTest extends TestCase
         $this->actingAs($this->admin());
         Company::factory()->create();
 
-        $entry = AdminAction::sole();
+        $entry = AdminAction::where('subject_type', Company::class)->sole();
 
         $this->assertTrue(AdminActionResource::canViewAny());
         $this->assertFalse(AdminActionResource::canCreate());
@@ -280,5 +284,37 @@ class AdminLogTest extends TestCase
         AdminLog::record('created', str_repeat('раздел', 50), note: 'слишком длинный раздел');
 
         $this->assertTrue(true, 'исключение не вышло наружу');
+    }
+
+    /**
+     * Правки справочников тоже попадают в журнал.
+     *
+     * У стран, городов, категорий и типов компаний есть метод name() —
+     * название на нужном языке. Название записи для журнала бралось
+     * через getAttribute('name'), Eloquent принимал метод за связь и
+     * бросал исключение, а AdminLog его глотал: весь раздел
+     * «Справочники» в журнал не попадал вовсе, ни одной строки.
+     */
+    #[Test]
+    public function правки_справочников_попадают_в_журнал(): void
+    {
+        $this->actingAs($this->admin());
+
+        $country = Country::create(['code' => 'zz', 'phone_code' => '+0', 'currency_code' => 'ZZZ']);
+        $country->update(['phone_code' => '+1']);
+        City::create(['country_id' => $country->id, 'slug' => 'zz-city']);
+        Category::factory()->create();
+        CompanyType::create(['code' => 'zz-type', 'sort' => 1]);
+
+        $rows = AdminAction::query()->where('section', 'catalogs')->orderBy('id')->get();
+
+        $this->assertSame(
+            ['App\\Models\\Country:created', 'App\\Models\\Country:updated', 'App\\Models\\City:created', 'App\\Models\\Category:created', 'App\\Models\\CompanyType:created'],
+            $rows->map(fn (AdminAction $a): string => $a->subject_type.':'.$a->action)->all(),
+        );
+
+        // Название записи — из её собственных полей: у страны код
+        $this->assertSame('zz', $rows[0]->subject_label);
+        $this->assertSame(['before' => ['phone_code' => '+0'], 'after' => ['phone_code' => '+1']], $rows[1]->changes);
     }
 }

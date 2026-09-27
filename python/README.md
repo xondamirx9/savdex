@@ -65,6 +65,9 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/admins.py` | Выдача доступа в админку — четвёртая и первая, что пишет |
 | `savdex/access.py` | Права в админке — копия AdminAccess, сверяется с PHP |
 | `savdex/bridge.py`, `savdex/adminpanel.py` | Вход в админку Django по пропуску из Laravel |
+| `savdex/adminsite.py` | Админка Django без своих таблиц: права, журнал, заголовки |
+| `savdex/audit.py` | Журнал действий — копия AdminLog, пишет в общий `admin_actions` |
+| `savdex/geo/` | Страны — первая таблица, которой владеет Django |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
 | `savdex/urls.py` | Адреса, которые Apache отдаёт Django. Пока только `/up` и `/py/up` |
 | `conftest.py` | Подмена базы на SQLite для проверок |
@@ -172,6 +175,22 @@ curl 127.0.0.1:8001/py/up        # ok
 
 Без `APP_KEY` в окружении вход выключен (503): подпись ключом
 разработчика подделал бы кто угодно.
+
+## Разделы админки на Django
+
+Раздел — модель Django (`managed = False`, таблицу по-прежнему заводит
+Laravel) и класс админки от `SavdexModelAdmin` с разделом прав AdminAccess:
+
+```python
+@register(Country, section="catalogs")
+class CountryAdmin(SavdexModelAdmin):
+    laravel_model = "App\\Models\\Country"  # как запись называется в журнале Laravel
+```
+
+Права, журнал (`created` / `updated` с «было — стало» / `deleted`) и
+русские заголовки даёт `SavdexModelAdmin`. Прежде чем раздел пишет в
+таблицу, таблица должна перейти к Django (`guards.OWNED_TABLES`), а роли
+`savdex_django` нужны права на запись — их выдаёт миграция Laravel.
 
 ## Выдача доступа в админку
 

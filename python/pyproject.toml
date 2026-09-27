@@ -11,6 +11,7 @@ dependencies = [
     "openpyxl>=3.1",
     "bcrypt>=4.2",
     "gunicorn>=23",
+    "whitenoise>=6.7",
 ]
 
 [dependency-groups]
@@ -60,3 +61,11 @@ disallow_untyped_defs = false
 DJANGO_SETTINGS_MODULE = "savdex.settings"
 python_files = ["test_*.py"]
 testpaths = ["tests"]
+# Схему делает Laravel: у Django в проверочной базе не должно быть даже
+# своей таблицы миграций — её CREATE остановил бы предохранитель
+addopts = "--no-migrations"
+filterwarnings = [
+    # Статика админки собирается при сборке образа (collectstatic), в
+    # проверках каталога нет — и не нужно
+    "ignore:No directory at:UserWarning",
+]

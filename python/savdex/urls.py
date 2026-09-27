@@ -15,7 +15,7 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 
-from savdex import adminpanel
+from savdex import adminpanel, adminsite
 
 
 def up(request: HttpRequest) -> HttpResponse:
@@ -29,5 +29,5 @@ urlpatterns = [
     # Вход в админку на Django — по пропуску из Laravel (savdex/bridge.py)
     path("py/login", adminpanel.login),
     path("py/logout", adminpanel.logout),
-    path("py/admin/", adminpanel.home),
+    path("py/admin/", adminsite.site.urls),
 ]

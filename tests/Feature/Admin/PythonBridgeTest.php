@@ -115,19 +115,14 @@ class PythonBridgeTest extends TestCase
         $this->assertSame('/py/admin/geo/countries?page=2', PythonBridge::safeNext('/py/admin/geo/countries?page=2'));
     }
 
-    /** Пока в разделах на Python только проверка входа — пункт меню видит суперадмин. */
+    /** Страны — первый раздел на Python: пункт меню ведёт через пропуск. */
     #[Test]
-    public function пункт_меню_только_суперадмину(): void
+    public function пункт_стран_ведёт_в_раздел_на_python(): void
     {
-        $this->actingAs($this->admin(['admin_role' => AdminAccess::SUPERADMIN]))
+        $this->actingAs($this->admin())
             ->get('/admin')
             ->assertOk()
-            ->assertSee('Админка на Python');
-
-        $this->actingAs($this->admin(['admin_role' => AdminAccess::ADMIN]))
-            ->get('/admin')
-            ->assertOk()
-            ->assertDontSee('Админка на Python');
+            ->assertSee('/admin/python?next=/py/admin/geo/country/', false);
     }
 
     /** Ключ подписи выведен из APP_KEY, но им не является. */

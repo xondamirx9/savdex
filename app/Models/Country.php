@@ -113,11 +113,18 @@ class Country extends Model
         return $this->hasMany(Tender::class);
     }
 
+    public function resumes(): HasMany
+    {
+        return $this->hasMany(Resume::class);
+    }
+
     /**
      * Что удерживает страну от удаления.
      *
      * Города считаются наравне с компаниями: внешний ключ у них
      * каскадный, и удаление страны увело бы их за собой без вопросов.
+     * Резюме тоже: раньше их не считали, и удаление страны молча
+     * обнуляло её у резюме (внешний ключ nullOnDelete).
      *
      * @return array<string, int>
      */
@@ -127,6 +134,7 @@ class Country extends Model
             'города' => $this->cities()->count(),
             'компании' => $this->companies()->count(),
             'тендеры' => $this->tenders()->count(),
+            'резюме' => $this->resumes()->count(),
         ];
 
         return array_filter($counts);

@@ -179,8 +179,8 @@ class TestСтраницы:
 
         assert page.status_code == 200
         assert "Анна" in page.content.decode()
-        assert "Справочники" in page.content.decode()
-        assert "Компании" not in page.content.decode()
+        # Контент-менеджеру справочники выданы — раздел стран виден
+        assert "Страны" in page.content.decode()
 
     def test_без_входа_за_пропуском_в_laravel(self, база):
         response = Client().get("/py/admin/geo/?page=2")

@@ -97,11 +97,20 @@ final class AdminLog
         return $user instanceof User && $user->is_admin;
     }
 
-    /** Понятное название записи: имя компании, заголовок объявления, почта. */
+    /**
+     * Понятное название записи: имя компании, заголовок объявления, почта.
+     *
+     * Только из собственных полей записи, не через getAttribute():
+     * у стран, городов, категорий и типов компаний есть метод name(),
+     * Eloquent принимал его за связь и бросал исключение — и весь раздел
+     * «Справочники» не попадал в журнал ни одной строкой.
+     */
     public static function label(Model $subject): string
     {
+        $attributes = $subject->getAttributes();
+
         foreach (['name', 'title', 'email', 'code', 'slug'] as $field) {
-            $value = $subject->getAttribute($field);
+            $value = $attributes[$field] ?? null;
 
             if (is_string($value) && $value !== '') {
                 return mb_substr($value, 0, 200);

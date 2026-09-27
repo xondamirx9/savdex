@@ -9,16 +9,14 @@ use App\Filament\Resources\Cities\CityResource;
 use App\Filament\Resources\Cities\Pages\CreateCity;
 use App\Filament\Resources\Cities\Pages\EditCity;
 use App\Filament\Resources\Cities\Pages\ListCities;
-use App\Filament\Resources\Countries\CountryResource;
-use App\Filament\Resources\Countries\Pages\CreateCountry;
-use App\Filament\Resources\Countries\Pages\EditCountry;
-use App\Filament\Resources\Countries\Pages\ListCountries;
 use App\Models\City;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\User;
 use App\Support\AdminAccess;
+use Database\Seeders\GeoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -29,10 +27,17 @@ use Tests\TestCase;
  * До них список стран правился только сидером, то есть деплоем: новое
  * направление работы ждало разработчика. Теперь страну и город заводят
  * из панели, и она же не даёт снести страну, на которой стоят компании.
+ *
+ * Страны с этапа 2 переноса правятся в разделе на Python
+ * (python/savdex/geo/admin.py, проверки — python/tests/test_countries_admin.py).
+ * Здесь остались правила модели и пункт меню, который туда ведёт.
  */
 class GeographyTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** Пункт меню «Страны» — вход в раздел на Python через пропуск. */
+    private const COUNTRIES_LINK = '/admin/python?next=/py/admin/geo/country/';
 
     private function admin(string $role): User
     {
@@ -65,8 +70,7 @@ class GeographyTest extends TestCase
         foreach ([AdminAccess::SUPERADMIN, AdminAccess::ADMIN] as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->assertTrue(CountryResource::canViewAny(), "{$role} должен видеть страны");
-            $this->assertTrue(CountryResource::canCreate(), "{$role} должен заводить страны");
+            $this->get('/admin')->assertSee(self::COUNTRIES_LINK, false);
             $this->assertTrue(CityResource::canViewAny(), "{$role} должен видеть города");
             $this->assertTrue(CityResource::canCreate(), "{$role} должен заводить города");
         }
@@ -79,7 +83,7 @@ class GeographyTest extends TestCase
         foreach ([AdminAccess::SALES, AdminAccess::FINANCE, AdminAccess::SUPPORT] as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->assertFalse(CountryResource::canViewAny(), "{$role} не должен видеть страны");
+            $this->get('/admin')->assertDontSee(self::COUNTRIES_LINK, false);
             $this->assertFalse(CityResource::canViewAny(), "{$role} не должен видеть города");
         }
     }
@@ -90,8 +94,7 @@ class GeographyTest extends TestCase
     {
         $this->actingAs($this->admin(AdminAccess::MODERATOR));
 
-        $this->assertTrue(CountryResource::canViewAny());
-        $this->assertFalse(CountryResource::canCreate());
+        $this->get('/admin')->assertSee(self::COUNTRIES_LINK, false);
         $this->assertFalse(CityResource::canCreate());
     }
 
@@ -105,10 +108,6 @@ class GeographyTest extends TestCase
         $uz = $this->country('uz');
         $city = City::query()->create(['country_id' => $uz->id, 'slug' => 'tashkent', 'is_active' => true]);
         $city->translations()->create(['locale' => 'ru', 'name' => 'Ташкент']);
-
-        Livewire::test(ListCountries::class)
-            ->assertOk()
-            ->assertCanSeeTableRecords([$uz]);
 
         Livewire::test(ListCities::class)
             ->assertOk()
@@ -182,6 +181,27 @@ class GeographyTest extends TestCase
         $this->assertDatabaseHas('cities', ['slug' => 'tashkent']);
     }
 
+    /** Резюме тоже держат страну: раньше удаление молча обнуляло её у них. */
+    #[Test]
+    public function страна_с_резюме_не_удаляется(): void
+    {
+        $country = $this->country('tj');
+        $user = User::factory()->create();
+        DB::table('resumes')->insert([
+            'user_id' => $user->id, 'title' => 'Инженер', 'country_id' => $country->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        try {
+            $country->delete();
+            $this->fail('страна с резюме удалилась — у резюме страна обнулилась бы');
+        } catch (RecordIsReferenced $e) {
+            $this->assertSame(['резюме' => 1], $e->references);
+        }
+
+        $this->assertDatabaseHas('resumes', ['country_id' => $country->id]);
+    }
+
     #[Test]
     public function город_с_компаниями_не_удаляется(): void
     {
@@ -242,41 +262,6 @@ class GeographyTest extends TestCase
 
     // ── Формы ───────────────────────────────────────────────────────
 
-    /**
-     * Форма заводится целиком, вместе с переводами.
-     *
-     * Список открывался и тогда, когда форма падала: в этом проекте
-     * так уже было с финансовыми операциями. Поэтому здесь не «экран
-     * открылся», а «страна создана и её видно».
-     */
-    #[Test]
-    public function страна_заводится_через_форму_админки(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::ADMIN));
-
-        Livewire::test(CreateCountry::class)
-            ->fillForm([
-                'code' => 'kg',
-                'phone_code' => '+996',
-                'currency_code' => 'KGS',
-                'sort' => 5,
-                'is_active' => true,
-                'translations' => [
-                    ['locale' => 'ru', 'name' => 'Киргизия'],
-                    ['locale' => 'en', 'name' => 'Kyrgyzstan'],
-                ],
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $country = Country::query()->where('code', 'kg')->with('translations')->first();
-
-        $this->assertNotNull($country, 'страна должна была создаться');
-        $this->assertSame('Киргизия', $country->name('ru'));
-        $this->assertSame('Kyrgyzstan', $country->name('en'));
-        $this->assertSame('+996', $country->phone_code);
-    }
-
     #[Test]
     public function город_заводится_через_форму_админки(): void
     {
@@ -314,32 +299,49 @@ class GeographyTest extends TestCase
         $city = City::query()->create(['country_id' => $country->id, 'slug' => 'tashkent']);
         $city->translations()->create(['locale' => 'ru', 'name' => 'Ташкент']);
 
-        Livewire::test(EditCountry::class, ['record' => $country->getRouteKey()])
-            ->assertOk()
-            ->assertFormSet(['code' => 'uz']);
-
         Livewire::test(EditCity::class, ['record' => $city->getRouteKey()])
             ->assertOk()
             ->assertFormSet(['slug' => 'tashkent']);
     }
 
-    /** Два кода страны в одном регистре — это один и тот же список выбора. */
+    /**
+     * Деплой не откатывает правки стран.
+     *
+     * GeoSeeder гоняется на каждом деплое и раньше перезаписывал
+     * существующие страны: выключенная в админке страна включалась
+     * обратно, переименованная — возвращала старое имя. Теперь он
+     * только досоздаёт недостающие.
+     */
     #[Test]
-    public function повторный_код_страны_не_проходит(): void
+    public function сидер_не_откатывает_правки_стран(): void
     {
-        $this->actingAs($this->admin(AdminAccess::ADMIN));
+        $this->seed(GeoSeeder::class);
 
-        $this->country('uz');
+        $uz = Country::query()->where('code', 'uz')->firstOrFail();
+        $uz->update(['is_active' => false, 'sort' => 42]);
+        $uz->translations()->where('locale', 'ru')->update(['name' => 'Республика Узбекистан']);
+        $count = Country::count();
 
-        Livewire::test(CreateCountry::class)
-            ->fillForm([
-                'code' => 'uz',
-                'phone_code' => '+998',
-                'currency_code' => 'UZS',
-                'sort' => 0,
-                'translations' => [['locale' => 'ru', 'name' => 'Дубль']],
-            ])
-            ->call('create')
-            ->assertHasFormErrors(['code']);
+        $this->seed(GeoSeeder::class);
+
+        $uz->refresh()->load('translations');
+        $this->assertFalse($uz->is_active);
+        $this->assertSame(42, $uz->sort);
+        $this->assertSame('Республика Узбекистан', $uz->name('ru'));
+        $this->assertSame($count, Country::count(), 'дублей нет');
+    }
+
+    /** На свежей базе сидер по-прежнему заводит страны со всеми названиями. */
+    #[Test]
+    public function сидер_заводит_страны_на_свежей_базе(): void
+    {
+        $this->seed(GeoSeeder::class);
+
+        $uz = Country::query()->where('code', 'uz')->with('translations')->firstOrFail();
+
+        $this->assertTrue($uz->is_active);
+        $this->assertSame('Узбекистан', $uz->name('ru'));
+        $this->assertCount(5, $uz->translations);
+        $this->assertGreaterThan(0, $uz->cities()->count());
     }
 }
