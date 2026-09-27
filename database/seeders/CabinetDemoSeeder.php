@@ -601,10 +601,28 @@ class CabinetDemoSeeder extends Seeder
         }
     }
 
-    /** @param array<string, Listing> $listings */
+    /**
+     * Демо-отзывы о демо-компании.
+     *
+     * Только не на боевой площадке и только от демо-компаний. Раньше
+     * автора брали из любых компаний базы без порядка: на живом сайте
+     * каждый деплой с SEED_DEMO=true приписывал настоящей компании ещё
+     * одну копию выдуманного отзыва, и они попадали на главную.
+     * Такие отзывы скрывает миграция hide_demo_seeded_reviews.
+     *
+     * @param  array<string, Listing>  $listings
+     */
     private function reviews(Company $company, array $listings): void
     {
-        $authors = Company::query()->where('id', '!=', $company->id)->get();
+        if (app()->isProduction()) {
+            return;
+        }
+
+        $authors = Company::query()
+            ->where('id', '!=', $company->id)
+            ->where('name', 'like', 'ООО «Демо-%')
+            ->orderBy('id')
+            ->get();
 
         if ($authors->count() < 2) {
             return;
