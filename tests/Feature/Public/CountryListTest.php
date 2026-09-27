@@ -178,18 +178,39 @@ class CountryListTest extends TestCase
                 ->all() === [$own->slug]));
     }
 
-    /** Под страной показаны все её компании, без ограничения. */
+    /**
+     * Под страной сразу первые двенадцать компаний, «Показать ещё»
+     * одним нажатием подгружает всех оставшихся.
+     */
     #[Test]
-    public function под_страной_показаны_все_компании(): void
+    public function показать_ещё_подгружает_все_оставшиеся_компании(): void
     {
-        Company::factory()->count(12)->create([
+        $companies = Company::factory()->count(30)->create([
             'status' => Company::STATUS_ACTIVE,
             'country_id' => Country::where('code', 'pl')->value('id'),
         ]);
 
         $this->get('/countries')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('countries.0.companies', 12)
+            ->where('countries.0.companies', 30)
             ->has('countries.0.items', 12));
+
+        $shown = collect($this->get('/countries')->viewData('page')['props']['countries'][0]['items'])->pluck('slug');
+
+        $more = $this->getJson('/countries/pl/companies?offset=12')
+            ->assertOk()
+            ->assertJsonCount(18, 'items')
+            ->json('items');
+
+        $this->assertEqualsCanonicalizing(
+            $companies->pluck('slug')->all(),
+            $shown->merge(collect($more)->pluck('slug'))->all(),
+        );
+    }
+
+    #[Test]
+    public function показать_ещё_для_неизвестной_страны_404(): void
+    {
+        $this->getJson('/countries/xx/companies')->assertNotFound();
     }
 
     /**
