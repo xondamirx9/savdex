@@ -351,7 +351,8 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         params.append(row["field"])
 
     similar = _rows(
-        f"{select} and r.id != %s{same_field} order by r.published_at desc, r.id desc limit 4", params
+        f"{select} and r.id != %s{same_field} order by r.published_at desc, r.id desc limit 4",
+        params,
     )
 
     return inertia.render(
