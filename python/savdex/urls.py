@@ -16,7 +16,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
-from savdex.web import directory, legal, news
+from savdex.web import directory, legal, news, pricing
 from savdex.web import views as web
 
 
@@ -39,6 +39,7 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<key>help|guide|rules)$", web.doc),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index),
