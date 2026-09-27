@@ -18,6 +18,10 @@ from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+#: Корень Laravel: Django живёт в его подпапке python/. Нужен для общих
+#: с Laravel файлов — кэша (savdex/laravel_cache.py) и публичного диска
+LARAVEL_ROOT = Path(os.environ.get("LARAVEL_ROOT", BASE_DIR.parent))
+
 # ── Секреты и режим ─────────────────────────────────────────────────
 
 
@@ -133,6 +137,8 @@ INSTALLED_APPS = [
     "savdex.apps.SavdexConfig",
     "savdex.geo.apps.GeoConfig",
     "savdex.catalogs.apps.CatalogsConfig",
+    "savdex.billing.apps.BillingConfig",
+    "savdex.site.apps.SiteConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

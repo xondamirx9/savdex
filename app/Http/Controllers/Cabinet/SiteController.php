@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Cabinet;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\CompanySite;
+use App\Models\CompanySiteProduct;
+use App\Support\Currencies;
+use App\Support\ImageStore;
 use App\Support\Microsite\SiteHost;
 use App\Support\Microsite\SitePage;
 use App\Support\Microsite\SiteTheme;
@@ -16,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 /**
  * Редактор мини-сайта: адрес, шаблон и оформление.
@@ -52,7 +56,22 @@ class SiteController extends Controller
             ],
             'subdomain' => $site->subdomain ?? SiteHost::suggest($company->slug),
             'theme' => $site?->draftTheme() ?? SiteTheme::normalize(null),
+            'hero_url' => $site !== null ? CompanySite::heroUrl($site->draftTheme()) : null,
             'options' => SiteTheme::options(),
+
+            'products' => $company->siteProducts()->get()->map(fn (CompanySiteProduct $p): array => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'description' => $p->description,
+                'price' => $p->price !== null ? (float) $p->price : null,
+                'currency' => $p->currency,
+                'unit' => $p->unit,
+                'image' => $p->thumbUrl(),
+            ])->values(),
+            'products_limit' => CompanySiteProduct::LIMIT,
+            // Объявления попадают на сайт сами — редактор только говорит сколько
+            'listings_count' => $company->activeListings()->count(),
+            'currencies' => Currencies::codes(),
         ]);
     }
 
@@ -72,11 +91,17 @@ class SiteController extends Controller
             'subdomain.unique' => __('ui.messages.site.subdomain_taken'),
         ]);
 
+        // Фон меняется только загрузкой: из формы он не принимается,
+        // иначе в тему можно было бы подставить чужой файл
+        // Запросом, а не через связь: закэшированный пустой site
+        // остался бы на компании после создания сайта ниже
+        $hero = $company->site()->first()?->theme['hero_image'] ?? null;
+
         CompanySite::updateOrCreate(
             ['company_id' => $company->id],
             [
                 'subdomain' => strtolower($data['subdomain']),
-                'theme' => SiteTheme::normalize($data['theme']),
+                'theme' => SiteTheme::normalize([...$data['theme'], 'hero_image' => $hero]),
             ],
         );
 
@@ -102,6 +127,68 @@ class SiteController extends Controller
         $site->publish();
 
         return back()->with('success', __('ui.messages.site.published'));
+    }
+
+    /**
+     * Фон первого экрана. Попадает в черновик: посетители увидят его
+     * после «Опубликовать», как и остальное оформление.
+     */
+    public function uploadHero(Request $request): RedirectResponse
+    {
+        $company = $request->user()->company;
+
+        if ($company === null || ! $this->available($company)) {
+            return back()->with('error', __('ui.messages.site.plan_required'));
+        }
+
+        $site = $company->site;
+
+        if ($site === null) {
+            return back()->with('error', __('ui.messages.site.save_first'));
+        }
+
+        $request->validate([
+            'hero' => ['required', 'file', 'mimes:'.implode(',', ImageStore::ALLOWED_MIMES), 'max:'.ImageStore::MAX_SIZE_KB],
+        ], [
+            'hero.required' => __('ui.messages.file.required'),
+            'hero.mimes' => __('ui.messages.image.mimes'),
+            'hero.max' => __('ui.messages.image.max'),
+        ]);
+
+        $store = app(ImageStore::class);
+
+        try {
+            $path = $store->store($request->file('hero'), "sites/{$company->id}", ImageStore::COVER);
+        } catch (RuntimeException) {
+            return back()->with('error', __('ui.messages.image.unreadable'));
+        }
+
+        $this->replaceHero($site, $path);
+
+        return back()->with('success', __('ui.messages.site.hero_saved'));
+    }
+
+    public function removeHero(Request $request): RedirectResponse
+    {
+        $site = $request->user()->company?->site;
+
+        if ($site !== null) {
+            $this->replaceHero($site, null);
+        }
+
+        return back()->with('success', __('ui.messages.site.hero_removed'));
+    }
+
+    /** Новый фон черновика; прежний файл удаляется, если он не на сайте. */
+    private function replaceHero(CompanySite $site, ?string $path): void
+    {
+        $previous = $site->theme['hero_image'] ?? null;
+
+        $site->forceFill(['theme' => [...$site->draftTheme(), 'hero_image' => $path]])->save();
+
+        if ($previous !== null && ! $site->heroInUse($previous)) {
+            app(ImageStore::class)->delete($previous);
+        }
     }
 
     /** Снять с публикации можно и без тарифа: это не услуга, а отказ от неё. */

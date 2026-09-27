@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from django.db import connection, models
@@ -42,11 +42,44 @@ def now() -> datetime:
     return timezone.now().replace(microsecond=0)
 
 
+class UTCDateTimeField(models.DateTimeField):  # type: ignore[type-arg]
+    """
+    Столбец timestamp (без пояса), как его заводит Laravel, — в UTC.
+
+    Django на PostgreSQL рассчитывает на timestamptz и читает timestamp
+    без пояса «наивным» временем, которое не сравнить с текущим. Laravel
+    пишет туда UTC (app.timezone) — так его и читаем.
+    """
+
+    def from_db_value(self, value: Any, expression: Any, connection: Any) -> Any:  # noqa: ANN401
+        if value is not None and timezone.is_naive(value):
+            return timezone.make_aware(value, UTC)
+
+        return value
+
+
+class LaravelJSONField(models.JSONField):
+    """
+    Столбец json (не jsonb), как его заводит Laravel.
+
+    Для jsonb Django просит драйвер отдавать текст и разбирает его сам;
+    для json драйвер psycopg разбирает значение сам, и Django разбирал
+    бы его второй раз — строка «SAVDEX» падала бы как недопустимый JSON.
+    Поэтому столбец читается текстом, а разбирает только Django.
+    """
+
+    def select_format(self, compiler: Any, sql: str, params: Any) -> Any:  # noqa: ANN401
+        if compiler.connection.vendor == "postgresql":
+            return f"({sql})::text", params
+
+        return super().select_format(compiler, sql, params)
+
+
 class Timestamped(models.Model):
     """created_at и updated_at, которые Eloquent ставит сам."""
 
-    created_at = models.DateTimeField(null=True, editable=False)
-    updated_at = models.DateTimeField(null=True, editable=False)
+    created_at = UTCDateTimeField(null=True, editable=False)
+    updated_at = UTCDateTimeField(null=True, editable=False)
 
     class Meta:
         abstract = True
@@ -93,19 +126,15 @@ class Reference:
         )
 
 
-class Catalog(Timestamped):
+class Guarded(Timestamped):
     """
-    Запись справочника с названиями на языках.
+    Запись, которая не удаляется, пока на неё ссылаются.
 
-    Наследник объявляет REFERENCES, NAME_FALLBACK, HELD_AS и INSTEAD, а связь
-    с переводами называет related_name="translations".
+    Наследник объявляет REFERENCES, HELD_AS и INSTEAD.
     """
 
     #: Кто удерживает запись от удаления
     REFERENCES: ClassVar[tuple[Reference, ...]] = ()
-
-    #: Поле, которое показывается, если названия нет ни на одном языке
-    NAME_FALLBACK: ClassVar[str] = "id"
 
     #: «на страну», «на город» — для отказа в удалении
     HELD_AS: ClassVar[str] = "на запись"
@@ -115,12 +144,6 @@ class Catalog(Timestamped):
 
     class Meta:
         abstract = True
-
-    def name(self, locale: str = "ru") -> str:
-        """name(): название на языке, с откатом на русский и на код."""
-        names = {t.locale: t.name for t in self.translations.all()}  # type: ignore[attr-defined]
-
-        return names.get(locale) or names.get("ru") or str(getattr(self, self.NAME_FALLBACK))
 
     def references(self) -> dict[str, int]:
         """references(): кто ссылается на запись; пусто — удалять можно."""
@@ -155,6 +178,27 @@ class Catalog(Timestamped):
             raise RecordIsReferencedError(f"Удалить нельзя, {self.HELD_AS} ссылаются: {parts}.")
 
         return super().delete(*args, **kwargs)
+
+
+class Catalog(Guarded):
+    """
+    Запись справочника с названиями на языках.
+
+    Сверх Guarded наследник объявляет NAME_FALLBACK, а связь с
+    переводами называет related_name="translations".
+    """
+
+    #: Поле, которое показывается, если названия нет ни на одном языке
+    NAME_FALLBACK: ClassVar[str] = "id"
+
+    class Meta:
+        abstract = True
+
+    def name(self, locale: str = "ru") -> str:
+        """name(): название на языке, с откатом на русский и на код."""
+        names = {t.locale: t.name for t in self.translations.all()}  # type: ignore[attr-defined]
+
+        return names.get(locale) or names.get("ru") or str(getattr(self, self.NAME_FALLBACK))
 
 
 class Translation(Timestamped):

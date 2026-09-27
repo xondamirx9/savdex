@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\CompanyContact;
 use App\Models\CompanyDocument;
 use App\Models\CompanySite;
+use App\Models\CompanySiteProduct;
 use App\Models\Listing;
 use App\Models\Review;
 use App\Support\ListingCard;
@@ -26,7 +27,7 @@ final class SitePage
     private const LISTINGS = 24;
 
     /**
-     * @param  array<string, string>  $theme  результат SiteTheme::normalize()
+     * @param  array<string, string|null>  $theme  результат SiteTheme::normalize()
      */
     public static function render(CompanySite $site, array $theme, bool $preview = false): Response
     {
@@ -37,6 +38,7 @@ final class SitePage
             'theme' => $theme,
             'vars' => SiteTheme::variables($theme),
             'fonts' => SiteTheme::fontsUrl($theme),
+            'hero' => CompanySite::heroUrl($theme),
             'preview' => $preview,
             'site' => [
                 'url' => $site->url(),
@@ -46,7 +48,7 @@ final class SitePage
             'company' => $company->businessCard(),
             'initials' => $company->initials(),
             'contacts' => self::contacts($company),
-            'listings' => self::listings($company),
+            'products' => self::products($company),
             'files' => self::files($company),
             'reviews' => self::reviews($company),
         ])
@@ -87,10 +89,32 @@ final class SitePage
             ->all();
     }
 
-    /** @return list<array<string, mixed>> */
-    private static function listings(Company $company): array
+    /**
+     * Товары сайта: сначала заведённые на самом сайте — компания
+     * расставила их сама, — потом действующие объявления. Объявления
+     * подтягиваются без участия компании: выложила на площадке —
+     * товар появился и на сайте.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function products(Company $company): array
     {
-        return $company->activeListings()
+        $own = $company->siteProducts()
+            ->get()
+            ->map(fn (CompanySiteProduct $p): array => [
+                'key' => 'p'.$p->id,
+                'title' => $p->title,
+                'excerpt' => str($p->description ?? '')->squish()->limit(140)->toString(),
+                'cover' => $p->thumbUrl(),
+                'price' => $p->price !== null ? (float) $p->price : null,
+                'currency' => $p->currency,
+                'unit' => $p->unit,
+                'negotiable' => $p->price === null,
+                'category' => null,
+                'url' => null,
+            ]);
+
+        $listings = $company->activeListings()
             ->visibleIn()
             ->with(ListingCard::relations())
             ->latest('published_at')
@@ -100,24 +124,22 @@ final class SitePage
                 $card = ListingCard::present($l);
 
                 return [
-                    'id' => $card['id'],
+                    'key' => 'l'.$card['id'],
                     'title' => $card['title'],
                     'excerpt' => $card['excerpt'],
-                    'type' => $card['type'],
                     'cover' => $card['cover'],
                     'price' => $card['price'],
                     'currency' => $card['currency'],
                     'unit' => $card['unit'],
                     'negotiable' => $card['negotiable'],
-                    'min_order' => $card['min_order'],
                     'category' => $card['category'],
                     // Подробности — на площадке: там фотографии, характеристики
                     // и отклик. Своей страницы товара у мини-сайта пока нет
                     'url' => $l->slug !== null ? self::marketplaceUrl('/listing/'.$l->slug) : null,
                 ];
-            })
-            ->values()
-            ->all();
+            });
+
+        return $own->concat($listings)->values()->all();
     }
 
     /**

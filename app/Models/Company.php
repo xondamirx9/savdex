@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\ContentTranslation;
 use App\Support\SearchText;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,6 +44,19 @@ class Company extends Model
     public const VERIFICATION_NONE = 0;
 
     public const VERIFICATION_CONTACTS = 1;
+
+    /**
+     * Партнёрство с площадкой. Назначает администратор действием
+     * «Партнёрство» в админке; на странице «Партнёры» — две вкладки.
+     */
+    public const PARTNER_GENERAL = 'general';
+
+    public const PARTNER_REGULAR = 'partner';
+
+    public const PARTNER_TIERS = [
+        self::PARTNER_GENERAL => 'Генеральный партнёр',
+        self::PARTNER_REGULAR => 'Партнёр',
+    ];
 
     public const VERIFICATION_COMPANY = 2;
 
@@ -198,6 +212,12 @@ class Company extends Model
         return $this->hasOne(CompanySite::class);
     }
 
+    /** Товары, заведённые прямо на мини-сайте, — в порядке показа. */
+    public function siteProducts(): HasMany
+    {
+        return $this->hasMany(CompanySiteProduct::class)->orderBy('sort')->orderByDesc('id');
+    }
+
     public function wallet(): HasOne
     {
         return $this->hasOne(Wallet::class);
@@ -326,15 +346,17 @@ class Company extends Model
             'tin' => $this->tin,
             'type' => $this->type,
             'type_label' => $this->typeLabel(),
-            'custom_category' => $this->custom_category,
+            // Свободный текст компании — на языке посетителя, пока
+            // перевода нет — как написан (ContentTranslation)
+            'custom_category' => ContentTranslation::text($this->custom_category),
             'country' => $this->country?->name(),
             'city' => $this->city?->name(),
             'address' => $this->address,
             'coords' => $this->lat && $this->lng ? ['lat' => (float) $this->lat, 'lng' => (float) $this->lng] : null,
-            'description' => $this->description,
+            'description' => ContentTranslation::text($this->description),
             // Пометка об источнике данных: заполняется для карточек,
             // заведённых площадкой; правится в админке
-            'source_note' => $this->source_note,
+            'source_note' => ContentTranslation::text($this->source_note),
             'website' => $this->websiteUrl(),
             'founded_year' => $this->founded_year,
             'employees_range' => $this->employees_range,

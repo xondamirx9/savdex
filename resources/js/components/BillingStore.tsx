@@ -58,7 +58,14 @@ function order(kind: 'plan' | 'credits', id: number) {
  * просрочен, не тот вид), и человек должен видеть свою.
  */
 function PromoCodeForm() {
-    const form = useForm({ promo_code: '' });
+    // Со страницы тарифов приходят с кодом в адресе (?promo=…):
+    // поле уже заполнено, остаётся нажать «Применить»
+    const form = useForm({
+        promo_code:
+            typeof window !== 'undefined'
+                ? (new URLSearchParams(window.location.search).get('promo') ?? '').toUpperCase().slice(0, 32)
+                : '',
+    });
 
     function submit(e: FormEvent) {
         e.preventDefault();

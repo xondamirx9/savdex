@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Cabinet;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Listing;
+use App\Support\ContentTranslation;
 use App\Support\Notifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -120,7 +121,7 @@ class ListingController extends Controller
             'expires_at' => $listing->expires_at?->translatedFormat('d.m.Y'),
             'expiring_soon' => $listing->isExpiringSoon(),
             'badges' => $listing->activePromotions
-                ->map(fn ($p): ?string => $p->type?->badge)
+                ->map(fn ($p): ?string => ContentTranslation::text($p->type?->badge))
                 ->filter()
                 ->values(),
         ];

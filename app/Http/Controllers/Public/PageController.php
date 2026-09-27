@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Public;
 
+use App\Exceptions\PromoCodeRejected;
 use App\Http\Controllers\Controller;
 use App\Models\Banner;
 use App\Models\Category;
@@ -15,8 +16,11 @@ use App\Models\Listing;
 use App\Models\Plan;
 use App\Models\Review;
 use App\Models\Setting;
+use App\Services\OrderService;
+use App\Services\PromoCodeService;
 use App\Support\Appearance;
 use App\Support\BannerCard;
+use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
 use App\Support\ListingCard;
 use App\Support\NewsRepository;
@@ -25,6 +29,7 @@ use App\Support\Seo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -151,7 +156,7 @@ class PageController extends Controller
         ]);
     }
 
-    public function pricing(): Response
+    public function pricing(Request $request): Response
     {
         app(Seo::class)
             ->title(__('ui.seo.pricing_title'))
@@ -164,8 +169,16 @@ class PageController extends Controller
          * с кассой не могут разойтись.
          */
         $rate = app(CurrencyRate::class)->usd();
+        [$promo, $promoError] = $this->pricingPromo($request);
 
         return Inertia::render('Pricing', [
+            'promo' => $promo !== null ? [
+                'code' => $promo['code'],
+                'plan_code' => $promo['plan_code'],
+                'discount_percent' => $promo['discount_percent'],
+                'days' => $promo['days'],
+            ] : null,
+            'promoError' => $promoError,
             'plans' => Plan::query()->where('is_active', true)->orderBy('sort')->get()
                 ->map(fn (Plan $p): array => [
                     'code' => $p->code,
@@ -184,8 +197,66 @@ class PageController extends Controller
                     'sees_interested_names' => $p->sees_interested_names,
                     'has_microsite' => $p->has_microsite,
                     'advanced_analytics' => $p->advanced_analytics,
+                    'promo_price' => $promo !== null && $promo['plan_id'] === $p->id
+                        ? self::promoPrice($p, $promo, $rate)
+                        : null,
                 ]),
         ]);
+    }
+
+    /**
+     * Промокод, введённый на странице тарифов (?promo=КОД).
+     *
+     * Код здесь только проверяется, а не гасится: гасит его активация
+     * в кабинете. Адрес с кодом можно давать ссылкой — с листовки или
+     * из рассылки человек сразу видит свою цену.
+     *
+     * Попыток — десять в час с адреса, как у активации: проверка
+     * отвечает «такого кода нет», и без предела по ней перебирали бы коды.
+     *
+     * @return array{0: array<string, mixed>|null, 1: string|null}
+     */
+    private function pricingPromo(Request $request): array
+    {
+        $input = trim((string) $request->query('promo', ''));
+
+        if ($input === '') {
+            return [null, null];
+        }
+
+        $key = 'pricing-promo:'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($key, 10)) {
+            return [null, __('ui.pricing.promo_throttled')];
+        }
+
+        RateLimiter::hit($key, 3600);
+
+        try {
+            return [app(PromoCodeService::class)->preview($input), null];
+        } catch (PromoCodeRejected $e) {
+            return [null, $e->getMessage()];
+        }
+    }
+
+    /**
+     * Цена тарифа по промокоду — тем же расчётом, что и счёт
+     * (OrderService::discounted): на витрине и в счёте сумма обязана
+     * совпадать до сума.
+     *
+     * @param  array<string, mixed>  $promo
+     * @return array{price_usd: float, price_uzs: int, discount_percent: int|null, days: int|null}
+     */
+    private static function promoPrice(Plan $plan, array $promo, float $rate): array
+    {
+        $percent = $promo['discount_percent'];
+
+        return [
+            'price_usd' => $percent === null ? 0.0 : round((float) $plan->price_usd * (100 - $percent) / 100, 2),
+            'price_uzs' => $percent === null ? 0 : OrderService::discounted($plan->priceUzs($rate), $percent),
+            'discount_percent' => $percent,
+            'days' => $promo['days'],
+        ];
     }
 
     /**
@@ -336,34 +407,39 @@ class PageController extends Controller
             ->description(__('ui.seo.partners_description'))
             ->canonical(url('/partners'));
 
-        $partners = Company::query()
+        /*
+         * Партнёров назначает администратор (действие «Партнёрство»
+         * в админке): это договорённость с площадкой, а не уровень
+         * проверки. Две вкладки — генеральные и обычные партнёры.
+         */
+        $rows = Company::query()
             ->with(['city.translations', 'country.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
             ->where('status', Company::STATUS_ACTIVE)
-            ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
-            ->orderByDesc('verification_level')
+            ->whereIn('partner_tier', array_keys(Company::PARTNER_TIERS))
+            ->orderBy('partner_sort')
             ->orderByDesc('rating')
             ->orderBy('id')
-            ->limit(24)
-            ->get()
-            ->map(fn (Company $c): array => [
-                'slug' => $c->slug,
-                'name' => $c->name,
-                'type_label' => $c->typeLabel(),
-                'city' => $c->city?->name(),
-                'country' => $c->country?->name(),
-                'verification_level' => $c->verification_level,
-                'rating' => (float) $c->rating,
-                'reviews_count' => $c->reviews_count,
-                // Объявления вместо «сделок»: измеримая величина
-                'listings_count' => (int) $c->listings_count,
-                'initials' => $c->initials(),
-                'logo' => $c->logoUrl(),
-            ])
-            ->all();
+            ->get();
+
+        $present = fn (Company $c): array => [
+            'slug' => $c->slug,
+            'name' => $c->name,
+            'type_label' => $c->typeLabel(),
+            'city' => $c->city?->name(),
+            'country' => $c->country?->name(),
+            'verification_level' => $c->verification_level,
+            'rating' => (float) $c->rating,
+            'reviews_count' => $c->reviews_count,
+            // Объявления вместо «сделок»: измеримая величина
+            'listings_count' => (int) $c->listings_count,
+            'initials' => $c->initials(),
+            'logo' => $c->logoUrl(),
+        ];
 
         return Inertia::render('Partners', [
-            'partners' => $partners,
+            'general' => $rows->where('partner_tier', Company::PARTNER_GENERAL)->map($present)->values()->all(),
+            'partners' => $rows->where('partner_tier', Company::PARTNER_REGULAR)->map($present)->values()->all(),
             'stats' => [
                 'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
                 'verified' => Company::where('status', Company::STATUS_ACTIVE)
@@ -624,7 +700,7 @@ class PageController extends Controller
                 'author' => $r->authorCompany->name,
                 'initials' => $r->authorCompany->initials(),
                 'rating' => (int) $r->rating,
-                'body' => $r->body,
+                'body' => ContentTranslation::text($r->body),
                 'when' => $r->created_at->translatedFormat('d.m.Y'),
                 'company_name' => $r->company->name,
                 'company_slug' => $r->company->slug,

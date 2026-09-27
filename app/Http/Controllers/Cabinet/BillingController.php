@@ -16,6 +16,7 @@ use App\Services\OrderService;
 use App\Services\Payments\PaymentGatewayException;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\PromoCodeService;
+use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -53,6 +54,7 @@ class BillingController extends Controller
                 'checkout' => false,
                 // Тариф выдаётся на компанию: без неё промокод активировать не на что
                 'promoAllowed' => false,
+                'selected' => null,
             ]);
         }
 
@@ -100,7 +102,7 @@ class BillingController extends Controller
                 ->map(fn (Payment $p): array => [
                     'id' => $p->id,
                     'date' => ($p->paid_at ?? $p->created_at)->translatedFormat('d.m.Y'),
-                    'description' => $p->description,
+                    'description' => ContentTranslation::text($p->description),
                     'method' => $p->method !== null
                         ? ucfirst((string) $p->provider).' · '.$p->method->masked()
                         : ucfirst((string) $p->provider),
@@ -127,7 +129,7 @@ class BillingController extends Controller
             'packs' => CreditPack::query()->where('is_active', true)->orderBy('sort')->get()
                 ->map(fn (CreditPack $p): array => [
                     'id' => $p->id,
-                    'name' => $p->name,
+                    'name' => ContentTranslation::text($p->name),
                     'credits' => $p->credits,
                     'price_uzs' => $p->priceUzs($rate),
                     'per_credit' => $p->perCredit($rate),
@@ -144,13 +146,21 @@ class BillingController extends Controller
                 ->map(fn (Payment $p): array => [
                     'id' => $p->id,
                     'number' => $p->number,
-                    'description' => $p->description,
+                    'description' => ContentTranslation::text($p->description),
                     'amount' => $p->amountLabel(),
                     'created_at' => $p->created_at->translatedFormat('d.m.Y'),
                     'expires_at' => $p->expiresAt()?->translatedFormat('d.m.Y'),
                 ]),
 
             'requisites' => self::requisites(),
+
+            /*
+             * Тариф, выбранный на странице тарифов (?plan=business):
+             * страница сразу предлагает его оплатить. Сам заказ —
+             * по-прежнему POST из окна подтверждения: переход по ссылке
+             * не должен выставлять счёт, ссылки открывают и роботы.
+             */
+            'selected' => $request->string('plan')->toString() ?: null,
 
             // Включена ли онлайн-касса: от этого зависят подписи кнопок
             // («Оплатить» против «Выставить счёт») и кнопка оплаты на счетах

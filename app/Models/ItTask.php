@@ -76,12 +76,16 @@ class ItTask extends Model
      * их в один плоский перечень рядом с бухгалтерией значит утопить
      * четыре новых направления среди семи старых пунктов.
      *
+     * «Подбор персонала» живёт внутри HR-услуг: рядом с ним в панели
+     * стоит раздел «Резюме» — он не вид задачи, а отдельная страница,
+     * поэтому добавляется пунктом только в интерфейсе.
+     *
      * Порядок здесь — порядок в панели фильтра.
      */
     public const SERVICE_SECTIONS = [
         'it' => ['web', 'mobile', 'erp', 'integration', 'design', 'automation', 'support'],
+        'hr_services' => ['hr'],
         'logistics' => [],
-        'hr' => [],
         'customs' => [],
         'accounting' => [],
         'other' => [],
@@ -105,6 +109,24 @@ class ItTask extends Model
         $children = self::SERVICE_SECTIONS[$code] ?? [];
 
         return $children === [] ? [$code] : $children;
+    }
+
+    /**
+     * Дерево направлений для панели фильтра — общее для ленты услуг
+     * и раздела «Резюме», который стоит внутри HR-услуг.
+     *
+     * @return list<array{code: string, label: string, children: list<array{code: string, label: string}>}>
+     */
+    public static function sectionTree(): array
+    {
+        return array_map(fn (string $code): array => [
+            'code' => $code,
+            'label' => __('ui.it_tasks.types.'.$code),
+            'children' => array_map(fn (string $child): array => [
+                'code' => $child,
+                'label' => __('ui.it_tasks.types.'.$child),
+            ], self::SERVICE_SECTIONS[$code]),
+        ], array_keys(self::SERVICE_SECTIONS));
     }
 
     public const BUDGET_TYPES = ['fixed', 'range', 'negotiable'];

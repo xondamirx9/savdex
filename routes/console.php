@@ -11,6 +11,7 @@ use App\Models\Listing;
 use App\Models\NewsPost;
 use App\Models\Resume;
 use App\Models\Tender;
+use App\Services\MachineTranslator;
 use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\UzumGateway;
 use App\Support\CurrencyRate;
@@ -128,15 +129,26 @@ Schedule::call(function (): void {
 
     Tender::query()
         ->where('status', Tender::STATUS_PUBLISHED)
-        ->where(fn ($q) => $q->whereNull('title_i18n')
-            ->orWhereIn('title_i18n', ['[]', '{}']))
+        // По ключам языков, а не сравнением с '[]': json-столбец
+        // PostgreSQL со строкой не сравнивает, и добор падал
+        ->where(function ($q): void {
+            foreach (MachineTranslator::TARGETS as $locale) {
+                $q->orWhereJsonDoesntContainKey('title_i18n->'.$locale);
+            }
+        })
         ->orderBy('id')
         ->limit(20)
         ->pluck('id')
         ->each(fn (int $id) => TranslateTender::dispatch($id));
 })->hourly()->name('tenders-translate-catchup')->onOneServer();
 
-// Новости — по той же схеме, что объявления и тендеры
+/*
+ * Новости — по той же схеме, что объявления и тендеры, но каждые пять
+ * минут, а не раз в час. С этапа 2 переноса новости правит админка на
+ * Python: она не ставит перевод в очередь сама, а сбрасывает перевод
+ * изменённого поля, и этот добор — единственный путь к переводу.
+ * Раз в час значило бы до часа русского текста на всех языках.
+ */
 Schedule::call(function (): void {
     if (! config('services.machine_translation.enabled')) {
         return;
@@ -144,13 +156,23 @@ Schedule::call(function (): void {
 
     NewsPost::query()
         ->where('is_published', true)
-        ->where(fn ($q) => $q->whereNull('title_i18n')
-            ->orWhereIn('title_i18n', ['[]', '{}']))
+        ->lackingTranslations()
         ->orderBy('id')
         ->limit(20)
         ->pluck('id')
         ->each(fn (int $id) => TranslateNewsPost::dispatch($id));
-})->hourly()->name('news-translate-catchup')->onOneServer();
+})->everyFiveMinutes()->name('news-translate-catchup')->onOneServer();
+
+/*
+ * Перевод прочего текста из базы — описаний компаний, IT-задач,
+ * отзывов, услуг продвижения (App\Support\ContentTranslation).
+ * Каждую минуту: страница ставит текст в очередь при первом показе,
+ * и перевод должен успеть к следующему заходу, а не через час.
+ */
+Schedule::command('translations:fill --limit=20')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();
 
 /*
  * Прозвон Uzum Checkout: доступен ли API с нашего адреса (прямо или

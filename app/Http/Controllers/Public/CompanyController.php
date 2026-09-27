@@ -11,6 +11,7 @@ use App\Models\CompanyDocument;
 use App\Models\Country;
 use App\Models\Review;
 use App\Services\ReviewService;
+use App\Support\ContentTranslation;
 use App\Support\DateHelper;
 use App\Support\SearchText;
 use App\Support\SeoBuilders;
@@ -345,9 +346,9 @@ class CompanyController extends Controller
                     'author' => $r->authorCompany?->name ?? __('ui.cabinet.incoming.deleted'),
                     'initials' => $r->authorCompany?->initials() ?? '?',
                     'rating' => $r->rating,
-                    'body' => $r->body,
+                    'body' => ContentTranslation::text($r->body),
                     'deal_confirmed' => $r->deal_confirmed,
-                    'reply' => $r->reply,
+                    'reply' => ContentTranslation::text($r->reply),
                     'when' => $r->created_at->translatedFormat('d.m.Y'),
                 ]),
 

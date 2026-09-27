@@ -9,17 +9,13 @@ use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Broadcasts\BroadcastResource;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
-use App\Filament\Resources\CreditPacks\CreditPackResource;
 use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\LandingBlocks\LandingBlockResource;
 use App\Filament\Resources\Listings\ListingResource;
-use App\Filament\Resources\NewsPosts\NewsPostResource;
 use App\Filament\Resources\Pages\PageResource;
-use App\Filament\Resources\Plans\PlanResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Resumes\ResumeResource;
 use App\Filament\Resources\Reviews\ReviewResource;
-use App\Filament\Resources\Settings\SettingResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Resources\Tenders\TenderResource;
 use App\Filament\Resources\Users\UserResource;
@@ -59,14 +55,10 @@ class AdminAccessTest extends TestCase
         Complaints::class,
         Invoices::class,
         SubscriptionResource::class,
-        PlanResource::class,
         PromoCodeResource::class,
-        CreditPackResource::class,
         PageResource::class,
-        NewsPostResource::class,
         LandingBlockResource::class,
         BroadcastResource::class,
-        SettingResource::class,
     ];
 
     private function admin(string $role): User
@@ -92,7 +84,7 @@ class AdminAccessTest extends TestCase
                 UserResource::class, CompanyResource::class, ListingResource::class,
                 TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
                 ResumeResource::class, ReviewResource::class, Complaints::class,
-                PageResource::class, NewsPostResource::class, LandingBlockResource::class,
+                PageResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
 
@@ -119,7 +111,7 @@ class AdminAccessTest extends TestCase
 
             'финансы' => [AdminAccess::FINANCE, [
                 CompanyResource::class, Invoices::class, SubscriptionResource::class,
-                PlanResource::class, PromoCodeResource::class, CreditPackResource::class,
+                PromoCodeResource::class,
             ]],
 
             'поддержка' => [AdminAccess::SUPPORT, [
@@ -129,7 +121,7 @@ class AdminAccessTest extends TestCase
             ]],
 
             'контент' => [AdminAccess::CONTENT_MANAGER, [
-                PageResource::class, NewsPostResource::class, LandingBlockResource::class,
+                PageResource::class, LandingBlockResource::class,
                 BroadcastResource::class,
             ]],
         ];

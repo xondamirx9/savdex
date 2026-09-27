@@ -36,6 +36,7 @@ use App\Models\User;
 use App\Observers\AuditObserver;
 use App\Support\AdminAccess;
 use App\Support\Business;
+use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
 use App\Support\PriceDisplay;
 use App\Support\Runtime;
@@ -67,6 +68,8 @@ class AppServiceProvider extends ServiceProvider
         // на карточку — это десятки походов в кэш за одной таблицей
         $this->app->scoped(CurrencyRate::class);
         $this->app->scoped(PriceDisplay::class);
+        // Переводы, найденные за запрос, помнятся только в его пределах
+        $this->app->scoped(ContentTranslation::class);
     }
 
     public function boot(): void

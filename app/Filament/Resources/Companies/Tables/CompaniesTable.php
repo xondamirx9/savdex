@@ -22,6 +22,7 @@ use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -99,6 +100,14 @@ class CompaniesTable
                         default => 'gray',
                     }),
 
+                TextColumn::make('partner_tier')
+                    ->label('Партнёрство')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => Company::PARTNER_TIERS[$state] ?? '—')
+                    ->color(fn (?string $state): string => $state === Company::PARTNER_GENERAL ? 'warning' : 'info')
+                    ->placeholder('—')
+                    ->toggleable(),
+
                 TextColumn::make('listings_count')
                     ->label('Объявлений')
                     ->counts('listings')
@@ -125,6 +134,7 @@ class CompaniesTable
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('verification_level')->label('Верификация')->options(self::LEVELS),
+                SelectFilter::make('partner_tier')->label('Партнёрство')->options(Company::PARTNER_TIERS),
                 SelectFilter::make('status')->label('Статус')->options([
                     'active' => 'Активна',
                     'blocked' => 'Заблокирована',
@@ -162,6 +172,47 @@ class CompaniesTable
                         );
 
                         Notification::make()->title('Уровень обновлён')->success()->send();
+                    }),
+
+                /*
+                 * Партнёрство — отдельным действием, как верификация:
+                 * это договорённость с площадкой, а не реквизит компании.
+                 * Компания сразу появляется на странице «Партнёры»
+                 * во вкладке своего уровня; «Не партнёр» убирает её оттуда.
+                 */
+                Action::make('partner')
+                    ->label('Партнёрство')
+                    ->icon('heroicon-o-star')
+                    ->color('warning')
+                    ->fillForm(fn (Company $record): array => [
+                        'tier' => $record->partner_tier ?? 'none',
+                        'sort' => $record->partner_sort,
+                    ])
+                    ->schema([
+                        Select::make('tier')
+                            ->label('Уровень')
+                            ->options(['none' => 'Не партнёр'] + Company::PARTNER_TIERS)
+                            ->required()
+                            ->helperText('Страница «Партнёры»: вкладки «Генеральные партнёры» и «Партнёры».'),
+                        TextInput::make('sort')
+                            ->label('Порядок')
+                            ->numeric()
+                            ->minValue(0)
+                            ->default(0)
+                            ->helperText('Меньше — выше во вкладке. При равном порядке — по рейтингу.'),
+                    ])
+                    ->action(function (Company $record, array $data): void {
+                        $tier = array_key_exists($data['tier'], Company::PARTNER_TIERS) ? $data['tier'] : null;
+
+                        $record->forceFill([
+                            'partner_tier' => $tier,
+                            'partner_sort' => max(0, (int) ($data['sort'] ?? 0)),
+                        ])->save();
+
+                        Notification::make()
+                            ->title($tier === null ? 'Компания убрана из партнёров' : 'Сохранено: '.Company::PARTNER_TIERS[$tier])
+                            ->success()
+                            ->send();
                     }),
 
                 /*

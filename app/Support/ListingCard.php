@@ -65,7 +65,7 @@ final class ListingCard
             // Метки продвижения показываются как есть: скрывать факт
             // платного размещения площадка не будет
             'badges' => $listing->activePromotions
-                ->map(fn ($p): ?string => $p->type?->badge)
+                ->map(fn ($p): ?string => ContentTranslation::text($p->type?->badge))
                 ->filter()
                 ->values(),
             'promoted' => $listing->activePromotions->isNotEmpty(),
