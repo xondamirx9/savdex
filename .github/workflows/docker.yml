@@ -109,6 +109,7 @@ jobs:
         run: |
           docker run -d --name savdex --network host \
             -e PORT=18080 \
+            -e APP_URL=http://127.0.0.1:18080 \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
             -e DB_CONNECTION=pgsql \
             -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
@@ -130,6 +131,12 @@ jobs:
             = "302 http://127.0.0.1:18080/admin/python?next=/py/admin/"
           # Стили админки Django собраны при сборке и отдаются через Apache
           curl -fsS -o /dev/null http://127.0.0.1:18080/py/static/admin/css/base.css
+          # Страницы сайта на Django (этап 3): «Помощь» отдаёт Django — без
+          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — Laravel
+          curl -fsS -D /tmp/help.h -o /tmp/help.html http://127.0.0.1:18080/help
+          ! grep -qi '^x-powered-by: php' /tmp/help.h
+          grep -q '"component":"DocPage"' /tmp/help.html
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
 
       - name: Журнал контейнера
         if: always()

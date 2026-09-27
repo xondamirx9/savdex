@@ -118,6 +118,12 @@ SHARED_WRITES: dict[str, str] = {
         "выдача прав администратора (команда admin, неделя 5): у модели "
         "User нет событий, PHP-команда пишет те же поля простым save()"
     ),
+    "content_translations": (
+        "очередь машинного перевода (этап 3): страница на Django, как и "
+        "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
+        "— только insert … on conflict do nothing; переводит задача Laravel "
+        "translations:fill"
+    ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
         "только delete по ключу — то же, что Cache::forget(), когда кэш "

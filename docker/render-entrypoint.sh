@@ -285,6 +285,19 @@ fi
 # Слушает только 127.0.0.1: снаружи до Django не достучаться, только
 # через Apache. Два процесса: сейчас через Django идут считанные
 # адреса; больше — PYTHON_WORKERS.
+# Страницам сайта на Django нужны словарь интерфейса и подписи «N минут
+# назад» — ровно те, что у Laravel (app/Console/Commands/ExportUiForPython.php).
+# Выгружаются до старта Django: словарь меняется только с релизом.
+runuser -u www-data -- php artisan savdex:export-ui \
+    || echo "ВНИМАНИЕ: словарь для Django не выгружен — страницы сайта на Django отдадут 503." >&2
+
+# Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
+# все снова отдаёт Laravel: это откат без выкладки, через переменную в
+# настройках Render и перезапуск.
+export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs}"
+# Основной домен (хост из APP_URL): только его страницы отдаёт Django
+export SAVDEX_HOST="$(printf '%s' "${APP_URL:-}" | sed -E 's#^[a-z]+://##; s#/.*$##')"
+
 if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
     (
         set +e

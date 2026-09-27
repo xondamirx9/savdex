@@ -32,8 +32,8 @@ def test_счёт_этапов():
     assert by_number[1].state == "done"
     # Этап 2 сделан: оставшиеся четыре таблицы — решения заказчика
     assert (by_number[2].done, by_number[2].total, by_number[2].state) == (17, 17, "done")
-    # Этап 3 без своих таблиц — по шагам: Django уже читает вход Laravel
-    assert (by_number[3].done, by_number[3].total, by_number[3].state) == (1, 3, "active")
+    # Этап 3 без своих таблиц — по шагам: вход Laravel и первые страницы
+    assert (by_number[3].done, by_number[3].total, by_number[3].state) == (2, 3, "active")
     assert by_number[7].state == "ahead"
 
     # Ничего не перенесено — этап 2 «впереди»
