@@ -178,8 +178,10 @@ def php(code: str, env: dict[str, str] | None = None) -> str:
         env={**ОКРУЖЕНИЕ, **(env or {})},
         capture_output=True,
         text=True,
-        check=True,
     )
+    # Ошибка PHP — в выводе tinker, а не в коде возврата: без него
+    # упавшая подготовка данных ничего не объясняет
+    assert вывод.returncode == 0, (вывод.stdout + вывод.stderr)[-3000:]
 
     return вывод.stdout.strip()
 

@@ -19,7 +19,10 @@ class ExportUiForPythonTest extends TestCase
     #[Test]
     public function выгружает_словарь_и_подписи_на_всех_языках(): void
     {
+        $before = app()->getLocale();
         $this->artisan('savdex:export-ui')->assertSuccessful();
+        // Язык приложения команда возвращает на место
+        $this->assertSame($before, app()->getLocale());
 
         foreach (Locales::codes() as $locale) {
             $data = json_decode(File::get(ExportUiForPython::directory()."/{$locale}.json"), true);
@@ -34,6 +37,12 @@ class ExportUiForPythonTest extends TestCase
         $this->assertSame('2 недели назад', $ru['ago']['week'][2]);
         // Словарь — как проп translations у Laravel
         $this->assertSame(trans('ui.nav.help', locale: 'ru'), $ru['translations']['nav']['help']);
+
+        // Как на странице, где язык задан app()->setLocale: у китайского
+        // ->locale('zh') даёт «21分钟前» без пробела, страница — с пробелом
+        $zh = json_decode(File::get(ExportUiForPython::directory().'/zh.json'), true);
+        app()->setLocale('zh');
+        $this->assertSame(now()->subMinutes(21)->diffForHumans(), $zh['ago']['minute'][21]);
     }
 
     #[Test]

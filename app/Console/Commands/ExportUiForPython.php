@@ -110,6 +110,15 @@ class ExportUiForPython extends Command
         $now = Carbon::create(2026, 1, 1, 0, 0, 0, 'UTC');
         $table = [];
 
+        /*
+         * Язык — как на странице: через app()->setLocale, а не
+         * ->locale() у даты. Для китайского они расходятся: страница
+         * пишет «21 分钟前», а ->locale('zh') — «21分钟前», и Django
+         * показывал бы подпись не такой, как Laravel.
+         */
+        $previous = app()->getLocale();
+        app()->setLocale($locale);
+
         foreach (self::UNITS as $unit => $max) {
             for ($count = 1; $count <= $max; $count++) {
                 $past = match ($unit) {
@@ -117,9 +126,11 @@ class ExportUiForPython extends Command
                     default => $now->copy()->sub($unit, $count),
                 };
 
-                $table[$unit][$count] = $past->locale($locale)->diffForHumans($now->copy(), ['syntax' => Carbon::DIFF_RELATIVE_TO_NOW]);
+                $table[$unit][$count] = $past->diffForHumans($now->copy(), ['syntax' => Carbon::DIFF_RELATIVE_TO_NOW]);
             }
         }
+
+        app()->setLocale($previous);
 
         return $table;
     }

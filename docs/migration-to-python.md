@@ -834,7 +834,7 @@ Django не переписывает: их выгружает сам Laravel к�
 сессии, скрытая страница (404), машинный перевод, SEO-робот.
 
 **Включение и откат.** Адреса страницы доходят до Django, только если
-её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing`,
+её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing,home`,
 `docker/apache-python.conf`). Откат без выкладки: в настройках Render
 задать `SAVDEX_PY_PAGES` пустой и перезапустить — страницы снова отдаёт
 Laravel. Django получает только читающие запросы (GET, HEAD) основного
@@ -852,6 +852,7 @@ Laravel. Django получает только читающие запросы (G
 | `directory` ✅ | `/countries`, `/partners` | `tests/test_web_directory.py` |
 | `legal` ✅ | `/terms`, `/payment`, `/security`, `/privacy`, `/refunds` | `tests/test_web_legal.py` |
 | `pricing` ✅ | `/pricing` (с `?promo=` — Laravel) | `tests/test_web_pricing.py` |
+| `home` ✅ | `/`, `/uz`, `/en` … | `tests/test_web_home.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -865,6 +866,13 @@ Python: оба сайта читают один файл `resources/legal/docume
 кладёт планировщик Laravel. Сам Django к ЦБ не ходит и в кэш не
 пишет — нет свежей таблицы, берёт последнюю удачную или запасной курс,
 как Laravel при сбое ЦБ (`python/savdex/web/currency.py`).
+
+Главная собирает карточки объявлений так же, как каталог
+(`ListingCard`, цена в валюте языка — `PriceDisplay`): эта часть
+пригодится на этапе 4. При переносе нашлась и исправлена ошибка
+Laravel: карточка объявления считала «доверие» к поставщику без его
+правовой формы (столбец не выбирался), и у ИП без типа компании оно
+было ниже, чем в кабинете.
 
 Чего Django на своих страницах не делает — записи сессии (до этапа 5):
 язык из префикса Laravel запомнит на ближайшей своей странице, а срок

@@ -88,7 +88,7 @@ final class ListingCard
             'company' => fn ($q) => $q
                 ->select([
                     'id', 'name', 'slug', 'verification_level', 'rating', 'city_id', 'country_id',
-                    'type', 'phone', 'email', 'tin', 'address', 'description', 'logo_path',
+                    'type', 'legal_form', 'phone', 'email', 'tin', 'address', 'description', 'logo_path',
                 ])
                 ->withExists(['documents as has_approved_documents' => fn ($d) => $d->where('moderation_status', 'approved')]),
             'company.city.translations',

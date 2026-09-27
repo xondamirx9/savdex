@@ -48,6 +48,7 @@ def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
 _DIRECTORIES = {
     "countries": ("country_translations", "country_id", "code"),
     "cities": ("city_translations", "city_id", "slug"),
+    "categories": ("category_translations", "category_id", "slug"),
 }
 
 
