@@ -31,7 +31,10 @@ def сайт() -> Iterator[str]:
         "App\\Models\\Listing::factory()->create(['source' => 'import', 'title_i18n' => null]);"
         "App\\Models\\Listing::factory()->draft()->create();"
         "App\\Models\\Company::factory()->create(['status' => 'blocked']);"
-        "echo 'ok';"
+        "echo 'ok';",
+        # Без машинного перевода: там, где есть сеть (CI), он дописывал
+        # импортированному объявлению перевод, и счётчики расходились
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
     )
 
     with laravel() as root:
