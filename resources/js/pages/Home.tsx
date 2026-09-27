@@ -304,11 +304,14 @@ export default function Home({
     /** Баннер акции под первым экраном; null — сейчас ничего не идёт */
     banner: BannerData | null;
 }) {
-    const statCells: [typeof Users, string, number, string][] = [
-        [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies')],
-        [Boxes, 'stat-ico-orange', stats.listings, t('home.stat_listings')],
-        [Globe2, 'stat-ico-sky', stats.countries, t('home.stat_countries')],
-        [Handshake, 'stat-ico-violet', stats.categories, t('home.stat_categories')],
+    // Каждый счётчик ведёт туда, что он считает: компании — в каталог
+    // компаний, объявления и категории — в «Товары», страны — на
+    // страницу стран (в шапке её нет, попасть можно отсюда и из подвала)
+    const statCells: [typeof Users, string, number, string, string][] = [
+        [Users, 'stat-ico-blue', stats.companies, t('home.stat_companies'), routes.companies],
+        [Boxes, 'stat-ico-orange', stats.listings, t('home.stat_listings'), routes.catalog],
+        [Globe2, 'stat-ico-sky', stats.countries, t('home.stat_countries'), routes.countries],
+        [Handshake, 'stat-ico-violet', stats.categories, t('home.stat_categories'), routes.catalog],
     ];
 
     return (
@@ -374,8 +377,8 @@ export default function Home({
             <section className="stats-band">
                 <div className="container">
                     <div className="stats-band-card">
-                        {statCells.map(([Icon, tone, value, label]) => (
-                            <div key={label} className="stat-cell">
+                        {statCells.map(([Icon, tone, value, label, href]) => (
+                            <Link key={label} href={href} className="stat-cell">
                                 <span className={cn('stat-ico', tone)}>
                                     <Icon aria-hidden className="size-5" />
                                 </span>
@@ -383,7 +386,7 @@ export default function Home({
                                     <div className="stat-cell-num">{formatNumber(value)}</div>
                                     <div className="stat-cell-label">{label}</div>
                                 </div>
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </div>

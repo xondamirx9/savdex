@@ -161,6 +161,37 @@ class CountryListTest extends TestCase
                 ->contains('pl')));
     }
 
+    /** Под страной — её компании, чужие и неактивные туда не попадают. */
+    #[Test]
+    public function под_страной_показаны_её_компании(): void
+    {
+        $pl = Country::where('code', 'pl')->value('id');
+        $uz = Country::where('code', 'uz')->value('id');
+
+        $own = Company::factory()->create(['status' => Company::STATUS_ACTIVE, 'country_id' => $pl]);
+        Company::factory()->create(['status' => Company::STATUS_ACTIVE, 'country_id' => $uz]);
+        Company::factory()->create(['status' => Company::STATUS_BLOCKED, 'country_id' => $pl]);
+
+        $this->get('/countries')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('countries', fn (Collection $countries): bool => collect($countries->firstWhere('code', 'pl')['items'])
+                ->pluck('slug')
+                ->all() === [$own->slug]));
+    }
+
+    /** Под страной не больше восьми компаний: остальные — в каталоге. */
+    #[Test]
+    public function под_страной_не_больше_восьми_компаний(): void
+    {
+        Company::factory()->count(10)->create([
+            'status' => Company::STATUS_ACTIVE,
+            'country_id' => Country::where('code', 'pl')->value('id'),
+        ]);
+
+        $this->get('/countries')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('countries.0.companies', 10)
+            ->has('countries.0.items', 8));
+    }
+
     /**
      * Границы стран для проверки координат.
      *

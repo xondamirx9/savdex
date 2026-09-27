@@ -574,6 +574,7 @@ return [
         'planned_title' => 'Üzerinde çalışılan yönler',
         'planned_lead' => 'Bu ülkelerin şirketlerini şu anda platforma dâhil ediyoruz. İlk şirketler geldiği anda ülke etkin hâle gelir.',
         'planned_badge' => 'yakında',
+        'all_companies' => 'Ülkedeki tüm şirketler',
     ],
 
     'partners' => [

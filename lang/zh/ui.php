@@ -573,6 +573,7 @@ return [
         'planned_title' => '正在拓展的方向',
         'planned_lead' => '我们正在接入这些国家的公司。一旦有首批公司入驻，该国家就会变为可用。',
         'planned_badge' => '即将开放',
+        'all_companies' => '该国全部公司',
     ],
 
     'partners' => [

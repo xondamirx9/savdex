@@ -201,11 +201,14 @@ class PageController extends Controller
             ->groupBy('country_id')
             ->pluck('total', 'country_id');
 
+        $showcase = $this->companiesByCountry();
+
         $countries = Country::listed()
             ->map(fn (Country $c): array => [
                 'code' => $c->code,
                 'name' => $c->name(),
                 'companies' => (int) ($companyCounts[$c->id] ?? 0),
+                'items' => $showcase[$c->id] ?? [],
             ])
             ->sortByDesc('companies')
             ->values();
@@ -219,6 +222,51 @@ class PageController extends Controller
             'countries' => $countries->filter(fn (array $c): bool => $c['companies'] > 0)->values()->all(),
             'planned' => $countries->filter(fn (array $c): bool => $c['companies'] === 0)->values()->all(),
         ]);
+    }
+
+    /** Сколько компаний показывать под страной; остальные — по ссылке в каталог. */
+    private const COMPANIES_PER_COUNTRY = 8;
+
+    /**
+     * Компании под каждой страной на странице «Страны».
+     *
+     * Верхушка по проверке и рейтингу — в том же порядке, что каталог
+     * компаний, чтобы «Все компании страны» продолжали тот же список.
+     * Отбор одним запросом через row_number: компаний больше тысячи,
+     * и тянуть их все ради восьми на страну незачем.
+     *
+     * @return array<int, list<array<string, mixed>>> по country_id
+     */
+    private function companiesByCountry(): array
+    {
+        $ranked = Company::query()
+            ->select('companies.*')
+            ->selectRaw('row_number() over (partition by country_id order by verification_level desc, rating desc, id) as country_rank')
+            // Счётчик — во внутреннем запросе: на подзапрос во FROM
+            // withCount не навешивается
+            ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
+            ->where('status', Company::STATUS_ACTIVE)
+            ->whereNotNull('country_id');
+
+        return Company::query()
+            ->fromSub($ranked, 'companies')
+            ->with(['city.translations'])
+            ->where('country_rank', '<=', self::COMPANIES_PER_COUNTRY)
+            ->orderBy('country_rank')
+            ->get()
+            ->groupBy('country_id')
+            ->map(fn ($companies) => $companies->map(fn (Company $c): array => [
+                'slug' => $c->slug,
+                'name' => $c->name,
+                'type_label' => $c->typeLabel(),
+                'city' => $c->city?->name(),
+                'verification_level' => $c->verification_level,
+                'rating' => (float) $c->rating,
+                'listings_count' => (int) $c->listings_count,
+                'initials' => $c->initials(),
+                'logo' => $c->logoUrl(),
+            ])->values()->all())
+            ->all();
     }
 
     /**

@@ -1,21 +1,40 @@
-import { Globe2 } from 'lucide-react';
+import { ArrowRight, Globe2, Star } from 'lucide-react';
+import { VerificationBadge } from '@/components/VerificationBadge';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { flag } from '@/lib/flag';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
+interface CompanyRow {
+    slug: string;
+    name: string;
+    type_label: string | null;
+    city: string | null;
+    verification_level: number;
+    rating: number;
+    listings_count: number;
+    initials: string;
+    logo: string | null;
+}
+
 interface CountryRow {
     code: string;
     name: string;
     companies: number;
+    /** Верхушка компаний страны; остальные — по ссылке в каталог */
+    items: CompanyRow[];
 }
 
 /**
  * Страны-участники площадки.
  *
- * Каждая карточка ведёт в каталог компаний с фильтром по стране:
+ * Сверху — плашки стран для быстрого перехода, ниже под каждой
+ * страной её компании и ссылка в каталог с фильтром по стране:
  * страница-справочник без действия — тупик, а не витрина.
+ *
+ * В шапке сайта страницы нет: сюда ведут счётчик «стран региона»
+ * на главной и ссылка в подвале.
  */
 export default function Countries({ countries, planned }: { countries: CountryRow[]; planned: CountryRow[] }) {
     return (
@@ -35,27 +54,67 @@ export default function Countries({ countries, planned }: { countries: CountryRo
                         <p className="t-h4">{t('countries.empty')}</p>
                     </div>
                 ) : (
-                    <div className="country-grid" data-reveal-stagger>
+                    <>
+                        {/* Быстрый переход к стране: плашки со счётчиками,
+                            как на главной, ведут к её разделу ниже */}
+                        <div className="country-grid" data-reveal-stagger>
+                            {countries.map((c) => (
+                                <a key={c.code} href={`#country-${c.code}`} className="country-card">
+                                    <span className="country-flag" aria-hidden>
+                                        {flag(c.code) || <Globe2 className="size-8" />}
+                                    </span>
+                                    <span style={{ minWidth: 0 }}>
+                                        <span className="country-name" style={{ display: 'block' }}>
+                                            {c.name}
+                                        </span>
+                                        <span className="country-count" style={{ display: 'block' }}>
+                                            {tChoice('countries.companies', c.companies)}
+                                        </span>
+                                    </span>
+                                </a>
+                            ))}
+                        </div>
+
+                        {/* Под каждой страной — её компании */}
                         {countries.map((c) => (
-                            <Link
-                                key={c.code}
-                                href={`${routes.companies}?country=${c.code}`}
-                                className="country-card"
-                            >
-                                <span className="country-flag" aria-hidden>
-                                    {flag(c.code) || <Globe2 className="size-8" />}
-                                </span>
-                                <span style={{ minWidth: 0 }}>
-                                    <span className="country-name" style={{ display: 'block' }}>
+                            <section key={c.code} id={`country-${c.code}`} className="country-section">
+                                <div className="section-bar">
+                                    <h2 className="country-section-title">
+                                        <span aria-hidden>{flag(c.code) || <Globe2 className="size-6" />}</span>
                                         {c.name}
-                                    </span>
-                                    <span className="country-count" style={{ display: 'block' }}>
-                                        {tChoice('countries.companies', c.companies)}
-                                    </span>
-                                </span>
-                            </Link>
+                                        <span className="country-count">
+                                            {tChoice('countries.companies', c.companies)}
+                                        </span>
+                                    </h2>
+                                    <Link href={`${routes.companies}?country=${c.code}`} className="section-bar-link">
+                                        {t('countries.all_companies')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                                    </Link>
+                                </div>
+                                <div className="supplier-grid">
+                                    {c.items.map((s) => (
+                                        <Link key={s.slug} href={routes.company(s.slug)} className="supplier-card">
+                                            <span className="supplier-head">
+                                                <span className="listing-logo logo-48">
+                                                    {s.logo ? <img src={s.logo} alt="" /> : s.initials}
+                                                </span>
+                                                <VerificationBadge level={s.verification_level} />
+                                            </span>
+                                            <span className="supplier-name">{s.name}</span>
+                                            <span className="supplier-meta">
+                                                {[s.type_label, s.city].filter(Boolean).join(' · ')}
+                                            </span>
+                                            <span className="supplier-facts">
+                                                <span className="listing-rating">
+                                                    <Star aria-hidden className="size-3.5" /> <b>{s.rating.toFixed(1)}</b>
+                                                </span>
+                                                <span>{tChoice('home.suppliers_listings', s.listings_count)}</span>
+                                            </span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </section>
                         ))}
-                    </div>
+                    </>
                 )}
 
                 {/* Направления без компаний — отдельно и честно: это план,
