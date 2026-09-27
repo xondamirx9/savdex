@@ -13,6 +13,7 @@ use App\Models\Company;
 use App\Models\Country;
 use App\Models\FaqItem;
 use App\Models\ItTask;
+use App\Models\LandingBlock;
 use App\Models\Listing;
 use App\Models\Page;
 use App\Models\Plan;
@@ -69,22 +70,30 @@ class PageController extends Controller
                 ],
             ]);
 
+        // Тексты, вопросы и видимость секций — из админки («Главная
+        // страница»), на языке посетителя; порядок секций — в макете
+        $blocks = LandingBlock::cards();
+        $faq = $blocks['faq'] ?? null;
+
         /*
          * FAQ размечается и для поисковика: по вопросам из него Google
          * показывает раскрывающиеся ответы прямо в выдаче. Источник
-         * один — словарь: расхождение текста на странице и в разметке
-         * поисковики наказывают.
+         * один — блок главной: расхождение текста на странице и в
+         * разметке поисковики наказывают. Скрытые вопросы не размечаются.
          */
-        app(Seo::class)->schema([
-            '@type' => 'FAQPage',
-            'mainEntity' => array_map(fn (int $i): array => [
-                '@type' => 'Question',
-                'name' => __("ui.home.faq_q{$i}"),
-                'acceptedAnswer' => ['@type' => 'Answer', 'text' => __("ui.home.faq_a{$i}")],
-            ], range(1, 6)),
-        ]);
+        if ($faq !== null && $faq['visible'] && $faq['items'] !== []) {
+            app(Seo::class)->schema([
+                '@type' => 'FAQPage',
+                'mainEntity' => array_map(fn (array $item): array => [
+                    '@type' => 'Question',
+                    'name' => $item['title'],
+                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => $item['text']],
+                ], $faq['items']),
+            ]);
+        }
 
         return Inertia::render('Home', [
+            'blocks' => $blocks,
             'stats' => $stats,
             // Баннер акции — сразу под первым экраном. Пусто, если
             // сейчас ничего не идёт: место не резервируется

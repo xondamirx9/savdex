@@ -502,3 +502,65 @@ class FaqItem(Timestamped):
 
     def __str__(self) -> str:
         return self.question
+
+
+# ── Главная страница ────────────────────────────────────────────────
+
+#: LandingBlock::KEYS — секции главной в порядке макета
+LANDING_KEYS: tuple[str, ...] = (
+    "hero",
+    "stats",
+    "categories",
+    "vip",
+    "requests",
+    "suppliers",
+    "how",
+    "reviews",
+    "faq",
+    "news",
+    "cta",
+)
+
+
+class LandingBlock(Timestamped):
+    """
+    Секция главной — копия правил App\\Models\\LandingBlock.
+
+    Правятся тексты и видимость; порядок задан макетом, секции не
+    заводятся и не удаляются. Языки — как у Page: русский в основных
+    столбцах, остальные — в *_i18n, пустой язык сайт переводит машиной.
+    У «Как это работает» и «Частых вопросов» пункты — в body: название
+    первой строкой, пояснение следующей, пункты через пустую строку.
+    """
+
+    key = models.CharField("ключ", max_length=190, unique=True, editable=False)
+    name = models.CharField("секция", max_length=190, editable=False)
+    eyebrow = models.CharField("надзаголовок", max_length=190, null=True, blank=True)
+    eyebrow_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    heading = models.CharField("заголовок", max_length=190, null=True, blank=True)
+    heading_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    subheading = models.TextField("подзаголовок", null=True, blank=True)
+    subheading_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    button = models.CharField("кнопка", max_length=190, null=True, blank=True)
+    button_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    body = models.TextField("текст", null=True, blank=True)
+    body_i18n = LaravelJSONField(null=True, blank=True, editable=False)
+    # Прежнее поле Filament: сайт его не читает, Django не трогает
+    payload = LaravelJSONField(null=True, blank=True, editable=False)
+    is_visible = models.BooleanField("показывать", default=True)
+    sort = models.PositiveSmallIntegerField("порядок", default=0, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "landing_blocks"
+        ordering = ("sort", "id")
+        verbose_name = "секция главной"
+        verbose_name_plural = "главная страница"
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def can_hide(self) -> bool:
+        """Первый экран не скрывается: на нём поиск."""
+        return self.key != "hero"

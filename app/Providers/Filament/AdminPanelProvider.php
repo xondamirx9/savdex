@@ -121,6 +121,12 @@ class AdminPanelProvider extends PanelProvider
             // ведёт через пропуск (/admin/python) в раздел на Python.
             // Видимость — по тем же правам AdminAccess, что и у раздела
             ->navigationItems([
+                NavigationItem::make('Главная страница')
+                    ->url('/admin/python?next=/py/admin/site/landingblock/')
+                    ->icon('heroicon-o-home')
+                    ->group('Контент')
+                    ->sort(1)
+                    ->visible(fn (): bool => AdminAccess::allows('content.view')),
                 NavigationItem::make('Новости')
                     ->url('/admin/python?next=/py/admin/site/newspost/')
                     ->icon('heroicon-o-newspaper')

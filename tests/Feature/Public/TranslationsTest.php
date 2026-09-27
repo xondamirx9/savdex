@@ -39,7 +39,7 @@ class TranslationsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('locale', $locale)
                 ->has('translations.nav.catalog')
-                ->has('translations.home.h1'));
+                ->has('translations.home.search_button'));
     }
 
     /**
