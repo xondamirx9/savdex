@@ -388,7 +388,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
 
     similar = _rows(
         f"{_SELECT} where t.status = 'active' and t.id != %s and t.service_type = %s "
-        "order by t.published_at desc limit 3",
+        "order by t.published_at desc, t.id desc limit 3",
         [row["id"], row["service_type"]],
     )
     files = _rows(

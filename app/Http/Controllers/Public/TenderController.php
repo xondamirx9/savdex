@@ -76,6 +76,8 @@ class TenderController extends Controller
             ->where('id', '!=', $tender->id)
             ->when($tender->category_id, fn (Builder $q, int $id) => $q->where('category_id', $id))
             ->orderByRaw('deadline_at is null, deadline_at asc')
+            // При равном сроке (и у всех без срока) — стабильный порядок
+            ->orderByDesc('id')
             ->limit(3)
             ->get();
 

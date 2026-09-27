@@ -136,6 +136,8 @@ class ResumeController extends Controller
                 ->where('id', '!=', $resume->id)
                 ->when($resume->field, fn (Builder $q, string $field) => $q->where('field', $field))
                 ->latest('published_at')
+                // При равной дате — стабильный порядок, как в списке
+                ->latest('id')
                 ->limit(4)
                 ->get()
                 ->map(fn (Resume $r): array => $this->card($r))

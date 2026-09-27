@@ -366,7 +366,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         "and (t.published_at is null or t.published_at <= %s) "
         "and (t.deadline_at is null or t.deadline_at >= %s) "
         f"and t.id != %s{same_category} "
-        "order by t.deadline_at is null, t.deadline_at asc limit 3",
+        "order by t.deadline_at is null, t.deadline_at asc, t.id desc limit 3",
         params,
     )
 
