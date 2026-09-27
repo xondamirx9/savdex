@@ -855,7 +855,7 @@ Laravel. Django получает только читающие запросы (G
 | `pricing` ✅ | `/pricing` (с `?promo=` — Laravel) | `tests/test_web_pricing.py` |
 | `home` ✅ | `/`, `/uz`, `/en` … | `tests/test_web_home.py` |
 | `reviews` ✅ | `/reviews` (форма `/reviews/new` — Laravel) | `tests/test_web_reviews.py` |
-| `tenders` ✅ | `/tenders` — 301 в каталог (этап 4) | `tests/test_web_throttle.py` |
+| `tenders` ✅ | `/tenders` — 301 в каталог, `/tenders/<адрес>`, `/catalog?type=tender` (этап 4) | `tests/test_web_throttle.py`, `tests/test_web_tenders.py` |
 | `services` ✅ | `/resumes`, `/it-services` (этап 4) | `tests/test_web_resumes.py`, `tests/test_web_it_tasks.py` |
 | `companies` ✅ | `/companies` (этап 4) | `tests/test_web_companies.py` |
 
@@ -970,6 +970,27 @@ Laravel: карточка объявления считала «доверие»
 названий, которых у этих языков нет, и при общем языке сайта брал их
 из запасного русского; теперь язык ставится на саму дату
 (`DateHelper::monthYear`, тест `tests/Feature/DateHelperTest.php`).
+
+**Шаг 4 — закупки.** Вкладка «Тендеры» каталога (`/catalog?type=tender`)
+и страница закупки `/tenders/<адрес>` — в группе `tenders`. Вкладку
+Apache отдаёт Django, только когда `type=tender` в адресе один: при
+двух PHP берёт последний, и вкладка могла бы оказаться объявлениями,
+которые пока у Laravel.
+
+Страница закупки — первая страница Django, которая пишет в таблицу
+каталога: `$tender->increment('views_count')`. Запись заявлена в
+`guards.SHARED_WRITES`, а у роли `savdex_django` право на правку только
+двух столбцов — `views_count` и `updated_at` (миграция
+`2026_09_30_100000_grant_django_tender_views`). Событий сохранения
+increment у Laravel не вызывает, кроме `updated`, на котором
+`AuditObserver` пишет строку журнала, если закупку открыл
+администратор, — Django пишет ту же строку (`tests/test_web_tenders.py`
+сверяет обе).
+
+По пути: адрес страницы с языковым префиксом Laravel собирает заново
+(`LocalizeUrl` берёт `getQueryString()`), поэтому в ссылках
+переключателя языка параметры упорядочены, а без префикса — нет
+(`Context.request_uri`).
 
 ### Этап 5. Кабинет (10–12 недель)
 

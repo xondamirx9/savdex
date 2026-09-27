@@ -50,8 +50,20 @@ class Context:
 
     @property
     def request_uri(self) -> str:
-        """$request->getRequestUri() после LocalizeUrl: путь без префикса и запрос."""
-        return self.path + (f"?{self.query}" if self.query else "")
+        """
+        $request->getRequestUri() после LocalizeUrl: путь без префикса и
+        запрос. С префиксом языка LocalizeUrl собирает адрес заново из
+        getQueryString() — параметры уже упорядочены (normalizeQueryString);
+        без префикса адрес остаётся как пришёл.
+        """
+        if self.url_locale is None:
+            return self.path + (f"?{self.query}" if self.query else "")
+
+        from savdex.web.phpquery import normalize
+
+        query = normalize(self.query)
+
+        return self.path + (f"?{query}" if query else "")
 
     def url(self, path: str) -> str:
         """url('/…') на текущем хосте."""

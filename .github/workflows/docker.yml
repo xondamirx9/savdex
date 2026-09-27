@@ -153,6 +153,14 @@ jobs:
             = "301 http://127.0.0.1:18080/catalog?type=tender&closed=1"
           curl -s -D /tmp/tenders.h -o /dev/null http://127.0.0.1:18080/tenders
           ! grep -qi '^x-powered-by: php' /tmp/tenders.h
+          # Вкладка «Тендеры» каталога и страница закупки — Django, другие
+          # вкладки каталога — Laravel
+          curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender'
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/tenders/nothing
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=supply' | grep -qi '^x-powered-by: php'
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender&type=supply' | grep -qi '^x-powered-by: php'
           # «Резюме», «IT-услуги» и каталог компаний — Django; страница
           # задачи — Laravel
           for page in resumes it-services companies; do
