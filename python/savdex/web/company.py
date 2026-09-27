@@ -109,18 +109,19 @@ def company_view(ctx: Context, company_id: int) -> None:
         if not laravel_cache.add(key, True, DEDUP_MINUTES * 60):
             return
 
-    _remember_viewer(company_id, viewer)
+    remember_viewer(company_id, viewer)
 
 
-def _remember_viewer(target: int, viewer: int) -> None:
+def remember_viewer(target: int, viewer: int, listing_id: int | None = None) -> None:
     """StatsRecorder::rememberViewer: повтор отсеивается и по таблице; сбой — молча."""
     now = datetime.now(UTC).replace(microsecond=0, tzinfo=None)
 
     try:
         recent = _rows(
             "select 1 from audience_views where viewer_company_id = %s and "
-            "target_company_id = %s and listing_id is null and created_at >= %s limit 1",
-            [viewer, target, now - timedelta(minutes=DEDUP_MINUTES)],
+            "target_company_id = %s and listing_id is not distinct from %s::bigint "
+            "and created_at >= %s limit 1",
+            [viewer, target, listing_id, now - timedelta(minutes=DEDUP_MINUTES)],
         )
 
         if recent:
@@ -134,8 +135,8 @@ def _remember_viewer(target: int, viewer: int) -> None:
         ):
             cursor.execute(
                 "insert into audience_views (target_company_id, viewer_company_id, "
-                "listing_id, created_at, updated_at) values (%s, %s, null, %s, %s)",
-                [target, viewer, now, now],
+                "listing_id, created_at, updated_at) values (%s, %s, %s, %s, %s)",
+                [target, viewer, listing_id, now, now],
             )
     except Exception:
         # rescue(): статистика дешевле показа страницы

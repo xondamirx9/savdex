@@ -89,6 +89,17 @@ def visitor_key(ctx: Context) -> tuple[str | None, str | None]:
     return f"py-{fresh}", fresh
 
 
+def set_visitor_cookie(ctx: Context, response: HttpResponse, value: str) -> None:
+    """Своя кука гостя без сессии Laravel: живёт, пока открыт браузер, как сессия."""
+    response.set_cookie(
+        VISITOR_COOKIE,
+        value,
+        httponly=True,
+        samesite="Lax",
+        secure=ctx.request.is_secure(),
+    )
+
+
 def without_recent(ids: list[int], kind: str, visitor: str | None) -> list[int]:
     """StatsRecorder::withoutRecent: add() ставит ключ, только если его нет."""
     if not ids or visitor is None or not laravel_cache.is_file_store():
@@ -304,13 +315,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     )
 
     if fresh_cookie is not None:
-        response.set_cookie(
-            VISITOR_COOKIE,
-            fresh_cookie,
-            httponly=True,
-            samesite="Lax",
-            secure=ctx.request.is_secure(),
-        )
+        set_visitor_cookie(ctx, response, fresh_cookie)
 
     return response
 

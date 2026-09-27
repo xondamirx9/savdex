@@ -158,13 +158,15 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/page.h
           curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/tenders/nothing
           ! grep -qi '^x-powered-by: php' /tmp/page.h
-          # Каталог объявлений — тоже Django (группа catalog), страница
-          # объявления — Laravel
+          # Каталог объявлений и страница объявления — тоже Django
+          # (группа catalog), картинка превью — Laravel
           for page in 'catalog' 'catalog?type=supply' 'catalog?type=tender&type=supply'; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/listing/nothing | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/listing/nothing
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D - -o /dev/null http://127.0.0.1:18080/og/listing/1.jpg | grep -qi '^x-powered-by: php'
           # «Резюме», «IT-услуги» (со страницами) и каталог компаний — Django
           for page in resumes it-services companies; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"

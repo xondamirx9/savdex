@@ -141,9 +141,10 @@ SHARED_WRITES: dict[str, str] = {
         "чаще раза в 30 минут на пару компаний; у модели AudienceView событий нет"
     ),
     "listings": (
-        "показы объявлений (этап 4): каталог на Django, как "
-        "StatsRecorder::impressions, — только update impressions_count + 1 и "
-        "updated_at пачкой, без событий модели (у Laravel это тоже запрос, а не save)"
+        "показы и просмотры объявлений (этап 4): каталог и страница объявления "
+        "на Django, как StatsRecorder::impressions и ::view, — только +1 к "
+        "impressions_count или views_count и updated_at, без событий сохранения; "
+        "просмотр администратора — строка журнала, как AuditObserver"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "

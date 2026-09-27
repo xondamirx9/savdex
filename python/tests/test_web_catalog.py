@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from collections.abc import Iterator
 
@@ -22,6 +23,21 @@ from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_б�
 from .web_site import laravel, из_django, из_laravel, сверить, страница
 
 pytestmark = нужна_база
+
+#: Файловый кэш, общий с Laravel: курс ЦБ для цен в валюте языка Django
+#: берёт из него (в CI у Laravel есть сеть, и курс он получает сам)
+ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
+
+
+def очистить_кэш() -> None:
+    """Кэш с нуля — заодно и счётчик ограничения частоты."""
+    subprocess.run(
+        ["php", "artisan", "cache:clear"],
+        cwd=КОРЕНЬ,
+        env={**ОКРУЖЕНИЕ, **ФАЙЛОВЫЙ},
+        check=True,
+        capture_output=True,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -72,13 +88,23 @@ def сайт() -> Iterator[str]:
         "echo 'ok';",
         {"MACHINE_TRANSLATION_ENABLED": "false"},
     )
+    очистить_кэш()
 
-    with laravel() as root:
-        yield root
+    try:
+        with laravel(**ФАЙЛОВЫЙ) as root:
+            yield root
+    finally:
+        очистить_кэш()
+
+
+def без_кэша() -> None:
+    """Файлы кэша Laravel — прочь: отсев повторов и счётчик частоты с нуля."""
+    shutil.rmtree(КОРЕНЬ / "storage/framework/cache/data", ignore_errors=True)
 
 
 def обнулить() -> None:
     """Статистика с нуля перед каждой стороной сверки."""
+    без_кэша()
     sql("update listings set impressions_count = 0")
     sql("delete from listing_stats")
     sql("delete from search_hits")
@@ -107,16 +133,16 @@ def обнулить() -> None:
     ],
 )
 def test_выдача(сайт, path):
-    сверить(сайт, path, перед=обнулить)
+    сверить(сайт, path, перед=обнулить, env=ФАЙЛОВЫЙ)
 
 
 def test_раздел_и_город(сайт):
-    д, _ = сверить(сайт, "/catalog", перед=обнулить)
+    д, _ = сверить(сайт, "/catalog", перед=обнулить, env=ФАЙЛОВЫЙ)
     props = страница(д["body"])["props"]
     раздел = props["categories"][0]["id"]
     город = props["cities"][0]["id"]
 
-    сверить(сайт, f"/catalog?category={раздел}&city={город}", перед=обнулить)
+    сверить(сайт, f"/catalog?category={раздел}&city={город}", перед=обнулить, env=ФАЙЛОВЫЙ)
 
 
 def статистика() -> tuple[object, ...]:
@@ -138,7 +164,7 @@ def test_статистика_как_у_laravel(сайт, path):
     laravel_side = статистика()
 
     обнулить()
-    из_django(сайт, path)
+    из_django(сайт, path, env=ФАЙЛОВЫЙ)
 
     assert статистика() == laravel_side
     assert laravel_side[0] and any(n for _, n in laravel_side[0])
