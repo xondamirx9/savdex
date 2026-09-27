@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\ImageStore;
 use App\Support\Microsite\SiteHost;
 use App\Support\Microsite\SiteTheme;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Мини-сайт компании: адрес на savdex.site и оформление.
@@ -53,13 +55,13 @@ class CompanySite extends Model
         return SiteHost::url($this->subdomain);
     }
 
-    /** @return array<string, string> */
+    /** @return array<string, string|null> */
     public function draftTheme(): array
     {
         return SiteTheme::normalize($this->theme);
     }
 
-    /** @return array<string, string> */
+    /** @return array<string, string|null> */
     public function publishedTheme(): array
     {
         return SiteTheme::normalize($this->published_theme);
@@ -94,11 +96,33 @@ class CompanySite extends Model
 
     public function publish(): void
     {
+        $previousHero = $this->published_theme['hero_image'] ?? null;
+
         $this->forceFill([
             'status' => self::STATUS_PUBLISHED,
             'published_theme' => $this->draftTheme(),
             'published_at' => now(),
         ])->save();
+
+        // Прежний фон больше нигде не показывается — файл не нужен
+        if ($previousHero !== null && ! $this->heroInUse($previousHero)) {
+            app(ImageStore::class)->delete($previousHero);
+        }
+    }
+
+    /** Фон нужен черновику или опубликованной версии — удалять его нельзя. */
+    public function heroInUse(string $path): bool
+    {
+        return ($this->theme['hero_image'] ?? null) === $path
+            || ($this->published_theme['hero_image'] ?? null) === $path;
+    }
+
+    /** Адрес фона первого экрана из этого оформления; null — фона нет. */
+    public static function heroUrl(array $theme): ?string
+    {
+        $path = $theme['hero_image'] ?? null;
+
+        return is_string($path) && Storage::disk('public')->exists($path) ? asset('storage/'.$path) : null;
     }
 
     public function unpublish(): void

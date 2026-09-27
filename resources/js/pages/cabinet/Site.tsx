@@ -1,7 +1,9 @@
 import { router, useForm } from '@inertiajs/react';
-import { ExternalLink, Monitor, Smartphone } from 'lucide-react';
+import { ExternalLink, ImagePlus, Monitor, Package, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Panel } from '@/components/cabinet';
+import { Panel, formatNumber } from '@/components/cabinet';
+import { Modal } from '@/components/Modal';
+import { useConfirm } from '@/components/useConfirm';
 import { Alert } from '@/components/ui';
 import { Link } from '@/components/ui/Link';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
@@ -40,14 +42,43 @@ type Props = {
         modes: SiteTheme['mode'][];
         radii: SiteTheme['radius'][];
         fonts: { key: string; name: string }[];
-        presets: Record<string, Omit<SiteTheme, 'template'>>;
+        presets: Record<string, Omit<SiteTheme, 'template' | 'hero_image'>>;
         fonts_url: string;
     };
+    /** Фон первого экрана из черновика */
+    hero_url: string | null;
+    products: SiteProductRow[];
+    products_limit: number;
+    /** Действующие объявления: на сайте они показываются сами */
+    listings_count: number;
+    currencies: string[];
+};
+
+type SiteProductRow = {
+    id: number;
+    title: string;
+    description: string | null;
+    price: number | null;
+    currency: string;
+    unit: string | null;
+    image: string | null;
 };
 
 type FormData = { subdomain: string; theme: SiteTheme };
 
-export default function Site({ available, address, site, subdomain, theme, options }: Props) {
+export default function Site({
+    available,
+    address,
+    site,
+    subdomain,
+    theme,
+    options,
+    hero_url,
+    products,
+    products_limit,
+    listings_count,
+    currencies,
+}: Props) {
     const form = useForm<FormData>({ subdomain, theme });
     const frame = useRef<HTMLIFrameElement>(null);
     const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -244,6 +275,22 @@ export default function Site({ available, address, site, subdomain, theme, optio
                         </div>
                     </Panel>
 
+                    <HeroPanel
+                        url={hero_url}
+                        disabled={!available || !site}
+                        onChange={(heroImage) =>
+                            form.setData((d) => ({ ...d, theme: { ...d.theme, hero_image: heroImage } }))
+                        }
+                    />
+
+                    <ProductsPanel
+                        products={products}
+                        limit={products_limit}
+                        listingsCount={listings_count}
+                        currencies={currencies}
+                        disabled={!available}
+                    />
+
                     <Panel>
                         <p className="t-sm muted" style={{ marginBottom: 12 }}>
                             {site?.unpublished_changes && published
@@ -414,5 +461,312 @@ function FontField({
                 ))}
             </select>
         </div>
+    );
+}
+
+/**
+ * Фон первого экрана. Загрузка сразу пишет его в черновик, поэтому
+ * нужен сохранённый сайт; на сайте фон появится после публикации.
+ */
+function HeroPanel({
+    url,
+    disabled,
+    onChange,
+}: {
+    url: string | null;
+    disabled: boolean;
+    onChange: (heroImage: string | null) => void;
+}) {
+    const input = useRef<HTMLInputElement>(null);
+    const [busy, setBusy] = useState(false);
+
+    // Новый путь фона приходит в теме страницы после загрузки
+    const sync = (page: { props: Record<string, unknown> }) =>
+        onChange((page.props.theme as SiteTheme | undefined)?.hero_image ?? null);
+
+    return (
+        <Panel title={t('cabinet.site.hero')}>
+            {url ? (
+                <img src={url} alt="" className="site-hero-thumb" />
+            ) : (
+                <p className="t-sm muted">{t('cabinet.site.hero_empty')}</p>
+            )}
+            <input
+                ref={input}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+
+                    if (!file) return;
+
+                    setBusy(true);
+                    router.post(
+                        routes.cabinetSiteHero,
+                        { hero: file },
+                        { forceFormData: true, preserveScroll: true, onSuccess: sync, onFinish: () => setBusy(false) },
+                    );
+                }}
+            />
+            <div className="row mt-12" style={{ gap: 10, flexWrap: 'wrap' }}>
+                <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled={disabled || busy}
+                    onClick={() => input.current?.click()}
+                >
+                    <ImagePlus aria-hidden className="size-4" />
+                    {url ? t('cabinet.site.hero_replace') : t('cabinet.site.hero_upload')}
+                </button>
+                {url && (
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                            router.delete(routes.cabinetSiteHero, { preserveScroll: true, onSuccess: sync })
+                        }
+                    >
+                        <Trash2 aria-hidden className="size-4" /> {t('cabinet.site.hero_remove')}
+                    </button>
+                )}
+            </div>
+            <p className="hint">{disabled ? t('cabinet.site.hero_save_first') : t('cabinet.site.hero_hint')}</p>
+        </Panel>
+    );
+}
+
+type ProductForm = {
+    title: string;
+    description: string;
+    price: string;
+    currency: string;
+    unit: string;
+    image: File | null;
+};
+
+/**
+ * Товары сайта. Объявления компании сюда не вносятся — на сайте
+ * они показываются сами; здесь то, что компания хочет показать
+ * только на своей странице.
+ */
+function ProductsPanel({
+    products,
+    limit,
+    listingsCount,
+    currencies,
+    disabled,
+}: {
+    products: SiteProductRow[];
+    limit: number;
+    listingsCount: number;
+    currencies: string[];
+    disabled: boolean;
+}) {
+    const [editing, setEditing] = useState<SiteProductRow | 'new' | null>(null);
+    const { confirm, dialog } = useConfirm();
+    const form = useForm<ProductForm>({ title: '', description: '', price: '', currency: 'UZS', unit: '', image: null });
+
+    const open = (product: SiteProductRow | 'new') => {
+        form.clearErrors();
+        form.setData(
+            product === 'new'
+                ? { title: '', description: '', price: '', currency: 'UZS', unit: '', image: null }
+                : {
+                      title: product.title,
+                      description: product.description ?? '',
+                      price: product.price === null ? '' : String(product.price),
+                      currency: product.currency,
+                      unit: product.unit ?? '',
+                      image: null,
+                  },
+        );
+        setEditing(product);
+    };
+
+    const submit = () => {
+        const url =
+            editing === 'new' || editing === null
+                ? routes.cabinetSiteProducts
+                : routes.cabinetSiteProduct(editing.id);
+
+        form.post(url, { forceFormData: true, preserveScroll: true, onSuccess: () => setEditing(null) });
+    };
+
+    return (
+        <Panel
+            title={t('cabinet.site.products')}
+            action={
+                <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={disabled || products.length >= limit}
+                    onClick={() => open('new')}
+                >
+                    <Plus aria-hidden className="size-4" /> {t('cabinet.site.product_add')}
+                </button>
+            }
+        >
+            {dialog}
+
+            <p className="t-sm muted" style={{ marginBottom: 12 }}>
+                {t('cabinet.site.products_listings', { count: listingsCount })}{' '}
+                <Link href={routes.cabinetListings} className="font-semibold underline">
+                    {t('cabinet.site.products_listings_link')}
+                </Link>
+            </p>
+
+            {products.length === 0 ? (
+                <p className="t-sm muted">{t('cabinet.site.products_empty')}</p>
+            ) : (
+                <ul className="site-products">
+                    {products.map((p) => (
+                        <li key={p.id} className="site-product">
+                            <span className="site-product-thumb">
+                                {p.image ? <img src={p.image} alt="" /> : <Package aria-hidden className="size-5" />}
+                            </span>
+                            <span className="site-product-text">
+                                <b>{p.title}</b>
+                                <small className="muted">
+                                    {p.price === null
+                                        ? t('site.products.negotiable')
+                                        : `${formatNumber(p.price)} ${p.currency}${p.unit ? ` / ${p.unit}` : ''}`}
+                                </small>
+                            </span>
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-icon"
+                                aria-label={t('cabinet.site.product_edit')}
+                                disabled={disabled}
+                                onClick={() => open(p)}
+                            >
+                                <Pencil aria-hidden className="size-4" />
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-icon"
+                                aria-label={t('cabinet.site.product_delete')}
+                                onClick={() =>
+                                    confirm({
+                                        title: t('cabinet.site.product_delete_title', { title: p.title }),
+                                        confirmLabel: t('common.delete'),
+                                        danger: true,
+                                        onConfirm: () =>
+                                            router.delete(routes.cabinetSiteProduct(p.id), { preserveScroll: true }),
+                                    })
+                                }
+                            >
+                                <Trash2 aria-hidden className="size-4" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <Modal
+                open={editing !== null}
+                onClose={() => setEditing(null)}
+                title={editing === 'new' ? t('cabinet.site.product_add') : t('cabinet.site.product_edit')}
+                width={520}
+                footer={
+                    <div className="row" style={{ gap: 10, justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>
+                            {t('common.cancel')}
+                        </button>
+                        <button type="button" className="btn btn-primary" disabled={form.processing} onClick={submit}>
+                            {t('cabinet.site.product_save')}
+                        </button>
+                    </div>
+                }
+            >
+                <div className="field">
+                    <label className="label" htmlFor="sp-title">
+                        {t('cabinet.site.product_title')}
+                    </label>
+                    <input
+                        id="sp-title"
+                        className="input"
+                        maxLength={190}
+                        value={form.data.title}
+                        onChange={(e) => form.setData('title', e.target.value)}
+                    />
+                    {form.errors.title && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.title}</p>}
+                </div>
+                <div className="grid grid-2">
+                    <div className="field">
+                        <label className="label" htmlFor="sp-price">
+                            {t('cabinet.site.product_price')}
+                        </label>
+                        <input
+                            id="sp-price"
+                            className="input"
+                            inputMode="decimal"
+                            value={form.data.price}
+                            placeholder={t('site.products.negotiable')}
+                            onChange={(e) => form.setData('price', e.target.value.replace(/[^\d.]/g, ''))}
+                        />
+                        {form.errors.price && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.price}</p>}
+                    </div>
+                    <div className="grid grid-2" style={{ gap: 8 }}>
+                        <div className="field">
+                            <label className="label" htmlFor="sp-currency">
+                                {t('cabinet.site.product_currency')}
+                            </label>
+                            <select
+                                id="sp-currency"
+                                className="input"
+                                value={form.data.currency}
+                                onChange={(e) => form.setData('currency', e.target.value)}
+                            >
+                                {currencies.map((c) => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="field">
+                            <label className="label" htmlFor="sp-unit">
+                                {t('cabinet.site.product_unit')}
+                            </label>
+                            <input
+                                id="sp-unit"
+                                className="input"
+                                maxLength={30}
+                                value={form.data.unit}
+                                onChange={(e) => form.setData('unit', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="field">
+                    <label className="label" htmlFor="sp-description">
+                        {t('cabinet.site.product_description')}
+                    </label>
+                    <textarea
+                        id="sp-description"
+                        className="input"
+                        rows={3}
+                        maxLength={2000}
+                        value={form.data.description}
+                        onChange={(e) => form.setData('description', e.target.value)}
+                    />
+                </div>
+                <div className="field">
+                    <label className="label" htmlFor="sp-image">
+                        {t('cabinet.site.product_photo')}
+                    </label>
+                    <input
+                        id="sp-image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => form.setData('image', e.target.files?.[0] ?? null)}
+                    />
+                    {form.errors.image && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.image}</p>}
+                </div>
+            </Modal>
+        </Panel>
     );
 }

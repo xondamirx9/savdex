@@ -98,4 +98,23 @@ class SiteThemeTest extends TestCase
             $this->assertMatchesRegularExpression(SiteHost::PATTERN, SiteHost::suggest($slug), $slug);
         }
     }
+
+    #[Test]
+    public function фон_принимается_только_из_хранилища_сайтов(): void
+    {
+        $this->assertSame('sites/5/abc.jpg', SiteTheme::normalize(['hero_image' => 'sites/5/abc.jpg'])['hero_image']);
+
+        foreach (['../../.env', 'https://evil.test/x.jpg', 'companies/5/a.jpg', 'sites/5/../x.jpg'] as $bad) {
+            $this->assertNull(SiteTheme::normalize(['hero_image' => $bad])['hero_image'], $bad);
+        }
+    }
+
+    /** Акцент в цвет фона на «Ярком» шаблоне не прячет кнопку. */
+    #[Test]
+    public function кнопка_на_фирменном_фоне_остаётся_видна(): void
+    {
+        $vars = SiteTheme::variables(SiteTheme::normalize(['primary' => '#7a4acb', 'accent' => '#7a4acb']));
+
+        $this->assertGreaterThanOrEqual(1.6, SiteTheme::contrast($vars['--ms-hero-cta'], '#7a4acb'));
+    }
 }

@@ -26,6 +26,7 @@ use App\Http\Controllers\Cabinet\ResumeController;
 use App\Http\Controllers\Cabinet\ReviewController;
 use App\Http\Controllers\Cabinet\SettingsController;
 use App\Http\Controllers\Cabinet\SiteController as CabinetSiteController;
+use App\Http\Controllers\Cabinet\SiteProductController;
 use App\Http\Controllers\Cabinet\TelegramLinkController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Microsite\SiteController as MicrositeController;
@@ -395,6 +396,23 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::post('/cabinet/site/publish', [CabinetSiteController::class, 'publish'])->name('cabinet.site.publish');
     Route::post('/cabinet/site/unpublish', [CabinetSiteController::class, 'unpublish'])->name('cabinet.site.unpublish');
     Route::get('/cabinet/site/preview', [CabinetSiteController::class, 'preview'])->name('cabinet.site.preview');
+    Route::post('/cabinet/site/hero', [CabinetSiteController::class, 'uploadHero'])
+        ->middleware('throttle:30,60')
+        ->name('cabinet.site.hero');
+    Route::delete('/cabinet/site/hero', [CabinetSiteController::class, 'removeHero'])->name('cabinet.site.hero.remove');
+
+    // Товары мини-сайта. Правка — POST: с фотографией форма идёт
+    // multipart, а PATCH с файлом PHP не разбирает
+    Route::post('/cabinet/site/products', [SiteProductController::class, 'store'])
+        ->middleware('throttle:60,60')
+        ->name('cabinet.site.products.store');
+    Route::post('/cabinet/site/products/{id}', [SiteProductController::class, 'update'])
+        ->whereNumber('id')
+        ->middleware('throttle:60,60')
+        ->name('cabinet.site.products.update');
+    Route::delete('/cabinet/site/products/{id}', [SiteProductController::class, 'destroy'])
+        ->whereNumber('id')
+        ->name('cabinet.site.products.destroy');
 
     Route::get('/cabinet/company', [CompanyProfileController::class, 'edit'])->name('cabinet.company');
     Route::patch('/cabinet/company', [CompanyProfileController::class, 'update'])->name('cabinet.company.update');
