@@ -1,0 +1,17 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+{% comment %}
+  Адрес новости подставляется из заголовка, пока новость заводится, —
+  как в Filament. У готовой новости адрес сам не меняется: внешние
+  ссылки перестали бы работать. «Открыть» — у опубликованной.
+{% endcomment %}
+{% block object-tools-items %}
+  {% if original and original.is_published %}
+    <li><a href="/news/{{ original.slug }}" target="_blank" rel="noopener">Открыть на сайте ↗</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+{% block admin_change_form_document_ready %}
+  {{ block.super }}
+  {% if add %}<script src="{% static 'savdex/news-slug.js' %}"></script>{% endif %}
+{% endblock %}

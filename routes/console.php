@@ -142,7 +142,13 @@ Schedule::call(function (): void {
         ->each(fn (int $id) => TranslateTender::dispatch($id));
 })->hourly()->name('tenders-translate-catchup')->onOneServer();
 
-// Новости — по той же схеме, что объявления и тендеры
+/*
+ * Новости — по той же схеме, что объявления и тендеры, но каждые пять
+ * минут, а не раз в час. С этапа 2 переноса новости правит админка на
+ * Python: она не ставит перевод в очередь сама, а сбрасывает перевод
+ * изменённого поля, и этот добор — единственный путь к переводу.
+ * Раз в час значило бы до часа русского текста на всех языках.
+ */
 Schedule::call(function (): void {
     if (! config('services.machine_translation.enabled')) {
         return;
@@ -155,7 +161,7 @@ Schedule::call(function (): void {
         ->limit(20)
         ->pluck('id')
         ->each(fn (int $id) => TranslateNewsPost::dispatch($id));
-})->hourly()->name('news-translate-catchup')->onOneServer();
+})->everyFiveMinutes()->name('news-translate-catchup')->onOneServer();
 
 /*
  * Перевод прочего текста из базы — описаний компаний, IT-задач,

@@ -17,6 +17,11 @@ use Illuminate\Support\Str;
  *
  * Переехала из NewsRepository в базу: править новости не должно
  * означать выкатывать релиз.
+ *
+ * С этапа 2 переноса новости правит раздел на Python
+ * (python/savdex/site/). Таблица делится по столбцам: текст пишет он,
+ * машинный перевод (*_i18n) — TranslateNewsPost отсюда. Правка текста
+ * там сбрасывает перевод поля, и его подбирает добор news-translate-catchup.
  */
 #[Fillable([
     'slug', 'category', 'title', 'excerpt', 'body', 'image_path',
