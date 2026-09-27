@@ -73,7 +73,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 RUN cd python \
     && UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-dev --no-cache --compile-bytecode \
         --python /usr/bin/python3 \
-    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL" \
+    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography" \
     && .venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
 COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini

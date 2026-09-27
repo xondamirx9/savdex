@@ -155,6 +155,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     # Кто открыл раздел админки на Django (вход — пропуском из Laravel)
     "savdex.adminpanel.AdminMiddleware",
+    # Кто вошёл на сайт — по сессии Laravel, лениво (этап 3)
+    "savdex.visitor.VisitorMiddleware",
 ]
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"
