@@ -215,7 +215,7 @@ return [
         'rules' => 'Joylashtirish qoidalari',
         'pricing' => 'Tariflar',
         'products' => 'Mahsulotlar',
-        'rfq' => 'So‘rovlar (RFQ)',
+        'rfq' => 'So‘rovlar',
         'tenders' => 'Tenderlar',
         'resumes' => 'Rezyumelar',
         'it_services' => 'Qo‘shimcha xizmatlar',

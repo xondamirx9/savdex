@@ -212,7 +212,7 @@ return [
         'rules' => 'Posting rules',
         'pricing' => 'Pricing',
         'products' => 'Products',
-        'rfq' => 'Requests (RFQ)',
+        'rfq' => 'Requests',
         'tenders' => 'Tenders',
         'resumes' => 'Resumes',
         'it_services' => 'Extra services',

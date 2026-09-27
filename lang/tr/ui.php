@@ -212,7 +212,7 @@ return [
         'rules' => 'İlan kuralları',
         'pricing' => 'Tarifeler',
         'products' => 'Ürünler',
-        'rfq' => 'Talepler (RFQ)',
+        'rfq' => 'Talepler',
         'tenders' => 'İhaleler',
         'resumes' => 'Özgeçmişler',
         'it_services' => 'Ek hizmetler',
