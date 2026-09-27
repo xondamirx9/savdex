@@ -3,10 +3,13 @@ import {
     Armchair,
     ArrowRight,
     Box,
+    Calculator,
     Boxes,
     Briefcase,
     Cog,
+    Code2,
     Cpu,
+    FileCheck2,
     FlaskConical,
     Globe2,
     Handshake,
@@ -23,6 +26,7 @@ import {
     Shirt,
     Star,
     Truck,
+    UserSearch,
     Users,
     UtensilsCrossed,
     Wallet,
@@ -56,6 +60,21 @@ interface Stats {
     categories: number;
     countries: number;
 }
+
+/** Направление «Доп. услуг» для плитки рядом с категориями */
+interface ServiceTile {
+    type: string;
+    name: string;
+    tasks: number;
+}
+
+const SERVICE_ICONS: Record<string, typeof Package> = {
+    it: Code2,
+    logistics: Truck,
+    hr_services: UserSearch,
+    customs: FileCheck2,
+    accounting: Calculator,
+};
 
 interface CategoryTile {
     id: number;
@@ -278,6 +297,7 @@ function HeroSearch({
 export default function Home({
     stats,
     categories,
+    services,
     latest,
     requests,
     suppliers,
@@ -290,6 +310,8 @@ export default function Home({
 }: {
     stats: Stats;
     categories: CategoryTile[];
+    /** Две популярные услуги — плитки рядом с категориями */
+    services: ServiceTile[];
     latest: ProductRow[];
     requests: ProductRow[];
     suppliers: SupplierRow[];
@@ -393,7 +415,7 @@ export default function Home({
             </section>
 
             {/* ── Популярные категории ── */}
-            {categories.length > 0 && (
+            {(categories.length > 0 || services.length > 0) && (
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
@@ -403,7 +425,8 @@ export default function Home({
                             </Link>
                         </div>
                         <div className="cat-grid" data-reveal-stagger>
-                            {categories.slice(0, 6).map((c, i) => {
+                            {/* Ряд — шесть плиток: услуги занимают последние места */}
+                            {categories.slice(0, 6 - services.length).map((c, i) => {
                                 const Icon = categoryIcon(c.icon);
 
                                 return (
@@ -415,6 +438,27 @@ export default function Home({
                                             <span className="cat-name">{c.name}</span>
                                             <span className="cat-count" style={{ display: 'block' }}>
                                                 {tChoice('home.categories_count', c.listings)}
+                                            </span>
+                                        </span>
+                                    </Link>
+                                );
+                            })}
+                            {services.map((svc, i) => {
+                                const Icon = SERVICE_ICONS[svc.type] ?? Briefcase;
+
+                                return (
+                                    <Link
+                                        key={svc.type}
+                                        href={`${routes.itTasks}?type=${svc.type}`}
+                                        className="cat-card"
+                                    >
+                                        <span className={cn('cat-thumb', `cat-g-${i === 0 ? 7 : 8}`)}>
+                                            <Icon aria-hidden />
+                                        </span>
+                                        <span style={{ minWidth: 0 }}>
+                                            <span className="cat-name">{svc.name}</span>
+                                            <span className="cat-count" style={{ display: 'block' }}>
+                                                {svc.tasks > 0 ? tChoice('it_tasks.found', svc.tasks) : t('nav.it_services')}
                                             </span>
                                         </span>
                                     </Link>
