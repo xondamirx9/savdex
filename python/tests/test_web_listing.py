@@ -14,7 +14,6 @@ StatsRecorder::view: счётчик, дневная строка, «Кто мн�
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from collections.abc import Iterator
 
@@ -28,6 +27,9 @@ pytestmark = нужна_база
 #: Файловый кэш, общий с Laravel: курс ЦБ для цен в валюте языка Django
 #: берёт из него (в CI у Laravel есть сеть, и курс он получает сам)
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
+
+#: Ключи курса ЦБ в кэше Laravel (CurrencyRate)
+КУРС = ("cbu.rates", "cbu.rates.last", "cbu.rate.usd.last")
 
 
 def очистить_кэш() -> None:
@@ -87,6 +89,15 @@ def сайт() -> Iterator[str]:
         {"MACHINE_TRANSLATION_ENABLED": "false"},
     )
     очистить_кэш()
+    # Курс ЦБ — в кэш заранее: Laravel не пойдёт за ним в сеть (в CI она
+    # есть, локально нет), и цены в валюте языка у обеих сторон одни
+    php(
+        "Illuminate\\Support\\Facades\\Cache::put('cbu.rates', ['USD' => 12650.5,"
+        "'CNY' => 1760.25, 'TRY' => 305.1, 'EUR' => 13710.0, 'RUB' => 140.2, 'KZT' => 25.3],"
+        "now()->addDay());"
+        "echo 'ok';",
+        ФАЙЛОВЫЙ,
+    )
 
     try:
         with laravel(**ФАЙЛОВЫЙ) as root:
@@ -96,8 +107,18 @@ def сайт() -> Iterator[str]:
 
 
 def без_кэша() -> None:
-    """Файлы кэша Laravel — прочь: отсев повторов и счётчик частоты с нуля."""
-    shutil.rmtree(КОРЕНЬ / "storage/framework/cache/data", ignore_errors=True)
+    """
+    Файлы кэша Laravel — прочь (отсев повторов и счётчик частоты с нуля),
+    кроме курса ЦБ: его Django берёт из этого кэша, а в CI Laravel
+    получает курс из сети.
+    """
+    import hashlib
+
+    курс = {hashlib.sha1(k.encode()).hexdigest() for k in КУРС}
+
+    for файл in (КОРЕНЬ / "storage/framework/cache/data").rglob("*"):
+        if файл.is_file() and файл.name not in курс:
+            файл.unlink(missing_ok=True)
 
 
 def обнулить() -> None:
@@ -185,3 +206,10 @@ def test_просмотр_администратора_в_журнале(сай�
         "changes::jsonb from admin_actions order by id"
     )
     assert л == д and л[2] == "listings"
+
+
+def test_цена_в_валюте_языка(сайт):
+    """Курс ЦБ из общего кэша: на английской странице — доллары, у обеих сторон одни."""
+    д, _ = сверить(сайт, "/en/listing/cement", перед=обнулить, env=ФАЙЛОВЫЙ)
+
+    assert страница(д["body"])["props"]["listing"]["converted"]["currency"] == "USD"
