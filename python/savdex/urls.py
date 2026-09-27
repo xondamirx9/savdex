@@ -17,6 +17,7 @@ from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
+    catalog,
     companies,
     company,
     directory,
@@ -60,7 +61,7 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<slug>[^/]+)$", it_tasks.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)$", company.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", tenders.catalog),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", catalog.catalog),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders/(?P<slug>[^/]+)$", tenders.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners),

@@ -140,6 +140,19 @@ SHARED_WRITES: dict[str, str] = {
         "как StatsRecorder::companyView, — только insert строки просмотра, не "
         "чаще раза в 30 минут на пару компаний; у модели AudienceView событий нет"
     ),
+    "listings": (
+        "показы объявлений (этап 4): каталог на Django, как "
+        "StatsRecorder::impressions, — только update impressions_count + 1 и "
+        "updated_at пачкой, без событий модели (у Laravel это тоже запрос, а не save)"
+    ),
+    "listing_stats": (
+        "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
+        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily"
+    ),
+    "search_hits": (
+        "«по каким запросам вас находили» (этап 4): insert … on conflict do "
+        "nothing строки дня и +1 к показам, как StatsRecorder::search"
+    ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
