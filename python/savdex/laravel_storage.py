@@ -31,6 +31,11 @@ def public_root() -> Path:
     return Path(settings.LARAVEL_ROOT) / "storage/app/public"
 
 
+def private_root() -> Path:
+    """Диск local у Laravel — storage/app/private: документы компаний."""
+    return Path(settings.LARAVEL_ROOT) / "storage/app/private"
+
+
 def sniff(head: bytes, *, allow_svg: bool) -> str:
     """Расширение по первым байтам файла; не картинка — исключение."""
     if head.startswith(b"\x89PNG\r\n\x1a\n"):

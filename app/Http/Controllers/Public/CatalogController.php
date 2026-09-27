@@ -342,9 +342,12 @@ class CatalogController extends Controller
                 'category.translations',
                 'category.parent.translations',
                 'category.fields',
-                'attributes',
+                // Порядок — по записи: без него Postgres отдавал
+                // характеристики, фото с одинаковым sort и значки как лягут
+                'attributes' => fn ($q) => $q->orderBy('id'),
+                'activePromotions' => fn ($q) => $q->orderBy('id'),
                 'activePromotions.type',
-                'images',
+                'images' => fn ($q) => $q->orderBy('id'),
             ])
             ->where('slug', $slug)
             ->firstOrFail();
@@ -484,6 +487,8 @@ class CatalogController extends Controller
             ->where('id', '!=', $listing->id)
             ->when($listing->category_id !== null, fn (Builder $q) => $q->where('category_id', $listing->category_id))
             ->latest('published_at')
+            // При равной дате — стабильный порядок, как в выдаче
+            ->latest('id')
             ->limit(4)
             ->get()
             ->map(fn (Listing $l): array => $this->present($l))

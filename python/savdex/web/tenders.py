@@ -24,11 +24,10 @@ from savdex.web import inertia, paginator, search_text
 from savdex.web.directory import _named
 from savdex.web.home import _utc, banner, visible_in
 from savdex.web.it_tasks import _date
-from savdex.web.phpquery import laravel_input, php_int, text
+from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo, _limit
 from savdex.web.shared import Context
-from savdex.web.throttle import throttled
 
 PER_PAGE = 20
 
@@ -128,29 +127,6 @@ def cities(locale: str) -> list[dict[str, Any]]:
     )
 
     return sorted([{"id": r["id"], "name": names[r["id"]]} for r in rows], key=lambda c: c["name"])
-
-
-def catalog(request: HttpRequest) -> HttpResponse:
-    """/catalog — Django отдаёт только вкладку тендеров."""
-    return throttled(request, 120, _catalog)
-
-
-def _catalog(ctx: Context) -> HttpResponse:
-    query = laravel_input(ctx.query)
-
-    def string(key: str) -> str:
-        value = query.get(key)
-
-        return text(value) if isinstance(value, str) else ""
-
-    if string("type") != "tender":
-        # Объявления Apache сюда не отдаёт; адрес, который всё же дошёл
-        # (например, type дважды), — не молча чужой страницей
-        from savdex.web.views import not_found
-
-        return not_found(ctx)
-
-    return tenders_tab(ctx, string)
 
 
 def tenders_tab(ctx: Context, string: Callable[[str], str]) -> HttpResponse:

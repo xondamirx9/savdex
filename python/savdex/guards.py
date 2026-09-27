@@ -135,6 +135,25 @@ SHARED_WRITES: dict[str, str] = {
         "$task->increment('views_count'), не заказчику; просмотр "
         "администратора — строка журнала (раздел ittasks), как AuditObserver"
     ),
+    "audience_views": (
+        "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
+        "как StatsRecorder::companyView, — только insert строки просмотра, не "
+        "чаще раза в 30 минут на пару компаний; у модели AudienceView событий нет"
+    ),
+    "listings": (
+        "показы и просмотры объявлений (этап 4): каталог и страница объявления "
+        "на Django, как StatsRecorder::impressions и ::view, — только +1 к "
+        "impressions_count или views_count и updated_at, без событий сохранения; "
+        "просмотр администратора — строка журнала, как AuditObserver"
+    ),
+    "listing_stats": (
+        "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
+        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily"
+    ),
+    "search_hits": (
+        "«по каким запросам вас находили» (этап 4): insert … on conflict do "
+        "nothing строки дня и +1 к показам, как StatsRecorder::search"
+    ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
