@@ -109,6 +109,37 @@ def render(
     return response
 
 
+def render_bare(
+    ctx: Context, component: str, props: dict[str, Any], seo: Seo, status: int
+) -> HttpResponse:
+    """
+    Страница, собранная без HandleInertiaRequests, — как ответ на
+    исключение, брошенное раньше него (429 у throttle): без общих
+    пропсов, без версии сборки и без проверки версии, адрес — без
+    языкового префикса, заголовков Vary и Link нет.
+    """
+    url = phpquery.full_path(ctx.path, ctx.query) or "/"
+
+    if ctx.path.endswith("/") and ctx.path != "/" and not url.split("?")[0].endswith("/"):
+        path, sep, query = url.partition("?")
+        url = path + "/" + sep + query
+
+    page = {"component": component, "props": props, "url": url, "version": ""}
+
+    if ctx.inertia:
+        response = HttpResponse(php_json(page), status=status, content_type="application/json")
+        response["X-Inertia"] = "true"
+    else:
+        tags, _ = vite.assets(ctx.root)
+        response = HttpResponse(
+            _html(ctx, seo, page, tags), status=status, content_type="text/html; charset=utf-8"
+        )
+
+    response["Cache-Control"] = "no-cache, private"
+
+    return response
+
+
 def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
     """resources/views/app.blade.php."""
     values = settings_values()

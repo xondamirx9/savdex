@@ -850,11 +850,12 @@ Laravel. Django получает только читающие запросы (G
 | `docs` ✅ | `/help`, `/guide`, `/rules` | `tests/test_web_parity.py` |
 | `news` ✅ | `/news`, `/news/<адрес>` | `tests/test_web_news.py` |
 | `about` ✅ | `/about`, `/contact` | `tests/test_web_about.py` |
-| `directory` ✅ | `/countries`, `/partners` | `tests/test_web_directory.py` |
+| `directory` ✅ | `/countries`, `/partners`, `/countries/<код>/companies` (этап 4) | `tests/test_web_directory.py`, `tests/test_web_throttle.py` |
 | `legal` ✅ | `/terms`, `/payment`, `/security`, `/privacy`, `/refunds` | `tests/test_web_legal.py` |
 | `pricing` ✅ | `/pricing` (с `?promo=` — Laravel) | `tests/test_web_pricing.py` |
 | `home` ✅ | `/`, `/uz`, `/en` … | `tests/test_web_home.py` |
 | `reviews` ✅ | `/reviews` (форма `/reviews/new` — Laravel) | `tests/test_web_reviews.py` |
+| `tenders` ✅ | `/tenders` — 301 в каталог (этап 4) | `tests/test_web_throttle.py` |
 
 Даты новостей на других языках Laravel пишет через Carbon (названия
 месяцев) — шаблоны тоже выгружает `savdex:export-ui`.
@@ -888,12 +889,13 @@ Laravel: карточка объявления считала «доверие»
 (сверка с Symfony — `tests/test_phpquery.py`). Визитки компаний (`/companies`,
 `/company/<адрес>`) и каталог к ним не относятся, хотя в начале этапа
 были в его списке: визитка записывает просмотр компании компанией
-(«Кто мной интересуется», `audience_views`) и помечает его в сессии, а
-весь блок каталога стоит за ограничением частоты (`throttle:120,1` —
-счётчик в кэше). Их перенос — этап 4, вместе с копией `StatsRecorder`
-и ограничением частоты на стороне Django. «Показать ещё» на странице
-стран (`/countries/<код>/companies`) — тоже за ограничением частоты и
-остаётся за Laravel до того же этапа.
+(«Кто мной интересуется», `audience_views`), повтор отсеивая ключом в
+кэше из номера сессии и компании, а весь блок каталога стоит за
+ограничением частоты (`throttle:120,1` — счётчик в кэше). Их перенос —
+этап 4, вместе с копией `StatsRecorder` и ограничением частоты на
+стороне Django. «Показать ещё» на странице стран
+(`/countries/<код>/companies`) — тоже за ограничением частоты и
+переехало первым шагом этапа 4.
 
 Чего Django на своих страницах не делает — записи сессии (до этапа 5):
 язык из префикса Laravel запомнит на ближайшей своей странице, а срок
@@ -903,6 +905,25 @@ Laravel: карточка объявления считала «доверие»
 
 Самая посещаемая часть. Переносить по одной странице, каждую держать
 неделю под наблюдением, прежде чем браться за следующую.
+
+**Шаг 1 — ограничение частоты.** Счётчик `throttle` у Laravel лежит в
+файловом кэше (на боевом `CACHE_STORE=file`), ключ — посетитель, а не
+адрес: sha1 номера пользователя или, у гостя, sha1(«|IP»). Значит, у
+всех адресов под `throttle` счётчик один, и Django обязан считать в
+него же — иначе половина каталога на Django удвоила бы лимит.
+`savdex/web/throttle.py` повторяет `RateLimiter` (метка окна, счётчик,
+проверка «слишком много» до засчитывания), а `savdex/laravel_cache.py`
+пишет те же файлы тем же форматом (срок + `serialize()`), под
+`flock`, как `FileStore`. Отказ 429 у Laravel собирается без
+`HandleInertiaRequests` (throttle стоит раньше): без общих пропсов,
+с пустой версией и без перехода на запомненный язык — Django отдаёт
+такую же голую страницу (`inertia.render_bare`). Сверка — в
+`tests/test_web_throttle.py`: 58 запросов к Laravel, 59-й к Django,
+60-й к Laravel, 61-й — 429 с обеих сторон.
+
+На этом шаге переехали «Показать ещё» на странице стран (группа
+`directory`) и старый адрес ленты закупок `/tenders` — 301 в каталог
+(новая группа `tenders`, к ней позже добавятся страницы закупок).
 
 ### Этап 5. Кабинет (10–12 недель)
 

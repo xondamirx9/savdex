@@ -146,6 +146,13 @@ jobs:
           curl -fsS -D /tmp/home.h -o /tmp/home.html http://127.0.0.1:18080/
           ! grep -qi '^x-powered-by: php' /tmp/home.h
           grep -q '"component":"Home"' /tmp/home.html
+          # Этап 4: «Показать ещё» у стран и старый адрес /tenders — Django
+          curl -s -D /tmp/more.h -o /dev/null http://127.0.0.1:18080/countries/uz/companies
+          ! grep -qi '^x-powered-by: php' /tmp/more.h
+          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:18080/tenders?closed=1')" \
+            = "301 http://127.0.0.1:18080/catalog?type=tender&closed=1"
+          curl -s -D /tmp/tenders.h -o /dev/null http://127.0.0.1:18080/tenders
+          ! grep -qi '^x-powered-by: php' /tmp/tenders.h
           # Форма «Оцените SavdEx» — Laravel (гостя уводит на вход)
           curl -s -D - -o /dev/null http://127.0.0.1:18080/reviews/new | grep -qi '^x-powered-by: php'
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)

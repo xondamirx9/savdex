@@ -44,6 +44,11 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?countries/(?P<code>[A-Za-z]{2})/companies$",
+        directory.country_companies,
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<doc>terms|payment|security|privacy|refunds)$", legal.show),
