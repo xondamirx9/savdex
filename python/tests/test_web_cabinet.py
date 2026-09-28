@@ -639,3 +639,51 @@ def test_резюме(сайт, path):
         )
 
     сверить(сайт, path, войти(сайт, email))
+
+
+# ── Профиль компании ────────────────────────────────────────────────
+
+
+def _документы() -> None:
+    """Документы разных видов, файл на диске у одного; сотрудник; контакты."""
+    if sql("select 1 from company_documents limit 1"):
+        return
+
+    файл = КОРЕНЬ / "storage/app/private/docs/reg.pdf"
+    файл.parent.mkdir(parents=True, exist_ok=True)
+    файл.write_bytes(b"%PDF-1.4 test")
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "foreach ([['registration', 'approved', 'docs/reg.pdf', 2500000],"
+        " ['license', 'pending', 'docs/lic.pdf', 20480],"
+        " ['price_list', 'pending', 'docs/p.xlsx', null]]"
+        " as [$type, $status, $path, $size]) { $d = new App\\Models\\CompanyDocument();"
+        " $d->forceFill(['company_id' => $c->id, 'type' => $type, 'title' => 'Док '.$type,"
+        " 'file_path' => $path, 'file_size' => $size, 'is_public' => $type !== 'license',"
+        " 'moderation_status' => $status,"
+        " 'valid_until' => $type === 'license' ? '2027-01-31' : null,"
+        " 'created_at' => '2026-09-20 10:00:00'])->save(); }"
+        "$c->contacts()->create(['type' => 'phone', 'value' => '+998901234567',"
+        " 'label' => 'Отдел продаж',"
+        " 'contact_person' => 'Азиз', 'is_public' => true, 'is_primary' => true]);"
+        "$c->contacts()->create(['type' => 'email', 'value' => 'sales@owner.uz',"
+        " 'is_public' => false]);"
+        "App\\Models\\User::factory()->create(['company_id' => $c->id, 'company_role' => 'staff',"
+        " 'email_verified_at' => null]);"
+        "echo 'ok';"
+    )
+
+
+@pytest.mark.parametrize("path", ["/cabinet/company", "/uz/cabinet/company"])
+def test_профиль_компании(сайт, path):
+    _документы()
+    sql(
+        "update users set company_role = 'owner', phone_verified_at = '2026-09-01 10:00:00' "
+        "where email = 'owner@savdex.uz'"
+    )
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_профиль_без_компании(сайт):
+    пользователь("nocompany10@savdex.uz")
+    сверить(сайт, "/cabinet/company", войти(сайт, "nocompany10@savdex.uz"))

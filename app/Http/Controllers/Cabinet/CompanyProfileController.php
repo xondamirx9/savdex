@@ -71,7 +71,8 @@ class CompanyProfileController extends Controller
                 'is_public' => $c->is_public,
             ]) ?? [],
 
-            'documents' => $company?->documents()->latest()->get()->map(fn (CompanyDocument $d): array => [
+            // Хвост по id: документы одной секунды шли в плавающем порядке
+            'documents' => $company?->documents()->latest()->latest('id')->get()->map(fn (CompanyDocument $d): array => [
                 'id' => $d->id,
                 'type' => $d->type,
                 'type_label' => $d->typeLabel(),
@@ -84,7 +85,7 @@ class CompanyProfileController extends Controller
                 'missing' => $d->fileMissing(),
             ]) ?? [],
 
-            'employees' => $company?->users()->get()->map(fn ($u): array => [
+            'employees' => $company?->users()->orderBy('id')->get()->map(fn ($u): array => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
@@ -98,7 +99,7 @@ class CompanyProfileController extends Controller
             // Порядок внутри страны — по значимости города (sort):
             // в списке из трёх десятков российских городов Москва
             // должна стоять первой, а не там, куда её положил id
-            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->get()
+            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->orderBy('id')->get()
                 ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name(), 'country_id' => $c->country_id]),
 
             'verification' => $this->verificationChecklist($request, $company),

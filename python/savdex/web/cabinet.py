@@ -1501,3 +1501,170 @@ def _present_resume(r: dict[str, Any], public_url: Any) -> dict[str, Any]:  # no
         "views": r["views_count"],
         "experience": {"years": months // 12, "months": months % 12},
     }
+
+
+# ── Профиль компании /cabinet/company (CompanyProfileController::edit)
+
+#: ItTask::SERVICE_TYPES — подписи в коде, по-русски на всех языках
+SERVICE_TYPES = {
+    "web": "Сайты и веб-приложения",
+    "mobile": "Мобильные приложения",
+    "erp": "1С, учёт и ERP",
+    "integration": "Интеграции и API",
+    "design": "Дизайн и UX",
+    "automation": "Автоматизация и боты",
+    "support": "Поддержка и администрирование",
+    "logistics": "Логистика и перевозки",
+    "hr": "Подбор персонала",
+    "customs": "Декларирование и ВЭД",
+    "accounting": "Бухгалтерские услуги",
+    "other": "Другое",
+}
+
+#: CompanyDocument::MATERIAL_TYPES
+_MATERIALS = ("presentation", "price_list", "catalog", "other")
+
+
+def company_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Company", company_props(ctx), _seo(ctx))
+
+
+def company_props(ctx: Context) -> dict[str, Any]:
+    from savdex import laravel_storage
+    from savdex.web.company import _file_size
+    from savdex.web.directory import _named, listed_countries, logo_url
+    from savdex.web.shared import initials
+
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+    company = company_of(ctx)
+    cid = company["id"] if company else None
+    documents = (
+        _rows(
+            "select * from company_documents where company_id = %s "
+            "order by created_at desc, id desc",
+            [cid],
+        )
+        if cid
+        else []
+    )
+    approved = {d["type"] for d in documents if d["moderation_status"] == "approved"}
+    city_names = _named("cities", ctx.locale)
+    private = laravel_storage.private_root()
+    plan = company_plan(cid) if cid else None
+
+    def document(d: dict[str, Any]) -> dict[str, Any]:
+        label = ctx.t(f"cabinet.files.types.{d['type']}")
+
+        return {
+            "id": d["id"],
+            "type": d["type"],
+            "type_label": label if label != f"ui.cabinet.files.types.{d['type']}" else d["type"],
+            "title": d["title"],
+            "status": d["moderation_status"],
+            "size": _file_size(d["file_size"]),
+            "is_material": d["type"] in _MATERIALS,
+            "is_public": bool(d["is_public"]),
+            "valid_until": _date(d["valid_until"]),
+            "missing": not (private / str(d["file_path"] or "")).is_file(),
+        }
+
+    def check(key: str, done: bool, hint: bool = False) -> dict[str, Any]:
+        return {
+            "label": ctx.t(f"cabinet.company.{key}"),
+            "done": done,
+            "hint": ctx.t("cabinet.company.verify_hint_plus") if hint else None,
+        }
+
+    return {
+        "company": None
+        if company is None
+        else {
+            "id": company["id"],
+            "name": company["name"],
+            "slug": company["slug"],
+            "legal_name": company["legal_name"],
+            "tin": company["tin"],
+            "country_id": company["country_id"],
+            "city_id": company["city_id"],
+            "address": company["address"],
+            "description": company["description"],
+            "custom_category": company["custom_category"],
+            "website": company["website"],
+            "founded_year": company["founded_year"],
+            "employees_range": company["employees_range"],
+            "type": company["type"],
+            "primary_role": company["primary_role"],
+            "is_it_provider": bool(company["is_it_provider"]),
+            "it_specializations": company["it_specializations"] or [],
+            "initials": initials(company["name"]),
+            "logo": logo_url(ctx, company["logo_path"]),
+            "cover": logo_url(ctx, company["cover_path"]),
+            "completeness": completeness(company, bool(approved)),
+            "missing": _missing(ctx, company, bool(approved)),
+            "verification_level": company["verification_level"],
+        },
+        "serviceTypes": SERVICE_TYPES,
+        "contacts": [
+            {
+                "id": c["id"],
+                "type": c["type"],
+                "value": c["value"],
+                "label": c["label"],
+                "contact_person": c["contact_person"],
+                "is_public": bool(c["is_public"]),
+            }
+            for c in _rows(
+                "select * from company_contacts where company_id = %s "
+                "order by is_primary desc, sort_order, id",
+                [cid],
+            )
+        ]
+        if cid
+        else [],
+        "documents": [document(d) for d in documents],
+        "employees": [
+            {
+                "id": u["id"],
+                "name": u["name"],
+                "email": u["email"],
+                "role": ctx.t(
+                    "cabinet.company.role_owner"
+                    if u["company_role"] == "owner"
+                    else "cabinet.company.role_staff"
+                ),
+                "verified": u["email_verified_at"] is not None,
+            }
+            for u in _rows(
+                "select * from users where company_id = %s and deleted_at is null order by id",
+                [cid],
+            )
+        ]
+        if cid
+        else [],
+        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "cities": [
+            {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
+            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+        ],
+        "verification": [
+            check("verify_email", user["email_verified_at"] is not None),
+            check("verify_phone", user["phone_verified_at"] is not None),
+            check("verify_registration", "registration" in approved),
+            check("verify_tin", company is not None and _filled(company["tin"])),
+            check("verify_licenses", "license" in approved, hint=True),
+            check("verify_address", company is not None and _filled(company["address"]), hint=True),
+        ],
+        "plan": None
+        if plan is None
+        else {
+            "name": plan["name"],
+            "verification_days": plan.get("verification_days"),
+            "has_microsite": bool(plan.get("has_microsite")),
+        },
+    }
