@@ -536,6 +536,7 @@ return [
         'planned_lead' => 'Bu ülkelerin şirketlerini şu anda platforma dâhil ediyoruz. İlk şirketler geldiği anda ülke etkin hâle gelir.',
         'planned_badge' => 'yakında',
         'all_companies' => 'Ülkedeki tüm şirketler',
+        'pick_hint' => 'Şirketlerini görmek için bir ülke seçin.',
         'show_more' => 'Daha fazla göster',
         'load_failed' => 'Şirketler yüklenemedi. Lütfen tekrar deneyin.',
     ],

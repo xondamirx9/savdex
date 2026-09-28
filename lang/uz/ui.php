@@ -539,6 +539,7 @@ return [
         'planned_lead' => 'Bu mamlakatlar kompaniyalarini hozir ulayapmiz. Birinchilari paydo bo‘lishi bilan mamlakat faol bo‘ladi.',
         'planned_badge' => 'tez orada',
         'all_companies' => 'Mamlakatdagi barcha kompaniyalar',
+        'pick_hint' => 'Kompaniyalarini ko‘rish uchun mamlakatni tanlang.',
         'show_more' => 'Yana ko‘rsatish',
         'load_failed' => 'Kompaniyalarni yuklab bo‘lmadi. Qaytadan urinib ko‘ring.',
     ],
