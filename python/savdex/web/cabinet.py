@@ -1228,3 +1228,76 @@ def listings_props(ctx: Context) -> dict[str, Any]:
         "status": status,
         "limit": {"used": counts["active"], "total": company_plan(cid)["listings_limit"]},
     }
+
+
+# ── Чаты /cabinet/chats (ChatController::index) ─────────────────────
+
+
+def chats(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Chats", chats_props(ctx), _seo(ctx))
+
+
+def chats_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.seo import _limit
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"threads": [], "hasCompany": False}
+
+    cid = company["id"]
+    threads = _rows(
+        "select t.*, l.title as l_title, k.title as k_title from message_threads t "
+        "left join listings l on l.id = t.listing_id and l.deleted_at is null "
+        "left join it_tasks k on k.id = t.it_task_id "
+        "where t.buyer_company_id = %s or t.seller_company_id = %s "
+        "order by t.last_message_at desc, t.id desc limit 100",
+        [cid, cid],
+    )
+    ids = [t["id"] for t in threads]
+    last = {
+        m["thread_id"]: m
+        for m in _rows(
+            "select * from messages where id in (select max(id) from messages "
+            "where thread_id = any(%s) group by thread_id)",
+            [ids],
+        )
+    }
+    others = _companies(
+        [
+            t["seller_company_id"] if t["buyer_company_id"] == cid else t["buyer_company_id"]
+            for t in threads
+        ]
+    )
+    result = []
+
+    for t in threads:
+        mine_buyer = t["buyer_company_id"] == cid
+        other = others.get(t["seller_company_id"] if mine_buyer else t["buyer_company_id"])
+        read_at = t["buyer_read_at"] if mine_buyer else t["seller_read_at"]
+        message = last.get(t["id"])
+        unread = _count(
+            "select count(*) as n from messages where thread_id = %s and company_id != %s"
+            + (" and created_at > %s" if read_at is not None else ""),
+            [t["id"], cid, *([read_at] if read_at is not None else [])],
+        )
+        result.append(
+            {
+                "id": t["id"],
+                "company": other["name"] if other else ctx.t("cabinet.incoming.deleted"),
+                "initials": initials(other["name"]) if other else "—",
+                "listing": t["l_title"] if t["l_title"] is not None else t["k_title"],
+                "last": _limit(message["body"], 80, "...") if message else None,
+                "last_mine": message is not None and message["company_id"] == cid,
+                "at": ago(t["last_message_at"], ctx.locale) if t["last_message_at"] else None,
+                "unread": unread,
+            }
+        )
+
+    return {"hasCompany": True, "threads": result}
