@@ -64,7 +64,8 @@ def резюме(status: str | None, *, опубликовано: bool = True) -
 def снимок() -> Any:
     return {
         "resumes": sql(
-            "select status, published_at::text, published_at > now() - interval '1 hour', "
+            "select status, case when published_at > now() - interval '1 hour' then 'сейчас' "
+            "else published_at::text end, "
             "deleted_at is not null, updated_at > now() - interval '1 hour' from resumes"
         ),
         "photo": (Path(КОРЕНЬ) / "storage/app/public" / ФОТО).exists(),
@@ -109,7 +110,7 @@ def test_удалить(сайт, status):
 
     if status is not None:
         assert итог["ответ"]["status"] == 303
-        assert итог["база"]["resumes"][0][3] is True and not итог["база"]["photo"]
+        assert итог["база"]["resumes"][0][2] is True and not итог["база"]["photo"]
 
 
 # ── Правка ──────────────────────────────────────────────────────────
