@@ -1,58 +1,82 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
 import { formatNumber } from '@/components/cabinet';
 
-/** На сервере useLayoutEffect не выполняется — там берём обычный. */
-const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
-
-/** Замедление к концу: число разгоняется и мягко встаёт на место. */
-const easeOutCubic = (x: number): number => 1 - Math.pow(1 - x, 3);
+/**
+ * На сервере слоя нет — там достаточно обычного эффекта. Без этой
+ * подмены React ругается на useLayoutEffect при серверной отрисовке.
+ */
+const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
- * Число, которое «набегает» от нуля до значения, когда попадает на экран.
+ * Счётчик, добегающий до значения.
  *
- * Сервер отдаёт в разметке настоящее число: поисковик и человек без
- * JavaScript видят верную цифру. Анимация — только поверх неё, в браузере,
- * и только один раз: при обратной прокрутке счёт не повторяется.
+ * Числа на полосе показателей — первое, что видит посетитель: «1 193
+ * компании» работает доводом, только если взгляд на нём задержался.
+ * Неподвижное число сливается с остальной вёрсткой, растущее — нет.
  *
- * Скринридер получает итоговое число сразу (sr-only), а бегущие цифры
- * от него скрыты — иначе он зачитывал бы промежуточные значения.
- * При «уменьшить движение» в системе число показывается сразу.
+ * Обнуление делается до отрисовки, а не в обычном эффекте: разметка
+ * приходит с сервера с итоговым числом, и обычный эффект успел бы
+ * показать его на кадр раньше сброса — число моргнуло бы.
+ *
+ * Разгон идёт по кубической кривой с замедлением к концу: равномерный
+ * счёт читается как индикатор загрузки, а не как рост.
  */
-export function CountUp({ value, duration = 1400 }: { value: number; duration?: number }) {
-    const ref = useRef<HTMLSpanElement>(null);
+export function CountUp({ value, duration = 1100 }: { value: number; duration?: number }) {
     const [shown, setShown] = useState(value);
+    const [armed, setArmed] = useState(false);
+    const ref = useRef<HTMLSpanElement>(null);
 
-    useIsoLayoutEffect(() => {
+    useBeforePaint(() => {
+        // Нечего разгонять, и системную настройку уважаем: там число
+        // просто стоит на месте
+        if (value <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        setShown(0);
+        setArmed(true);
+    }, [value]);
+
+    useEffect(() => {
+        if (!armed) return;
+
         const el = ref.current;
 
-        if (el === null || value <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            setShown(value);
-
-            return;
-        }
-
-        // До первой отрисовки — ноль, чтобы не мелькнуло итоговое число
-        setShown(0);
+        if (el === null) return;
 
         let frame = 0;
-        let start = 0;
 
-        const tick = (now: number) => {
-            if (start === 0) start = now;
-            const progress = Math.min(1, (now - start) / duration);
-            setShown(Math.round(easeOutCubic(progress) * value));
+        const run = () => {
+            const started = performance.now();
 
-            if (progress < 1) frame = requestAnimationFrame(tick);
+            const tick = (now: number) => {
+                const passed = Math.min(1, (now - started) / duration);
+                const eased = 1 - (1 - passed) ** 3;
+
+                setShown(Math.round(value * eased));
+
+                if (passed < 1) frame = requestAnimationFrame(tick);
+            };
+
+            frame = requestAnimationFrame(tick);
         };
+
+        // Полоса показателей стоит на первом экране и видна сразу.
+        // Наблюдатель нужен для тех же чисел ниже по странице: счёт,
+        // отработавший до прокрутки, посетитель бы не увидел
+        if (el.getBoundingClientRect().top < window.innerHeight) {
+            run();
+
+            return () => cancelAnimationFrame(frame);
+        }
 
         const io = new IntersectionObserver(
             (entries) => {
-                if (entries.some((e) => e.isIntersecting)) {
-                    io.disconnect();
-                    frame = requestAnimationFrame(tick);
-                }
+                if (!entries[0].isIntersecting) return;
+
+                io.disconnect();
+                run();
             },
-            { threshold: 0.3 },
+            { threshold: 0.2 },
         );
 
         io.observe(el);
@@ -61,14 +85,7 @@ export function CountUp({ value, duration = 1400 }: { value: number; duration?: 
             io.disconnect();
             cancelAnimationFrame(frame);
         };
-    }, [value, duration]);
+    }, [armed, value, duration]);
 
-    return (
-        <>
-            <span ref={ref} aria-hidden="true">
-                {formatNumber(shown)}
-            </span>
-            <span className="sr-only">{formatNumber(value)}</span>
-        </>
-    );
+    return <span ref={ref}>{formatNumber(shown)}</span>;
 }

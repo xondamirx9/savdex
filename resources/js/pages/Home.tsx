@@ -40,12 +40,12 @@ import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { ReviewCard, type FeedReview } from '@/components/ReviewCard';
 import { SelectField } from '@/components/SelectField';
 import { VerificationBadge } from '@/components/VerificationBadge';
+import { CountUp } from '@/components/CountUp';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
-import { CountUp } from '@/components/CountUp';
 
 /**
  * Секция главной: тексты и видимость из админки («Главная страница»),
@@ -452,9 +452,7 @@ export default function Home({
                                         <Icon aria-hidden className="size-5" />
                                     </span>
                                     <div style={{ minWidth: 0 }}>
-                                        <div className="stat-cell-num">
-                                            <CountUp value={value} />
-                                        </div>
+                                        <div className="stat-cell-num"><CountUp value={value} /></div>
                                         <div className="stat-cell-label">{label}</div>
                                     </div>
                                 </Link>

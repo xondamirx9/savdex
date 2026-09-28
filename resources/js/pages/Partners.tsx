@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Link } from '@/components/ui/Link';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { Tabs } from '@/components/cabinet';
+import { CountUp } from '@/components/CountUp';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
-import { CountUp } from '@/components/CountUp';
 
 interface PartnerRow {
     slug: string;
@@ -116,9 +116,7 @@ export default function Partners({
                                 <Icon aria-hidden className="size-5" />
                             </span>
                             <div style={{ minWidth: 0 }}>
-                                <div className="stat-cell-num">
-                                            <CountUp value={value} />
-                                        </div>
+                                <div className="stat-cell-num"><CountUp value={value} /></div>
                                 <div className="stat-cell-label">{label}</div>
                             </div>
                         </div>
