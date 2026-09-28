@@ -52,6 +52,22 @@ def translations(locale: str) -> dict[str, Any]:
     return data
 
 
+def group_t(key: str, locale: str) -> str:
+    """
+    __('<словарь>.<ключ>') для словарей, кроме ui (company.field.tin):
+    выгружены в groups, русский — запасной. Ключа нет — сам ключ.
+    """
+    node: Any = _load(locale).get("groups", {})
+
+    for part in key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return key
+
+        node = node[part]
+
+    return node if isinstance(node, str) else key
+
+
 def t(key: str, locale: str, **replace: object) -> str:
     """
     __('ui.<key>'): строка словаря по пути через точку, с подстановкой

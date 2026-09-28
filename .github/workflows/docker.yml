@@ -148,6 +148,10 @@ jobs:
           grep -qi '^set-cookie: laravel-session=' /tmp/about.h
           grep -qi '^set-cookie: XSRF-TOKEN=' /tmp/about.h
           ! grep -qi '^x-powered-by: php' /tmp/about.h
+          # Кабинет (группа cabinet): гостя Django уводит на вход сам
+          curl -s -D /tmp/cabinet.h -o /dev/null http://127.0.0.1:18080/cabinet
+          grep -qi '^location: http://127.0.0.1:18080/login' /tmp/cabinet.h
+          ! grep -qi '^x-powered-by: php' /tmp/cabinet.h
           # Главная — тоже Django, со страницей Home
           curl -fsS -D /tmp/home.h -o /tmp/home.html http://127.0.0.1:18080/
           ! grep -qi '^x-powered-by: php' /tmp/home.h
