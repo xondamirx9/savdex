@@ -25,6 +25,7 @@ from savdex.web import (
     companies,
     company,
     company_contact_actions,
+    company_profile_actions,
     contact_actions,
     directory,
     home,
@@ -258,7 +259,9 @@ urlpatterns = [
         for verb in ("publish", "hide")
     ],
     re_path(
-        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$", cabinet.company_page, name="cabinet.company"
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$",
+        company_profile_actions.page,
+        name="cabinet.company",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),

@@ -122,7 +122,8 @@ SHARED_WRITES: dict[str, str] = {
         "языка /locale/<язык> (LocaleController); правка администратора — "
         "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
         "форма) — имя, телефон, язык и сброс подтверждения телефона; "
-        "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at"
+        "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
+        "новая компания — company_id и company_role владельца"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -245,6 +246,11 @@ SHARED_WRITES: dict[str, str] = {
         "квота откликов (этап 5, чат): новый кошелёк компании, как "
         "Wallet::firstOrCreate, и условное списание отклика — "
         "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
+    ),
+    "companies": (
+        "профиль своей компании (этап 5, форма): правка полей формы и "
+        "search_text, новая компания с адресом из названия, как "
+        "CompanyProfileController::update; журнал администратора — как AuditObserver"
     ),
     "company_contacts": (
         "контакты своей компании (этап 5, форма): добавить, изменить, удалить, "

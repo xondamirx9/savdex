@@ -10,13 +10,15 @@ updated_at, у администратора — строка журнала (Aud
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
 
 from django.db import connection
 
 from savdex import audit
+from savdex.audit import _php_json
 from savdex.guards import allowed_writes
 from savdex.web.listing_actions import _now, _stamp
 from savdex.web.shared import Context
@@ -45,6 +47,36 @@ def _same(before: Any, after: Any) -> bool:  # noqa: ANN401
     return numeric(before) and numeric(after) and str(before) == str(after)
 
 
+def _php_bool(value: Any) -> bool:  # noqa: ANN401
+    """(bool) $value у PHP."""
+    return value not in (None, False, 0, 0.0, "", "0", [], {})
+
+
+def _cast_same(cast: str | None, before: Any, after: Any) -> bool:  # noqa: ANN401
+    """HasAttributes::originalIsEquivalent с приведением столбца."""
+    if cast == "bool":
+        return _php_bool(before) is _php_bool(after)
+
+    if cast == "json":
+        return json.dumps(before) == json.dumps(after)
+
+    if cast == "int":
+        try:
+            return int(float(str(before))) == int(float(str(after)))
+        except ValueError:
+            return _same(before, after)
+
+    return _same(before, after)
+
+
+def _written(cast: str | None, value: Any) -> Any:  # noqa: ANN401
+    """Значение столбца: массив с кастом array — текстом json_encode."""
+    if cast == "json" and value is not None:
+        return _php_json(value)
+
+    return _stamp(value)
+
+
 def save(
     ctx: Context,
     table: str,
@@ -54,8 +86,15 @@ def save(
     section: str | None,
     model: str,
     saving: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    casts: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """$model->forceFill($changes)->save(); вернуть изменившиеся поля."""
+    """
+    $model->forceFill($changes)->save(); вернуть изменившиеся поля.
+
+    casts — приведения модели для сравнения (bool, int, json): у них
+    Eloquent сравнивает приведённые значения, а не текст.
+    """
+    casts = casts or {}
     after = {**row, **changes}
 
     if saving is not None:
@@ -64,7 +103,7 @@ def save(
     dirty = {
         column: after[column]
         for column in row
-        if column != "updated_at" and not _same(row[column], after[column])
+        if column != "updated_at" and not _cast_same(casts.get(column), row[column], after[column])
     }
 
     if not dirty:
@@ -76,10 +115,11 @@ def save(
     with allowed_writes(table), connection.cursor() as cursor:
         cursor.execute(
             f"update {table} set {sets}, updated_at = %s where id = %s",
-            [*(_stamp(v) for v in dirty.values()), _stamp(now), row["id"]],
+            [*(_written(casts.get(c), v) for c, v in dirty.items()), _stamp(now), row["id"]],
         )
 
-    before = {c: _stamp(row[c]) for c in dirty}
+    # getRawOriginal и getChanges: сырые значения — массив текстом JSON
+    before = {c: _written(casts.get(c), row[c]) for c in dirty}
     row.update(dirty, updated_at=now)
 
     # Наблюдатель срабатывает после записи: подпись — по новым значениям
@@ -90,7 +130,7 @@ def save(
             section,
             model,
             row,
-            {"before": before, "after": {c: _stamp(v) for c, v in dirty.items()}},
+            {"before": before, "after": {c: _written(casts.get(c), v) for c, v in dirty.items()}},
         )
 
     return dirty
