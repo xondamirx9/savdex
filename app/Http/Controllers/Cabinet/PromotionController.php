@@ -44,7 +44,9 @@ class PromotionController extends Controller
         $active = $company->promotions()
             ->with(['listing', 'type'])
             ->where('status', 'active')
+            // Хвост по id: продвижения одной секунды шли в плавающем порядке
             ->latest()
+            ->latest('id')
             ->get()
             ->map(fn (Promotion $p): array => [
                 'id' => $p->id,
@@ -60,6 +62,7 @@ class PromotionController extends Controller
         $types = PromotionType::query()
             ->where('is_active', true)
             ->orderBy('sort')
+            ->orderBy('id')
             ->get()
             ->map(fn (PromotionType $t): array => [
                 'id' => $t->id,
@@ -78,7 +81,9 @@ class PromotionController extends Controller
         return Inertia::render('cabinet/Promo', [
             'active' => $active,
             'types' => $types,
+            // По id: без порядка список в выпадающем меню шёл как придётся
             'listings' => $company->activeListings()
+                ->orderBy('id')
                 ->get()
                 ->map(fn (Listing $l): array => ['id' => $l->id, 'title' => $l->title]),
             'units' => $company->wallet?->promo_units ?? 0,

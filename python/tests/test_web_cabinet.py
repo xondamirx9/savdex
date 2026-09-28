@@ -589,3 +589,175 @@ def test_чаты(сайт, path):
 def test_чаты_без_компании(сайт):
     пользователь("nocompany8@savdex.uz")
     сверить(сайт, "/cabinet/chats", войти(сайт, "nocompany8@savdex.uz"))
+
+
+# ── Продвижение ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/promo", "/uz/cabinet/promo"])
+def test_продвижение(сайт, path):
+    _объявления()
+    # Эффект: прирост показов; у второго «до» — ноль (эффекта нет); одна секунда
+    sql(
+        "update promotions set impressions_before = case when mod(id, 2) = 0 then 40 else 0 end, "
+        "impressions_after = 57, created_at = '2026-09-26 09:00:00'"
+    )
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_продвижение_без_компании(сайт):
+    пользователь("nocompany9@savdex.uz")
+    сверить(сайт, "/cabinet/promo", войти(сайт, "nocompany9@savdex.uz"))
+
+
+# ── Моё резюме ──────────────────────────────────────────────────────
+
+
+def test_резюме_пустое(сайт):
+    пользователь("seeker0@savdex.uz", phone="+998900000001")
+    сверить(сайт, "/cabinet/resume", войти(сайт, "seeker0@savdex.uz"))
+
+
+@pytest.mark.parametrize("path", ["/cabinet/resume", "/uz/cabinet/resume", "/zh/cabinet/resume"])
+def test_резюме(сайт, path):
+    email = "seeker@savdex.uz"
+
+    if not sql("select 1 from users where email = %s", [email]):
+        uid = пользователь(email)
+        php(
+            "$r = new App\\Models\\Resume();"
+            "$r->forceFill(['user_id' => "
+            + str(uid)
+            + ", 'slug' => 'logist', 'title' => 'Логист', 'field' => 'logistics',"
+            "'salary' => 1200, 'currency' => 'USD', 'employment' => ['full', 'project'],"
+            "'skills' => ['1С', 'Excel'], 'jobs' => [['company' => 'Стройбаза',"
+            " 'position' => 'Логист', 'from' => '2020-01', 'to' => null]],"
+            "'experience_months' => 45, 'photo_path' => 'resumes/p.webp',"
+            "'moderation_note' => 'Уточните зарплату', 'status' => 'draft'])->save();"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    сверить(сайт, path, войти(сайт, email))
+
+
+# ── Профиль компании ────────────────────────────────────────────────
+
+
+def _документы() -> None:
+    """Документы разных видов, файл на диске у одного; сотрудник; контакты."""
+    if sql("select 1 from company_documents limit 1"):
+        return
+
+    файл = КОРЕНЬ / "storage/app/private/docs/reg.pdf"
+    файл.parent.mkdir(parents=True, exist_ok=True)
+    файл.write_bytes(b"%PDF-1.4 test")
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "foreach ([['registration', 'approved', 'docs/reg.pdf', 2500000],"
+        " ['license', 'pending', 'docs/lic.pdf', 20480],"
+        " ['price_list', 'pending', 'docs/p.xlsx', null]]"
+        " as [$type, $status, $path, $size]) { $d = new App\\Models\\CompanyDocument();"
+        " $d->forceFill(['company_id' => $c->id, 'type' => $type, 'title' => 'Док '.$type,"
+        " 'file_path' => $path, 'file_size' => $size, 'is_public' => $type !== 'license',"
+        " 'moderation_status' => $status,"
+        " 'valid_until' => $type === 'license' ? '2027-01-31' : null,"
+        " 'created_at' => '2026-09-20 10:00:00'])->save(); }"
+        "$c->contacts()->create(['type' => 'phone', 'value' => '+998901234567',"
+        " 'label' => 'Отдел продаж',"
+        " 'contact_person' => 'Азиз', 'is_public' => true, 'is_primary' => true]);"
+        "$c->contacts()->create(['type' => 'email', 'value' => 'sales@owner.uz',"
+        " 'is_public' => false]);"
+        "App\\Models\\User::factory()->create(['company_id' => $c->id, 'company_role' => 'staff',"
+        " 'email_verified_at' => null]);"
+        "echo 'ok';"
+    )
+
+
+@pytest.mark.parametrize("path", ["/cabinet/company", "/uz/cabinet/company"])
+def test_профиль_компании(сайт, path):
+    _документы()
+    sql(
+        "update users set company_role = 'owner', phone_verified_at = '2026-09-01 10:00:00' "
+        "where email = 'owner@savdex.uz'"
+    )
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_профиль_без_компании(сайт):
+    пользователь("nocompany10@savdex.uz")
+    сверить(сайт, "/cabinet/company", войти(сайт, "nocompany10@savdex.uz"))
+
+
+# ── Мои IT-задачи ───────────────────────────────────────────────────
+
+
+def _задачи() -> int:
+    """IT-задачи владельца: бюджеты трёх видов, исполнитель, отклики, файлы."""
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+
+    if not sql("select 1 from it_tasks where company_id = %s", [owner]):
+        php(
+            "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+            "$dev = App\\Models\\Company::factory()->create(['name' => 'Tashkent Soft']);"
+            "foreach ([['fixed', 1500000, null, 'UZS'], ['range', 500, 900, 'USD'],"
+            " ['negotiable', null, null, 'UZS']] as $i => [$type, $from, $to, $cur]) {"
+            " $t = App\\Models\\ItTask::factory()->create(['company_id' => $c->id,"
+            " 'budget_type' => $type, 'budget_from' => $from, 'budget_to' => $to,"
+            " 'currency' => $cur, 'status' => ['active', 'completed', 'closed'][$i],"
+            " 'contractor_company_id' => $i === 1 ? $dev->id : null,"
+            " 'deadline_at' => $i === 0 ? '2026-12-01' : null, 'stack' => ['Laravel', 'React'],"
+            " 'created_at' => '2026-09-20 10:00:00'])->id;"
+            " if ($i === 0) {"
+            " foreach ([$dev, App\\Models\\Company::factory()->create()] as $k => $b)"
+            " { App\\Models\\MessageThread::create(['buyer_company_id' => $b->id,"
+            " 'seller_company_id' => $c->id, 'it_task_id' => $t]);"
+            " if ($k === 1) { $b->delete(); } }"
+            " foreach ([2048, 3500000] as $size) { $f = new App\\Models\\ItTaskFile();"
+            " $f->forceFill(['it_task_id' => $t, 'title' => 'ТЗ '.$size,"
+            " 'file_path' => 'it/'.$size,"
+            " 'file_size' => $size, 'mime' => 'application/pdf'])->save(); } } }"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    [(first,)] = sql(
+        "select min(id) from it_tasks where company_id = %s and budget_type = 'fixed'", [owner]
+    )
+
+    return int(first)
+
+
+@pytest.mark.parametrize("path", ["/cabinet/it-tasks", "/uz/cabinet/it-tasks"])
+def test_мои_задачи(сайт, path):
+    _задачи()
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_задача_форма(сайт):
+    task = _задачи()
+    куки = владелец(сайт)
+
+    сверить(сайт, "/cabinet/it-tasks/create", куки)
+    сверить(сайт, f"/cabinet/it-tasks/{task}/edit", куки)
+
+    php("App\\Models\\ItTask::factory()->create(); echo 'ok';")
+    [(чужая,)] = sql(
+        "select min(id) from it_tasks where company_id != (select id from companies "
+        "where slug = 'owner')"
+    )
+    д, _ = сверить(сайт, f"/cabinet/it-tasks/{чужая}/edit", куки)
+    assert д["status"] == 404
+
+
+def test_задачи_без_компании(сайт):
+    пользователь("nocompany11@savdex.uz")
+    куки = войти(сайт, "nocompany11@savdex.uz")
+    сверить(сайт, "/cabinet/it-tasks", куки)
+
+    # Без компании форма уводит в профиль с предупреждением в сессии
+    стороны = по_сторонам(сайт, "/cabinet/it-tasks/create", lambda: None, cookies=куки)
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["headers"]["location"].endswith("/cabinet/company")
+    assert '"warning":' in итог["payload"]

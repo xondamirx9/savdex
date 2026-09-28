@@ -34,9 +34,11 @@ class ItTaskController extends Controller
             ? collect()
             : ItTask::query()
                 ->where('company_id', $company->id)
-                ->with(['contractor', 'threads.buyer'])
+                // Отклики и задачи — с хвостом по id: иначе порядок плавал
+                ->with(['contractor', 'threads' => fn ($q) => $q->orderBy('id'), 'threads.buyer'])
                 ->withCount('files')
                 ->orderByDesc('created_at')
+                ->orderByDesc('id')
                 ->get();
 
         return Inertia::render('cabinet/it-tasks/Index', [
