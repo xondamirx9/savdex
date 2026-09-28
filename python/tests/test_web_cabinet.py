@@ -1,0 +1,189 @@
+"""
+Этап 5, шаг 2: сводка кабинета /cabinet на Django неотличима от Laravel.
+
+Перед страницей — посредники маршрута: гость уходит на вход (адрес
+запоминается в сессии, url.intended), пароль, выданный вручную, — на
+смену пароля с предупреждением в сессии; XHR, ждущий JSON, — 401.
+Сессия после ответа сверяется побайтно, как в test_web_session.
+
+Сама сводка: компания и заполненность профиля (чего не хватает — на
+языке страницы), показатели за 30 дней к предыдущим 30, ряды со
+сглаживанием, последние события, лимиты тарифа, истекающие и черновики;
+у пунктов меню — счётчики кабинета. Без компании — пустая сводка.
+
+Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+
+import pytest
+
+from .pg_admin import php, sql, нужна_база, свежая_база
+from .test_web_session import СЕССИЯ, куки_ответа, одинаково, по_сторонам
+from .web_site import laravel, войти, из_django, пользователь, сверить, страница
+
+pytestmark = нужна_база
+
+
+@pytest.fixture(scope="module")
+def сайт() -> Iterator[str]:
+    свежая_база()
+
+    for seeder in ("PlanSeeder",):
+        php(f"(new Database\\Seeders\\{seeder})->run(); echo 'ok';")
+
+    # Компания владельца: объявления, статистика за 70 дней, кошелёк,
+    # подписка, события одной секунды, чаты, отзывы, раскрытия
+    php(
+        "$c = App\\Models\\Company::factory()->create(['slug' => 'owner', 'tin' => null,"
+        "'address' => '  ', 'description' => str_repeat('а', 99), 'logo_path' => null]);"
+        "$other = App\\Models\\Company::factory()->create();"
+        "$ls = App\\Models\\Listing::factory()->count(3)->create(['company_id' => $c->id,"
+        "'expires_at' => now()->addDays(3)]);"
+        "App\\Models\\Listing::factory()->create(['company_id' => $c->id,"
+        "'expires_at' => now()->addDays(20)]);"
+        "App\\Models\\Listing::factory()->draft()->create(['company_id' => $c->id]);"
+        "$gone = App\\Models\\Listing::factory()->create(['company_id' => $c->id]);"
+        "foreach (range(0, 69) as $d) { foreach ([$ls[0], $ls[1], $gone] as $k => $l) {"
+        " App\\Models\\ListingStat::create(['listing_id' => $l->id,"
+        " 'date' => today()->subDays($d), 'impressions' => ($d * 7 + $k) % 13,"
+        " 'views' => ($d * 3 + $k) % 5, 'favorites' => $d % 2, 'unlocks' => ($d + $k) % 3]); } }"
+        "$gone->delete();"
+        "$plan = App\\Models\\Plan::where('code', '!=', 'free')->orderBy('id')->first();"
+        "App\\Models\\Subscription::create(['company_id' => $c->id, 'plan_id' => $plan->id,"
+        "'status' => 'active', 'started_at' => now()->subDays(3),"
+        "'ends_at' => now()->addDays(27)]);"
+        "App\\Models\\Wallet::create(['company_id' => $c->id, 'credits' => 4, 'promo_units' => 1,"
+        "'contacts_used_this_period' => 2, 'period_resets_at' => now()->addDays(10)]);"
+        "foreach (range(1, 7) as $i) { App\\Models\\ActivityEvent::create(["
+        "'company_id' => $c->id, 'type' => 'view', 'tone' => 'primary',"
+        "'message' => 'Событие '.$i, 'url' => '/cabinet']); }"
+        "App\\Models\\ActivityEvent::query()->update(['created_at' => now()->subHours(3)]);"
+        "App\\Models\\ContactUnlock::factory()->create(['company_id' => $c->id,"
+        "'target_company_id' => $other->id]);"
+        "foreach ([$other, App\\Models\\Company::factory()->create()] as $from) {"
+        " App\\Models\\ContactUnlock::factory()->create(['company_id' => $from->id,"
+        " 'target_company_id' => $c->id]); }"
+        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
+        "'author_company_id' => $other->id, 'status' => 'published']);"
+        "$t = App\\Models\\MessageThread::create(['buyer_company_id' => $other->id,"
+        "'seller_company_id' => $c->id]);"
+        "$t->forceFill(['seller_read_at' => now()->subDay()])->save();"
+        "App\\Models\\Message::create(['thread_id' => $t->id, 'company_id' => $other->id,"
+        "'body' => 'Здравствуйте']);"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+
+    with laravel() as root:
+        yield root
+
+
+def владелец(сайт: str) -> dict[str, str]:
+    email = "owner@savdex.uz"
+
+    if not sql("select 1 from users where email = %s", [email]):
+        пользователь(email)
+        sql(
+            "update users set company_id = (select id from companies where slug = 'owner') "
+            "where email = %s",
+            [email],
+        )
+
+    # Язык из адреса прошлой сверки (/uz/cabinet) уводил бы на /uz/…
+    sql("update users set locale = 'ru' where email = %s", [email])
+
+    return войти(сайт, email)
+
+
+# ── Посредники ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet", "/uz/cabinet", "/cabinet?tab=x&a=1"])
+def test_гость_уходит_на_вход(сайт, path):
+    стороны = по_сторонам(сайт, path, lambda: None)
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["status"] == 302
+    assert '"url":{"intended":' in итог["payload"] and '"locale"' not in итог["payload"]
+
+
+def test_xhr_гостя_тоже_на_вход(сайт):
+    """JSON с 401 у Laravel — только для api/*: XHR страницы уходит на вход."""
+    стороны = по_сторонам(
+        сайт,
+        "/cabinet",
+        lambda: None,
+        headers={"X-Requested-With": "XMLHttpRequest", "Accept": "*/*"},
+    )
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["status"] == 302
+    assert "intended" in итог["payload"]
+
+
+def test_выданный_пароль_уводит_на_смену(сайт):
+    пользователь("temp@savdex.uz", must_change_password=True)
+    куки = войти(сайт, "temp@savdex.uz")
+    sid_cookie = {СЕССИЯ: куки[СЕССИЯ]}
+
+    стороны = по_сторонам(сайт, "/cabinet", lambda: None, cookies={**куки, **sid_cookie})
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["headers"]["location"].endswith("/password/change")
+    assert '"warning":' in итог["payload"] and '"new":["warning"]' not in итог["payload"]
+
+
+# ── Сводка ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet", "/en/cabinet", "/uz/cabinet"])
+def test_сводка(сайт, path):
+    куки = владелец(сайт)
+    д, _ = сверить(сайт, path, куки)
+    props = страница(д["body"])["props"]
+
+    assert props["counts"] == {
+        "listings": 4,
+        "contacts": 1,
+        "incoming": 2,
+        "reviews": 1,
+        "chats": 1,
+    }
+    assert props["expiring"] == 3 and props["drafts"] == 1
+    assert len(props["events"]) == 5
+    assert props["metrics"]["impressions"]["delta"] is not None
+
+
+def test_без_компании(сайт):
+    пользователь("nocompany@savdex.uz")
+    д, _ = сверить(сайт, "/cabinet", войти(сайт, "nocompany@savdex.uz"))
+    props = страница(д["body"])["props"]
+
+    assert props["company"] is None and props["counts"] is None
+
+
+def test_счётчики_только_в_кабинете(сайт):
+    д, _ = сверить(сайт, "/about", владелец(сайт))
+
+    assert страница(д["body"])["props"]["counts"] is None
+
+
+def test_переход_inertia(сайт):
+    куки = владелец(сайт)
+    полная = из_django(сайт, "/cabinet", куки)
+    версия = страница(полная["body"])["version"]
+
+    сверить(
+        сайт,
+        "/cabinet",
+        куки,
+        headers={
+            "X-Inertia": "true",
+            "X-Inertia-Version": версия,
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    assert куки_ответа(полная)[СЕССИЯ]["value"]

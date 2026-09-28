@@ -59,6 +59,7 @@ class ExportUiForPython extends Command
 
             $data = [
                 'translations' => $locale === Locales::DEFAULT ? $active : array_replace_recursive($base, $active),
+                'groups' => $this->groups($locale),
                 'ago' => $this->ago($locale),
                 'dates' => $this->dates($locale),
             ];
@@ -73,6 +74,30 @@ class ExportUiForPython extends Command
         $this->info('Словарь выгружен: '.self::directory());
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Словари, кроме ui, — те, что нужны страницам на Django (кабинет,
+     * этап 5): __('company.field.tin') и подобные. Нет файла или ключа
+     * на языке — русский, как у переводчика Laravel с запасным языком.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function groups(string $locale): array
+    {
+        $groups = [];
+
+        foreach (['company'] as $group) {
+            $base = trans($group, locale: Locales::DEFAULT);
+            $active = trans($group, locale: $locale);
+
+            $groups[$group] = array_replace_recursive(
+                is_array($base) ? $base : [],
+                is_array($active) ? $active : [],
+            );
+        }
+
+        return $groups;
     }
 
     /**
