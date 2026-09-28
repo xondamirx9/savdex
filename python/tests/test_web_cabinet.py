@@ -444,3 +444,36 @@ def test_уведомления(сайт, query):
             )
 
     сверить(сайт, "/notifications" + query, куки)
+
+
+# ── Избранное ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/favorites", "/uz/favorites"])
+def test_избранное(сайт, path):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+
+    if not sql("select 1 from favorites where user_id = %s", [uid]):
+        php(
+            "$seller = App\\Models\\Company::factory()->create();"
+            "$gone = App\\Models\\Company::factory()->create();"
+            "$ids = [];"
+            "foreach (['active', 'expired', 'archived', 'draft', 'moderation'] as $s) {"
+            " $ids[] = App\\Models\\Listing::factory()->create(['company_id' => $seller->id,"
+            " 'status' => $s, 'published_at' => '2026-09-20 10:00:00'])->id; }"
+            "$trashed = App\\Models\\Listing::factory()->create(['company_id' => $seller->id]);"
+            "$ids[] = $trashed->id; $trashed->delete();"
+            "$ids[] = App\\Models\\Listing::factory()->create(['company_id' => $gone->id,"
+            " 'published_at' => '2026-09-21 10:00:00'])->id; $gone->delete();"
+            "foreach ($ids as $id) { App\\Models\\Favorite::create(['user_id' => "
+            + str(uid)
+            + ", 'listing_id' => $id]); }"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    д, _ = сверить(сайт, path, куки)
+    items = страница(д["body"])["props"]["items"]
+
+    assert len(items) == 4 and [i["active"] for i in items].count(False) == 2

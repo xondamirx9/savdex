@@ -1088,3 +1088,44 @@ def notifications_props(ctx: Context) -> dict[str, Any]:
             [ctx.user["id"]],
         ),
     }
+
+
+# ── Избранное /favorites (FavoriteController::index) ────────────────
+
+
+def favorites(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "Favorites", favorites_props(ctx), _seo(ctx))
+
+
+def favorites_props(ctx: Context) -> dict[str, Any]:
+    """
+    Живые, истёкшие и архивные — с пометкой «не активно»; черновики,
+    модерация и отклонённые скрыты целиком. Компания в корзине — карточка
+    без продавца, как у ListingCard с пустой связью.
+    """
+    from savdex.web import content
+    from savdex.web.home import _LISTING_COMPANY, Cards
+    from savdex.web.shared import settings_values
+
+    assert ctx.user is not None
+    rows = _rows(
+        f"select l.*, {_LISTING_COMPANY} from listings l "
+        "left join companies c on c.id = l.company_id and c.deleted_at is null "
+        "where l.status in ('active', 'expired', 'archived') and l.deleted_at is null "
+        "and l.id in (select listing_id from favorites where user_id = %s) "
+        "order by l.published_at desc nulls first, l.id desc",
+        [ctx.user["id"]],
+    )
+    cards = Cards(ctx, settings_values(), content.Translations(ctx.locale))
+
+    return {
+        "items": [
+            {**card, "active": row["status"] == "active"}
+            for card, row in zip(cards.present(rows), rows, strict=True)
+        ]
+    }

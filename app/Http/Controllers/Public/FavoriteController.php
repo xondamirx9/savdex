@@ -41,6 +41,8 @@ class FavoriteController extends Controller
                 ->where('user_id', $request->user()->id)
                 ->pluck('listing_id'))
             ->orderByDesc('published_at')
+            // Хвост по id: объявления одной секунды шли в плавающем порядке
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Listing $l): array => [
                 ...ListingCard::present($l),
