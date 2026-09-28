@@ -75,6 +75,11 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries, name="countries"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners, name="partners"),
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?partners/(?P<tier>general|regular|multi)$",
+        directory.partners_tier,
+        name="partners-tier",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?countries/(?P<code>[A-Za-z]{2})/companies$",
         directory.country_companies,
         name="countries.companies",
