@@ -10,6 +10,7 @@ use App\Models\Listing;
 use App\Support\Currencies;
 use App\Support\ListingTags;
 use App\Support\Notifier;
+use App\Support\ProductSpecs;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -177,8 +178,40 @@ class ListingWizardController extends Controller
         $listing->save();
 
         foreach ($attributes as $key => $value) {
+            $key = (string) $key;
+
+            /*
+             * Детали товара проверяются по описанию поля: неизвестный
+             * ключ или мусор в значении молча отбрасываются. Очищенное
+             * поле удаляется — блок необязательный, и пустая строка
+             * на карточке читалась бы как «деталь есть, но пустая».
+             */
+            if (str_starts_with($key, ProductSpecs::PREFIX)) {
+                $clean = ProductSpecs::clean($key, $value);
+
+                if ($clean === '') {
+                    $listing->attributes()->where('key', $key)->delete();
+                } elseif ($clean !== null) {
+                    $listing->attributes()->updateOrCreate(['key' => $key], ['value' => $clean]);
+                }
+
+                continue;
+            }
+
             $listing->attributes()->updateOrCreate(['key' => $key], ['value' => (string) $value]);
         }
+
+        /*
+         * Сменили категорию — детали, которых у новой нет (толщина
+         * у ткани, срок годности у станка), убираются: на карточке
+         * они выглядели бы ошибкой.
+         */
+        $allowed = array_column(ProductSpecs::forCategory($listing->fresh('category.parent')->category), 'key');
+
+        $listing->attributes()
+            ->where('key', 'like', ProductSpecs::PREFIX.'%')
+            ->whereNotIn('key', $allowed)
+            ->delete();
 
         if ($chosenTags !== null) {
             $listing->tags = array_values(array_intersect(
@@ -304,6 +337,9 @@ class ListingWizardController extends Controller
                 'children' => $parent->children->map(fn (Category $child): array => [
                     'id' => $child->id,
                     'name' => $child->name(),
+                    // Блок «Информация о товаре»: набор полей зависит
+                    // от категории, у услуг он пустой
+                    'specs' => ProductSpecs::form($parent->slug, $child->slug),
                     'fields' => $child->fields->map(fn ($f): array => [
                         'key' => $f->key,
                         'label' => $f->label,

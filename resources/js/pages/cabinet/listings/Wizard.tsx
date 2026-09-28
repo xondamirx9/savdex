@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Check, CloudUpload, Package, ShoppingCart, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PhotoUploader, type ListingPhoto } from '@/components/PhotoUploader';
+import { ProductSpecsBlock, type SpecField } from '@/components/ProductSpecsBlock';
 import { SelectField } from '@/components/SelectField';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
@@ -20,6 +21,8 @@ interface Child {
     id: number;
     name: string;
     fields: Field[];
+    /** Поля блока «Информация о товаре» — подобраны под категорию */
+    specs: SpecField[];
 }
 
 interface Parent {
@@ -490,6 +493,18 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 {t('cabinet.wizard.negotiable')}
                             </label>
                             {errors.price && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.price}</p>}
+
+                            {/* Детали товара — необязательные: блок свёрнут, и кнопка
+                                «Далее» ниже работает, заполнен он или нет */}
+                            {child && (
+                                <ProductSpecsBlock
+                                    key={child.id}
+                                    fields={child.specs}
+                                    values={data.attributes}
+                                    category={child.name}
+                                    onChange={(next) => setData('attributes', next)}
+                                />
+                            )}
 
                             <div className="row mt-32" style={{ gap: 10 }}>
                                 <button className="btn btn-secondary" onClick={() => go(1)}>
