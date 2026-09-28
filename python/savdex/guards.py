@@ -120,6 +120,11 @@ SHARED_WRITES: dict[str, str] = {
         "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
         "только locale и updated_at, когда язык сменился"
     ),
+    "message_threads": (
+        "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
+        "MessageThread::markReadFor, — только время прочтения своей стороны "
+        "и updated_at; событий у модели нет"
+    ),
     "sessions": (
         "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
         "StartSession и DatabaseSessionHandler, — продлевает, стирает "

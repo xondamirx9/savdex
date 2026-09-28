@@ -2089,3 +2089,98 @@ def site_props(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
         ),
         "currencies": list(CURRENCY_LABELS),
     }
+
+
+# ── Разговор /cabinet/chats/<id> (ChatController::show) ─────────────
+
+
+def chat(request: HttpRequest, thread_id: str) -> HttpResponse:
+    from savdex.guards import allowed_writes
+    from savdex.web.shared import initials
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+    found = _rows("select * from message_threads where id = %s", [int(thread_id)])
+
+    # 404, а не 403: чужой разговор не подтверждает своё существование
+    if company is None or not found:
+        return not_found(ctx)
+
+    t = found[0]
+    cid = company["id"]
+
+    if cid not in (t["buyer_company_id"], t["seller_company_id"]):
+        return not_found(ctx)
+
+    # markReadFor: прочитано — своей стороной; save() двигает и updated_at
+    column = "buyer_read_at" if t["buyer_company_id"] == cid else "seller_read_at"
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+    with allowed_writes("message_threads"), connection.cursor() as cursor:
+        cursor.execute(
+            f"update message_threads set {column} = %s, updated_at = %s where id = %s",
+            [stamp, stamp, t["id"]],
+        )
+
+    other_id = t["seller_company_id"] if t["buyer_company_id"] == cid else t["buyer_company_id"]
+    others = _companies([other_id])
+    other = others.get(other_id)
+    listing = (
+        _rows(
+            "select title, slug, status from listings where id = %s and deleted_at is null",
+            [t["listing_id"]],
+        )
+        if t["listing_id"]
+        else []
+    )
+    task = (
+        _rows("select title, slug, status from it_tasks where id = %s", [t["it_task_id"]])
+        if t["it_task_id"]
+        else []
+    )
+
+    return inertia.render(
+        ctx,
+        "cabinet/Chat",
+        {
+            "thread": {
+                "id": t["id"],
+                "company": other["name"] if other else ctx.t("cabinet.incoming.deleted"),
+                "initials": initials(other["name"]) if other else "—",
+                "company_slug": other["slug"] if other else None,
+                "listing": {
+                    "title": listing[0]["title"],
+                    "slug": listing[0]["slug"],
+                    "active": listing[0]["status"] == "active",
+                }
+                if listing
+                else None,
+                "task": {
+                    "title": task[0]["title"],
+                    "slug": task[0]["slug"],
+                    "active": task[0]["status"] == "active",
+                }
+                if task
+                else None,
+            },
+            "messages": [
+                {
+                    "id": m["id"],
+                    "mine": m["company_id"] == cid,
+                    "body": m["body"],
+                    "at": m["created_at"].strftime("%d.%m.%Y %H:%M"),
+                }
+                for m in _rows(
+                    "select id, company_id, body, created_at from messages where thread_id = %s "
+                    "order by id limit 500",
+                    [t["id"]],
+                )
+            ],
+        },
+        _seo(ctx),
+    )

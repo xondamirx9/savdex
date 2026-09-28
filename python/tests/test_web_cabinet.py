@@ -805,3 +805,68 @@ def test_мини_сайт_без_компании(сайт):
     пользователь("nocompany12@savdex.uz")
     д, _ = сверить(сайт, "/cabinet/site", войти(сайт, "nocompany12@savdex.uz"))
     assert д["status"] == 302
+
+
+# ── Разговор ────────────────────────────────────────────────────────
+
+
+def test_разговор_отмечает_прочитанное(сайт):
+    _чаты()
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+    threads = sql(
+        "select id, buyer_company_id = %s from message_threads where %s in "
+        "(buyer_company_id, seller_company_id) and exists (select 1 from messages m "
+        "where m.thread_id = message_threads.id) order by id",
+        [owner, owner],
+    )
+    куки = владелец(сайт)
+
+    for thread, is_buyer in threads[:3]:
+        column, other = (
+            ("buyer_read_at", "seller_read_at") if is_buyer else ("seller_read_at", "buyer_read_at")
+        )
+        [(before_other,)] = sql(f"select {other} from message_threads where id = %s", [thread])
+        снимки = []
+
+        def сбросить(thread: int = thread, column: str = column) -> None:
+            sql(f"update message_threads set {column} = null where id = %s", [thread])
+
+        def снять(
+            _: object,
+            thread: int = thread,
+            column: str = column,
+            other: str = other,
+            before: object = before_other,
+            снимки: list[object] = снимки,
+        ) -> None:
+            снимки.append(
+                sql(
+                    f"select {column} is not null and {column} > now() - interval '1 minute', "
+                    f"{other} is not distinct from %s from message_threads where id = %s",
+                    [before, thread],
+                )[0]
+            )
+
+        сверить(сайт, f"/cabinet/chats/{thread}", куки, перед=сбросить, после=снять)
+
+        # Отмечена своя сторона, чужая не тронута — у обеих
+        assert снимки == [(True, True), (True, True)], снимки
+
+
+def test_чужой_разговор_404(сайт):
+    _чаты()
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+    php(
+        "App\\Models\\MessageThread::create(['buyer_company_id' => App\\Models\\Company::factory()"
+        "->create()->id, 'seller_company_id' => App\\Models\\Company::factory()->create()->id]);"
+        "echo 'ok';"
+    )
+    [(чужой,)] = sql(
+        "select max(id) from message_threads where %s not in (buyer_company_id, seller_company_id)",
+        [owner],
+    )
+    куки = владелец(сайт)
+
+    for path in (f"/cabinet/chats/{чужой}", "/cabinet/chats/999999"):
+        д, _ = сверить(сайт, path, куки)
+        assert д["status"] == 404
