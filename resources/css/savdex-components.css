@@ -1968,6 +1968,38 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);min-width:0}
 .product-company b{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .product-company svg{flex-shrink:0}
+
+/* Строки-факты: партия, город, проверка, скорость ответа, компания.
+   Столбик со значками вместо разрозненных подписей по углам — глаз
+   идёт по одной колонке, а карточки в ряду сверяются построчно.
+
+   Значок не сжимается и не переносится: строка с длинным городом
+   иначе роняет его на вторую строчку, и столбик расползается. */
+.product-facts{display:flex;flex-direction:column;gap:5px;margin:0 0 12px;padding:0;list-style:none;
+  font-size:12px;color:var(--text-muted);min-width:0}
+.product-facts li{display:flex;align-items:center;gap:7px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.product-facts svg{flex-shrink:0;color:var(--text-soft,var(--text-muted))}
+/* Проверенный продавец — единственная строка цветом: это довод,
+   а не характеристика товара */
+.product-facts li.is-verified{color:var(--success)}
+.product-facts li.is-verified svg{color:var(--success)}
+/* Компания отделена чертой: выше — о товаре, ниже — о продавце */
+.product-facts-company{padding-top:8px;margin-top:3px;border-top:1px solid var(--border)}
+.product-facts-company b{font-weight:600;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Кнопка внизу карточки. Оформление, а не ссылка: вся карточка ведёт
+   в объявление, и вторая ссылка удвоила бы обход с клавиатуры
+   и список ссылок у скринридера.
+
+   margin-top:auto прижимает её к низу: в ряду из четырёх карточек
+   с названиями разной длины кнопки иначе встают лесенкой. */
+.product-cta{display:block;margin-top:auto;padding:9px 12px;border-radius:var(--r-btn);
+  background:var(--primary-700);color:#fff;font-size:13px;font-weight:600;text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background var(--t-fast)}
+.product-card:hover .product-cta{background:var(--primary-800,var(--navy-900))}
 /* «Twemoji Country Flags» первым: Windows не рисует флаги-эмодзи,
    и полифилл (app.tsx) подключает этот шрифт только там, где нужно */
 .flag{display:inline-block;line-height:1;font-family:var(--font-flags)}

@@ -142,7 +142,8 @@ NEW_DAYS = 7
 
 _LISTING_COMPANY = (
     "c.name as c_name, c.slug as c_slug, c.verification_level as c_verification_level, "
-    "c.rating as c_rating, c.city_id as c_city_id, c.country_id as c_country_id, "
+    "c.rating as c_rating, c.response_time_hours as c_response_time_hours, "
+    "c.city_id as c_city_id, c.country_id as c_country_id, "
     "c.type as c_type, c.legal_form as c_legal_form, c.phone as c_phone, c.email as c_email, "
     "c.tin as c_tin, c.address as c_address, c.description as c_description, "
     "c.logo_path as c_logo_path, exists (select 1 from company_documents d where "
@@ -258,6 +259,7 @@ class Cards:
                 "verified": int(company["verification_level"] or 0),
                 "rating": float(company["rating"] or 0),
                 "trust": completeness(company, bool(company["has_documents"])),
+                "response_hours": company["response_time_hours"],
             },
             "badges": [b for b in badges if b],
             "promoted": promoted,

@@ -61,6 +61,10 @@ final class ListingCard
                 // Процент доверия — заполненность профиля поставщика:
                 // покупатель видит, насколько компания раскрыла себя
                 'trust' => $listing->company?->profileCompleteness() ?? 0,
+                // За сколько часов компания обычно отвечает. null —
+                // не измеряли: строку на карточке просто не рисуем,
+                // выдумывать «отвечает быстро» нечестно
+                'response_hours' => $listing->company?->response_time_hours,
             ],
             // Метки продвижения показываются как есть: скрывать факт
             // платного размещения площадка не будет
@@ -87,7 +91,8 @@ final class ListingCard
             // проверка на каждую карточку была бы N+1 запросами
             'company' => fn ($q) => $q
                 ->select([
-                    'id', 'name', 'slug', 'verification_level', 'rating', 'city_id', 'country_id',
+                    'id', 'name', 'slug', 'verification_level', 'rating', 'response_time_hours',
+                    'city_id', 'country_id',
                     'type', 'legal_form', 'phone', 'email', 'tin', 'address', 'description', 'logo_path',
                 ])
                 ->withExists(['documents as has_approved_documents' => fn ($d) => $d->where('moderation_status', 'approved')]),
