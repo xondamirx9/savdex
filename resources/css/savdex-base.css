@@ -28,6 +28,7 @@
   --r-btn:8px; --r-card:12px; --r-pill:999px;
   --sh-sm:var(--shadow-sm); --sh-md:var(--shadow-md);
   --sh-hover:var(--shadow-lift); --sh-raise:var(--shadow-raise); --sh-modal:var(--shadow-modal);
+  --font-flags:var(--font-flag);
   --container:1280px; --gutter:24px;
   --t-fast:150ms cubic-bezier(.4,0,.2,1);
   --t-mid:200ms cubic-bezier(.4,0,.2,1);

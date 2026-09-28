@@ -313,7 +313,7 @@ return [
         'search_button' => 'Ara',
         'tab_products' => 'Ürünler',
         'tab_companies' => 'Şirketler',
-        'tab_rfq' => 'Talepler (RFQ)',
+        'tab_rfq' => 'Talepler',
         'select_category' => 'Kategori seçin',
         'select_country' => 'Ülke seçin',
         'select_city' => 'Tüm şehirler',

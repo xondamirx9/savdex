@@ -318,7 +318,7 @@ return [
         'search_button' => 'Найти',
         'tab_products' => 'Товары',
         'tab_companies' => 'Компании',
-        'tab_rfq' => 'Запросы (RFQ)',
+        'tab_rfq' => 'Запросы',
         'select_category' => 'Выберите категорию',
         'select_country' => 'Выберите страну',
         'select_city' => 'Все города',

@@ -313,7 +313,7 @@ return [
         'search_button' => 'Search',
         'tab_products' => 'Products',
         'tab_companies' => 'Companies',
-        'tab_rfq' => 'Requests (RFQ)',
+        'tab_rfq' => 'Requests',
         'select_category' => 'Select a category',
         'select_country' => 'Select a country',
         'select_city' => 'All cities',

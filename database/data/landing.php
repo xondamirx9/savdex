@@ -92,22 +92,22 @@ return [
         ],
     ],
     'requests' => [
-        'name' => 'Запросы (RFQ)',
+        'name' => 'Запросы',
         'texts' => [
             'ru' => [
-                'heading' => 'Запросы (RFQ)',
+                'heading' => 'Запросы',
             ],
             'uz' => [
-                'heading' => 'So‘rovlar (RFQ)',
+                'heading' => 'So‘rovlar',
             ],
             'en' => [
-                'heading' => 'Requests (RFQ)',
+                'heading' => 'Requests',
             ],
             'zh' => [
-                'heading' => '采购需求 (RFQ)',
+                'heading' => '采购需求',
             ],
             'tr' => [
-                'heading' => 'Talepler (RFQ)',
+                'heading' => 'Talepler',
             ],
         ],
     ],
