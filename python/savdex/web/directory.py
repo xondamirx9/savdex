@@ -1,5 +1,6 @@
 """
-«Страны» и «Партнёры» — копия PageController::countries и ::partners.
+«Страны» и «Партнёры» — копия PageController::countries, ::partners
+и ::partnersTier.
 
 Порядок стран — как Country::listed: сперва поле sort, затем название
 по правилам языка (Collator ICU у PHP). То же сравнение делает
@@ -217,25 +218,61 @@ def countries(request: HttpRequest) -> HttpResponse:
     )
 
 
+#: Company::PARTNER_SLUGS — адрес страницы вида → код в базе, в том же порядке
+PARTNER_SLUGS = {"general": "general", "regular": "partner", "multi": "multi"}
+
+#: Company::PARTNER_TIERS — все коды партнёрства
+_PARTNER_CODES = "('general', 'partner', 'multi')"
+
+
 def partners(request: HttpRequest) -> HttpResponse:
-    """PageController::partners."""
+    """PageController::partners — три вида партнёрства со счётчиками."""
     ctx = context(request)
 
     if isinstance(ctx, HttpResponse):
         return ctx
 
+    counts = {
+        r["partner_tier"]: int(r["total"])
+        for r in _rows(
+            "select partner_tier, count(*) as total from companies where status = 'active' "
+            f"and deleted_at is null and partner_tier in {_PARTNER_CODES} group by partner_tier"
+        )
+    }
+
+    return inertia.render(
+        ctx,
+        "Partners",
+        {
+            "tiers": [
+                {"slug": slug, "count": counts.get(code, 0)} for slug, code in PARTNER_SLUGS.items()
+            ],
+        },
+        _seo(ctx, "partners", "partners"),
+    )
+
+
+def partners_tier(request: HttpRequest, tier: str) -> HttpResponse:
+    """PageController::partnersTier — страница одного вида: /partners/general и т. д."""
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    code = PARTNER_SLUGS[tier]
     options = type_options(ctx.locale)
     cities = _named("cities", ctx.locale)
     country_names = _named("countries", ctx.locale)
     rows = _rows(
         "select m.*, (select count(*) from listings l where l.company_id = m.id and "
         "l.status = 'active' and l.deleted_at is null) as listings_count from companies m "
-        "where m.status = 'active' and m.deleted_at is null and m.partner_tier in "
-        "('general', 'partner') order by m.partner_sort, m.rating desc, m.id"
+        "where m.status = 'active' and m.deleted_at is null and m.partner_tier = %s "
+        "order by m.partner_sort, m.rating desc, m.id",
+        [code],
     )
 
-    def present(c: dict[str, Any]) -> dict[str, Any]:
-        return {
+    partners_list = [
+        {
             "slug": c["slug"],
             "name": c["name"],
             "type_label": type_label(ctx, c, options),
@@ -248,32 +285,26 @@ def partners(request: HttpRequest) -> HttpResponse:
             "initials": initials(c["name"]),
             "logo": logo_url(ctx, c["logo_path"]),
         }
+        for c in rows
+    ]
 
-    def count(query: str) -> int:
-        return int(_rows(query)[0]["n"])
+    seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
+    seo = (
+        seo.title(ctx.t(f"partners.tiers.{tier}.title"))
+        .description(ctx.t(f"partners.tiers.{tier}.text"))
+        .canonical(ctx.url(f"partners/{tier}"))
+    )
 
     return inertia.render(
         ctx,
-        "Partners",
+        "PartnersTier",
         {
-            "general": [present(c) for c in rows if c["partner_tier"] == "general"],
-            "partners": [present(c) for c in rows if c["partner_tier"] == "partner"],
-            "stats": {
-                "total": count(
-                    "select count(*) as n from companies where status = 'active' "
-                    "and deleted_at is null"
-                ),
-                "verified": count(
-                    "select count(*) as n from companies where status = 'active' "
-                    "and deleted_at is null and verification_level >= 2"
-                ),
-                "listings": count(
-                    "select count(*) as n from listings where status = 'active' "
-                    "and deleted_at is null"
-                ),
-            },
+            "tier": tier,
+            "partners": partners_list,
+            # Соседние виды — ссылками внизу страницы
+            "others": [slug for slug in PARTNER_SLUGS if slug != tier],
         },
-        _seo(ctx, "partners", "partners"),
+        seo,
     )
 
 

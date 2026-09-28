@@ -21,11 +21,13 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
 import { useDismiss } from '@/lib/useDismiss';
+import { PARTNER_TIERS, TIER_LOOK } from '@/lib/partnerTiers';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -40,6 +42,8 @@ import type { SharedProps } from '@/types';
 interface MenuItem {
     href: string;
     label: string;
+    /** Подразделы — всплывают столбиком при наведении */
+    children?: { href: string; label: string; tier?: keyof typeof TIER_LOOK }[];
     /** Пункт с query-строкой активен только при точном совпадении её части. */
     match?: (path: string, search: string) => boolean;
 }
@@ -83,11 +87,117 @@ function menu(): MenuItem[] {
             // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет
             match: (path) => path.startsWith(routes.itTasks) || path.startsWith('/resume'),
         },
-        { href: routes.partners, label: t('nav.partners') },
+        {
+            href: routes.partners,
+            label: t('nav.partners'),
+            children: PARTNER_TIERS.map((tier) => ({
+                href: routes.partnersTier(tier),
+                label: t(`partners.tiers.${tier}.title`),
+                tier,
+            })),
+        },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },
         { href: routes.about, label: t('nav.about_us') },
     ];
+}
+
+/**
+ * Пункт ленты разделов со всплывающим списком подразделов («Партнёры»).
+ *
+ * Список открывается при наведении и при фокусе с клавиатуры, стоит
+ * столбиком под пунктом. Рисуется порталом в body с позицией по пункту:
+ * лента разделов прокручивается по горизонтали (overflow-x) и обрезала
+ * бы вложенное окошко, а размытие фона шапки сбивало бы fixed-позицию.
+ * Сам пункт остаётся ссылкой — нажатие ведёт на страницу раздела.
+ */
+function NavDropdown({ item, active }: { item: MenuItem; active: boolean }) {
+    const anchor = useRef<HTMLSpanElement>(null);
+    const closeTimer = useRef<number | undefined>(undefined);
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+    const open = () => {
+        window.clearTimeout(closeTimer.current);
+        const r = anchor.current?.getBoundingClientRect();
+        if (r) setPos({ top: r.bottom + 4, left: r.left });
+    };
+
+    // Небольшая задержка: мышь успевает дойти от пункта до окошка
+    const close = () => {
+        window.clearTimeout(closeTimer.current);
+        closeTimer.current = window.setTimeout(() => setPos(null), 150);
+    };
+
+    // Прокрутка страницы или ленты уводит пункт — окошко закрывается
+    useEffect(() => {
+        if (pos === null) return;
+
+        const hide = () => setPos(null);
+        window.addEventListener('scroll', hide, { passive: true, capture: true });
+        window.addEventListener('resize', hide);
+
+        return () => {
+            window.removeEventListener('scroll', hide, { capture: true });
+            window.removeEventListener('resize', hide);
+        };
+    }, [pos]);
+
+    useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+    const menuId = `subnav-menu-${item.href.replace(/\W/g, '')}`;
+
+    return (
+        <span
+            ref={anchor}
+            className="subnav-dd"
+            onMouseEnter={open}
+            onMouseLeave={close}
+            onFocus={open}
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close();
+            }}
+            onKeyDown={(e) => e.key === 'Escape' && setPos(null)}
+        >
+            <Link
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                aria-haspopup="true"
+                aria-expanded={pos !== null}
+                aria-controls={menuId}
+            >
+                {item.label}
+            </Link>
+            {pos !== null &&
+                createPortal(
+                    <div
+                        id={menuId}
+                        className="subnav-dd-menu"
+                        style={{ top: pos.top, left: pos.left }}
+                        onMouseEnter={open}
+                        onMouseLeave={close}
+                        onFocus={open}
+                        onBlur={close}
+                    >
+                        {item.children?.map((child) => {
+                            const look = child.tier ? TIER_LOOK[child.tier] : null;
+                            const Icon = look?.[0];
+
+                            return (
+                                <Link key={child.href} href={child.href} onClick={() => setPos(null)}>
+                                    {Icon && (
+                                        <span className={cn('stat-ico', look[1])}>
+                                            <Icon aria-hidden className="size-4" />
+                                        </span>
+                                    )}
+                                    {child.label}
+                                </Link>
+                            );
+                        })}
+                    </div>,
+                    document.body,
+                )}
+        </span>
+    );
 }
 
 /**
@@ -750,11 +860,15 @@ export function SiteHeader() {
 
                 <nav className="subnav" aria-label={t('nav.main')}>
                     <div className="container subnav-inner">
-                        {items.map((item) => (
-                            <Link key={item.href} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
-                                {item.label}
-                            </Link>
-                        ))}
+                        {items.map((item) =>
+                            item.children ? (
+                                <NavDropdown key={item.href} item={item} active={isActive(item)} />
+                            ) : (
+                                <Link key={item.href} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
+                                    {item.label}
+                                </Link>
+                            ),
+                        )}
                         <Link href={authed ? routes.listingCreate : routes.register} className="subnav-post">
                             {t('nav.post_listing')} <PlusCircle aria-hidden />
                         </Link>
@@ -770,9 +884,23 @@ export function SiteHeader() {
             >
                 <div className="mobile-menu-inner">
                     {items.map((item) => (
-                        <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
-                            {item.label}
-                        </Link>
+                        <div key={item.href} style={{ display: 'contents' }}>
+                            <Link href={item.href} onClick={() => setMenuOpen(false)}>
+                                {item.label}
+                            </Link>
+                            {/* Подразделы на телефоне — отступом под пунктом:
+                                наведения там нет, всплывать меню не может */}
+                            {item.children?.map((child) => (
+                                <Link
+                                    key={child.href}
+                                    href={child.href}
+                                    className="mobile-sublink"
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    {child.label}
+                                </Link>
+                            ))}
+                        </div>
                     ))}
 
                     {/* Избранное, сообщения, контакты и профиль переехали

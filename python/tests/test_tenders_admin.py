@@ -242,13 +242,17 @@ def test_правка_признака_в_разделе(люди):
 
 def test_значок_на_сайте(люди):
     """Страница закупки на Django: у госзакупки government = true."""
-    from .web_site import из_django, страница
+    from .web_site import laravel, из_django, страница
 
+    # На минуту раньше: Django сравнивает с текущим временем без долей секунды
     [(slug,)] = sql(
-        "update tenders set is_government = true, status = 'published', published_at = now() "
-        "where title = 'Road repair' returning slug"
+        "update tenders set is_government = true, status = 'published', "
+        "published_at = now() - interval '1 minute' where title = 'Road repair' returning slug"
     )
-    ответ = из_django("http://127.0.0.1:8000", f"/tenders/{slug}")
+
+    # laravel() выгружает словари и манифест сборки, без них страница не рисуется
+    with laravel() as root:
+        ответ = из_django(root, f"/tenders/{slug}")
 
     assert ответ["status"] == 200, ответ["body"][:1000]
     assert страница(ответ["body"])["props"]["tender"]["government"] is True

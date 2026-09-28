@@ -3,8 +3,9 @@
 
 Страны: работающие и запланированные, порядок по полю sort и названию
 по правилам языка (ICU), витрина до 12 компаний на страну. Партнёры:
-генеральные и обычные, тип компании из справочника или правовая форма,
-город и страна на языке посетителя, счётчики.
+счётчики генеральных, обычных и мультипартнёров, страница каждого вида,
+тип компании из справочника или правовая форма, город и страна на языке
+посетителя.
 
 Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
@@ -48,6 +49,7 @@ def сайт() -> Iterator[str]:
         "'legal_form' => 'legal', 'partner_tier' => 'general', 'partner_sort' => 1]);"
         "$make(['country_id' => $uz, 'city_id' => $city, 'partner_tier' => 'partner', "
         "'rating' => 4.5]);"
+        "$make(['country_id' => $uz, 'city_id' => $city, 'partner_tier' => 'multi']);"
         "$make(['country_id' => $uz, 'city_id' => null, 'status' => 'blocked', "
         "'partner_tier' => 'partner']);"
         "App\\Models\\Listing::factory()->count(3)->create();"
@@ -76,4 +78,27 @@ def test_партнёры(сайт, path):
     д, _ = сверить(сайт, path)
     props = страница(д["body"])["props"]
 
-    assert len(props["general"]) == 2 and len(props["partners"]) == 1
+    # Заблокированный партнёр не считается
+    assert props["tiers"] == [
+        {"slug": "general", "count": 2},
+        {"slug": "regular", "count": 1},
+        {"slug": "multi", "count": 1},
+    ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/partners/general",
+        "/partners/regular",
+        "/partners/multi",
+        "/en/partners/general",
+        "/zh/partners/multi",
+    ],
+)
+def test_страница_вида_партнёров(сайт, path):
+    д, _ = сверить(сайт, path)
+    props = страница(д["body"])["props"]
+
+    assert props["tier"] == path.rsplit("/", 1)[1]
+    assert len(props["others"]) == 2
