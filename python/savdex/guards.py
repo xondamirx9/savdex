@@ -142,6 +142,9 @@ SHARED_WRITES: dict[str, str] = {
         "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
         "описания, search_text и updated_at, как TranslateTender (save с событием "
         "saving)"
+        "; раздел «Закупки» админки Django (этап 5, savdex/tenders): закупка "
+        "целиком — правка и загрузка файлом, с событиями модели Tender "
+        "(search_text, адрес), столбцы перевода и просмотров не трогает"
     ),
     "resumes": (
         "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "

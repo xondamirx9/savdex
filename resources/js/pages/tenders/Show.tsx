@@ -45,6 +45,9 @@ export default function TenderShow({ tender, similar }: { tender: Tender; simila
                     <article style={{ maxWidth: '72ch' }}>
                         <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
                             {deadlineBadge(tender)}
+                            {tender.government && (
+                                <span className="badge badge-verified">{t('tenders.government')}</span>
+                            )}
                             {tender.category && <span className="badge badge-neutral">{tender.category}</span>}
                             {tender.published && (
                                 <span className="t-caption muted row" style={{ gap: 6 }}>

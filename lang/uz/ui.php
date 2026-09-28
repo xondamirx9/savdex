@@ -760,6 +760,7 @@ return [
     ],
 
     'tenders' => [
+        'government' => 'Davlat xaridi',
         'meta_title' => 'Tenderlar va xaridlar — SAVDEX',
         'meta_description' => 'O‘zbekiston va Markaziy Osiyodagi ochiq tenderlar va xaridlar: xarid predmeti, byudjet, takliflarni topshirish muddati va buyurtmachi kontaktlari.',
         'eyebrow' => 'Xaridlar',
