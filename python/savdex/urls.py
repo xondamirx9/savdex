@@ -33,6 +33,7 @@ from savdex.web import (
     news,
     pricing,
     resumes,
+    review_actions,
     reviews,
     tenders,
 )
@@ -144,6 +145,15 @@ urlpatterns = [
         contact_actions.complain,
         name="cabinet.contacts.complain",
     ),
+    # Отзывы о своей компании (этап 5, шаг 25): ответ и спор, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/reviews/(?P<review_id>[0-9]{{1,18}})/{verb}$",
+            getattr(review_actions, verb),
+            name=f"cabinet.reviews.{verb}",
+        )
+        for verb in ("reply", "dispute")
+    ],
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
