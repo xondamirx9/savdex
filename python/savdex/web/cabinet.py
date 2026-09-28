@@ -956,3 +956,88 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
         "statuses": UNLOCK_STATUSES,
         "filters": {"q": q, "status": status},
     }
+
+
+# ── Настройки /cabinet/settings (SettingsController::index) ─────────
+
+#: NotificationPreference::EVENTS — подписи в коде, по-русски на всех языках
+NOTIFICATION_EVENTS = {
+    "contact_unlocked": "Открыли мой контакт",
+    "new_review": "Новый отзыв",
+    "moderation": "Модерация объявления",
+    "listing_expiring": "Объявление истекает",
+    "digest": "Дайджест по подпискам",
+}
+
+
+def settings_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Settings", settings_props(ctx), _seo(ctx))
+
+
+def _telegram_configured() -> bool:
+    """TelegramGateway::configured: токен и имя бота заданы."""
+    import os
+
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    username = (os.environ.get("TELEGRAM_BOT_USERNAME") or "").strip().lstrip("@")
+
+    return token != "" and username != ""
+
+
+def settings_props(ctx: Context) -> dict[str, Any]:
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+    saved = {
+        p["event"]: p
+        for p in _rows(
+            "select event, email, telegram from notification_preferences where user_id = %s "
+            "order by id",
+            [user["id"]],
+        )
+    }
+    last_login = user["last_login_at"]
+
+    return {
+        "profile": {
+            "name": user["name"],
+            "email": user["email"],
+            "phone": user["phone"],
+            "locale": user["locale"],
+            "email_verified": user["email_verified_at"] is not None,
+            "phone_verified": user["phone_verified_at"] is not None,
+        },
+        # Умолчания — здесь, а не строками в базе: список событий растёт
+        "notifications": [
+            {
+                "event": event,
+                "label": label,
+                "email": _pref(saved.get(event), "email", True),
+                "telegram": _pref(saved.get(event), "telegram", False),
+            }
+            for event, label in NOTIFICATION_EVENTS.items()
+        ],
+        "telegram": {
+            "available": _telegram_configured(),
+            "linked": user["telegram_chat_id"] is not None,
+            "username": user["telegram_username"],
+        },
+        "security": {
+            "two_factor": user["two_factor_confirmed_at"] is not None,
+            "last_login_at": last_login.strftime("%d.%m.%Y, %H:%M") if last_login else None,
+            "last_login_ip": user["last_login_ip"],
+        },
+        "is_owner": user["company_role"] == "owner",
+    }
+
+
+def _pref(row: dict[str, Any] | None, key: str, default: bool) -> bool:
+    """$saved->get($event)?->email ?? true: нет строки или null — умолчание."""
+    if row is None or row[key] is None:
+        return default
+
+    return bool(row[key])

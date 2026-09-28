@@ -385,3 +385,32 @@ def test_мои_контакты(сайт, query):
 def test_мои_контакты_без_компании(сайт):
     пользователь("nocompany5@savdex.uz")
     сверить(сайт, "/cabinet/contacts", войти(сайт, "nocompany5@savdex.uz"))
+
+
+# ── Настройки ───────────────────────────────────────────────────────
+
+
+def test_настройки(сайт):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+    sql(
+        "update users set phone = '+998901112233', last_login_at = '2026-09-20 08:05:00', "
+        "last_login_ip = '10.1.2.3', telegram_username = 'owner_tg', company_role = 'owner' "
+        "where id = %s",
+        [uid],
+    )
+    sql("delete from notification_preferences where user_id = %s", [uid])
+    sql(
+        "insert into notification_preferences (user_id, event, email, telegram, created_at, "
+        "updated_at) values (%s, 'new_review', false, true, now(), now()), "
+        "(%s, 'digest', true, false, now(), now()), (%s, 'unknown', false, false, now(), now())",
+        [uid, uid, uid],
+    )
+
+    for path in ("/cabinet/settings", "/tr/cabinet/settings"):
+        сверить(сайт, path, куки)
+
+
+def test_настройки_без_компании(сайт):
+    пользователь("nocompany6@savdex.uz")
+    сверить(сайт, "/cabinet/settings", войти(сайт, "nocompany6@savdex.uz"))
