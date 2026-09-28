@@ -10,6 +10,7 @@ Inertia, теги <head>.
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import re
@@ -54,7 +55,9 @@ extra = {"HTTP_" + k.upper().replace("-", "_"): v for k, v in headers.items()}
 if method == "GET":
     r = client.get(path, **extra)
 else:
-    r = client.generic(method, path, body.encode(), content_type, **extra)
+    import base64
+    data = base64.b64decode(body[7:]) if body.startswith("base64:") else body.encode()
+    r = client.generic(method, path, data, content_type, **extra)
 print(json.dumps({
     "status": r.status_code,
     "headers": {k.lower(): v for k, v in r.items()},
@@ -213,7 +216,10 @@ def из_laravel(
         root + path,
         cookies=cookies or {},
         headers=headers,
-        content=body.encode() if method != "GET" else None,
+        # Двоичное тело (файлы в multipart) приходит как «base64:…»
+        content=(base64.b64decode(body[7:]) if body.startswith("base64:") else body.encode())
+        if method != "GET"
+        else None,
         timeout=30,
     )
 

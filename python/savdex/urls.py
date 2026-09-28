@@ -263,6 +263,17 @@ urlpatterns = [
         company_profile_actions.page,
         name="cabinet.company",
     ),
+    # Логотип и обложка компании (этап 5, шаг 34): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/logo$",
+        company_profile_actions.logo,
+        name="cabinet.company.logo",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/cover$",
+        company_profile_actions.cover,
+        name="cabinet.company.cover",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
     re_path(

@@ -33,6 +33,7 @@ from savdex.web.resume_actions import _exists
 from savdex.web.search_text import index
 from savdex.web.shared import Context
 from savdex.web.validation import Check, validate, validated
+from savdex.web.views import not_found
 
 #: Tin::FAKE
 FAKE_TINS = ("123456789", "987654321", "123123123")
@@ -245,3 +246,119 @@ def page(request: HttpRequest) -> HttpResponse:
         return update(request)
 
     return company_page(request)
+
+
+# ── Логотип и обложка (этап 5, шаг 34) ─────────────────────────────
+
+
+def _upload(request: HttpRequest, field: str, size: Any, saved: str) -> HttpResponse:  # noqa: ANN401
+    """CompanyProfileController::uploadLogo / uploadCover (throttle:30,60)."""
+    from savdex.web import image_store
+
+    ctx = action(request, throttle=30, throttle_minutes=60)
+    company = company_of(ctx)
+
+    if company is None:
+        flash(ctx, "error", ctx.t("messages.company.fill_first"))
+
+        return back(ctx)
+
+    data = {**input_of(request), **request.FILES.dict()}
+    errors = validate(
+        data,
+        {field: ["required", "file", "mimes:jpg,jpeg,png,webp", "max:8192"]},
+        ctx.locale,
+        {
+            f"{field}.required": ctx.t("messages.file.required"),
+            f"{field}.mimes": ctx.t("messages.image.mimes"),
+            f"{field}.max": ctx.t("messages.image.max"),
+        },
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    try:
+        path = image_store.store(data[field].read(), f"companies/{company['id']}", size)
+    except image_store.UnreadableImageError:
+        flash(ctx, "error", ctx.t("messages.image.unreadable"))
+
+        return back(ctx)
+
+    column = f"{field}_path"
+    previous = company[column]
+    eloquent.save(
+        ctx,
+        "companies",
+        company,
+        {column: path},
+        section="companies",
+        model="Company",
+        saving=_search_text,
+        casts=CASTS,
+    )
+    image_store.delete(previous)
+    flash(ctx, "success", ctx.t(saved))
+
+    return back(ctx)
+
+
+def _remove(request: HttpRequest, field: str, deleted: str) -> HttpResponse:
+    """CompanyProfileController::removeLogo / removeCover."""
+    from savdex.web import image_store
+
+    ctx = action(request)
+    company = company_of(ctx)
+
+    if company is None:
+        return not_found(ctx)
+
+    column = f"{field}_path"
+    image_store.delete(company[column])
+    eloquent.save(
+        ctx,
+        "companies",
+        company,
+        {column: None},
+        section="companies",
+        model="Company",
+        saving=_search_text,
+        casts=CASTS,
+    )
+    flash(ctx, "success", ctx.t(deleted))
+
+    return back(ctx)
+
+
+@form()
+def upload_logo(request: HttpRequest) -> HttpResponse:
+    from savdex.web import image_store
+
+    return _upload(request, "logo", image_store.LOGO, "messages.company.logo_saved")
+
+
+@form("DELETE")
+def remove_logo(request: HttpRequest) -> HttpResponse:
+    return _remove(request, "logo", "messages.company.logo_deleted")
+
+
+@form()
+def upload_cover(request: HttpRequest) -> HttpResponse:
+    from savdex.web import image_store
+
+    return _upload(request, "cover", image_store.COVER, "messages.company.cover_saved")
+
+
+@form("DELETE")
+def remove_cover(request: HttpRequest) -> HttpResponse:
+    return _remove(request, "cover", "messages.company.cover_deleted")
+
+
+def logo(request: HttpRequest) -> HttpResponse:
+    """/cabinet/company/logo: POST — загрузить, DELETE — убрать."""
+    return remove_logo(request) if request.method == "DELETE" else upload_logo(request)
+
+
+def cover(request: HttpRequest) -> HttpResponse:
+    """/cabinet/company/cover: POST — загрузить, DELETE — убрать."""
+    return remove_cover(request) if request.method == "DELETE" else upload_cover(request)

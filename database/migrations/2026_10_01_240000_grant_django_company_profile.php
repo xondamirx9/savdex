@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Профиль своей компании на Django (этап 5, шаг 33): правка полей формы и
- * search_text, новая компания и её владелец. Роли нет — делать нечего.
+ * search_text, новая компания и её владелец; логотип и обложка (шаг 34).
+ * Роли нет — делать нечего.
  */
 return new class extends Migration
 {
@@ -14,7 +15,7 @@ return new class extends Migration
     private const GRANTS = [
         'INSERT ON companies',
         'USAGE ON SEQUENCE companies_id_seq',
-        'UPDATE (name, legal_name, tin, country_id, city_id, address, description, website, founded_year, employees_range, type, custom_category, primary_role, is_it_provider, it_specializations, search_text, updated_at) ON companies',
+        'UPDATE (logo_path, cover_path, name, legal_name, tin, country_id, city_id, address, description, website, founded_year, employees_range, type, custom_category, primary_role, is_it_provider, it_specializations, search_text, updated_at) ON companies',
         'UPDATE (company_id, company_role) ON users',
     ];
 

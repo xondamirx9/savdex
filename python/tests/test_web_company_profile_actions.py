@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -157,3 +158,140 @@ def test_новая_компания(сайт, admin, prefix):
 
     assert итог["ответ"]["status"] == 303
     assert итог["база"]["owner"][0][1] == "owner"
+
+
+# ── Логотип и обложка ───────────────────────────────────────────────
+
+
+def картинка(width: int, height: int, fmt: str = "PNG", alpha: bool = False) -> bytes:
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGBA" if alpha else "RGB", (width, height), (200, 30, 30, 128)).save(out, fmt)
+
+    return out.getvalue()
+
+
+def multipart(поля: dict[str, tuple[str, bytes] | str]) -> tuple[str, str]:
+    """Тело multipart/form-data (base64 для помощника) и его Content-Type."""
+    import base64
+
+    граница = "----savdexparity"
+    части = []
+
+    for name, value in поля.items():
+        if isinstance(value, tuple):
+            filename, data = value
+            части.append(
+                f'--{граница}\r\nContent-Disposition: form-data; name="{name}"; '
+                f'filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode()
+                + data
+                + b"\r\n"
+            )
+        else:
+            части.append(
+                f'--{граница}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n".encode()
+            )
+
+    тело = b"".join(части) + f"--{граница}--\r\n".encode()
+
+    return "base64:" + base64.b64encode(тело).decode(), f"multipart/form-data; boundary={граница}"
+
+
+СТАРЫЙ = "companies/old/logo.webp"
+
+
+def с_картинкой(field: str) -> Callable[[], None]:
+    def run() -> None:
+        from .pg_admin import КОРЕНЬ
+
+        сброс()()
+        путь = Path(КОРЕНЬ) / "storage/app/public" / СТАРЫЙ
+        путь.parent.mkdir(parents=True, exist_ok=True)
+        путь.write_bytes(b"old")
+        sql(f"update companies set {field}_path = %s where slug = 'mine'", [СТАРЫЙ])
+
+    return run
+
+
+def снимок_картинки(field: str) -> Callable[[], Any]:
+    def run() -> Any:
+        from PIL import Image
+
+        from .pg_admin import КОРЕНЬ
+
+        [(путь,)] = sql(f"select {field}_path from companies where slug = 'mine'")
+        файл = None
+
+        if путь and путь != СТАРЫЙ:
+            with Image.open(Path(КОРЕНЬ) / "storage/app/public" / путь) as img:
+                файл = (img.format, img.size)
+
+        return {
+            "path": re.sub(r"/[A-Za-z0-9]{40}\.webp$", "/<random>.webp", путь or ""),
+            "file": файл,
+            "old": (Path(КОРЕНЬ) / "storage/app/public" / СТАРЫЙ).exists(),
+            "journal": снимок()["journal"],
+        }
+
+    return run
+
+
+@pytest.mark.parametrize("field", ["logo", "cover"])
+@pytest.mark.parametrize(
+    "файл",
+    [
+        ("big.png", картинка(1200, 600)),
+        ("small.png", картинка(100, 80, alpha=True)),
+        ("photo.jpg", картинка(3000, 2001, "JPEG")),
+        ("photo.webp", картинка(700, 700, "WEBP")),
+        ("anim.gif", картинка(50, 50, "GIF")),
+        ("fake.png", b"not an image at all"),
+        ("empty.png", b""),
+        None,
+    ],
+)
+def test_картинка(сайт, field, файл):
+    поля: dict[str, tuple[str, bytes] | str] = {"note": "x"}
+
+    if файл is not None:
+        поля[field] = файл
+
+    тело, тип = multipart(поля)
+    итог = отправить(
+        сайт,
+        f"/cabinet/company/{field}",
+        с_картинкой(field),
+        снимок_картинки(field),
+        uid=учётка("owner@savdex.uz"),
+        body=тело,
+        content_type=тип,
+        headers=inertia(),
+    )
+
+    if файл is not None and файл[0] == "big.png":
+        assert итог["база"]["file"] == ("WEBP", (512, 256) if field == "logo" else (1200, 600))
+        assert not итог["база"]["old"]
+
+
+@pytest.mark.parametrize("field", ["logo", "cover"])
+@pytest.mark.parametrize("admin", [False, True])
+def test_убрать_картинку(сайт, field, admin):
+    def подготовка() -> None:
+        с_картинкой(field)()
+        sql("update users set is_admin = %s where email = 'owner@savdex.uz'", [admin])
+
+    итог = отправить(
+        сайт,
+        f"/cabinet/company/{field}",
+        подготовка,
+        снимок_картинки(field),
+        uid=учётка("owner@savdex.uz"),
+        method="DELETE",
+        headers=inertia(),
+    )
+
+    assert итог["база"]["path"] == "" and not итог["база"]["old"]

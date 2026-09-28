@@ -84,10 +84,25 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
         if value is _MISSING or value is None:
             return False
 
+        if _is_file(value):
+            return True
+
         if isinstance(value, str):
             return value.strip() != ""
 
         return not (isinstance(value, dict | list) and len(value) == 0)
+
+    if rule == "file":
+        return _is_file(value)
+
+    if rule == "mimes":
+        # validateMimes: расширение по содержимому; jpg и jpeg — одно и то же
+        extensions = set((param or "").split(","))
+
+        if extensions & {"jpg", "jpeg"}:
+            extensions |= {"jpg", "jpeg"}
+
+        return _is_file(value) and _guess_extension(value) in extensions
 
     if rule == "array":
         return isinstance(value, dict | list)
@@ -173,6 +188,10 @@ def _size(value: Any, numeric: bool = False) -> float | None:  # noqa: ANN401
     Validator::getSize: число при числовом правиле (numeric, integer), массив —
     число элементов, иначе длина строки.
     """
+    if _is_file(value):
+        # Размер файла — в килобайтах
+        return float(value.size or 0) / 1024
+
     if numeric and not isinstance(value, bool):
         if isinstance(value, int | float):
             return float(value)
@@ -188,6 +207,36 @@ def _size(value: Any, numeric: bool = False) -> float | None:  # noqa: ANN401
 
     if isinstance(value, str):
         return float(len(value))
+
+    return None
+
+
+def _is_file(value: Any) -> bool:  # noqa: ANN401
+    """Загруженный файл (UploadedFile у Laravel)."""
+    from django.core.files.uploadedfile import UploadedFile
+
+    return isinstance(value, UploadedFile)
+
+
+def _guess_extension(upload: Any) -> str | None:  # noqa: ANN401
+    """UploadedFile::guessExtension: по первым байтам (finfo), не по имени."""
+    head = upload.read(64)
+    upload.seek(0)
+
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+
+    if head.startswith(b"%PDF-"):
+        return "pdf"
 
     return None
 
@@ -218,6 +267,9 @@ def _kind(rules: Sequence[str | Check], value: Any) -> str:  # noqa: ANN401
 
     if isinstance(value, dict | list):
         return "array"
+
+    if _is_file(value):
+        return "file"
 
     return "string"
 
