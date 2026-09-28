@@ -870,3 +870,68 @@ def test_чужой_разговор_404(сайт):
     for path in (f"/cabinet/chats/{чужой}", "/cabinet/chats/999999"):
         д, _ = сверить(сайт, path, куки)
         assert д["status"] == 404
+
+
+# ── Мастер объявления ───────────────────────────────────────────────
+
+
+def _черновик() -> int:
+    """Черновик владельца в подразделе с полями, характеристиками и фото."""
+    if not sql("select 1 from categories where parent_id is not null limit 1"):
+        subprocess.run(
+            ["php", "artisan", "db:seed", "--class=CategorySeeder", "--force"],
+            cwd=КОРЕНЬ,
+            env=ОКРУЖЕНИЕ,
+            check=True,
+            capture_output=True,
+        )
+
+    found = sql("select id from listings where slug = 'wizard-draft'")
+
+    if found:
+        return int(found[0][0])
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$child = App\\Models\\Category::whereNotNull('parent_id')->orderBy('id')->first();"
+        "$child->fields()->updateOrCreate(['key' => 'mark'], ['label' => 'Марка',"
+        " 'type' => 'select', 'options' => ['М400', 'М500'], 'sort' => 1]);"
+        "$l = App\\Models\\Listing::factory()->draft()->create(['company_id' => $c->id,"
+        " 'slug' => 'wizard-draft', 'category_id' => $child->id,"
+        " 'title' => 'Цемент М400 навалом 50 кг', 'tags' => ['цемент'], 'wizard_step' => 3]);"
+        "foreach ([['weight', '50 кг'], ['mark', 'М400']] as [$k, $v])"
+        " { $l->attributes()->create(['key' => $k, 'value' => $v]); }"
+        "foreach ([1, 0] as $i => $sort) { $l->images()->create(['path' => 'l/w'.$i.'.webp',"
+        " 'thumb_path' => $i ? null : 'l/wt'.$i.'.webp', 'sort' => $sort]); }"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+
+    return int(sql("select id from listings where slug = 'wizard-draft'")[0][0])
+
+
+@pytest.mark.parametrize("prefix", ["", "/uz"])
+def test_мастер_объявления(сайт, prefix):
+    listing = _черновик()
+    сверить(сайт, f"{prefix}/cabinet/listings/{listing}/edit", владелец(сайт))
+
+
+def test_мастер_чужое_и_неподтверждённая_почта(сайт):
+    listing = _черновик()
+    чужое = int(
+        php("echo App\\Models\\Listing::factory()->draft()->create()->id;").splitlines()[-1]
+    )
+    д, _ = сверить(сайт, f"/cabinet/listings/{чужое}/edit", владелец(сайт))
+    assert д["status"] == 404
+
+    пользователь("unverified@savdex.uz")
+    sql(
+        "update users set email_verified_at = null, company_id = (select id from companies "
+        "where slug = 'owner') where email = 'unverified@savdex.uz'"
+    )
+    куки = войти(сайт, "unverified@savdex.uz")
+    стороны = по_сторонам(сайт, f"/cabinet/listings/{listing}/edit", lambda: None, cookies=куки)
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["headers"]["location"].endswith("/verify-email")
+    assert '"intended":' in итог["payload"]

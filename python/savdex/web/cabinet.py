@@ -2184,3 +2184,172 @@ def chat(request: HttpRequest, thread_id: str) -> HttpResponse:
         },
         _seo(ctx),
     )
+
+
+# ── Мастер объявления: шаги /cabinet/listings/<id>/edit ─────────────
+
+
+def _require_verified(ctx: Context) -> HttpResponse | None:
+    """
+    verified (EnsureEmailIsVerified): почта не подтверждена — на экран
+    подтверждения, адрес страницы — в url.intended; XHR, ждущий JSON, — 403.
+    """
+    from savdex.web.views import error
+
+    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+        return None
+
+    if _expects_json(ctx.request):
+        return error(ctx, 403)
+
+    store = _store(ctx)
+
+    if store is not None:
+        store.put("url.intended", store.full_url if ctx.request.method == "GET" else ctx.url("/"))
+
+    return _redirect(ctx, "/verify-email")
+
+
+def _category_tree(locale: str) -> list[dict[str, Any]]:
+    """ListingWizardController::categoryTree: активные разделы, подразделы с полями."""
+    from savdex.web.directory import _named
+
+    names = _named("categories", locale)
+    roots = _rows(
+        "select id, slug from categories where parent_id is null and is_active order by sort, id"
+    )
+    children = _rows(
+        "select id, parent_id from categories where parent_id = any(%s) order by sort, id",
+        [[r["id"] for r in roots]],
+    )
+    fields: dict[int, list[dict[str, Any]]] = {}
+
+    for f in _rows(
+        "select category_id, key, label, type, options, unit from category_fields "
+        "where category_id = any(%s) order by sort, id",
+        [[c["id"] for c in children]],
+    ):
+        fields.setdefault(f["category_id"], []).append(
+            {
+                "key": f["key"],
+                "label": f["label"],
+                "type": f["type"],
+                "options": f["options"] or [],
+                "unit": f["unit"],
+            }
+        )
+
+    return [
+        {
+            "id": r["id"],
+            "slug": r["slug"],
+            "name": names[r["id"]],
+            "children": [
+                {"id": c["id"], "name": names[c["id"]], "fields": fields.get(c["id"], [])}
+                for c in children
+                if c["parent_id"] == r["id"]
+            ],
+        }
+        for r in roots
+    ]
+
+
+def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
+    from savdex.web.directory import _named
+    from savdex.web.listing import suggestions
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    refused = _require_verified(ctx)
+
+    if refused is not None:
+        return refused
+
+    company = company_of(ctx)
+    found = (
+        _rows(
+            "select * from listings where id = %s and company_id = %s and deleted_at is null",
+            [int(listing_id), company["id"]],
+        )
+        if company is not None
+        else []
+    )
+
+    if not found:
+        return not_found(ctx)
+
+    row = found[0]
+    categories = _named("categories", ctx.locale)
+    parent_id = None
+    category = parent = None
+
+    if row["category_id"]:
+        category = categories.get(row["category_id"])
+        found_parent = _rows("select parent_id from categories where id = %s", [row["category_id"]])
+        parent_id = found_parent[0]["parent_id"] if found_parent else None
+        parent = categories.get(parent_id) if parent_id is not None else None
+
+    attributes = _rows(
+        "select key, value from listing_attributes where listing_id = %s order by id", [row["id"]]
+    )
+    city_id = company["city_id"] if company else None
+    city = _named("cities", ctx.locale).get(city_id) if city_id else None
+    plan = company_plan(company["id"]) if company else None
+
+    return inertia.render(
+        ctx,
+        "cabinet/listings/Wizard",
+        {
+            "listing": {
+                "id": row["id"],
+                "type": row["type"],
+                "category_id": row["category_id"],
+                "parent_id": parent_id,
+                "title": row["title"],
+                "description": row["description"],
+                "price": float(row["price"]) if row["price"] is not None else None,
+                "bundle_price": float(row["bundle_price"])
+                if row["bundle_price"] is not None
+                else None,
+                "currency": row["currency"],
+                "unit": row["unit"],
+                "price_negotiable": bool(row["price_negotiable"]),
+                "min_order": row["min_order"],
+                "delivery_terms": row["delivery_terms"],
+                "payment_terms": row["payment_terms"],
+                "status": row["status"],
+                "step": row["wizard_step"],
+                "tags": list(row["tags"] or []),
+                # pluck('value', 'key'): повтор ключа — побеждает последняя
+                "attributes": {a["key"]: a["value"] for a in attributes},
+                "images": [
+                    # ListingImage::thumbUrl — без проверки, что файл на месте
+                    {"id": i["id"], "thumb": ctx.url("storage/" + (i["thumb_path"] or i["path"]))}
+                    for i in _rows(
+                        "select id, path, thumb_path from listing_images where listing_id = %s "
+                        "order by sort, id",
+                        [row["id"]],
+                    )
+                ],
+            },
+            "categories": _category_tree(ctx.locale),
+            "slots": {
+                "used": _count(
+                    "select count(*) as n from listings where company_id = %s "
+                    "and status = 'active' and deleted_at is null",
+                    [company["id"]],
+                )
+                if company
+                else 0,
+                "total": plan["listings_limit"] if plan else None,
+            },
+            "tagOptions": suggestions(
+                row, category, parent, [str(a["value"] or "") for a in attributes], city
+            ),
+        },
+        _seo(ctx),
+    )
