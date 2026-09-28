@@ -17,6 +17,7 @@ from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
+    actions,
     auth,
     cabinet,
     catalog,
@@ -80,6 +81,32 @@ urlpatterns = [
         name="countries.companies",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect, name="tenders"),
+    # Формы кабинета (этап 5, шаг 21): POST, только группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?notifications/(?P<notification_id>[0-9]{1,18})/read$",
+        actions.notification_read,
+        name="notifications.read",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?notifications/read-all$",
+        actions.notifications_read_all,
+        name="notifications.read-all",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?favorites/(?P<listing_id>[0-9]{1,18})$",
+        actions.favorite_toggle,
+        name="favorites.toggle",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/notifications$",
+        actions.settings_notifications,
+        name="cabinet.settings.notifications",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?locale/(?P<locale>ru|uz|en|zh|tr)$",
+        actions.locale_update,
+        name="locale.update",
+    ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),

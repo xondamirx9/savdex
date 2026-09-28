@@ -98,6 +98,19 @@ def client_ip(request: HttpRequest | None) -> str | None:
     return None
 
 
+def _php_json(value: Any) -> str:  # noqa: ANN401
+    """
+    Как каст array у Eloquent (json_encode без флагов): компактно, «/» и
+    не-ASCII экранированы — столбец json хранит текст как есть, и строка
+    журнала от Django не отличается от строки Laravel.
+    """
+    from savdex.web.session import _php_value
+
+    return json.dumps(
+        _php_value(value), separators=(",", ":"), ensure_ascii=True, default=str
+    ).replace("/", "\\/")
+
+
 def record(
     connection: BaseDatabaseWrapper,
     *,
@@ -140,7 +153,7 @@ def record(
                     # default=str: значение, которое JSON не знает (дата, число
                     # с фиксированной точкой), пишется строкой, а не губит строку
                     # журнала целиком — так уже было со справочниками в PHP
-                    json.dumps(cleaned, ensure_ascii=False, default=str) if cleaned else None,
+                    _php_json(cleaned) if cleaned else None,
                     note,
                     ip,
                     datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),

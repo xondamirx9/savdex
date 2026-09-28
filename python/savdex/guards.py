@@ -118,7 +118,9 @@ SHARED_WRITES: dict[str, str] = {
         "выдача прав администратора (команда admin, неделя 5): у модели "
         "User нет событий, PHP-команда пишет те же поля простым save(); "
         "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
-        "только locale и updated_at, когда язык сменился"
+        "только locale и updated_at, когда язык сменился; то же — форма смены "
+        "языка /locale/<язык> (LocaleController); правка администратора — "
+        "строка журнала, как AuditObserver"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -157,11 +159,14 @@ SHARED_WRITES: dict[str, str] = {
         "показы и просмотры объявлений (этап 4): каталог и страница объявления "
         "на Django, как StatsRecorder::impressions и ::view, — только +1 к "
         "impressions_count или views_count и updated_at, без событий сохранения; "
-        "просмотр администратора — строка журнала, как AuditObserver"
+        "просмотр администратора — строка журнала, как AuditObserver; "
+        "избранное (этап 5) — ±1 к favorites_count, как StatsRecorder::favorite "
+        "и decrement в FavoriteController"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
-        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily"
+        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily (показы, "
+        "просмотры, с этапа 5 — избранное)"
     ),
     "search_hits": (
         "«по каким запросам вас находили» (этап 4): insert … on conflict do "
@@ -172,6 +177,19 @@ SHARED_WRITES: dict[str, str] = {
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
         "— только insert … on conflict do nothing; переводит задача Laravel "
         "translations:fill"
+    ),
+    "user_notifications": (
+        "прочтение уведомлений (этап 5, форма): одно или все свои — только "
+        "read_at и updated_at, как UserNotification::markRead и update() у "
+        "Laravel; событий у модели нет"
+    ),
+    "favorites": (
+        "избранное (этап 5, форма): insert … on conflict do nothing и delete "
+        "своей строки, как FavoriteController::toggle; событий у модели нет"
+    ),
+    "notification_preferences": (
+        "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
+        "строка или email/telegram/updated_at своей; событий у модели нет"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
