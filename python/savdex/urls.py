@@ -93,6 +93,7 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$", cabinet.company_page, name="cabinet.company"
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/create$",
         cabinet.it_task_create,

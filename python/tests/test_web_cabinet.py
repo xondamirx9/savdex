@@ -761,3 +761,47 @@ def test_задачи_без_компании(сайт):
 
     assert стороны["django"][0]["headers"]["location"].endswith("/cabinet/company")
     assert '"warning":' in итог["payload"]
+
+
+# ── Мини-сайт ───────────────────────────────────────────────────────
+
+
+def test_мини_сайт_без_сайта(сайт):
+    sql(
+        "delete from company_sites where company_id = (select id from companies "
+        "where slug = 'owner')"
+    )
+    сверить(сайт, "/cabinet/site", владелец(сайт))
+
+
+def test_мини_сайт(сайт):
+    фон = КОРЕНЬ / "storage/app/public/sites/1/hero.webp"
+    фон.parent.mkdir(parents=True, exist_ok=True)
+    фон.write_bytes(b"RIFF")
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "App\\Models\\CompanySite::query()->where('company_id', $c->id)->delete();"
+        "$s = new App\\Models\\CompanySite();"
+        "$s->forceFill(['company_id' => $c->id, 'subdomain' => 'owner-shop',"
+        " 'status' => 'published', 'published_at' => '2026-09-21 14:30:00',"
+        " 'theme' => ['template' => 'bold', 'primary' => '#AABBCC', 'mode' => 'neon',"
+        "  'hero_image' => 'sites/1/hero.webp', 'extra' => 'x'],"
+        " 'published_theme' => ['template' => 'classic']])->save();"
+        "App\\Models\\CompanySiteProduct::query()->where('company_id', $c->id)->delete();"
+        "foreach ([[2, 'Цемент', 45000], [1, 'Арматура', null], [1, 'Щебень', 120]]"
+        " as [$sort, $t, $p])"
+        " { $x = new App\\Models\\CompanySiteProduct(); $x->forceFill(['company_id' => $c->id,"
+        " 'title' => $t, 'price' => $p, 'currency' => 'UZS', 'sort' => $sort,"
+        " 'image_path' => $t === 'Цемент' ? 'sites/1/hero.webp' : null])->save(); }"
+        "echo 'ok';"
+    )
+    куки = владелец(сайт)
+
+    for path in ("/cabinet/site", "/uz/cabinet/site"):
+        сверить(сайт, path, куки)
+
+
+def test_мини_сайт_без_компании(сайт):
+    пользователь("nocompany12@savdex.uz")
+    д, _ = сверить(сайт, "/cabinet/site", войти(сайт, "nocompany12@savdex.uz"))
+    assert д["status"] == 302

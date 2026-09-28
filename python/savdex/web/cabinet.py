@@ -18,6 +18,7 @@ GET-запросом. Формы по-прежнему отправляются 
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -1851,3 +1852,240 @@ def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
         },
         _seo(ctx),
     )
+
+
+# ── Мини-сайт: редактор /cabinet/site (Cabinet\SiteController::edit) ─
+
+#: SiteTheme — шаблоны, режимы, скругления, шрифты, умолчания, пресеты
+SITE_TEMPLATES = ["classic", "bold", "minimal"]
+SITE_MODES = ["light", "dark"]
+SITE_RADII = ["sharp", "soft", "round"]
+SITE_FONTS = {
+    "manrope": "Manrope",
+    "inter": "Inter",
+    "montserrat": "Montserrat",
+    "rubik": "Rubik",
+    "nunito": "Nunito",
+    "pt-sans": "PT Sans",
+    "ibm-plex-sans": "IBM Plex Sans",
+    "oswald": "Oswald",
+    "playfair-display": "Playfair Display",
+    "lora": "Lora",
+    "pt-serif": "PT Serif",
+}
+SITE_DEFAULTS: dict[str, str | None] = {
+    "template": "classic",
+    "primary": "#1a56db",
+    "accent": "#f59e0b",
+    "mode": "light",
+    "heading_font": "manrope",
+    "body_font": "manrope",
+    "radius": "soft",
+    "hero_image": None,
+}
+SITE_PRESETS = {
+    "savdex": {
+        "primary": "#1a56db",
+        "accent": "#f59e0b",
+        "mode": "light",
+        "heading_font": "manrope",
+        "body_font": "manrope",
+        "radius": "soft",
+    },
+    "forest": {
+        "primary": "#0f6e56",
+        "accent": "#d4a017",
+        "mode": "light",
+        "heading_font": "lora",
+        "body_font": "pt-sans",
+        "radius": "soft",
+    },
+    "graphite": {
+        "primary": "#f97316",
+        "accent": "#38bdf8",
+        "mode": "dark",
+        "heading_font": "oswald",
+        "body_font": "inter",
+        "radius": "sharp",
+    },
+    "terracotta": {
+        "primary": "#b4532a",
+        "accent": "#2f6f73",
+        "mode": "light",
+        "heading_font": "playfair-display",
+        "body_font": "nunito",
+        "radius": "round",
+    },
+    "royal": {
+        "primary": "#5b3cc4",
+        "accent": "#e11d74",
+        "mode": "light",
+        "heading_font": "montserrat",
+        "body_font": "rubik",
+        "radius": "round",
+    },
+}
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_HERO = re.compile(r"^sites/\d+/[A-Za-z0-9._-]+$")
+
+#: CompanySiteProduct::LIMIT
+SITE_PRODUCTS_LIMIT = 60
+
+
+def site_theme(value: Any) -> dict[str, str | None]:  # noqa: ANN401
+    """SiteTheme::normalize: неизвестное — отброшено, недопустимое — умолчание."""
+    source = value if isinstance(value, dict) else {}
+    theme = dict(SITE_DEFAULTS)
+
+    if source.get("template") in SITE_TEMPLATES:
+        theme["template"] = source["template"]
+
+    for key in ("primary", "accent"):
+        if isinstance(source.get(key), str) and _HEX.match(source[key]):
+            theme[key] = source[key].lower()
+
+    if source.get("mode") in SITE_MODES:
+        theme["mode"] = source["mode"]
+
+    for key in ("heading_font", "body_font"):
+        if isinstance(source.get(key), str) and source[key] in SITE_FONTS:
+            theme[key] = source[key]
+
+    if isinstance(source.get("radius"), str) and source["radius"] in SITE_RADII:
+        theme["radius"] = source["radius"]
+
+    if isinstance(source.get("hero_image"), str) and _HERO.match(source["hero_image"]):
+        theme["hero_image"] = source["hero_image"]
+
+    return theme
+
+
+def _site_options() -> dict[str, Any]:
+    """SiteTheme::options."""
+    return {
+        "templates": SITE_TEMPLATES,
+        "modes": SITE_MODES,
+        "radii": SITE_RADII,
+        "fonts": [{"key": k, "name": v} for k, v in SITE_FONTS.items()],
+        "presets": SITE_PRESETS,
+        "fonts_url": "https://fonts.bunny.net/css?family="
+        + "|".join(f"{k}:600" for k in SITE_FONTS)
+        + "&display=swap",
+    }
+
+
+def _microsite_domain() -> str:
+    """SiteHost::domain: MICROSITE_DOMAIN; пусто — сайты по пути /s/…."""
+    import os
+
+    return (os.environ.get("MICROSITE_DOMAIN") or "").strip().lower()
+
+
+def _app_url() -> str:
+    import os
+
+    return os.environ.get("APP_URL", "http://localhost")
+
+
+def site_url(subdomain: str) -> str:
+    """SiteHost::url."""
+    from urllib.parse import urlsplit
+
+    domain = _microsite_domain()
+
+    if domain == "":
+        return _app_url().rstrip("/") + "/s/" + subdomain
+
+    app = urlsplit(_app_url())
+    port = f":{app.port}" if app.port else ""
+
+    return f"{app.scheme or 'https'}://{subdomain}.{domain}{port}"
+
+
+def _address_parts() -> dict[str, str]:
+    """SiteHost::addressParts."""
+    from urllib.parse import urlsplit
+
+    domain = _microsite_domain()
+
+    if domain != "":
+        return {"prefix": "", "suffix": "." + domain}
+
+    return {"prefix": (urlsplit(_app_url()).hostname or "") + "/s/", "suffix": ""}
+
+
+def suggest_subdomain(slug: str) -> str:
+    """SiteHost::suggest."""
+    sub = re.sub(r"[^a-z0-9-]+", "-", slug.lower()).strip("-")
+    sub = re.sub(r"-{2,}", "-", sub)[:40].strip("-")
+
+    return sub if len(sub) >= 3 else sub + "-site"
+
+
+def site_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+
+    if company is None:
+        return _redirect(ctx, "/cabinet/company")
+
+    return inertia.render(ctx, "cabinet/Site", site_props(ctx, company), _seo(ctx))
+
+
+def site_props(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
+    from savdex.web.directory import logo_url
+
+    cid = company["id"]
+    found = _rows("select * from company_sites where company_id = %s order by id limit 1", [cid])
+    site = found[0] if found else None
+    plan = company_plan(cid)
+    draft = site_theme(site["theme"]) if site else None
+    hero = (draft or {}).get("hero_image")
+
+    return {
+        "available": company["status"] != "blocked" and bool(plan.get("has_microsite")),
+        "address": _address_parts(),
+        "site": None
+        if site is None
+        else {
+            "subdomain": site["subdomain"],
+            "url": site_url(site["subdomain"]),
+            "status": site["status"],
+            "published_at": site["published_at"].strftime("%d.%m.%Y %H:%M")
+            if site["published_at"]
+            else None,
+            # Черновик отличается от того, что видят посетители
+            "unpublished_changes": site["status"] != "published"
+            or draft != site_theme(site["published_theme"]),
+        },
+        "subdomain": site["subdomain"] if site else suggest_subdomain(company["slug"]),
+        "theme": draft if draft is not None else site_theme(None),
+        "hero_url": (logo_url(ctx, hero) if isinstance(hero, str) else None) if site else None,
+        "options": _site_options(),
+        "products": [
+            {
+                "id": p["id"],
+                "title": p["title"],
+                "description": p["description"],
+                "price": float(p["price"]) if p["price"] is not None else None,
+                "currency": p["currency"],
+                "unit": p["unit"],
+                "image": logo_url(ctx, p["thumb_path"] or p["image_path"]),
+            }
+            for p in _rows(
+                "select * from company_site_products where company_id = %s order by sort, id desc",
+                [cid],
+            )
+        ],
+        "products_limit": SITE_PRODUCTS_LIMIT,
+        "listings_count": _count(
+            "select count(*) as n from listings where company_id = %s and status = 'active' "
+            "and deleted_at is null",
+            [cid],
+        ),
+        "currencies": list(CURRENCY_LABELS),
+    }
