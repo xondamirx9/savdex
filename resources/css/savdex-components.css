@@ -1718,7 +1718,14 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    primary-500 держит 5.2:1. Активный пункт остаётся белым. */
 .chrome-overlay .subnav-inner a:hover{color:var(--primary-500)}
 .chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
-.chrome-overlay .subnav-post{color:#fff}
+/* «Разместить объявление» на тёмной шапке — ванильный: заметный акцент,
+   не сливается с синими пунктами меню. !important — потому что базовое
+   правило .subnav-post держит синий через !important, и без этого
+   на тёмном фоне оставался синий текст с контрастом ниже нормы.
+   #F3E5AB на navy-900 — около 13:1. На белой шапке остаётся синий:
+   ваниль на белом не читается */
+.chrome-overlay .subnav-post{color:#F3E5AB!important}
+.chrome-overlay .subnav-post:hover{color:#FFF6D5!important}
 /* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
    важнее композиции */
 
