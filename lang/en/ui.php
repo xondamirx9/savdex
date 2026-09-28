@@ -540,6 +540,7 @@ return [
         'planned_lead' => 'We are onboarding companies from these countries right now. The country becomes active as soon as the first ones appear.',
         'planned_badge' => 'soon',
         'all_companies' => 'All companies in the country',
+        'pick_hint' => 'Choose a country to see its companies.',
         'show_more' => 'Show more',
         'load_failed' => 'Could not load companies. Please try again.',
     ],

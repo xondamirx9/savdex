@@ -539,6 +539,7 @@ return [
         'planned_lead' => '我们正在接入这些国家的公司。一旦有首批公司入驻，该国家就会变为可用。',
         'planned_badge' => '即将开放',
         'all_companies' => '该国全部公司',
+        'pick_hint' => '选择一个国家即可查看其企业。',
         'show_more' => '显示更多',
         'load_failed' => '无法加载公司，请重试。',
     ],
