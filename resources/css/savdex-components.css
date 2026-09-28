@@ -1761,10 +1761,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    primary-500 держит 5.2:1. Активный пункт остаётся белым. */
 .chrome-overlay .subnav-inner a:hover{color:var(--primary-500)}
 .chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
-/* На тёмной шапке «серый» — это приглушённый белый: тот же тон,
-   что у соседних разделов */
-.chrome-overlay .subnav .subnav-post{color:rgba(255,255,255,.85)}
-.chrome-overlay .subnav .subnav-post:hover{color:var(--primary-500)}
+/* На тёмной шапке первого экрана — ванильный: заметный акцент, который
+   не сливается с белыми пунктами меню. #F3E5AB на navy-900 — около 13:1.
+   На белой строке остаётся серым (правило выше): ваниль на белом не читается */
+.chrome-overlay .subnav .subnav-post{color:#F3E5AB}
+.chrome-overlay .subnav .subnav-post:hover{color:#FFF6D5}
 /* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
    важнее композиции */
 

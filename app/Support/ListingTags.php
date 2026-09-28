@@ -94,6 +94,12 @@ class ListingTags
 
         // Характеристики-размеры узнаваемы и различают похожие позиции
         foreach ($listing->attributes as $attribute) {
+            // Детали товара хранятся кодами («25 kg», «black») — в теги
+            // они попали бы непереведёнными
+            if (ProductSpecs::owns((string) $attribute->key)) {
+                continue;
+            }
+
             $value = trim((string) $attribute->value);
 
             if ($value !== '' && mb_strlen($value) <= 20 && preg_match('/\d/', $value) === 1) {
