@@ -90,6 +90,7 @@ urlpatterns = [
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings$", cabinet.settings_page, name="cabinet.settings"
     ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?notifications$", cabinet.notifications, name="notifications"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index, name="news"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show, name="news.show"),
     re_path(

@@ -414,3 +414,33 @@ def test_настройки(сайт):
 def test_настройки_без_компании(сайт):
     пользователь("nocompany6@savdex.uz")
     сверить(сайт, "/cabinet/settings", войти(сайт, "nocompany6@savdex.uz"))
+
+
+# ── Уведомления ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("query", ["", "?filter=unread", "?filter=other", "?filter="])
+def test_уведомления(сайт, query):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+
+    if not sql("select 1 from user_notifications where user_id = %s", [uid]):
+        for i in range(7):
+            sql(
+                "insert into user_notifications (user_id, type, tone, title, body, url, "
+                "is_broadcast, read_at, created_at, updated_at) values (%s, %s, 'primary', %s, "
+                "%s, %s, %s, %s, now() - make_interval(hours => %s), now())",
+                [
+                    uid,
+                    "broadcast" if i < 3 else "review",
+                    f"Уведомление {i}",
+                    "Текст" if i % 2 else None,
+                    "/cabinet/reviews" if i % 3 == 0 else None,
+                    i < 3,
+                    None if i % 2 else "2026-09-01 10:00:00",
+                    # Рассылка — в одну секунду: порядок решает id
+                    1 if i < 3 else i + 1,
+                ],
+            )
+
+    сверить(сайт, "/notifications" + query, куки)

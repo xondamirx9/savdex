@@ -1041,3 +1041,50 @@ def _pref(row: dict[str, Any] | None, key: str, default: bool) -> bool:
         return default
 
     return bool(row[key])
+
+
+# ── Уведомления /notifications (NotificationController::index) ──────
+
+
+def notifications(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "Notifications", notifications_props(ctx), _seo(ctx))
+
+
+def notifications_props(ctx: Context) -> dict[str, Any]:
+    assert ctx.user is not None
+    raw = laravel_input(ctx.query).get("filter")
+    only_unread = isinstance(raw, str) and text(raw) == "unread"
+    rows = _rows(
+        "select * from user_notifications where user_id = %s"
+        + (" and read_at is null" if only_unread else "")
+        + " order by created_at desc, id desc limit 100",
+        [ctx.user["id"]],
+    )
+
+    return {
+        "notifications": [
+            {
+                "id": n["id"],
+                "type": n["type"],
+                "tone": n["tone"],
+                "title": n["title"],
+                "body": n["body"],
+                "url": n["url"],
+                "is_broadcast": bool(n["is_broadcast"]),
+                "read": n["read_at"] is not None,
+                "ago": ago(n["created_at"], ctx.locale),
+                "date": n["created_at"].strftime("%d.%m.%Y, %H:%M"),
+            }
+            for n in rows
+        ],
+        "filter": "unread" if only_unread else "all",
+        "unread": _count(
+            "select count(*) as n from user_notifications where user_id = %s and read_at is null",
+            [ctx.user["id"]],
+        ),
+    }
