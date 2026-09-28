@@ -106,7 +106,7 @@ def context(request: HttpRequest, redirect: bool = True) -> Context | HttpRespon
         locale = url_locale
 
         if redirect and started is not None:
-            session.remember_locale(started[0], url_locale)
+            session.remember_locale(request, started[0], url_locale)
     else:
         stored = _stored(visitor)
         locale = stored or locales.DEFAULT

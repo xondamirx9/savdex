@@ -87,7 +87,7 @@ class ExportUiForPython extends Command
     {
         $groups = [];
 
-        foreach (['company', 'specs'] as $group) {
+        foreach (['company', 'specs', 'validation'] as $group) {
             $base = trans($group, locale: Locales::DEFAULT);
             $active = trans($group, locale: $locale);
 

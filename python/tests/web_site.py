@@ -46,11 +46,15 @@ django.setup()
 from django.test import Client
 
 path, cookies, headers = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
+method, body, content_type = sys.argv[4], sys.argv[5], sys.argv[6]
 client = Client()
 for name, value in cookies.items():
     client.cookies[name] = value
 extra = {"HTTP_" + k.upper().replace("-", "_"): v for k, v in headers.items()}
-r = client.get(path, **extra)
+if method == "GET":
+    r = client.get(path, **extra)
+else:
+    r = client.generic(method, path, body.encode(), content_type, **extra)
 print(json.dumps({
     "status": r.status_code,
     "headers": {k.lower(): v for k, v in r.items()},
@@ -195,8 +199,23 @@ def из_laravel(
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
+    method: str = "GET",
+    body: str = "",
+    content_type: str = "",
 ) -> dict[str, Any]:
-    r = httpx.get(root + path, cookies=cookies or {}, headers=headers or {}, timeout=30)
+    headers = dict(headers or {})
+
+    if content_type:
+        headers["Content-Type"] = content_type
+
+    r = httpx.request(
+        method,
+        root + path,
+        cookies=cookies or {},
+        headers=headers,
+        content=body.encode() if method != "GET" else None,
+        timeout=30,
+    )
 
     return {
         "status": r.status_code,
@@ -226,6 +245,9 @@ def из_django(
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
+    method: str = "GET",
+    body: str = "",
+    content_type: str = "",
 ) -> dict[str, Any]:
     host = root.removeprefix("http://")
     вывод = subprocess.run(
@@ -236,6 +258,9 @@ def из_django(
             path,
             json.dumps(cookies or {}),
             json.dumps({"Host": host, **(headers or {})}),
+            method,
+            body,
+            content_type or "application/octet-stream",
         ],
         cwd=PYTHON,
         env={

@@ -170,6 +170,8 @@ class Store:
     full_url: str = ""
     #: Корень сайта: https — кука с флагом secure
     root: str = ""
+    #: Форма отклонена по токену CSRF (419) — без куки XSRF-TOKEN
+    csrf_refused: bool = False
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
         return arr_get(self.data, key, default)
@@ -334,29 +336,57 @@ def _authenticate(
     return laravel_session.Visitor(session_id=store.id, session=store.data)
 
 
-def remember_locale(store: Store, locale: str) -> None:
+def remember_locale(request: HttpRequest, store: Store, locale: str) -> None:
     """
     SetLocale: язык из префикса — в сессию и в профиль. Сравнение
     обязательно, как у Laravel: иначе каждая страница писала бы UPDATE.
     """
     store.put("locale", locale)
 
-    if store.user_id is None:
-        return
+    if store.user_id is not None:
+        save_user_locale(request, store.user_id, locale)
+
+
+def save_user_locale(request: HttpRequest, user_id: int, locale: str) -> None:
+    """
+    $user->update(['locale' => …]): запись, только если язык сменился.
+    Правка администратора — строка журнала, как AuditObserver (раздел users).
+    """
+    from savdex import access, audit
 
     with connection.cursor() as cursor:
-        cursor.execute("select locale from users where id = %s", [store.user_id])
+        cursor.execute(
+            "select locale, name, email, is_admin, admin_role, status from users where id = %s",
+            [user_id],
+        )
         row = cursor.fetchone()
 
     if row is None or row[0] == locale:
         return
 
+    before, name, email, is_admin, role, status = row
     stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
     with allowed_writes("users"), connection.cursor() as cursor:
         cursor.execute(
             "update users set locale = %s, updated_at = %s where id = %s",
-            [locale, stamp, store.user_id],
+            [locale, stamp, user_id],
+        )
+
+    if is_admin:
+        admin = access.Admin(
+            id=user_id, name=name, email=email, is_admin=True, role=role, status=status
+        )
+        audit.record(
+            connection,
+            action="updated",
+            section="users",
+            actor=admin,
+            subject_type="App\\Models\\User",
+            subject_id=user_id,
+            subject_label=audit.label({"name": name, "email": email}, "User", user_id),
+            changes={"before": {"locale": before}, "after": {"locale": locale}},
+            ip=client_ip(request),
         )
 
 
@@ -485,10 +515,12 @@ def finish(request: HttpRequest, response: HttpResponse) -> HttpResponse:
         http_only=_env_bool("SESSION_HTTP_ONLY", True) is not False,
         session_cookie=True,
     )
-    # PreventRequestForgery: XSRF-TOKEN — на каждый ответ, читается скриптом
-    _set_cookie(
-        response, store, "XSRF-TOKEN", store.token, key, http_only=False, session_cookie=False
-    )
+    # PreventRequestForgery: XSRF-TOKEN — на каждый ответ, читается скриптом;
+    # отказ по токену (419) куку не получает — её ставит сам посредник
+    if not store.csrf_refused:
+        _set_cookie(
+            response, store, "XSRF-TOKEN", store.token, key, http_only=False, session_cookie=False
+        )
 
     store.age_flash()
 
