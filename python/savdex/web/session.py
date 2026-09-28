@@ -177,6 +177,9 @@ class Store:
     def put(self, key: str, value: Any) -> None:  # noqa: ANN401
         arr_set(self.data, key, value)
 
+    def forget(self, key: str) -> None:
+        arr_forget(self.data, [key])
+
     @property
     def token(self) -> str:
         return str(self.data.get("_token", ""))

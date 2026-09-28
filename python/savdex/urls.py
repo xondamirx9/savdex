@@ -17,6 +17,7 @@ from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
+    auth,
     cabinet,
     catalog,
     companies,
@@ -79,6 +80,27 @@ urlpatterns = [
         name="countries.companies",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect, name="tenders"),
+    # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",
+        auth.forgot_password,
+        name="password.request",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?reset-password/(?P<token>[^/]+)$",
+        auth.reset_password,
+        name="password.reset",
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?verify-email$", auth.verify_email, name="verification.notice"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?password/change$", auth.force_password, name="password.forced"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?onboarding/company$",
+        auth.onboarding_company,
+        name="onboarding.company",
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews/new$", auth.review_new, name="reviews.create"),
     # Кабинет (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet$", cabinet.dashboard, name="cabinet"),
     re_path(

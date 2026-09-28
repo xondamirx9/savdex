@@ -117,8 +117,17 @@ def _authenticate(ctx: Context) -> HttpResponse | None:
 
 
 def _require_password_change(ctx: Context) -> HttpResponse | None:
-    """RequirePasswordChange: выданный вручную пароль — сначала сменить."""
+    """
+    RequirePasswordChange: выданный вручную пароль — сначала сменить.
+    Кроме самой смены пароля и подтверждения почты (ALLOWED посредника).
+    """
     if ctx.user is None or not ctx.user["must_change_password"]:
+        return None
+
+    match = ctx.request.resolver_match
+    name = (match.url_name if match is not None else None) or ""
+
+    if name == "password.forced" or name.startswith("verification."):
         return None
 
     store = _store(ctx)
