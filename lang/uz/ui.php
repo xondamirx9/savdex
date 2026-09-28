@@ -316,7 +316,7 @@ return [
         'search_button' => 'Topish',
         'tab_products' => 'Mahsulotlar',
         'tab_companies' => 'Kompaniyalar',
-        'tab_rfq' => 'So‘rovlar (RFQ)',
+        'tab_rfq' => 'So‘rovlar',
         'select_category' => 'Toifani tanlang',
         'select_country' => 'Davlatni tanlang',
         'select_city' => 'Barcha shaharlar',

@@ -312,7 +312,7 @@ return [
         'search_button' => '搜索',
         'tab_products' => '产品',
         'tab_companies' => '企业',
-        'tab_rfq' => '询价 (RFQ)',
+        'tab_rfq' => '询价',
         'select_category' => '选择类目',
         'select_country' => '选择国家',
         'select_city' => '全部城市',
