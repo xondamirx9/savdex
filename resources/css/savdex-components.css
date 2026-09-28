@@ -1158,6 +1158,18 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 [data-reveal-stagger].is-visible>*:nth-child(5){transition-delay:280ms}
 [data-reveal-stagger].is-visible>*:nth-child(6){transition-delay:350ms}
 
+/* Появление увеличением — для сеток одинаковых карточек.
+   Карточки там стоят плотно, и сдвиг вверх у соседей сливается
+   в общее дрожание; рост из чуть уменьшенной читается по каждой
+   карточке отдельно.
+
+   Правило идёт после базового и с тем же весом: вариант со значением
+   в атрибуте перебивает его порядком, а задержки каскада достаются
+   от селектора без значения — переписывать их не нужно. */
+[data-reveal-stagger='scale']>*{opacity:0;transform:scale(.92);
+  transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .55s cubic-bezier(.16,1,.3,1)}
+[data-reveal-stagger='scale'].is-visible>*{opacity:1;transform:none}
+
 /* Подъём карточки. transform вместо изменения размеров —
    он не вызывает пересчёт раскладки и идёт на видеокарте */
 .lift{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s cubic-bezier(.16,1,.3,1),
