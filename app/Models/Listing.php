@@ -275,7 +275,8 @@ class Listing extends Model
 
     public function activePromotions(): HasMany
     {
-        return $this->promotions()->where('status', 'active');
+        // По id: значки нескольких продвижений шли в плавающем порядке
+        return $this->promotions()->where('status', 'active')->orderBy('id');
     }
 
     protected static function booted(): void

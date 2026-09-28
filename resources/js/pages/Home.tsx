@@ -637,7 +637,7 @@ export default function Home({
                         <div className="section-bar">
                             <h2>{faq.heading}</h2>
                         </div>
-                        <div className="objection-grid" data-reveal-stagger>
+                        <div className="objection-grid" data-reveal-stagger="scale">
                             {(faq.items ?? []).map((item, i) => {
                                 const Icon = FAQ_ICONS[i % FAQ_ICONS.length];
 

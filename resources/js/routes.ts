@@ -38,6 +38,7 @@ export const routes = {
     pricing: '/pricing',
     countries: '/countries',
     partners: '/partners',
+    partnersTier: (tier: 'general' | 'regular' | 'multi') => `/partners/${tier}`,
     reviews: '/reviews',
     reviewsNew: '/reviews/new',
     contacts: '/contact',

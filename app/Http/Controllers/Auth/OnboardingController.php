@@ -40,11 +40,11 @@ class OnboardingController extends Controller
             // Порядок внутри страны — по значимости города (sort):
             // в списке из трёх десятков российских городов Москва
             // должна стоять первой, а не там, куда её положил id
-            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->get()
+            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->orderBy('id')->get()
                 ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name(), 'country_id' => $c->country_id]),
 
             'categories' => Category::query()->whereNull('parent_id')->where('is_active', true)
-                ->with('translations')->orderBy('sort')->get()
+                ->with('translations')->orderBy('sort')->orderBy('id')->get()
                 ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name' => $c->name()]),
 
             'types' => Company::typeOptions(),
@@ -63,7 +63,7 @@ class OnboardingController extends Controller
                 ->where('parent_id', Category::query()->where('slug', 'uslugi')->value('id'))
                 ->where('is_active', true)
                 ->with('translations')
-                ->orderBy('sort')
+                ->orderBy('sort')->orderBy('id')
                 ->get()
                 ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name' => $c->name()]),
         ]);

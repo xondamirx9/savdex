@@ -116,7 +116,22 @@ APPEND_ONLY_SHARED: frozenset[str] = frozenset({"admin_actions"})
 SHARED_WRITES: dict[str, str] = {
     "users": (
         "выдача прав администратора (команда admin, неделя 5): у модели "
-        "User нет событий, PHP-команда пишет те же поля простым save()"
+        "User нет событий, PHP-команда пишет те же поля простым save(); "
+        "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
+        "только locale и updated_at, когда язык сменился; то же — форма смены "
+        "языка /locale/<язык> (LocaleController); правка администратора — "
+        "строка журнала, как AuditObserver"
+    ),
+    "message_threads": (
+        "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
+        "MessageThread::markReadFor, — только время прочтения своей стороны "
+        "и updated_at; событий у модели нет"
+    ),
+    "sessions": (
+        "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
+        "StartSession и DatabaseSessionHandler, — продлевает, стирает "
+        "одноразовые сообщения, заводит сессию гостю, запоминает адрес и "
+        "язык; вход по «запомнить меня» переносит сессию на новый номер"
     ),
     "tenders": (
         "счётчик просмотров закупки (этап 4): страница /tenders/<адрес> на "
@@ -124,11 +139,19 @@ SHARED_WRITES: dict[str, str] = {
         "update views_count = views_count + 1 и updated_at; событий сохранения "
         "(перевод, search_text) increment не вызывает, строку журнала для "
         "администратора пишет savdex/audit.py"
+        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
+        "описания, search_text и updated_at, как TranslateTender (save с событием "
+        "saving)"
+        "; раздел «Закупки» админки Django (этап 5, savdex/tenders): закупка "
+        "целиком — правка и загрузка файлом, с событиями модели Tender "
+        "(search_text, адрес), столбцы перевода и просмотров не трогает"
     ),
     "resumes": (
         "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "
         "$resume->increment('views_count'), не владельцу; событий сохранения "
         "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
+        "; машинный перевод (этап 5, manage.py translate) — переводы должности, "
+        "«о себе» и мест работы и updated_at, как TranslateResume (saveQuietly)"
     ),
     "it_tasks": (
         "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
@@ -144,11 +167,17 @@ SHARED_WRITES: dict[str, str] = {
         "показы и просмотры объявлений (этап 4): каталог и страница объявления "
         "на Django, как StatsRecorder::impressions и ::view, — только +1 к "
         "impressions_count или views_count и updated_at, без событий сохранения; "
-        "просмотр администратора — строка журнала, как AuditObserver"
+        "просмотр администратора — строка журнала, как AuditObserver; "
+        "избранное (этап 5) — ±1 к favorites_count, как StatsRecorder::favorite "
+        "и decrement в FavoriteController"
+        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
+        "описания, search_text и updated_at, как TranslateListing (save с "
+        "событием saving)"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
-        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily"
+        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily (показы, "
+        "просмотры, с этапа 5 — избранное)"
     ),
     "search_hits": (
         "«по каким запросам вас находили» (этап 4): insert … on conflict do "
@@ -159,6 +188,21 @@ SHARED_WRITES: dict[str, str] = {
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
         "— только insert … on conflict do nothing; переводит задача Laravel "
         "translations:fill"
+        "; машинный перевод (этап 5, manage.py translate) — перевод и число "
+        "попыток, как translations:fill"
+    ),
+    "user_notifications": (
+        "прочтение уведомлений (этап 5, форма): одно или все свои — только "
+        "read_at и updated_at, как UserNotification::markRead и update() у "
+        "Laravel; событий у модели нет"
+    ),
+    "favorites": (
+        "избранное (этап 5, форма): insert … on conflict do nothing и delete "
+        "своей строки, как FavoriteController::toggle; событий у модели нет"
+    ),
+    "notification_preferences": (
+        "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
+        "строка или email/telegram/updated_at своей; событий у модели нет"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "

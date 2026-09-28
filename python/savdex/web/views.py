@@ -185,11 +185,24 @@ def doc(request: HttpRequest, key: str) -> HttpResponse:
 # ── Ошибки ──────────────────────────────────────────────────────────
 
 
-def error(ctx: Context, status: int, bare: bool = False) -> HttpResponse:
+def error(ctx: Context, status: int, bare: bool = False, message: str = "") -> HttpResponse:
     """
     Страница ошибки в оформлении сайта — как обработчик исключений в
     bootstrap/app.php: Error с языком, словарём и ссылками языков.
+    У ошибки сервера — код обращения, и она пишется в журнал.
     """
+    reference = None
+
+    if status >= 500:
+        import hashlib
+        import logging
+        import time
+
+        reference = hashlib.md5(f"{message}{int(time.time())}".encode()).hexdigest()[:8]
+        logging.getLogger("savdex").error(
+            "Код обращения %s: %s (%s)", reference, message, ctx.request.build_absolute_uri()
+        )
+
     seo = _seo(ctx)
     title = (
         ui.t("errors.not_found", ctx.locale)
@@ -199,7 +212,7 @@ def error(ctx: Context, status: int, bare: bool = False) -> HttpResponse:
     seo.title(title).bare()
     props = {
         "status": status,
-        "reference": None,
+        "reference": reference,
         "locale": ctx.locale,
         "translations": ui.translations(ctx.locale),
         "localeLinks": [

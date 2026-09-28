@@ -47,7 +47,9 @@ class ContactController extends Controller
                         ->orWhere('note', 'like', "%{$q}%");
                 });
             })
+            // Хвост по id: раскрытия одной секунды шли в плавающем порядке
             ->latest()
+            ->latest('id')
             ->get()
             ->map(fn (ContactUnlock $u): array => [
                 'id' => $u->id,

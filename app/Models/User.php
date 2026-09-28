@@ -116,7 +116,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
      */
     public function alerts(): HasMany
     {
-        return $this->hasMany(UserNotification::class)->latest();
+        // Хвост по id: рассылка создаёт уведомления в одну секунду
+        return $this->hasMany(UserNotification::class)->latest()->latest('id');
     }
 
     public function isOwner(): bool

@@ -100,6 +100,10 @@ Route::get('/countries/{code}/companies', [PageController::class, 'countryCompan
     ->middleware('throttle:60,1')
     ->name('countries.companies');
 Route::get('/partners', [PageController::class, 'partners'])->name('partners');
+// Отдельная страница каждого вида партнёров; адрес — из Company::PARTNER_SLUGS
+Route::get('/partners/{tier}', [PageController::class, 'partnersTier'])
+    ->whereIn('tier', ['general', 'regular', 'multi'])
+    ->name('partners.tier');
 Route::get('/contact', [PageController::class, 'contacts'])->name('contacts');
 
 /*

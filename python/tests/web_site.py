@@ -46,14 +46,22 @@ django.setup()
 from django.test import Client
 
 path, cookies, headers = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
+method, body, content_type = sys.argv[4], sys.argv[5], sys.argv[6]
 client = Client()
 for name, value in cookies.items():
     client.cookies[name] = value
 extra = {"HTTP_" + k.upper().replace("-", "_"): v for k, v in headers.items()}
-r = client.get(path, **extra)
+if method == "GET":
+    r = client.get(path, **extra)
+else:
+    r = client.generic(method, path, body.encode(), content_type, **extra)
 print(json.dumps({
     "status": r.status_code,
     "headers": {k.lower(): v for k, v in r.items()},
+    "cookies": {
+        k: {"value": m.value, **{a: m[a] for a in m.keys() if m[a] not in ("", None)}}
+        for k, m in r.cookies.items()
+    },
     "body": r.content.decode(),
 }))
 """
@@ -191,10 +199,44 @@ def из_laravel(
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
+    method: str = "GET",
+    body: str = "",
+    content_type: str = "",
 ) -> dict[str, Any]:
-    r = httpx.get(root + path, cookies=cookies or {}, headers=headers or {}, timeout=30)
+    headers = dict(headers or {})
 
-    return {"status": r.status_code, "headers": dict(r.headers), "body": r.text}
+    if content_type:
+        headers["Content-Type"] = content_type
+
+    r = httpx.request(
+        method,
+        root + path,
+        cookies=cookies or {},
+        headers=headers,
+        content=body.encode() if method != "GET" else None,
+        timeout=30,
+    )
+
+    return {
+        "status": r.status_code,
+        "headers": dict(r.headers),
+        "cookies": dict(_куки_ответа(r.headers.get_list("set-cookie"))),
+        "body": r.text,
+    }
+
+
+def _куки_ответа(заголовки: list[str]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Set-Cookie от Laravel — в том же виде, что куки ответа Django."""
+    for заголовок in заголовки:
+        первая, *атрибуты = [часть.strip() for часть in заголовок.split(";")]
+        имя, _, значение = первая.partition("=")
+        разобранные: dict[str, Any] = {"value": значение}
+
+        for атрибут in атрибуты:
+            ключ, есть, знач = атрибут.partition("=")
+            разобранные[ключ.lower()] = знач if есть else True
+
+        yield имя, разобранные
 
 
 def из_django(
@@ -203,6 +245,9 @@ def из_django(
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
+    method: str = "GET",
+    body: str = "",
+    content_type: str = "",
 ) -> dict[str, Any]:
     host = root.removeprefix("http://")
     вывод = subprocess.run(
@@ -213,6 +258,9 @@ def из_django(
             path,
             json.dumps(cookies or {}),
             json.dumps({"Host": host, **(headers or {})}),
+            method,
+            body,
+            content_type or "application/octet-stream",
         ],
         cwd=PYTHON,
         env={
@@ -287,6 +335,23 @@ def разница(д: Any, л: Any, путь: str = "") -> list[str]:
     return [] if д == л else [f"{путь}: {д!r:.200} | {л!r:.200}"]
 
 
+#: Данные, которые есть только у Django: с 28.09 Laravel не дополняется
+#: (docs/migration-to-python.md), и новые возможности появляются только в
+#: Python. Сверка с Laravel их не видит — их проверяют свои тесты
+ТОЛЬКО_DJANGO = frozenset({"government"})
+
+
+def без_новых(value: Any) -> Any:
+    """Страница Django без ключей ТОЛЬКО_DJANGO — для сверки с Laravel."""
+    if isinstance(value, dict):
+        return {k: без_новых(v) for k, v in value.items() if k not in ТОЛЬКО_DJANGO}
+
+    if isinstance(value, list):
+        return [без_новых(v) for v in value]
+
+    return value
+
+
 def сверить(
     сайт: str,
     path: str,
@@ -294,22 +359,30 @@ def сверить(
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
     перед: Callable[[], object] | None = None,
+    после: Callable[[dict[str, Any]], object] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Django, затем Laravel; статус, страница и шапка должны совпасть.
 
     перед — вызывается перед каждой из сторон: страницы, которые пишут
-    (счётчик просмотров), иначе видели бы запись друг друга.
+    (счётчик просмотров), иначе видели бы запись друг друга; после —
+    сразу после ответа каждой стороны (снять то, что она записала).
     """
     if перед is not None:
         перед()
 
     д = из_django(сайт, path, cookies, headers, env)
 
+    if после is not None:
+        после(д)
+
     if перед is not None:
         перед()
 
     л = из_laravel(сайт, path, cookies, headers)
+
+    if после is not None:
+        после(л)
 
     assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
 
@@ -320,6 +393,10 @@ def сверить(
         return д, л
 
     стр_д, стр_л = страница(д["body"]), страница(л["body"])
+    # Словарь интерфейса у сторон общий (lang/*/ui.php) — его не трогаем
+    стр_д["props"] = {
+        k: v if k == "translations" else без_новых(v) for k, v in стр_д["props"].items()
+    }
 
     for key in ("component", "url", "version", "sharedProps"):
         assert стр_д.get(key) == стр_л.get(key), key

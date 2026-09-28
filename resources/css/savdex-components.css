@@ -332,8 +332,6 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
   border-bottom:1px solid var(--border)}
 .mobile-menu a:not(.btn)[aria-current="page"]{color:var(--primary-700);font-weight:600}
 .mobile-menu a:hover{text-decoration:none}
-.mobile-submenu{display:flex;flex-direction:column;padding:0 0 8px 14px;border-left:2px solid var(--border);margin-left:2px}
-.mobile-menu .mobile-submenu a:not(.btn){padding:10px 0;font-size:15px;color:var(--text-muted);border-bottom:0}
 .mobile-group{border-bottom:1px solid var(--border)}
 .mobile-group-btn{display:flex;align-items:center;justify-content:space-between;width:100%;
   padding:15px 0;font-size:17px;font-weight:500;color:var(--text);min-height:52px}
@@ -1160,6 +1158,18 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 [data-reveal-stagger].is-visible>*:nth-child(5){transition-delay:280ms}
 [data-reveal-stagger].is-visible>*:nth-child(6){transition-delay:350ms}
 
+/* Появление увеличением — для сеток одинаковых карточек.
+   Карточки там стоят плотно, и сдвиг вверх у соседей сливается
+   в общее дрожание; рост из чуть уменьшенной читается по каждой
+   карточке отдельно.
+
+   Правило идёт после базового и с тем же весом: вариант со значением
+   в атрибуте перебивает его порядком, а задержки каскада достаются
+   от селектора без значения — переписывать их не нужно. */
+[data-reveal-stagger='scale']>*{opacity:0;transform:scale(.92);
+  transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .55s cubic-bezier(.16,1,.3,1)}
+[data-reveal-stagger='scale'].is-visible>*{opacity:1;transform:none}
+
 /* Подъём карточки. transform вместо изменения размеров —
    он не вызывает пересчёт раскладки и идёт на видеокарте */
 .lift{transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s cubic-bezier(.16,1,.3,1),
@@ -1679,28 +1689,30 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   color:var(--text);white-space:nowrap;transition:background var(--t-fast),color var(--t-fast)}
 .subnav a:hover{background:transparent;color:var(--primary-600);text-decoration:none}
 .subnav a[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
-/* Подменю «Доп. услуги»: пункт + стрелка, список — fixed поверх
-   страницы (лента прокручивается и обрезала бы обычный блок) */
-.subnav-drop{display:inline-flex;align-items:center;flex-shrink:0}
-.subnav .subnav-drop>a{padding-right:4px}
-.subnav-drop-toggle{display:grid;place-items:center;width:22px;height:30px;padding:0;border:0;background:none;
-  color:inherit;opacity:.7;cursor:pointer;border-radius:6px}
-.subnav-drop-toggle svg{width:15px;height:15px;transition:transform var(--t-mid)}
-.subnav-drop.is-open .subnav-drop-toggle svg{transform:rotate(180deg)}
-.subnav-drop-toggle:hover{opacity:1}
-.subnav .subnav-menu{position:fixed;z-index:60;min-width:250px;margin-top:2px;padding:6px;
-  background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--sh-raise);
-  display:flex;flex-direction:column}
-.subnav .subnav-menu a,.chrome-overlay .subnav .subnav-menu a{display:flex;align-items:center;gap:10px;
-  padding:9px 12px;border-radius:8px;font-size:14.5px;font-weight:500;color:var(--text);white-space:nowrap;background:none}
-.subnav .subnav-menu a svg{width:18px;height:18px;color:var(--primary-700);flex-shrink:0}
-.subnav .subnav-menu a:hover,.chrome-overlay .subnav .subnav-menu a:hover{background:var(--primary-50);color:var(--primary-700)}
-.subnav .subnav-menu a[aria-current="page"],.chrome-overlay .subnav .subnav-menu a[aria-current="page"]{
-  background:var(--primary-50);color:var(--primary-700);font-weight:600}
-.subnav .subnav-menu a.subnav-menu-all{margin-top:4px;border-top:1px solid var(--border);border-radius:0 0 8px 8px;
-  padding-top:11px;color:var(--primary-700)}
-.subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
-  color:var(--primary-700)!important;font-weight:600!important}
+/* Серый, а не синий: в строке разделов это такая же ссылка, как
+   остальные, и синим она перетягивала внимание с самих разделов.
+
+   Без !important. С ним правило перебивало и оформление для тёмной
+   шапки: над первым экраном ссылка оставалась синей на тёмно-синем
+   фоне — 3.4:1, ниже нормы для текста. */
+/* «Партнёры»: всплывающий столбик подразделов (NavDropdown).
+   Лежит в body — поверх шапки и первого экрана */
+.subnav-dd{display:inline-flex}
+.subnav-dd-menu{position:fixed;z-index:80;min-width:250px;display:flex;flex-direction:column;gap:2px;
+  padding:8px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--sh-hover)}
+.subnav-dd-menu a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  font-size:14.5px;font-weight:500;color:var(--text);white-space:nowrap}
+.subnav-dd-menu a:hover,.subnav-dd-menu a:focus-visible{background:var(--primary-50);color:var(--primary-700);text-decoration:none}
+.subnav-dd-menu .stat-ico{width:30px;height:30px;border-radius:8px}
+.mobile-menu .mobile-sublink{padding-left:32px;font-size:.95em;color:var(--text-muted)}
+.subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-weight:600}
+/* Цвет задаётся с весом самого правила, а не !important: рядом стоит
+   .subnav a, оно весит больше одного класса и перебивало бы. Прежний
+   !important перебивал заодно и оформление тёмной шапки — над первым
+   экраном ссылка оставалась синей на тёмно-синем, 3.4:1, ниже нормы
+   для текста. */
+.subnav .subnav-post{color:var(--text-muted)}
+.subnav .subnav-post:hover{color:var(--primary-600)}
 .subnav-post svg{width:19px;height:19px}
 
 /* Поиск на телефоне: отдельная строка под шапкой */
@@ -1759,7 +1771,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    primary-500 держит 5.2:1. Активный пункт остаётся белым. */
 .chrome-overlay .subnav-inner a:hover{color:var(--primary-500)}
 .chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
-.chrome-overlay .subnav-post{color:#fff}
+/* На тёмной шапке первого экрана — ванильный: заметный акцент, который
+   не сливается с белыми пунктами меню. #F3E5AB на navy-900 — около 13:1.
+   На белой строке остаётся серым (правило выше): ваниль на белом не читается */
+.chrome-overlay .subnav .subnav-post{color:#F3E5AB}
+.chrome-overlay .subnav .subnav-post:hover{color:#FFF6D5}
 /* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
    важнее композиции */
 
@@ -1962,6 +1978,38 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);min-width:0}
 .product-company b{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .product-company svg{flex-shrink:0}
+
+/* Строки-факты: партия, город, проверка, скорость ответа, компания.
+   Столбик со значками вместо разрозненных подписей по углам — глаз
+   идёт по одной колонке, а карточки в ряду сверяются построчно.
+
+   Значок не сжимается и не переносится: строка с длинным городом
+   иначе роняет его на вторую строчку, и столбик расползается. */
+.product-facts{display:flex;flex-direction:column;gap:5px;margin:0 0 12px;padding:0;list-style:none;
+  font-size:12px;color:var(--text-muted);min-width:0}
+.product-facts li{display:flex;align-items:center;gap:7px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.product-facts svg{flex-shrink:0;color:var(--text-soft,var(--text-muted))}
+/* Проверенный продавец — единственная строка цветом: это довод,
+   а не характеристика товара */
+.product-facts li.is-verified{color:var(--success)}
+.product-facts li.is-verified svg{color:var(--success)}
+/* Компания отделена чертой: выше — о товаре, ниже — о продавце */
+.product-facts-company{padding-top:8px;margin-top:3px;border-top:1px solid var(--border)}
+.product-facts-company b{font-weight:600;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Кнопка внизу карточки. Оформление, а не ссылка: вся карточка ведёт
+   в объявление, и вторая ссылка удвоила бы обход с клавиатуры
+   и список ссылок у скринридера.
+
+   margin-top:auto прижимает её к низу: в ряду из четырёх карточек
+   с названиями разной длины кнопки иначе встают лесенкой. */
+.product-cta{display:block;margin-top:auto;padding:9px 12px;border-radius:var(--r-btn);
+  background:var(--primary-700);color:#fff;font-size:13px;font-weight:600;text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background var(--t-fast)}
+.product-card:hover .product-cta{background:var(--primary-800,var(--navy-900))}
 /* «Twemoji Country Flags» первым: Windows не рисует флаги-эмодзи,
    и полифилл (app.tsx) подключает этот шрифт только там, где нужно */
 .flag{display:inline-block;line-height:1;font-family:var(--font-flags)}
@@ -2037,6 +2085,9 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
 .country-name{font-size:15px;font-weight:600;color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .country-count{font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.country-card.is-active{border-color:var(--primary-700);box-shadow:0 0 0 1px var(--primary-700);background:var(--primary-50)}
+.country-pick-hint{margin-top:28px;text-align:center}
+#country-companies{scroll-margin-top:120px}
 .country-section{margin-top:48px;scroll-margin-top:120px}
 .country-section-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;margin:0}
 .country-section-title .country-count{font-size:14px;font-weight:500}
@@ -2242,6 +2293,19 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
 .partners-stats>*{min-width:0}
 .partner-stat{display:flex;align-items:center;gap:14px;padding:var(--sp-4,16px);
   background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
+/* Виды партнёрства: ячейка-ссылка выше обычной — в ней ещё
+   описание, кто это такие, и приглашение перейти */
+.partner-tier{flex-direction:column;align-items:stretch;gap:12px;padding:22px 22px 18px;
+  color:inherit;transition:box-shadow var(--t-fast),border-color var(--t-fast),transform var(--t-fast)}
+.partner-tier:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500);text-decoration:none;transform:translateY(-2px)}
+.partner-tier-head{display:flex;align-items:center;gap:14px}
+.partner-tier-title{display:block;font-weight:700;font-size:16px;color:var(--text);margin-top:2px}
+.partner-tier-text{font-size:14px;line-height:1.55;color:var(--text-muted);flex:1}
+.partner-tier-go{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--primary-700)}
+.partner-tier-mini{color:inherit}
+.partner-tier-mini:hover{border-color:var(--primary-500);text-decoration:none}
+.partner-tier-hero{display:flex;gap:18px;align-items:flex-start;padding:8px 0 0;margin-bottom:28px}
+.partner-tier-hero .stat-ico{width:56px;height:56px;flex-shrink:0;margin-top:26px}
 @media (max-width:640px){.partners-stats{grid-template-columns:1fr}}
 
 .objection-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-6,24px)}

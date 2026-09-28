@@ -1,5 +1,5 @@
 import { ArrowRight, ChevronDown, Globe2, Star } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { Button } from '@/components/ui/Button';
 import { Link } from '@/components/ui/Link';
@@ -29,17 +29,54 @@ interface CountryRow {
     items: CompanyRow[];
 }
 
+/** Страна из адреса (?country=tr) — на выбранную страну можно дать ссылку. */
+function countryFromUrl(countries: CountryRow[]): string | null {
+    if (typeof window === 'undefined') return null;
+
+    const code = new URLSearchParams(window.location.search).get('country')
+        ?? window.location.hash.replace(/^#country-/, '');
+
+    return countries.some((c) => c.code === code) ? code : null;
+}
+
 /**
  * Страны-участники площадки.
  *
- * Сверху — плашки стран для быстрого перехода, ниже под каждой
- * страной её компании: первые сразу, все остальные — одним
- * нажатием «Показать ещё».
+ * Сначала — только плашки стран со счётчиками компаний: список всех
+ * компаний всех стран подряд был длинной лентой, в которой нужную
+ * страну приходилось искать прокруткой. Нажатие на страну открывает
+ * под плашками её компании (первые сразу, остальные — «Показать ещё»),
+ * повторное нажатие закрывает. Выбранная страна — в адресе.
  *
  * В шапке сайта страницы нет: сюда ведут счётчик «стран региона»
  * на главной и ссылка в подвале.
  */
 export default function Countries({ countries, planned }: { countries: CountryRow[]; planned: CountryRow[] }) {
+    const [selected, setSelected] = useState<string | null>(null);
+    const sectionRef = useRef<HTMLDivElement>(null);
+    const chosen = countries.find((c) => c.code === selected) ?? null;
+
+    // Из адреса — после загрузки: на сервере адреса страницы нет
+    useEffect(() => setSelected(countryFromUrl(countries)), [countries]);
+
+    function choose(code: string) {
+        const next = selected === code ? null : code;
+        setSelected(next);
+
+        const url = new URL(window.location.href);
+        url.hash = '';
+        if (next) url.searchParams.set('country', next);
+        else url.searchParams.delete('country');
+        window.history.replaceState(window.history.state, '', url);
+
+        // Компании появляются под плашками — подводим к ним взгляд
+        if (next) {
+            requestAnimationFrame(() =>
+                sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+            );
+        }
+    }
+
     return (
         <PublicLayout title={t('countries.meta_title')} description={t('countries.meta_description')}>
             <div className="container" style={{ paddingBlock: '32px 96px' }}>
@@ -58,11 +95,20 @@ export default function Countries({ countries, planned }: { countries: CountryRo
                     </div>
                 ) : (
                     <>
-                        {/* Быстрый переход к стране: плашки со счётчиками,
-                            как на главной, ведут к её разделу ниже */}
+                        {/* Плашки стран: нажатие открывает компании страны ниже */}
                         <div className="country-grid" data-reveal-stagger>
                             {countries.map((c) => (
-                                <a key={c.code} href={`#country-${c.code}`} className="country-card">
+                                <a
+                                    key={c.code}
+                                    href={`?country=${c.code}`}
+                                    className={c.code === selected ? 'country-card is-active' : 'country-card'}
+                                    aria-pressed={c.code === selected}
+                                    aria-controls="country-companies"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        choose(c.code);
+                                    }}
+                                >
                                     <span className="country-flag" aria-hidden>
                                         {flag(c.code) || <Globe2 className="size-8" />}
                                     </span>
@@ -78,10 +124,15 @@ export default function Countries({ countries, planned }: { countries: CountryRo
                             ))}
                         </div>
 
-                        {/* Под каждой страной — её компании */}
-                        {countries.map((c) => (
-                            <CountrySection key={c.code} country={c} />
-                        ))}
+                        {/* Компании выбранной страны; пока страна не выбрана —
+                            подсказка вместо ленты всех компаний подряд */}
+                        <div id="country-companies" ref={sectionRef} aria-live="polite">
+                            {chosen ? (
+                                <CountrySection key={chosen.code} country={chosen} />
+                            ) : (
+                                <p className="t-sm muted country-pick-hint">{t('countries.pick_hint')}</p>
+                            )}
+                        </div>
                     </>
                 )}
 

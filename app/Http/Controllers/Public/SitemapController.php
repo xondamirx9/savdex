@@ -176,6 +176,9 @@ class SitemapController extends Controller
             // роботу иначе не найти иначе как по ссылкам с витрины
             ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => url('/partners'), 'priority' => '0.4', 'changefreq' => 'monthly'],
+            ['loc' => url('/partners/general'), 'priority' => '0.4', 'changefreq' => 'monthly'],
+            ['loc' => url('/partners/regular'), 'priority' => '0.4', 'changefreq' => 'monthly'],
+            ['loc' => url('/partners/multi'), 'priority' => '0.4', 'changefreq' => 'monthly'],
             ['loc' => url('/contact'), 'priority' => '0.4', 'changefreq' => 'yearly'],
             ...$docs,
             // Оферту и политику ищут по названию площадки перед оплатой;

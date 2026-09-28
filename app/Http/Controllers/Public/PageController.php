@@ -472,46 +472,78 @@ class PageController extends Controller
             ->canonical(url('/partners'));
 
         /*
+         * Сама страница списков не показывает: три ячейки — виды
+         * партнёрства со счётчиками — ведут на отдельные страницы.
          * Партнёров назначает администратор (действие «Партнёрство»
-         * в админке): это договорённость с площадкой, а не уровень
-         * проверки. Две вкладки — генеральные и обычные партнёры.
+         * в админке), это договорённость с площадкой, а не уровень
+         * проверки.
          */
-        $rows = Company::query()
+        $counts = self::partnersQuery()
+            ->selectRaw('partner_tier, count(*) as total')
+            ->groupBy('partner_tier')
+            ->pluck('total', 'partner_tier');
+
+        return Inertia::render('Partners', [
+            'tiers' => collect(Company::PARTNER_SLUGS)
+                ->map(fn (string $code, string $slug): array => [
+                    'slug' => $slug,
+                    'count' => (int) ($counts[$code] ?? 0),
+                ])
+                ->values()
+                ->all(),
+        ]);
+    }
+
+    /** Страница одного вида партнёров: /partners/general и т. д. */
+    public function partnersTier(string $tier): Response
+    {
+        $code = Company::PARTNER_SLUGS[$tier] ?? null;
+
+        abort_if($code === null, 404);
+
+        app(Seo::class)
+            ->title(__("ui.partners.tiers.{$tier}.title"))
+            ->description(__("ui.partners.tiers.{$tier}.text"))
+            ->canonical(url('/partners/'.$tier));
+
+        $partners = self::partnersQuery()
             ->with(['city.translations', 'country.translations'])
             ->withCount(['listings as listings_count' => fn ($q) => $q->where('status', Listing::STATUS_ACTIVE)])
-            ->where('status', Company::STATUS_ACTIVE)
-            ->whereIn('partner_tier', array_keys(Company::PARTNER_TIERS))
+            ->where('partner_tier', $code)
             ->orderBy('partner_sort')
             ->orderByDesc('rating')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->map(fn (Company $c): array => [
+                'slug' => $c->slug,
+                'name' => $c->name,
+                'type_label' => $c->typeLabel(),
+                'city' => $c->city?->name(),
+                'country' => $c->country?->name(),
+                'verification_level' => $c->verification_level,
+                'rating' => (float) $c->rating,
+                'reviews_count' => $c->reviews_count,
+                // Объявления вместо «сделок»: измеримая величина
+                'listings_count' => (int) $c->listings_count,
+                'initials' => $c->initials(),
+                'logo' => $c->logoUrl(),
+            ])
+            ->all();
 
-        $present = fn (Company $c): array => [
-            'slug' => $c->slug,
-            'name' => $c->name,
-            'type_label' => $c->typeLabel(),
-            'city' => $c->city?->name(),
-            'country' => $c->country?->name(),
-            'verification_level' => $c->verification_level,
-            'rating' => (float) $c->rating,
-            'reviews_count' => $c->reviews_count,
-            // Объявления вместо «сделок»: измеримая величина
-            'listings_count' => (int) $c->listings_count,
-            'initials' => $c->initials(),
-            'logo' => $c->logoUrl(),
-        ];
-
-        return Inertia::render('Partners', [
-            'general' => $rows->where('partner_tier', Company::PARTNER_GENERAL)->map($present)->values()->all(),
-            'partners' => $rows->where('partner_tier', Company::PARTNER_REGULAR)->map($present)->values()->all(),
-            'stats' => [
-                'total' => Company::where('status', Company::STATUS_ACTIVE)->count(),
-                'verified' => Company::where('status', Company::STATUS_ACTIVE)
-                    ->where('verification_level', '>=', Company::VERIFICATION_COMPANY)
-                    ->count(),
-                'listings' => Listing::where('status', Listing::STATUS_ACTIVE)->count(),
-            ],
+        return Inertia::render('PartnersTier', [
+            'tier' => $tier,
+            'partners' => $partners,
+            // Соседние виды — ссылками внизу страницы
+            'others' => array_values(array_diff(array_keys(Company::PARTNER_SLUGS), [$tier])),
         ]);
+    }
+
+    /** @return Builder<Company> */
+    private static function partnersQuery(): Builder
+    {
+        return Company::query()
+            ->where('status', Company::STATUS_ACTIVE)
+            ->whereIn('partner_tier', array_keys(Company::PARTNER_TIERS));
     }
 
     /** Контакты площадки. Реквизиты — из словаря, как и весь текст. */

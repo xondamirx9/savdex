@@ -22,12 +22,14 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
 import { servicePages } from '@/lib/serviceSections';
 import { useDismiss } from '@/lib/useDismiss';
+import { PARTNER_TIERS, TIER_LOOK } from '@/lib/partnerTiers';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -42,10 +44,10 @@ import type { SharedProps } from '@/types';
 interface MenuItem {
     href: string;
     label: string;
+    /** Подразделы — всплывают столбиком при наведении */
+    children?: { href: string; label: string; tier?: keyof typeof TIER_LOOK; Icon?: LucideIcon }[];
     /** Пункт с query-строкой активен только при точном совпадении её части. */
     match?: (path: string, search: string) => boolean;
-    /** Подменю при наведении: страницы направлений «Доп. услуг» */
-    submenu?: { href: string; label: string; Icon?: LucideIcon }[];
 }
 
 /**
@@ -88,12 +90,21 @@ function menu(): MenuItem[] {
             // страницы направлений — тоже часть раздела
             match: (path) =>
                 path.startsWith(routes.itTasks) || path.startsWith('/resume') || path.startsWith('/services/'),
-            submenu: [
+            // Направления — каждое со своей страницей; последним — общая лента
+            children: [
                 ...servicePages().map(({ href, label, Icon }) => ({ href, label, Icon })),
                 { href: routes.itTasks, label: t('service_pages.menu_all') },
             ],
         },
-        { href: routes.partners, label: t('nav.partners') },
+        {
+            href: routes.partners,
+            label: t('nav.partners'),
+            children: PARTNER_TIERS.map((tier) => ({
+                href: routes.partnersTier(tier),
+                label: t(`partners.tiers.${tier}.title`),
+                tier,
+            })),
+        },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },
         { href: routes.about, label: t('nav.about_us') },
@@ -101,92 +112,106 @@ function menu(): MenuItem[] {
 }
 
 /**
- * Пункт ленты разделов с подменю — «Доп. услуги».
+ * Пункт ленты разделов со всплывающим списком подразделов («Партнёры»).
  *
- * Открывается наведением, а с клавиатуры и на сенсорном экране —
- * стрелкой рядом с пунктом: сам пункт по-прежнему ведёт в ленту задач.
- *
- * Список ставится position: fixed по координатам пункта: лента
- * разделов прокручивается по горизонтали (overflow-x: auto), и
- * обычный выпадающий блок внутри неё обрезался бы по её высоте.
+ * Список открывается при наведении и при фокусе с клавиатуры, стоит
+ * столбиком под пунктом. Рисуется порталом в body с позицией по пункту:
+ * лента разделов прокручивается по горизонтали (overflow-x) и обрезала
+ * бы вложенное окошко, а размытие фона шапки сбивало бы fixed-позицию.
+ * Сам пункт остаётся ссылкой — нажатие ведёт на страницу раздела.
  */
-function SubnavDropdown({ item, active, path }: { item: MenuItem; active: boolean; path: string }) {
-    const [open, setOpen] = useState(false);
-    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-    const ref = useDismiss(() => setOpen(false));
+function NavDropdown({ item, active }: { item: MenuItem; active: boolean }) {
+    const anchor = useRef<HTMLSpanElement>(null);
     const closeTimer = useRef<number | undefined>(undefined);
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-    const show = () => {
+    const open = () => {
         window.clearTimeout(closeTimer.current);
-        const rect = ref.current?.getBoundingClientRect();
-
-        if (rect) setPos({ top: rect.bottom, left: rect.left });
-        setOpen(true);
+        const r = anchor.current?.getBoundingClientRect();
+        if (r) setPos({ top: r.bottom + 4, left: r.left });
     };
 
-    // Небольшая задержка: курсор, пересекающий зазор до списка,
-    // не должен закрывать его
-    const hide = () => {
-        closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+    // Небольшая задержка: мышь успевает дойти от пункта до окошка
+    const close = () => {
+        window.clearTimeout(closeTimer.current);
+        closeTimer.current = window.setTimeout(() => setPos(null), 150);
     };
 
-    // Прокрутка страницы сдвигает пункт — список за ним не едет
+    // Прокрутка страницы или ленты уводит пункт — окошко закрывается
     useEffect(() => {
-        if (!open) return;
+        if (pos === null) return;
 
-        const close = () => setOpen(false);
-        window.addEventListener('scroll', close, { passive: true });
-        window.addEventListener('resize', close);
+        const hide = () => setPos(null);
+        window.addEventListener('scroll', hide, { passive: true, capture: true });
+        window.addEventListener('resize', hide);
 
         return () => {
-            window.removeEventListener('scroll', close);
-            window.removeEventListener('resize', close);
+            window.removeEventListener('scroll', hide, { capture: true });
+            window.removeEventListener('resize', hide);
         };
-    }, [open]);
+    }, [pos]);
 
     useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
+    const menuId = `subnav-menu-${item.href.replace(/\W/g, '')}`;
+
     return (
-        <div
-            className={cn('subnav-drop', open && 'is-open')}
-            ref={ref}
-            onMouseEnter={show}
-            onMouseLeave={hide}
-            onKeyDown={(e) => {
-                if (e.key === 'Escape') setOpen(false);
+        <span
+            ref={anchor}
+            className="subnav-dd"
+            onMouseEnter={open}
+            onMouseLeave={close}
+            onFocus={open}
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close();
             }}
+            onKeyDown={(e) => e.key === 'Escape' && setPos(null)}
         >
-            <Link href={item.href} aria-current={active ? 'page' : undefined} onClick={() => setOpen(false)}>
+            <Link
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                aria-haspopup="true"
+                aria-expanded={pos !== null}
+                aria-controls={menuId}
+            >
                 {item.label}
             </Link>
-            <button
-                type="button"
-                className="subnav-drop-toggle"
-                aria-expanded={open}
-                aria-label={t('service_pages.menu_toggle')}
-                onClick={() => (open ? setOpen(false) : show())}
-            >
-                <ChevronDown aria-hidden />
-            </button>
+            {pos !== null &&
+                createPortal(
+                    <div
+                        id={menuId}
+                        className="subnav-dd-menu"
+                        style={{ top: pos.top, left: pos.left }}
+                        onMouseEnter={open}
+                        onMouseLeave={close}
+                        onFocus={open}
+                        onBlur={close}
+                    >
+                        {item.children?.map((child) => {
+                            const look = child.tier ? TIER_LOOK[child.tier] : null;
+                            const Icon = look?.[0];
 
-            {open && pos && item.submenu && (
-                <div className="subnav-menu" role="menu" style={{ top: pos.top, left: pos.left }}>
-                    {item.submenu.map(({ href, label, Icon }) => (
-                        <Link
-                            key={href}
-                            href={href}
-                            role="menuitem"
-                            className={cn(!Icon && 'subnav-menu-all')}
-                            aria-current={path === href ? 'page' : undefined}
-                            onClick={() => setOpen(false)}
-                        >
-                            {Icon && <Icon aria-hidden />}
-                            {label}
-                        </Link>
-                    ))}
-                </div>
-            )}
-        </div>
+                            return (
+                                <Link key={child.href} href={child.href} onClick={() => setPos(null)}>
+                                    {Icon && (
+                                        <span className={cn('stat-ico', look[1])}>
+                                            <Icon aria-hidden className="size-4" />
+                                        </span>
+                                    )}
+                                    {/* Направления «Доп. услуг» — со своей иконкой */}
+                                    {!Icon && child.Icon && (
+                                        <span className="stat-ico stat-ico-blue">
+                                            <child.Icon aria-hidden className="size-4" />
+                                        </span>
+                                    )}
+                                    {child.label}
+                                </Link>
+                            );
+                        })}
+                    </div>,
+                    document.body,
+                )}
+        </span>
     );
 }
 
@@ -851,8 +876,8 @@ export function SiteHeader() {
                 <nav className="subnav" aria-label={t('nav.main')}>
                     <div className="container subnav-inner">
                         {items.map((item) =>
-                            item.submenu ? (
-                                <SubnavDropdown key={item.href} item={item} active={isActive(item)} path={path} />
+                            item.children ? (
+                                <NavDropdown key={item.href} item={item} active={isActive(item)} />
                             ) : (
                                 <Link key={item.href} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
                                     {item.label}
@@ -874,22 +899,22 @@ export function SiteHeader() {
             >
                 <div className="mobile-menu-inner">
                     {items.map((item) => (
-                        <div key={item.href} className="mobile-menu-group">
+                        <div key={item.href} style={{ display: 'contents' }}>
                             <Link href={item.href} onClick={() => setMenuOpen(false)}>
                                 {item.label}
                             </Link>
-                            {/* Подменю на телефоне — сразу списком: наведения нет */}
-                            {item.submenu && (
-                                <div className="mobile-submenu">
-                                    {item.submenu
-                                        .filter((sub) => sub.Icon)
-                                        .map((sub) => (
-                                            <Link key={sub.href} href={sub.href} onClick={() => setMenuOpen(false)}>
-                                                {sub.label}
-                                            </Link>
-                                        ))}
-                                </div>
-                            )}
+                            {/* Подразделы на телефоне — отступом под пунктом:
+                                наведения там нет, всплывать меню не может */}
+                            {item.children?.map((child) => (
+                                <Link
+                                    key={child.href}
+                                    href={child.href}
+                                    className="mobile-sublink"
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    {child.label}
+                                </Link>
+                            ))}
                         </div>
                     ))}
 

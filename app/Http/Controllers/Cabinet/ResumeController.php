@@ -58,7 +58,8 @@ class ResumeController extends Controller
             'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['id' => $c->id, 'name' => $c->name()]),
 
-            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->get()
+            // Хвост по id: города с одинаковым sort шли в плавающем порядке
+            'cities' => City::query()->where('is_active', true)->with('translations')->orderBy('sort')->orderBy('id')->get()
                 ->map(fn (City $c): array => ['id' => $c->id, 'name' => $c->name(), 'country_id' => $c->country_id]),
         ]);
     }

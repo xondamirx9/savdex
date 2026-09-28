@@ -139,6 +139,7 @@ INSTALLED_APPS = [
     "savdex.catalogs.apps.CatalogsConfig",
     "savdex.billing.apps.BillingConfig",
     "savdex.site.apps.SiteConfig",
+    "savdex.tenders.apps.TendersConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -157,6 +158,8 @@ MIDDLEWARE = [
     "savdex.adminpanel.AdminMiddleware",
     # Кто вошёл на сайт — по сессии Laravel, лениво (этап 3)
     "savdex.visitor.VisitorMiddleware",
+    # Сессия Laravel, начатая страницей сайта, — сохранить (этап 5)
+    "savdex.web.session.SessionMiddleware",
 ]
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"
