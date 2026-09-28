@@ -1414,6 +1414,17 @@ JSON — страница 403. Счётчик откликов IT-задачи �
 чистит поля Telegram. Сверка — `tests/test_web_settings_actions.py`.
 Права роли — миграция `grant_django_settings_profile`.
 
+**Шаг 31 — контакты своей компании** (группа `forms`,
+`savdex/web/company_contact_actions.py`): добавить, изменить, удалить.
+Проверка значения по типу: почта — `email:rfc` (`savdex/web/email_rfc.py`,
+перенос RFCValidation из egulias вместе с IDN как у ICU; сверка с PHP
+на 86 тыс. строк — `tests/test_email_rfc.py`), телефон — шаблон PHP,
+одно значение в компании — один раз (правило-объект `Check`; как у
+Laravel, `unique` и `exists` не проверяются, если у поля уже есть
+ошибка). Одинаковые тексты ошибок у поля — один раз (`MessageBag::add`).
+Сверка — `tests/test_web_company_contact_actions.py` (48 случаев). Права
+роли — миграция `grant_django_company_contacts`.
+
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
 владеет он) и раздел «Закупки» в админке Django (`savdex/tenders`):

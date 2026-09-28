@@ -245,6 +245,10 @@ SHARED_WRITES: dict[str, str] = {
         "Wallet::firstOrCreate, и условное списание отклика — "
         "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
     ),
+    "company_contacts": (
+        "контакты своей компании (этап 5, форма): добавить, изменить, удалить, "
+        "как CompanyContactController; событий и журнала у модели нет"
+    ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
         "только delete по ключу — то же, что Cache::forget(), когда кэш "

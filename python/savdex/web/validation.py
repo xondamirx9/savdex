@@ -16,10 +16,20 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from savdex.web import ui
+
+
+@dataclass(frozen=True)
+class Check:
+    """Правило-объект (Rule::unique и т. п.): имя для текста ошибки и проверка."""
+
+    name: str
+    passes: Callable[[Any], bool]
+
 
 #: Validator::$implicitRules (из тех, что есть здесь)
 IMPLICIT = ("required",)
@@ -119,6 +129,12 @@ def _passes(rule: str, param: str | None, value: Any) -> bool:  # noqa: ANN401
 
         return _php_regex(param or "").search(_php_string(value)) is not None
 
+    if rule == "email":
+        # validateEmail: без параметров и с rfc — RFCValidation
+        from savdex.web.email_rfc import is_valid
+
+        return is_valid(value)
+
     if rule == "url":
         from savdex.web.url_rule import is_url
 
@@ -170,9 +186,11 @@ def _php_string(value: Any) -> str:  # noqa: ANN401
     return str(value)
 
 
-def _kind(rules: list[str], value: Any) -> str:  # noqa: ANN401
+def _kind(rules: Sequence[str | Check], value: Any) -> str:  # noqa: ANN401
     """Validator::getAttributeType: numeric/integer в правилах, массив, иначе строка."""
-    if any(r.partition(":")[0] in ("numeric", "integer", "decimal") for r in rules):
+    names = [r.partition(":")[0] for r in rules if isinstance(r, str)]
+
+    if any(r in ("numeric", "integer", "decimal") for r in names):
         return "numeric"
 
     if isinstance(value, dict | list):
@@ -223,7 +241,7 @@ def _message(
 
 def validate(
     data: Mapping[str, Any],
-    rules: Mapping[str, list[str]],
+    rules: Mapping[str, Sequence[str | Check]],
     locale: str,
     messages: Mapping[str, str] | None = None,
 ) -> dict[str, list[str]]:
@@ -236,7 +254,10 @@ def validate(
             nullable = "nullable" in field_rules
 
             for spec in field_rules:
-                rule, _, param = spec.partition(":")
+                if isinstance(spec, Check):
+                    rule, param = spec.name, ""
+                else:
+                    rule, _, param = spec.partition(":")
 
                 # nullable — не правило, а пропуск остальных для null
                 # (isNotNullIfMarkedAsNullable)
@@ -249,18 +270,32 @@ def validate(
                 if rule not in IMPLICIT and not _present(value):
                     continue
 
-                if not _passes(rule, param or None, value):
-                    errors.setdefault(attribute, []).append(
-                        _message(
-                            rule,
-                            attribute,
-                            "*" in pattern,
-                            locale,
-                            messages or {},
-                            _kind(field_rules, value),
-                            param or None,
-                        )
+                # hasNotFailedPreviousRuleIfPresenceRule: unique и exists —
+                # только пока у поля нет ошибок
+                if rule in ("unique", "exists") and attribute in errors:
+                    continue
+
+                passed = (
+                    spec.passes(value)
+                    if isinstance(spec, Check)
+                    else _passes(rule, param or None, value)
+                )
+
+                if not passed:
+                    text = _message(
+                        rule,
+                        attribute,
+                        "*" in pattern,
+                        locale,
+                        messages or {},
+                        _kind(field_rules, value),
+                        param or None,
                     )
+                    found = errors.setdefault(attribute, [])
+
+                    # MessageBag::add: одинаковый текст у поля — один раз
+                    if text not in found:
+                        found.append(text)
 
                     if rule in IMPLICIT:
                         break
