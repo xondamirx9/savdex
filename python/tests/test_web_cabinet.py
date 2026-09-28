@@ -16,11 +16,12 @@
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Iterator
 
 import pytest
 
-from .pg_admin import php, sql, нужна_база, свежая_база
+from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
 from .test_web_session import СЕССИЯ, куки_ответа, одинаково, по_сторонам
 from .web_site import laravel, войти, из_django, пользователь, сверить, страница
 
@@ -31,8 +32,14 @@ pytestmark = нужна_база
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    for seeder in ("PlanSeeder",):
-        php(f"(new Database\\Seeders\\{seeder})->run(); echo 'ok';")
+    for seeder in ("PlanSeeder", "GeoSeeder"):
+        subprocess.run(
+            ["php", "artisan", "db:seed", f"--class={seeder}", "--force"],
+            cwd=КОРЕНЬ,
+            env=ОКРУЖЕНИЕ,
+            check=True,
+            capture_output=True,
+        )
 
     # Компания владельца: объявления, статистика за 70 дней, кошелёк,
     # подписка, события одной секунды, чаты, отзывы, раскрытия
@@ -66,6 +73,8 @@ def сайт() -> Iterator[str]:
         "foreach ([$other, App\\Models\\Company::factory()->create()] as $from) {"
         " App\\Models\\ContactUnlock::factory()->create(['company_id' => $from->id,"
         " 'target_company_id' => $c->id]); }"
+        "$cities = App\\Models\\City::orderBy('id')->limit(2)->pluck('id');"
+        "$other->update(['city_id' => $cities[1]]);"
         "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
         "'author_company_id' => $other->id, 'status' => 'published']);"
         "$t = App\\Models\\MessageThread::create(['buyer_company_id' => $other->id,"
@@ -73,6 +82,12 @@ def сайт() -> Iterator[str]:
         "$t->forceFill(['seller_read_at' => now()->subDay()])->save();"
         "App\\Models\\Message::create(['thread_id' => $t->id, 'company_id' => $other->id,"
         "'body' => 'Здравствуйте']);"
+        # Аналитика: поисковые запросы (равные показы — порядок по запросу),
+        # города компаний, открывавших контакты
+        "foreach (['цемент', 'арматура', 'бетон', 'кирпич'] as $i => $q) {"
+        " foreach ([0, 5, 40] as $d) { App\\Models\\SearchHit::create(['company_id' => $c->id,"
+        " 'query' => $q, 'date' => today()->subDays($d), 'impressions' => 3 - ($i % 2),"
+        " 'clicks' => $i]); } }"
         "echo 'ok';",
         {"MACHINE_TRANSLATION_ENABLED": "false"},
     )
@@ -187,3 +202,32 @@ def test_переход_inertia(сайт):
         },
     )
     assert куки_ответа(полная)[СЕССИЯ]["value"]
+
+
+# ── Аналитика ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["", "?period=7", "?period=90", "?period=abc", "?period=", "?period[]=7", "?period=7abc"],
+)
+def test_аналитика(сайт, query):
+    сверить(сайт, "/cabinet/analytics" + query, владелец(сайт))
+
+
+@pytest.mark.parametrize("path", ["/uz/cabinet/analytics?period=90", "/en/cabinet/analytics"])
+def test_аналитика_расширенная(сайт, path):
+    """Тариф с расширенной аналитикой: запросы и сравнение с категорией."""
+    sql(
+        "update subscriptions set plan_id = (select id from plans where advanced_analytics "
+        "order by id limit 1) where company_id = (select id from companies where slug = 'owner')"
+    )
+    д, _ = сверить(сайт, path, владелец(сайт))
+    props = страница(д["body"])["props"]
+
+    assert props["advanced"] is True and props["queries"] and props["benchmark"]
+
+
+def test_аналитика_без_компании(сайт):
+    пользователь("nocompany2@savdex.uz")
+    сверить(сайт, "/cabinet/analytics", войти(сайт, "nocompany2@savdex.uz"))
