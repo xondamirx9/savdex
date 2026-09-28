@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia
+from savdex.web import content, inertia, specs
 from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
@@ -69,6 +69,27 @@ def _keep(char: str) -> bool:
         or char.isspace()
         or char in "×xх-"
     )
+
+
+def _attributes(
+    attributes: list[dict[str, Any]], fields: dict[str, str], locale: str, text: specs.Text
+) -> list[dict[str, Any]]:
+    """
+    Характеристики карточки: поля категории подписью из справочника,
+    за ними детали товара (spec_*) на языке посетителя — ProductSpecs::present.
+    """
+    rows: list[dict[str, Any]] = []
+
+    for a in sorted(attributes, key=lambda a: specs.owns(str(a["key"]))):
+        if specs.owns(str(a["key"])):
+            shown = specs.present(str(a["key"]), str(a["value"] or ""), locale, text)
+
+            if shown is not None:
+                rows.append(shown)
+        else:
+            rows.append({"key": text(fields.get(a["key"]) or a["key"]), "value": text(a["value"])})
+
+    return rows
 
 
 def suggestions(
@@ -375,7 +396,11 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     cards = Cards(ctx, settings_values(), translations)
     image_urls = [ctx.url("storage/" + i["path"]) for i in images]
     suggested = suggestions(
-        row, category, parent, [str(a["value"] or "") for a in attributes], city
+        row,
+        category,
+        parent,
+        [str(a["value"] or "") for a in attributes if not specs.owns(str(a["key"]))],
+        city,
     )
     published = _utc(row["published_at"])
     expires = _utc(row["expires_at"])
@@ -411,13 +436,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 "published": published.strftime("%d.%m.%Y") if published else None,
                 "expires": expires.strftime("%d.%m.%Y") if expires else None,
                 "views": row["views_count"],
-                "attributes": [
-                    {
-                        "key": translations.text(fields.get(a["key"]) or a["key"]),
-                        "value": translations.text(a["value"]),
-                    }
-                    for a in attributes
-                ],
+                "attributes": _attributes(attributes, fields, locale, translations.text),
                 "badges": [
                     b
                     for b in (translations.text(p["badge"]) for p in badges)
