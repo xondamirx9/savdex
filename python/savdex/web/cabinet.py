@@ -751,3 +751,92 @@ def _viewers(
         )
 
     return result
+
+
+# ── Отзывы /cabinet/reviews (Cabinet\ReviewController::index) ───────
+
+#: Review::CRITERIA — подписи в коде, по-русски на всех языках
+CRITERIA = {
+    "rating_description": "Соответствие описанию",
+    "rating_response": "Скорость ответа",
+    "rating_deadlines": "Соблюдение сроков",
+    "rating_quality": "Качество товара",
+}
+
+
+def reviews(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Reviews", reviews_props(ctx), _seo(ctx))
+
+
+def reviews_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"reviews": [], "summary": None, "criteria": CRITERIA}
+
+    rows = _rows(
+        "select r.*, a.name as a_name, a.verification_level as a_level, l.title as l_title "
+        "from reviews r "
+        "left join companies a on a.id = r.author_company_id and a.deleted_at is null "
+        "left join listings l on l.id = r.listing_id and l.deleted_at is null "
+        "where r.company_id = %s and r.status = 'published' "
+        "order by r.created_at desc, r.id desc",
+        [company["id"]],
+    )
+
+    return {
+        "reviews": [
+            {
+                "id": r["id"],
+                "author": r["a_name"],
+                "initials": initials(r["a_name"]) if r["a_name"] is not None else None,
+                "verified": int(r["a_level"] or 0),
+                "rating": r["rating"],
+                "body": r["body"],
+                "deal_confirmed": bool(r["deal_confirmed"]),
+                "listing": r["l_title"],
+                "reply": r["reply"],
+                "dispute_status": r["dispute_status"],
+                "moderator_note": r["moderator_note"],
+                "when": ago(r["created_at"], ctx.locale),
+            }
+            for r in rows
+        ],
+        "summary": _reviews_summary(rows),
+        "criteria": CRITERIA,
+    }
+
+
+def _reviews_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Средние по критериям и распределение оценок, от пяти звёзд к одной."""
+    if not rows:
+        return None
+
+    criteria = []
+
+    for key, label in CRITERIA.items():
+        # ->filter(): ни пустых, ни нулей
+        values = [r[key] for r in rows if r[key]]
+        criteria.append(
+            {
+                "label": label,
+                "value": php_round(sum(values) / len(values), 1) if values else None,
+            }
+        )
+
+    return {
+        "average": php_round(sum(r["rating"] for r in rows) / len(rows), 1),
+        "total": len(rows),
+        "distribution": [
+            {"star": star, "count": sum(1 for r in rows if r["rating"] == star)}
+            for star in range(5, 0, -1)
+        ],
+        "criteria": criteria,
+    }

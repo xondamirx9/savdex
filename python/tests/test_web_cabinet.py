@@ -285,3 +285,52 @@ def test_кто_интересуется(сайт, path, names):
 def test_кто_интересуется_без_компании(сайт):
     пользователь("nocompany3@savdex.uz")
     сверить(сайт, "/cabinet/incoming", войти(сайт, "nocompany3@savdex.uz"))
+
+
+# ── Отзывы ──────────────────────────────────────────────────────────
+
+
+def _отзывы() -> None:
+    """Отзывы разных оценок: критерии с нулями и пустыми, автор в корзине, спор."""
+    if sql("select count(*) from reviews")[0][0] > 1:
+        return
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$l = $c->listings()->orderBy('id')->first();"
+        "foreach ([[5, 5, 0, null, 4], [3, 2, 3, 3, 3], [4, 4, 5, null, null], [5, 5, 5, 5, 5]]"
+        " as $i => [$r, $d, $s, $t, $q]) { $a = App\\Models\\Company::factory()->create();"
+        " App\\Models\\Review::factory()->create(['company_id' => $c->id,"
+        " 'author_company_id' => $a->id, 'rating' => $r, 'rating_description' => $d,"
+        " 'rating_response' => $s, 'rating_deadlines' => $t, 'rating_quality' => $q,"
+        " 'status' => 'published', 'listing_id' => $i === 0 ? $l->id : null,"
+        " 'reply' => $i === 1 ? 'Спасибо' : null, 'dispute_status' => $i === 2 ? 'rejected' : null,"
+        " 'moderator_note' => $i === 2 ? 'Отзыв по делу' : null,"
+        " 'deal_confirmed' => $i % 2 === 0]);"
+        " if ($i === 3) { $a->delete(); } }"
+        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
+        "'author_company_id' => App\\Models\\Company::factory()->create()->id,"
+        "'status' => 'hidden']);"
+        "echo 'ok';"
+    )
+    # Часами раньше, одна пара — в одну секунду: «N секунд назад» и
+    # порядок равных не плавают
+    sql("update reviews set created_at = now() - make_interval(hours => id::int)")
+    sql(
+        "update reviews set created_at = (select min(created_at) from reviews) where id in "
+        "(select id from reviews order by id desc limit 2)"
+    )
+
+
+@pytest.mark.parametrize("path", ["/cabinet/reviews", "/zh/cabinet/reviews"])
+def test_отзывы(сайт, path):
+    _отзывы()
+    д, _ = сверить(сайт, path, владелец(сайт))
+    props = страница(д["body"])["props"]
+
+    assert props["summary"]["total"] == 5 and len(props["reviews"]) == 5
+
+
+def test_отзывы_без_компании(сайт):
+    пользователь("nocompany4@savdex.uz")
+    сверить(сайт, "/cabinet/reviews", войти(сайт, "nocompany4@savdex.uz"))
