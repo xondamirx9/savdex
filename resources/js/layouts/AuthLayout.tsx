@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
 
 /**
@@ -22,11 +23,18 @@ const benefits = (): string[] => [
  * она отодвигает форму за экран и мешает, а не помогает.
  */
 export function AuthLayout({
+    wide = false,
     title,
     heading,
     subheading,
     children,
 }: {
+    /**
+     * Широкая колонка формы. Нужна там, где в строку встают варианты
+     * выбора: в 380 px три карточки роли сжимаются до нечитаемых
+     * столбиков по букве в строке.
+     */
+    wide?: boolean;
     title: string;
     heading: string;
     subheading?: string;
@@ -39,7 +47,16 @@ export function AuthLayout({
                 {t('auth.skip_to_form')}
             </a>
 
-            <div className="grid min-h-screen lg:grid-cols-[1fr_460px]">
+            <div
+                className={cn(
+                    'grid min-h-screen',
+                    /* Широкий режим расширяет саму колонку формы, а не
+                       блок внутри неё: ограничивала ширину колонка
+                       (460 px минус поля — те же 380), и max-width
+                       у внутреннего блока ничего не менял. */
+                    wide ? 'lg:grid-cols-[1fr_640px]' : 'lg:grid-cols-[1fr_460px]',
+                )}
+            >
                 <aside className="bg-primary-700 hidden flex-col p-14 text-white lg:flex">
                     <Link href="/" aria-label={t('auth.home_aria')}>
                         <Logo inverted />
@@ -75,7 +92,7 @@ export function AuthLayout({
                     id="form"
                     className="bg-surface flex flex-col justify-center overflow-y-auto px-5 py-8 sm:px-10 lg:px-10 lg:py-12"
                 >
-                    <div className="mx-auto w-full max-w-[380px]">
+                    <div className={cn('mx-auto w-full', wide ? 'max-w-[520px]' : 'max-w-[380px]')}>
                         <Link href="/" className="mb-7 inline-block lg:hidden" aria-label={t('auth.home_aria')}>
                             <Logo />
                         </Link>
