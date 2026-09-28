@@ -120,12 +120,16 @@ SHARED_WRITES: dict[str, str] = {
         "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
         "только locale и updated_at, когда язык сменился; то же — форма смены "
         "языка /locale/<язык> (LocaleController); правка администратора — "
-        "строка журнала, как AuditObserver"
+        "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
+        "форма) — имя, телефон, язык и сброс подтверждения телефона; "
+        "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
+        "новая компания — company_id и company_role владельца"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
         "MessageThread::markReadFor, — только время прочтения своей стороны "
-        "и updated_at; событий у модели нет"
+        "и updated_at; событий у модели нет. Чат (этап 5, форма): новый "
+        "разговор по отклику и last_message_at с отметкой прочтения отправителя"
     ),
     "sessions": (
         "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
@@ -152,11 +156,22 @@ SHARED_WRITES: dict[str, str] = {
         "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
         "; машинный перевод (этап 5, manage.py translate) — переводы должности, "
         "«о себе» и мест работы и updated_at, как TranslateResume (saveQuietly)"
+        "; своё резюме (этап 5, форма) — правка и новое резюме (поля формы, "
+        "опыт, адрес, сброс переводов правленого), статус, дата публикации и "
+        "мягкое удаление, как ResumeController"
     ),
     "it_tasks": (
         "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
         "$task->increment('views_count'), не заказчику; просмотр "
-        "администратора — строка журнала (раздел ittasks), как AuditObserver"
+        "администратора — строка журнала (раздел ittasks), как AuditObserver; "
+        "отклик исполнителя (этап 5, чат) — responses_count + 1 и updated_at, "
+        "как $task->increment('responses_count'), с той же строкой журнала; "
+        "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
+        "search_text и удаление, как ItTaskController, с журналом администратора"
+    ),
+    "it_task_files": (
+        "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
+        "с диска, как ItTaskController::destroyFile; событий у модели нет"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
@@ -173,6 +188,9 @@ SHARED_WRITES: dict[str, str] = {
         "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
         "описания, search_text и updated_at, как TranslateListing (save с "
         "событием saving)"
+        "; «Мои объявления» (этап 5, шаг 23) — статус, сроки, пометка модератора, "
+        "мягкое удаление и search_text, как ListingController (save с событием "
+        "saving, у администратора — строка журнала)"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -195,6 +213,11 @@ SHARED_WRITES: dict[str, str] = {
         "прочтение уведомлений (этап 5, форма): одно или все свои — только "
         "read_at и updated_at, как UserNotification::markRead и update() у "
         "Laravel; событий у модели нет"
+        "; уведомления компании (этап 5, шаг 23) — insert, как Notifier::company"
+    ),
+    "activity_events": (
+        "лента кабинета (этап 5, форма): insert события, как Notifier::company "
+        "при повторной публикации объявления; событий у модели нет"
     ),
     "favorites": (
         "избранное (этап 5, форма): insert … on conflict do nothing и delete "
@@ -203,6 +226,35 @@ SHARED_WRITES: dict[str, str] = {
     "notification_preferences": (
         "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
         "строка или email/telegram/updated_at своей; событий у модели нет"
+    ),
+    "contact_unlocks": (
+        "«Мои контакты» (этап 5, форма): статус и заметка, жалоба — "
+        "update изменившихся полей своей строки и updated_at, как "
+        "ContactController; событий и журнала у модели нет"
+    ),
+    "reviews": (
+        "отзывы о своей компании (этап 5, форма): ответ и спор — update "
+        "изменившихся полей своей строки и updated_at, как ReviewController; "
+        "рейтинг они не трогают (событие saved пересчитывает его только при "
+        "смене оценки, статуса, компании), у администратора — строка журнала"
+    ),
+    "messages": (
+        "чат (этап 5, форма): новое сообщение в разговор, как ChatService::send "
+        "(текст уже с маскировкой контактов); событий у модели нет"
+    ),
+    "wallets": (
+        "квота откликов (этап 5, чат): новый кошелёк компании, как "
+        "Wallet::firstOrCreate, и условное списание отклика — "
+        "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
+    ),
+    "companies": (
+        "профиль своей компании (этап 5, форма): правка полей формы и "
+        "search_text, новая компания с адресом из названия, как "
+        "CompanyProfileController::update; журнал администратора — как AuditObserver"
+    ),
+    "company_contacts": (
+        "контакты своей компании (этап 5, форма): добавить, изменить, удалить, "
+        "как CompanyContactController; событий и журнала у модели нет"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "

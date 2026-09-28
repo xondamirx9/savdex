@@ -21,17 +21,26 @@ from savdex.web import (
     auth,
     cabinet,
     catalog,
+    chat_actions,
     companies,
     company,
+    company_contact_actions,
+    company_profile_actions,
+    contact_actions,
     directory,
     home,
+    it_task_actions,
     it_tasks,
     legal,
     listing,
+    listing_actions,
     news,
     pricing,
+    resume_actions,
     resumes,
+    review_actions,
     reviews,
+    settings_actions,
     tenders,
 )
 from savdex.web import views as web
@@ -112,6 +121,81 @@ urlpatterns = [
         actions.locale_update,
         name="locale.update",
     ),
+    # «Мои объявления» (этап 5, шаг 23): формы, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/bulk$",
+        listing_actions.bulk,
+        name="cabinet.listings.bulk",
+    ),
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{{1,18}})/{verb}$",
+            getattr(listing_actions, verb),
+            name=f"cabinet.listings.{verb}",
+        )
+        for verb in ("renew", "archive", "resubmit")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})$",
+        listing_actions.destroy,
+        name="cabinet.listings.destroy",
+    ),
+    # «Мои контакты» (этап 5, шаг 24): формы и выгрузка, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/export$",
+        contact_actions.export,
+        name="cabinet.contacts.export",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/(?P<unlock_id>[0-9]{1,18})$",
+        contact_actions.update,
+        name="cabinet.contacts.update",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/(?P<unlock_id>[0-9]{1,18})/complaint$",
+        contact_actions.complain,
+        name="cabinet.contacts.complain",
+    ),
+    # IT-задачи своей компании (этап 5, шаг 27): группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{{1,18}})/{verb}$",
+            getattr(it_task_actions, verb),
+            name=f"cabinet.it-tasks.{verb}",
+        )
+        for verb in ("close", "complete", "reopen")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})$",
+        it_task_actions.destroy,
+        name="cabinet.it-tasks.destroy",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})/files/"
+        r"(?P<file_id>[0-9]{1,18})$",
+        it_task_actions.destroy_file,
+        name="cabinet.it-tasks.files.destroy",
+    ),
+    # Отклики в чат (этап 5, шаг 26): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<listing_id>[0-9]{1,18})/respond$",
+        chat_actions.respond,
+        name="listing.respond",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<task_id>[0-9]{1,18})/respond$",
+        chat_actions.respond_task,
+        name="it-tasks.respond",
+    ),
+    # Отзывы о своей компании (этап 5, шаг 25): ответ и спор, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/reviews/(?P<review_id>[0-9]{{1,18}})/{verb}$",
+            getattr(review_actions, verb),
+            name=f"cabinet.reviews.{verb}",
+        )
+        for verb in ("reply", "dispute")
+    ],
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
@@ -142,9 +226,53 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings$", cabinet.listings, name="cabinet.listings"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", cabinet.resume, name="cabinet.resume"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
+    # Контакты своей компании (этап 5, шаг 31): группа forms
     re_path(
-        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$", cabinet.company_page, name="cabinet.company"
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/contacts$",
+        company_contact_actions.store,
+        name="cabinet.contacts.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/contacts/(?P<contact_id>[0-9]{1,18})$",
+        company_contact_actions.contact,
+        name="cabinet.contacts.edit",
+    ),
+    # Настройки профиля (этап 5, шаг 29): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/profile$",
+        settings_actions.profile,
+        name="cabinet.settings.profile",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/telegram$",
+        settings_actions.telegram,
+        name="cabinet.settings.telegram",
+    ),
+    # Своё резюме (этап 5, шаг 28): опубликовать и скрыть, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/resume/{verb}$",
+            getattr(resume_actions, verb),
+            name=f"cabinet.resume.{verb}",
+        )
+        for verb in ("publish", "hide")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$",
+        company_profile_actions.page,
+        name="cabinet.company",
+    ),
+    # Логотип и обложка компании (этап 5, шаг 34): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/logo$",
+        company_profile_actions.logo,
+        name="cabinet.company.logo",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/cover$",
+        company_profile_actions.cover,
+        name="cabinet.company.cover",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
@@ -155,7 +283,7 @@ urlpatterns = [
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats/(?P<thread_id>[0-9]+)$",
-        cabinet.chat,
+        chat_actions.thread,
         name="cabinet.chats.show",
     ),
     re_path(

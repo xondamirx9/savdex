@@ -149,12 +149,14 @@ def action(
     *,
     auth: bool = True,
     throttle: int | None = None,
+    throttle_minutes: int = 1,
     password_change: bool = True,
 ) -> Context:
     """
     Контекст формы — или RefusedError с ответом посредника.
 
-    throttle — throttle:N,1 маршрута (у всех форм сайта окно — минута).
+    throttle, throttle_minutes — throttle:N,M маршрута. GET (выгрузка
+    файла) CSRF не проверяет — как PreventRequestForgery::isReading.
     """
     from savdex.web.cabinet import _authenticate, _require_password_change
     from savdex.web.views import error
@@ -168,7 +170,9 @@ def action(
     bare = replace(first, locale=first.url_locale or locales.DEFAULT)
 
     # Без записи сессии (не database) токен не с чем сверить
-    if started is None or not _csrf_ok(request, started[0]):
+    reading = request.method in ("GET", "HEAD", "OPTIONS")
+
+    if not reading and (started is None or not _csrf_ok(request, started[0])):
         if started is not None:
             started[0].csrf_refused = True
 
@@ -177,8 +181,11 @@ def action(
     if auth and (refused := _authenticate(first)) is not None:
         raise RefusedError(refused)
 
-    if throttle is not None and (refused := _throttle(first, bare, throttle)) is not None:
-        raise RefusedError(refused)
+    if throttle is not None:
+        refused = _throttle(first, bare, throttle, throttle_minutes)
+
+        if refused is not None:
+            raise RefusedError(refused)
 
     ctx = context(request)
 
@@ -191,9 +198,11 @@ def action(
     return ctx
 
 
-def _throttle(first: Context, bare: Context, max_attempts: int) -> HttpResponse | None:
+def _throttle(
+    first: Context, bare: Context, max_attempts: int, minutes: int = 1
+) -> HttpResponse | None:
     """
-    throttle:N,1. Отказ Inertia-формы — назад с ошибкой поля body и
+    throttle:N,M. Отказ Inertia-формы — назад с ошибкой поля body и
     сообщением error (bootstrap/app.php), иначе страница 429.
     """
     from savdex import laravel_cache
@@ -220,7 +229,7 @@ def _throttle(first: Context, bare: Context, max_attempts: int) -> HttpResponse 
 
         return error(bare, 429, bare=True)
 
-    throttle.hit(key)
+    throttle.hit(key, 60 * minutes)
     # Заголовки частоты — на ответ формы (actions.form)
     setattr(first.request, RATE_ATTR, (max_attempts, key))
 
