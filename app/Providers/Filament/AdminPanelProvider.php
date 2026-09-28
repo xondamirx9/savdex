@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use App\Filament\Widgets\ActivationFunnel;
 use App\Filament\Widgets\AwaitingRole;
 use App\Filament\Widgets\ContentDrafts;
@@ -55,7 +56,8 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
-            ->login()
+            // Своя форма: почта без учёта регистра, как при входе на сайт
+            ->login(Login::class)
             // Тот же синий, что на витрине: админка — часть продукта,
             // а не отдельный инструмент со своим оформлением
             ->colors([
