@@ -159,8 +159,14 @@ def одинаково(стороны: dict[str, tuple[dict[str, Any], dict[str,
     assert set(куки_д) == set(куки_л) == {СЕССИЯ, "XSRF-TOKEN"}, (куки_д, куки_л)
 
     for имя in (СЕССИЯ, "XSRF-TOKEN"):
-        без_значения = [{k: v for k, v in к[имя].items() if k != "value"} for к in (куки_д, куки_л)]
+        # Max-Age у Symfony — «срок минус сейчас»: на стыке секунд 7199
+        без_значения = [
+            {k: v for k, v in к[имя].items() if k not in ("value", "max-age")}
+            for к in (куки_д, куки_л)
+        ]
         assert без_значения[0] == без_значения[1], имя
+        сроки = [int(к[имя].get("max-age", 0)) for к in (куки_д, куки_л)]
+        assert abs(сроки[0] - сроки[1]) <= 1, (имя, сроки)
 
     assert строка_д is not None and строка_л is not None
 
