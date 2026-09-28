@@ -184,7 +184,13 @@ def _activate(ctx: Context, row: dict[str, Any], plan: dict[str, Any]) -> None:
 
 
 def _notify_company(
-    ctx: Context, company: dict[str, Any], type_: str, title: str, tone: str, url: str
+    ctx: Context,
+    company: dict[str, Any],
+    type_: str,
+    title: str,
+    tone: str,
+    url: str,
+    body: str | None = None,
 ) -> None:
     """Notifier::company: событие в ленте кабинета и уведомление каждому сотруднику."""
     now = _stamp(_now())
@@ -202,9 +208,9 @@ def _notify_company(
             [company["id"]],
         ):
             cursor.execute(
-                "insert into user_notifications (user_id, company_id, type, title, tone, url, "
-                "created_at, updated_at) values (%s, %s, %s, %s, %s, %s, %s, %s)",
-                [user["id"], user["company_id"], type_, title, tone, url, now, now],
+                "insert into user_notifications (user_id, company_id, type, title, body, tone, "
+                "url, created_at, updated_at) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                [user["id"], user["company_id"], type_, title, body, tone, url, now, now],
             )
 
 

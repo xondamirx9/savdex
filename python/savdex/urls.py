@@ -21,6 +21,7 @@ from savdex.web import (
     auth,
     cabinet,
     catalog,
+    chat_actions,
     companies,
     company,
     contact_actions,
@@ -145,6 +146,17 @@ urlpatterns = [
         contact_actions.complain,
         name="cabinet.contacts.complain",
     ),
+    # Отклики в чат (этап 5, шаг 26): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<listing_id>[0-9]{1,18})/respond$",
+        chat_actions.respond,
+        name="listing.respond",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<task_id>[0-9]{1,18})/respond$",
+        chat_actions.respond_task,
+        name="it-tasks.respond",
+    ),
     # Отзывы о своей компании (этап 5, шаг 25): ответ и спор, группа forms
     *[
         re_path(
@@ -197,7 +209,7 @@ urlpatterns = [
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats/(?P<thread_id>[0-9]+)$",
-        cabinet.chat,
+        chat_actions.thread,
         name="cabinet.chats.show",
     ),
     re_path(

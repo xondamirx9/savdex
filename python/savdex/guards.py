@@ -125,7 +125,8 @@ SHARED_WRITES: dict[str, str] = {
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
         "MessageThread::markReadFor, — только время прочтения своей стороны "
-        "и updated_at; событий у модели нет"
+        "и updated_at; событий у модели нет. Чат (этап 5, форма): новый "
+        "разговор по отклику и last_message_at с отметкой прочтения отправителя"
     ),
     "sessions": (
         "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
@@ -156,7 +157,9 @@ SHARED_WRITES: dict[str, str] = {
     "it_tasks": (
         "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
         "$task->increment('views_count'), не заказчику; просмотр "
-        "администратора — строка журнала (раздел ittasks), как AuditObserver"
+        "администратора — строка журнала (раздел ittasks), как AuditObserver; "
+        "отклик исполнителя (этап 5, чат) — responses_count + 1 и updated_at, "
+        "как $task->increment('responses_count'), с той же строкой журнала"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
@@ -222,6 +225,15 @@ SHARED_WRITES: dict[str, str] = {
         "изменившихся полей своей строки и updated_at, как ReviewController; "
         "рейтинг они не трогают (событие saved пересчитывает его только при "
         "смене оценки, статуса, компании), у администратора — строка журнала"
+    ),
+    "messages": (
+        "чат (этап 5, форма): новое сообщение в разговор, как ChatService::send "
+        "(текст уже с маскировкой контактов); событий у модели нет"
+    ),
+    "wallets": (
+        "квота откликов (этап 5, чат): новый кошелёк компании, как "
+        "Wallet::firstOrCreate, и условное списание отклика — "
+        "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
