@@ -761,3 +761,177 @@ def test_задачи_без_компании(сайт):
 
     assert стороны["django"][0]["headers"]["location"].endswith("/cabinet/company")
     assert '"warning":' in итог["payload"]
+
+
+# ── Мини-сайт ───────────────────────────────────────────────────────
+
+
+def test_мини_сайт_без_сайта(сайт):
+    sql(
+        "delete from company_sites where company_id = (select id from companies "
+        "where slug = 'owner')"
+    )
+    сверить(сайт, "/cabinet/site", владелец(сайт))
+
+
+def test_мини_сайт(сайт):
+    фон = КОРЕНЬ / "storage/app/public/sites/1/hero.webp"
+    фон.parent.mkdir(parents=True, exist_ok=True)
+    фон.write_bytes(b"RIFF")
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "App\\Models\\CompanySite::query()->where('company_id', $c->id)->delete();"
+        "$s = new App\\Models\\CompanySite();"
+        "$s->forceFill(['company_id' => $c->id, 'subdomain' => 'owner-shop',"
+        " 'status' => 'published', 'published_at' => '2026-09-21 14:30:00',"
+        " 'theme' => ['template' => 'bold', 'primary' => '#AABBCC', 'mode' => 'neon',"
+        "  'hero_image' => 'sites/1/hero.webp', 'extra' => 'x'],"
+        " 'published_theme' => ['template' => 'classic']])->save();"
+        "App\\Models\\CompanySiteProduct::query()->where('company_id', $c->id)->delete();"
+        "foreach ([[2, 'Цемент', 45000], [1, 'Арматура', null], [1, 'Щебень', 120]]"
+        " as [$sort, $t, $p])"
+        " { $x = new App\\Models\\CompanySiteProduct(); $x->forceFill(['company_id' => $c->id,"
+        " 'title' => $t, 'price' => $p, 'currency' => 'UZS', 'sort' => $sort,"
+        " 'image_path' => $t === 'Цемент' ? 'sites/1/hero.webp' : null])->save(); }"
+        "echo 'ok';"
+    )
+    куки = владелец(сайт)
+
+    for path in ("/cabinet/site", "/uz/cabinet/site"):
+        сверить(сайт, path, куки)
+
+
+def test_мини_сайт_без_компании(сайт):
+    пользователь("nocompany12@savdex.uz")
+    д, _ = сверить(сайт, "/cabinet/site", войти(сайт, "nocompany12@savdex.uz"))
+    assert д["status"] == 302
+
+
+# ── Разговор ────────────────────────────────────────────────────────
+
+
+def test_разговор_отмечает_прочитанное(сайт):
+    _чаты()
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+    threads = sql(
+        "select id, buyer_company_id = %s from message_threads where %s in "
+        "(buyer_company_id, seller_company_id) and exists (select 1 from messages m "
+        "where m.thread_id = message_threads.id) order by id",
+        [owner, owner],
+    )
+    куки = владелец(сайт)
+
+    for thread, is_buyer in threads[:3]:
+        column, other = (
+            ("buyer_read_at", "seller_read_at") if is_buyer else ("seller_read_at", "buyer_read_at")
+        )
+        [(before_other,)] = sql(f"select {other} from message_threads where id = %s", [thread])
+        снимки = []
+
+        def сбросить(thread: int = thread, column: str = column) -> None:
+            sql(f"update message_threads set {column} = null where id = %s", [thread])
+
+        def снять(
+            _: object,
+            thread: int = thread,
+            column: str = column,
+            other: str = other,
+            before: object = before_other,
+            снимки: list[object] = снимки,
+        ) -> None:
+            снимки.append(
+                sql(
+                    f"select {column} is not null and {column} > now() - interval '1 minute', "
+                    f"{other} is not distinct from %s from message_threads where id = %s",
+                    [before, thread],
+                )[0]
+            )
+
+        сверить(сайт, f"/cabinet/chats/{thread}", куки, перед=сбросить, после=снять)
+
+        # Отмечена своя сторона, чужая не тронута — у обеих
+        assert снимки == [(True, True), (True, True)], снимки
+
+
+def test_чужой_разговор_404(сайт):
+    _чаты()
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+    php(
+        "App\\Models\\MessageThread::create(['buyer_company_id' => App\\Models\\Company::factory()"
+        "->create()->id, 'seller_company_id' => App\\Models\\Company::factory()->create()->id]);"
+        "echo 'ok';"
+    )
+    [(чужой,)] = sql(
+        "select max(id) from message_threads where %s not in (buyer_company_id, seller_company_id)",
+        [owner],
+    )
+    куки = владелец(сайт)
+
+    for path in (f"/cabinet/chats/{чужой}", "/cabinet/chats/999999"):
+        д, _ = сверить(сайт, path, куки)
+        assert д["status"] == 404
+
+
+# ── Мастер объявления ───────────────────────────────────────────────
+
+
+def _черновик() -> int:
+    """Черновик владельца в подразделе с полями, характеристиками и фото."""
+    if not sql("select 1 from categories where parent_id is not null limit 1"):
+        subprocess.run(
+            ["php", "artisan", "db:seed", "--class=CategorySeeder", "--force"],
+            cwd=КОРЕНЬ,
+            env=ОКРУЖЕНИЕ,
+            check=True,
+            capture_output=True,
+        )
+
+    found = sql("select id from listings where slug = 'wizard-draft'")
+
+    if found:
+        return int(found[0][0])
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$child = App\\Models\\Category::whereNotNull('parent_id')->orderBy('id')->first();"
+        "$child->fields()->updateOrCreate(['key' => 'mark'], ['label' => 'Марка',"
+        " 'type' => 'select', 'options' => ['М400', 'М500'], 'sort' => 1]);"
+        "$l = App\\Models\\Listing::factory()->draft()->create(['company_id' => $c->id,"
+        " 'slug' => 'wizard-draft', 'category_id' => $child->id,"
+        " 'title' => 'Цемент М400 навалом 50 кг', 'tags' => ['цемент'], 'wizard_step' => 3]);"
+        "foreach ([['weight', '50 кг'], ['mark', 'М400']] as [$k, $v])"
+        " { $l->attributes()->create(['key' => $k, 'value' => $v]); }"
+        "foreach ([1, 0] as $i => $sort) { $l->images()->create(['path' => 'l/w'.$i.'.webp',"
+        " 'thumb_path' => $i ? null : 'l/wt'.$i.'.webp', 'sort' => $sort]); }"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+
+    return int(sql("select id from listings where slug = 'wizard-draft'")[0][0])
+
+
+@pytest.mark.parametrize("prefix", ["", "/uz"])
+def test_мастер_объявления(сайт, prefix):
+    listing = _черновик()
+    сверить(сайт, f"{prefix}/cabinet/listings/{listing}/edit", владелец(сайт))
+
+
+def test_мастер_чужое_и_неподтверждённая_почта(сайт):
+    listing = _черновик()
+    чужое = int(
+        php("echo App\\Models\\Listing::factory()->draft()->create()->id;").splitlines()[-1]
+    )
+    д, _ = сверить(сайт, f"/cabinet/listings/{чужое}/edit", владелец(сайт))
+    assert д["status"] == 404
+
+    пользователь("unverified@savdex.uz")
+    sql(
+        "update users set email_verified_at = null, company_id = (select id from companies "
+        "where slug = 'owner') where email = 'unverified@savdex.uz'"
+    )
+    куки = войти(сайт, "unverified@savdex.uz")
+    стороны = по_сторонам(сайт, f"/cabinet/listings/{listing}/edit", lambda: None, cookies=куки)
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["headers"]["location"].endswith("/verify-email")
+    assert '"intended":' in итог["payload"]

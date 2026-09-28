@@ -93,6 +93,17 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$", cabinet.company_page, name="cabinet.company"
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]+)/edit$",
+        cabinet.listing_wizard,
+        name="cabinet.listings.edit",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats/(?P<thread_id>[0-9]+)$",
+        cabinet.chat,
+        name="cabinet.chats.show",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/create$",
         cabinet.it_task_create,
