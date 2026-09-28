@@ -81,6 +81,10 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect, name="tenders"),
     # Кабинет (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet$", cabinet.dashboard, name="cabinet"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/analytics$", cabinet.analytics, name="cabinet.analytics"
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/incoming$", cabinet.incoming, name="cabinet.incoming"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index, name="news"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show, name="news.show"),
     re_path(

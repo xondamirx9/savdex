@@ -26,6 +26,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex.web import inertia, locales, session, ui
 from savdex.web.home import _filled, completeness, php_round
+from savdex.web.phpquery import laravel_input, php_int
 from savdex.web.request import _expects_json, context
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, ago
@@ -384,11 +385,15 @@ def _delta(now: int, prev: int) -> float | None:
     return php_round((now - prev) / prev * 100, 1) if prev > 0 else None
 
 
-def summary(company_id: int) -> dict[str, Any]:
-    """CabinetMetrics::summary: 30 дней и предыдущие 30 (граница — в обоих)."""
-    start = _today() - timedelta(days=DAYS - 1)
+def _from(days: int) -> date:
+    return _today() - timedelta(days=days - 1)
+
+
+def summary(company_id: int, days: int = DAYS) -> dict[str, Any]:
+    """CabinetMetrics::summary: период и предыдущий такой же (граница — в обоих)."""
+    start = _from(days)
     now = _sum(company_id, start, _today())
-    prev = _sum(company_id, start - timedelta(days=DAYS), start)
+    prev = _sum(company_id, start - timedelta(days=days), start)
 
     def conversion(p: dict[str, int]) -> float:
         return php_round(p["unlocks"] / p["views"] * 100, 1) if p["views"] > 0 else 0.0
@@ -410,13 +415,13 @@ def summary(company_id: int) -> dict[str, Any]:
     }
 
 
-def series(company_id: int) -> dict[str, list[float]]:
+def series(company_id: int, days: int = DAYS) -> dict[str, list[float]]:
     """CabinetMetrics::series: по дням, скользящее среднее за неделю."""
     today = _today()
-    rows = {r["date"]: r for r in _stats(company_id, today - timedelta(days=DAYS - 1), today)}
+    rows = {r["date"]: r for r in _stats(company_id, _from(days), today)}
     raw: dict[str, list[int]] = {"impressions": [], "views": [], "unlocks": []}
 
-    for i in range(DAYS - 1, -1, -1):
+    for i in range(days - 1, -1, -1):
         row = rows.get(today - timedelta(days=i))
 
         for metric, values in raw.items():
@@ -433,3 +438,316 @@ def _smooth(values: list[int], window: int = 7) -> list[float]:
         out.append(php_round(sum(part) / len(part), 1))
 
     return out
+
+
+#: CabinetMetrics::funnel — подписи в коде, по-русски на всех языках
+_FUNNEL = (
+    ("Показы в выдаче", "impressions", "primary"),
+    ("Просмотры карточки", "views", "primary"),
+    ("Добавили в избранное", "favorites", "primary"),
+    ("Открыли контакт", "unlocks", "success"),
+    ("Оставили отзыв", "reviews", "warning"),
+)
+
+
+def funnel(company_id: int, days: int) -> list[dict[str, Any]]:
+    """CabinetMetrics::funnel: показы → просмотры → избранное → контакты → отзывы."""
+    totals: dict[str, int] = dict(_sum(company_id, _from(days), _today()))
+    totals["reviews"] = _count(
+        "select count(*) as n from reviews where company_id = %s and status = 'published' "
+        "and created_at >= %s",
+        [company_id, _from(days)],
+    )
+    top = max(1, totals["impressions"])
+
+    return [
+        {
+            "label": label,
+            "value": totals[key],
+            "share": php_round(totals[key] / top * 100, 1),
+            "tone": tone,
+        }
+        for label, key, tone in _FUNNEL
+    ]
+
+
+def geography(company_id: int, locale: str) -> list[dict[str, Any]]:
+    """
+    CabinetMetrics::geography: города компаний, открывавших контакты, —
+    группы в порядке первого появления, по убыванию, шесть первых.
+    """
+    from savdex.web.directory import _named
+
+    cities = _named("cities", locale)
+    groups: dict[str, int] = {}
+
+    for row in _rows(
+        "select c.city_id from contact_unlocks u left join companies c "
+        "on c.id = u.company_id and c.deleted_at is null "
+        "where u.target_company_id = %s order by u.id",
+        [company_id],
+    ):
+        label = cities.get(row["city_id"]) if row["city_id"] is not None else None
+        label = label if label is not None else "Не указан"
+        groups[label] = groups.get(label, 0) + 1
+
+    # sortDesc устойчив: равные остаются в порядке появления
+    ranked = sorted(groups.items(), key=lambda kv: kv[1], reverse=True)[:6]
+
+    return [{"label": label, "value": value} for label, value in ranked]
+
+
+def queries(company_id: int, days: int, limit: int = 10) -> list[dict[str, Any]]:
+    """CabinetMetrics::queries: поисковые запросы с CTR."""
+    return [
+        {
+            "query": h["query"],
+            "impressions": int(h["impressions"]),
+            "clicks": int(h["clicks"]),
+            "ctr": php_round(h["clicks"] / h["impressions"] * 100, 1)
+            if h["impressions"] > 0
+            else 0.0,
+        }
+        for h in _rows(
+            "select query, sum(impressions) as impressions, sum(clicks) as clicks "
+            "from search_hits where company_id = %s and date >= %s group by query "
+            "order by impressions desc, query limit %s",
+            [company_id, _from(days), limit],
+        )
+    ]
+
+
+# ── Аналитика /cabinet/analytics (AnalyticsController) ──────────────
+
+PERIODS = (7, 30, 90)
+
+
+def analytics(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Analytics", analytics_props(ctx), _seo(ctx))
+
+
+def analytics_props(ctx: Context) -> dict[str, Any]:
+    periods = {str(d): ctx.t("cabinet.analytics.period_days", days=d) for d in PERIODS}
+    company = company_of(ctx)
+
+    if company is None:
+        return {
+            "metrics": None,
+            "funnel": [],
+            "geography": [],
+            "queries": [],
+            "benchmark": [],
+            "periods": periods,
+            "period": 30,
+            "advanced": False,
+            "plan": None,
+        }
+
+    # $request->integer('period', 30): intval ввода (пустое — null — это 0)
+    value = laravel_input(ctx.query).get("period", 30)
+    period = php_int(value, 0) if isinstance(value, str) else (30 if value == 30 else 0)
+    period = period if period in PERIODS else 30
+
+    cid = company["id"]
+    plan = company_plan(cid)
+    advanced = bool(plan.get("advanced_analytics"))
+    metrics = summary(cid, period)
+
+    return {
+        "metrics": metrics,
+        "series": series(cid, period),
+        "funnel": funnel(cid, period),
+        "geography": geography(cid, ctx.locale),
+        "queries": queries(cid, period) if advanced else [],
+        "benchmark": _benchmark(ctx, metrics) if advanced else [],
+        "periods": periods,
+        "period": period,
+        "advanced": advanced,
+        "plan": {"name": plan["name"]},
+    }
+
+
+def _benchmark(ctx: Context, metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    """AnalyticsController::benchmark: медианы категории пока постоянные."""
+    views = float(metrics["views"]["value"])
+    impressions = max(1.0, float(metrics["impressions"]["value"]))
+    ctr = php_round(views / impressions * 100, 1)
+    conversion = float(metrics["conversion"]["value"])
+
+    return [
+        _benchmark_row(ctx, ctx.t("cabinet.analytics.ctr"), ctr, 12.0),
+        _benchmark_row(ctx, ctx.t("cabinet.analytics.to_contact"), conversion, 4.0),
+    ]
+
+
+def _benchmark_row(ctx: Context, label: str, you: float, median: float) -> dict[str, Any]:
+    ratio = you / median if median > 0 else 1.0
+
+    if ratio >= 1.4:
+        verdict, tone = "top_quarter", "success"
+    elif ratio >= 1.0:
+        verdict, tone = "above_median", "success"
+    elif ratio >= 0.7:
+        verdict, tone = "near_median", "muted"
+    else:
+        verdict, tone = "below_median", "warning"
+
+    return {
+        "label": label,
+        "you": you,
+        "median": median,
+        "position": min(96.0, max(4.0, ratio * 50)),
+        "verdict": ctx.t(f"cabinet.analytics.{verdict}"),
+        "tone": tone,
+    }
+
+
+# ── Кто мной интересуется /cabinet/incoming (IncomingController) ────
+
+
+def incoming(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Incoming", incoming_props(ctx), _seo(ctx))
+
+
+def _interested(
+    ctx: Context, company: dict[str, Any] | None, cities: dict[int, str], sees_names: bool
+) -> dict[str, Any]:
+    """Общая часть строки: имя и рейтинг — только на тарифе, где их видно."""
+    from savdex.web.shared import initials
+
+    role = (company or {}).get("primary_role")
+    city = cities.get(company["city_id"]) if company and company["city_id"] is not None else None
+
+    return {
+        "name": company["name"] if sees_names and company else None,
+        "slug": company["slug"] if sees_names and company else None,
+        "initials": initials(company["name"]) if sees_names and company else None,
+        "verified": int(company["verification_level"] or 0) if sees_names and company else 0,
+        "type": ctx.t("cabinet.incoming.buyer" if role == "buyer" else "cabinet.incoming.supplier"),
+        "rating": float(company["rating"] or 0) if sees_names and company else 0.0,
+        "city": city if city is not None else ctx.t("cabinet.incoming.city_unknown"),
+    }
+
+
+def incoming_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.directory import _named
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"rows": [], "viewers": [], "sees_names": False, "plan": None}
+
+    cid = company["id"]
+    plan = company_plan(cid)
+    sees_names = bool(plan.get("sees_interested_names"))
+    cities = _named("cities", ctx.locale)
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    unlocks = _rows(
+        "select u.id, u.created_at, l.title as listing_title, c.id as c_id "
+        "from contact_unlocks u "
+        "left join listings l on l.id = u.listing_id and l.deleted_at is null "
+        "left join companies c on c.id = u.company_id and c.deleted_at is null "
+        "where u.target_company_id = %s and u.created_at >= %s "
+        "order by u.created_at desc, u.id desc",
+        [cid, since],
+    )
+    companies = _companies([u["c_id"] for u in unlocks if u["c_id"] is not None])
+
+    return {
+        "rows": [
+            {
+                "id": u["id"],
+                **_interested(ctx, companies.get(u["c_id"]), cities, sees_names),
+                "listing": u["listing_title"],
+                "when": ago(u["created_at"], ctx.locale),
+            }
+            for u in unlocks
+        ],
+        "viewers": _viewers(ctx, cid, sees_names, since, cities),
+        "sees_names": sees_names,
+        "plan": {"name": plan["name"]},
+    }
+
+
+def _companies(ids: list[int]) -> dict[int, dict[str, Any]]:
+    if not ids:
+        return {}
+
+    return {
+        c["id"]: c
+        for c in _rows(
+            "select id, name, slug, verification_level, primary_role, rating, city_id "
+            "from companies where id = any(%s) and deleted_at is null",
+            [list(set(ids))],
+        )
+    }
+
+
+def _viewers(
+    ctx: Context, company_id: int, sees_names: bool, since: datetime, cities: dict[int, str]
+) -> list[dict[str, Any]]:
+    """IncomingController::viewers: свёртка просмотров по зрителю, 50 последних."""
+    aggregates = _rows(
+        "select viewer_company_id, count(*) as views_total, max(created_at) as last_at "
+        "from audience_views where target_company_id = %s and created_at >= %s "
+        "group by viewer_company_id order by last_at desc, viewer_company_id desc limit 50",
+        [company_id, since],
+    )
+
+    if not aggregates:
+        return []
+
+    ids = [a["viewer_company_id"] for a in aggregates]
+    companies = _companies(ids)
+    pages: dict[int, list[int | None]] = {}
+
+    for p in _rows(
+        "select distinct viewer_company_id, listing_id from audience_views "
+        "where target_company_id = %s and created_at >= %s and viewer_company_id = any(%s) "
+        "order by viewer_company_id, listing_id",
+        [company_id, since, ids],
+    ):
+        pages.setdefault(p["viewer_company_id"], []).append(p["listing_id"])
+
+    listing_ids = sorted({i for seen in pages.values() for i in seen if i is not None})
+    # withTrashed: снятое объявление остаётся под своим названием
+    titles = {
+        r["id"]: r["title"]
+        for r in _rows("select id, title from listings where id = any(%s)", [listing_ids])
+    }
+    result = []
+
+    for i, row in enumerate(aggregates):
+        viewed = pages.get(row["viewer_company_id"], [])
+        found = [titles.get(x) for x in viewed if x]
+        # ->filter()->unique(): пустые названия прочь, повторы — один раз
+        listing_titles = list(dict.fromkeys(t for t in found if t))
+        looked = listing_titles[:2]
+
+        if len(listing_titles) > 2:
+            looked.append(ctx.t("cabinet.incoming.and_more", count=len(listing_titles) - 2))
+
+        if any(x is None for x in viewed):
+            looked.append(ctx.t("cabinet.incoming.company_card"))
+
+        result.append(
+            {
+                "id": i,
+                **_interested(ctx, companies.get(row["viewer_company_id"]), cities, sees_names),
+                "looked": " · ".join(looked),
+                "views": int(row["views_total"]),
+                "when": ago(row["last_at"], ctx.locale),
+            }
+        )
+
+    return result
