@@ -43,7 +43,9 @@ class IncomingController extends Controller
         $rows = $company->unlockedBy()
             ->with(['company.city.translations', 'listing'])
             ->where('created_at', '>=', now()->subDays(30))
+            // Хвост по id: раскрытия одной секунды шли в плавающем порядке
             ->latest()
+            ->latest('id')
             ->get()
             ->map(fn (ContactUnlock $u): array => [
                 'id' => $u->id,
@@ -94,6 +96,7 @@ class IncomingController extends Controller
             ->selectRaw('viewer_company_id, count(*) as views_total, max(created_at) as last_at')
             ->groupBy('viewer_company_id')
             ->orderByDesc('last_at')
+            ->orderByDesc('viewer_company_id')
             ->limit(50)
             ->get();
 
@@ -117,6 +120,10 @@ class IncomingController extends Controller
             ->whereIn('viewer_company_id', $viewerIds)
             ->select('viewer_company_id', 'listing_id')
             ->distinct()
+            // Порядок DISTINCT у PostgreSQL не определён, а от него
+            // зависит, какие два объявления попадут в подпись
+            ->orderBy('viewer_company_id')
+            ->orderBy('listing_id')
             ->get()
             ->groupBy('viewer_company_id');
 

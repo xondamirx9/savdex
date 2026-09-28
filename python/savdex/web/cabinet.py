@@ -605,3 +605,149 @@ def _benchmark_row(ctx: Context, label: str, you: float, median: float) -> dict[
         "verdict": ctx.t(f"cabinet.analytics.{verdict}"),
         "tone": tone,
     }
+
+
+# ── Кто мной интересуется /cabinet/incoming (IncomingController) ────
+
+
+def incoming(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Incoming", incoming_props(ctx), _seo(ctx))
+
+
+def _interested(
+    ctx: Context, company: dict[str, Any] | None, cities: dict[int, str], sees_names: bool
+) -> dict[str, Any]:
+    """Общая часть строки: имя и рейтинг — только на тарифе, где их видно."""
+    from savdex.web.shared import initials
+
+    role = (company or {}).get("primary_role")
+    city = cities.get(company["city_id"]) if company and company["city_id"] is not None else None
+
+    return {
+        "name": company["name"] if sees_names and company else None,
+        "slug": company["slug"] if sees_names and company else None,
+        "initials": initials(company["name"]) if sees_names and company else None,
+        "verified": int(company["verification_level"] or 0) if sees_names and company else 0,
+        "type": ctx.t("cabinet.incoming.buyer" if role == "buyer" else "cabinet.incoming.supplier"),
+        "rating": float(company["rating"] or 0) if sees_names and company else 0.0,
+        "city": city if city is not None else ctx.t("cabinet.incoming.city_unknown"),
+    }
+
+
+def incoming_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.directory import _named
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"rows": [], "viewers": [], "sees_names": False, "plan": None}
+
+    cid = company["id"]
+    plan = company_plan(cid)
+    sees_names = bool(plan.get("sees_interested_names"))
+    cities = _named("cities", ctx.locale)
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    unlocks = _rows(
+        "select u.id, u.created_at, l.title as listing_title, c.id as c_id "
+        "from contact_unlocks u "
+        "left join listings l on l.id = u.listing_id and l.deleted_at is null "
+        "left join companies c on c.id = u.company_id and c.deleted_at is null "
+        "where u.target_company_id = %s and u.created_at >= %s "
+        "order by u.created_at desc, u.id desc",
+        [cid, since],
+    )
+    companies = _companies([u["c_id"] for u in unlocks if u["c_id"] is not None])
+
+    return {
+        "rows": [
+            {
+                "id": u["id"],
+                **_interested(ctx, companies.get(u["c_id"]), cities, sees_names),
+                "listing": u["listing_title"],
+                "when": ago(u["created_at"], ctx.locale),
+            }
+            for u in unlocks
+        ],
+        "viewers": _viewers(ctx, cid, sees_names, since, cities),
+        "sees_names": sees_names,
+        "plan": {"name": plan["name"]},
+    }
+
+
+def _companies(ids: list[int]) -> dict[int, dict[str, Any]]:
+    if not ids:
+        return {}
+
+    return {
+        c["id"]: c
+        for c in _rows(
+            "select id, name, slug, verification_level, primary_role, rating, city_id "
+            "from companies where id = any(%s) and deleted_at is null",
+            [list(set(ids))],
+        )
+    }
+
+
+def _viewers(
+    ctx: Context, company_id: int, sees_names: bool, since: datetime, cities: dict[int, str]
+) -> list[dict[str, Any]]:
+    """IncomingController::viewers: свёртка просмотров по зрителю, 50 последних."""
+    aggregates = _rows(
+        "select viewer_company_id, count(*) as views_total, max(created_at) as last_at "
+        "from audience_views where target_company_id = %s and created_at >= %s "
+        "group by viewer_company_id order by last_at desc, viewer_company_id desc limit 50",
+        [company_id, since],
+    )
+
+    if not aggregates:
+        return []
+
+    ids = [a["viewer_company_id"] for a in aggregates]
+    companies = _companies(ids)
+    pages: dict[int, list[int | None]] = {}
+
+    for p in _rows(
+        "select distinct viewer_company_id, listing_id from audience_views "
+        "where target_company_id = %s and created_at >= %s and viewer_company_id = any(%s) "
+        "order by viewer_company_id, listing_id",
+        [company_id, since, ids],
+    ):
+        pages.setdefault(p["viewer_company_id"], []).append(p["listing_id"])
+
+    listing_ids = sorted({i for seen in pages.values() for i in seen if i is not None})
+    # withTrashed: снятое объявление остаётся под своим названием
+    titles = {
+        r["id"]: r["title"]
+        for r in _rows("select id, title from listings where id = any(%s)", [listing_ids])
+    }
+    result = []
+
+    for i, row in enumerate(aggregates):
+        viewed = pages.get(row["viewer_company_id"], [])
+        found = [titles.get(x) for x in viewed if x]
+        # ->filter()->unique(): пустые названия прочь, повторы — один раз
+        listing_titles = list(dict.fromkeys(t for t in found if t))
+        looked = listing_titles[:2]
+
+        if len(listing_titles) > 2:
+            looked.append(ctx.t("cabinet.incoming.and_more", count=len(listing_titles) - 2))
+
+        if any(x is None for x in viewed):
+            looked.append(ctx.t("cabinet.incoming.company_card"))
+
+        result.append(
+            {
+                "id": i,
+                **_interested(ctx, companies.get(row["viewer_company_id"]), cities, sees_names),
+                "looked": " · ".join(looked),
+                "views": int(row["views_total"]),
+                "when": ago(row["last_at"], ctx.locale),
+            }
+        )
+
+    return result

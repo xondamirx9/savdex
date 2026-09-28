@@ -231,3 +231,57 @@ def test_аналитика_расширенная(сайт, path):
 def test_аналитика_без_компании(сайт):
     пользователь("nocompany2@savdex.uz")
     сверить(сайт, "/cabinet/analytics", войти(сайт, "nocompany2@savdex.uz"))
+
+
+# ── Кто мной интересуется ───────────────────────────────────────────
+
+
+def _просмотры() -> None:
+    """Просмотры визитки и объявлений: зрители, удалённое объявление, «и ещё»."""
+    if sql("select 1 from audience_views limit 1"):
+        return
+
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+    зрители = [r[0] for r in sql("select id from companies where id != %s order by id", [owner])]
+    объявления = [
+        r[0] for r in sql("select id from listings where company_id = %s order by id", [owner])
+    ]
+
+    for i, зритель in enumerate(зрители[:3]):
+        for j, объявление in enumerate([None, *объявления][: 2 + 2 * i]):
+            sql(
+                "insert into audience_views (target_company_id, viewer_company_id, listing_id, "
+                "created_at, updated_at) values (%s, %s, %s, "
+                "now() - make_interval(hours => %s + 1), now())",
+                [owner, зритель, объявление, i + j],
+            )
+
+    # Раскрытия — часами раньше: «N секунд назад» разошлось бы между сторонами
+    sql("update contact_unlocks set created_at = now() - make_interval(hours => id::int)")
+
+    # Старше месяца — не считается
+    sql(
+        "insert into audience_views (target_company_id, viewer_company_id, listing_id, "
+        "created_at, updated_at) values (%s, %s, null, now() - interval '40 days', now())",
+        [owner, зрители[0]],
+    )
+
+
+@pytest.mark.parametrize("names", [False, True])
+@pytest.mark.parametrize("path", ["/cabinet/incoming", "/uz/cabinet/incoming"])
+def test_кто_интересуется(сайт, path, names):
+    _просмотры()
+    sql(
+        "update subscriptions set plan_id = (select id from plans where sees_interested_names = %s "
+        "order by id limit 1) where company_id = (select id from companies where slug = 'owner')",
+        [names],
+    )
+    д, _ = сверить(сайт, path, владелец(сайт))
+    props = страница(д["body"])["props"]
+
+    assert props["sees_names"] is names and props["viewers"] and props["rows"]
+
+
+def test_кто_интересуется_без_компании(сайт):
+    пользователь("nocompany3@savdex.uz")
+    сверить(сайт, "/cabinet/incoming", войти(сайт, "nocompany3@savdex.uz"))
