@@ -87,6 +87,14 @@
     --font-sans:
         'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
 
+    /* Стек для флагов-эмодзи. Первым — шрифт, который подключает
+       полифилл в app.tsx: Windows региональные пары сама не рисует
+       и показывает вместо флага две буквы кода. Держим одним
+       токеном — стек уже разъехался между .flag и .country-flag,
+       и на странице стран вместо флагов выходили «TR» и «PL». */
+    --font-flag: 'Twemoji Country Flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
+        sans-serif;
+
     --text-display: 3rem; /* 48 */
     --text-display--line-height: 3.5rem;
     --text-h1: 2.25rem; /* 36 */

@@ -85,6 +85,7 @@ export default function Register() {
 
     return (
         <AuthLayout
+            wide
             title={t('auth.register_title')}
             heading={t('auth.register_heading')}
             subheading={t('auth.register_subheading')}
@@ -96,7 +97,7 @@ export default function Register() {
                     <legend className="label" style={{ marginBottom: 8 }}>
                         {t('auth.account_type_legend')} <span className="req">*</span>
                     </legend>
-                    <div className="radio-cards">
+                    <div className="radio-cards radio-cards--row">
                         {accountTypes().map(([value, title, desc]) => (
                             <label key={value} className="radio-card">
                                 <input
