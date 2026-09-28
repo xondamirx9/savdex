@@ -122,7 +122,11 @@ class CompaniesTable
                     ->label('Партнёрство')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Company::PARTNER_TIERS[$state] ?? '—')
-                    ->color(fn (?string $state): string => $state === Company::PARTNER_GENERAL ? 'warning' : 'info')
+                    ->color(fn (?string $state): string => match ($state) {
+                        Company::PARTNER_GENERAL => 'warning',
+                        Company::PARTNER_MULTI => 'success',
+                        default => 'info',
+                    })
                     ->placeholder('—')
                     ->toggleable(),
 
@@ -212,7 +216,7 @@ class CompaniesTable
                             ->label('Уровень')
                             ->options(['none' => 'Не партнёр'] + Company::PARTNER_TIERS)
                             ->required()
-                            ->helperText('Страница «Партнёры»: вкладки «Генеральные партнёры» и «Партнёры».'),
+                            ->helperText('У каждого вида — своя страница: «Генеральные партнёры», «Партнёры», «Мультипартнёры» (раздел «Партнёры» на сайте).'),
                         TextInput::make('sort')
                             ->label('Порядок')
                             ->numeric()

@@ -47,15 +47,31 @@ class Company extends Model
 
     /**
      * Партнёрство с площадкой. Назначает администратор действием
-     * «Партнёрство» в админке; на странице «Партнёры» — две вкладки.
+     * «Партнёрство» в админке. У каждого вида — своя страница
+     * (/partners/general, /partners/regular, /partners/multi).
+     *
+     * Генеральный партнёр — отчисляет площадке процент с продаж;
+     * партнёр — проверенный клиент, оказывающий свои услуги;
+     * мультипартнёр — представитель других компаний, государств
+     * и государственных органов.
      */
     public const PARTNER_GENERAL = 'general';
 
     public const PARTNER_REGULAR = 'partner';
 
+    public const PARTNER_MULTI = 'multi';
+
     public const PARTNER_TIERS = [
         self::PARTNER_GENERAL => 'Генеральный партнёр',
         self::PARTNER_REGULAR => 'Партнёр',
+        self::PARTNER_MULTI => 'Мультипартнёр',
+    ];
+
+    /** Адрес страницы вида партнёров → код в базе. */
+    public const PARTNER_SLUGS = [
+        'general' => self::PARTNER_GENERAL,
+        'regular' => self::PARTNER_REGULAR,
+        'multi' => self::PARTNER_MULTI,
     ];
 
     public const VERIFICATION_COMPANY = 2;

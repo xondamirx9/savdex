@@ -1695,6 +1695,16 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    Без !important. С ним правило перебивало и оформление для тёмной
    шапки: над первым экраном ссылка оставалась синей на тёмно-синем
    фоне — 3.4:1, ниже нормы для текста. */
+/* «Партнёры»: всплывающий столбик подразделов (NavDropdown).
+   Лежит в body — поверх шапки и первого экрана */
+.subnav-dd{display:inline-flex}
+.subnav-dd-menu{position:fixed;z-index:80;min-width:250px;display:flex;flex-direction:column;gap:2px;
+  padding:8px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--sh-hover)}
+.subnav-dd-menu a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  font-size:14.5px;font-weight:500;color:var(--text);white-space:nowrap}
+.subnav-dd-menu a:hover,.subnav-dd-menu a:focus-visible{background:var(--primary-50);color:var(--primary-700);text-decoration:none}
+.subnav-dd-menu .stat-ico{width:30px;height:30px;border-radius:8px}
+.mobile-menu .mobile-sublink{padding-left:32px;font-size:.95em;color:var(--text-muted)}
 .subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-weight:600}
 /* Цвет задаётся с весом самого правила, а не !important: рядом стоит
    .subnav a, оно весит больше одного класса и перебивало бы. Прежний
@@ -2241,6 +2251,19 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
 .partners-stats>*{min-width:0}
 .partner-stat{display:flex;align-items:center;gap:14px;padding:var(--sp-4,16px);
   background:var(--white);border:1px solid var(--border);border-radius:var(--r-card)}
+/* Виды партнёрства: ячейка-ссылка выше обычной — в ней ещё
+   описание, кто это такие, и приглашение перейти */
+.partner-tier{flex-direction:column;align-items:stretch;gap:12px;padding:22px 22px 18px;
+  color:inherit;transition:box-shadow var(--t-fast),border-color var(--t-fast),transform var(--t-fast)}
+.partner-tier:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500);text-decoration:none;transform:translateY(-2px)}
+.partner-tier-head{display:flex;align-items:center;gap:14px}
+.partner-tier-title{display:block;font-weight:700;font-size:16px;color:var(--text);margin-top:2px}
+.partner-tier-text{font-size:14px;line-height:1.55;color:var(--text-muted);flex:1}
+.partner-tier-go{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--primary-700)}
+.partner-tier-mini{color:inherit}
+.partner-tier-mini:hover{border-color:var(--primary-500);text-decoration:none}
+.partner-tier-hero{display:flex;gap:18px;align-items:flex-start;padding:8px 0 0;margin-bottom:28px}
+.partner-tier-hero .stat-ico{width:56px;height:56px;flex-shrink:0;margin-top:26px}
 @media (max-width:640px){.partners-stats{grid-template-columns:1fr}}
 
 .objection-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-6,24px)}
