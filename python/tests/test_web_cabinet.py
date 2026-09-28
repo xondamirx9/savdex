@@ -899,7 +899,8 @@ def _черновик() -> int:
         "$l = App\\Models\\Listing::factory()->draft()->create(['company_id' => $c->id,"
         " 'slug' => 'wizard-draft', 'category_id' => $child->id,"
         " 'title' => 'Цемент М400 навалом 50 кг', 'tags' => ['цемент'], 'wizard_step' => 3]);"
-        "foreach ([['weight', '50 кг'], ['mark', 'М400']] as [$k, $v])"
+        "foreach ([['weight', '50 кг'], ['mark', 'М400'], ['spec_weight', '50 kg'],"
+        " ['spec_color', 'grey']] as [$k, $v])"
         " { $l->attributes()->create(['key' => $k, 'value' => $v]); }"
         "foreach ([1, 0] as $i => $sort) { $l->images()->create(['path' => 'l/w'.$i.'.webp',"
         " 'thumb_path' => $i ? null : 'l/wt'.$i.'.webp', 'sort' => $sort]); }"
@@ -913,7 +914,18 @@ def _черновик() -> int:
 @pytest.mark.parametrize("prefix", ["", "/uz"])
 def test_мастер_объявления(сайт, prefix):
     listing = _черновик()
-    сверить(сайт, f"{prefix}/cabinet/listings/{listing}/edit", владелец(сайт))
+    д, _ = сверить(сайт, f"{prefix}/cabinet/listings/{listing}/edit", владелец(сайт))
+    props = страница(д["body"])["props"]
+
+    # Блок «Информация о товаре» (ProductSpecs): поля у каждого подраздела,
+    # детали в теги не идут. Пока ProductSpecs у Laravel нет — блока нет
+    if not (КОРЕНЬ / "lang/ru/specs.php").exists():
+        assert not any("specs" in c for p in props["categories"] for c in p["children"])
+        return
+
+    assert all("specs" in c for p in props["categories"] for c in p["children"])
+    assert any(c["specs"] for p in props["categories"] for c in p["children"])
+    assert "50 kg" not in props["tagOptions"]
 
 
 def test_мастер_чужое_и_неподтверждённая_почта(сайт):

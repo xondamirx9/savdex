@@ -52,18 +52,25 @@ def translations(locale: str) -> dict[str, Any]:
     return data
 
 
+def group_node(key: str, locale: str) -> object:
+    """trans('<словарь>.<ключ>') как есть — строка, массив или None, если ключа нет."""
+    node: Any = _load(locale).get("groups", {})
+
+    for part in key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+
+        node = node[part]
+
+    return node
+
+
 def group_t(key: str, locale: str) -> str:
     """
     __('<словарь>.<ключ>') для словарей, кроме ui (company.field.tin):
     выгружены в groups, русский — запасной. Ключа нет — сам ключ.
     """
-    node: Any = _load(locale).get("groups", {})
-
-    for part in key.split("."):
-        if not isinstance(node, dict) or part not in node:
-            return key
-
-        node = node[part]
+    node = group_node(key, locale)
 
     return node if isinstance(node, str) else key
 

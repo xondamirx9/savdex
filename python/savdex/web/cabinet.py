@@ -25,7 +25,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
-from savdex.web import inertia, locales, session, ui
+from savdex.web import inertia, locales, session, specs, ui
 from savdex.web.home import _filled, completeness, php_round
 from savdex.web.phpquery import laravel_input, php_int, text
 from savdex.web.request import _expects_json, context
@@ -2219,10 +2219,11 @@ def _category_tree(locale: str) -> list[dict[str, Any]]:
         "select id, slug from categories where parent_id is null and is_active order by sort, id"
     )
     children = _rows(
-        "select id, parent_id from categories where parent_id = any(%s) order by sort, id",
+        "select id, parent_id, slug from categories where parent_id = any(%s) order by sort, id",
         [[r["id"] for r in roots]],
     )
     fields: dict[int, list[dict[str, Any]]] = {}
+    with_specs = specs.enabled()
 
     for f in _rows(
         "select category_id, key, label, type, options, unit from category_fields "
@@ -2245,7 +2246,13 @@ def _category_tree(locale: str) -> list[dict[str, Any]]:
             "slug": r["slug"],
             "name": names[r["id"]],
             "children": [
-                {"id": c["id"], "name": names[c["id"]], "fields": fields.get(c["id"], [])}
+                {
+                    "id": c["id"],
+                    "name": names[c["id"]],
+                    # Блок «Информация о товаре»: поля под категорию
+                    **({"specs": specs.form(r["slug"], c["slug"], locale)} if with_specs else {}),
+                    "fields": fields.get(c["id"], []),
+                }
                 for c in children
                 if c["parent_id"] == r["id"]
             ],
@@ -2348,7 +2355,11 @@ def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
                 "total": plan["listings_limit"] if plan else None,
             },
             "tagOptions": suggestions(
-                row, category, parent, [str(a["value"] or "") for a in attributes], city
+                row,
+                category,
+                parent,
+                [str(a["value"] or "") for a in attributes if not specs.owns(str(a["key"]))],
+                city,
             ),
         },
         _seo(ctx),

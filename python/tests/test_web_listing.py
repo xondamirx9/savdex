@@ -72,6 +72,13 @@ def сайт() -> Iterator[str]:
         "'title_i18n' => ['en' => 'Cement M400 wholesale'], 'bundle_price' => 900000,"
         "'delivery_terms' => 'Самовывоз', 'payment_terms' => 'Перечисление',"
         "'tags' => ['нет такого', 'цемент'], 'expires_at' => now()->addDays(20)]);"
+        # Детали товара (ProductSpecs) — раньше поля раздела: на карточке
+        # они встают после него; пустая и чужая spec_* — как у Laravel
+        "foreach ([['spec_weight', '25 kg'], ['spec_dimensions', '120xx75,5 cm'],"
+        "['spec_color', 'black'], ['spec_material', 'Сталь с медью'], ['spec_grade', ' '],"
+        "['spec_unknown', '7 шт'], ['spec_warranty', '12 months'], ['spec_year', '2024'],"
+        "['spec_power', '3.5 zz'], ['spec_voltage', '220'], ['spec_origin', 'Узбекистан']]"
+        " as [$k, $v]) { $l->attributes()->create(['key' => $k, 'value' => $v]); }"
         "$l->attributes()->create(['key' => 'mark', 'value' => 'М400']);"
         "$l->attributes()->create(['key' => 'weight', 'value' => '50 кг']);"
         "foreach ([1, 1, 0] as $i => $sort) { $l->images()->create(['path' => 'l/'.$i.'.webp',"
@@ -213,3 +220,24 @@ def test_цена_в_валюте_языка(сайт):
     д, _ = сверить(сайт, "/en/listing/cement", перед=обнулить, env=ФАЙЛОВЫЙ)
 
     assert страница(д["body"])["props"]["listing"]["converted"]["currency"] == "USD"
+
+
+def test_детали_товара(сайт):
+    """ProductSpecs: детали после полей раздела, на языке посетителя, без пустых."""
+    if not (КОРЕНЬ / "lang/ru/specs.php").exists():
+        pytest.skip("ProductSpecs у Laravel ещё нет — страницы сверены без блока")
+
+    for path, вес, цвет in (
+        ("/listing/cement", "25 кг", "Чёрный"),
+        ("/en/listing/cement", "25 kg", "Black"),
+    ):
+        д, _ = сверить(сайт, path, перед=обнулить, env=ФАЙЛОВЫЙ)
+        props = страница(д["body"])["props"]
+        rows = {a["key"]: a["value"] for a in props["listing"]["attributes"]}
+        ключи = [a["key"] for a in props["listing"]["attributes"]]
+
+        # Чужой ключ spec_unknown — обычная характеристика, в начале списка
+        assert set(ключи[:3]) == {"spec_unknown", "Марка", "weight"}
+        assert вес in rows.values() and цвет in rows.values()
+        assert "spec_unknown" in rows and "spec_grade" not in rows
+        assert "25 kg" not in props["listing"]["tags"]
