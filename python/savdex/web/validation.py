@@ -104,10 +104,13 @@ def _passes(rule: str, param: str | None, value: Any) -> bool:  # noqa: ANN401
             isinstance(value, str) and re.fullmatch(r"\s*[+-]?(0|[1-9]\d*)\s*", value) is not None
         )
 
-    if rule == "min":
+    if rule in ("min", "max"):
         size = _size(value)
 
-        return size is not None and size >= float(param or 0)
+        if size is None:
+            return False
+
+        return size >= float(param or 0) if rule == "min" else size <= float(param or 0)
 
     if rule == "in":
         allowed = (param or "").split(",")
@@ -204,9 +207,15 @@ def validate(
     for pattern, field_rules in rules.items():
         for attribute in _expand(data, pattern):
             value = _get(data, attribute.split("."))
+            nullable = "nullable" in field_rules
 
             for spec in field_rules:
                 rule, _, param = spec.partition(":")
+
+                # nullable — не правило, а пропуск остальных для null
+                # (isNotNullIfMarkedAsNullable)
+                if rule == "nullable" or (nullable and value is None and rule not in IMPLICIT):
+                    continue
 
                 # Не implicit-правило для отсутствующего поля не проверяется
                 # (isValidatable → presentOrRuleIsImplicit); пустая строка

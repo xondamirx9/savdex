@@ -212,6 +212,11 @@ SHARED_WRITES: dict[str, str] = {
         "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
         "строка или email/telegram/updated_at своей; событий у модели нет"
     ),
+    "contact_unlocks": (
+        "«Мои контакты» (этап 5, форма): статус и заметка, жалоба — "
+        "update изменившихся полей своей строки и updated_at, как "
+        "ContactController; событий и журнала у модели нет"
+    ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
         "только delete по ключу — то же, что Cache::forget(), когда кэш "

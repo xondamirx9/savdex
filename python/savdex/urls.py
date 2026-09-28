@@ -23,6 +23,7 @@ from savdex.web import (
     catalog,
     companies,
     company,
+    contact_actions,
     directory,
     home,
     it_tasks,
@@ -126,6 +127,22 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})$",
         listing_actions.destroy,
         name="cabinet.listings.destroy",
+    ),
+    # «Мои контакты» (этап 5, шаг 24): формы и выгрузка, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/export$",
+        contact_actions.export,
+        name="cabinet.contacts.export",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/(?P<unlock_id>[0-9]{1,18})$",
+        contact_actions.update,
+        name="cabinet.contacts.update",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts/(?P<unlock_id>[0-9]{1,18})/complaint$",
+        contact_actions.complain,
+        name="cabinet.contacts.complain",
     ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
