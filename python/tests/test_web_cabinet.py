@@ -252,12 +252,15 @@ def _просмотры() -> None:
             sql(
                 "insert into audience_views (target_company_id, viewer_company_id, listing_id, "
                 "created_at, updated_at) values (%s, %s, %s, "
-                "now() - make_interval(hours => %s + 1), now())",
+                "now() - make_interval(hours => %s + 1, mins => 30), now())",
                 [owner, зритель, объявление, i + j],
             )
 
     # Раскрытия — часами раньше: «N секунд назад» разошлось бы между сторонами
-    sql("update contact_unlocks set created_at = now() - make_interval(hours => id::int)")
+    sql(
+        "update contact_unlocks set "
+        "created_at = now() - make_interval(hours => id::int, mins => 30)"
+    )
 
     # Старше месяца — не считается
     sql(
@@ -315,7 +318,7 @@ def _отзывы() -> None:
     )
     # Часами раньше, одна пара — в одну секунду: «N секунд назад» и
     # порядок равных не плавают
-    sql("update reviews set created_at = now() - make_interval(hours => id::int)")
+    sql("update reviews set created_at = now() - make_interval(hours => id::int, mins => 30)")
     sql(
         "update reviews set created_at = (select min(created_at) from reviews) where id in "
         "(select id from reviews order by id desc limit 2)"
@@ -362,7 +365,10 @@ def _раскрытия() -> None:
         " if ($i === 3) { $t->delete(); } }"
         "echo 'ok';"
     )
-    sql("update contact_unlocks set created_at = now() - make_interval(hours => id::int)")
+    sql(
+        "update contact_unlocks set "
+        "created_at = now() - make_interval(hours => id::int, mins => 30)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -429,7 +435,7 @@ def test_уведомления(сайт, query):
             sql(
                 "insert into user_notifications (user_id, type, tone, title, body, url, "
                 "is_broadcast, read_at, created_at, updated_at) values (%s, %s, 'primary', %s, "
-                "%s, %s, %s, %s, now() - make_interval(hours => %s), now())",
+                "%s, %s, %s, %s, now() - make_interval(hours => %s, mins => 30), now())",
                 [
                     uid,
                     "broadcast" if i < 3 else "review",
@@ -477,3 +483,61 @@ def test_избранное(сайт, path):
     items = страница(д["body"])["props"]["items"]
 
     assert len(items) == 4 and [i["active"] for i in items].count(False) == 2
+
+
+# ── Мои объявления ──────────────────────────────────────────────────
+
+
+def _объявления() -> None:
+    """Объявления всех вкладок, два значка продвижения, замечание модератора."""
+    if sql("select 1 from listings where status = 'needs_changes'"):
+        return
+
+    subprocess.run(
+        ["php", "artisan", "db:seed", "--class=PromotionTypeSeeder", "--force"],
+        cwd=КОРЕНЬ,
+        env=ОКРУЖЕНИЕ,
+        check=True,
+        capture_output=True,
+    )
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "foreach (['needs_changes', 'expired', 'rejected', 'archived'] as $s) {"
+        " App\\Models\\Listing::factory()->create(['company_id' => $c->id, 'status' => $s,"
+        " 'moderation_note' => $s === 'needs_changes' ? 'Добавьте фото' : null]); }"
+        "$l = $c->listings()->where('status', 'active')->orderBy('id')->first();"
+        "foreach (['urgent', 'highlight'] as $code) { App\\Models\\Promotion::create(["
+        "'listing_id' => $l->id, 'company_id' => $c->id, 'units_spent' => 1,"
+        "'promotion_type_id' => App\\Models\\PromotionType::where('code', $code)->value('id'),"
+        "'status' => 'active', 'starts_at' => now(), 'ends_at' => now()->addDays(3)]); }"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+    # Массовое действие — одна секунда у всех: порядок решает id
+    sql("update listings set updated_at = '2026-09-25 12:00:00'")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "?status=draft",
+        "?status=needs_changes",
+        "?status=expired",
+        "?status=archived",
+        "?status=",
+    ],
+)
+def test_мои_объявления(сайт, query):
+    _объявления()
+    сверить(сайт, "/cabinet/listings" + query, владелец(сайт))
+
+
+def test_мои_объявления_по_узбекски(сайт):
+    _объявления()
+    сверить(сайт, "/uz/cabinet/listings", владелец(сайт))
+
+
+def test_мои_объявления_без_компании(сайт):
+    пользователь("nocompany7@savdex.uz")
+    сверить(сайт, "/cabinet/listings", войти(сайт, "nocompany7@savdex.uz"))
