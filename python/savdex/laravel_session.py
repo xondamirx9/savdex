@@ -168,6 +168,37 @@ def decrypt(payload: str, key_list: list[bytes]) -> str | None:
     return None
 
 
+def encrypt(plain: str, key: bytes) -> str:
+    """
+    Encrypter::encrypt($value, serialize: false) — как EncryptCookies
+    шифрует куку: AES-256-CBC со случайным вектором, подпись HMAC-SHA256
+    поверх base64 вектора и шифротекста, всё — JSON в base64.
+    """
+    iv = os.urandom(16)
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plain.encode()) + padder.finalize()
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+    iv_b64 = base64.b64encode(iv).decode()
+    value_b64 = base64.b64encode(encryptor.update(padded) + encryptor.finalize()).decode()
+    mac = hmac.new(key, (iv_b64 + value_b64).encode(), hashlib.sha256).hexdigest()
+    # JSON_UNESCAPED_SLASHES, порядок ключей — compact('iv', 'value', 'mac', 'tag')
+    payload = json.dumps(
+        {"iv": iv_b64, "value": value_b64, "mac": mac, "tag": ""}, separators=(",", ":")
+    )
+
+    return base64.b64encode(payload.encode()).decode()
+
+
+def cookie_prefix(name: str, key: bytes) -> str:
+    """CookieValuePrefix::create: HMAC-SHA1 от «<имя>v2» и черта."""
+    return hmac.new(key, f"{name}v2".encode(), hashlib.sha1).hexdigest() + "|"
+
+
+def encrypt_cookie(name: str, value: str, key: bytes) -> str:
+    """Значение куки, как его ставит EncryptCookies: префикс имени и шифр."""
+    return encrypt(cookie_prefix(name, key) + value, key)
+
+
 def cookie_value(name: str, raw: str | None, key_list: list[bytes]) -> str | None:
     """Значение куки без префикса CookieValuePrefix — или None, если не наше."""
     if not raw:
@@ -179,7 +210,7 @@ def cookie_value(name: str, raw: str | None, key_list: list[bytes]) -> str | Non
         return None
 
     for key in key_list:
-        prefix = hmac.new(key, f"{name}v2".encode(), hashlib.sha1).hexdigest() + "|"
+        prefix = cookie_prefix(name, key)
 
         if plain.startswith(prefix):
             return plain[len(prefix) :]

@@ -25,7 +25,7 @@ from django.http import HttpRequest, HttpResponse
 from savdex import audit
 from savdex.guards import allowed_writes
 from savdex.web import content, inertia
-from savdex.web.catalog import bump_daily, set_visitor_cookie, visitor_key, without_recent
+from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
 from savdex.web.directory import _named, logo_url
@@ -294,7 +294,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     if preview and not owner:
         return not_found(ctx)
 
-    visitor, fresh_cookie = visitor_key(ctx)
+    visitor = visitor_key(ctx)
 
     if not preview:
         _count_view(ctx, row, visitor)
@@ -459,9 +459,6 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
         },
         seo,
     )
-
-    if fresh_cookie is not None:
-        set_visitor_cookie(ctx, response, fresh_cookie)
 
     return response
 

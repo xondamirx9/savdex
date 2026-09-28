@@ -54,6 +54,10 @@ r = client.get(path, **extra)
 print(json.dumps({
     "status": r.status_code,
     "headers": {k.lower(): v for k, v in r.items()},
+    "cookies": {
+        k: {"value": m.value, **{a: m[a] for a in m.keys() if m[a] not in ("", None)}}
+        for k, m in r.cookies.items()
+    },
     "body": r.content.decode(),
 }))
 """
@@ -194,7 +198,26 @@ def из_laravel(
 ) -> dict[str, Any]:
     r = httpx.get(root + path, cookies=cookies or {}, headers=headers or {}, timeout=30)
 
-    return {"status": r.status_code, "headers": dict(r.headers), "body": r.text}
+    return {
+        "status": r.status_code,
+        "headers": dict(r.headers),
+        "cookies": dict(_куки_ответа(r.headers.get_list("set-cookie"))),
+        "body": r.text,
+    }
+
+
+def _куки_ответа(заголовки: list[str]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Set-Cookie от Laravel — в том же виде, что куки ответа Django."""
+    for заголовок in заголовки:
+        первая, *атрибуты = [часть.strip() for часть in заголовок.split(";")]
+        имя, _, значение = первая.partition("=")
+        разобранные: dict[str, Any] = {"value": значение}
+
+        for атрибут in атрибуты:
+            ключ, есть, знач = атрибут.partition("=")
+            разобранные[ключ.lower()] = знач if есть else True
+
+        yield имя, разобранные
 
 
 def из_django(
@@ -294,22 +317,30 @@ def сверить(
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
     перед: Callable[[], object] | None = None,
+    после: Callable[[dict[str, Any]], object] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Django, затем Laravel; статус, страница и шапка должны совпасть.
 
     перед — вызывается перед каждой из сторон: страницы, которые пишут
-    (счётчик просмотров), иначе видели бы запись друг друга.
+    (счётчик просмотров), иначе видели бы запись друг друга; после —
+    сразу после ответа каждой стороны (снять то, что она записала).
     """
     if перед is not None:
         перед()
 
     д = из_django(сайт, path, cookies, headers, env)
 
+    if после is not None:
+        после(д)
+
     if перед is not None:
         перед()
 
     л = из_laravel(сайт, path, cookies, headers)
+
+    if после is not None:
+        после(л)
 
     assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
 
