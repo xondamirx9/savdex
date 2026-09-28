@@ -120,7 +120,9 @@ SHARED_WRITES: dict[str, str] = {
         "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
         "только locale и updated_at, когда язык сменился; то же — форма смены "
         "языка /locale/<язык> (LocaleController); правка администратора — "
-        "строка журнала, как AuditObserver"
+        "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
+        "форма) — имя, телефон, язык и сброс подтверждения телефона; "
+        "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -153,13 +155,21 @@ SHARED_WRITES: dict[str, str] = {
         "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
         "; машинный перевод (этап 5, manage.py translate) — переводы должности, "
         "«о себе» и мест работы и updated_at, как TranslateResume (saveQuietly)"
+        "; своё резюме (этап 5, форма) — статус, дата публикации и мягкое "
+        "удаление, как ResumeController"
     ),
     "it_tasks": (
         "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
         "$task->increment('views_count'), не заказчику; просмотр "
         "администратора — строка журнала (раздел ittasks), как AuditObserver; "
         "отклик исполнителя (этап 5, чат) — responses_count + 1 и updated_at, "
-        "как $task->increment('responses_count'), с той же строкой журнала"
+        "как $task->increment('responses_count'), с той же строкой журнала; "
+        "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
+        "search_text и удаление, как ItTaskController, с журналом администратора"
+    ),
+    "it_task_files": (
+        "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
+        "с диска, как ItTaskController::destroyFile; событий у модели нет"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "

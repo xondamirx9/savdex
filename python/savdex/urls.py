@@ -27,15 +27,18 @@ from savdex.web import (
     contact_actions,
     directory,
     home,
+    it_task_actions,
     it_tasks,
     legal,
     listing,
     listing_actions,
     news,
     pricing,
+    resume_actions,
     resumes,
     review_actions,
     reviews,
+    settings_actions,
     tenders,
 )
 from savdex.web import views as web
@@ -151,6 +154,26 @@ urlpatterns = [
         contact_actions.complain,
         name="cabinet.contacts.complain",
     ),
+    # IT-задачи своей компании (этап 5, шаг 27): группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{{1,18}})/{verb}$",
+            getattr(it_task_actions, verb),
+            name=f"cabinet.it-tasks.{verb}",
+        )
+        for verb in ("close", "complete", "reopen")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})$",
+        it_task_actions.destroy,
+        name="cabinet.it-tasks.destroy",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})/files/"
+        r"(?P<file_id>[0-9]{1,18})$",
+        it_task_actions.destroy_file,
+        name="cabinet.it-tasks.files.destroy",
+    ),
     # Отклики в чат (этап 5, шаг 26): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<listing_id>[0-9]{1,18})/respond$",
@@ -201,7 +224,27 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings$", cabinet.listings, name="cabinet.listings"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", cabinet.resume, name="cabinet.resume"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
+    # Настройки профиля (этап 5, шаг 29): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/profile$",
+        settings_actions.profile,
+        name="cabinet.settings.profile",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/telegram$",
+        settings_actions.telegram,
+        name="cabinet.settings.telegram",
+    ),
+    # Своё резюме (этап 5, шаг 28): опубликовать и скрыть, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/resume/{verb}$",
+            getattr(resume_actions, verb),
+            name=f"cabinet.resume.{verb}",
+        )
+        for verb in ("publish", "hide")
+    ],
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$", cabinet.company_page, name="cabinet.company"
     ),
