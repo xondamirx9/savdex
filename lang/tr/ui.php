@@ -839,7 +839,7 @@ return [
         ],
 
         'recruitment' => [
-            'title' => 'Personel seçimi',
+            'title' => 'HR',
             'lead' => 'İşe alım görevleri: pozisyonu anlatın — işe alım ajansları ve uzmanları sohbette yanıt verecek.',
             'offers' => [
                 'Anahtar teslim pozisyon doldurma',

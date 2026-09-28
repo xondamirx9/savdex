@@ -839,7 +839,7 @@ return [
         ],
 
         'recruitment' => [
-            'title' => 'Recruitment',
+            'title' => 'HR',
             'lead' => 'Hiring tasks: describe the vacancy — recruitment agencies and recruiters will reply in chat.',
             'offers' => [
                 'Turnkey vacancy filling',

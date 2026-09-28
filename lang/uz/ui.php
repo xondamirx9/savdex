@@ -842,7 +842,7 @@ return [
         ],
 
         'recruitment' => [
-            'title' => 'Xodim tanlash',
+            'title' => 'HR',
             'lead' => 'Xodim tanlash vazifalari: vakansiyani tasvirlang — kadrlar agentliklari va rekruterlar chatda javob beradi.',
             'offers' => [
                 'Vakansiyani to‘liq yopish',
