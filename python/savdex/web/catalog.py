@@ -15,16 +15,13 @@
   показано по запросу, +1 показ за день — без отсева повторов, как у
   Laravel.
 
-Посетитель — сессия Laravel. У гостя, который ходит только по
-страницам Django, её нет (сессию до этапа 5 пишет Laravel): Django
-метит его своей кукой savdex_visitor, иначе каждое обновление
-страницы засчитывалось бы новым показом.
+Посетитель — сессия Laravel: страница Django ведёт её сама (с этапа 5
+и гостю тоже), так что ключ отсева повторов тот же, что у Laravel.
 """
 
 from __future__ import annotations
 
 import re
-import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -51,9 +48,6 @@ DEDUP_MINUTES = 30
 #: Продвижения, поднимающие объявление в «Подходящих»
 PROMOTED_CODES = ("category_top", "home_top", "bump", "urgent")
 
-#: Своя кука гостя без сессии Laravel — только для отсева повторных показов
-VISITOR_COOKIE = "savdex_visitor"
-
 _TRUE = ("1", "true", "on", "yes")
 
 #: $request->hasAny([...]) у Laravel
@@ -71,33 +65,9 @@ def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
 # ── Статистика (StatsRecorder) ──────────────────────────────────────
 
 
-def visitor_key(ctx: Context) -> tuple[str | None, str | None]:
-    """
-    Кем считать посетителя для отсева повторов: сессия Laravel, иначе
-    своя кука Django. Второе — новая кука, которую надо поставить.
-    """
-    if ctx.visitor.session_id is not None:
-        return ctx.visitor.session_id, None
-
-    own = ctx.request.COOKIES.get(VISITOR_COOKIE, "")
-
-    if re.fullmatch(r"[A-Za-z0-9]{40}", own):
-        return f"py-{own}", None
-
-    fresh = secrets.token_hex(20)
-
-    return f"py-{fresh}", fresh
-
-
-def set_visitor_cookie(ctx: Context, response: HttpResponse, value: str) -> None:
-    """Своя кука гостя без сессии Laravel: живёт, пока открыт браузер, как сессия."""
-    response.set_cookie(
-        VISITOR_COOKIE,
-        value,
-        httponly=True,
-        samesite="Lax",
-        secure=ctx.request.is_secure(),
-    )
+def visitor_key(ctx: Context) -> str | None:
+    """Кем считать посетителя для отсева повторов: номер сессии Laravel."""
+    return ctx.visitor.session_id
 
 
 def without_recent(ids: list[int], kind: str, visitor: str | None) -> list[int]:
@@ -276,7 +246,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     )
 
     # Показы засчитываются тому, что реально попало в выдачу
-    visitor, fresh_cookie = visitor_key(ctx)
+    visitor = visitor_key(ctx)
 
     if rows:
         impressions([r["id"] for r in rows], visitor)
@@ -290,7 +260,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     listings = paginator.to_array(ctx, page)
     listings["data"] = cards.present(rows)
 
-    response = inertia.render(
+    return inertia.render(
         ctx,
         "catalog/Index",
         {
@@ -313,11 +283,6 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
         },
         _seo(ctx, query, term, category, city, total, current),
     )
-
-    if fresh_cookie is not None:
-        set_visitor_cookie(ctx, response, fresh_cookie)
-
-    return response
 
 
 def _seo(

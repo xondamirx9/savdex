@@ -17,6 +17,7 @@ from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
+    cabinet,
     catalog,
     companies,
     company,
@@ -50,29 +51,54 @@ urlpatterns = [
     path("py/whoami", visitor.whoami),
     # Страницы сайта (этап 3, savdex/web/): адрес доходит сюда, только если
     # его группа включена в SAVDEX_PY_PAGES (docker/apache-python.conf)
-    re_path(r"^(?:(?:uz|en|zh|tr)/?)?$", home.home),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<key>help|guide|rules)$", web.doc),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?resume/(?P<slug>[^/]+)$", resumes.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services$", it_tasks.index),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<slug>[^/]+)$", it_tasks.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)$", company.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", catalog.catalog),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<slug>[^/]+)$", listing.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders/(?P<slug>[^/]+)$", tenders.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners),
+    re_path(r"^(?:(?:uz|en|zh|tr)/?)?$", home.home, name="home"),
+    *[
+        re_path(rf"^(?:(?:uz|en|zh|tr)/)?(?P<key>{key})$", web.doc, name=f"docs.{key}")
+        for key in ("help", "guide", "rules")
+    ],
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about, name="about"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts, name="contacts"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing, name="pricing"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index, name="reviews"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index, name="resumes"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?resume/(?P<slug>[^/]+)$", resumes.show, name="resumes.show"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services$", it_tasks.index, name="it-tasks"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<slug>[^/]+)$", it_tasks.show, name="it-tasks.show"
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index, name="companies.index"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)$", company.show, name="companies.show"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", catalog.catalog, name="catalog"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<slug>[^/]+)$", listing.show, name="listings.show"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders/(?P<slug>[^/]+)$", tenders.show, name="tenders.show"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?countries$", directory.countries, name="countries"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?partners$", directory.partners, name="partners"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?countries/(?P<code>[A-Za-z]{2})/companies$",
         directory.country_companies,
+        name="countries.companies",
     ),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?(?P<doc>terms|payment|security|privacy|refunds)$", legal.show),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders$", directory.tenders_redirect, name="tenders"),
+    # Кабинет (этап 5): страницы, открываемые GET-запросом
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet$", cabinet.dashboard, name="cabinet"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/analytics$", cabinet.analytics, name="cabinet.analytics"
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/incoming$", cabinet.incoming, name="cabinet.incoming"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings$", cabinet.listings, name="cabinet.listings"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/reviews$", cabinet.reviews, name="cabinet.reviews"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts$", cabinet.contacts, name="cabinet.contacts"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings$", cabinet.settings_page, name="cabinet.settings"
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?notifications$", cabinet.notifications, name="notifications"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?favorites$", cabinet.favorites, name="favorites"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?news$", news.index, name="news"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?news/(?P<slug>[^/]+)$", news.show, name="news.show"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?(?P<doc>terms|payment|security|privacy|refunds)$",
+        legal.show,
+        name="legal",
+    ),
 ]

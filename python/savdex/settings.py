@@ -157,6 +157,8 @@ MIDDLEWARE = [
     "savdex.adminpanel.AdminMiddleware",
     # Кто вошёл на сайт — по сессии Laravel, лениво (этап 3)
     "savdex.visitor.VisitorMiddleware",
+    # Сессия Laravel, начатая страницей сайта, — сохранить (этап 5)
+    "savdex.web.session.SessionMiddleware",
 ]
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"

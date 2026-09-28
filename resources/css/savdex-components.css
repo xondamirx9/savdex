@@ -1677,8 +1677,20 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   color:var(--text);white-space:nowrap;transition:background var(--t-fast),color var(--t-fast)}
 .subnav a:hover{background:transparent;color:var(--primary-600);text-decoration:none}
 .subnav a[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
-.subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
-  color:var(--primary-700)!important;font-weight:600!important}
+/* Серый, а не синий: в строке разделов это такая же ссылка, как
+   остальные, и синим она перетягивала внимание с самих разделов.
+
+   Без !important. С ним правило перебивало и оформление для тёмной
+   шапки: над первым экраном ссылка оставалась синей на тёмно-синем
+   фоне — 3.4:1, ниже нормы для текста. */
+.subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-weight:600}
+/* Цвет задаётся с весом самого правила, а не !important: рядом стоит
+   .subnav a, оно весит больше одного класса и перебивало бы. Прежний
+   !important перебивал заодно и оформление тёмной шапки — над первым
+   экраном ссылка оставалась синей на тёмно-синем, 3.4:1, ниже нормы
+   для текста. */
+.subnav .subnav-post{color:var(--text-muted)}
+.subnav .subnav-post:hover{color:var(--primary-600)}
 .subnav-post svg{width:19px;height:19px}
 
 /* Поиск на телефоне: отдельная строка под шапкой */
@@ -1737,14 +1749,11 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    primary-500 держит 5.2:1. Активный пункт остаётся белым. */
 .chrome-overlay .subnav-inner a:hover{color:var(--primary-500)}
 .chrome-overlay .subnav-inner a[aria-current='page']{color:#fff}
-/* «Разместить объявление» на тёмной шапке — ванильный: заметный акцент,
-   не сливается с синими пунктами меню. !important — потому что базовое
-   правило .subnav-post держит синий через !important, и без этого
-   на тёмном фоне оставался синий текст с контрастом ниже нормы.
-   #F3E5AB на navy-900 — около 13:1. На белой шапке остаётся синий:
-   ваниль на белом не читается */
-.chrome-overlay .subnav-post{color:#F3E5AB!important}
-.chrome-overlay .subnav-post:hover{color:#FFF6D5!important}
+/* На тёмной шапке первого экрана — ванильный: заметный акцент, который
+   не сливается с белыми пунктами меню. #F3E5AB на navy-900 — около 13:1.
+   На белой строке остаётся серым (правило выше): ваниль на белом не читается */
+.chrome-overlay .subnav .subnav-post{color:#F3E5AB}
+.chrome-overlay .subnav .subnav-post:hover{color:#FFF6D5}
 /* Жёлтая полоса тестового режима остаётся жёлтой: предупреждение
    важнее композиции */
 

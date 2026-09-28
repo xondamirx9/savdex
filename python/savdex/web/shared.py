@@ -308,6 +308,12 @@ def initials(name: str | None) -> str:
     return "".join(w[:1].upper() for w in words[:2])
 
 
+def _cabinet_counts(ctx: Context) -> dict[str, int] | None:
+    from savdex.web.cabinet import counts
+
+    return counts(ctx)
+
+
 def _wallet_summary(company_id: int) -> dict[str, Any]:
     """HandleInertiaRequests::walletSummary."""
     plans = _rows(
@@ -511,8 +517,8 @@ def shared(ctx: Context) -> dict[str, Any]:
             "error": ctx.session.get("error"),
             "warning": ctx.session.get("warning"),
         },
-        # Счётчики кабинета — только в кабинете, а его отдаёт Laravel
-        "counts": None,
+        # Счётчики кабинета — только на его адресах (savdex/web/cabinet.py)
+        "counts": _cabinet_counts(ctx),
         "bell": _bell(ctx, user["id"]) if user else None,
         "navCategories": _nav_categories(ctx.locale),
         "support": {

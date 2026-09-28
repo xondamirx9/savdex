@@ -316,7 +316,8 @@ class Company extends Model
 
     public function events(): HasMany
     {
-        return $this->hasMany(ActivityEvent::class)->latest();
+        // Хвост по id: события одной секунды иначе шли в плавающем порядке
+        return $this->hasMany(ActivityEvent::class)->latest()->latest('id');
     }
 
     public function searchHits(): HasMany

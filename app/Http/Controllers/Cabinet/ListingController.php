@@ -82,7 +82,9 @@ class ListingController extends Controller
         $listings = $company->listings()
             ->with(['category.translations', 'activePromotions.type'])
             ->where('status', $status)
+            // Хвост по id: массовое действие меняет объявления в одну секунду
             ->latest('updated_at')
+            ->latest('id')
             ->get()
             ->map(fn (Listing $l): array => $this->present($l));
 

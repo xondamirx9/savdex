@@ -42,6 +42,8 @@ class ChatController extends Controller
             ->participant($company)
             ->with(['listing', 'itTask', 'buyer', 'seller'])
             ->orderByDesc('last_message_at')
+            // Хвост по id: разговоры без сообщений (null) и одной секунды
+            ->orderByDesc('id')
             ->limit(100)
             ->get();
 
