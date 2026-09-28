@@ -687,3 +687,77 @@ def test_профиль_компании(сайт, path):
 def test_профиль_без_компании(сайт):
     пользователь("nocompany10@savdex.uz")
     сверить(сайт, "/cabinet/company", войти(сайт, "nocompany10@savdex.uz"))
+
+
+# ── Мои IT-задачи ───────────────────────────────────────────────────
+
+
+def _задачи() -> int:
+    """IT-задачи владельца: бюджеты трёх видов, исполнитель, отклики, файлы."""
+    [(owner,)] = sql("select id from companies where slug = 'owner'")
+
+    if not sql("select 1 from it_tasks where company_id = %s", [owner]):
+        php(
+            "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+            "$dev = App\\Models\\Company::factory()->create(['name' => 'Tashkent Soft']);"
+            "foreach ([['fixed', 1500000, null, 'UZS'], ['range', 500, 900, 'USD'],"
+            " ['negotiable', null, null, 'UZS']] as $i => [$type, $from, $to, $cur]) {"
+            " $t = App\\Models\\ItTask::factory()->create(['company_id' => $c->id,"
+            " 'budget_type' => $type, 'budget_from' => $from, 'budget_to' => $to,"
+            " 'currency' => $cur, 'status' => ['active', 'completed', 'closed'][$i],"
+            " 'contractor_company_id' => $i === 1 ? $dev->id : null,"
+            " 'deadline_at' => $i === 0 ? '2026-12-01' : null, 'stack' => ['Laravel', 'React'],"
+            " 'created_at' => '2026-09-20 10:00:00'])->id;"
+            " if ($i === 0) {"
+            " foreach ([$dev, App\\Models\\Company::factory()->create()] as $k => $b)"
+            " { App\\Models\\MessageThread::create(['buyer_company_id' => $b->id,"
+            " 'seller_company_id' => $c->id, 'it_task_id' => $t]);"
+            " if ($k === 1) { $b->delete(); } }"
+            " foreach ([2048, 3500000] as $size) { $f = new App\\Models\\ItTaskFile();"
+            " $f->forceFill(['it_task_id' => $t, 'title' => 'ТЗ '.$size,"
+            " 'file_path' => 'it/'.$size,"
+            " 'file_size' => $size, 'mime' => 'application/pdf'])->save(); } } }"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    [(first,)] = sql(
+        "select min(id) from it_tasks where company_id = %s and budget_type = 'fixed'", [owner]
+    )
+
+    return int(first)
+
+
+@pytest.mark.parametrize("path", ["/cabinet/it-tasks", "/uz/cabinet/it-tasks"])
+def test_мои_задачи(сайт, path):
+    _задачи()
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_задача_форма(сайт):
+    task = _задачи()
+    куки = владелец(сайт)
+
+    сверить(сайт, "/cabinet/it-tasks/create", куки)
+    сверить(сайт, f"/cabinet/it-tasks/{task}/edit", куки)
+
+    php("App\\Models\\ItTask::factory()->create(); echo 'ok';")
+    [(чужая,)] = sql(
+        "select min(id) from it_tasks where company_id != (select id from companies "
+        "where slug = 'owner')"
+    )
+    д, _ = сверить(сайт, f"/cabinet/it-tasks/{чужая}/edit", куки)
+    assert д["status"] == 404
+
+
+def test_задачи_без_компании(сайт):
+    пользователь("nocompany11@savdex.uz")
+    куки = войти(сайт, "nocompany11@savdex.uz")
+    сверить(сайт, "/cabinet/it-tasks", куки)
+
+    # Без компании форма уводит в профиль с предупреждением в сессии
+    стороны = по_сторонам(сайт, "/cabinet/it-tasks/create", lambda: None, cookies=куки)
+    итог = одинаково(стороны)
+
+    assert стороны["django"][0]["headers"]["location"].endswith("/cabinet/company")
+    assert '"warning":' in итог["payload"]

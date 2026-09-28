@@ -1668,3 +1668,186 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "has_microsite": bool(plan.get("has_microsite")),
         },
     }
+
+
+# ── Мои IT-задачи /cabinet/it-tasks (Cabinet\ItTaskController) ──────
+
+#: ItTask::STATUSES и ::CURRENCIES — подписи в коде
+IT_TASK_STATUSES = {
+    "active": "Открыта",
+    "closed": "Закрыта",
+    "completed": "Выполнена",
+    "archived": "В архиве",
+}
+IT_TASK_CURRENCIES = ["UZS", "USD"]
+
+
+def _budget_label(ctx: Context, t: dict[str, Any]) -> str:
+    """ItTaskController::budgetLabel."""
+    from savdex.web.it_tasks import number_format
+
+    currency = ctx.t("catalog.currency_uzs") if t["currency"] == "UZS" else t["currency"]
+    negotiable = ctx.t("cabinet.it_task_form.budget_negotiable")
+    low, high = t["budget_from"], t["budget_to"]
+
+    if t["budget_type"] == "fixed":
+        return f"{number_format(float(low), 0)} {currency}" if low is not None else negotiable
+
+    if t["budget_type"] == "range":
+        if low is None or high is None:
+            return negotiable
+
+        return f"{number_format(float(low), 0)} – {number_format(float(high), 0)} {currency}"
+
+    return negotiable
+
+
+def it_tasks(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/it-tasks/Index", it_tasks_props(ctx), _seo(ctx))
+
+
+def it_tasks_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.it_tasks import _date as day_month_year
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"hasCompany": False, "tasks": []}
+
+    tasks = _rows(
+        "select t.*, c.name as contractor_name, (select count(*) from it_task_files f "
+        "where f.it_task_id = t.id) as files_count from it_tasks t "
+        "left join companies c on c.id = t.contractor_company_id and c.deleted_at is null "
+        "where t.company_id = %s order by t.created_at desc, t.id desc",
+        [company["id"]],
+    )
+    responders: dict[int, list[dict[str, Any]]] = {}
+
+    for r in _rows(
+        "select m.it_task_id, m.buyer_company_id, b.name from message_threads m "
+        "left join companies b on b.id = m.buyer_company_id and b.deleted_at is null "
+        "where m.it_task_id = any(%s) order by m.id",
+        [[t["id"] for t in tasks]],
+    ):
+        responders.setdefault(r["it_task_id"], []).append(
+            {
+                "id": r["buyer_company_id"],
+                "name": r["name"] if r["name"] is not None else ctx.t("cabinet.incoming.deleted"),
+            }
+        )
+
+    return {
+        "hasCompany": True,
+        "tasks": [
+            {
+                "id": t["id"],
+                "slug": t["slug"],
+                "title": t["title"],
+                "service_type": SERVICE_TYPES.get(t["service_type"], t["service_type"]),
+                "budget": _budget_label(ctx, t),
+                "deadline": day_month_year(t["deadline_at"], ctx.locale),
+                "status": t["status"],
+                "status_label": IT_TASK_STATUSES.get(t["status"], t["status"]),
+                "responses": t["responses_count"],
+                "views": t["views_count"],
+                "files": t["files_count"],
+                "published": day_month_year(t["published_at"], ctx.locale),
+                "result_url": t["result_url"],
+                "result_summary": t["result_summary"],
+                "contractor": t["contractor_name"],
+                "responders": responders.get(t["id"], []),
+            }
+            for t in tasks
+        ],
+    }
+
+
+def it_task_create(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    if company_of(ctx) is None:
+        # Задачу без компании не поставить — сначала профиль
+        store = _store(ctx)
+
+        if store is not None:
+            store.flash("warning", ctx.t("messages.it_task.no_company"))
+
+        return _redirect(ctx, "/cabinet/company")
+
+    return inertia.render(
+        ctx,
+        "cabinet/it-tasks/Form",
+        {
+            "task": None,
+            "files": [],
+            "serviceTypes": SERVICE_TYPES,
+            "currencies": IT_TASK_CURRENCIES,
+        },
+        _seo(ctx),
+    )
+
+
+def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
+    from savdex.web.it_tasks import size_label
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+    found = (
+        _rows(
+            "select * from it_tasks where id = %s and company_id = %s",
+            [int(task_id), company["id"]],
+        )
+        if company is not None
+        else []
+    )
+
+    # 404, а не 403: чужая задача не подтверждает своё существование
+    if not found:
+        return not_found(ctx)
+
+    t = found[0]
+
+    return inertia.render(
+        ctx,
+        "cabinet/it-tasks/Form",
+        {
+            "task": {
+                "id": t["id"],
+                "slug": t["slug"],
+                "title": t["title"],
+                "description": t["description"],
+                "service_type": t["service_type"],
+                "stack": t["stack"] or [],
+                "budget_type": t["budget_type"],
+                "budget_from": float(t["budget_from"]) if t["budget_from"] is not None else None,
+                "budget_to": float(t["budget_to"]) if t["budget_to"] is not None else None,
+                "currency": t["currency"],
+                "deadline_at": t["deadline_at"].strftime("%Y-%m-%d") if t["deadline_at"] else None,
+                "status": t["status"],
+            },
+            "files": [
+                {"id": f["id"], "title": f["title"], "size": size_label(f["file_size"])}
+                for f in _rows(
+                    "select id, title, file_size from it_task_files where it_task_id = %s "
+                    "order by id",
+                    [t["id"]],
+                )
+            ],
+            "serviceTypes": SERVICE_TYPES,
+            "currencies": IT_TASK_CURRENCIES,
+        },
+        _seo(ctx),
+    )
