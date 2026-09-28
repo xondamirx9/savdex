@@ -77,3 +77,11 @@ def variants(term: str) -> list[str]:
     unique = list(dict.fromkeys(forms))
 
     return [v for v in unique if v != ""]
+
+
+def index(text: str) -> str:
+    """SearchText::index: строка для столбца search_text — обе графики разом."""
+    normalized = normalize(text)
+    forms = [normalized, _strtr(normalized, CYR_TO_LAT), _strtr(normalized, LAT_TO_CYR)]
+
+    return " ".join(dict.fromkeys(forms))

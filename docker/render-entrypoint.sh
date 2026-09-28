@@ -243,6 +243,17 @@ if [ -d /var/data ]; then
 fi
 
 php artisan storage:link || true
+
+# Машинный перевод ведёт Python (python/savdex/management/commands/
+# translate.py): у Laravel он выключается до config:cache — очередь и
+# часовой добор не переводят то же самое второй раз. Сам флаг для Python
+# сохраняется в PY_MACHINE_TRANSLATION_ENABLED. Откат без выкладки —
+# SAVDEX_PY_TRANSLATE=0 в настройках Render и перезапуск.
+if [ "${SAVDEX_PY_TRANSLATE:-1}" != "0" ] && [ -x python/.venv/bin/python ]; then
+    export PY_MACHINE_TRANSLATION_ENABLED="${MACHINE_TRANSLATION_ENABLED:-true}"
+    export MACHINE_TRANSLATION_ENABLED=false
+fi
+
 php artisan config:cache
 php artisan view:cache
 # route:cache не используется: /robots.txt объявлен замыканием,
@@ -315,6 +326,18 @@ if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
             sleep 5
         done
     ) &
+
+    # Машинный перевод на Python: проход раз в минуту (см. выше про флаг)
+    if [ -n "${PY_MACHINE_TRANSLATION_ENABLED:-}" ]; then
+        (
+            set +e
+            while true; do
+                runuser -u www-data -- python/.venv/bin/python python/manage.py translate
+                echo "ВНИМАНИЕ: перевод на Python остановился, перезапуск через 30 секунд." >&2
+                sleep 30
+            done
+        ) &
+    fi
 fi
 
 exec "$@"
