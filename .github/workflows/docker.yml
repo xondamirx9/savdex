@@ -152,6 +152,8 @@ jobs:
           curl -s -D /tmp/cabinet.h -o /dev/null http://127.0.0.1:18080/cabinet
           grep -qi '^location: http://127.0.0.1:18080/login' /tmp/cabinet.h
           ! grep -qi '^x-powered-by: php' /tmp/cabinet.h
+          # Машинный перевод ведёт Python: обработчик запущен
+          docker exec savdex sh -c 'grep -al "manage.py" /proc/[0-9]*/cmdline | xargs -r cat | tr "\0" " " | grep -q "manage.py translate"'
           # Формы (группа forms) по умолчанию выключены: POST — у Laravel
           curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/locale/uz
           grep -qi '^x-powered-by: php' /tmp/form.h

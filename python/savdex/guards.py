@@ -139,11 +139,16 @@ SHARED_WRITES: dict[str, str] = {
         "update views_count = views_count + 1 и updated_at; событий сохранения "
         "(перевод, search_text) increment не вызывает, строку журнала для "
         "администратора пишет savdex/audit.py"
+        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
+        "описания, search_text и updated_at, как TranslateTender (save с событием "
+        "saving)"
     ),
     "resumes": (
         "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "
         "$resume->increment('views_count'), не владельцу; событий сохранения "
         "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
+        "; машинный перевод (этап 5, manage.py translate) — переводы должности, "
+        "«о себе» и мест работы и updated_at, как TranslateResume (saveQuietly)"
     ),
     "it_tasks": (
         "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
@@ -162,6 +167,9 @@ SHARED_WRITES: dict[str, str] = {
         "просмотр администратора — строка журнала, как AuditObserver; "
         "избранное (этап 5) — ±1 к favorites_count, как StatsRecorder::favorite "
         "и decrement в FavoriteController"
+        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
+        "описания, search_text и updated_at, как TranslateListing (save с "
+        "событием saving)"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -177,6 +185,8 @@ SHARED_WRITES: dict[str, str] = {
         "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
         "— только insert … on conflict do nothing; переводит задача Laravel "
         "translations:fill"
+        "; машинный перевод (этап 5, manage.py translate) — перевод и число "
+        "попыток, как translations:fill"
     ),
     "user_notifications": (
         "прочтение уведомлений (этап 5, форма): одно или все свои — только "
