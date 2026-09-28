@@ -110,3 +110,108 @@ def test_удалить(сайт, status):
     if status is not None:
         assert итог["ответ"]["status"] == 303
         assert итог["база"]["resumes"][0][3] is True and not итог["база"]["photo"]
+
+
+# ── Правка ──────────────────────────────────────────────────────────
+
+
+def снимок_правки() -> Any:
+    return sql(
+        "select slug, title, field, country_id, city_id, salary, currency, employment::text, "
+        "schedule::text, experience_months, about, skills::text, jobs::text, education::text, "
+        "languages::text, contact_name, contact_phone, contact_email, show_phone, show_email, "
+        "title_i18n::text, about_i18n::text, jobs_i18n::text, "
+        "updated_at > now() - interval '1 hour' from resumes order by id"
+    )
+
+
+def есть_резюме(slug: str | None = "prorab-1") -> Callable[[], None]:
+    def run() -> None:
+        sql("delete from resumes")
+        sql("select setval('resumes_id_seq', 1, false)")
+        sql(
+            "insert into resumes (user_id, slug, title, about, employment, jobs, skills, "
+            "title_i18n, about_i18n, jobs_i18n, status, created_at, updated_at) "
+            "values (%s, %s, 'Прораб', 'Стройка', '[\"full\"]', '[]', '[\"Excel\"]', "
+            '\'{"en":"Foreman"}\', \'{"en":"Construction"}\', \'{"en":[]}\', \'published\', '
+            "now() - interval '1 day', now() - interval '1 day')",
+            [соискатель(), slug],
+        )
+
+    return run
+
+
+def нет_резюме() -> None:
+    sql("delete from resumes")
+    sql("select setval('resumes_id_seq', 1, false)")
+
+
+ПОЛНОЕ = {
+    "title": "Прораб / мастер участка",
+    "field": "construction",
+    "salary": "15000000",
+    "currency": "UZS",
+    "employment": ["full", "project"],
+    "schedule": ["shift"],
+    "about": 'Стройка 10 лет, "под ключ" — https://savdex.uz',
+    "skills": ["  AutoCAD ", "", "Сметы", None],
+    "jobs": [
+        {"company": "ООО Цемент", "position": "Прораб", "start": "2018-03", "end": "2021-06"},
+        {"company": "Бетон", "position": "Мастер", "start": "2020-01", "end": "", "hack": 1},
+        {"company": "", "position": "", "start": "", "end": ""},
+    ],
+    "education": [{"institution": "ТАСИ", "level": "bachelor", "year": "2012"}, {"faculty": "x"}],
+    "languages": [{"name": "Русский", "level": "native"}, {"name": "", "level": "basic"}],
+    "contact_name": "Азиз",
+    "contact_phone": "+998 90 111-22-33",
+    "contact_email": "aziz@savdex.uz",
+    "show_phone": "0",
+    "show_email": True,
+}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        ПОЛНОЕ,
+        {"title": "Прораб"},
+        {"title": "Прораб", "about": "Новое о себе", "employment": []},
+        {"title": "Инженер ПТО", "jobs": [{"company": "A", "position": "B", "start": "2019"}]},
+        {"title": "ab"},
+        {**ПОЛНОЕ, "jobs": [{"company": "Без должности"}]},
+        {**ПОЛНОЕ, "education": [{"institution": "ТАСИ", "year": "1900"}]},
+        {**ПОЛНОЕ, "country_id": 999999, "city_id": "abc"},
+        {**ПОЛНОЕ, "contact_email": "не почта"},
+        {**ПОЛНОЕ, "skills": [f"навык {i}" for i in range(31)]},
+        {**ПОЛНОЕ, "employment": ["full", "boss"], "salary": -5, "show_phone": "yes"},
+        {**ПОЛНОЕ, "field": "space", "currency": "BTC"},
+        {},
+    ],
+)
+@pytest.mark.parametrize("было", ["есть", "нет", "без адреса"])
+def test_правка(сайт, body, было):
+    подготовка = {"есть": есть_резюме(), "нет": нет_резюме, "без адреса": есть_резюме(None)}[было]
+    отправить(
+        сайт,
+        "/cabinet/resume",
+        подготовка,
+        снимок_правки,
+        uid=соискатель(),
+        body=body,
+        method="PATCH",
+        headers=inertia(),
+    )
+
+
+@pytest.mark.parametrize("prefix", ["/en", "/uz"])
+def test_правка_на_языке(сайт, prefix):
+    отправить(
+        сайт,
+        f"{prefix}/cabinet/resume",
+        нет_резюме,
+        снимок_правки,
+        uid=соискатель(),
+        body={**ПОЛНОЕ, "jobs": [{"company": "Без должности"}], "title": "ab"},
+        method="PATCH",
+        headers=inertia(),
+    )

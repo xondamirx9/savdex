@@ -1425,6 +1425,20 @@ Laravel, `unique` и `exists` не проверяются, если у поля 
 Сверка — `tests/test_web_company_contact_actions.py` (48 случаев). Права
 роли — миграция `grant_django_company_contacts`.
 
+**Шаг 32 — правка своего резюме** (группа `forms`,
+`savdex/web/resume_actions.py`, `PATCH /cabinet/resume`). Валидатор
+дорос до формы с вложенными массивами:
+- правила `between`, `required_with` (звёздочки условий — индексами поля), `exists`;
+- размер числового поля — само число;
+- ошибки полей со звёздочкой — после обычных, как раскрывает правила Laravel;
+- `validated()` с `excludeUnvalidatedArrayKeys` — лишние ключи вложенных массивов отбрасываются, пустой массив поля со вложенными правилами не трогает прежнее значение.
+
+Массивы пишутся текстом `json_encode` (столбцы `json`), опыт — как
+`Resume::experienceMonths`, правка заголовка, «о себе» или мест работы
+сбрасывает их переводы, новому резюме — адрес. Сверка —
+`tests/test_web_resume_actions.py` (41 случай правки). Права роли —
+миграция `grant_django_resume_update`.
+
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
 владеет он) и раздел «Закупки» в админке Django (`savdex/tenders`):
