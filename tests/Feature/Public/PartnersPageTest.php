@@ -15,10 +15,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Страница «Партнёры»: генеральные партнёры и партнёры.
+ * Раздел «Партнёры»: три вида партнёрства — генеральные партнёры,
+ * партнёры и мультипартнёры.
  *
- * Состав назначает администратор — страница сама никого не отбирает,
- * в том числе по уровню проверки.
+ * Страница раздела показывает только виды со счётчиками, списки —
+ * на отдельных страницах. Состав назначает администратор.
  */
 class PartnersPageTest extends TestCase
 {
@@ -33,39 +34,61 @@ class PartnersPageTest extends TestCase
     }
 
     #[Test]
-    public function партнёры_раскладываются_по_вкладкам(): void
+    public function раздел_показывает_три_вида_со_счётчиками(): void
     {
-        $general = $this->company(Company::PARTNER_GENERAL);
-        $partner = $this->company(Company::PARTNER_REGULAR);
-        // Проверенная, но не партнёр — на странице её нет
-        $this->company(null, ['verification_level' => Company::VERIFICATION_EXTENDED]);
+        $this->company(Company::PARTNER_GENERAL);
+        $this->company(Company::PARTNER_REGULAR);
+        $this->company(Company::PARTNER_REGULAR);
+        $this->company(Company::PARTNER_MULTI);
+        // Не партнёр и заблокированный партнёр не считаются
+        $this->company(null);
+        $this->company(Company::PARTNER_MULTI, ['status' => 'blocked']);
 
         $this->get('/partners')->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Partners')
-            ->has('general', 1)
-            ->where('general.0.slug', $general->slug)
-            ->has('partners', 1)
-            ->where('partners.0.slug', $partner->slug));
+            ->where('tiers', [
+                ['slug' => 'general', 'count' => 1],
+                ['slug' => 'regular', 'count' => 2],
+                ['slug' => 'multi', 'count' => 1],
+            ])
+            ->missing('partners'));
     }
 
     #[Test]
-    public function порядок_задаёт_администратор_а_заблокированных_нет(): void
+    public function у_каждого_вида_своя_страница(): void
+    {
+        $general = $this->company(Company::PARTNER_GENERAL);
+        $partner = $this->company(Company::PARTNER_REGULAR);
+        $multi = $this->company(Company::PARTNER_MULTI);
+
+        foreach (['general' => $general, 'regular' => $partner, 'multi' => $multi] as $slug => $company) {
+            $this->get('/partners/'.$slug)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('PartnersTier')
+                ->where('tier', $slug)
+                ->has('partners', 1)
+                ->where('partners.0.slug', $company->slug)
+                ->has('others', 2));
+        }
+
+        $this->get('/partners/unknown')->assertNotFound();
+    }
+
+    #[Test]
+    public function порядок_задаёт_администратор(): void
     {
         $second = $this->company(Company::PARTNER_REGULAR, ['rating' => 5]);
         $second->forceFill(['partner_sort' => 2])->save();
         $first = $this->company(Company::PARTNER_REGULAR, ['rating' => 1]);
         $first->forceFill(['partner_sort' => 1])->save();
-        $this->company(Company::PARTNER_REGULAR, ['status' => 'blocked']);
 
-        $this->get('/partners')->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('partners', 2)
+        $this->get('/partners/regular')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('partners.0.slug', $first->slug)
             ->where('partners.1.slug', $second->slug));
     }
 
     /** Назначить и снять партнёра администратор может в любой момент. */
     #[Test]
-    public function администратор_назначает_и_снимает_партнёра(): void
+    public function администратор_назначает_мультипартнёра_и_снимает(): void
     {
         $this->actingAs(User::factory()->create([
             'is_admin' => true,
@@ -76,9 +99,9 @@ class PartnersPageTest extends TestCase
         $company = Company::factory()->create();
 
         Livewire::test(ListCompanies::class)
-            ->callAction(TestAction::make('partner')->table($company), ['tier' => Company::PARTNER_GENERAL, 'sort' => 3]);
+            ->callAction(TestAction::make('partner')->table($company), ['tier' => Company::PARTNER_MULTI, 'sort' => 3]);
 
-        $this->assertSame(Company::PARTNER_GENERAL, $company->fresh()->partner_tier);
+        $this->assertSame(Company::PARTNER_MULTI, $company->fresh()->partner_tier);
         $this->assertSame(3, (int) $company->fresh()->partner_sort);
 
         Livewire::test(ListCompanies::class)

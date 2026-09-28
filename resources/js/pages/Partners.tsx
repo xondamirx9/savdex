@@ -1,96 +1,23 @@
-import { ArrowRight, Boxes, Crown, Handshake, ShieldCheck, Star, Users } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from '@/components/ui/Link';
-import { VerificationBadge } from '@/components/VerificationBadge';
-import { Tabs } from '@/components/cabinet';
+import { ArrowRight } from 'lucide-react';
 import { CountUp } from '@/components/CountUp';
+import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { t, tChoice } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
+import { TIER_LOOK, type PartnerTierSlug } from '@/lib/partnerTiers';
 import { routes } from '@/routes';
 
-interface PartnerRow {
-    slug: string;
-    name: string;
-    type_label: string | null;
-    city: string | null;
-    country: string | null;
-    verification_level: number;
-    rating: number;
-    reviews_count: number;
-    listings_count: number;
-    initials: string;
-    logo: string | null;
-}
-
-type Tier = 'general' | 'partners';
-
 /**
- * Партнёры площадки: две вкладки — генеральные и обычные партнёры.
+ * Партнёры площадки: три вида партнёрства.
  *
- * Состав назначает администратор (действие «Партнёрство» в админке),
- * поэтому страница ничего не отбирает сама. Вкладка запоминается
- * в адресе (?tab=partners) — на неё можно дать ссылку.
+ * Страница — вход в раздел: у каждого вида ячейка со счётчиком
+ * и коротким описанием, кто это такие, а сами списки живут на
+ * отдельных страницах (/partners/general, /regular, /multi).
+ * Состав назначает администратор действием «Партнёрство» в админке.
  */
-function initialTier(general: PartnerRow[]): Tier {
-    if (typeof window !== 'undefined') {
-        const tab = new URLSearchParams(window.location.search).get('tab');
-
-        if (tab === 'general' || tab === 'partners') return tab;
-    }
-
-    // Генеральных ещё не назначили — сразу открываем тех, кто есть
-    return general.length > 0 ? 'general' : 'partners';
-}
-
-function PartnerCard({ p }: { p: PartnerRow }) {
-    return (
-        <Link href={routes.company(p.slug)} className="supplier-card">
-            <span className="supplier-head">
-                <span className="listing-logo logo-48">{p.logo ? <img src={p.logo} alt="" /> : p.initials}</span>
-                <VerificationBadge level={p.verification_level} />
-            </span>
-            <span className="supplier-name">{p.name}</span>
-            <span className="supplier-meta">{[p.type_label, p.city ?? p.country].filter(Boolean).join(' · ')}</span>
-            <span className="supplier-facts">
-                <span className="listing-rating">
-                    <Star aria-hidden className="size-3.5" /> <b>{p.rating.toFixed(1)}</b>
-                </span>
-                <span>{tChoice('home.suppliers_listings', p.listings_count)}</span>
-            </span>
-        </Link>
-    );
-}
-
-export default function Partners({
-    general,
-    partners,
-    stats,
-}: {
-    general: PartnerRow[];
-    partners: PartnerRow[];
-    stats: { total: number; verified: number; listings: number };
-}) {
-    const [tier, setTier] = useState<Tier>(() => initialTier(general));
-    const rows = tier === 'general' ? general : partners;
-
-    function choose(key: string) {
-        const next = key === 'general' ? 'general' : 'partners';
-        setTier(next);
-
-        const url = new URL(window.location.href);
-        url.searchParams.set('tab', next);
-        window.history.replaceState(window.history.state, '', url);
-    }
-
-    const cells: [typeof Users, string, number, string][] = [
-        [Users, 'stat-ico-blue', stats.total, t('partners.stat_total')],
-        [ShieldCheck, 'stat-ico-sky', stats.verified, t('partners.stat_verified')],
-        [Boxes, 'stat-ico-violet', stats.listings, t('partners.stat_listings')],
-    ];
-
+export default function Partners({ tiers }: { tiers: { slug: PartnerTierSlug; count: number }[] }) {
     return (
         <PublicLayout title={t('partners.meta_title')} description={t('partners.meta_description')}>
-            <div className="container">
+            <div className="container" style={{ paddingBottom: 96 }}>
                 <nav aria-label={t('companies_page.crumbs')} style={{ padding: '20px 0 4px' }}>
                     <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
                         <li>
@@ -109,66 +36,34 @@ export default function Partners({
                     <p className="t-lead">{t('partners.lead')}</p>
                 </div>
 
-                <div className="partners-stats" data-reveal-stagger>
-                    {cells.map(([Icon, tone, value, label]) => (
-                        <div key={label} className="partner-stat">
-                            <span className={`stat-ico ${tone}`}>
-                                <Icon aria-hidden className="size-5" />
-                            </span>
-                            <div style={{ minWidth: 0 }}>
-                                <div className="stat-cell-num"><CountUp value={value} /></div>
-                                <div className="stat-cell-label">{label}</div>
-                            </div>
-                        </div>
-                    ))}
+                {/* Три вида партнёрства: кто это такие, сколько их и ссылка
+                    на отдельную страницу со списком */}
+                <div className="partners-stats partner-tiers" data-reveal-stagger>
+                    {tiers.map(({ slug, count }) => {
+                        const [Icon, tone] = TIER_LOOK[slug];
+
+                        return (
+                            <Link key={slug} href={routes.partnersTier(slug)} className="partner-stat partner-tier">
+                                <span className="partner-tier-head">
+                                    <span className={`stat-ico ${tone}`}>
+                                        <Icon aria-hidden className="size-5" />
+                                    </span>
+                                    <span style={{ minWidth: 0 }}>
+                                        <span className="stat-cell-num" style={{ display: 'block' }}>
+                                            <CountUp value={count} />
+                                        </span>
+                                        <span className="partner-tier-title">{t(`partners.tiers.${slug}.title`)}</span>
+                                    </span>
+                                </span>
+                                <span className="partner-tier-text">{t(`partners.tiers.${slug}.text`)}</span>
+                                <span className="partner-tier-go">
+                                    {t('partners.open')} <ArrowRight aria-hidden className="size-4" />
+                                </span>
+                            </Link>
+                        );
+                    })}
                 </div>
             </div>
-
-            <section className="section--tight">
-                <div className="container">
-                    <Tabs
-                        label={t('partners.tabs_label')}
-                        active={tier}
-                        onChange={choose}
-                        items={[
-                            { key: 'general', label: t('partners.tab_general'), count: general.length },
-                            { key: 'partners', label: t('partners.tab_partners'), count: partners.length },
-                        ]}
-                    />
-                    <p className="t-sm muted" style={{ margin: '-4px 0 20px' }}>
-                        {tier === 'general' ? t('partners.general_lead') : t('partners.partners_lead')}
-                    </p>
-
-                    <div role="tabpanel">
-                        {rows.length === 0 ? (
-                            <div className="card empty">
-                                <div className="empty-icon">
-                                    {tier === 'general' ? (
-                                        <Crown aria-hidden className="size-7" />
-                                    ) : (
-                                        <Handshake aria-hidden className="size-7" />
-                                    )}
-                                </div>
-                                <p className="t-h4">
-                                    {tier === 'general' ? t('partners.empty_general') : t('partners.empty_partners')}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="supplier-grid">
-                                {rows.map((p) => (
-                                    <PartnerCard key={p.slug} p={p} />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="row" style={{ justifyContent: 'center', marginTop: 36 }}>
-                        <Link href={routes.companies} className="btn btn-secondary btn-lg">
-                            {t('partners.all_companies')} <ArrowRight aria-hidden className="size-4" />
-                        </Link>
-                    </div>
-                </div>
-            </section>
         </PublicLayout>
     );
 }
