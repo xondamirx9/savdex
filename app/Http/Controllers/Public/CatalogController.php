@@ -16,6 +16,7 @@ use App\Support\ContentTranslation;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
 use App\Support\PriceDisplay;
+use App\Support\ProductSpecs;
 use App\Support\Seo;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
@@ -411,11 +412,22 @@ class CatalogController extends Controller
                  * как есть: покупатель должен видеть «Марка», а не mark.
                  * Ключ без описания в справочнике остаётся как записан.
                  */
-                'attributes' => $listing->attributes->map(fn ($a): array => [
-                    'key' => ContentTranslation::text($listing->category?->fields
-                        ->firstWhere('key', $a->key)?->label ?? $a->key),
-                    'value' => ContentTranslation::text($a->value),
-                ]),
+                /*
+                 * Детали товара (spec_*) — подписью и значением на языке
+                 * посетителя, после полей категории: марка и профиль
+                 * важнее веса и страны производства.
+                 */
+                'attributes' => $listing->attributes
+                    ->sortBy(fn ($a): int => ProductSpecs::owns((string) $a->key) ? 1 : 0)
+                    ->map(fn ($a): ?array => ProductSpecs::owns((string) $a->key)
+                        ? ProductSpecs::present((string) $a->key, (string) $a->value)
+                        : [
+                            'key' => ContentTranslation::text($listing->category?->fields
+                                ->firstWhere('key', $a->key)?->label ?? $a->key),
+                            'value' => ContentTranslation::text($a->value),
+                        ])
+                    ->filter()
+                    ->values(),
                 'badges' => $listing->activePromotions->map(fn ($p): ?string => ContentTranslation::text($p->type?->badge))->filter()->values(),
                 'promoted' => $listing->activePromotions->isNotEmpty(),
 
