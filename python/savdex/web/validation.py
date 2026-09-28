@@ -88,12 +88,47 @@ def _passes(rule: str, param: str | None, value: Any) -> bool:  # noqa: ANN401
     if rule == "boolean":
         return value in (True, False, 0, 1, "0", "1") and not isinstance(value, float)
 
+    if rule == "integer":
+        # filter_var(FILTER_VALIDATE_INT): целое, строка из цифр без
+        # ведущих нулей (пробелы по краям допустимы), true — это 1
+        if isinstance(value, bool):
+            return value is True
+
+        if isinstance(value, int):
+            return True
+
+        if isinstance(value, float):
+            return value.is_integer()
+
+        return (
+            isinstance(value, str) and re.fullmatch(r"\s*[+-]?(0|[1-9]\d*)\s*", value) is not None
+        )
+
+    if rule == "min":
+        size = _size(value)
+
+        return size is not None and size >= float(param or 0)
+
     if rule == "in":
         allowed = (param or "").split(",")
 
         return not isinstance(value, dict | list) and _php_string(value) in allowed
 
     raise ValueError(f"Правило {rule} не перенесено")
+
+
+def _size(value: Any) -> float | None:  # noqa: ANN401
+    """Validator::getSize: массив — число элементов, число — само, строка — длина."""
+    if isinstance(value, dict | list):
+        return float(len(value))
+
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+
+    if isinstance(value, str):
+        return float(len(value))
+
+    return None
 
 
 def _php_string(value: Any) -> str:  # noqa: ANN401
@@ -104,6 +139,17 @@ def _php_string(value: Any) -> str:  # noqa: ANN401
         return ""
 
     return str(value)
+
+
+def _kind(rules: list[str], value: Any) -> str:  # noqa: ANN401
+    """Validator::getAttributeType: numeric/integer в правилах, массив, иначе строка."""
+    if any(r.partition(":")[0] in ("numeric", "integer", "decimal") for r in rules):
+        return "numeric"
+
+    if isinstance(value, dict | list):
+        return "array"
+
+    return "string"
 
 
 def _displayable(attribute: str, implicit: bool) -> str:
@@ -117,16 +163,27 @@ def _displayable(attribute: str, implicit: bool) -> str:
 
 
 def _message(
-    rule: str, attribute: str, implicit: bool, locale: str, messages: Mapping[str, str]
+    rule: str,
+    attribute: str,
+    implicit: bool,
+    locale: str,
+    messages: Mapping[str, str],
+    kind: str = "string",
+    param: str | None = None,
 ) -> str:
     """FormatsMessages::getMessage и makeReplacements."""
     text = messages.get(f"{attribute}.{rule}") or messages.get(rule)
 
     if text is None:
-        line = ui.group_node(f"validation.{rule}", locale)
-        text = line if isinstance(line, str) else f"validation.{rule}"
+        # Правила размера — текст по виду значения (validation.min.array)
+        key = f"validation.{rule}" + (f".{kind}" if rule in ("min", "max") else "")
+        line = ui.group_node(key, locale)
+        text = line if isinstance(line, str) else key
 
     name = _displayable(attribute, implicit)
+
+    if param is not None and rule in ("min", "max"):
+        text = text.replace(f":{rule}", param)
 
     return (
         text.replace(":attribute", name)
@@ -159,7 +216,15 @@ def validate(
 
                 if not _passes(rule, param or None, value):
                     errors.setdefault(attribute, []).append(
-                        _message(rule, attribute, "*" in pattern, locale, messages or {})
+                        _message(
+                            rule,
+                            attribute,
+                            "*" in pattern,
+                            locale,
+                            messages or {},
+                            _kind(field_rules, value),
+                            param or None,
+                        )
                     )
 
                     if rule in IMPLICIT:

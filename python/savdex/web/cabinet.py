@@ -342,6 +342,7 @@ def active_subscription(company_id: int) -> dict[str, Any] | None:
 _FREE_DEFAULT = {
     "code": "free",
     "name": "Free",
+    "listing_days": 30,
     "listings_limit": 4,
     "contacts_limit": 3,
     "promo_units": 0,

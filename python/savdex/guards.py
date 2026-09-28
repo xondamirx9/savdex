@@ -173,6 +173,9 @@ SHARED_WRITES: dict[str, str] = {
         "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
         "описания, search_text и updated_at, как TranslateListing (save с "
         "событием saving)"
+        "; «Мои объявления» (этап 5, шаг 23) — статус, сроки, пометка модератора, "
+        "мягкое удаление и search_text, как ListingController (save с событием "
+        "saving, у администратора — строка журнала)"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -195,6 +198,11 @@ SHARED_WRITES: dict[str, str] = {
         "прочтение уведомлений (этап 5, форма): одно или все свои — только "
         "read_at и updated_at, как UserNotification::markRead и update() у "
         "Laravel; событий у модели нет"
+        "; уведомления компании (этап 5, шаг 23) — insert, как Notifier::company"
+    ),
+    "activity_events": (
+        "лента кабинета (этап 5, форма): insert события, как Notifier::company "
+        "при повторной публикации объявления; событий у модели нет"
     ),
     "favorites": (
         "избранное (этап 5, форма): insert … on conflict do nothing и delete "

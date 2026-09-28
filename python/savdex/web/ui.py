@@ -113,3 +113,35 @@ def date_template(locale: str, name: str, month: int) -> str:
     template: str = table[name][str(month)]
 
     return template
+
+
+def _plural_index(locale: str, number: int) -> int:
+    """MessageSelector::getPluralIndex для языков площадки."""
+    if locale == "ru":
+        if number % 10 == 1 and number % 100 != 11:
+            return 0
+
+        return 1 if 2 <= number % 10 <= 4 and (number % 100 < 10 or number % 100 >= 20) else 2
+
+    if locale == "en":
+        return 0 if number == 1 else 1
+
+    # tr, zh — одна форма; uz у Laravel в списке нет — тоже 0
+    return 0
+
+
+def choice(key: str, number: int, locale: str, **replace: object) -> str:
+    """
+    trans_choice('ui.<key>', n): форма по числу (MessageSelector::choose),
+    :count подставляется всегда. Явные условия {1} и [2,*] не
+    поддерживаются — в словаре их нет.
+    """
+    line = t(key, locale)
+    segments = line.split("|")
+    index = _plural_index(locale, number)
+    text = segments[index] if len(segments) > 1 and index < len(segments) else segments[0]
+
+    for name, value in sorted({"count": number, **replace}.items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf":{re.escape(name)}\b", str(value), text)
+
+    return text

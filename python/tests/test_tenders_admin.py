@@ -233,8 +233,8 @@ def test_правка_признака_в_разделе(люди):
     assert (gov, json.loads(i18n), views) == (False, {"en": "Road repair EN"}, 7)
     assert (
         sql(
-            "select changes::text from admin_actions where section = 'tenders' and action = 'updated' "
-            "order by id desc limit 1"
+            "select changes::text from admin_actions where section = 'tenders' "
+            "and action = 'updated' order by id desc limit 1"
         )[0][0].count("is_government")
         == 2
     )

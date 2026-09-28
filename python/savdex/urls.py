@@ -28,6 +28,7 @@ from savdex.web import (
     it_tasks,
     legal,
     listing,
+    listing_actions,
     news,
     pricing,
     resumes,
@@ -106,6 +107,25 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?locale/(?P<locale>ru|uz|en|zh|tr)$",
         actions.locale_update,
         name="locale.update",
+    ),
+    # «Мои объявления» (этап 5, шаг 23): формы, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/bulk$",
+        listing_actions.bulk,
+        name="cabinet.listings.bulk",
+    ),
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{{1,18}})/{verb}$",
+            getattr(listing_actions, verb),
+            name=f"cabinet.listings.{verb}",
+        )
+        for verb in ("renew", "archive", "resubmit")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})$",
+        listing_actions.destroy,
+        name="cabinet.listings.destroy",
     ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
