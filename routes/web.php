@@ -44,11 +44,13 @@ use App\Http\Controllers\Public\OgImageController;
 use App\Http\Controllers\Public\PageController;
 use App\Http\Controllers\Public\ResumeController as PublicResumeController;
 use App\Http\Controllers\Public\ReviewsController;
+use App\Http\Controllers\Public\ServiceSectionController;
 use App\Http\Controllers\Public\SitemapController;
 use App\Http\Controllers\Public\TenderController;
 use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Middleware\BlockGreedyCrawlers;
 use App\Http\Middleware\RequirePasswordChange;
+use App\Models\ItTask;
 use App\Models\Page;
 use App\Support\Microsite\SiteHost;
 use Illuminate\Http\Request;
@@ -168,6 +170,10 @@ Route::get('/resume/{slug}', [PublicResumeController::class, 'show'])->name('res
 
 // IT-услуги — IT-задачи компаний; откликаются IT-исполнители
 Route::get('/it-services', [ItTaskController::class, 'index'])->name('it-tasks');
+// Страница одного направления «Доп. услуг» — из подменю в шапке
+Route::get('/services/{slug}', [ServiceSectionController::class, 'show'])
+    ->where('slug', implode('|', array_keys(ItTask::SERVICE_PAGES)))
+    ->name('services.show');
 Route::get('/it-services/{slug}', [ItTaskController::class, 'show'])->name('it-tasks.show');
 
 /*

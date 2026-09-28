@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/react';
+import { Calculator, Code2, FileCheck2, Truck, UserSearch, Users, type LucideIcon } from 'lucide-react';
 import type { FilterOption } from '@/components/BoardFilter';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
@@ -43,4 +44,40 @@ export function openServiceSection(id: string, applyTaskType: (type: string) => 
     }
 
     applyTaskType(id);
+}
+
+/**
+ * Страницы направлений «Доп. услуг» — подменю в шапке.
+ *
+ * Те же адреса и в том же порядке, что ItTask::SERVICE_PAGES
+ * на сервере: там по ним открывается страница, здесь строится меню.
+ */
+export const SERVICE_PAGES = ['it', 'hr', 'recruitment', 'logistics', 'customs', 'accounting'] as const;
+
+export const SERVICE_PAGE_ICONS: Record<string, LucideIcon> = {
+    it: Code2,
+    hr: Users,
+    recruitment: UserSearch,
+    logistics: Truck,
+    customs: FileCheck2,
+    accounting: Calculator,
+};
+
+/** Страница направления по коду из ленты задач: hr_services → hr, hr → recruitment. */
+export const SERVICE_PAGE_BY_CODE: Record<string, string> = {
+    it: 'it',
+    hr_services: 'hr',
+    hr: 'recruitment',
+    logistics: 'logistics',
+    customs: 'customs',
+    accounting: 'accounting',
+};
+
+export function servicePages(): { slug: string; label: string; href: string; Icon: LucideIcon }[] {
+    return SERVICE_PAGES.map((slug) => ({
+        slug,
+        label: t(`service_pages.${slug}.title`),
+        href: routes.serviceSection(slug),
+        Icon: SERVICE_PAGE_ICONS[slug],
+    }));
 }

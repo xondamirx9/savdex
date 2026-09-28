@@ -19,6 +19,7 @@ import {
     User,
     Wallet,
     X,
+    type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -26,6 +27,7 @@ import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
+import { servicePages } from '@/lib/serviceSections';
 import { useDismiss } from '@/lib/useDismiss';
 import { PARTNER_TIERS, TIER_LOOK } from '@/lib/partnerTiers';
 import { routes } from '@/routes';
@@ -43,7 +45,7 @@ interface MenuItem {
     href: string;
     label: string;
     /** Подразделы — всплывают столбиком при наведении */
-    children?: { href: string; label: string; tier?: keyof typeof TIER_LOOK }[];
+    children?: { href: string; label: string; tier?: keyof typeof TIER_LOOK; Icon?: LucideIcon }[];
     /** Пункт с query-строкой активен только при точном совпадении её части. */
     match?: (path: string, search: string) => boolean;
 }
@@ -84,8 +86,15 @@ function menu(): MenuItem[] {
         {
             href: routes.itTasks,
             label: t('nav.it_services'),
-            // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет
-            match: (path) => path.startsWith(routes.itTasks) || path.startsWith('/resume'),
+            // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет;
+            // страницы направлений — тоже часть раздела
+            match: (path) =>
+                path.startsWith(routes.itTasks) || path.startsWith('/resume') || path.startsWith('/services/'),
+            // Направления — каждое со своей страницей; последним — общая лента
+            children: [
+                ...servicePages().map(({ href, label, Icon }) => ({ href, label, Icon })),
+                { href: routes.itTasks, label: t('service_pages.menu_all') },
+            ],
         },
         {
             href: routes.partners,
@@ -187,6 +196,12 @@ function NavDropdown({ item, active }: { item: MenuItem; active: boolean }) {
                                     {Icon && (
                                         <span className={cn('stat-ico', look[1])}>
                                             <Icon aria-hidden className="size-4" />
+                                        </span>
+                                    )}
+                                    {/* Направления «Доп. услуг» — со своей иконкой */}
+                                    {!Icon && child.Icon && (
+                                        <span className="stat-ico stat-ico-blue">
+                                            <child.Icon aria-hidden className="size-4" />
                                         </span>
                                     )}
                                     {child.label}

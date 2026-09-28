@@ -168,6 +168,10 @@ class SitemapController extends Controller
             ['loc' => url('/news'), 'priority' => '0.6', 'changefreq' => 'weekly'],
             ['loc' => url('/catalog').'?type=tender', 'priority' => '0.8', 'changefreq' => 'daily'],
             ['loc' => url('/it-services'), 'priority' => '0.8', 'changefreq' => 'daily'],
+            // Страницы направлений «Доп. услуг»
+            ...array_map(fn (string $slug): array => [
+                'loc' => url('/services/'.$slug), 'priority' => '0.7', 'changefreq' => 'daily',
+            ], array_keys(ItTask::SERVICE_PAGES)),
             // Разделы из подвала: индексируемые страницы, которых
             // роботу иначе не найти иначе как по ссылкам с витрины
             ['loc' => url('/countries'), 'priority' => '0.5', 'changefreq' => 'monthly'],

@@ -805,6 +805,100 @@ return [
 
     // ── IT services ─────────────────────────────────────────
 
+    // ── Страницы направлений «Доп. услуг» ────────────────────
+
+    'service_pages' => [
+        'eyebrow' => 'Extra services',
+        'menu_all' => 'All tasks',
+        'menu_toggle' => 'Service areas',
+        'stat_active' => 'open tasks',
+        'stat_completed' => 'completed',
+        'stat_providers' => 'providers',
+        'stat_resumes' => 'CVs',
+        'offers_title' => 'What you can order',
+        'kinds_title' => 'What this area includes',
+        'tasks_title' => 'Open tasks',
+        'tasks_all' => 'All tasks in this area',
+        'tasks_empty' => 'No open tasks yet. Post the first one — providers will reply in chat.',
+        'completed_title' => 'Already done',
+        'providers_title' => 'Providers',
+        'providers_empty' => 'No providers yet. Mark this area in your company profile and clients will find you here.',
+        'resumes_title' => 'Candidate CVs',
+        'resumes_all' => 'All CVs',
+        'cta_title' => 'Need a provider?',
+        'cta_text' => 'Describe the task — it is free. Providers will reply and discuss the details in chat.',
+        'others_title' => 'Other areas',
+
+        'it' => [
+            'title' => 'IT services',
+            'lead' => 'Websites, mobile apps, 1C and ERP, integrations, design, bots and support: companies post tasks, IT providers reply.',
+            'offers' => [
+                'Websites, online stores and web apps',
+                'Mobile apps for iOS and Android',
+                '1C, accounting systems and ERP',
+                'Integrations with warehouse, payment systems and APIs',
+                'Interface and brand design',
+                'Telegram bots and process automation',
+                'Website and server support and administration',
+            ],
+        ],
+
+        'hr' => [
+            'title' => 'HR services',
+            'lead' => 'Recruitment and candidate CVs: find an employee or a recruitment agency for your company.',
+            'offers' => [
+                'Hiring for a vacancy',
+                'Mass hiring of workers and frontline staff',
+                'Executive and niche specialist search',
+                'Candidate CVs with experience and salary expectations',
+            ],
+        ],
+
+        'recruitment' => [
+            'title' => 'HR',
+            'lead' => 'Hiring tasks: describe the vacancy — recruitment agencies and recruiters will reply in chat.',
+            'offers' => [
+                'Turnkey vacancy filling',
+                'Mass hiring',
+                'Executive and niche specialist search',
+                'Candidate and reference checks',
+            ],
+        ],
+
+        'logistics' => [
+            'title' => 'Logistics and transport',
+            'lead' => 'Freight across Uzbekistan and abroad, storage and forwarding — clients and carriers agree directly.',
+            'offers' => [
+                'Road freight across Uzbekistan and Central Asia',
+                'International delivery: road, rail, air, sea',
+                'Groupage cargo',
+                'Warehousing and forwarding',
+            ],
+        ],
+
+        'customs' => [
+            'title' => 'Customs and foreign trade',
+            'lead' => 'Customs clearance, certification and support for foreign trade deals.',
+            'offers' => [
+                'Import and export customs declarations',
+                'Certificates of conformity and origin',
+                'Foreign trade and HS code advice',
+                'Support for contracts with foreign partners',
+            ],
+        ],
+
+        'accounting' => [
+            'title' => 'Accounting services',
+            'lead' => 'Bookkeeping, reporting and taxes — for companies that need an outsourced accountant.',
+            'offers' => [
+                'Bookkeeping and tax accounting',
+                'Filing reports',
+                'Restoring accounting records',
+                'Payroll and HR records',
+            ],
+        ],
+    ],
+
     'it_tasks' => [
         'meta_title' => 'Additional business services',
         'meta_description' => 'Companies post service tasks: IT development, logistics, recruitment, customs declarations and accounting. Contractors respond and agree on details in chat.',
