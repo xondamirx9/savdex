@@ -1301,3 +1301,553 @@ def chats_props(ctx: Context) -> dict[str, Any]:
         )
 
     return {"hasCompany": True, "threads": result}
+
+
+# ── Продвижение /cabinet/promo (PromotionController::index) ─────────
+
+
+def promo(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Promo", promo_props(ctx), _seo(ctx))
+
+
+def _cost_label(t: dict[str, Any]) -> str:
+    """PromotionType::costLabel — по-русски на всех языках, как в коде."""
+    units = f"{t['cost_units']} ед."
+
+    return (
+        f"{units} / {t['duration_days']} дн."
+        if (t["duration_days"] or 0) > 0
+        else f"{units} разово"
+    )
+
+
+def promo_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web import content
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"active": [], "types": [], "listings": [], "units": 0, "resets_at": None}
+
+    cid = company["id"]
+    translations = content.Translations(ctx.locale)
+    active = _rows(
+        "select p.*, l.title as l_title, t.name as t_name, t.badge as t_badge "
+        "from promotions p "
+        "left join listings l on l.id = p.listing_id and l.deleted_at is null "
+        "left join promotion_types t on t.id = p.promotion_type_id "
+        "where p.company_id = %s and p.status = 'active' order by p.created_at desc, p.id desc",
+        [cid],
+    )
+    types = _rows("select * from promotion_types where is_active order by sort, id")
+    translations.prefetch(
+        [a["t_badge"] for a in active]
+        + [t[k] for t in types for k in ("name", "description", "effect_hint")]
+    )
+    taken = {
+        r["promotion_type_id"]: r["n"]
+        for r in _rows(
+            "select promotion_type_id, count(*) as n from promotions where status = 'active' "
+            "group by promotion_type_id"
+        )
+    }
+    wallets = _rows("select * from wallets where company_id = %s limit 1", [cid])
+    wallet = wallets[0] if wallets else None
+
+    def effect(p: dict[str, Any]) -> int | None:
+        """Promotion::effect: прирост показов в процентах."""
+        before, after = p["impressions_before"], p["impressions_after"]
+
+        if after is None or (before or 0) < 1:
+            return None
+
+        return int(php_round((after - before) / before * 100))
+
+    return {
+        "active": [
+            {
+                "id": p["id"],
+                "listing": p["l_title"],
+                "type": p["t_name"],
+                "badge": translations.text(p["t_badge"]),
+                "ends_at": _date(p["ends_at"]),
+                "before": p["impressions_before"],
+                "after": p["impressions_after"],
+                "effect": effect(p),
+            }
+            for p in active
+        ],
+        "types": [
+            {
+                "id": t["id"],
+                "code": t["code"],
+                "name": translations.text(t["name"]),
+                "description": translations.text(t["description"]),
+                "effect_hint": translations.text(t["effect_hint"]),
+                "cost": t["cost_units"],
+                "cost_label": _cost_label(t),
+                "icon": t["icon"],
+                "slots": t["slots"],
+                "taken": taken.get(t["id"], 0) if t["slots"] is not None else None,
+                "available": t["slots"] is None or taken.get(t["id"], 0) < t["slots"],
+            }
+            for t in types
+        ],
+        "listings": [
+            {"id": r["id"], "title": r["title"]}
+            for r in _rows(
+                "select id, title from listings where company_id = %s and status = 'active' "
+                "and deleted_at is null order by id",
+                [cid],
+            )
+        ],
+        "units": (wallet or {}).get("promo_units") or 0,
+        "resets_at": _date((wallet or {}).get("period_resets_at")),
+    }
+
+
+# ── Моё резюме /cabinet/resume (Cabinet\ResumeController::edit) ─────
+
+#: Currencies::ALL — подписи в коде, по-русски на всех языках
+CURRENCY_LABELS = {
+    "UZS": "сум",
+    "USD": "доллар США",
+    "EUR": "евро",
+    "CNY": "юань",
+    "TRY": "турецкая лира",
+    "RUB": "рубль",
+    "KZT": "тенге",
+}
+
+
+def resume(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Resume", resume_props(ctx), _seo(ctx))
+
+
+def resume_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web import resumes as options
+    from savdex.web.directory import _named, listed_countries
+    from savdex.web.shared import public_url
+
+    assert ctx.user is not None
+    user = _rows("select name, email, phone from users where id = %s", [ctx.user["id"]])[0]
+    found = _rows(
+        "select * from resumes where user_id = %s and deleted_at is null order by id limit 1",
+        [ctx.user["id"]],
+    )
+    city_names = _named("cities", ctx.locale)
+
+    return {
+        "resume": _present_resume(found[0], public_url) if found else None,
+        # Заготовка для первого захода — из профиля
+        "defaults": {
+            "contact_name": user["name"],
+            "contact_email": user["email"],
+            "contact_phone": user["phone"],
+        },
+        "options": {
+            "fields": options.labels(ctx, "field", options.FIELDS),
+            "employment": options.labels(ctx, "employment", options.EMPLOYMENT),
+            "schedule": options.labels(ctx, "schedule", options.SCHEDULE),
+            "language_levels": options.labels(ctx, "language_level", options.LANGUAGE_LEVELS),
+            "education_levels": options.labels(ctx, "education_level", options.EDUCATION_LEVELS),
+            "currencies": CURRENCY_LABELS,
+        },
+        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "cities": [
+            {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
+            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+        ],
+    }
+
+
+def _present_resume(r: dict[str, Any], public_url: Any) -> dict[str, Any]:  # noqa: ANN401
+    months = r["experience_months"] or 0
+
+    return {
+        "id": r["id"],
+        "slug": r["slug"],
+        "title": r["title"],
+        "field": r["field"],
+        "country_id": r["country_id"],
+        "city_id": r["city_id"],
+        "salary": r["salary"],
+        "currency": r["currency"],
+        "employment": r["employment"] or [],
+        "schedule": r["schedule"] or [],
+        "about": r["about"],
+        "skills": r["skills"] or [],
+        "jobs": r["jobs"] or [],
+        "education": r["education"] or [],
+        "languages": r["languages"] or [],
+        "contact_name": r["contact_name"],
+        "contact_phone": r["contact_phone"],
+        "contact_email": r["contact_email"],
+        "show_phone": bool(r["show_phone"]),
+        "show_email": bool(r["show_email"]),
+        "photo": public_url(r["photo_path"]) if r["photo_path"] is not None else None,
+        "status": r["status"],
+        "moderation_note": r["moderation_note"],
+        "views": r["views_count"],
+        "experience": {"years": months // 12, "months": months % 12},
+    }
+
+
+# ── Профиль компании /cabinet/company (CompanyProfileController::edit)
+
+#: ItTask::SERVICE_TYPES — подписи в коде, по-русски на всех языках
+SERVICE_TYPES = {
+    "web": "Сайты и веб-приложения",
+    "mobile": "Мобильные приложения",
+    "erp": "1С, учёт и ERP",
+    "integration": "Интеграции и API",
+    "design": "Дизайн и UX",
+    "automation": "Автоматизация и боты",
+    "support": "Поддержка и администрирование",
+    "logistics": "Логистика и перевозки",
+    "hr": "Подбор персонала",
+    "customs": "Декларирование и ВЭД",
+    "accounting": "Бухгалтерские услуги",
+    "other": "Другое",
+}
+
+#: CompanyDocument::MATERIAL_TYPES
+_MATERIALS = ("presentation", "price_list", "catalog", "other")
+
+
+def company_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Company", company_props(ctx), _seo(ctx))
+
+
+def company_props(ctx: Context) -> dict[str, Any]:
+    from savdex import laravel_storage
+    from savdex.web.company import _file_size
+    from savdex.web.directory import _named, listed_countries, logo_url
+    from savdex.web.shared import initials
+
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+    company = company_of(ctx)
+    cid = company["id"] if company else None
+    documents = (
+        _rows(
+            "select * from company_documents where company_id = %s "
+            "order by created_at desc, id desc",
+            [cid],
+        )
+        if cid
+        else []
+    )
+    approved = {d["type"] for d in documents if d["moderation_status"] == "approved"}
+    city_names = _named("cities", ctx.locale)
+    private = laravel_storage.private_root()
+    plan = company_plan(cid) if cid else None
+
+    def document(d: dict[str, Any]) -> dict[str, Any]:
+        label = ctx.t(f"cabinet.files.types.{d['type']}")
+
+        return {
+            "id": d["id"],
+            "type": d["type"],
+            "type_label": label if label != f"ui.cabinet.files.types.{d['type']}" else d["type"],
+            "title": d["title"],
+            "status": d["moderation_status"],
+            "size": _file_size(d["file_size"]),
+            "is_material": d["type"] in _MATERIALS,
+            "is_public": bool(d["is_public"]),
+            "valid_until": _date(d["valid_until"]),
+            "missing": not (private / str(d["file_path"] or "")).is_file(),
+        }
+
+    def check(key: str, done: bool, hint: bool = False) -> dict[str, Any]:
+        return {
+            "label": ctx.t(f"cabinet.company.{key}"),
+            "done": done,
+            "hint": ctx.t("cabinet.company.verify_hint_plus") if hint else None,
+        }
+
+    return {
+        "company": None
+        if company is None
+        else {
+            "id": company["id"],
+            "name": company["name"],
+            "slug": company["slug"],
+            "legal_name": company["legal_name"],
+            "tin": company["tin"],
+            "country_id": company["country_id"],
+            "city_id": company["city_id"],
+            "address": company["address"],
+            "description": company["description"],
+            "custom_category": company["custom_category"],
+            "website": company["website"],
+            "founded_year": company["founded_year"],
+            "employees_range": company["employees_range"],
+            "type": company["type"],
+            "primary_role": company["primary_role"],
+            "is_it_provider": bool(company["is_it_provider"]),
+            "it_specializations": company["it_specializations"] or [],
+            "initials": initials(company["name"]),
+            "logo": logo_url(ctx, company["logo_path"]),
+            "cover": logo_url(ctx, company["cover_path"]),
+            "completeness": completeness(company, bool(approved)),
+            "missing": _missing(ctx, company, bool(approved)),
+            "verification_level": company["verification_level"],
+        },
+        "serviceTypes": SERVICE_TYPES,
+        "contacts": [
+            {
+                "id": c["id"],
+                "type": c["type"],
+                "value": c["value"],
+                "label": c["label"],
+                "contact_person": c["contact_person"],
+                "is_public": bool(c["is_public"]),
+            }
+            for c in _rows(
+                "select * from company_contacts where company_id = %s "
+                "order by is_primary desc, sort_order, id",
+                [cid],
+            )
+        ]
+        if cid
+        else [],
+        "documents": [document(d) for d in documents],
+        "employees": [
+            {
+                "id": u["id"],
+                "name": u["name"],
+                "email": u["email"],
+                "role": ctx.t(
+                    "cabinet.company.role_owner"
+                    if u["company_role"] == "owner"
+                    else "cabinet.company.role_staff"
+                ),
+                "verified": u["email_verified_at"] is not None,
+            }
+            for u in _rows(
+                "select * from users where company_id = %s and deleted_at is null order by id",
+                [cid],
+            )
+        ]
+        if cid
+        else [],
+        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "cities": [
+            {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
+            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+        ],
+        "verification": [
+            check("verify_email", user["email_verified_at"] is not None),
+            check("verify_phone", user["phone_verified_at"] is not None),
+            check("verify_registration", "registration" in approved),
+            check("verify_tin", company is not None and _filled(company["tin"])),
+            check("verify_licenses", "license" in approved, hint=True),
+            check("verify_address", company is not None and _filled(company["address"]), hint=True),
+        ],
+        "plan": None
+        if plan is None
+        else {
+            "name": plan["name"],
+            "verification_days": plan.get("verification_days"),
+            "has_microsite": bool(plan.get("has_microsite")),
+        },
+    }
+
+
+# ── Мои IT-задачи /cabinet/it-tasks (Cabinet\ItTaskController) ──────
+
+#: ItTask::STATUSES и ::CURRENCIES — подписи в коде
+IT_TASK_STATUSES = {
+    "active": "Открыта",
+    "closed": "Закрыта",
+    "completed": "Выполнена",
+    "archived": "В архиве",
+}
+IT_TASK_CURRENCIES = ["UZS", "USD"]
+
+
+def _budget_label(ctx: Context, t: dict[str, Any]) -> str:
+    """ItTaskController::budgetLabel."""
+    from savdex.web.it_tasks import number_format
+
+    currency = ctx.t("catalog.currency_uzs") if t["currency"] == "UZS" else t["currency"]
+    negotiable = ctx.t("cabinet.it_task_form.budget_negotiable")
+    low, high = t["budget_from"], t["budget_to"]
+
+    if t["budget_type"] == "fixed":
+        return f"{number_format(float(low), 0)} {currency}" if low is not None else negotiable
+
+    if t["budget_type"] == "range":
+        if low is None or high is None:
+            return negotiable
+
+        return f"{number_format(float(low), 0)} – {number_format(float(high), 0)} {currency}"
+
+    return negotiable
+
+
+def it_tasks(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/it-tasks/Index", it_tasks_props(ctx), _seo(ctx))
+
+
+def it_tasks_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.it_tasks import _date as day_month_year
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"hasCompany": False, "tasks": []}
+
+    tasks = _rows(
+        "select t.*, c.name as contractor_name, (select count(*) from it_task_files f "
+        "where f.it_task_id = t.id) as files_count from it_tasks t "
+        "left join companies c on c.id = t.contractor_company_id and c.deleted_at is null "
+        "where t.company_id = %s order by t.created_at desc, t.id desc",
+        [company["id"]],
+    )
+    responders: dict[int, list[dict[str, Any]]] = {}
+
+    for r in _rows(
+        "select m.it_task_id, m.buyer_company_id, b.name from message_threads m "
+        "left join companies b on b.id = m.buyer_company_id and b.deleted_at is null "
+        "where m.it_task_id = any(%s) order by m.id",
+        [[t["id"] for t in tasks]],
+    ):
+        responders.setdefault(r["it_task_id"], []).append(
+            {
+                "id": r["buyer_company_id"],
+                "name": r["name"] if r["name"] is not None else ctx.t("cabinet.incoming.deleted"),
+            }
+        )
+
+    return {
+        "hasCompany": True,
+        "tasks": [
+            {
+                "id": t["id"],
+                "slug": t["slug"],
+                "title": t["title"],
+                "service_type": SERVICE_TYPES.get(t["service_type"], t["service_type"]),
+                "budget": _budget_label(ctx, t),
+                "deadline": day_month_year(t["deadline_at"], ctx.locale),
+                "status": t["status"],
+                "status_label": IT_TASK_STATUSES.get(t["status"], t["status"]),
+                "responses": t["responses_count"],
+                "views": t["views_count"],
+                "files": t["files_count"],
+                "published": day_month_year(t["published_at"], ctx.locale),
+                "result_url": t["result_url"],
+                "result_summary": t["result_summary"],
+                "contractor": t["contractor_name"],
+                "responders": responders.get(t["id"], []),
+            }
+            for t in tasks
+        ],
+    }
+
+
+def it_task_create(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    if company_of(ctx) is None:
+        # Задачу без компании не поставить — сначала профиль
+        store = _store(ctx)
+
+        if store is not None:
+            store.flash("warning", ctx.t("messages.it_task.no_company"))
+
+        return _redirect(ctx, "/cabinet/company")
+
+    return inertia.render(
+        ctx,
+        "cabinet/it-tasks/Form",
+        {
+            "task": None,
+            "files": [],
+            "serviceTypes": SERVICE_TYPES,
+            "currencies": IT_TASK_CURRENCIES,
+        },
+        _seo(ctx),
+    )
+
+
+def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
+    from savdex.web.it_tasks import size_label
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+    found = (
+        _rows(
+            "select * from it_tasks where id = %s and company_id = %s",
+            [int(task_id), company["id"]],
+        )
+        if company is not None
+        else []
+    )
+
+    # 404, а не 403: чужая задача не подтверждает своё существование
+    if not found:
+        return not_found(ctx)
+
+    t = found[0]
+
+    return inertia.render(
+        ctx,
+        "cabinet/it-tasks/Form",
+        {
+            "task": {
+                "id": t["id"],
+                "slug": t["slug"],
+                "title": t["title"],
+                "description": t["description"],
+                "service_type": t["service_type"],
+                "stack": t["stack"] or [],
+                "budget_type": t["budget_type"],
+                "budget_from": float(t["budget_from"]) if t["budget_from"] is not None else None,
+                "budget_to": float(t["budget_to"]) if t["budget_to"] is not None else None,
+                "currency": t["currency"],
+                "deadline_at": t["deadline_at"].strftime("%Y-%m-%d") if t["deadline_at"] else None,
+                "status": t["status"],
+            },
+            "files": [
+                {"id": f["id"], "title": f["title"], "size": size_label(f["file_size"])}
+                for f in _rows(
+                    "select id, title, file_size from it_task_files where it_task_id = %s "
+                    "order by id",
+                    [t["id"]],
+                )
+            ],
+            "serviceTypes": SERVICE_TYPES,
+            "currencies": IT_TASK_CURRENCIES,
+        },
+        _seo(ctx),
+    )
