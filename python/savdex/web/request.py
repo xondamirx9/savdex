@@ -7,11 +7,11 @@
 - SetLocale: язык — из префикса; без префикса — запомненный (профиль,
   затем сессия), и тогда GET-запрос уводится на адрес с префиксом.
 
-Чего Django не делает — запись: SetLocale у Laravel запоминает язык
-из префикса в сессии и в профиле. Сессию до этапа 5 пишет только
-Laravel, поэтому язык запомнится на ближайшей его странице (ссылки
-внутри страницы и так ведут с префиксом). ?hl= (смена языка) Apache
-сюда не пускает — это запись, её делает Laravel.
+Сессию Laravel страница ведёт сама (savdex/web/session.py): начинает
+её здесь, как StartSession, — раньше SetLocale, но после отказа
+роботу; SetLocale запоминает язык из префикса в сессии и в профиле;
+сохраняет её SessionMiddleware после страницы. ?hl= (смена языка)
+Apache сюда не пускает — это делает Laravel.
 
 Канонический хост и мини-сайты сюда тоже не доходят: Apache отдаёт
 Django только запросы к основному домену (docker/apache-python.conf).
@@ -23,7 +23,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_session
-from savdex.web import locales
+from savdex.web import locales, phpquery, session
 from savdex.web.shared import Context
 
 #: BlockGreedyCrawlers::CRAWLERS
@@ -89,13 +89,24 @@ def context(request: HttpRequest, redirect: bool = True) -> Context | HttpRespon
             content_type="text/plain; charset=utf-8",
         )
 
-    visitor = laravel_session.identify(request.COOKIES, connection)
     url_locale, path = locales.split(request.path)
     query = request.META.get("QUERY_STRING", "")
     root = root_of(request)
+    started = session.start(request)
+
+    if started is None:
+        visitor = laravel_session.identify(request.COOKIES, connection)
+    else:
+        store, visitor = started
+        store.root = root
+        # Request::fullUrl() после LocalizeUrl — путь без префикса
+        store.full_url = root + phpquery.full_path(path, query)
 
     if url_locale is not None:
         locale = url_locale
+
+        if redirect and started is not None:
+            session.remember_locale(started[0], url_locale)
     else:
         stored = _stored(visitor)
         locale = stored or locales.DEFAULT
