@@ -14,6 +14,7 @@ import json
 import random
 import shutil
 import subprocess
+import unicodedata
 
 import pytest
 
@@ -574,6 +575,79 @@ def _php(values: list[str]) -> list[bool]:
     return json.loads(вывод.stdout)
 
 
+#: Общие категории Unicode — PHP сообщает свою для каждого знака
+КАТЕГОРИИ = (
+    "Lu",
+    "Ll",
+    "Lt",
+    "Lm",
+    "Lo",
+    "Mn",
+    "Mc",
+    "Me",
+    "Nd",
+    "Nl",
+    "No",
+    "Pc",
+    "Pd",
+    "Ps",
+    "Pe",
+    "Pi",
+    "Pf",
+    "Po",
+    "Sm",
+    "Sc",
+    "Sk",
+    "So",
+    "Zs",
+    "Zl",
+    "Zp",
+    "Cc",
+    "Cf",
+    "Cs",
+    "Co",
+    "Cn",
+)
+
+
+def _категории_php(знаки: list[str]) -> list[str]:
+    """Категория каждого знака по таблицам PCRE2, с которыми собран PHP."""
+    код = (
+        "$in = json_decode(stream_get_contents(STDIN), true);"
+        "$cats = " + json.dumps(list(КАТЕГОРИИ)) + ";"
+        "echo json_encode(array_map(function ($ch) use ($cats) {"
+        " foreach ($cats as $c) { if (preg_match('/^\\p{' . $c . '}$/u', $ch)) return $c; }"
+        " return '?'; }, $in));"
+    )
+    вывод = subprocess.run(
+        ["php", "-r", код],
+        input=json.dumps(знаки),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    return json.loads(вывод.stdout)
+
+
+def _та_же_версия_unicode(строки: list[str]) -> list[str]:
+    """
+    Только строки из знаков, которые Python и PHP относят к одной
+    категории. Версии Unicode у unicodedata и у PCRE2 бывают разные
+    (в CI Python новее): знак, назначенный в новой версии, для одной
+    стороны буква, для другой — неназначенный. Это разница окружения, а
+    не переноса, и такие строки не сверяются.
+    """
+    знаки = sorted({ch for s in строки for ch in s if ord(ch) > 127})
+    чужие = {
+        ch
+        for ch, php in zip(знаки, _категории_php(знаки), strict=True)
+        if unicodedata.category(ch) != php
+    }
+
+    return [s for s in строки if not чужие.intersection(s)]
+
+
 @pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
 def test_как_у_laravel():
     строки = [
@@ -584,6 +658,7 @@ def test_как_у_laravel():
         *_домены(),
         *_точки(),
     ]
+    строки = _та_же_версия_unicode(строки)
     ожидание = _php(строки)
     расхождения = [(s, e) for s, e in zip(строки, ожидание, strict=True) if is_valid(s) is not e]
 
