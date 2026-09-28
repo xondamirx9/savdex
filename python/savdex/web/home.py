@@ -195,7 +195,7 @@ class Cards:
             promotions = _rows(
                 "select p.listing_id, t.badge from promotions p left join promotion_types t "
                 "on t.id = p.promotion_type_id where p.listing_id = any(%s) "
-                "and p.status = 'active'",
+                "and p.status = 'active' order by p.id",
                 [ids],
             )
             self.translations.prefetch(p["badge"] for p in promotions)

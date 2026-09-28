@@ -1129,3 +1129,175 @@ def favorites_props(ctx: Context) -> dict[str, Any]:
             for card, row in zip(cards.present(rows), rows, strict=True)
         ]
     }
+
+
+# ── Мои объявления /cabinet/listings (Cabinet\ListingController::index)
+
+#: Вкладки — порядок как в интерфейсе; «На модерации» нет (постмодерация)
+LISTING_TABS = ("active", "draft", "needs_changes", "expired", "rejected")
+
+
+def listings(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/listings/Index", listings_props(ctx), _seo(ctx))
+
+
+def listings_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web import content
+    from savdex.web.directory import _named
+
+    tabs = {key: ctx.t(f"cabinet.listings.tab_{key}") for key in LISTING_TABS}
+    company = company_of(ctx)
+
+    if company is None:
+        return {
+            "listings": [],
+            "counts": dict.fromkeys(LISTING_TABS, 0),
+            "tabs": tabs,
+            "status": "active",
+            "limit": None,
+        }
+
+    raw = laravel_input(ctx.query).get("status")
+    status = text(raw) if isinstance(raw, str) else ""
+    status = status if status in LISTING_TABS else "active"
+    cid = company["id"]
+    counts = {
+        key: _count(
+            "select count(*) as n from listings where company_id = %s and status = %s "
+            "and deleted_at is null",
+            [cid, key],
+        )
+        for key in LISTING_TABS
+    }
+    rows = _rows(
+        "select * from listings where company_id = %s and status = %s and deleted_at is null "
+        "order by updated_at desc, id desc",
+        [cid, status],
+    )
+    categories = _named("categories", ctx.locale)
+    translations = content.Translations(ctx.locale)
+    badges: dict[int, list[str | None]] = {}
+
+    if rows:
+        promotions = _rows(
+            "select p.listing_id, t.badge from promotions p left join promotion_types t "
+            "on t.id = p.promotion_type_id where p.listing_id = any(%s) and p.status = 'active' "
+            "order by p.id",
+            [[r["id"] for r in rows]],
+        )
+        translations.prefetch(p["badge"] for p in promotions)
+
+        for p in promotions:
+            badges.setdefault(p["listing_id"], []).append(translations.text(p["badge"]))
+
+    soon = datetime.now(UTC).replace(tzinfo=None) + timedelta(days=7)
+
+    return {
+        "listings": [
+            {
+                "id": r["id"],
+                # Слаг пуст у свежего черновика — кабинет ведёт в редактор
+                "slug": r["slug"],
+                "title": r["title"],
+                "type": r["type"],
+                "category": categories.get(r["category_id"]) if r["category_id"] else None,
+                "price": float(r["price"]) if r["price"] is not None else None,
+                "currency": r["currency"],
+                "unit": r["unit"],
+                "negotiable": bool(r["price_negotiable"]),
+                "status": r["status"],
+                "moderation_note": r["moderation_note"],
+                "impressions": r["impressions_count"],
+                "views": r["views_count"],
+                "unlocks": r["unlocks_count"],
+                "expires_at": _date(r["expires_at"]),
+                "expiring_soon": r["status"] == "active"
+                and r["expires_at"] is not None
+                and r["expires_at"] < soon,
+                "badges": [b for b in badges.get(r["id"], []) if b],
+            }
+            for r in rows
+        ],
+        "counts": counts,
+        "tabs": tabs,
+        "status": status,
+        "limit": {"used": counts["active"], "total": company_plan(cid)["listings_limit"]},
+    }
+
+
+# ── Чаты /cabinet/chats (ChatController::index) ─────────────────────
+
+
+def chats(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Chats", chats_props(ctx), _seo(ctx))
+
+
+def chats_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.seo import _limit
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"threads": [], "hasCompany": False}
+
+    cid = company["id"]
+    threads = _rows(
+        "select t.*, l.title as l_title, k.title as k_title from message_threads t "
+        "left join listings l on l.id = t.listing_id and l.deleted_at is null "
+        "left join it_tasks k on k.id = t.it_task_id "
+        "where t.buyer_company_id = %s or t.seller_company_id = %s "
+        "order by t.last_message_at desc, t.id desc limit 100",
+        [cid, cid],
+    )
+    ids = [t["id"] for t in threads]
+    last = {
+        m["thread_id"]: m
+        for m in _rows(
+            "select * from messages where id in (select max(id) from messages "
+            "where thread_id = any(%s) group by thread_id)",
+            [ids],
+        )
+    }
+    others = _companies(
+        [
+            t["seller_company_id"] if t["buyer_company_id"] == cid else t["buyer_company_id"]
+            for t in threads
+        ]
+    )
+    result = []
+
+    for t in threads:
+        mine_buyer = t["buyer_company_id"] == cid
+        other = others.get(t["seller_company_id"] if mine_buyer else t["buyer_company_id"])
+        read_at = t["buyer_read_at"] if mine_buyer else t["seller_read_at"]
+        message = last.get(t["id"])
+        unread = _count(
+            "select count(*) as n from messages where thread_id = %s and company_id != %s"
+            + (" and created_at > %s" if read_at is not None else ""),
+            [t["id"], cid, *([read_at] if read_at is not None else [])],
+        )
+        result.append(
+            {
+                "id": t["id"],
+                "company": other["name"] if other else ctx.t("cabinet.incoming.deleted"),
+                "initials": initials(other["name"]) if other else "—",
+                "listing": t["l_title"] if t["l_title"] is not None else t["k_title"],
+                "last": _limit(message["body"], 80, "...") if message else None,
+                "last_mine": message is not None and message["company_id"] == cid,
+                "at": ago(t["last_message_at"], ctx.locale) if t["last_message_at"] else None,
+                "unread": unread,
+            }
+        )
+
+    return {"hasCompany": True, "threads": result}
