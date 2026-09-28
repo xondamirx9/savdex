@@ -194,8 +194,11 @@ jobs:
           done
           # Файл задачи — Laravel (проверка доступа)
           curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/files/1 | grep -qi '^x-powered-by: php'
-          # Форма «Оцените SavdEx» — Laravel (гостя уводит на вход)
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/reviews/new | grep -qi '^x-powered-by: php'
+          # Форма «Оцените SavdEx» — страница Django (гостя уводит на вход),
+          # отправка — Laravel
+          curl -s -D /tmp/rnew.h -o /dev/null http://127.0.0.1:18080/reviews/new
+          ! grep -qi '^x-powered-by: php' /tmp/rnew.h
+          grep -qi '^location: http://127.0.0.1:18080/login' /tmp/rnew.h
           # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
           curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
 
