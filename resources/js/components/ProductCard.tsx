@@ -1,9 +1,8 @@
 import { router, usePage } from '@inertiajs/react';
-import { Heart, Package, ShoppingCart, Star } from 'lucide-react';
+import { BadgeCheck, Building2, Clock, Heart, MapPin, Package, ShoppingCart, Star } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
 import { formatNumber } from '@/components/cabinet';
 import { cn } from '@/lib/cn';
-import { flag } from '@/lib/flag';
 import { t } from '@/lib/i18n';
 import { unitLabel } from '@/lib/units';
 import { routes } from '@/routes';
@@ -37,7 +36,15 @@ export interface ProductRow {
     published: string | null;
     is_new: boolean;
     views: number;
-    company: { name: string | null; slug: string | null; verified: number; rating: number; trust: number };
+    company: {
+        name: string | null;
+        slug: string | null;
+        verified: number;
+        rating: number;
+        trust: number;
+        /** За сколько часов компания обычно отвечает; null — не измеряли */
+        response_hours: number | null;
+    };
     badges: string[];
     promoted: boolean;
     /** false на странице избранного, если объявление снято с публикации */
@@ -112,7 +119,6 @@ function FavButton({ id }: { id: number }) {
 export function ProductCard({ row }: { row: ProductRow }) {
     const href = row.slug ? routes.listing(row.slug) : routes.catalog;
     const TypeIcon = row.type === 'demand' ? ShoppingCart : Package;
-    const countryFlag = flag(row.country);
 
     return (
         /* Неактивная карточка приглушается, но НЕ через .is-disabled:
@@ -145,49 +151,20 @@ export function ProductCard({ row }: { row: ProductRow }) {
             <FavButton id={row.id} />
 
             <div className="product-body">
-                <span className="product-origin">
-                    {countryFlag && (
-                        <span className="flag" aria-hidden>
-                            {countryFlag}
-                        </span>
-                    )}
-                    {row.country_name ?? row.city ?? ''}
-                    <span
-                        className={cn(
-                            'product-trust',
-                            row.company.trust >= 70 && 'is-high',
-                            row.company.trust < 40 && 'is-low',
-                        )}
-                        title={t('catalog.trust_hint')}
-                    >
-                        {t('catalog.trust', { percent: String(row.company.trust) })}
-                    </span>
-                </span>
-
                 <Link href={href} className="product-title">
                     {row.title}
                 </Link>
 
-                <div className="product-price-row">
-                    <span className="product-price">
-                        {row.negotiable || row.price === null ? (
-                            <small>{t('catalog.price_negotiable')}</small>
-                        ) : (
-                            <>
-                                {/* Шаблон «от :price» лежит в словаре целиком:
-                                    в узбекском и китайском «от» стоит после числа */}
-                                {t('catalog.price_from', { price: shownPrice(row.price, row.currency, row.converted) })}
-                                {row.unit && <small> / {unitLabel(row.unit)}</small>}
-                            </>
-                        )}
-                    </span>
-                    {row.min_order !== null && (
-                        <span className="product-moq">
-                            {t('catalog.moq')}: {formatNumber(row.min_order)}
-                            {row.unit ? ` ${unitLabel(row.unit)}` : ''}
-                        </span>
+                <span className="product-price">
+                    {row.negotiable || row.price === null ? (
+                        <small>{t('catalog.price_negotiable')}</small>
+                    ) : (
+                        <>
+                            {shownPrice(row.price, row.currency, row.converted)}
+                            {row.unit && <small> / {unitLabel(row.unit)}</small>}
+                        </>
                     )}
-                </div>
+                </span>
 
                 {/* Пересчёт приблизителен — цена продавца остаётся
                     на карточке: договор заключают по ней */}
@@ -197,24 +174,60 @@ export function ProductCard({ row }: { row: ProductRow }) {
                     </span>
                 )}
 
-                <span className="product-company">
-                    {/* Имя собственное: браузерный переводчик превращал
-                        «OOO Tranquil» в «ООО Спокойствие» */}
-                    <b className="notranslate" translate="no">{row.company.name}</b>
+                {/* Строки-факты: то, что покупатель сверяет до перехода
+                    в карточку, — партия, город, проверка, скорость
+                    ответа. Каждая строка появляется только со своими
+                    данными: пустая строка со значком хуже её отсутствия */}
+                <ul className="product-facts">
+                    {row.min_order !== null && (
+                        <li>
+                            <Package aria-hidden className="size-4" />
+                            {t('catalog.moq_label')}: {formatNumber(row.min_order)}
+                            {row.unit ? ` ${unitLabel(row.unit)}` : ''}
+                        </li>
+                    )}
+
+                    {(row.city || row.country_name) && (
+                        <li>
+                            <MapPin aria-hidden className="size-4" />
+                            {row.city ?? row.country_name}
+                        </li>
+                    )}
+
                     {row.company.verified >= 2 && (
-                        <span title={t('catalog.verified')} style={{ color: 'var(--success)', display: 'inline-flex' }}>
-                            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M9 12l2 2 4-4" />
-                                <circle cx="12" cy="12" r="9" />
-                            </svg>
-                        </span>
+                        <li className="is-verified">
+                            <BadgeCheck aria-hidden className="size-4" />
+                            {t('catalog.verified_seller')}
+                        </li>
                     )}
-                    {row.company.rating > 0 && (
-                        <span className="listing-rating">
-                            <Star aria-hidden className="size-3" style={{ fill: 'currentColor', color: 'var(--warning)' }} />
-                            {row.company.rating.toFixed(1)}
-                        </span>
+
+                    {row.company.response_hours !== null && row.company.response_hours > 0 && (
+                        <li>
+                            <Clock aria-hidden className="size-4" />
+                            {t('catalog.responds_in', { hours: String(row.company.response_hours) })}
+                        </li>
                     )}
+
+                    <li className="product-facts-company">
+                        <Building2 aria-hidden className="size-4" />
+                        {/* Имя собственное: браузерный переводчик превращал
+                            «OOO Tranquil» в «ООО Спокойствие» */}
+                        <b className="notranslate" translate="no">{row.company.name}</b>
+                        {row.company.rating > 0 && (
+                            <span className="listing-rating">
+                                <Star aria-hidden className="size-3" style={{ fill: 'currentColor', color: 'var(--warning)' }} />
+                                {row.company.rating.toFixed(1)}
+                            </span>
+                        )}
+                    </li>
+                </ul>
+
+                {/* Кнопка — оформление, а не вторая ссылка: вся карточка
+                    и так ведёт в объявление (a.product-title::after).
+                    Отдельная ссылка удвоила бы обход с клавиатуры
+                    и список ссылок у скринридера */}
+                <span className="product-cta" aria-hidden>
+                    {t('catalog.open_offer')}
                 </span>
             </div>
         </article>
