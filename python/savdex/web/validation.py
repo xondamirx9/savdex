@@ -112,12 +112,38 @@ def _passes(rule: str, param: str | None, value: Any) -> bool:  # noqa: ANN401
 
         return size >= float(param or 0) if rule == "min" else size <= float(param or 0)
 
+    if rule == "regex":
+        # validateRegex: только строки и числа, preg_match > 0
+        if not isinstance(value, str | int | float) or isinstance(value, bool):
+            return False
+
+        return _php_regex(param or "").search(_php_string(value)) is not None
+
+    if rule == "url":
+        from savdex.web.url_rule import is_url
+
+        return is_url(value, tuple(param.split(",")) if param else ())
+
     if rule == "in":
         allowed = (param or "").split(",")
 
         return not isinstance(value, dict | list) and _php_string(value) in allowed
 
     raise ValueError(f"Правило {rule} не перенесено")
+
+
+def _php_regex(pattern: str) -> re.Pattern[str]:
+    """Шаблон preg_match («/…/флаги»): без u — только ASCII в \\d, \\s, \\w."""
+    delimiter = pattern[:1]
+    closing = {"(": ")", "[": "]", "{": "}", "<": ">"}.get(delimiter, delimiter)
+    end = pattern.rindex(closing)
+    flags = 0 if "u" in pattern[end + 1 :] else re.ASCII
+
+    for flag, value in (("i", re.I), ("m", re.M), ("s", re.S), ("x", re.X)):
+        if flag in pattern[end + 1 :]:
+            flags |= value
+
+    return re.compile(pattern[1:end], flags)
 
 
 def _size(value: Any) -> float | None:  # noqa: ANN401
