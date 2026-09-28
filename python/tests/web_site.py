@@ -335,6 +335,23 @@ def разница(д: Any, л: Any, путь: str = "") -> list[str]:
     return [] if д == л else [f"{путь}: {д!r:.200} | {л!r:.200}"]
 
 
+#: Данные, которые есть только у Django: с 28.09 Laravel не дополняется
+#: (docs/migration-to-python.md), и новые возможности появляются только в
+#: Python. Сверка с Laravel их не видит — их проверяют свои тесты
+ТОЛЬКО_DJANGO = frozenset({"government"})
+
+
+def без_новых(value: Any) -> Any:
+    """Страница Django без ключей ТОЛЬКО_DJANGO — для сверки с Laravel."""
+    if isinstance(value, dict):
+        return {k: без_новых(v) for k, v in value.items() if k not in ТОЛЬКО_DJANGO}
+
+    if isinstance(value, list):
+        return [без_новых(v) for v in value]
+
+    return value
+
+
 def сверить(
     сайт: str,
     path: str,
@@ -376,6 +393,10 @@ def сверить(
         return д, л
 
     стр_д, стр_л = страница(д["body"]), страница(л["body"])
+    # Словарь интерфейса у сторон общий (lang/*/ui.php) — его не трогаем
+    стр_д["props"] = {
+        k: v if k == "translations" else без_новых(v) for k, v in стр_д["props"].items()
+    }
 
     for key in ("component", "url", "version", "sharedProps"):
         assert стр_д.get(key) == стр_л.get(key), key

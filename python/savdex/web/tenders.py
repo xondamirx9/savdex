@@ -85,6 +85,8 @@ def card(
         "days_left": (deadline.date() - now.date()).days if deadline is not None else None,
         "closed": deadline is not None and deadline < now,
         "published": _date(row["published_at"], locale),
+        # Госзакупка (этап 5, только Django): значок на карточке и странице
+        "government": bool(row.get("is_government")),
     }
 
 

@@ -767,6 +767,7 @@ return [
     ],
 
     'tenders' => [
+        'government' => 'Kamu ihalesi',
         'meta_title' => 'İhaleler ve satın almalar — SAVDEX',
         'meta_description' => 'Özbekistan ve Orta Asya’daki açık ihaleler ve satın almalar: alım konusu, bütçe, teklif son tarihi ve alıcı iletişim bilgileri.',
         'eyebrow' => 'Satın almalar',

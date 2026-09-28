@@ -24,6 +24,8 @@ export interface TenderRow {
     days_left: number | null;
     closed: boolean;
     published: string | null;
+    /** Госзакупка — значок «Госзакупка» (загружается из админки) */
+    government?: boolean;
 }
 
 /** «250 000 000 сум» — бюджет в формате языка витрины. */
@@ -67,6 +69,7 @@ export function TenderCard({ row }: { row: TenderRow }) {
         >
             <div className="row wrap" style={{ gap: 8 }}>
                 {deadlineBadge(row)}
+                {row.government && <span className="badge badge-verified">{t('tenders.government')}</span>}
                 {row.category && <span className="badge badge-neutral">{row.category}</span>}
             </div>
 

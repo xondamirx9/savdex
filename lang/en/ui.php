@@ -767,6 +767,7 @@ return [
     ],
 
     'tenders' => [
+        'government' => 'Government tender',
         'meta_title' => 'Tenders and procurement — SAVDEX',
         'meta_description' => 'Open tenders and procurement in Uzbekistan and Central Asia: what is purchased, budget, bid deadline and customer contacts.',
         'eyebrow' => 'Procurement',

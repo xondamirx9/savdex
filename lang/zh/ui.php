@@ -766,6 +766,7 @@ return [
     ],
 
     'tenders' => [
+        'government' => '政府采购',
         'meta_title' => '招标与采购 — SAVDEX',
         'meta_description' => '乌兹别克斯坦及中亚的公开招标与采购：采购标的、预算、投标截止日期及采购方联系方式。',
         'eyebrow' => '采购',
