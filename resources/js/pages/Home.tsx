@@ -45,6 +45,7 @@ import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
+import { SERVICE_PAGE_BY_CODE } from '@/lib/serviceSections';
 import { routes } from '@/routes';
 
 /**
@@ -482,7 +483,11 @@ export default function Home({
                                 return (
                                     <Link
                                         key={svc.type}
-                                        href={`${routes.itTasks}?type=${svc.type}`}
+                                        href={
+                                            SERVICE_PAGE_BY_CODE[svc.type]
+                                                ? routes.serviceSection(SERVICE_PAGE_BY_CODE[svc.type])
+                                                : `${routes.itTasks}?type=${svc.type}`
+                                        }
                                         className="cat-card"
                                     >
                                         <span className={cn('cat-thumb', `cat-g-${i === 0 ? 7 : 8}`)}>

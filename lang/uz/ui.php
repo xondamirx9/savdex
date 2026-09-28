@@ -792,6 +792,100 @@ return [
 
     // ── IT xizmatlar ────────────────────────────────────────
 
+    // ── Страницы направлений «Доп. услуг» ────────────────────
+
+    'service_pages' => [
+        'eyebrow' => 'Qo‘shimcha xizmatlar',
+        'menu_all' => 'Barcha vazifalar',
+        'menu_toggle' => 'Xizmat yo‘nalishlari',
+        'stat_active' => 'ochiq vazifa',
+        'stat_completed' => 'bajarilgan',
+        'stat_providers' => 'ijrochi',
+        'stat_resumes' => 'rezyume',
+        'offers_title' => 'Nimani buyurtma qilish mumkin',
+        'kinds_title' => 'Yo‘nalish tarkibi',
+        'tasks_title' => 'Ochiq vazifalar',
+        'tasks_all' => 'Yo‘nalishdagi barcha vazifalar',
+        'tasks_empty' => 'Hozircha ochiq vazifalar yo‘q. Birinchisini joylang — ijrochilar chatda javob beradi.',
+        'completed_title' => 'Bajarilgan',
+        'providers_title' => 'Ijrochilar',
+        'providers_empty' => 'Hozircha ijrochilar yo‘q. Kompaniya profilida yo‘nalishni belgilang — buyurtmachilar sizni shu yerda topadi.',
+        'resumes_title' => 'Nomzodlar rezyumesi',
+        'resumes_all' => 'Barcha rezyumelar',
+        'cta_title' => 'Ijrochi kerakmi?',
+        'cta_text' => 'Vazifani tasvirlab bering — bu bepul. Ijrochilar javob beradi va tafsilotlarni chatda muhokama qiladi.',
+        'others_title' => 'Boshqa yo‘nalishlar',
+
+        'it' => [
+            'title' => 'IT xizmatlar',
+            'lead' => 'Saytlar, mobil ilovalar, 1C va ERP, integratsiyalar, dizayn, botlar va qo‘llab-quvvatlash: kompaniyalar vazifa joylaydi, IT ijrochilar javob beradi.',
+            'offers' => [
+                'Saytlar, internet-do‘konlar va veb-ilovalar',
+                'iOS va Android uchun mobil ilovalar',
+                '1C, hisob va ERP joriy etish',
+                'Ombor, to‘lov tizimlari va API bilan integratsiya',
+                'Interfeys va firma uslubi dizayni',
+                'Telegram-botlar va jarayonlarni avtomatlashtirish',
+                'Sayt va serverlarni qo‘llab-quvvatlash va boshqarish',
+            ],
+        ],
+
+        'hr' => [
+            'title' => 'HR xizmatlar',
+            'lead' => 'Xodim tanlash va nomzodlar rezyumesi: kompaniyangiz uchun xodim yoki kadrlar agentligini toping.',
+            'offers' => [
+                'Vakansiya uchun xodim tanlash',
+                'Ishchilar va chiziqli xodimlarni ommaviy tanlash',
+                'Rahbarlar va tor mutaxassislarni izlash',
+                'Tajriba va maosh kutilmalari ko‘rsatilgan rezyumelar',
+            ],
+        ],
+
+        'recruitment' => [
+            'title' => 'Xodim tanlash',
+            'lead' => 'Xodim tanlash vazifalari: vakansiyani tasvirlang — kadrlar agentliklari va rekruterlar chatda javob beradi.',
+            'offers' => [
+                'Vakansiyani to‘liq yopish',
+                'Ommaviy tanlash',
+                'Rahbarlar va tor mutaxassislarni izlash',
+                'Nomzodlar va tavsiyalarni tekshirish',
+            ],
+        ],
+
+        'logistics' => [
+            'title' => 'Logistika va tashish',
+            'lead' => 'O‘zbekiston bo‘ylab va xorijga yuk tashish, saqlash va ekspeditsiya — buyurtmachi va tashuvchi to‘g‘ridan-to‘g‘ri kelishadi.',
+            'offers' => [
+                'O‘zbekiston va Markaziy Osiyo bo‘ylab avtotashish',
+                'Xalqaro yetkazish: avto, temir yo‘l, avia, dengiz',
+                'Yig‘ma yuklar',
+                'Omborda saqlash va ekspeditsiya',
+            ],
+        ],
+
+        'customs' => [
+            'title' => 'Deklaratsiya va TIF',
+            'lead' => 'Bojxona rasmiylashtiruvi, sertifikatlash va tashqi savdo bitimlarini kuzatib borish.',
+            'offers' => [
+                'Import va eksport bojxona deklaratsiyasi',
+                'Muvofiqlik va kelib chiqish sertifikatlari',
+                'TIF va TIF TN kodlari bo‘yicha maslahat',
+                'Xorijiy hamkorlar bilan shartnomalarni kuzatib borish',
+            ],
+        ],
+
+        'accounting' => [
+            'title' => 'Buxgalteriya xizmatlari',
+            'lead' => 'Hisob, hisobot va soliqlar — autsorsing buxgalter kerak bo‘lgan kompaniyalar uchun.',
+            'offers' => [
+                'Buxgalteriya va soliq hisobi',
+                'Hisobot topshirish',
+                'Hisobni tiklash',
+                'Ish haqi va kadrlar hisobi',
+            ],
+        ],
+    ],
+
     'it_tasks' => [
         'meta_title' => 'Biznes uchun qo‘shimcha xizmatlar',
         'meta_description' => 'Kompaniyalar xizmat topshiriqlarini e’lon qiladi: IT ishlab chiqish, logistika, xodim tanlash, deklaratsiya va buxgalteriya. Ijrochilar javob beradi va chatda kelishadi.',

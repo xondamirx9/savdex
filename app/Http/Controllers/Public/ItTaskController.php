@@ -173,8 +173,12 @@ class ItTaskController extends Controller
 
     // ── Представление ────────────────────────────────────────
 
-    /** @return array<string, mixed> */
-    private function card(ItTask $task): array
+    /**
+     * Карточка задачи — общая для ленты и страниц направлений.
+     *
+     * @return array<string, mixed>
+     */
+    public static function card(ItTask $task): array
     {
         return [
             'id' => $task->id,

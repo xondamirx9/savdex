@@ -91,6 +91,23 @@ class ItTask extends Model
         'other' => [],
     ];
 
+    /**
+     * Страницы направлений «Доп. услуг»: адрес → код направления или вида.
+     *
+     * Порядок — порядок подменю «Доп. услуги» в шапке. «Подбор
+     * персонала» — вид внутри HR-услуг, но страница у него своя:
+     * заказчик ищет именно его. «Другое» страницы не получает:
+     * о нём нечего рассказать.
+     */
+    public const SERVICE_PAGES = [
+        'it' => 'it',
+        'hr' => 'hr_services',
+        'recruitment' => 'hr',
+        'logistics' => 'logistics',
+        'customs' => 'customs',
+        'accounting' => 'accounting',
+    ];
+
     /** Коды, по которым можно фильтровать: конечные виды и направления. */
     public static function filterableTypes(): array
     {

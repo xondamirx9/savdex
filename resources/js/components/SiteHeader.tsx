@@ -19,12 +19,14 @@ import {
     User,
     Wallet,
     X,
+    type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
 import { t, tChoice } from '@/lib/i18n';
+import { servicePages } from '@/lib/serviceSections';
 import { useDismiss } from '@/lib/useDismiss';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -42,6 +44,8 @@ interface MenuItem {
     label: string;
     /** Пункт с query-строкой активен только при точном совпадении её части. */
     match?: (path: string, search: string) => boolean;
+    /** Подменю при наведении: страницы направлений «Доп. услуг» */
+    submenu?: { href: string; label: string; Icon?: LucideIcon }[];
 }
 
 /**
@@ -80,14 +84,110 @@ function menu(): MenuItem[] {
         {
             href: routes.itTasks,
             label: t('nav.it_services'),
-            // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет
-            match: (path) => path.startsWith(routes.itTasks) || path.startsWith('/resume'),
+            // Резюме — пункт HR-услуг внутри «Доп. услуг», своей вкладки нет;
+            // страницы направлений — тоже часть раздела
+            match: (path) =>
+                path.startsWith(routes.itTasks) || path.startsWith('/resume') || path.startsWith('/services/'),
+            submenu: [
+                ...servicePages().map(({ href, label, Icon }) => ({ href, label, Icon })),
+                { href: routes.itTasks, label: t('service_pages.menu_all') },
+            ],
         },
         { href: routes.partners, label: t('nav.partners') },
         { href: routes.news, label: t('nav.news') },
         { href: routes.pricing, label: t('nav.pricing') },
         { href: routes.about, label: t('nav.about_us') },
     ];
+}
+
+/**
+ * Пункт ленты разделов с подменю — «Доп. услуги».
+ *
+ * Открывается наведением, а с клавиатуры и на сенсорном экране —
+ * стрелкой рядом с пунктом: сам пункт по-прежнему ведёт в ленту задач.
+ *
+ * Список ставится position: fixed по координатам пункта: лента
+ * разделов прокручивается по горизонтали (overflow-x: auto), и
+ * обычный выпадающий блок внутри неё обрезался бы по её высоте.
+ */
+function SubnavDropdown({ item, active, path }: { item: MenuItem; active: boolean; path: string }) {
+    const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+    const ref = useDismiss(() => setOpen(false));
+    const closeTimer = useRef<number | undefined>(undefined);
+
+    const show = () => {
+        window.clearTimeout(closeTimer.current);
+        const rect = ref.current?.getBoundingClientRect();
+
+        if (rect) setPos({ top: rect.bottom, left: rect.left });
+        setOpen(true);
+    };
+
+    // Небольшая задержка: курсор, пересекающий зазор до списка,
+    // не должен закрывать его
+    const hide = () => {
+        closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+    };
+
+    // Прокрутка страницы сдвигает пункт — список за ним не едет
+    useEffect(() => {
+        if (!open) return;
+
+        const close = () => setOpen(false);
+        window.addEventListener('scroll', close, { passive: true });
+        window.addEventListener('resize', close);
+
+        return () => {
+            window.removeEventListener('scroll', close);
+            window.removeEventListener('resize', close);
+        };
+    }, [open]);
+
+    useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+    return (
+        <div
+            className={cn('subnav-drop', open && 'is-open')}
+            ref={ref}
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') setOpen(false);
+            }}
+        >
+            <Link href={item.href} aria-current={active ? 'page' : undefined} onClick={() => setOpen(false)}>
+                {item.label}
+            </Link>
+            <button
+                type="button"
+                className="subnav-drop-toggle"
+                aria-expanded={open}
+                aria-label={t('service_pages.menu_toggle')}
+                onClick={() => (open ? setOpen(false) : show())}
+            >
+                <ChevronDown aria-hidden />
+            </button>
+
+            {open && pos && item.submenu && (
+                <div className="subnav-menu" role="menu" style={{ top: pos.top, left: pos.left }}>
+                    {item.submenu.map(({ href, label, Icon }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            role="menuitem"
+                            className={cn(!Icon && 'subnav-menu-all')}
+                            aria-current={path === href ? 'page' : undefined}
+                            onClick={() => setOpen(false)}
+                        >
+                            {Icon && <Icon aria-hidden />}
+                            {label}
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 /**
@@ -750,11 +850,15 @@ export function SiteHeader() {
 
                 <nav className="subnav" aria-label={t('nav.main')}>
                     <div className="container subnav-inner">
-                        {items.map((item) => (
-                            <Link key={item.href} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
-                                {item.label}
-                            </Link>
-                        ))}
+                        {items.map((item) =>
+                            item.submenu ? (
+                                <SubnavDropdown key={item.href} item={item} active={isActive(item)} path={path} />
+                            ) : (
+                                <Link key={item.href} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
+                                    {item.label}
+                                </Link>
+                            ),
+                        )}
                         <Link href={authed ? routes.listingCreate : routes.register} className="subnav-post">
                             {t('nav.post_listing')} <PlusCircle aria-hidden />
                         </Link>
@@ -770,9 +874,23 @@ export function SiteHeader() {
             >
                 <div className="mobile-menu-inner">
                     {items.map((item) => (
-                        <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
-                            {item.label}
-                        </Link>
+                        <div key={item.href} className="mobile-menu-group">
+                            <Link href={item.href} onClick={() => setMenuOpen(false)}>
+                                {item.label}
+                            </Link>
+                            {/* Подменю на телефоне — сразу списком: наведения нет */}
+                            {item.submenu && (
+                                <div className="mobile-submenu">
+                                    {item.submenu
+                                        .filter((sub) => sub.Icon)
+                                        .map((sub) => (
+                                            <Link key={sub.href} href={sub.href} onClick={() => setMenuOpen(false)}>
+                                                {sub.label}
+                                            </Link>
+                                        ))}
+                                </div>
+                            )}
+                        </div>
                     ))}
 
                     {/* Избранное, сообщения, контакты и профиль переехали

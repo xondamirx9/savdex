@@ -789,6 +789,100 @@ return [
 
     // ── BT hizmetleri ───────────────────────────────────────
 
+    // ── Страницы направлений «Доп. услуг» ────────────────────
+
+    'service_pages' => [
+        'eyebrow' => 'Ek hizmetler',
+        'menu_all' => 'Tüm görevler',
+        'menu_toggle' => 'Hizmet alanları',
+        'stat_active' => 'açık görev',
+        'stat_completed' => 'tamamlandı',
+        'stat_providers' => 'hizmet sağlayıcı',
+        'stat_resumes' => 'özgeçmiş',
+        'offers_title' => 'Neler sipariş edilebilir',
+        'kinds_title' => 'Bu alanın kapsamı',
+        'tasks_title' => 'Açık görevler',
+        'tasks_all' => 'Bu alandaki tüm görevler',
+        'tasks_empty' => 'Henüz açık görev yok. İlkini yayınlayın — hizmet sağlayıcılar sohbette yanıt verecek.',
+        'completed_title' => 'Tamamlananlar',
+        'providers_title' => 'Hizmet sağlayıcılar',
+        'providers_empty' => 'Henüz hizmet sağlayıcı yok. Şirket profilinizde bu alanı işaretleyin, müşteriler sizi burada bulsun.',
+        'resumes_title' => 'Aday özgeçmişleri',
+        'resumes_all' => 'Tüm özgeçmişler',
+        'cta_title' => 'Hizmet sağlayıcı mı arıyorsunuz?',
+        'cta_text' => 'Görevi anlatın — ücretsizdir. Hizmet sağlayıcılar yanıt verip ayrıntıları sohbette konuşacak.',
+        'others_title' => 'Diğer alanlar',
+
+        'it' => [
+            'title' => 'BT hizmetleri',
+            'lead' => 'Web siteleri, mobil uygulamalar, 1C ve ERP, entegrasyonlar, tasarım, botlar ve destek: şirketler görev yayınlar, BT sağlayıcıları yanıt verir.',
+            'offers' => [
+                'Web siteleri, e-ticaret siteleri ve web uygulamaları',
+                'iOS ve Android mobil uygulamaları',
+                '1C, muhasebe sistemleri ve ERP',
+                'Depo, ödeme sistemleri ve API entegrasyonları',
+                'Arayüz ve kurumsal kimlik tasarımı',
+                'Telegram botları ve süreç otomasyonu',
+                'Site ve sunucu desteği ve yönetimi',
+            ],
+        ],
+
+        'hr' => [
+            'title' => 'İK hizmetleri',
+            'lead' => 'Personel seçimi ve aday özgeçmişleri: şirketiniz için çalışan ya da işe alım ajansı bulun.',
+            'offers' => [
+                'Pozisyona göre personel seçimi',
+                'İşçi ve saha personeli için toplu işe alım',
+                'Yönetici ve uzman arama',
+                'Deneyim ve maaş beklentisi belirtilmiş özgeçmişler',
+            ],
+        ],
+
+        'recruitment' => [
+            'title' => 'Personel seçimi',
+            'lead' => 'İşe alım görevleri: pozisyonu anlatın — işe alım ajansları ve uzmanları sohbette yanıt verecek.',
+            'offers' => [
+                'Anahtar teslim pozisyon doldurma',
+                'Toplu işe alım',
+                'Yönetici ve uzman arama',
+                'Aday ve referans kontrolü',
+            ],
+        ],
+
+        'logistics' => [
+            'title' => 'Lojistik ve taşımacılık',
+            'lead' => 'Özbekistan içi ve yurt dışı yük taşımacılığı, depolama ve nakliye organizasyonu — müşteri ve taşıyıcı doğrudan anlaşır.',
+            'offers' => [
+                'Özbekistan ve Orta Asya genelinde karayolu taşımacılığı',
+                'Uluslararası teslimat: karayolu, demiryolu, hava, deniz',
+                'Parsiyel yükler',
+                'Depolama ve nakliye organizasyonu',
+            ],
+        ],
+
+        'customs' => [
+            'title' => 'Gümrük ve dış ticaret',
+            'lead' => 'Gümrük işlemleri, belgelendirme ve dış ticaret anlaşmalarına destek.',
+            'offers' => [
+                'İthalat ve ihracat gümrük beyannamesi',
+                'Uygunluk ve menşe sertifikaları',
+                'Dış ticaret ve GTİP kodu danışmanlığı',
+                'Yabancı ortaklarla sözleşmelere destek',
+            ],
+        ],
+
+        'accounting' => [
+            'title' => 'Muhasebe hizmetleri',
+            'lead' => 'Muhasebe, raporlama ve vergiler — dışarıdan muhasebeci arayan şirketler için.',
+            'offers' => [
+                'Muhasebe ve vergi kayıtları',
+                'Rapor beyanı',
+                'Muhasebe kayıtlarının düzeltilmesi',
+                'Bordro ve personel kayıtları',
+            ],
+        ],
+    ],
+
     'it_tasks' => [
         'meta_title' => 'İşletmeler için ek hizmetler',
         'meta_description' => 'Şirketler hizmet görevleri yayınlar: BT geliştirme, lojistik, personel seçimi, gümrük beyannamesi ve muhasebe. Yükleniciler yanıt verir ve ayrıntıları sohbette kararlaştırır.',

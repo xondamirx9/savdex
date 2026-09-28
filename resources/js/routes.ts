@@ -19,6 +19,8 @@ export const routes = {
     tenders: '/catalog?type=tender',
     tender: (slug: string) => `/tenders/${slug}`,
     itTasks: '/it-services',
+    /* Страница направления «Доп. услуг»: it, hr, recruitment, logistics… */
+    serviceSection: (slug: string) => `/services/${slug}`,
     resumes: '/resumes',
     resume: (slug: string) => `/resume/${slug}`,
     itTask: (slug: string) => `/it-services/${slug}`,

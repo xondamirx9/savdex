@@ -146,7 +146,7 @@ class ResumeController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function card(Resume $resume): array
+    public static function card(Resume $resume): array
     {
         return [
             'id' => $resume->id,

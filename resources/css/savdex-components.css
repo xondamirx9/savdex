@@ -332,6 +332,8 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
   border-bottom:1px solid var(--border)}
 .mobile-menu a:not(.btn)[aria-current="page"]{color:var(--primary-700);font-weight:600}
 .mobile-menu a:hover{text-decoration:none}
+.mobile-submenu{display:flex;flex-direction:column;padding:0 0 8px 14px;border-left:2px solid var(--border);margin-left:2px}
+.mobile-menu .mobile-submenu a:not(.btn){padding:10px 0;font-size:15px;color:var(--text-muted);border-bottom:0}
 .mobile-group{border-bottom:1px solid var(--border)}
 .mobile-group-btn{display:flex;align-items:center;justify-content:space-between;width:100%;
   padding:15px 0;font-size:17px;font-weight:500;color:var(--text);min-height:52px}
@@ -1677,6 +1679,26 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   color:var(--text);white-space:nowrap;transition:background var(--t-fast),color var(--t-fast)}
 .subnav a:hover{background:transparent;color:var(--primary-600);text-decoration:none}
 .subnav a[aria-current="page"]{color:var(--primary-700);background:var(--primary-50);font-weight:600}
+/* Подменю «Доп. услуги»: пункт + стрелка, список — fixed поверх
+   страницы (лента прокручивается и обрезала бы обычный блок) */
+.subnav-drop{display:inline-flex;align-items:center;flex-shrink:0}
+.subnav .subnav-drop>a{padding-right:4px}
+.subnav-drop-toggle{display:grid;place-items:center;width:22px;height:30px;padding:0;border:0;background:none;
+  color:inherit;opacity:.7;cursor:pointer;border-radius:6px}
+.subnav-drop-toggle svg{width:15px;height:15px;transition:transform var(--t-mid)}
+.subnav-drop.is-open .subnav-drop-toggle svg{transform:rotate(180deg)}
+.subnav-drop-toggle:hover{opacity:1}
+.subnav .subnav-menu{position:fixed;z-index:60;min-width:250px;margin-top:2px;padding:6px;
+  background:var(--white);border:1px solid var(--border);border-radius:var(--r-card);box-shadow:var(--sh-raise);
+  display:flex;flex-direction:column}
+.subnav .subnav-menu a,.chrome-overlay .subnav .subnav-menu a{display:flex;align-items:center;gap:10px;
+  padding:9px 12px;border-radius:8px;font-size:14.5px;font-weight:500;color:var(--text);white-space:nowrap;background:none}
+.subnav .subnav-menu a svg{width:18px;height:18px;color:var(--primary-700);flex-shrink:0}
+.subnav .subnav-menu a:hover,.chrome-overlay .subnav .subnav-menu a:hover{background:var(--primary-50);color:var(--primary-700)}
+.subnav .subnav-menu a[aria-current="page"],.chrome-overlay .subnav .subnav-menu a[aria-current="page"]{
+  background:var(--primary-50);color:var(--primary-700);font-weight:600}
+.subnav .subnav-menu a.subnav-menu-all{margin-top:4px;border-top:1px solid var(--border);border-radius:0 0 8px 8px;
+  padding-top:11px;color:var(--primary-700)}
 .subnav-post{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
   color:var(--primary-700)!important;font-weight:600!important}
 .subnav-post svg{width:19px;height:19px}
@@ -1962,6 +1984,48 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
   background:var(--primary-50);color:var(--primary-700);border:1px solid var(--primary-100)}
 .feature-b2b h3{font-size:14.5px;font-weight:700;margin-bottom:4px}
 .feature-b2b p{font-size:13px;color:var(--text-muted);line-height:1.5}
+
+/* ── Страница направления «Доп. услуг» ── */
+.service-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:20px;align-items:center;margin-bottom:28px}
+.service-hero-ico{width:72px;height:72px;border-radius:18px;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(135deg,var(--primary-500),var(--primary-700))}
+.service-hero-ico svg{width:34px;height:34px}
+.service-hero .eyebrow{text-decoration:none}
+.service-hero h1{margin:4px 0 8px}
+.service-hero .t-lead{max-width:720px;margin:0}
+.service-stats{margin-bottom:28px}
+.service-about{display:grid;gap:20px;margin-bottom:8px}
+.service-about--split{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+.service-offers,.service-kinds{padding:24px}
+.service-offers h2,.service-kinds h2{margin-bottom:14px}
+.service-offers ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:0;padding:0;list-style:none}
+.service-about--split .service-offers ul{grid-template-columns:1fr}
+.service-offers li{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.45}
+.service-offers li svg{color:var(--primary-700);flex-shrink:0;margin-top:3px}
+.service-kinds-list{display:flex;flex-direction:column}
+.service-kind{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);
+  color:var(--text);font-weight:500;font-size:15px}
+.service-kind:last-child{border-bottom:0}
+.service-kind:hover{color:var(--primary-700);text-decoration:none}
+.service-kind .muted{font-weight:400;font-size:13.5px;white-space:nowrap}
+.service-block{margin-top:44px}
+.service-others{display:flex;flex-wrap:wrap;gap:10px}
+.service-other{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid var(--border);
+  border-radius:var(--r-pill);background:var(--white);color:var(--text);font-weight:500;font-size:14.5px}
+.service-other svg{color:var(--primary-700)}
+.service-other:hover{border-color:var(--primary-500);color:var(--primary-700);text-decoration:none}
+@media (max-width:1024px){
+  .service-hero{grid-template-columns:auto minmax(0,1fr)}
+  .service-hero-cta{grid-column:1/-1;justify-self:start}
+  .service-about--split{grid-template-columns:1fr}
+  .service-stats{grid-template-columns:repeat(2,1fr) !important}
+}
+@media (max-width:640px){
+  .service-hero{grid-template-columns:1fr;gap:14px}
+  .service-hero-ico{width:56px;height:56px;border-radius:14px}
+  .service-hero-cta{width:100%;justify-content:center}
+  .service-offers ul{grid-template-columns:1fr}
+}
 
 /* ── Карточка страны ── */
 .country-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
