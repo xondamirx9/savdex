@@ -148,8 +148,11 @@ class CabinetMetrics
      */
     public function geography(): array
     {
+        // По id: группы идут в порядке первого появления, и порядок
+        // строк без него у PostgreSQL не определён
         return $this->company->unlockedBy()
             ->with('company.city.translations')
+            ->orderBy('id')
             ->get()
             ->groupBy(fn ($u) => $u->company?->city?->name() ?? 'Не указан')
             ->map->count()
@@ -172,6 +175,8 @@ class CabinetMetrics
             ->selectRaw('query, SUM(impressions) as impressions, SUM(clicks) as clicks')
             ->groupBy('query')
             ->orderByDesc('impressions')
+            // Запросы с равными показами — по алфавиту, а не как придётся
+            ->orderBy('query')
             ->limit($limit)
             ->get()
             ->map(fn ($h): array => [
