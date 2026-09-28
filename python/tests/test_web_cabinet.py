@@ -589,3 +589,22 @@ def test_чаты(сайт, path):
 def test_чаты_без_компании(сайт):
     пользователь("nocompany8@savdex.uz")
     сверить(сайт, "/cabinet/chats", войти(сайт, "nocompany8@savdex.uz"))
+
+
+# ── Продвижение ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/promo", "/uz/cabinet/promo"])
+def test_продвижение(сайт, path):
+    _объявления()
+    # Эффект: прирост показов; у второго «до» — ноль (эффекта нет); одна секунда
+    sql(
+        "update promotions set impressions_before = case when mod(id, 2) = 0 then 40 else 0 end, "
+        "impressions_after = 57, created_at = '2026-09-26 09:00:00'"
+    )
+    сверить(сайт, path, владелец(сайт))
+
+
+def test_продвижение_без_компании(сайт):
+    пользователь("nocompany9@savdex.uz")
+    сверить(сайт, "/cabinet/promo", войти(сайт, "nocompany9@savdex.uz"))

@@ -1301,3 +1301,111 @@ def chats_props(ctx: Context) -> dict[str, Any]:
         )
 
     return {"hasCompany": True, "threads": result}
+
+
+# ── Продвижение /cabinet/promo (PromotionController::index) ─────────
+
+
+def promo(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Promo", promo_props(ctx), _seo(ctx))
+
+
+def _cost_label(t: dict[str, Any]) -> str:
+    """PromotionType::costLabel — по-русски на всех языках, как в коде."""
+    units = f"{t['cost_units']} ед."
+
+    return (
+        f"{units} / {t['duration_days']} дн."
+        if (t["duration_days"] or 0) > 0
+        else f"{units} разово"
+    )
+
+
+def promo_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web import content
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"active": [], "types": [], "listings": [], "units": 0, "resets_at": None}
+
+    cid = company["id"]
+    translations = content.Translations(ctx.locale)
+    active = _rows(
+        "select p.*, l.title as l_title, t.name as t_name, t.badge as t_badge "
+        "from promotions p "
+        "left join listings l on l.id = p.listing_id and l.deleted_at is null "
+        "left join promotion_types t on t.id = p.promotion_type_id "
+        "where p.company_id = %s and p.status = 'active' order by p.created_at desc, p.id desc",
+        [cid],
+    )
+    types = _rows("select * from promotion_types where is_active order by sort, id")
+    translations.prefetch(
+        [a["t_badge"] for a in active]
+        + [t[k] for t in types for k in ("name", "description", "effect_hint")]
+    )
+    taken = {
+        r["promotion_type_id"]: r["n"]
+        for r in _rows(
+            "select promotion_type_id, count(*) as n from promotions where status = 'active' "
+            "group by promotion_type_id"
+        )
+    }
+    wallets = _rows("select * from wallets where company_id = %s limit 1", [cid])
+    wallet = wallets[0] if wallets else None
+
+    def effect(p: dict[str, Any]) -> int | None:
+        """Promotion::effect: прирост показов в процентах."""
+        before, after = p["impressions_before"], p["impressions_after"]
+
+        if after is None or (before or 0) < 1:
+            return None
+
+        return int(php_round((after - before) / before * 100))
+
+    return {
+        "active": [
+            {
+                "id": p["id"],
+                "listing": p["l_title"],
+                "type": p["t_name"],
+                "badge": translations.text(p["t_badge"]),
+                "ends_at": _date(p["ends_at"]),
+                "before": p["impressions_before"],
+                "after": p["impressions_after"],
+                "effect": effect(p),
+            }
+            for p in active
+        ],
+        "types": [
+            {
+                "id": t["id"],
+                "code": t["code"],
+                "name": translations.text(t["name"]),
+                "description": translations.text(t["description"]),
+                "effect_hint": translations.text(t["effect_hint"]),
+                "cost": t["cost_units"],
+                "cost_label": _cost_label(t),
+                "icon": t["icon"],
+                "slots": t["slots"],
+                "taken": taken.get(t["id"], 0) if t["slots"] is not None else None,
+                "available": t["slots"] is None or taken.get(t["id"], 0) < t["slots"],
+            }
+            for t in types
+        ],
+        "listings": [
+            {"id": r["id"], "title": r["title"]}
+            for r in _rows(
+                "select id, title from listings where company_id = %s and status = 'active' "
+                "and deleted_at is null order by id",
+                [cid],
+            )
+        ],
+        "units": (wallet or {}).get("promo_units") or 0,
+        "resets_at": _date((wallet or {}).get("period_resets_at")),
+    }
