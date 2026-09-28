@@ -334,3 +334,54 @@ def test_отзывы(сайт, path):
 def test_отзывы_без_компании(сайт):
     пользователь("nocompany4@savdex.uz")
     сверить(сайт, "/cabinet/reviews", войти(сайт, "nocompany4@savdex.uz"))
+
+
+# ── Мои контакты ────────────────────────────────────────────────────
+
+
+def _раскрытия() -> None:
+    """Раскрытия владельца: статусы, заметки, телефоны и почты, компания в корзине."""
+    if sql("select count(*) from contact_unlocks where note is not null")[0][0]:
+        return
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$l = $c->listings()->orderBy('id')->first();"
+        "foreach (['negotiating', 'deal', 'rejected', 'contacted'] as $i => $s) {"
+        " $t = App\\Models\\Company::factory()->create(['name' => 'Поставщик '.$i]);"
+        " $t->contacts()->create(['type' => 'phone', 'value' => '+99890000000'.$i,"
+        " 'is_public' => true, 'is_primary' => $i === 1]);"
+        " $t->contacts()->create(['type' => 'email', 'value' => 'p'.$i.'@x.uz',"
+        " 'is_public' => false]);"
+        " $t->contacts()->create(['type' => 'phone', 'value' => '+99871000000'.$i,"
+        " 'is_public' => true]);"
+        " App\\Models\\ContactUnlock::factory()->create(['company_id' => $c->id,"
+        " 'target_company_id' => $t->id, 'status' => $s, 'note' => $i === 2 ? 'ждём КП' : null,"
+        " 'listing_id' => $i === 0 ? $l->id : null,"
+        " 'complaint_status' => $i === 3 ? 'pending' : null]);"
+        " if ($i === 3) { $t->delete(); } }"
+        "echo 'ok';"
+    )
+    sql("update contact_unlocks set created_at = now() - make_interval(hours => id::int)")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "?status=deal",
+        "?status=nonsense",
+        "?q=%D0%9F%D0%BE%D1%81%D1%82%D0%B0%D0%B2%D1%89%D0%B8%D0%BA",
+        "?q=%D0%9A%D0%9F",
+        "?q=%20%20&status=",
+        "?q=%25",
+    ],
+)
+def test_мои_контакты(сайт, query):
+    _раскрытия()
+    сверить(сайт, "/cabinet/contacts" + query, владелец(сайт))
+
+
+def test_мои_контакты_без_компании(сайт):
+    пользователь("nocompany5@savdex.uz")
+    сверить(сайт, "/cabinet/contacts", войти(сайт, "nocompany5@savdex.uz"))

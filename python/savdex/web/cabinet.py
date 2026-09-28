@@ -26,7 +26,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex.web import inertia, locales, session, ui
 from savdex.web.home import _filled, completeness, php_round
-from savdex.web.phpquery import laravel_input, php_int
+from savdex.web.phpquery import laravel_input, php_int, text
 from savdex.web.request import _expects_json, context
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, ago
@@ -839,4 +839,120 @@ def _reviews_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
             for star in range(5, 0, -1)
         ],
         "criteria": criteria,
+    }
+
+
+# ── Мои контакты /cabinet/contacts (ContactController::index) ───────
+
+#: ContactUnlock::STATUSES — подписи в коде, по-русски на всех языках
+UNLOCK_STATUSES = {
+    "new": "Новый",
+    "contacted": "Связался",
+    "negotiating": "В переговорах",
+    "deal": "Сделка",
+    "rejected": "Не подошёл",
+}
+
+
+def contacts(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Contacts", contacts_props(ctx), _seo(ctx))
+
+
+def contacts_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.directory import _named
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {
+            "contacts": [],
+            "statuses": UNLOCK_STATUSES,
+            "filters": {"q": "", "status": ""},
+        }
+
+    query = laravel_input(ctx.query)
+    # $request->string(): нет ключа или пусто (null) — ''
+    raw_q, raw_status = query.get("q"), query.get("status")
+    q = text(raw_q) if isinstance(raw_q, str) else ""
+    status = text(raw_status) if isinstance(raw_status, str) else ""
+    where = ["u.company_id = %s"]
+    params: list[Any] = [company["id"]]
+
+    if status != "" and status in UNLOCK_STATUSES:
+        where.append("u.status = %s")
+        params.append(status)
+
+    if q != "":
+        # Поиск и по заметке: человек ищет «ждём КП», а не только название
+        where.append(
+            "(exists (select 1 from companies s where s.id = u.target_company_id "
+            "and s.name like %s and s.deleted_at is null) or u.note like %s)"
+        )
+        params += [f"%{q}%", f"%{q}%"]
+
+    unlocks = _rows(
+        "select u.*, l.title as l_title from contact_unlocks u "
+        "left join listings l on l.id = u.listing_id and l.deleted_at is null "
+        f"where {' and '.join(where)} order by u.created_at desc, u.id desc",
+        params,
+    )
+    targets = {
+        c["id"]: c
+        for c in _rows(
+            "select * from companies where id = any(%s) and deleted_at is null",
+            [list({u["target_company_id"] for u in unlocks})],
+        )
+    }
+    reachable: dict[int, list[dict[str, Any]]] = {}
+
+    for c in _rows(
+        "select company_id, type, value from company_contacts where company_id = any(%s) "
+        "order by is_primary desc, sort_order, id",
+        [list(targets)],
+    ):
+        reachable.setdefault(c["company_id"], []).append(c)
+
+    cities = _named("cities", ctx.locale)
+    result = []
+
+    for u in unlocks:
+        target = targets.get(u["target_company_id"])
+        own = reachable.get(target["id"], []) if target else []
+        city = target["city_id"] if target else None
+
+        result.append(
+            {
+                "id": u["id"],
+                "company": {
+                    "name": target["name"] if target else None,
+                    "slug": target["slug"] if target else None,
+                    "initials": initials(target["name"]) if target else None,
+                    "verified": int(target["verification_level"] or 0) if target else 0,
+                    "city": cities.get(city) if city is not None else None,
+                },
+                # Контакты целиком — они оплачены
+                "phones": [c["value"] for c in own if c["type"] == "phone"],
+                "emails": [c["value"] for c in own if c["type"] == "email"],
+                "listing": u["l_title"],
+                "opened_at": _date(u["created_at"]),
+                "status": u["status"],
+                "status_label": UNLOCK_STATUSES.get(u["status"], u["status"]),
+                "note": u["note"],
+                "can_review": u["status"] in ("deal", "negotiating"),
+                "complaint_status": u["complaint_status"],
+                "moderator_note": u["moderator_note"],
+                "refunded": bool(u["refunded"]),
+            }
+        )
+
+    return {
+        "contacts": result,
+        "statuses": UNLOCK_STATUSES,
+        "filters": {"q": q, "status": status},
     }
