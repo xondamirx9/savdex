@@ -1409,3 +1409,95 @@ def promo_props(ctx: Context) -> dict[str, Any]:
         "units": (wallet or {}).get("promo_units") or 0,
         "resets_at": _date((wallet or {}).get("period_resets_at")),
     }
+
+
+# ── Моё резюме /cabinet/resume (Cabinet\ResumeController::edit) ─────
+
+#: Currencies::ALL — подписи в коде, по-русски на всех языках
+CURRENCY_LABELS = {
+    "UZS": "сум",
+    "USD": "доллар США",
+    "EUR": "евро",
+    "CNY": "юань",
+    "TRY": "турецкая лира",
+    "RUB": "рубль",
+    "KZT": "тенге",
+}
+
+
+def resume(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Resume", resume_props(ctx), _seo(ctx))
+
+
+def resume_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web import resumes as options
+    from savdex.web.directory import _named, listed_countries
+    from savdex.web.shared import public_url
+
+    assert ctx.user is not None
+    user = _rows("select name, email, phone from users where id = %s", [ctx.user["id"]])[0]
+    found = _rows(
+        "select * from resumes where user_id = %s and deleted_at is null order by id limit 1",
+        [ctx.user["id"]],
+    )
+    city_names = _named("cities", ctx.locale)
+
+    return {
+        "resume": _present_resume(found[0], public_url) if found else None,
+        # Заготовка для первого захода — из профиля
+        "defaults": {
+            "contact_name": user["name"],
+            "contact_email": user["email"],
+            "contact_phone": user["phone"],
+        },
+        "options": {
+            "fields": options.labels(ctx, "field", options.FIELDS),
+            "employment": options.labels(ctx, "employment", options.EMPLOYMENT),
+            "schedule": options.labels(ctx, "schedule", options.SCHEDULE),
+            "language_levels": options.labels(ctx, "language_level", options.LANGUAGE_LEVELS),
+            "education_levels": options.labels(ctx, "education_level", options.EDUCATION_LEVELS),
+            "currencies": CURRENCY_LABELS,
+        },
+        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "cities": [
+            {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
+            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+        ],
+    }
+
+
+def _present_resume(r: dict[str, Any], public_url: Any) -> dict[str, Any]:  # noqa: ANN401
+    months = r["experience_months"] or 0
+
+    return {
+        "id": r["id"],
+        "slug": r["slug"],
+        "title": r["title"],
+        "field": r["field"],
+        "country_id": r["country_id"],
+        "city_id": r["city_id"],
+        "salary": r["salary"],
+        "currency": r["currency"],
+        "employment": r["employment"] or [],
+        "schedule": r["schedule"] or [],
+        "about": r["about"],
+        "skills": r["skills"] or [],
+        "jobs": r["jobs"] or [],
+        "education": r["education"] or [],
+        "languages": r["languages"] or [],
+        "contact_name": r["contact_name"],
+        "contact_phone": r["contact_phone"],
+        "contact_email": r["contact_email"],
+        "show_phone": bool(r["show_phone"]),
+        "show_email": bool(r["show_email"]),
+        "photo": public_url(r["photo_path"]) if r["photo_path"] is not None else None,
+        "status": r["status"],
+        "moderation_note": r["moderation_note"],
+        "views": r["views_count"],
+        "experience": {"years": months // 12, "months": months % 12},
+    }

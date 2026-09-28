@@ -608,3 +608,34 @@ def test_продвижение(сайт, path):
 def test_продвижение_без_компании(сайт):
     пользователь("nocompany9@savdex.uz")
     сверить(сайт, "/cabinet/promo", войти(сайт, "nocompany9@savdex.uz"))
+
+
+# ── Моё резюме ──────────────────────────────────────────────────────
+
+
+def test_резюме_пустое(сайт):
+    пользователь("seeker0@savdex.uz", phone="+998900000001")
+    сверить(сайт, "/cabinet/resume", войти(сайт, "seeker0@savdex.uz"))
+
+
+@pytest.mark.parametrize("path", ["/cabinet/resume", "/uz/cabinet/resume", "/zh/cabinet/resume"])
+def test_резюме(сайт, path):
+    email = "seeker@savdex.uz"
+
+    if not sql("select 1 from users where email = %s", [email]):
+        uid = пользователь(email)
+        php(
+            "$r = new App\\Models\\Resume();"
+            "$r->forceFill(['user_id' => "
+            + str(uid)
+            + ", 'slug' => 'logist', 'title' => 'Логист', 'field' => 'logistics',"
+            "'salary' => 1200, 'currency' => 'USD', 'employment' => ['full', 'project'],"
+            "'skills' => ['1С', 'Excel'], 'jobs' => [['company' => 'Стройбаза',"
+            " 'position' => 'Логист', 'from' => '2020-01', 'to' => null]],"
+            "'experience_months' => 45, 'photo_path' => 'resumes/p.webp',"
+            "'moderation_note' => 'Уточните зарплату', 'status' => 'draft'])->save();"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    сверить(сайт, path, войти(сайт, email))

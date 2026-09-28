@@ -88,6 +88,7 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings$", cabinet.listings, name="cabinet.listings"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", cabinet.resume, name="cabinet.resume"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/reviews$", cabinet.reviews, name="cabinet.reviews"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/contacts$", cabinet.contacts, name="cabinet.contacts"),
     re_path(
