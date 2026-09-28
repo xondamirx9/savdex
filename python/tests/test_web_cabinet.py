@@ -285,3 +285,195 @@ def test_кто_интересуется(сайт, path, names):
 def test_кто_интересуется_без_компании(сайт):
     пользователь("nocompany3@savdex.uz")
     сверить(сайт, "/cabinet/incoming", войти(сайт, "nocompany3@savdex.uz"))
+
+
+# ── Отзывы ──────────────────────────────────────────────────────────
+
+
+def _отзывы() -> None:
+    """Отзывы разных оценок: критерии с нулями и пустыми, автор в корзине, спор."""
+    if sql("select count(*) from reviews")[0][0] > 1:
+        return
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$l = $c->listings()->orderBy('id')->first();"
+        "foreach ([[5, 5, 0, null, 4], [3, 2, 3, 3, 3], [4, 4, 5, null, null], [5, 5, 5, 5, 5]]"
+        " as $i => [$r, $d, $s, $t, $q]) { $a = App\\Models\\Company::factory()->create();"
+        " App\\Models\\Review::factory()->create(['company_id' => $c->id,"
+        " 'author_company_id' => $a->id, 'rating' => $r, 'rating_description' => $d,"
+        " 'rating_response' => $s, 'rating_deadlines' => $t, 'rating_quality' => $q,"
+        " 'status' => 'published', 'listing_id' => $i === 0 ? $l->id : null,"
+        " 'reply' => $i === 1 ? 'Спасибо' : null, 'dispute_status' => $i === 2 ? 'rejected' : null,"
+        " 'moderator_note' => $i === 2 ? 'Отзыв по делу' : null,"
+        " 'deal_confirmed' => $i % 2 === 0]);"
+        " if ($i === 3) { $a->delete(); } }"
+        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
+        "'author_company_id' => App\\Models\\Company::factory()->create()->id,"
+        "'status' => 'hidden']);"
+        "echo 'ok';"
+    )
+    # Часами раньше, одна пара — в одну секунду: «N секунд назад» и
+    # порядок равных не плавают
+    sql("update reviews set created_at = now() - make_interval(hours => id::int)")
+    sql(
+        "update reviews set created_at = (select min(created_at) from reviews) where id in "
+        "(select id from reviews order by id desc limit 2)"
+    )
+
+
+@pytest.mark.parametrize("path", ["/cabinet/reviews", "/zh/cabinet/reviews"])
+def test_отзывы(сайт, path):
+    _отзывы()
+    д, _ = сверить(сайт, path, владелец(сайт))
+    props = страница(д["body"])["props"]
+
+    assert props["summary"]["total"] == 5 and len(props["reviews"]) == 5
+
+
+def test_отзывы_без_компании(сайт):
+    пользователь("nocompany4@savdex.uz")
+    сверить(сайт, "/cabinet/reviews", войти(сайт, "nocompany4@savdex.uz"))
+
+
+# ── Мои контакты ────────────────────────────────────────────────────
+
+
+def _раскрытия() -> None:
+    """Раскрытия владельца: статусы, заметки, телефоны и почты, компания в корзине."""
+    if sql("select count(*) from contact_unlocks where note is not null")[0][0]:
+        return
+
+    php(
+        "$c = App\\Models\\Company::where('slug', 'owner')->first();"
+        "$l = $c->listings()->orderBy('id')->first();"
+        "foreach (['negotiating', 'deal', 'rejected', 'contacted'] as $i => $s) {"
+        " $t = App\\Models\\Company::factory()->create(['name' => 'Поставщик '.$i]);"
+        " $t->contacts()->create(['type' => 'phone', 'value' => '+99890000000'.$i,"
+        " 'is_public' => true, 'is_primary' => $i === 1]);"
+        " $t->contacts()->create(['type' => 'email', 'value' => 'p'.$i.'@x.uz',"
+        " 'is_public' => false]);"
+        " $t->contacts()->create(['type' => 'phone', 'value' => '+99871000000'.$i,"
+        " 'is_public' => true]);"
+        " App\\Models\\ContactUnlock::factory()->create(['company_id' => $c->id,"
+        " 'target_company_id' => $t->id, 'status' => $s, 'note' => $i === 2 ? 'ждём КП' : null,"
+        " 'listing_id' => $i === 0 ? $l->id : null,"
+        " 'complaint_status' => $i === 3 ? 'pending' : null]);"
+        " if ($i === 3) { $t->delete(); } }"
+        "echo 'ok';"
+    )
+    sql("update contact_unlocks set created_at = now() - make_interval(hours => id::int)")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "?status=deal",
+        "?status=nonsense",
+        "?q=%D0%9F%D0%BE%D1%81%D1%82%D0%B0%D0%B2%D1%89%D0%B8%D0%BA",
+        "?q=%D0%9A%D0%9F",
+        "?q=%20%20&status=",
+        "?q=%25",
+    ],
+)
+def test_мои_контакты(сайт, query):
+    _раскрытия()
+    сверить(сайт, "/cabinet/contacts" + query, владелец(сайт))
+
+
+def test_мои_контакты_без_компании(сайт):
+    пользователь("nocompany5@savdex.uz")
+    сверить(сайт, "/cabinet/contacts", войти(сайт, "nocompany5@savdex.uz"))
+
+
+# ── Настройки ───────────────────────────────────────────────────────
+
+
+def test_настройки(сайт):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+    sql(
+        "update users set phone = '+998901112233', last_login_at = '2026-09-20 08:05:00', "
+        "last_login_ip = '10.1.2.3', telegram_username = 'owner_tg', company_role = 'owner' "
+        "where id = %s",
+        [uid],
+    )
+    sql("delete from notification_preferences where user_id = %s", [uid])
+    sql(
+        "insert into notification_preferences (user_id, event, email, telegram, created_at, "
+        "updated_at) values (%s, 'new_review', false, true, now(), now()), "
+        "(%s, 'digest', true, false, now(), now()), (%s, 'unknown', false, false, now(), now())",
+        [uid, uid, uid],
+    )
+
+    for path in ("/cabinet/settings", "/tr/cabinet/settings"):
+        сверить(сайт, path, куки)
+
+
+def test_настройки_без_компании(сайт):
+    пользователь("nocompany6@savdex.uz")
+    сверить(сайт, "/cabinet/settings", войти(сайт, "nocompany6@savdex.uz"))
+
+
+# ── Уведомления ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("query", ["", "?filter=unread", "?filter=other", "?filter="])
+def test_уведомления(сайт, query):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+
+    if not sql("select 1 from user_notifications where user_id = %s", [uid]):
+        for i in range(7):
+            sql(
+                "insert into user_notifications (user_id, type, tone, title, body, url, "
+                "is_broadcast, read_at, created_at, updated_at) values (%s, %s, 'primary', %s, "
+                "%s, %s, %s, %s, now() - make_interval(hours => %s), now())",
+                [
+                    uid,
+                    "broadcast" if i < 3 else "review",
+                    f"Уведомление {i}",
+                    "Текст" if i % 2 else None,
+                    "/cabinet/reviews" if i % 3 == 0 else None,
+                    i < 3,
+                    None if i % 2 else "2026-09-01 10:00:00",
+                    # Рассылка — в одну секунду: порядок решает id
+                    1 if i < 3 else i + 1,
+                ],
+            )
+
+    сверить(сайт, "/notifications" + query, куки)
+
+
+# ── Избранное ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/favorites", "/uz/favorites"])
+def test_избранное(сайт, path):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+
+    if not sql("select 1 from favorites where user_id = %s", [uid]):
+        php(
+            "$seller = App\\Models\\Company::factory()->create();"
+            "$gone = App\\Models\\Company::factory()->create();"
+            "$ids = [];"
+            "foreach (['active', 'expired', 'archived', 'draft', 'moderation'] as $s) {"
+            " $ids[] = App\\Models\\Listing::factory()->create(['company_id' => $seller->id,"
+            " 'status' => $s, 'published_at' => '2026-09-20 10:00:00'])->id; }"
+            "$trashed = App\\Models\\Listing::factory()->create(['company_id' => $seller->id]);"
+            "$ids[] = $trashed->id; $trashed->delete();"
+            "$ids[] = App\\Models\\Listing::factory()->create(['company_id' => $gone->id,"
+            " 'published_at' => '2026-09-21 10:00:00'])->id; $gone->delete();"
+            "foreach ($ids as $id) { App\\Models\\Favorite::create(['user_id' => "
+            + str(uid)
+            + ", 'listing_id' => $id]); }"
+            "echo 'ok';",
+            {"MACHINE_TRANSLATION_ENABLED": "false"},
+        )
+
+    д, _ = сверить(сайт, path, куки)
+    items = страница(д["body"])["props"]["items"]
+
+    assert len(items) == 4 and [i["active"] for i in items].count(False) == 2

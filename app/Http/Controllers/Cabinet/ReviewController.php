@@ -36,7 +36,9 @@ class ReviewController extends Controller
 
         $reviews = $company->reviews()
             ->with(['authorCompany', 'listing'])
+            // Хвост по id: отзывы одной секунды шли в плавающем порядке
             ->latest()
+            ->latest('id')
             ->get();
 
         return Inertia::render('cabinet/Reviews', [

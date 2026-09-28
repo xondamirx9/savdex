@@ -26,7 +26,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex.web import inertia, locales, session, ui
 from savdex.web.home import _filled, completeness, php_round
-from savdex.web.phpquery import laravel_input, php_int
+from savdex.web.phpquery import laravel_input, php_int, text
 from savdex.web.request import _expects_json, context
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, ago
@@ -751,3 +751,381 @@ def _viewers(
         )
 
     return result
+
+
+# ── Отзывы /cabinet/reviews (Cabinet\ReviewController::index) ───────
+
+#: Review::CRITERIA — подписи в коде, по-русски на всех языках
+CRITERIA = {
+    "rating_description": "Соответствие описанию",
+    "rating_response": "Скорость ответа",
+    "rating_deadlines": "Соблюдение сроков",
+    "rating_quality": "Качество товара",
+}
+
+
+def reviews(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Reviews", reviews_props(ctx), _seo(ctx))
+
+
+def reviews_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {"reviews": [], "summary": None, "criteria": CRITERIA}
+
+    rows = _rows(
+        "select r.*, a.name as a_name, a.verification_level as a_level, l.title as l_title "
+        "from reviews r "
+        "left join companies a on a.id = r.author_company_id and a.deleted_at is null "
+        "left join listings l on l.id = r.listing_id and l.deleted_at is null "
+        "where r.company_id = %s and r.status = 'published' "
+        "order by r.created_at desc, r.id desc",
+        [company["id"]],
+    )
+
+    return {
+        "reviews": [
+            {
+                "id": r["id"],
+                "author": r["a_name"],
+                "initials": initials(r["a_name"]) if r["a_name"] is not None else None,
+                "verified": int(r["a_level"] or 0),
+                "rating": r["rating"],
+                "body": r["body"],
+                "deal_confirmed": bool(r["deal_confirmed"]),
+                "listing": r["l_title"],
+                "reply": r["reply"],
+                "dispute_status": r["dispute_status"],
+                "moderator_note": r["moderator_note"],
+                "when": ago(r["created_at"], ctx.locale),
+            }
+            for r in rows
+        ],
+        "summary": _reviews_summary(rows),
+        "criteria": CRITERIA,
+    }
+
+
+def _reviews_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Средние по критериям и распределение оценок, от пяти звёзд к одной."""
+    if not rows:
+        return None
+
+    criteria = []
+
+    for key, label in CRITERIA.items():
+        # ->filter(): ни пустых, ни нулей
+        values = [r[key] for r in rows if r[key]]
+        criteria.append(
+            {
+                "label": label,
+                "value": php_round(sum(values) / len(values), 1) if values else None,
+            }
+        )
+
+    return {
+        "average": php_round(sum(r["rating"] for r in rows) / len(rows), 1),
+        "total": len(rows),
+        "distribution": [
+            {"star": star, "count": sum(1 for r in rows if r["rating"] == star)}
+            for star in range(5, 0, -1)
+        ],
+        "criteria": criteria,
+    }
+
+
+# ── Мои контакты /cabinet/contacts (ContactController::index) ───────
+
+#: ContactUnlock::STATUSES — подписи в коде, по-русски на всех языках
+UNLOCK_STATUSES = {
+    "new": "Новый",
+    "contacted": "Связался",
+    "negotiating": "В переговорах",
+    "deal": "Сделка",
+    "rejected": "Не подошёл",
+}
+
+
+def contacts(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Contacts", contacts_props(ctx), _seo(ctx))
+
+
+def contacts_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.directory import _named
+    from savdex.web.shared import initials
+
+    company = company_of(ctx)
+
+    if company is None:
+        return {
+            "contacts": [],
+            "statuses": UNLOCK_STATUSES,
+            "filters": {"q": "", "status": ""},
+        }
+
+    query = laravel_input(ctx.query)
+    # $request->string(): нет ключа или пусто (null) — ''
+    raw_q, raw_status = query.get("q"), query.get("status")
+    q = text(raw_q) if isinstance(raw_q, str) else ""
+    status = text(raw_status) if isinstance(raw_status, str) else ""
+    where = ["u.company_id = %s"]
+    params: list[Any] = [company["id"]]
+
+    if status != "" and status in UNLOCK_STATUSES:
+        where.append("u.status = %s")
+        params.append(status)
+
+    if q != "":
+        # Поиск и по заметке: человек ищет «ждём КП», а не только название
+        where.append(
+            "(exists (select 1 from companies s where s.id = u.target_company_id "
+            "and s.name like %s and s.deleted_at is null) or u.note like %s)"
+        )
+        params += [f"%{q}%", f"%{q}%"]
+
+    unlocks = _rows(
+        "select u.*, l.title as l_title from contact_unlocks u "
+        "left join listings l on l.id = u.listing_id and l.deleted_at is null "
+        f"where {' and '.join(where)} order by u.created_at desc, u.id desc",
+        params,
+    )
+    targets = {
+        c["id"]: c
+        for c in _rows(
+            "select * from companies where id = any(%s) and deleted_at is null",
+            [list({u["target_company_id"] for u in unlocks})],
+        )
+    }
+    reachable: dict[int, list[dict[str, Any]]] = {}
+
+    for c in _rows(
+        "select company_id, type, value from company_contacts where company_id = any(%s) "
+        "order by is_primary desc, sort_order, id",
+        [list(targets)],
+    ):
+        reachable.setdefault(c["company_id"], []).append(c)
+
+    cities = _named("cities", ctx.locale)
+    result = []
+
+    for u in unlocks:
+        target = targets.get(u["target_company_id"])
+        own = reachable.get(target["id"], []) if target else []
+        city = target["city_id"] if target else None
+
+        result.append(
+            {
+                "id": u["id"],
+                "company": {
+                    "name": target["name"] if target else None,
+                    "slug": target["slug"] if target else None,
+                    "initials": initials(target["name"]) if target else None,
+                    "verified": int(target["verification_level"] or 0) if target else 0,
+                    "city": cities.get(city) if city is not None else None,
+                },
+                # Контакты целиком — они оплачены
+                "phones": [c["value"] for c in own if c["type"] == "phone"],
+                "emails": [c["value"] for c in own if c["type"] == "email"],
+                "listing": u["l_title"],
+                "opened_at": _date(u["created_at"]),
+                "status": u["status"],
+                "status_label": UNLOCK_STATUSES.get(u["status"], u["status"]),
+                "note": u["note"],
+                "can_review": u["status"] in ("deal", "negotiating"),
+                "complaint_status": u["complaint_status"],
+                "moderator_note": u["moderator_note"],
+                "refunded": bool(u["refunded"]),
+            }
+        )
+
+    return {
+        "contacts": result,
+        "statuses": UNLOCK_STATUSES,
+        "filters": {"q": q, "status": status},
+    }
+
+
+# ── Настройки /cabinet/settings (SettingsController::index) ─────────
+
+#: NotificationPreference::EVENTS — подписи в коде, по-русски на всех языках
+NOTIFICATION_EVENTS = {
+    "contact_unlocked": "Открыли мой контакт",
+    "new_review": "Новый отзыв",
+    "moderation": "Модерация объявления",
+    "listing_expiring": "Объявление истекает",
+    "digest": "Дайджест по подпискам",
+}
+
+
+def settings_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Settings", settings_props(ctx), _seo(ctx))
+
+
+def _telegram_configured() -> bool:
+    """TelegramGateway::configured: токен и имя бота заданы."""
+    import os
+
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    username = (os.environ.get("TELEGRAM_BOT_USERNAME") or "").strip().lstrip("@")
+
+    return token != "" and username != ""
+
+
+def settings_props(ctx: Context) -> dict[str, Any]:
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+    saved = {
+        p["event"]: p
+        for p in _rows(
+            "select event, email, telegram from notification_preferences where user_id = %s "
+            "order by id",
+            [user["id"]],
+        )
+    }
+    last_login = user["last_login_at"]
+
+    return {
+        "profile": {
+            "name": user["name"],
+            "email": user["email"],
+            "phone": user["phone"],
+            "locale": user["locale"],
+            "email_verified": user["email_verified_at"] is not None,
+            "phone_verified": user["phone_verified_at"] is not None,
+        },
+        # Умолчания — здесь, а не строками в базе: список событий растёт
+        "notifications": [
+            {
+                "event": event,
+                "label": label,
+                "email": _pref(saved.get(event), "email", True),
+                "telegram": _pref(saved.get(event), "telegram", False),
+            }
+            for event, label in NOTIFICATION_EVENTS.items()
+        ],
+        "telegram": {
+            "available": _telegram_configured(),
+            "linked": user["telegram_chat_id"] is not None,
+            "username": user["telegram_username"],
+        },
+        "security": {
+            "two_factor": user["two_factor_confirmed_at"] is not None,
+            "last_login_at": last_login.strftime("%d.%m.%Y, %H:%M") if last_login else None,
+            "last_login_ip": user["last_login_ip"],
+        },
+        "is_owner": user["company_role"] == "owner",
+    }
+
+
+def _pref(row: dict[str, Any] | None, key: str, default: bool) -> bool:
+    """$saved->get($event)?->email ?? true: нет строки или null — умолчание."""
+    if row is None or row[key] is None:
+        return default
+
+    return bool(row[key])
+
+
+# ── Уведомления /notifications (NotificationController::index) ──────
+
+
+def notifications(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "Notifications", notifications_props(ctx), _seo(ctx))
+
+
+def notifications_props(ctx: Context) -> dict[str, Any]:
+    assert ctx.user is not None
+    raw = laravel_input(ctx.query).get("filter")
+    only_unread = isinstance(raw, str) and text(raw) == "unread"
+    rows = _rows(
+        "select * from user_notifications where user_id = %s"
+        + (" and read_at is null" if only_unread else "")
+        + " order by created_at desc, id desc limit 100",
+        [ctx.user["id"]],
+    )
+
+    return {
+        "notifications": [
+            {
+                "id": n["id"],
+                "type": n["type"],
+                "tone": n["tone"],
+                "title": n["title"],
+                "body": n["body"],
+                "url": n["url"],
+                "is_broadcast": bool(n["is_broadcast"]),
+                "read": n["read_at"] is not None,
+                "ago": ago(n["created_at"], ctx.locale),
+                "date": n["created_at"].strftime("%d.%m.%Y, %H:%M"),
+            }
+            for n in rows
+        ],
+        "filter": "unread" if only_unread else "all",
+        "unread": _count(
+            "select count(*) as n from user_notifications where user_id = %s and read_at is null",
+            [ctx.user["id"]],
+        ),
+    }
+
+
+# ── Избранное /favorites (FavoriteController::index) ────────────────
+
+
+def favorites(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "Favorites", favorites_props(ctx), _seo(ctx))
+
+
+def favorites_props(ctx: Context) -> dict[str, Any]:
+    """
+    Живые, истёкшие и архивные — с пометкой «не активно»; черновики,
+    модерация и отклонённые скрыты целиком. Компания в корзине — карточка
+    без продавца, как у ListingCard с пустой связью.
+    """
+    from savdex.web import content
+    from savdex.web.home import _LISTING_COMPANY, Cards
+    from savdex.web.shared import settings_values
+
+    assert ctx.user is not None
+    rows = _rows(
+        f"select l.*, {_LISTING_COMPANY} from listings l "
+        "left join companies c on c.id = l.company_id and c.deleted_at is null "
+        "where l.status in ('active', 'expired', 'archived') and l.deleted_at is null "
+        "and l.id in (select listing_id from favorites where user_id = %s) "
+        "order by l.published_at desc nulls first, l.id desc",
+        [ctx.user["id"]],
+    )
+    cards = Cards(ctx, settings_values(), content.Translations(ctx.locale))
+
+    return {
+        "items": [
+            {**card, "active": row["status"] == "active"}
+            for card, row in zip(cards.present(rows), rows, strict=True)
+        ]
+    }
