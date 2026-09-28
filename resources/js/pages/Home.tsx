@@ -40,7 +40,7 @@ import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { ReviewCard, type FeedReview } from '@/components/ReviewCard';
 import { SelectField } from '@/components/SelectField';
 import { VerificationBadge } from '@/components/VerificationBadge';
-import { formatNumber } from '@/components/cabinet';
+import { CountUp } from '@/components/CountUp';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
@@ -452,7 +452,7 @@ export default function Home({
                                         <Icon aria-hidden className="size-5" />
                                     </span>
                                     <div style={{ minWidth: 0 }}>
-                                        <div className="stat-cell-num">{formatNumber(value)}</div>
+                                        <div className="stat-cell-num"><CountUp value={value} /></div>
                                         <div className="stat-cell-label">{label}</div>
                                     </div>
                                 </Link>
