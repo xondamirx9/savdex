@@ -87,6 +87,10 @@ def _php_value(value: Any) -> Any:  # noqa: ANN401
     if isinstance(value, list):
         return [_php_value(v) for v in value]
 
+    if isinstance(value, float) and value.is_integer():
+        # json_encode без JSON_PRESERVE_ZERO_FRACTION: 3.0 → 3
+        return int(value)
+
     return value
 
 
@@ -176,6 +180,19 @@ class Store:
     @property
     def token(self) -> str:
         return str(self.data.get("_token", ""))
+
+    def flash(self, key: str, value: Any) -> None:  # noqa: ANN401
+        """Store::flash: значение, ключ — в новые, из старых — убрать."""
+        self.put(key, value)
+        new = self.get("_flash.new", [])
+        new = list(new.values()) if isinstance(new, dict) else list(new)
+        self.put("_flash.new", [*new, key])
+        old = self.get("_flash.old", [])
+        items = old.items() if isinstance(old, dict) else enumerate(old)
+        # array_diff сохраняет ключи: без первого элемента список станет
+        # объектом {"1": …} — ровно так его и запишет json_encode
+        kept = {str(i): v for i, v in items if v != key}
+        self.put("_flash.old", kept)
 
     def age_flash(self) -> None:
         """Store::ageFlashData."""

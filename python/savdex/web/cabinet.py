@@ -1,0 +1,435 @@
+"""
+Кабинет на Django (этап 5, шаг 2) — страницы, которые открываются
+GET-запросом. Формы по-прежнему отправляются в Laravel.
+
+Каждой странице кабинета предшествуют посредники маршрутов Laravel:
+
+- auth (Authenticate): гость уходит на вход, а адрес страницы
+  запоминается в сессии (url.intended) — после входа Laravel вернёт
+  туда; XHR тоже (JSON с 401 у Laravel — только для api/*);
+- RequirePasswordChange: пароль выдан вручную — на смену пароля, с
+  предупреждением в сессии.
+
+Счётчики у пунктов меню (counts) — HandleInertiaRequests::cabinetCounts:
+только на адресах кабинета и только у человека с компанией.
+
+Сверка с настоящим Laravel — tests/test_web_cabinet.py.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
+
+from django.db import connection
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+
+from savdex.web import inertia, locales, session, ui
+from savdex.web.home import _filled, completeness, php_round
+from savdex.web.request import _expects_json, context
+from savdex.web.seo import Seo
+from savdex.web.shared import Context, ago
+
+#: CabinetMetrics: окно показателей
+DAYS = 30
+
+
+def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
+    with connection.cursor() as cursor:
+        cursor.execute(query, params or [])
+        columns = [c[0] for c in cursor.description or []]
+
+        return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+
+
+def _count(query: str, params: list[Any]) -> int:
+    return int(_rows(query, params)[0]["n"])
+
+
+# ── Посредники маршрутов ────────────────────────────────────────────
+
+
+def _redirect(ctx: Context, path: str) -> HttpResponse:
+    """redirect()->route(…): адрес на хосте; с префиксом — LocalizeUrl его сохранит."""
+    target = ctx.url(path)
+
+    if ctx.url_locale is not None:
+        target = locales.url(ctx.root, path, ctx.url_locale)
+
+    return HttpResponseRedirect(target)
+
+
+def page(request: HttpRequest) -> Context | HttpResponse:
+    """
+    Контекст страницы кабинета — или ответ посредника.
+
+    Порядок, как после сортировки посредников у Laravel: auth стоит в
+    списке приоритетов и встаёт раньше SetLocale, поэтому гость уходит
+    на вход, не запомнив язык из адреса; RequirePasswordChange — после
+    SetLocale и HandleInertiaRequests.
+    """
+    first = context(request, redirect=False)
+
+    if isinstance(first, HttpResponse):
+        return first
+
+    refused = _authenticate(first)
+
+    if refused is not None:
+        return refused
+
+    ctx = context(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return _require_password_change(ctx) or ctx
+
+
+def _store(ctx: Context) -> session.Store | None:
+    started = session.start(ctx.request)
+
+    return started[0] if started is not None else None
+
+
+def _authenticate(ctx: Context) -> HttpResponse | None:
+    """Authenticate: гость — на вход, адрес GET-страницы — в url.intended."""
+    if ctx.user is not None:
+        return None
+
+    # JSON с 401 у Laravel — только для api/* (shouldRenderJsonWhen в
+    # bootstrap/app.php): XHR страницы тоже уходит на вход
+    store = _store(ctx)
+
+    # Redirector::guest: страница — её адрес; XHR, ждущий JSON, — previous()
+    if store is not None:
+        if ctx.request.method == "GET" and not _expects_json(ctx.request):
+            intended = store.full_url
+        else:
+            referer = ctx.request.headers.get("Referer")
+            intended = referer or store.get("_previous.url") or ctx.url("/")
+
+        store.put("url.intended", intended)
+
+    return _redirect(ctx, "/login")
+
+
+def _require_password_change(ctx: Context) -> HttpResponse | None:
+    """RequirePasswordChange: выданный вручную пароль — сначала сменить."""
+    if ctx.user is None or not ctx.user["must_change_password"]:
+        return None
+
+    store = _store(ctx)
+
+    if store is not None:
+        store.flash("warning", ctx.t("messages.auth.must_change_password"))
+
+    return _redirect(ctx, "/password/change")
+
+
+def company_of(ctx: Context) -> dict[str, Any] | None:
+    """$request->user()->company: компания не в корзине."""
+    user = ctx.user
+
+    if user is None or user["company_id"] is None:
+        return None
+
+    rows = _rows(
+        "select * from companies where id = %s and deleted_at is null", [user["company_id"]]
+    )
+
+    return rows[0] if rows else None
+
+
+def counts(ctx: Context) -> dict[str, int] | None:
+    """HandleInertiaRequests::cabinetCounts."""
+    if ctx.path != "/cabinet" and not ctx.path.startswith("/cabinet/"):
+        return None
+
+    company = company_of(ctx)
+
+    if company is None:
+        return None
+
+    cid = company["id"]
+
+    return {
+        "listings": _count(
+            "select count(*) as n from listings where company_id = %s "
+            "and status = 'active' and deleted_at is null",
+            [cid],
+        ),
+        "contacts": _count(
+            "select count(*) as n from contact_unlocks where company_id = %s", [cid]
+        ),
+        "incoming": _count(
+            "select count(*) as n from contact_unlocks where target_company_id = %s", [cid]
+        ),
+        "reviews": _count(
+            "select count(*) as n from reviews where company_id = %s and status = 'published'",
+            [cid],
+        ),
+        "chats": unread_threads(cid),
+    }
+
+
+def unread_threads(company_id: int) -> int:
+    """MessageThread::unreadThreadsFor: разговоры с непрочитанным от собеседника."""
+
+    def unread(read_column: str) -> str:
+        return (
+            "exists (select 1 from messages where messages.thread_id = message_threads.id "
+            "and messages.company_id != %s and messages.created_at > "
+            f"coalesce(message_threads.{read_column}, '1970-01-01 00:00:00'))"
+        )
+
+    return _count(
+        "select count(*) as n from message_threads where "
+        f"((buyer_company_id = %s and {unread('buyer_read_at')}) "
+        f"or (seller_company_id = %s and {unread('seller_read_at')}))",
+        [company_id, company_id, company_id, company_id],
+    )
+
+
+# ── Сводка /cabinet (DashboardController) ───────────────────────────
+
+
+def dashboard(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    return inertia.render(ctx, "cabinet/Dashboard", dashboard_props(ctx), _seo(ctx))
+
+
+def _seo(ctx: Context) -> Seo:
+    """Страница без своего SEO — только заголовок сайта по умолчанию."""
+    return Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
+
+
+def dashboard_props(ctx: Context) -> dict[str, Any]:
+    company = company_of(ctx)
+
+    if company is None:
+        return {
+            "company": None,
+            "metrics": None,
+            "series": None,
+            "events": [],
+            "limits": None,
+            "plan": None,
+        }
+
+    cid = company["id"]
+    has_documents = bool(
+        _rows(
+            "select 1 from company_documents where company_id = %s "
+            "and moderation_status = 'approved' limit 1",
+            [cid],
+        )
+    )
+    plan = company_plan(cid)
+    wallets = _rows("select * from wallets where company_id = %s limit 1", [cid])
+    wallet = wallets[0] if wallets else None
+    subscription = active_subscription(cid)
+    active = _count(
+        "select count(*) as n from listings where company_id = %s "
+        "and status = 'active' and deleted_at is null",
+        [cid],
+    )
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    return {
+        "company": {
+            "name": company["name"],
+            "slug": company["slug"],
+            "completeness": completeness(company, has_documents),
+            "missing": _missing(ctx, company, has_documents),
+        },
+        "metrics": summary(cid),
+        "series": series(cid),
+        "events": [
+            {
+                "id": e["id"],
+                "type": e["type"],
+                "tone": e["tone"],
+                "message": e["message"],
+                "url": e["url"],
+                "ago": ago(e["created_at"], ctx.locale),
+            }
+            for e in _rows(
+                "select * from activity_events where company_id = %s "
+                "order by created_at desc, id desc limit 5",
+                [cid],
+            )
+        ],
+        "limits": {
+            "listings": {"used": active, "total": plan["listings_limit"]},
+            "contacts": {
+                "used": (wallet or {}).get("contacts_used_this_period") or 0,
+                "total": plan["contacts_limit"],
+            },
+            "promo": {
+                "used": max(
+                    0, (plan["promo_units"] or 0) - ((wallet or {}).get("promo_units") or 0)
+                ),
+                "total": plan["promo_units"],
+            },
+            "resets_at": _date((wallet or {}).get("period_resets_at")),
+        },
+        "plan": {
+            "name": plan["name"],
+            "until": _date(subscription["ends_at"] if subscription else None),
+        },
+        "expiring": _count(
+            "select count(*) as n from listings where company_id = %s and status = 'active' "
+            "and deleted_at is null and expires_at is not null and expires_at <= %s",
+            [cid, now + timedelta(days=7)],
+        ),
+        "drafts": _count(
+            "select count(*) as n from listings where company_id = %s "
+            "and status = 'draft' and deleted_at is null",
+            [cid],
+        ),
+    }
+
+
+def _date(value: datetime | None) -> str | None:
+    """translatedFormat('d.m.Y') — цифры, от языка не зависят."""
+    return value.strftime("%d.%m.%Y") if value is not None else None
+
+
+def _missing(ctx: Context, company: dict[str, Any], has_documents: bool) -> list[str]:
+    """Company::missingProfileFields: подписи из словаря company."""
+    checks = (
+        ("tin", not _filled(company["tin"])),
+        ("address", not _filled(company["address"])),
+        ("description", len(company["description"] or "") < 100),
+        ("logo", not _filled(company["logo_path"])),
+        ("documents", not has_documents),
+    )
+
+    return [ui.group_t(f"company.field.{key}", ctx.locale) for key, missing in checks if missing]
+
+
+# ── Тариф ───────────────────────────────────────────────────────────
+
+
+def active_subscription(company_id: int) -> dict[str, Any] | None:
+    """Company::subscription: действующая, по сроку тоже; последняя по id."""
+    rows = _rows(
+        "select * from subscriptions where company_id = %s and status = 'active' "
+        "and (ends_at is null or ends_at > %s) order by id desc limit 1",
+        [company_id, datetime.now(UTC).replace(tzinfo=None)],
+    )
+
+    return rows[0] if rows else None
+
+
+#: Company::plan — Free по умолчанию, если справочник тарифов пуст
+_FREE_DEFAULT = {
+    "code": "free",
+    "name": "Free",
+    "listings_limit": 4,
+    "contacts_limit": 3,
+    "promo_units": 0,
+}
+
+
+def company_plan(company_id: int) -> dict[str, Any]:
+    """Company::plan: тариф действующей подписки, иначе Free."""
+    subscription = active_subscription(company_id)
+
+    if subscription is not None:
+        rows = _rows("select * from plans where id = %s", [subscription["plan_id"]])
+
+        if rows:
+            return rows[0]
+
+    rows = _rows("select * from plans where code = 'free' limit 1")
+
+    return rows[0] if rows else dict(_FREE_DEFAULT)
+
+
+# ── Показатели (CabinetMetrics) ─────────────────────────────────────
+
+
+def _today() -> date:
+    return datetime.now(UTC).date()
+
+
+def _stats(company_id: int, start: date, end: date) -> list[dict[str, Any]]:
+    """Суммы listing_stats по дням — объявления компании не в корзине."""
+    return _rows(
+        "select date, sum(impressions) as impressions, sum(views) as views, "
+        "sum(favorites) as favorites, sum(unlocks) as unlocks from listing_stats "
+        "where listing_id in (select id from listings where company_id = %s "
+        "and deleted_at is null) and date between %s and %s group by date",
+        [company_id, start, end],
+    )
+
+
+def _sum(company_id: int, start: date, end: date) -> dict[str, int]:
+    rows = _stats(company_id, start, end)
+
+    return {
+        k: int(sum(r[k] or 0 for r in rows))
+        for k in ("impressions", "views", "favorites", "unlocks")
+    }
+
+
+def _delta(now: int, prev: int) -> float | None:
+    """Изменение в процентах; сравнивать не с чем — null."""
+    return php_round((now - prev) / prev * 100, 1) if prev > 0 else None
+
+
+def summary(company_id: int) -> dict[str, Any]:
+    """CabinetMetrics::summary: 30 дней и предыдущие 30 (граница — в обоих)."""
+    start = _today() - timedelta(days=DAYS - 1)
+    now = _sum(company_id, start, _today())
+    prev = _sum(company_id, start - timedelta(days=DAYS), start)
+
+    def conversion(p: dict[str, int]) -> float:
+        return php_round(p["unlocks"] / p["views"] * 100, 1) if p["views"] > 0 else 0.0
+
+    return {
+        **{
+            key: {
+                "value": now[key],
+                "delta": _delta(now[key], prev[key]),
+                "format": "int",
+            }
+            for key in ("impressions", "views", "unlocks")
+        },
+        "conversion": {
+            "value": conversion(now),
+            "delta": php_round(conversion(now) - conversion(prev), 1),
+            "format": "percent",
+        },
+    }
+
+
+def series(company_id: int) -> dict[str, list[float]]:
+    """CabinetMetrics::series: по дням, скользящее среднее за неделю."""
+    today = _today()
+    rows = {r["date"]: r for r in _stats(company_id, today - timedelta(days=DAYS - 1), today)}
+    raw: dict[str, list[int]] = {"impressions": [], "views": [], "unlocks": []}
+
+    for i in range(DAYS - 1, -1, -1):
+        row = rows.get(today - timedelta(days=i))
+
+        for metric, values in raw.items():
+            values.append(int((row or {}).get(metric) or 0))
+
+    return {metric: _smooth(values) for metric, values in raw.items()}
+
+
+def _smooth(values: list[int], window: int = 7) -> list[float]:
+    out = []
+
+    for i in range(len(values)):
+        part = values[max(0, i - window + 1) : i + 1]
+        out.append(php_round(sum(part) / len(part), 1))
+
+    return out
