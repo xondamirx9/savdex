@@ -99,8 +99,10 @@ class ListingWizardController extends Controller
                 'status' => $listing->status,
                 'step' => $listing->wizard_step,
                 'tags' => (array) $listing->tags,
-                'attributes' => $listing->attributes()->pluck('value', 'key'),
-                'images' => $listing->images()->orderBy('sort')->get()
+                // По id: при повторе ключа побеждает последняя, как и раньше,
+                // но «последняя» теперь одна и та же при каждом открытии
+                'attributes' => $listing->attributes()->orderBy('id')->pluck('value', 'key'),
+                'images' => $listing->images()->orderBy('sort')->orderBy('id')->get()
                     ->map(fn ($i): array => ['id' => $i->id, 'thumb' => $i->thumbUrl()])
                     ->values(),
             ],
@@ -284,8 +286,16 @@ class ListingWizardController extends Controller
         return Category::query()
             ->whereNull('parent_id')
             ->where('is_active', true)
-            ->with(['translations', 'children.translations', 'children.fields'])
+            // Хвост по id у разделов, подразделов и полей: при равном sort
+            // порядок иначе плавал
+            ->with([
+                'translations',
+                'children' => fn ($q) => $q->orderBy('id'),
+                'children.translations',
+                'children.fields' => fn ($q) => $q->orderBy('id'),
+            ])
             ->orderBy('sort')
+            ->orderBy('id')
             ->get()
             ->map(fn (Category $parent): array => [
                 'id' => $parent->id,
@@ -324,7 +334,9 @@ class ListingWizardController extends Controller
 
         abort_if($company === null, 404);
 
-        $listing = $company->listings()->with(['category', 'attributes', 'images'])->find($id);
+        $listing = $company->listings()
+            ->with(['category', 'attributes' => fn ($q) => $q->orderBy('id'), 'images'])
+            ->find($id);
 
         abort_if($listing === null, 404);
 

@@ -18,6 +18,7 @@ GET-запросом. Формы по-прежнему отправляются 
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -1848,6 +1849,507 @@ def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
             ],
             "serviceTypes": SERVICE_TYPES,
             "currencies": IT_TASK_CURRENCIES,
+        },
+        _seo(ctx),
+    )
+
+
+# ── Мини-сайт: редактор /cabinet/site (Cabinet\SiteController::edit) ─
+
+#: SiteTheme — шаблоны, режимы, скругления, шрифты, умолчания, пресеты
+SITE_TEMPLATES = ["classic", "bold", "minimal"]
+SITE_MODES = ["light", "dark"]
+SITE_RADII = ["sharp", "soft", "round"]
+SITE_FONTS = {
+    "manrope": "Manrope",
+    "inter": "Inter",
+    "montserrat": "Montserrat",
+    "rubik": "Rubik",
+    "nunito": "Nunito",
+    "pt-sans": "PT Sans",
+    "ibm-plex-sans": "IBM Plex Sans",
+    "oswald": "Oswald",
+    "playfair-display": "Playfair Display",
+    "lora": "Lora",
+    "pt-serif": "PT Serif",
+}
+SITE_DEFAULTS: dict[str, str | None] = {
+    "template": "classic",
+    "primary": "#1a56db",
+    "accent": "#f59e0b",
+    "mode": "light",
+    "heading_font": "manrope",
+    "body_font": "manrope",
+    "radius": "soft",
+    "hero_image": None,
+}
+SITE_PRESETS = {
+    "savdex": {
+        "primary": "#1a56db",
+        "accent": "#f59e0b",
+        "mode": "light",
+        "heading_font": "manrope",
+        "body_font": "manrope",
+        "radius": "soft",
+    },
+    "forest": {
+        "primary": "#0f6e56",
+        "accent": "#d4a017",
+        "mode": "light",
+        "heading_font": "lora",
+        "body_font": "pt-sans",
+        "radius": "soft",
+    },
+    "graphite": {
+        "primary": "#f97316",
+        "accent": "#38bdf8",
+        "mode": "dark",
+        "heading_font": "oswald",
+        "body_font": "inter",
+        "radius": "sharp",
+    },
+    "terracotta": {
+        "primary": "#b4532a",
+        "accent": "#2f6f73",
+        "mode": "light",
+        "heading_font": "playfair-display",
+        "body_font": "nunito",
+        "radius": "round",
+    },
+    "royal": {
+        "primary": "#5b3cc4",
+        "accent": "#e11d74",
+        "mode": "light",
+        "heading_font": "montserrat",
+        "body_font": "rubik",
+        "radius": "round",
+    },
+}
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_HERO = re.compile(r"^sites/\d+/[A-Za-z0-9._-]+$")
+
+#: CompanySiteProduct::LIMIT
+SITE_PRODUCTS_LIMIT = 60
+
+
+def site_theme(value: Any) -> dict[str, str | None]:  # noqa: ANN401
+    """SiteTheme::normalize: неизвестное — отброшено, недопустимое — умолчание."""
+    source = value if isinstance(value, dict) else {}
+    theme = dict(SITE_DEFAULTS)
+
+    if source.get("template") in SITE_TEMPLATES:
+        theme["template"] = source["template"]
+
+    for key in ("primary", "accent"):
+        if isinstance(source.get(key), str) and _HEX.match(source[key]):
+            theme[key] = source[key].lower()
+
+    if source.get("mode") in SITE_MODES:
+        theme["mode"] = source["mode"]
+
+    for key in ("heading_font", "body_font"):
+        if isinstance(source.get(key), str) and source[key] in SITE_FONTS:
+            theme[key] = source[key]
+
+    if isinstance(source.get("radius"), str) and source["radius"] in SITE_RADII:
+        theme["radius"] = source["radius"]
+
+    if isinstance(source.get("hero_image"), str) and _HERO.match(source["hero_image"]):
+        theme["hero_image"] = source["hero_image"]
+
+    return theme
+
+
+def _site_options() -> dict[str, Any]:
+    """SiteTheme::options."""
+    return {
+        "templates": SITE_TEMPLATES,
+        "modes": SITE_MODES,
+        "radii": SITE_RADII,
+        "fonts": [{"key": k, "name": v} for k, v in SITE_FONTS.items()],
+        "presets": SITE_PRESETS,
+        "fonts_url": "https://fonts.bunny.net/css?family="
+        + "|".join(f"{k}:600" for k in SITE_FONTS)
+        + "&display=swap",
+    }
+
+
+def _microsite_domain() -> str:
+    """SiteHost::domain: MICROSITE_DOMAIN; пусто — сайты по пути /s/…."""
+    import os
+
+    return (os.environ.get("MICROSITE_DOMAIN") or "").strip().lower()
+
+
+def _app_url() -> str:
+    import os
+
+    return os.environ.get("APP_URL", "http://localhost")
+
+
+def site_url(subdomain: str) -> str:
+    """SiteHost::url."""
+    from urllib.parse import urlsplit
+
+    domain = _microsite_domain()
+
+    if domain == "":
+        return _app_url().rstrip("/") + "/s/" + subdomain
+
+    app = urlsplit(_app_url())
+    port = f":{app.port}" if app.port else ""
+
+    return f"{app.scheme or 'https'}://{subdomain}.{domain}{port}"
+
+
+def _address_parts() -> dict[str, str]:
+    """SiteHost::addressParts."""
+    from urllib.parse import urlsplit
+
+    domain = _microsite_domain()
+
+    if domain != "":
+        return {"prefix": "", "suffix": "." + domain}
+
+    return {"prefix": (urlsplit(_app_url()).hostname or "") + "/s/", "suffix": ""}
+
+
+def suggest_subdomain(slug: str) -> str:
+    """SiteHost::suggest."""
+    sub = re.sub(r"[^a-z0-9-]+", "-", slug.lower()).strip("-")
+    sub = re.sub(r"-{2,}", "-", sub)[:40].strip("-")
+
+    return sub if len(sub) >= 3 else sub + "-site"
+
+
+def site_page(request: HttpRequest) -> HttpResponse:
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+
+    if company is None:
+        return _redirect(ctx, "/cabinet/company")
+
+    return inertia.render(ctx, "cabinet/Site", site_props(ctx, company), _seo(ctx))
+
+
+def site_props(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
+    from savdex.web.directory import logo_url
+
+    cid = company["id"]
+    found = _rows("select * from company_sites where company_id = %s order by id limit 1", [cid])
+    site = found[0] if found else None
+    plan = company_plan(cid)
+    draft = site_theme(site["theme"]) if site else None
+    hero = (draft or {}).get("hero_image")
+
+    return {
+        "available": company["status"] != "blocked" and bool(plan.get("has_microsite")),
+        "address": _address_parts(),
+        "site": None
+        if site is None
+        else {
+            "subdomain": site["subdomain"],
+            "url": site_url(site["subdomain"]),
+            "status": site["status"],
+            "published_at": site["published_at"].strftime("%d.%m.%Y %H:%M")
+            if site["published_at"]
+            else None,
+            # Черновик отличается от того, что видят посетители
+            "unpublished_changes": site["status"] != "published"
+            or draft != site_theme(site["published_theme"]),
+        },
+        "subdomain": site["subdomain"] if site else suggest_subdomain(company["slug"]),
+        "theme": draft if draft is not None else site_theme(None),
+        "hero_url": (logo_url(ctx, hero) if isinstance(hero, str) else None) if site else None,
+        "options": _site_options(),
+        "products": [
+            {
+                "id": p["id"],
+                "title": p["title"],
+                "description": p["description"],
+                "price": float(p["price"]) if p["price"] is not None else None,
+                "currency": p["currency"],
+                "unit": p["unit"],
+                "image": logo_url(ctx, p["thumb_path"] or p["image_path"]),
+            }
+            for p in _rows(
+                "select * from company_site_products where company_id = %s order by sort, id desc",
+                [cid],
+            )
+        ],
+        "products_limit": SITE_PRODUCTS_LIMIT,
+        "listings_count": _count(
+            "select count(*) as n from listings where company_id = %s and status = 'active' "
+            "and deleted_at is null",
+            [cid],
+        ),
+        "currencies": list(CURRENCY_LABELS),
+    }
+
+
+# ── Разговор /cabinet/chats/<id> (ChatController::show) ─────────────
+
+
+def chat(request: HttpRequest, thread_id: str) -> HttpResponse:
+    from savdex.guards import allowed_writes
+    from savdex.web.shared import initials
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    company = company_of(ctx)
+    found = _rows("select * from message_threads where id = %s", [int(thread_id)])
+
+    # 404, а не 403: чужой разговор не подтверждает своё существование
+    if company is None or not found:
+        return not_found(ctx)
+
+    t = found[0]
+    cid = company["id"]
+
+    if cid not in (t["buyer_company_id"], t["seller_company_id"]):
+        return not_found(ctx)
+
+    # markReadFor: прочитано — своей стороной; save() двигает и updated_at
+    column = "buyer_read_at" if t["buyer_company_id"] == cid else "seller_read_at"
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+    with allowed_writes("message_threads"), connection.cursor() as cursor:
+        cursor.execute(
+            f"update message_threads set {column} = %s, updated_at = %s where id = %s",
+            [stamp, stamp, t["id"]],
+        )
+
+    other_id = t["seller_company_id"] if t["buyer_company_id"] == cid else t["buyer_company_id"]
+    others = _companies([other_id])
+    other = others.get(other_id)
+    listing = (
+        _rows(
+            "select title, slug, status from listings where id = %s and deleted_at is null",
+            [t["listing_id"]],
+        )
+        if t["listing_id"]
+        else []
+    )
+    task = (
+        _rows("select title, slug, status from it_tasks where id = %s", [t["it_task_id"]])
+        if t["it_task_id"]
+        else []
+    )
+
+    return inertia.render(
+        ctx,
+        "cabinet/Chat",
+        {
+            "thread": {
+                "id": t["id"],
+                "company": other["name"] if other else ctx.t("cabinet.incoming.deleted"),
+                "initials": initials(other["name"]) if other else "—",
+                "company_slug": other["slug"] if other else None,
+                "listing": {
+                    "title": listing[0]["title"],
+                    "slug": listing[0]["slug"],
+                    "active": listing[0]["status"] == "active",
+                }
+                if listing
+                else None,
+                "task": {
+                    "title": task[0]["title"],
+                    "slug": task[0]["slug"],
+                    "active": task[0]["status"] == "active",
+                }
+                if task
+                else None,
+            },
+            "messages": [
+                {
+                    "id": m["id"],
+                    "mine": m["company_id"] == cid,
+                    "body": m["body"],
+                    "at": m["created_at"].strftime("%d.%m.%Y %H:%M"),
+                }
+                for m in _rows(
+                    "select id, company_id, body, created_at from messages where thread_id = %s "
+                    "order by id limit 500",
+                    [t["id"]],
+                )
+            ],
+        },
+        _seo(ctx),
+    )
+
+
+# ── Мастер объявления: шаги /cabinet/listings/<id>/edit ─────────────
+
+
+def _require_verified(ctx: Context) -> HttpResponse | None:
+    """
+    verified (EnsureEmailIsVerified): почта не подтверждена — на экран
+    подтверждения, адрес страницы — в url.intended; XHR, ждущий JSON, — 403.
+    """
+    from savdex.web.views import error
+
+    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+        return None
+
+    if _expects_json(ctx.request):
+        return error(ctx, 403)
+
+    store = _store(ctx)
+
+    if store is not None:
+        store.put("url.intended", store.full_url if ctx.request.method == "GET" else ctx.url("/"))
+
+    return _redirect(ctx, "/verify-email")
+
+
+def _category_tree(locale: str) -> list[dict[str, Any]]:
+    """ListingWizardController::categoryTree: активные разделы, подразделы с полями."""
+    from savdex.web.directory import _named
+
+    names = _named("categories", locale)
+    roots = _rows(
+        "select id, slug from categories where parent_id is null and is_active order by sort, id"
+    )
+    children = _rows(
+        "select id, parent_id from categories where parent_id = any(%s) order by sort, id",
+        [[r["id"] for r in roots]],
+    )
+    fields: dict[int, list[dict[str, Any]]] = {}
+
+    for f in _rows(
+        "select category_id, key, label, type, options, unit from category_fields "
+        "where category_id = any(%s) order by sort, id",
+        [[c["id"] for c in children]],
+    ):
+        fields.setdefault(f["category_id"], []).append(
+            {
+                "key": f["key"],
+                "label": f["label"],
+                "type": f["type"],
+                "options": f["options"] or [],
+                "unit": f["unit"],
+            }
+        )
+
+    return [
+        {
+            "id": r["id"],
+            "slug": r["slug"],
+            "name": names[r["id"]],
+            "children": [
+                {"id": c["id"], "name": names[c["id"]], "fields": fields.get(c["id"], [])}
+                for c in children
+                if c["parent_id"] == r["id"]
+            ],
+        }
+        for r in roots
+    ]
+
+
+def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
+    from savdex.web.directory import _named
+    from savdex.web.listing import suggestions
+    from savdex.web.views import not_found
+
+    ctx = page(request)
+
+    if isinstance(ctx, HttpResponse):
+        return ctx
+
+    refused = _require_verified(ctx)
+
+    if refused is not None:
+        return refused
+
+    company = company_of(ctx)
+    found = (
+        _rows(
+            "select * from listings where id = %s and company_id = %s and deleted_at is null",
+            [int(listing_id), company["id"]],
+        )
+        if company is not None
+        else []
+    )
+
+    if not found:
+        return not_found(ctx)
+
+    row = found[0]
+    categories = _named("categories", ctx.locale)
+    parent_id = None
+    category = parent = None
+
+    if row["category_id"]:
+        category = categories.get(row["category_id"])
+        found_parent = _rows("select parent_id from categories where id = %s", [row["category_id"]])
+        parent_id = found_parent[0]["parent_id"] if found_parent else None
+        parent = categories.get(parent_id) if parent_id is not None else None
+
+    attributes = _rows(
+        "select key, value from listing_attributes where listing_id = %s order by id", [row["id"]]
+    )
+    city_id = company["city_id"] if company else None
+    city = _named("cities", ctx.locale).get(city_id) if city_id else None
+    plan = company_plan(company["id"]) if company else None
+
+    return inertia.render(
+        ctx,
+        "cabinet/listings/Wizard",
+        {
+            "listing": {
+                "id": row["id"],
+                "type": row["type"],
+                "category_id": row["category_id"],
+                "parent_id": parent_id,
+                "title": row["title"],
+                "description": row["description"],
+                "price": float(row["price"]) if row["price"] is not None else None,
+                "bundle_price": float(row["bundle_price"])
+                if row["bundle_price"] is not None
+                else None,
+                "currency": row["currency"],
+                "unit": row["unit"],
+                "price_negotiable": bool(row["price_negotiable"]),
+                "min_order": row["min_order"],
+                "delivery_terms": row["delivery_terms"],
+                "payment_terms": row["payment_terms"],
+                "status": row["status"],
+                "step": row["wizard_step"],
+                "tags": list(row["tags"] or []),
+                # pluck('value', 'key'): повтор ключа — побеждает последняя
+                "attributes": {a["key"]: a["value"] for a in attributes},
+                "images": [
+                    # ListingImage::thumbUrl — без проверки, что файл на месте
+                    {"id": i["id"], "thumb": ctx.url("storage/" + (i["thumb_path"] or i["path"]))}
+                    for i in _rows(
+                        "select id, path, thumb_path from listing_images where listing_id = %s "
+                        "order by sort, id",
+                        [row["id"]],
+                    )
+                ],
+            },
+            "categories": _category_tree(ctx.locale),
+            "slots": {
+                "used": _count(
+                    "select count(*) as n from listings where company_id = %s "
+                    "and status = 'active' and deleted_at is null",
+                    [company["id"]],
+                )
+                if company
+                else 0,
+                "total": plan["listings_limit"] if plan else None,
+            },
+            "tagOptions": suggestions(
+                row, category, parent, [str(a["value"] or "") for a in attributes], city
+            ),
         },
         _seo(ctx),
     )
