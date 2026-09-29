@@ -8,14 +8,9 @@ use App\Filament\Pages\Complaints;
 use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Broadcasts\BroadcastResource;
 use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
-use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\Listings\ListingResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
-use App\Filament\Resources\Resumes\ResumeResource;
-use App\Filament\Resources\Reviews\ReviewResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
-use App\Filament\Resources\Tenders\TenderResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use App\Support\AdminAccess;
@@ -45,11 +40,6 @@ class AdminAccessTest extends TestCase
         UserResource::class,
         CompanyResource::class,
         ListingResource::class,
-        TenderResource::class,
-        ItTaskResource::class,
-        CompanyDocumentResource::class,
-        ResumeResource::class,
-        ReviewResource::class,
         Complaints::class,
         Invoices::class,
         SubscriptionResource::class,
@@ -78,30 +68,26 @@ class AdminAccessTest extends TestCase
 
             'администратор' => [AdminAccess::ADMIN, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
-                TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
-                ResumeResource::class, ReviewResource::class, Complaints::class,
+                Complaints::class,
                 BroadcastResource::class,
             ]],
 
             'продажи' => [AdminAccess::SALES, [
                 CompanyResource::class, ListingResource::class,
-                TenderResource::class, PromoCodeResource::class,
+                PromoCodeResource::class,
             ]],
 
             'менеджер поставщиков' => [AdminAccess::SUPPLIER_MANAGER, [
                 CompanyResource::class, ListingResource::class,
-                TenderResource::class, CompanyDocumentResource::class,
             ]],
 
             'менеджер покупателей' => [AdminAccess::BUYER_MANAGER, [
                 CompanyResource::class, ListingResource::class,
-                TenderResource::class, CompanyDocumentResource::class,
             ]],
 
             'модератор' => [AdminAccess::MODERATOR, [
-                CompanyResource::class, ListingResource::class, TenderResource::class,
-                ItTaskResource::class, CompanyDocumentResource::class,
-                ResumeResource::class, ReviewResource::class, Complaints::class,
+                CompanyResource::class, ListingResource::class,
+                Complaints::class,
             ]],
 
             'финансы' => [AdminAccess::FINANCE, [
@@ -111,7 +97,7 @@ class AdminAccessTest extends TestCase
 
             'поддержка' => [AdminAccess::SUPPORT, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
-                ItTaskResource::class, ResumeResource::class, ReviewResource::class, Complaints::class,
+                Complaints::class,
                 SubscriptionResource::class,
             ]],
 

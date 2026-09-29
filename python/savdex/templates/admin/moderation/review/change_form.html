@@ -1,0 +1,24 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Отзыв о компании (savdex/moderation/admin.py, ReviewAdmin): над формой —
+  откуда отзыв, отметки проверки и спор; под формой — решения модератора.
+{% endcomment %}
+{% block form_top %}
+  {% if review %}
+    <div class="module aligned">
+      <div class="form-row"><p><b>Откуда:</b> {{ origin_label }}{% if review.created_by %} · {{ review.created_by.name }}{% endif %}</p></div>
+      {% if review.screening_flags %}<div class="form-row"><p><b>Отметки проверки:</b> {{ review.screening_flags }}</p></div>{% endif %}
+      {% if review.dispute_status %}
+        <div class="form-row"><p><b>Спор:</b> {{ dispute_label }}{% if review.dispute_reason %} — {{ review.dispute_reason }}{% endif %}</p></div>
+      {% endif %}
+      {% if review.moderator_note %}<div class="form-row"><p><b>Формулировка решения:</b> {{ review.moderator_note }}</p></div>{% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
+{% block content %}
+  {{ block.super }}
+  {% if original %}
+    {% url 'savdex_admin:moderation_review_decide' original.pk as decide_url %}
+    {% include "admin/moderation/decision_panel.html" %}
+  {% endif %}
+{% endblock %}

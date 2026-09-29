@@ -1,0 +1,21 @@
+{% comment %}
+  Решения модератора (savdex/moderation/admin.py): одна форма, кнопка на
+  каждое доступное решение. Формулировку, где она нужна, стороны
+  получают дословно — поэтому она обязательна и не короче min_note знаков.
+{% endcomment %}
+{% if decisions %}
+  <form method="post" action="{{ decide_url }}" class="module aligned" id="decision">
+    {% csrf_token %}
+    <h2>Решение</h2>
+    <div class="form-row">
+      <label for="decision-note">Формулировка решения:</label>
+      <textarea name="note" id="decision-note" rows="3" cols="80"></textarea>
+      <div class="help">Нужна для «{% for code, label, needs in decisions %}{% if needs %}{{ label }}{% if not forloop.last %}», «{% endif %}{% endif %}{% endfor %}» — не короче {{ min_note }} знаков. Её дословно увидят стороны: напишите, что именно не так.</div>
+    </div>
+    <div class="submit-row">
+      {% for code, label, needs in decisions %}
+        <button type="submit" name="decision" value="{{ code }}" class="button{% if forloop.first %} default{% endif %}">{{ label }}</button>
+      {% endfor %}
+    </div>
+  </form>
+{% endif %}

@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Public;
 
-use App\Filament\Resources\Reviews\Pages\ListReviews;
 use App\Models\Company;
 use App\Models\ContactUnlock;
 use App\Models\Review;
 use App\Models\Setting;
 use App\Models\User;
 use App\Support\ReviewScreening;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -279,65 +276,5 @@ class ReviewPremoderationTest extends TestCase
             'admin_role' => User::ADMIN_MODERATOR,
             'status' => 'active',
         ]);
-    }
-
-    #[Test]
-    public function одобренный_отзыв_появляется_на_витрине(): void
-    {
-        $this->premoderation(true);
-        $review = $this->leave(self::CLEAN);
-        $owner = User::factory()->for($this->supplier)->create();
-
-        $this->actingAs($this->moderator());
-
-        Livewire::test(ListReviews::class)
-            ->callAction(TestAction::make('approve')->table($review));
-
-        $review->refresh();
-
-        $this->assertSame(Review::STATUS_PUBLISHED, $review->status);
-        $this->assertSame(1, $this->supplier->fresh()->reviews_count);
-
-        // Уведомление уходит именно здесь, а не при создании
-        $this->assertSame(1, $owner->alerts()->where('type', 'review')->count());
-    }
-
-    #[Test]
-    public function отклонённый_отзыв_на_витрину_не_попадает(): void
-    {
-        $this->premoderation(true);
-        $review = $this->leave(self::CLEAN);
-        $author = User::factory()->for($this->buyerCompany)->create();
-
-        $this->actingAs($this->moderator());
-
-        Livewire::test(ListReviews::class)
-            ->callAction(TestAction::make('rejectReview')->table($review), [
-                'note' => 'В тексте указан телефон — контакты раскрываются платно',
-            ]);
-
-        $review->refresh();
-
-        $this->assertSame(Review::STATUS_HIDDEN, $review->status);
-        $this->assertSame(0, $this->supplier->fresh()->reviews_count);
-
-        // Автор должен узнать причину: молча исчезнувший отзыв читается
-        // как «площадка убирает неудобное»
-        $this->assertSame(1, $author->alerts()->count());
-    }
-
-    #[Test]
-    public function отклонение_требует_формулировки(): void
-    {
-        $this->premoderation(true);
-        $review = $this->leave(self::CLEAN);
-
-        $this->actingAs($this->moderator());
-
-        Livewire::test(ListReviews::class)
-            ->callAction(TestAction::make('rejectReview')->table($review), ['note' => 'нет'])
-            ->assertHasActionErrors(['note']);
-
-        $this->assertSame(Review::STATUS_MODERATION, $review->fresh()->status);
     }
 }
