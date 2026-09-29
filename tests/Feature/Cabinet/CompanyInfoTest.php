@@ -69,7 +69,9 @@ class CompanyInfoTest extends TestCase
             ->getJson('/cabinet/settings/company-info')
             ->assertOk()
             ->assertJsonPath('company.name', 'ООО «Старое имя»')
-            ->assertJsonPath('locked_until', null);
+            ->assertJsonPath('locked_until', null)
+            ->assertJsonPath('days_left', null)
+            ->assertJsonPath('next_if_changed', now()->addMonthsNoOverflow(6)->format('d.m.Y'));
     }
 
     #[Test]
@@ -94,6 +96,12 @@ class CompanyInfoTest extends TestCase
         $company = $this->company->fresh();
         $this->assertNotNull($company->profile_changed_at);
         $this->assertNotNull($company->profileLockedUntil());
+
+        // Плашка над формой: сколько ждать и какая часть срока прошла
+        $this->actingAs($this->owner)
+            ->getJson('/cabinet/settings/company-info')
+            ->assertJsonPath('days_left', fn (int $days): bool => $days >= 180 && $days <= 184)
+            ->assertJsonPath('cooldown_progress', fn (float|int $p): bool => $p >= 0 && $p < 0.01);
 
         // Второй раз в тот же срок — отказ, имя прежнее
         $this->actingAs($this->owner)
