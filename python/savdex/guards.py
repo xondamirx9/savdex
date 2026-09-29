@@ -260,10 +260,15 @@ SHARED_WRITES: dict[str, str] = {
         "; раскрытие контактов (этап 5, шаг 40) — под блокировкой строки "
         "contacts_used_this_period + 1 или условное списание кредита, как "
         "ContactUnlockService::charge и Wallet::spend"
+        "; продвижение (этап 5, шаг 44) — условное списание единиц, Wallet::spend"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
         "удаление, как CompanyFileController; у администратора — строка журнала"
+    ),
+    "promotions": (
+        "продвижение объявления за единицы (этап 5, шаг 44): новая строка "
+        "с active_key, как PromotionController::store и событие saving"
     ),
     "wallet_transactions": (
         "история кошелька (этап 5, шаг 40): строка списания кредита за "
