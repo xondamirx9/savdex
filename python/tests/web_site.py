@@ -47,7 +47,9 @@ django.setup()
 from django.test import Client
 
 path, cookies, headers = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
-method, body, content_type = sys.argv[4], sys.argv[5], sys.argv[6]
+method, content_type = sys.argv[4], sys.argv[6]
+# Тело — через stdin: большие файлы не помещаются в аргументы процесса
+body = sys.stdin.read()
 client = Client()
 for name, value in cookies.items():
     client.cookies[name] = value
@@ -265,9 +267,10 @@ def из_django(
             json.dumps(cookies or {}),
             json.dumps({"Host": host, **(headers or {})}),
             method,
-            body,
+            "",
             content_type or "application/octet-stream",
         ],
+        input=body,
         cwd=PYTHON,
         env={
             **ОКРУЖЕНИЕ,

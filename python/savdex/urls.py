@@ -34,6 +34,7 @@ from savdex.web import (
     legal,
     listing,
     listing_actions,
+    listing_image_actions,
     news,
     pricing,
     resume_actions,
@@ -197,6 +198,24 @@ urlpatterns = [
         )
         for verb in ("reply", "dispute")
     ],
+    # Фото объявления (этап 5, шаг 37): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images$",
+        listing_image_actions.store,
+        name="cabinet.listings.images.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images/"
+        r"(?P<image_id>[0-9]{1,18})$",
+        listing_image_actions.destroy,
+        name="cabinet.listings.images.destroy",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images/"
+        r"(?P<image_id>[0-9]{1,18})/cover$",
+        listing_image_actions.cover,
+        name="cabinet.listings.images.cover",
+    ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
