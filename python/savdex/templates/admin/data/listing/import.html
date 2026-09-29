@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Загрузка товаров из Excel (savdex/data/admin.py, ListingAdmin.import_view;
+  разбор книги — savdex/data/workbook.py). Окно importWorkbook у
+  ListingsTable: книги, «заменить фотографии», образец; после загрузки —
+  отчёт с ошибками и заметками по строкам.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:data_listing_changelist' %}">Объявления</a>
+    › Загрузка из Excel
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div class="flex-container">
+            {{ field.label_tag }} {{ field }}
+          </div>
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Загрузить">
+      <a href="{% url 'savdex_admin:data_listing_template' %}" class="button">Скачать образец</a>
+    </div>
+  </form>
+
+  {% if result %}
+    <div class="module">
+      <h2>Итог загрузки</h2>
+      <p>
+        Обработано строк: <b>{{ result.rows }}</b>.
+        Создано: <b>{{ result.created }}</b>,
+        обновлено: <b>{{ result.updated }}</b>,
+        фотографий добавлено: <b>{{ result.photos }}</b>.
+      </p>
+      {% if result.errors %}
+        <h3>Не загружено</h3>
+        <ul>{% for error in result.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if result.notes %}
+        <h3>Загружено, но не всё</h3>
+        <ul>{% for note in result.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="module">
+    <h2>Как устроена книга</h2>
+    <p>Формат XLSX, можно выбрать сразу несколько файлов (до {{ max_workbooks }}).
+      В книге до пяти листов, по одному на язык: «Русский», «English», «O‘zbekcha»,
+      «中文», «Türkçe» — как в образце. Первая строка листа — названия столбцов,
+      дальше по строке на товар.</p>
+    <p>Русский лист главный: цена, валюта, категория, компания, город и фотографии
+      берутся с него. На остальных листах — заголовок, описание, условия поставки
+      и оплаты на своём языке, строка к строке с русским листом: число строк должно
+      совпадать, иначе книга не примется.</p>
+    <p>Фотографии вставьте прямо в русский лист, в строку своего товара: сколько
+      снимков в строке, столько и попадёт в объявление (до {{ max_images }}).
+      Формат снимков любой, какой открывает Excel.</p>
+    <p>Строка с «Номером» правит объявление с этим номером, без номера — ищется
+      по названию и компании, не нашлось — заводится новое. Новые объявления
+      попадают в «На проверке» — опубликуйте их из списка.</p>
+    <p>Незаполненная ячейка ничего не ломает: пустое поле просто останется пустым.
+      Ячейку, которую загрузка не понимает — категории нет в каталоге, валюты нет
+      у площадки, — она пропустит, а товар загрузит и напишет об этом в отчёте.</p>
+  </div>
+</div>
+{% endblock %}

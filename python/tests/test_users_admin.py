@@ -184,16 +184,19 @@ def test_не_суперадмин_навсегда_не_удаляет(люди
     sql("delete from users where id = %s", [uid])
 
 
-def test_правки_полей_здесь_нет(люди):
-    """Поля правит Filament: страница пользователя — только для чтения."""
+def test_без_права_правки_поля_не_меняются(люди):
+    """
+    С этапа 6 поля правятся здесь (tests/test_users_editing_admin.py) — но
+    только с правом users.edit: поддержка смотрит.
+    """
     uid = _аккаунт("readonly@company.uz")
 
     _, ответ = django(
-        люди["superadmin"],
+        люди["support"],
         ("post", f"{LIST}{uid}/change/", {"name": "Другое имя", "email": "x@company.uz"}),
     )
 
-    assert ответ["status"] in (302, 403)
+    assert ответ["status"] == 403
     assert sql("select name, email from users where id = %s", [uid]) == [
         ("readonly", "readonly@company.uz")
     ]

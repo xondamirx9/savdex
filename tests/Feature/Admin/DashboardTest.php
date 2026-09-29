@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Widgets\ActivationFunnel;
 use App\Filament\Widgets\ContentDrafts;
 use App\Filament\Widgets\FinanceToday;
@@ -177,53 +176,22 @@ class DashboardTest extends TestCase
         }
     }
 
-    // ── Вкладки компаний ────────────────────────────────────────────
+    // ── Новые компании ──────────────────────────────────────────────
 
+    /*
+     * Вкладки «Поставщики» и «Покупатели» раздела «Компании» — на Python
+     * (python/tests/test_companies_admin.py).
+     */
+
+    /** Строка «Новых поставщиков» открывает карточку в разделе на Python. */
     #[Test]
-    public function вкладки_делят_компании_по_направлению(): void
-    {
-        $this->actAs(AdminAccess::SUPERADMIN);
-
-        $supplier = Company::factory()->create(['primary_role' => 'supplier']);
-        $buyer = Company::factory()->create(['primary_role' => 'buyer']);
-        $both = Company::factory()->create(['primary_role' => 'both']);
-
-        Livewire::test(ListCompanies::class)
-            ->set('activeTab', 'suppliers')
-            ->assertCanSeeTableRecords([$supplier, $both])
-            ->assertCanNotSeeTableRecords([$buyer]);
-
-        Livewire::test(ListCompanies::class)
-            ->set('activeTab', 'buyers')
-            ->assertCanSeeTableRecords([$buyer, $both])
-            ->assertCanNotSeeTableRecords([$supplier]);
-    }
-
-    /** Компания, которая и продаёт, и закупает, нужна обоим менеджерам. */
-    #[Test]
-    public function компания_с_обеими_ролями_видна_в_обеих_вкладках(): void
-    {
-        $this->actAs(AdminAccess::SUPERADMIN);
-
-        $both = Company::factory()->create(['primary_role' => 'both']);
-
-        foreach (['suppliers', 'buyers'] as $tab) {
-            Livewire::test(ListCompanies::class)
-                ->set('activeTab', $tab)
-                ->assertCanSeeTableRecords([$both]);
-        }
-    }
-
-    #[Test]
-    public function менеджер_направления_попадает_на_свою_вкладку(): void
+    public function новая_компания_открывается_в_разделе_на_python(): void
     {
         $this->actAs(AdminAccess::SUPPLIER_MANAGER);
-        $this->assertSame('suppliers', Livewire::test(ListCompanies::class)->get('activeTab'));
 
-        $this->actAs(AdminAccess::BUYER_MANAGER);
-        $this->assertSame('buyers', Livewire::test(ListCompanies::class)->get('activeTab'));
+        $company = Company::factory()->create(['primary_role' => 'supplier']);
 
-        $this->actAs(AdminAccess::SUPERADMIN);
-        $this->assertSame('all', Livewire::test(ListCompanies::class)->get('activeTab'));
+        Livewire::test(IntakeQueue::class)
+            ->assertSeeHtml(e('/admin/python?next='.rawurlencode("/py/admin/data/companyrecord/{$company->id}/change/")));
     }
 }

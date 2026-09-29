@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\Complaints;
-use App\Filament\Resources\Listings\ListingResource;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
 use App\Models\Listing;
@@ -49,7 +48,9 @@ class ModerationQueue extends StatsOverviewWidget
                 Listing::where('status', Listing::STATUS_MODERATION)->count(),
                 Listing::where('status', Listing::STATUS_MODERATION)->min('updated_at'),
                 'heroicon-o-rectangle-stack',
-                ListingResource::getUrl(),
+                // Раздел «Объявления» — на Django (этап 6), сразу с фильтром
+                // очереди: ради неё сюда и заходят
+                '/admin/python?next=/py/admin/data/listing/%3Fstatus%3Dmoderation',
             );
         }
 

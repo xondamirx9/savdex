@@ -170,6 +170,48 @@ class NavigationTest extends TestCase
         ], array_keys($this->menu()));
     }
 
+    /**
+     * Разделы, перенесённые на Django, остаются на прежних местах.
+     *
+     * Пункт меню, у которого порядок равен порядку раздела, встаёт
+     * раньше него, а пункты с равным порядком — как в списке панели.
+     * Ошибка в одном числе переставляет меню, которое помнят руками.
+     */
+    #[Test]
+    public function перенесённые_разделы_на_прежних_местах(): void
+    {
+        $this->actAs(AdminAccess::SUPERADMIN);
+
+        $menu = $this->menu();
+
+        $this->assertSame(['Компании', 'Объявления', 'IT-задачи'], $menu['Данные']);
+        $this->assertSame([
+            'Пользователи', 'Отключённые аккаунты', 'Рассылки', 'Настройки',
+            'Журнал действий', 'Роли и права', 'Выгрузка в Excel',
+        ], $menu['Система']);
+    }
+
+    /** Пункты ведут через пропуск в разделы на Python (этап 6). */
+    #[Test]
+    public function перенесённые_разделы_ведут_на_python(): void
+    {
+        $this->actAs(AdminAccess::SUPERADMIN);
+
+        $panel = Filament::getPanel('admin');
+        Filament::setCurrentPanel($panel);
+
+        $links = collect($panel->getNavigation())
+            ->flatMap(fn ($group) => $group->getItems())
+            ->mapWithKeys(fn ($item): array => [(string) $item->getLabel() => $item->getUrl()]);
+
+        $this->assertSame([
+            'Компании' => '/admin/python?next=/py/admin/data/companyrecord/',
+            'Объявления' => '/admin/python?next=/py/admin/data/listing/',
+            'Пользователи' => '/admin/python?next=/py/admin/accounts/user/',
+            'Роли и права' => '/admin/python?next=/py/admin/accounts/staffmember/',
+        ], $links->only(['Компании', 'Объявления', 'Пользователи', 'Роли и права'])->all());
+    }
+
     // ── Дашборд ─────────────────────────────────────────────────────
 
     /**

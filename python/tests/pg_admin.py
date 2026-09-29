@@ -65,7 +65,9 @@ client = Client(HTTP_X_FORWARDED_FOR="203.0.113.7")
 out = [client.post("/py/login", {"token": token}).status_code]
 
 def upload(value):
-    # Файл в шаге — {"file": имя, "b64": содержимое}
+    # Файл в шаге — {"file": имя, "b64": содержимое}; несколько — списком
+    if isinstance(value, list):
+        return [upload(item) for item in value]
     if isinstance(value, dict) and "file" in value:
         return SimpleUploadedFile(value["file"], base64.b64decode(value["b64"]))
     return value
@@ -73,7 +75,8 @@ def upload(value):
 for method, url, data in steps:
     data = {k: upload(v) for k, v in (data or {}).items()}
     r = client.get(url) if method == "get" else client.post(url, data)
-    body = r.content.decode()
+    # Двоичный ответ (XLSX) — текстом с заменой: проверкам хватает начала
+    body = r.content.decode(errors="replace")
     out.append({"status": r.status_code, "location": r.get("Location"), "body": body})
 
 print(json.dumps(out, ensure_ascii=False))

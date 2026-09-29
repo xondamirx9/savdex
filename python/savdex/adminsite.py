@@ -380,7 +380,7 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
         # Laravel не пишет «изменено», если поменялось только время правки
         if {k for k in diff["after"] if k not in audit.NOISE}:
-            self.journal(request, "updated", obj, diff)
+            self.journal(request, audit.update_action(before, changed), obj, diff)
 
     def get_form(
         self,

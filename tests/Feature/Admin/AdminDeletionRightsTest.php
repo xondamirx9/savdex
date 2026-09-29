@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Listings\ListingResource;
-use App\Models\Company;
-use App\Models\Listing;
 use App\Models\User;
+use App\Support\AdminAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -20,6 +17,9 @@ use Tests\TestCase;
  * не переопределялось, а Filament без политики разрешает всё — модератор
  * мог выделить полсотни компаний галочками и снести их вместе с
  * кошельками, подписками и оплаченными раскрытиями.
+ *
+ * Сами разделы теперь на Python (python/tests/test_companies_admin.py,
+ * test_listings_admin.py) и спрашивают те же права; здесь — матрица.
  */
 class AdminDeletionRightsTest extends TestCase
 {
@@ -37,18 +37,14 @@ class AdminDeletionRightsTest extends TestCase
     #[Test]
     public function модератор_не_удаляет_компании_и_объявления(): void
     {
-        $this->actingAs($this->admin(User::ADMIN_MODERATOR));
+        $moderator = $this->admin(User::ADMIN_MODERATOR);
+        $this->actingAs($moderator);
 
-        $company = Company::factory()->create();
-        $listing = Listing::factory()->create();
+        $this->assertFalse(AdminAccess::allows('companies.delete'));
+        $this->assertFalse(AdminAccess::allows('listings.delete'));
 
-        $this->assertFalse(CompanyResource::canDelete($company));
-        $this->assertFalse(CompanyResource::canDeleteAny(), 'массовое удаление опаснее всего');
-        $this->assertFalse(CompanyResource::canForceDelete($company));
-
-        $this->assertFalse(ListingResource::canDelete($listing));
-        $this->assertFalse(ListingResource::canDeleteAny());
-        $this->assertFalse(ListingResource::canForceDelete($listing));
+        // Окончательное удаление — только суперадмину
+        $this->assertFalse($moderator->isSuperadmin());
     }
 
     /** Модерация остаётся доступной: разделы он по-прежнему видит и правит. */
@@ -57,22 +53,19 @@ class AdminDeletionRightsTest extends TestCase
     {
         $this->actingAs($this->admin(User::ADMIN_MODERATOR));
 
-        $this->assertTrue(CompanyResource::canViewAny());
-        $this->assertTrue(ListingResource::canViewAny());
-        $this->assertTrue(ListingResource::canEdit(Listing::factory()->create()));
+        $this->assertTrue(AdminAccess::allows('companies.view'));
+        $this->assertTrue(AdminAccess::allows('listings.view'));
+        $this->assertTrue(AdminAccess::allows('listings.edit'));
     }
 
     #[Test]
     public function суперадмин_удалять_может(): void
     {
-        $this->actingAs($this->admin(User::ADMIN_SUPERADMIN));
+        $superadmin = $this->admin(User::ADMIN_SUPERADMIN);
+        $this->actingAs($superadmin);
 
-        $company = Company::factory()->create();
-        $listing = Listing::factory()->create();
-
-        $this->assertTrue(CompanyResource::canDelete($company));
-        $this->assertTrue(CompanyResource::canForceDelete($company));
-        $this->assertTrue(ListingResource::canDelete($listing));
-        $this->assertTrue(ListingResource::canForceDelete($listing));
+        $this->assertTrue(AdminAccess::allows('companies.delete'));
+        $this->assertTrue(AdminAccess::allows('listings.delete'));
+        $this->assertTrue($superadmin->isSuperadmin());
     }
 }

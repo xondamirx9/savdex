@@ -4,17 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Users\Pages\EditUser;
-use App\Filament\Resources\Users\Pages\ListUsers;
-use App\Models\AdminAction;
 use App\Models\Favorite;
 use App\Models\Listing;
 use App\Models\User;
 use App\Support\AdminAccess;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\LegalRegistration;
 use Tests\TestCase;
@@ -121,101 +116,32 @@ class DisabledAccountsTest extends TestCase
         $this->assertTrue($old->fresh()->trashed());
     }
 
-    // ── Filament ────────────────────────────────────────────────────
-
+    /**
+     * Навсегда удалённый аккаунт уносит личное, а объявление компании
+     * остаётся — без ссылки на человека (внешние ключи базы).
+     */
     #[Test]
-    public function отключённый_находится_по_почте_и_удаляется_навсегда(): void
+    public function навсегда_удалённый_уносит_личное_а_объявление_остаётся(): void
     {
-        $superadmin = $this->admin(AdminAccess::SUPERADMIN);
         $gone = User::factory()->create(['email' => 'inoyatov@company.uz']);
         $listing = Listing::factory()->create(['user_id' => $gone->id]);
         Favorite::query()->create(['user_id' => $gone->id, 'listing_id' => $listing->id]);
-        $gone->delete();
 
-        Livewire::actingAs($superadmin)
-            ->test(ListUsers::class)
-            ->filterTable('trashed', false)
-            ->searchTable('inoyatov')
-            ->assertCanSeeTableRecords([$gone])
-            ->callAction(TestAction::make('forceDelete')->table($gone));
+        $gone->delete();
+        $gone->forceDelete();
 
         $this->assertNull(User::withTrashed()->find($gone->id));
         $this->assertSame(0, Favorite::query()->where('user_id', $gone->id)->count(), 'личное — вместе с аккаунтом');
         $this->assertNull($listing->fresh()->user_id, 'объявление компании остаётся');
-        $this->assertTrue(
-            AdminAction::query()->where('section', 'users')->where('action', 'force_deleted')->exists(),
-            'в журнале — удаление навсегда, а не просто удаление',
-        );
     }
 
-    #[Test]
-    public function действующий_в_пачке_навсегда_не_удаляется(): void
-    {
-        $superadmin = $this->admin(AdminAccess::SUPERADMIN);
-        $live = User::factory()->create();
-        $gone = User::factory()->create();
-        $gone->delete();
+    // ── Админка ─────────────────────────────────────────────────────
 
-        Livewire::actingAs($superadmin)
-            ->test(ListUsers::class)
-            ->filterTable('trashed', true)
-            ->selectTableRecords([$live->id, $gone->id])
-            ->callAction(TestAction::make('forceDelete')->table()->bulk());
-
-        $this->assertNotNull(User::query()->find($live->id), 'действующий остался');
-        $this->assertNull(User::withTrashed()->find($gone->id));
-    }
-
-    #[Test]
-    public function восстановление_из_списка(): void
-    {
-        $superadmin = $this->admin(AdminAccess::SUPERADMIN);
-        $gone = User::factory()->create();
-        $gone->delete();
-
-        Livewire::actingAs($superadmin)
-            ->test(ListUsers::class)
-            ->filterTable('trashed', false)
-            ->callAction(TestAction::make('restore')->table($gone));
-
-        $this->assertFalse($gone->fresh()->trashed());
-    }
-
-    #[Test]
-    public function отключение_из_списка(): void
-    {
-        $superadmin = $this->admin(AdminAccess::SUPERADMIN);
-        $user = User::factory()->create();
-
-        Livewire::actingAs($superadmin)
-            ->test(ListUsers::class)
-            ->callAction(TestAction::make('delete')->table($user));
-
-        $this->assertTrue($user->fresh()->trashed());
-    }
-
-    /**
-     * Filament проверяет стандартные действия по политикам, а политики
-     * у пользователей нет: «Удалить навсегда» видел любой, кому открыта
-     * правка пользователей.
+    /*
+     * Поиск отключённых, «Восстановить», «Удалить навсегда» (только
+     * суперадмин, не себя) — раздел «Пользователи» на Python:
+     * python/tests/test_users_admin.py.
      */
-    #[Test]
-    public function администратор_не_суперадмин_навсегда_не_удаляет(): void
-    {
-        $admin = $this->admin(AdminAccess::ADMIN);
-        $gone = User::factory()->create();
-        $gone->delete();
-
-        Livewire::actingAs($admin)
-            ->test(EditUser::class, ['record' => $gone->getRouteKey()])
-            ->assertActionHidden('forceDelete')
-            ->assertActionHidden('restore');
-
-        Livewire::actingAs($admin)
-            ->test(ListUsers::class)
-            ->filterTable('trashed', false)
-            ->assertActionHidden(TestAction::make('forceDelete')->table($gone));
-    }
 
     /** Пункт меню ведёт в тот же раздел на Python — тем, кто видит пользователей. */
     #[Test]
@@ -230,15 +156,5 @@ class DisabledAccountsTest extends TestCase
         $this->actingAs($this->admin(AdminAccess::FINANCE))
             ->get('/admin')
             ->assertDontSee($link, false);
-    }
-
-    #[Test]
-    public function себя_не_отключить_и_не_удалить(): void
-    {
-        $superadmin = $this->admin(AdminAccess::SUPERADMIN);
-
-        Livewire::actingAs($superadmin)
-            ->test(EditUser::class, ['record' => $superadmin->getRouteKey()])
-            ->assertActionHidden('delete');
     }
 }

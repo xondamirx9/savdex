@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\Company;
 use App\Support\AdminAccess;
 use Filament\Tables\Columns\TextColumn;
@@ -76,7 +75,7 @@ class IntakeQueue extends TableWidget
                     ->label('Компания')
                     ->wrap()
                     ->limit(50)
-                    ->description(fn (Company $record): ?string => $record->city?->name ?? $record->country?->name),
+                    ->description(fn (Company $record): ?string => $record->city?->name() ?? $record->country?->name()),
 
                 TextColumn::make('primary_role')
                     ->label('Направление')
@@ -110,7 +109,8 @@ class IntakeQueue extends TableWidget
                     ->label('Появилась')
                     ->state(fn (Company $record): string => $record->created_at->diffForHumans(syntax: true)),
             ])
-            ->recordUrl(fn (Company $record): string => CompanyResource::getUrl('edit', ['record' => $record]))
+            // Карточка компании — в разделе «Компании» на Django (этап 6)
+            ->recordUrl(fn (Company $record): string => '/admin/python?next='.rawurlencode("/py/admin/data/companyrecord/{$record->id}/change/"))
             ->emptyStateHeading(match ($role) {
                 'supplier' => 'Новых поставщиков нет',
                 'buyer' => 'Новых покупателей нет',

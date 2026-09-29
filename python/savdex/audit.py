@@ -37,6 +37,21 @@ SECRET = frozenset(
 #: AdminLog::NOISE — меняются при каждом сохранении и ничего не сообщают
 NOISE = frozenset({"updated_at", "created_at", "search_text"})
 
+
+def update_action(before: Mapping[str, Any], changed: Mapping[str, Any]) -> str:
+    """
+    AuditObserver::name: блокировка называется блокировкой, а не
+    «изменением» — её ищут отбором по действию («кто заблокировал»).
+    """
+    if "status" not in changed:
+        return "updated"
+
+    if changed["status"] == "blocked":
+        return "blocked"
+
+    return "unblocked" if before.get("status") == "blocked" else "updated"
+
+
 #: Поля, из которых берётся понятное название записи (AdminLog::label)
 _LABEL_FIELDS = ("name", "title", "email", "code", "slug")
 

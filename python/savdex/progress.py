@@ -172,6 +172,13 @@ STAGES: tuple[Stage, ...] = (
             "exports",
             "failed_import_rows",
         ),
+        kept={
+            "admin_actions": "журнал пишут обе админки, пока Laravel не выключен",
+            "activity_events": "ленту компании пишет и кабинет Laravel — общая до его выключения",
+            "imports": "служебная таблица Filament: Django загружает файлы без неё",
+            "exports": "служебная таблица Filament: Django выгружает сразу файлом",
+            "failed_import_rows": "служебная таблица Filament: отчёт Django — на странице загрузки",
+        },
     ),
     Stage(
         7,

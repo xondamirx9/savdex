@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Listings\Pages\ListListings;
 use App\Models\Category;
 use App\Models\City;
 use App\Models\Company;
@@ -13,12 +12,9 @@ use App\Models\Listing;
 use App\Models\User;
 use App\Services\ListingWorkbookImport;
 use App\Support\ListingWorkbookTemplate;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Livewire\Livewire;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer;
 use PHPUnit\Framework\Attributes\Test;
@@ -209,66 +205,6 @@ class ListingWorkbookImportTest extends TestCase
         // Опубликованное повторная загрузка не снимает с витрины
         $this->assertSame(Listing::STATUS_ACTIVE, $listing->fresh()->status);
         $this->assertSame(Listing::SOURCE_IMPORT, $listing->fresh()->source);
-    }
-
-    #[Test]
-    public function кнопка_в_админке_принимает_книгу_и_раскладывает_фотографии(): void
-    {
-        $admin = User::factory()->create([
-            'is_admin' => true,
-            'admin_role' => User::ADMIN_SUPERADMIN,
-            'status' => 'active',
-        ]);
-
-        $company = Company::factory()->create(['name' => 'ООО «Стройбаза»']);
-        $listing = Listing::factory()->for($company)->create(['title' => 'Кирпич керамический М150']);
-
-        $workbook = $this->workbook(
-            rows: [2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']],
-            pictures: [2 => 1],
-        );
-
-        Livewire::actingAs($admin)
-            ->test(ListListings::class)
-            ->callAction(TestAction::make('importWorkbook')->table(), [
-                'workbooks' => [
-                    UploadedFile::fake()->createWithContent('catalog.xlsx', (string) file_get_contents($workbook)),
-                ],
-            ])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame(1, $listing->images()->count());
-    }
-
-    #[Test]
-    public function за_раз_принимается_несколько_книг(): void
-    {
-        $admin = User::factory()->create([
-            'is_admin' => true,
-            'admin_role' => User::ADMIN_SUPERADMIN,
-            'status' => 'active',
-        ]);
-
-        $company = Company::factory()->create(['name' => 'ООО «Стройбаза»']);
-        $brick = Listing::factory()->for($company)->create(['title' => 'Кирпич керамический М150']);
-        $yarn = Listing::factory()->for($company)->create(['title' => 'Пряжа хлопковая 30/1']);
-
-        // Каталог разрезан по разделам: в каждой книге свой товар
-        $first = $this->workbook([2 => ['', 'Кирпич керамический М150', 'ООО «Стройбаза»', '', '', '', '', '']], [2 => 1]);
-        $second = $this->workbook([2 => ['', 'Пряжа хлопковая 30/1', 'ООО «Стройбаза»', '', '', '', '', '']], [2 => 1]);
-
-        Livewire::actingAs($admin)
-            ->test(ListListings::class)
-            ->callAction(TestAction::make('importWorkbook')->table(), [
-                'workbooks' => [
-                    UploadedFile::fake()->createWithContent('stroy.xlsx', (string) file_get_contents($first)),
-                    UploadedFile::fake()->createWithContent('tekstil.xlsx', (string) file_get_contents($second)),
-                ],
-            ])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame(1, $brick->images()->count());
-        $this->assertSame(1, $yarn->images()->count());
     }
 
     #[Test]

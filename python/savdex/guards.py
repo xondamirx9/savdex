@@ -157,6 +157,10 @@ SHARED_WRITES: dict[str, str] = {
         "email_verified_at; удаление учётки (шаг 47) — мягкое, deleted_at и "
         "updated_at после выхода, как SoftDeletes; привязка Telegram вебхуком "
         "бота (шаг 49) — telegram_chat_id, telegram_username, telegram_linked_at"
+        "; раздел «Пользователи» админки (этап 6, savdex/accounts/editing.py) — "
+        "новый (bcrypt $2y$) и правка полей формы, роль и личные права только с "
+        "roles.edit, «Подтвердить почту», «Выдать пароль», блокировка; «Роли и "
+        "права» — роль, is_admin и admin_permissions, как RoleResource"
     ),
     "login_attempts": (
         "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
@@ -166,6 +170,11 @@ SHARED_WRITES: dict[str, str] = {
         "направления компании со второго шага регистрации (этап 5, шаг 47): "
         "categories()->sync у только что созданной компании — одна вставка, "
         "без меток времени (связь без withTimestamps)"
+    ),
+    "broadcasts": (
+        "рассылки в админке (этап 6): черновик — вставка и правка формой, "
+        "отправка — автор, число получателей и время, как Notifier::broadcast; "
+        "удаление с правом удалять; у администратора — строка журнала"
     ),
     "platform_reviews": (
         "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
@@ -257,6 +266,10 @@ SHARED_WRITES: dict[str, str] = {
         "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
         "; удаление учётки владельцем (этап 5, шаг 47) — активные объявления "
         "компании в архив одним update, без событий, как activeListings()->update"
+        "; раздел «Объявления» админки (этап 6, savdex/data) — правка формой, "
+        "решения модератора, корзина, как ListingResource и ModerationService; "
+        "загрузка книгами Excel (savdex/data/workbook.py) — новые и найденные по "
+        "номеру, как ListingWorkbookImport"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -281,6 +294,8 @@ SHARED_WRITES: dict[str, str] = {
         "Laravel; событий у модели нет"
         "; уведомления компании (этап 5, шаг 23) — insert, как Notifier::company"
         "; решения по отзывам (этап 6) — Notifier::company и Notifier::user"
+        "; рассылка (этап 6) — пачками по 500 с is_broadcast и sent_by, как "
+        "Notifier::broadcast"
     ),
     "activity_events": (
         "лента кабинета (этап 5, форма): insert события, как Notifier::company "
@@ -353,6 +368,11 @@ SHARED_WRITES: dict[str, str] = {
         "при смене заполненного, как CompanyInfoController::update"
         "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
         " (и после решений по отзывам в админке, этап 6)"
+        "; раздел «Компании» админки (этап 6, savdex/data) — правка формой, "
+        "верификация, партнёрство, логотип и обложка, блокировка, корзина; "
+        "загрузка таблицей (savdex/data/company_import.py) — новые компании и "
+        "изменившиеся поля найденных, как CompanyImporter; эмблема — logo_path, "
+        "как CompanyEmblem::assign"
     ),
     "company_site_products": (
         "товары мини-сайта (этап 5, форма): добавить, изменить, удалить, как "
@@ -366,6 +386,8 @@ SHARED_WRITES: dict[str, str] = {
     "listing_images": (
         "фото своего объявления (этап 5, форма): загрузить, удалить, сделать "
         "обложкой и пронумеровать заново, как ListingImageController"
+        "; фото в админке (этап 6) и из книги Excel — добавить, заменить, "
+        "удалить, как ImagesRelationManager и WorkbookImages"
     ),
     "company_sites": (
         "мини-сайт своей компании (этап 5, форма): адрес и оформление "

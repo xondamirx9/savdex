@@ -1,0 +1,26 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Рассылка (savdex/system/admin.py, BroadcastAdmin): охват сейчас и
+  «Отправить» со вторым подтверждением — отозвать уведомления нельзя.
+{% endcomment %}
+{% block content %}
+  {{ block.super }}
+  {% if original %}
+    <div class="module aligned" id="broadcast-send">
+      <h2>Отправка</h2>
+      {% if original.sent_at %}
+        <div class="form-row"><p>Отправлена {{ original.sent_at|date:"d.m.Y H:i" }}, получили: {{ original.recipients_count }}.</p></div>
+      {% else %}
+        <div class="form-row"><p>Получат сейчас: <b>{{ recipients }}</b>. Число пересчитывается по сохранённому сегменту.</p></div>
+        {% if can_send %}
+          <form method="post" action="{% url 'savdex_admin:system_broadcast_send' original.pk %}">
+            {% csrf_token %}
+            <div class="submit-row">
+              <button type="submit" class="button default" onclick="return confirm('Отправить рассылку? Получат {{ recipients }} человек. Отменить отправку и отозвать уведомления будет нельзя.')">Отправить</button>
+            </div>
+          </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

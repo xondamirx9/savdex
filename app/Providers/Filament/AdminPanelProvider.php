@@ -24,6 +24,7 @@ use App\Models\Banner;
 use App\Models\CompanyDocument;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Task;
+use App\Models\Listing;
 use App\Models\PlatformReview;
 use App\Models\Review;
 use App\Models\Support\Ticket;
@@ -190,6 +191,24 @@ class AdminPanelProvider extends PanelProvider
                     ->badge(fn (): ?string => ($waiting = PlatformReview::query()
                         ->where('status', PlatformReview::STATUS_MODERATION)->count()) > 0 ? (string) $waiting : null, color: 'warning')
                     ->visible(fn (): bool => AdminAccess::allows('reviews.view')),
+                // «Компании» и «Объявления» на Django (этап 6): разделы
+                // Filament убраны, порядок в группе — прежний (Компании 1,
+                // Объявления 2, IT-задачи 3)
+                NavigationItem::make('Компании')
+                    ->url('/admin/python?next=/py/admin/data/companyrecord/')
+                    ->icon('heroicon-o-building-office')
+                    ->group('Данные')
+                    ->sort(1)
+                    ->visible(fn (): bool => AdminAccess::allows('companies.view')),
+                NavigationItem::make('Объявления')
+                    ->url('/admin/python?next=/py/admin/data/listing/')
+                    ->icon('heroicon-o-rectangle-stack')
+                    ->group('Данные')
+                    ->sort(2)
+                    // Счётчик — очередь модерации: сюда заходят именно за ней
+                    ->badge(fn (): ?string => ($waiting = Listing::query()
+                        ->where('status', Listing::STATUS_MODERATION)->count()) > 0 ? (string) $waiting : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('listings.view')),
                 NavigationItem::make('IT-задачи')
                     ->url('/admin/python?next=/py/admin/data/ittask/')
                     ->icon('heroicon-o-code-bracket')
@@ -252,16 +271,30 @@ class AdminPanelProvider extends PanelProvider
                     // Значок считает висящие сейчас, а не все заведённые
                     ->badge(fn (): ?string => ($live = Banner::query()->live()->count()) > 0 ? (string) $live : null)
                     ->visible(fn (): bool => AdminAccess::allows('content.view')),
-                // Тот же поиск и те же действия, что у фильтра «Отключённые»
-                // в «Пользователях», — раздел на Python (savdex/accounts)
+                // «Пользователи» на Django (этап 6): раздел Filament убран,
+                // порядок в группе — прежний (Пользователи 1, …, Роли и права 5)
+                NavigationItem::make('Пользователи')
+                    ->url('/admin/python?next=/py/admin/accounts/user/')
+                    ->icon('heroicon-o-users')
+                    ->group('Система')
+                    ->sort(1)
+                    ->visible(fn (): bool => AdminAccess::allows('users.view')),
+                // Те же «Пользователи» на Python (savdex/accounts) с фильтром
+                // «Отключённые»: тот же поиск и те же действия
                 NavigationItem::make('Отключённые аккаунты')
                     ->url('/admin/python?next=/py/admin/accounts/user/%3Fstate%3Ddisabled')
                     ->icon('heroicon-o-user-minus')
                     ->group('Система')
-                    // После «Пользователей» (1): при равном порядке пункт
-                    // меню идёт раньше раздела «Рассылки» (2)
+                    // После «Пользователей» (1) и раньше «Рассылок» (тоже 2):
+                    // пункты меню с равным порядком идут, как в этом списке
                     ->sort(2)
                     ->visible(fn (): bool => AdminAccess::allows('users.view')),
+                NavigationItem::make('Рассылки')
+                    ->url('/admin/python?next=/py/admin/system/broadcast/')
+                    ->icon('heroicon-o-megaphone')
+                    ->group('Система')
+                    ->sort(2)
+                    ->visible(fn (): bool => AdminAccess::allows('broadcasts.view')),
                 NavigationItem::make('Настройки')
                     ->url('/admin/python?next=/py/admin/site/setting/')
                     ->icon('heroicon-o-adjustments-horizontal')
@@ -274,6 +307,14 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Система')
                     ->sort(4)
                     ->visible(fn (): bool => AdminAccess::allows('audit.view')),
+                // Экран «Роли и права» на Django (этап 6): сотрудники панели,
+                // выдача и отзыв доступа — после «Журнала действий» (4)
+                NavigationItem::make('Роли и права')
+                    ->url('/admin/python?next=/py/admin/accounts/staffmember/')
+                    ->icon('heroicon-o-key')
+                    ->group('Система')
+                    ->sort(5)
+                    ->visible(fn (): bool => AdminAccess::allows('roles.view')),
                 NavigationItem::make('Тарифы')
                     ->url('/admin/python?next=/py/admin/billing/plan/')
                     ->icon('heroicon-o-currency-dollar')
