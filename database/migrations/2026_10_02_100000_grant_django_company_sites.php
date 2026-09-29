@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Мини-сайт своей компании на Django (этап 5, шаг 35): адрес и оформление
- * черновика, публикация и снятие, фон первого экрана. Роли нет — делать нечего.
+ * черновика, публикация и снятие, фон первого экрана; товары (шаг 36).
+ * Роли нет — делать нечего.
  */
 return new class extends Migration
 {
@@ -15,6 +16,10 @@ return new class extends Migration
         'INSERT ON company_sites',
         'USAGE ON SEQUENCE company_sites_id_seq',
         'UPDATE (subdomain, status, theme, published_theme, published_at, updated_at) ON company_sites',
+        'INSERT ON company_site_products',
+        'USAGE ON SEQUENCE company_site_products_id_seq',
+        'UPDATE (title, description, price, currency, unit, image_path, thumb_path, updated_at) ON company_site_products',
+        'DELETE ON company_site_products',
     ];
 
     public function up(): void

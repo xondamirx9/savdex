@@ -37,6 +37,7 @@ from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
 from savdex.web.shared import Context
 from savdex.web.validation import Check, validate, validated
+from savdex.web.views import not_found
 
 #: SiteHost::PATTERN
 SUBDOMAIN = r"/^[a-z0-9](?:[a-z0-9-]{1,38})[a-z0-9]$/"
@@ -302,3 +303,189 @@ def page(request: HttpRequest) -> HttpResponse:
 def hero(request: HttpRequest) -> HttpResponse:
     """/cabinet/site/hero: POST — загрузить фон, DELETE — убрать."""
     return remove_hero(request) if request.method == "DELETE" else upload_hero(request)
+
+
+# ── Товары мини-сайта (этап 5, шаг 36) ─────────────────────────────
+
+#: CompanySiteProduct::LIMIT
+PRODUCTS_LIMIT = 60
+
+#: Currencies::codes()
+CURRENCIES = ("UZS", "USD", "EUR", "CNY", "TRY", "RUB", "KZT")
+
+#: Приведения CompanySiteProduct для сравнения
+PRODUCT_CASTS = {"price": "decimal:2", "sort": "int"}
+
+
+def _product_company(ctx: Context) -> dict[str, Any] | None:
+    """SiteProductController::company: только с тарифом и не заблокированная."""
+    company = company_of(ctx)
+
+    return company if _available(company) else None
+
+
+def _product_fields(
+    ctx: Context, request: HttpRequest
+) -> tuple[dict[str, Any], dict[str, list[str]], Any]:
+    """SiteProductController::fields: проверенные поля без файла, ошибки и файл."""
+    data = {**input_of(request), **request.FILES.dict()}
+    rules: dict[str, list[str | Check]] = {
+        "title": ["required", "string", "min:2", "max:190"],
+        "description": ["nullable", "string", "max:2000"],
+        "price": ["nullable", "numeric", "min:0", "max:99999999999999"],
+        "currency": ["required", "in:" + ",".join(CURRENCIES)],
+        "unit": ["nullable", "string", "max:30"],
+        "image": ["nullable", "file", "mimes:jpg,jpeg,png,webp", "max:8192"],
+    }
+    errors = validate(
+        data,
+        rules,
+        ctx.locale,
+        {
+            "title.required": ctx.t("messages.site.product_title_required"),
+            "image.mimes": ctx.t("messages.image.mimes"),
+            "image.max": ctx.t("messages.image.max"),
+        },
+    )
+    fields = validated(data, rules)
+    image = fields.pop("image", None)
+
+    return fields, errors, image if image is not None and hasattr(image, "read") else None
+
+
+def _attach(company_id: int, product: dict[str, Any], image: Any) -> dict[str, Any] | None:  # noqa: ANN401
+    """SiteProductController::attachImage: новые пути или None — файл не картинка."""
+    if image is None:
+        return {}
+
+    try:
+        paths = image_store.store_with_thumb(image.read(), f"sites/{company_id}/products")
+    except image_store.UnreadableImageError:
+        return None
+
+    image_store.delete(product.get("image_path"), product.get("thumb_path"))
+
+    return {"image_path": paths["path"], "thumb_path": paths["thumb_path"]}
+
+
+@form()
+def product_store(request: HttpRequest) -> HttpResponse:
+    """SiteProductController::store (throttle:60,60)."""
+    ctx = action(request, throttle=60, throttle_minutes=60)
+    company = _product_company(ctx)
+
+    if company is None:
+        return _plan_required(ctx)
+
+    count = _rows(
+        "select count(*) as n from company_site_products where company_id = %s", [company["id"]]
+    )[0]["n"]
+
+    if count >= PRODUCTS_LIMIT:
+        flash(ctx, "error", ctx.t("messages.site.products_limit", limit=PRODUCTS_LIMIT))
+
+        return back(ctx)
+
+    fields, errors, image = _product_fields(ctx, request)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    paths = _attach(company["id"], {}, image)
+
+    if paths is None:
+        flash(ctx, "error", ctx.t("messages.image.unreadable"))
+
+        return back(ctx)
+
+    row = {**fields, "company_id": company["id"], **paths}
+    now = _stamp(eloquent.now())
+    columns = list(row)
+
+    with allowed_writes("company_site_products"), connection.cursor() as cursor:
+        cursor.execute(
+            f"insert into company_site_products ({', '.join(columns)}, updated_at, created_at) "
+            f"values ({', '.join(['%s'] * len(columns))}, %s, %s)",
+            [*row.values(), now, now],
+        )
+
+    flash(ctx, "success", ctx.t("messages.site.product_saved"))
+
+    return back(ctx)
+
+
+@form()
+def product_update(request: HttpRequest, product_id: str) -> HttpResponse:
+    """SiteProductController::update (throttle:60,60): правка — POST, фото в той же форме."""
+    ctx = action(request, throttle=60, throttle_minutes=60)
+    company = _product_company(ctx)
+
+    if company is None:
+        return _plan_required(ctx)
+
+    found = _rows(
+        "select * from company_site_products where company_id = %s and id = %s",
+        [company["id"], int(product_id)],
+    )
+
+    if not found:
+        return not_found(ctx)
+
+    product = found[0]
+    fields, errors, image = _product_fields(ctx, request)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    paths = _attach(company["id"], product, image)
+
+    if paths is None:
+        flash(ctx, "error", ctx.t("messages.image.unreadable"))
+
+        return back(ctx)
+
+    eloquent.save(
+        ctx,
+        "company_site_products",
+        product,
+        {**fields, **paths},
+        section=None,
+        model="CompanySiteProduct",
+        casts=PRODUCT_CASTS,
+    )
+    flash(ctx, "success", ctx.t("messages.site.product_saved"))
+
+    return back(ctx)
+
+
+@form("DELETE")
+def product_destroy(request: HttpRequest, product_id: str) -> HttpResponse:
+    """SiteProductController::destroy: и без тарифа — это уборка."""
+    ctx = action(request)
+    company = company_of(ctx)
+
+    if company is not None:
+        found = _rows(
+            "select * from company_site_products where company_id = %s and id = %s",
+            [company["id"], int(product_id)],
+        )
+
+        if not found:
+            return not_found(ctx)
+
+        image_store.delete(found[0]["image_path"], found[0]["thumb_path"])
+
+        with allowed_writes("company_site_products"), connection.cursor() as cursor:
+            cursor.execute("delete from company_site_products where id = %s", [found[0]["id"]])
+
+    flash(ctx, "success", ctx.t("messages.site.product_deleted"))
+
+    return back(ctx)
+
+
+def product(request: HttpRequest, product_id: str) -> HttpResponse:
+    """/cabinet/site/products/<id>: POST — правка, DELETE — удалить."""
+    if request.method == "DELETE":
+        return product_destroy(request, product_id)
+
+    return product_update(request, product_id)

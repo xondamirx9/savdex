@@ -289,6 +289,17 @@ urlpatterns = [
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/hero$", site_actions.hero, name="cabinet.site.hero"
     ),
+    # Товары мини-сайта (этап 5, шаг 36): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/products$",
+        site_actions.product_store,
+        name="cabinet.site.products.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/products/(?P<product_id>[0-9]{1,18})$",
+        site_actions.product,
+        name="cabinet.site.products.update",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]+)/edit$",
         cabinet.listing_wizard,

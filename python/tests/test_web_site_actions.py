@@ -231,3 +231,120 @@ def test_убрать_фон(сайт, опубликован):
 
     # Опубликованный фон остаётся на сайте — файл не трогаем
     assert итог["база"]["old_hero"] is True
+
+
+# ── Товары ──────────────────────────────────────────────────────────
+
+
+def товары(число: int = 1, *, тариф: bool = True, фото: bool = True) -> Callable[[], None]:
+    """Подготовка: товары компании (первый — с фото на диске)."""
+
+    def run() -> None:
+        сброс(тариф=тариф)()
+        sql("delete from company_site_products")
+        sql("select setval('company_site_products_id_seq', 1, false)")
+
+        for i in range(число):
+            sql(
+                "insert into company_site_products (company_id, title, price, currency, "
+                "image_path, thumb_path, created_at, updated_at) values ((select id from "
+                "companies where slug = 'mine'), %s, 100, 'UZS', %s, %s, "
+                "now() - interval '1 day', now() - interval '1 day')",
+                [
+                    f"Цемент {i}",
+                    ФОН if фото and i == 0 else None,
+                    "sites/1/products/thumb/old.webp" if фото and i == 0 else None,
+                ],
+            )
+
+    return run
+
+
+def снимок_товаров() -> Any:
+    rows = sql(
+        "select id, title, description, price::text, currency, unit, image_path, thumb_path, "
+        "sort, updated_at > now() - interval '1 hour' from company_site_products order by id"
+    )
+
+    return {
+        "products": [
+            tuple(
+                re.sub(r"products/(thumb/)?[A-Za-z0-9]{40}\.webp$", r"products/\1<random>", str(v))
+                for v in r
+            )
+            for r in rows
+        ],
+        "old_image": (ДИСК / ФОН).exists(),
+    }
+
+
+ТОВАР = {"title": "Цемент М400", "price": "52000.5", "currency": "UZS", "unit": "мешок"}
+
+
+@pytest.mark.parametrize(
+    "поля",
+    [
+        ТОВАР,
+        {**ТОВАР, "image": ("photo.jpg", картинка(2400, 1800, "JPEG"))},
+        {**ТОВАР, "image": ("fake.png", b"nope")},
+        {**ТОВАР, "price": "abc", "currency": "BTC"},
+        {**ТОВАР, "title": ""},
+        {**ТОВАР, "price": "-1"},
+        {"title": "Ц"},
+    ],
+)
+@pytest.mark.parametrize("было", [1, 60, "без тарифа"])
+def test_добавить_товар(сайт, поля, было):
+    подготовка = товары(1, тариф=False) if было == "без тарифа" else товары(int(было))
+    тело, тип = multipart(dict(поля))
+    отправить(
+        сайт,
+        "/cabinet/site/products",
+        подготовка,
+        снимок_товаров,
+        uid=владелец(),
+        body=тело,
+        content_type=тип,
+        headers=inertia(),
+    )
+
+
+@pytest.mark.parametrize(
+    "поля",
+    [
+        {"title": "Цемент 0", "price": "100", "currency": "UZS"},
+        {"title": "Цемент 0", "price": "100.00", "currency": "UZS"},
+        {**ТОВАР, "description": "Мешки по 50 кг"},
+        {**ТОВАР, "image": ("photo.png", картинка(300, 200))},
+        {**ТОВАР, "title": ""},
+    ],
+)
+@pytest.mark.parametrize("номер", [1, 999])
+def test_изменить_товар(сайт, поля, номер):
+    тело, тип = multipart(dict(поля))
+    отправить(
+        сайт,
+        f"/cabinet/site/products/{номер}",
+        товары(1),
+        снимок_товаров,
+        uid=владелец(),
+        body=тело,
+        content_type=тип,
+        headers=inertia(),
+    )
+
+
+@pytest.mark.parametrize(("номер", "тариф"), [(1, True), (1, False), (999, True)])
+def test_удалить_товар(сайт, номер, тариф):
+    итог = отправить(
+        сайт,
+        f"/cabinet/site/products/{номер}",
+        товары(1, тариф=тариф),
+        снимок_товаров,
+        uid=владелец(),
+        method="DELETE",
+        headers=inertia(),
+    )
+
+    if номер == 1:
+        assert not итог["база"]["products"] and not итог["база"]["old_image"]

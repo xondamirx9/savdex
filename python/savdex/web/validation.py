@@ -92,6 +92,13 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
 
         return not (isinstance(value, dict | list) and len(value) == 0)
 
+    if rule == "numeric":
+        # is_numeric: число или числовая строка
+        if isinstance(value, bool):
+            return False
+
+        return isinstance(value, int | float) or (isinstance(value, str) and _is_numeric(value))
+
     if rule == "lowercase":
         # Str::lower($value) === $value
         return isinstance(value, str) and value.lower() == value
