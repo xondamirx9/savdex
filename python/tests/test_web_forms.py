@@ -83,8 +83,11 @@ def отправить(
     headers: dict[str, str] | None = None,
     method: str = "POST",
     env: dict[str, str] | None = None,
+    drop: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """
+    drop — ключи ответа, которые не сверяются (время в JSON-ответе).
+
     POST на обе стороны с одинаковой подготовкой; ответ, сессия и снимок
     базы после каждой — одинаковые. Итог — ответ Django, строка сессии
     и снимок.
@@ -126,6 +129,10 @@ def отправить(
 
     if д["status"] not in (301, 302, 303):
         стр_д, стр_л = страница(д["body"]), страница(л["body"])
+
+        for key in drop:
+            стр_д.pop(key, None)
+            стр_л.pop(key, None)
         строки = разница(стр_д, стр_л)
         assert not строки, "\n".join(строки[:30])
 

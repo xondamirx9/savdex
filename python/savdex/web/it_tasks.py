@@ -214,11 +214,6 @@ def index(request: HttpRequest) -> HttpResponse:
         where.append("t.search_text like %s")
         params.append(f"%{search_text.normalize(term)}%")
 
-    if kind != "":
-        types = types_under(kind)
-        where.append("t.service_type in (" + ", ".join(["%s"] * len(types)) + ")")
-        params += types
-
     if city != 0:
         where.append("c.city_id = %s")
         params.append(city)
@@ -229,8 +224,25 @@ def index(request: HttpRequest) -> HttpResponse:
     if with_budget:
         where.append("t.budget_type != 'negotiable'")
 
-    condition = " and ".join(where)
     source = "from it_tasks t join companies c on c.id = t.company_id"
+
+    # Отбор без направления — основа и для ленты, и для счётчиков панели:
+    # число у пункта — сколько найдётся при переключении на него
+    counts = {
+        r["service_type"]: int(r["total"])
+        for r in _rows(
+            f"select t.service_type, count(*) as total {source} where {' and '.join(where)} "
+            "group by t.service_type",
+            params,
+        )
+    }
+
+    if kind != "":
+        types = types_under(kind)
+        where.append("t.service_type in (" + ", ".join(["%s"] * len(types)) + ")")
+        params += types
+
+    condition = " and ".join(where)
     total = _rows(f"select count(*) as n {source} where {condition}", params)[0]["n"]
     current, offset = paginator.offset(ctx, PER_PAGE)
     order = "t.completed_at desc" if done else "t.published_at desc"
@@ -265,7 +277,9 @@ def index(request: HttpRequest) -> HttpResponse:
                 "verified": verified,
                 "with_budget": with_budget,
             },
-            "types": section_tree(ctx),
+            "types": section_tree(ctx, counts),
+            # Число у пункта «Все задачи»
+            "total_all": sum(counts.values()),
             "cities": _cities(ctx.locale),
             "total": total,
             "viewer": _viewer(ctx),
