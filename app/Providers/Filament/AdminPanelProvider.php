@@ -123,6 +123,14 @@ class AdminPanelProvider extends PanelProvider
             // ведёт через пропуск (/admin/python) в раздел на Python.
             // Видимость — по тем же правам AdminAccess, что и у раздела
             ->navigationItems([
+                // CRM на Django (этап 6): раздел Filament убран, порядок в
+                // группе — прежний (Лиды 1, Сделки 2, Контакты 3, …)
+                NavigationItem::make('Контакты')
+                    ->url('/admin/python?next=/py/admin/crm/contact/')
+                    ->icon('heroicon-o-users')
+                    ->group('CRM')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('contacts.view')),
                 NavigationItem::make('Главная страница')
                     ->url('/admin/python?next=/py/admin/site/landingblock/')
                     ->icon('heroicon-o-home')

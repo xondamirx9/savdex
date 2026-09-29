@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Crm;
 
 use App\Filament\Resources\Communications\CommunicationResource;
-use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Resources\Tasks\TaskResource;
@@ -47,7 +46,7 @@ class CrmAccessTest extends TestCase
 
         $this->assertFalse(LeadResource::canViewAny());
         $this->assertFalse(DealResource::canViewAny());
-        $this->assertFalse(ContactResource::canViewAny());
+        $this->assertFalse(AdminAccess::allows('contacts.view'));
         $this->assertFalse(CommunicationResource::canViewAny());
     }
 
@@ -67,7 +66,7 @@ class CrmAccessTest extends TestCase
 
         $this->assertTrue(LeadResource::canViewAny());
         $this->assertTrue(DealResource::canViewAny());
-        $this->assertTrue(ContactResource::canViewAny());
+        $this->assertTrue(AdminAccess::allows('contacts.view'));
         $this->assertTrue(TaskResource::canViewAny());
         $this->assertTrue(CommunicationResource::canViewAny());
     }
@@ -80,7 +79,7 @@ class CrmAccessTest extends TestCase
 
         $this->assertTrue(TaskResource::canViewAny());
         $this->assertTrue(CommunicationResource::canViewAny());
-        $this->assertTrue(ContactResource::canViewAny());
+        $this->assertTrue(AdminAccess::allows('contacts.view'));
         $this->assertFalse(LeadResource::canViewAny());
         $this->assertFalse(DealResource::canViewAny());
     }

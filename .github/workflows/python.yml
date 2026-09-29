@@ -103,6 +103,7 @@ on:
       - 'resources/js/pages/Home.tsx'
       - 'app/Support/DatabaseExports.php'
       - 'app/Models/User.php'
+      - 'app/Models/Crm/**'
       - 'database/migrations/**'
   pull_request:
     paths:
@@ -184,6 +185,7 @@ on:
       - 'resources/js/pages/Home.tsx'
       - 'app/Support/DatabaseExports.php'
       - 'app/Models/User.php'
+      - 'app/Models/Crm/**'
       - 'database/migrations/**'
 
 defaults:
