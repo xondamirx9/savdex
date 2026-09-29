@@ -106,6 +106,25 @@ class MakeAdminCommandTest extends TestCase
         $this->assertTrue($user->fresh()->trashed(), 'удалённая учётка не восстанавливается');
     }
 
+    /**
+     * Почта удалённого свободна: на один адрес бывают удалённая и
+     * действующая учётки. Права получает действующая, а не та, что
+     * случайно нашлась первой.
+     */
+    #[Test]
+    public function действующая_учётка_раньше_удалённой_с_той_же_почтой(): void
+    {
+        $gone = User::factory()->create(['email' => 'same@savdex.uz']);
+        $gone->delete();
+        $live = User::factory()->create(['email' => 'same@savdex.uz']);
+
+        $this->artisan('savdex:admin', ['email' => 'same@savdex.uz'])->assertSuccessful();
+
+        $this->assertTrue($live->fresh()->is_admin);
+        $this->assertFalse($gone->fresh()->is_admin);
+        $this->assertTrue($gone->fresh()->trashed());
+    }
+
     #[Test]
     public function кривой_адрес_не_создаёт_админа(): void
     {

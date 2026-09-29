@@ -143,11 +143,12 @@ class RegisterRequest extends FormRequest
      * Почта: правила общие для первого шага (RegisterEmailRequest) и
      * самой регистрации, где адрес берётся из сессии уже подтверждённым.
      *
-     * @return list<string>
+     * @return list<mixed>
      */
     public static function emailRules(): array
     {
-        return ['required', 'string', 'email:rfc,strict', 'max:190', 'unique:users,email'];
+        // Отключённый (удалённый) аккаунт адрес не держит
+        return ['required', 'string', 'email:rfc,strict', 'max:190', Rule::unique('users', 'email')->withoutTrashed()];
     }
 
     /**

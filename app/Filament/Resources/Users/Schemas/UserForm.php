@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Unique;
 
 /**
  * Пользователь: создание доступа вручную (§6.3 ТЗ).
@@ -38,7 +39,8 @@ class UserForm
                         ->label('Почта')
                         ->email()
                         ->required()
-                        ->unique(ignoreRecord: true)
+                        // Среди действующих: адрес отключённого аккаунта свободен
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->withoutTrashed())
                         ->maxLength(190),
 
                     TextInput::make('phone')

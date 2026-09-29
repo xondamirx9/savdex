@@ -252,16 +252,13 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
         return ctx
 
     assert ctx.user is not None
+    company = company_of(ctx)
 
-    # OnboardingController::stepOpen: компании нет (удалённая — тоже нет,
-    # SoftDeletes) — или это юрлицо, заведённое при регистрации, без
-    # города (шаг его дополняет)
-    company = _rows(
-        "select legal_form, city_id from companies where id = %s and deleted_at is null",
-        [ctx.user["company_id"]],
-    )
-
-    if company and not (company[0]["legal_form"] == "legal" and company[0]["city_id"] is None):
+    # OnboardingController::stepOpen: компании нет — или юрлицо завело
+    # её при регистрации, и город ещё не указан
+    if company is not None and not (
+        company["legal_form"] == "legal" and company["city_id"] is None
+    ):
         return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale
