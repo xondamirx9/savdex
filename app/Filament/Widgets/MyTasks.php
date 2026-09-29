@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Crm\Task;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
@@ -61,7 +60,8 @@ class MyTasks extends TableWidget
                     ->label('Исполнитель')
                     ->placeholder('—'),
             ])
-            ->recordUrl(fn (Task $record): string => TaskResource::getUrl('edit', ['record' => $record]))
+            // Раздел «Задачи» — на Django (этап 6): строка ведёт туда через пропуск
+            ->recordUrl(fn (Task $record): string => '/admin/python?next='.rawurlencode("/py/admin/crm/task/{$record->id}/change/"))
             ->emptyStateHeading('На сегодня задач нет')
             ->emptyStateDescription('Сюда попадают задачи со сроком сегодня и раньше.');
     }

@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Crm;
 
-use App\Filament\Resources\Communications\CommunicationResource;
-use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Crm\Task;
 use App\Models\User;
 use App\Support\AdminAccess;
+use App\Support\AdminScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -43,7 +42,7 @@ class CrmAccessTest extends TestCase
         $this->assertFalse(AdminAccess::allows('leads.view'));
         $this->assertFalse(AdminAccess::allows('deals.view'));
         $this->assertFalse(AdminAccess::allows('contacts.view'));
-        $this->assertFalse(CommunicationResource::canViewAny());
+        $this->assertFalse(AdminAccess::allows('communications.view'));
     }
 
     #[Test]
@@ -52,7 +51,7 @@ class CrmAccessTest extends TestCase
         $this->actingAs($this->admin(AdminAccess::CONTENT_MANAGER));
 
         $this->assertFalse(AdminAccess::allows('leads.view'));
-        $this->assertFalse(TaskResource::canViewAny());
+        $this->assertFalse(AdminAccess::allows('tasks.view'));
     }
 
     #[Test]
@@ -63,8 +62,8 @@ class CrmAccessTest extends TestCase
         $this->assertTrue(AdminAccess::allows('leads.view'));
         $this->assertTrue(AdminAccess::allows('deals.view'));
         $this->assertTrue(AdminAccess::allows('contacts.view'));
-        $this->assertTrue(TaskResource::canViewAny());
-        $this->assertTrue(CommunicationResource::canViewAny());
+        $this->assertTrue(AdminAccess::allows('tasks.view'));
+        $this->assertTrue(AdminAccess::allows('communications.view'));
     }
 
     /** Поддержка ведёт свои задачи и переписку, но лидов и сделок не видит. */
@@ -73,8 +72,8 @@ class CrmAccessTest extends TestCase
     {
         $this->actingAs($this->admin(AdminAccess::SUPPORT));
 
-        $this->assertTrue(TaskResource::canViewAny());
-        $this->assertTrue(CommunicationResource::canViewAny());
+        $this->assertTrue(AdminAccess::allows('tasks.view'));
+        $this->assertTrue(AdminAccess::allows('communications.view'));
         $this->assertTrue(AdminAccess::allows('contacts.view'));
         $this->assertFalse(AdminAccess::allows('leads.view'));
         $this->assertFalse(AdminAccess::allows('deals.view'));
@@ -82,7 +81,11 @@ class CrmAccessTest extends TestCase
 
     // ── Область видимости ───────────────────────────────────────────
 
-    /** Задачи сужаются по исполнителю, а не по автору: список дел — про «мне». */
+    /**
+     * Задачи сужаются по исполнителю, а не по автору: список дел — про
+     * «мне». Так считают счётчик у пункта меню и виджет «Задачи на
+     * сегодня»; сам раздел — на Python (tests/test_crm_tasks_admin.py).
+     */
     #[Test]
     public function задачи_сужаются_по_исполнителю(): void
     {
@@ -98,7 +101,7 @@ class CrmAccessTest extends TestCase
 
         $this->actingAs($sales);
 
-        $visible = TaskResource::getEloquentQuery()->pluck('id')->all();
+        $visible = AdminScope::apply(Task::query(), 'tasks', 'assignee_id')->pluck('id')->all();
 
         $this->assertContains($mine->id, $visible);
         $this->assertNotContains($authored->id, $visible);

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Crm;
 
-use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Models\AdminAction;
 use App\Models\Crm\Deal;
 use App\Models\Crm\Lead;
@@ -12,7 +11,6 @@ use App\Models\Crm\Task;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -20,8 +18,8 @@ use Tests\TestCase;
  * Работа с CRM: как лид проходит путь до сделки.
  *
  * Проверяется не форма, а те действия, ради которых CRM и заводят.
- * Лиды и сделки — в админке на Python (tests/test_crm_leads_admin.py);
- * здесь — правила моделей и задачи.
+ * Разделы CRM — в админке на Python (tests/test_crm_leads_admin.py,
+ * tests/test_crm_tasks_admin.py); здесь — правила моделей.
  */
 class CrmWorkflowTest extends TestCase
 {
@@ -78,27 +76,6 @@ class CrmWorkflowTest extends TestCase
     }
 
     // ── Задача ──────────────────────────────────────────────────────
-
-    #[Test]
-    public function задача_закрывается_одной_кнопкой(): void
-    {
-        $sales = $this->sales();
-        $this->actingAs($sales);
-
-        $task = Task::factory()->create(['assignee_id' => $sales->id]);
-
-        Livewire::test(ListTasks::class)->callTableAction('done', $task);
-
-        $this->assertTrue($task->fresh()->isDone());
-
-        // Выполненная задача уходит из списка по умолчанию — чтобы
-        // вернуть её в работу, фильтр надо снять
-        Livewire::test(ListTasks::class)
-            ->removeTableFilter('open')
-            ->callTableAction('done', $task->fresh());
-
-        $this->assertFalse($task->fresh()->isDone());
-    }
 
     /**
      * Выполненная задача просроченной не считается.
