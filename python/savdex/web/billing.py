@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import math
-import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,6 +20,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
+from savdex.payments import checkout
 from savdex.web import content, inertia
 from savdex.web.cabinet import _rows, _seo, active_subscription, company_of, company_plan, page
 from savdex.web.currency import CurrencyRate, php_round
@@ -126,32 +126,9 @@ def _ucfirst(value: str) -> str:
 # ── Настройки ───────────────────────────────────────────────────────
 
 
-def _env_flag(name: str) -> bool:
-    """(bool) env($name, false): true/false словами, иначе строка по правилам PHP."""
-    raw = os.environ.get(name)
-
-    if raw is None:
-        return False
-
-    word = raw.strip().lower()
-
-    if word in ("true", "(true)"):
-        return True
-
-    if word in ("false", "(false)", "null", "(null)", "empty", "(empty)"):
-        return False
-
-    return raw not in ("", "0")
-
-
 def checkout_enabled() -> bool:
     """BillingController::checkoutEnabled: провайдер включён и касса открыта."""
-    provider = os.environ.get("PAYMENTS_DEFAULT") or "uzum"
-
-    if provider != "uzum":
-        return False
-
-    return _env_flag("PAYMENTS_UZUM_CHECKOUT_ENABLED") and _env_flag("PAYMENTS_UZUM_ENABLED")
+    return checkout.checkout_enabled()
 
 
 def requisites(ctx: Context) -> dict[str, str]:

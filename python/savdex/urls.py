@@ -442,6 +442,21 @@ urlpatterns = [
     ),
     # Формы кассы (этап 7, шаг 53): группа forms
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/order$",
+        billing_actions.order,
+        name="cabinet.billing.order",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/promo$",
+        billing_actions.promo,
+        name="cabinet.billing.promo",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/invoice/(?P<payment_id>[0-9]{1,18})/pay$",
+        billing_actions.pay,
+        name="cabinet.billing.invoice.pay",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/cancel$",
         billing_actions.cancel,
         name="cabinet.billing.cancel",

@@ -313,6 +313,9 @@ SHARED_WRITES: dict[str, str] = {
         "contacts_used_this_period + 1 или условное списание кредита, как "
         "ContactUnlockService::charge и Wallet::spend"
         "; продвижение (этап 5, шаг 44) — условное списание единиц, Wallet::spend"
+        "; новый тариф (этап 7, шаг 53, SubscriptionService::assign) — кошелёк "
+        "firstOrCreate, единицы продвижения тарифа сверху, обнуление раскрытий и "
+        "дата сброса периода"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
@@ -366,7 +369,10 @@ SHARED_WRITES: dict[str, str] = {
     "subscriptions": (
         "автопродление в кассе кабинета (этап 7, шаг 53): отмена — auto_renew "
         "и cancelled_at, включение — только у оплаченной подписки; updated_at, "
-        "у администратора — строка журнала, как AuditObserver"
+        "у администратора — строка журнала, как AuditObserver; промокод на "
+        "бесплатный период — SubscriptionService::assign: прежние действующие "
+        "истекают запросом (status, cancelled_at, updated_at), новая — вставкой "
+        "со строкой журнала"
     ),
     "payment_methods": (
         "отвязка карты в кассе кабинета (этап 7, шаг 53): delete своей карты, "
@@ -375,12 +381,17 @@ SHARED_WRITES: dict[str, str] = {
     "payments": (
         "отказ от неоплаченного счёта (этап 7, шаг 53), как OrderService::cancel: "
         "status failed, confirmed_by и admin_note, updated_at; строка остаётся; "
-        "у администратора — строка журнала"
+        "у администратора — строка журнала. Новый счёт (OrderService::create) — "
+        "вставка «ждёт оплаты» и номер из id; онлайн-касса — номер заказа Uzum "
+        "(external_id) и провайдер. Оплата и начисление — не здесь"
     ),
     "promo_codes": (
         "возврат скидочного кода отменённого счёта (этап 7, шаг 53), как "
         "OrderService::cancel: used_at, used_by_company_id, used_by_user_id и "
-        "updated_at — только если код не сработал и живой карточной транзакции нет"
+        "updated_at — только если код не сработал и живой карточной транзакции нет; "
+        "активация (PromoCodeService::capture) — условный захват свободного кода, "
+        "одна компания — один код (уникальный индекс); бесплатный период — "
+        "subscription_id выданной подписки"
     ),
 }
 

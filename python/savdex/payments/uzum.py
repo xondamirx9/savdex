@@ -172,22 +172,32 @@ class Probe:
 
 
 def _request(config: UzumConfig, client: httpx.Client) -> dict[str, object]:
+    """Прозвон: статус заведомо несуществующего заказа."""
+    return call(config, ПУТЬ_СТАТУСА, {"orderId": str(uuid.uuid4())}, client)
+
+
+def call(
+    config: UzumConfig,
+    path: str,
+    body: dict[str, object],
+    client: httpx.Client,
+    language: str = "ru-RU",
+) -> dict[str, object]:
     """
     Один запрос к Uzum. Возвращает `result`, иначе бросает UzumError.
 
     Разбор ответа повторяет UzumGateway::unwrap: HTTP 200 и errorCode 0,
-    всё остальное — отказ.
+    всё остальное — отказ. language — язык платёжной формы
+    (Content-Language); у прозвона формы нет, и это всегда ru-RU.
     """
     try:
         ответ = client.post(
-            config.base_url.rstrip("/") + ПУТЬ_СТАТУСА,
-            json={"orderId": str(uuid.uuid4())},
+            config.base_url.rstrip("/") + path,
+            json=body,
             headers={
                 "X-Terminal-Id": config.terminal_id,
                 "X-API-Key": config.secret_key,
-                # Язык платёжной формы. У прозвона локали нет, и это
-                # всегда ru-RU — форму никому не показывают
-                "Content-Language": "ru-RU",
+                "Content-Language": language,
                 "Accept": "application/json",
             },
         )
@@ -216,7 +226,9 @@ def _request(config: UzumConfig, client: httpx.Client) -> dict[str, object]:
     if not isinstance(тело, dict):
         raise UzumError("Uzum вернул не-JSON ответ")
 
-    код = int(тело.get("errorCode", -1))
+    # (int) ($body['errorCode'] ?? -1): null — как отсутствие
+    сырой = тело.get("errorCode")
+    код = -1 if сырой is None else _php_int(сырой)
 
     if код != 0:
         описание = str(тело.get("message", "без описания"))
@@ -226,6 +238,22 @@ def _request(config: UzumConfig, client: httpx.Client) -> dict[str, object]:
     результат = тело.get("result", {})
 
     return результат if isinstance(результат, dict) else {}
+
+
+def _php_int(value: object) -> int:
+    """(int) у PHP: число — целой частью, строка — ведущими цифрами, прочее — 0 или 1."""
+    if isinstance(value, bool):
+        return int(value)
+
+    if isinstance(value, int | float):
+        return int(value)
+
+    if isinstance(value, str):
+        found = re.match(r"\s*[+-]?\d+", value)
+
+        return int(found.group(0)) if found else 0
+
+    return 1 if value else 0
 
 
 def probe(config: UzumConfig, client: httpx.Client | None = None) -> Probe:
