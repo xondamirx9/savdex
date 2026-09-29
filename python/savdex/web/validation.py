@@ -92,6 +92,10 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
 
         return not (isinstance(value, dict | list) and len(value) == 0)
 
+    if rule == "lowercase":
+        # Str::lower($value) === $value
+        return isinstance(value, str) and value.lower() == value
+
     if rule == "file":
         return _is_file(value)
 

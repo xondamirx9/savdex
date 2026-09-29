@@ -252,6 +252,11 @@ SHARED_WRITES: dict[str, str] = {
         "search_text, новая компания с адресом из названия, как "
         "CompanyProfileController::update; журнал администратора — как AuditObserver"
     ),
+    "company_sites": (
+        "мини-сайт своей компании (этап 5, форма): адрес и оформление "
+        "черновика, публикация и снятие, фон первого экрана, как "
+        "SiteController и CompanySite; событий и журнала у модели нет"
+    ),
     "company_contacts": (
         "контакты своей компании (этап 5, форма): добавить, изменить, удалить, "
         "как CompanyContactController; событий и журнала у модели нет"

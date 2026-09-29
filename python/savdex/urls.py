@@ -41,6 +41,7 @@ from savdex.web import (
     review_actions,
     reviews,
     settings_actions,
+    site_actions,
     tenders,
 )
 from savdex.web import views as web
@@ -275,7 +276,19 @@ urlpatterns = [
         name="cabinet.company.cover",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
+    # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/site/{verb}$",
+            getattr(site_actions, verb),
+            name=f"cabinet.site.{verb}",
+        )
+        for verb in ("publish", "unpublish")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/hero$", site_actions.hero, name="cabinet.site.hero"
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]+)/edit$",
         cabinet.listing_wizard,
