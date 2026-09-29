@@ -236,6 +236,17 @@ Route::middleware('throttle:120,1')->group(function (): void {
 |--------------------------------------------------------------------------
 */
 
+/*
+ * У входа, регистрации, пароля и подтверждения почты — свои счётчики
+ * частоты (третий параметр throttle — приставка ключа).
+ *
+ * Без приставки ключ у throttle — только «домен|IP» (или номер
+ * пользователя), маршрут в него не входит, и все адреса сайта считают
+ * в один счётчик. Шесть просмотров карточек компаний за минуту — и
+ * «Забыли пароль» (6 в минуту) отвечал «слишком много действий»;
+ * пять — и не проходила регистрация. Со стороны это выглядело как
+ * «иногда не получается зарегистрироваться».
+ */
 Route::middleware('guest')->group(function (): void {
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
     /*
@@ -248,22 +259,22 @@ Route::middleware('guest')->group(function (): void {
      * пароль и телефон, двадцати отправок за десять минут хватает.
      */
     Route::post('/register', [RegisteredUserController::class, 'store'])
-        ->middleware('throttle:20,10');
+        ->middleware('throttle:20,10,register');
 
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
-        ->middleware('throttle:20,1');
+        ->middleware('throttle:20,1,login');
 
     // Восстановление пароля. Маршрут password.reset обязателен:
     // письмо ResetPassword строит ссылку через route('password.reset')
     Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'email'])
-        ->middleware('throttle:6,1')
+        ->middleware('throttle:6,1,password-email')
         ->name('password.email');
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])->name('password.reset');
     // Токен угадать нельзя, но подбирать его никто и не мешает
     Route::post('/reset-password', [PasswordResetController::class, 'update'])
-        ->middleware('throttle:10,60')
+        ->middleware('throttle:10,60,password-reset')
         ->name('password.update');
 });
 
@@ -293,20 +304,20 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      */
     Route::get('/verify-email', [EmailVerificationController::class, 'notice'])->name('verification.notice');
     Route::get('/verify-email/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-        ->middleware(['signed', 'throttle:6,1'])
+        ->middleware(['signed', 'throttle:6,1,verify-email'])
         ->name('verification.verify');
     // Подтверждение кодом из того же письма — для тех, кто читает
     // почту не в том браузере, где регистрировался
     Route::post('/verify-email/code', [EmailVerificationController::class, 'confirm'])
-        ->middleware('throttle:6,1')
+        ->middleware('throttle:6,1,verify-email')
         ->name('verification.code');
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])
-        ->middleware('throttle:6,1')
+        ->middleware('throttle:6,1,verify-email')
         ->name('verification.send');
 
     Route::get('/password/change', [ForcePasswordController::class, 'edit'])->name('password.forced');
     Route::post('/password/change', [ForcePasswordController::class, 'update'])
-        ->middleware('throttle:10,60')
+        ->middleware('throttle:10,60,password-forced')
         ->name('password.forced.update');
 
     /*
