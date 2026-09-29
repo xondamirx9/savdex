@@ -22,6 +22,7 @@ from savdex.web import (
     auth,
     auth_actions,
     billing,
+    billing_actions,
     cabinet,
     catalog,
     chat_actions,
@@ -438,6 +439,27 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/invoice/(?P<payment_id>[0-9]{1,18})$",
         billing.invoice,
         name="cabinet.billing.invoice",
+    ),
+    # Формы кассы (этап 7, шаг 53): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/cancel$",
+        billing_actions.cancel,
+        name="cabinet.billing.cancel",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/resume$",
+        billing_actions.resume,
+        name="cabinet.billing.resume",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/card/(?P<card_id>[0-9]{1,18})$",
+        billing_actions.remove_card,
+        name="cabinet.billing.card.remove",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/invoice/(?P<payment_id>[0-9]{1,18})/cancel$",
+        billing_actions.cancel_invoice,
+        name="cabinet.billing.invoice.cancel",
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/preview$",
