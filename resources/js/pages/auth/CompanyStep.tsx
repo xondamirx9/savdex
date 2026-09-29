@@ -17,6 +17,11 @@ interface Props {
     accountType?: 'legal' | 'individual' | 'freelancer';
     /** Имя из регистрации — готовое имя профиля физлица и фрилансера. */
     personName?: string;
+    /**
+     * Компания заведена при регистрации юрлица: название, ИНН
+     * и категории уже есть — шаг спрашивает только недостающее.
+     */
+    completing?: boolean;
 }
 
 /**
@@ -49,6 +54,7 @@ export default function CompanyStep({
     types,
     accountType = 'legal',
     personName = '',
+    completing = false,
 }: Props) {
     // Физлицо и фрилансер выступают от своего имени: без названия
     // компании и обязательного типа бизнеса, ИНН или ПИНФЛ — по желанию
@@ -115,22 +121,24 @@ export default function CompanyStep({
             subheading={person ? t('auth.person_subheading') : t('auth.company_subheading')}
         >
             <form onSubmit={submit} className="space-y-5" noValidate>
-                <TextInput
-                    label={person ? t('auth.person_name_label') : t('auth.company_name_label')}
-                    name="name"
-                    required
-                    placeholder={
-                        accountType === 'freelancer'
-                            ? t('auth.freelancer_name_placeholder')
-                            : person
-                              ? t('auth.person_name_placeholder')
-                              : t('auth.company_name_placeholder')
-                    }
-                    value={data.name}
-                    onChange={(e) => setData('name', e.target.value)}
-                    error={errors.name}
-                    autoFocus
-                />
+                {!completing && (
+                    <TextInput
+                        label={person ? t('auth.person_name_label') : t('auth.company_name_label')}
+                        name="name"
+                        required
+                        placeholder={
+                            accountType === 'freelancer'
+                                ? t('auth.freelancer_name_placeholder')
+                                : person
+                                  ? t('auth.person_name_placeholder')
+                                  : t('auth.company_name_placeholder')
+                        }
+                        value={data.name}
+                        onChange={(e) => setData('name', e.target.value)}
+                        error={errors.name}
+                        autoFocus
+                    />
+                )}
 
                 <div className="field">
                     <label className="label" htmlFor="c-type">
@@ -204,16 +212,18 @@ export default function CompanyStep({
                     </div>
                 </div>
 
-                <TextInput
-                    label={person ? t('auth.person_tin_label') : t('auth.tin_label')}
-                    name="tin"
-                    inputMode="numeric"
-                    placeholder={person ? t('auth.person_tin_placeholder') : t('auth.tin_placeholder')}
-                    value={data.tin}
-                    onChange={(e) => setData('tin', e.target.value)}
-                    error={errors.tin}
-                    hint={person ? t('auth.person_tin_hint') : t('auth.tin_hint')}
-                />
+                {!completing && (
+                    <TextInput
+                        label={person ? t('auth.person_tin_label') : t('auth.tin_label')}
+                        name="tin"
+                        inputMode="numeric"
+                        placeholder={person ? t('auth.person_tin_placeholder') : t('auth.tin_placeholder')}
+                        value={data.tin}
+                        onChange={(e) => setData('tin', e.target.value)}
+                        error={errors.tin}
+                        hint={person ? t('auth.person_tin_hint') : t('auth.tin_hint')}
+                    />
+                )}
 
                 <fieldset style={{ border: 'none' }}>
                     <legend className="label" style={{ marginBottom: 8 }}>
@@ -237,69 +247,71 @@ export default function CompanyStep({
                     </div>
                 </fieldset>
 
-                <div className="field">
-                    <label className="label" htmlFor="c-cats">
-                        {t('auth.categories_label')}
-                    </label>
-                    <SelectField
-                        id="c-cats"
-                        ariaLabel={t('auth.categories_add')}
-                        value=""
-                        onChange={(value) => value && toggleCategory(Number(value))}
-                        placeholder={t('auth.categories_add')}
-                        options={categories
-                            .filter((c) => !data.categories.includes(c.id))
-                            .map((c) => ({ value: String(c.id), label: c.name }))}
-                    />
+                {!completing && (
+                    <div className="field">
+                        <label className="label" htmlFor="c-cats">
+                            {t('auth.categories_label')}
+                        </label>
+                        <SelectField
+                            id="c-cats"
+                            ariaLabel={t('auth.categories_add')}
+                            value=""
+                            onChange={(value) => value && toggleCategory(Number(value))}
+                            placeholder={t('auth.categories_add')}
+                            options={categories
+                                .filter((c) => !data.categories.includes(c.id))
+                                .map((c) => ({ value: String(c.id), label: c.name }))}
+                        />
 
-                    {data.categories.some((id) => categories.some((c) => c.id === id)) && (
-                        <div className="row wrap mt-8" style={{ gap: 6 }}>
-                            {data.categories
-                                .filter((id) => categories.some((c) => c.id === id))
-                                .map((id) => {
-                                const category = allCategories.find((c) => c.id === id);
-                                return (
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        className="chip chip-active"
-                                        onClick={() => toggleCategory(id)}
-                                    >
-                                        {category?.name}
-                                        <X aria-hidden className="size-3.5" />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
+                        {data.categories.some((id) => categories.some((c) => c.id === id)) && (
+                            <div className="row wrap mt-8" style={{ gap: 6 }}>
+                                {data.categories
+                                    .filter((id) => categories.some((c) => c.id === id))
+                                    .map((id) => {
+                                    const category = allCategories.find((c) => c.id === id);
+                                    return (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            className="chip chip-active"
+                                            onClick={() => toggleCategory(id)}
+                                        >
+                                            {category?.name}
+                                            <X aria-hidden className="size-3.5" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
 
-                    {/* «Другое» выбрано — компания называет направление сама.
-                        Текст виден на визитке рядом с типом компании */}
-                    {needsCustomText && (
-                        <div className="mt-8">
-                            <input
-                                className="input"
-                                maxLength={80}
-                                value={data.custom_category}
-                                onChange={(e) => setData('custom_category', e.target.value)}
-                                placeholder={t('auth.custom_category_placeholder')}
-                                aria-label={t('auth.custom_category_aria')}
-                            />
-                            {errors.custom_category && (
-                                <p className="hint" style={{ color: 'var(--danger)' }}>{errors.custom_category}</p>
-                            )}
-                        </div>
-                    )}
+                        {/* «Другое» выбрано — компания называет направление сама.
+                            Текст виден на визитке рядом с типом компании */}
+                        {needsCustomText && (
+                            <div className="mt-8">
+                                <input
+                                    className="input"
+                                    maxLength={80}
+                                    value={data.custom_category}
+                                    onChange={(e) => setData('custom_category', e.target.value)}
+                                    placeholder={t('auth.custom_category_placeholder')}
+                                    aria-label={t('auth.custom_category_aria')}
+                                />
+                                {errors.custom_category && (
+                                    <p className="hint" style={{ color: 'var(--danger)' }}>{errors.custom_category}</p>
+                                )}
+                            </div>
+                        )}
 
-                    <p className={cn('hint', data.categories.length >= 5 && 'text-warning')}>
-                        {data.categories.length >= 5
-                            ? t('auth.categories_limit')
-                            : t('auth.categories_hint')}
-                    </p>
-                    {errors.categories && (
-                        <p className="hint" style={{ color: 'var(--danger)' }}>{errors.categories}</p>
-                    )}
-                </div>
+                        <p className={cn('hint', data.categories.length >= 5 && 'text-warning')}>
+                            {data.categories.length >= 5
+                                ? t('auth.categories_limit')
+                                : t('auth.categories_hint')}
+                        </p>
+                        {errors.categories && (
+                            <p className="hint" style={{ color: 'var(--danger)' }}>{errors.categories}</p>
+                        )}
+                    </div>
+                )}
 
                 <Button type="submit" size="lg" block loading={processing}>
                     {t('auth.continue')}

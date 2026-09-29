@@ -1,7 +1,9 @@
 import { useForm } from '@inertiajs/react';
+import { X } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
 import { Button, PasswordInput, TextInput } from '@/components/ui';
+import { SelectField } from '@/components/SelectField';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
@@ -38,11 +40,28 @@ const accountTypes = (): [string, string, string][] => [
     ['freelancer', t('auth.account_freelancer'), t('auth.account_freelancer_desc')],
 ];
 
+interface Props {
+    /** Разделы каталога — «Категория» юрлица. */
+    categories?: { id: number; name: string }[];
+    /** Направления «Доп. услуг» — «Категория» фрилансера. */
+    serviceSections?: { code: string; label: string }[];
+}
+
+/** Больше пяти категорий — профиль перестаёт что-либо говорить о компании. */
+const MAX_CATEGORIES = 5;
+
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
-export default function Register() {
+export default function Register({ categories = [], serviceSections = [] }: Props) {
     const { data, setData, post, processing, errors, clearErrors } = useForm({
+        // Юрлицо: компания и её категории
+        company_name: '',
+        tin: '',
+        categories: [] as number[],
+        // Физлицо и фрилансер: ПИНФЛ; фрилансер — ещё направление услуг
+        pinfl: '',
+        service_section: '',
         name: '',
         email: '',
         phone: '',
@@ -68,6 +87,18 @@ export default function Register() {
         } else if (errors[key as keyof typeof errors]) {
             clearErrors(key as keyof typeof errors);
         }
+    }
+
+    const legal = data.account_type === 'legal';
+    const freelancer = data.account_type === 'freelancer';
+
+    function toggleCategory(id: number) {
+        const next = data.categories.includes(id)
+            ? data.categories.filter((c) => c !== id)
+            : data.categories.length >= MAX_CATEGORIES
+              ? data.categories
+              : [...data.categories, id];
+        update('categories', next);
     }
 
     const strength = useMemo(() => {
@@ -127,7 +158,11 @@ export default function Register() {
                                     type="radio"
                                     name="account_type"
                                     checked={data.account_type === value}
-                                    onChange={() => update('account_type', value)}
+                                    onChange={() => {
+                                        update('account_type', value);
+                                        // Ошибки полей другого типа к новой форме не относятся
+                                        clearErrors();
+                                    }}
                                 />
                                 <div className="radio-card-body">
                                     <div className="radio-card-title">{title}</div>
@@ -141,33 +176,61 @@ export default function Register() {
                     )}
                 </fieldset>
 
-                <TextInput
-                    label={t('auth.email_label')}
-                    type="email"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    name="email"
-                    autoComplete="email"
-                    required
-                    placeholder={t('auth.email_placeholder')}
-                    value={data.email}
-                    onChange={(e) => update('email', e.target.value)}
-                    error={errors.email}
-                    hint={t('auth.email_hint')}
-                    autoFocus
-                />
+                {/* Порядок полей — свой у каждого типа: юрлицо начинает
+                    с компании, физлицо и фрилансер — с себя */}
+                {legal && (
+                    <>
+                        <TextInput
+                            label={t('auth.company_name_label')}
+                            name="company_name"
+                            autoComplete="organization"
+                            required
+                            placeholder={t('auth.company_name_placeholder')}
+                            value={data.company_name}
+                            onChange={(e) => update('company_name', e.target.value)}
+                            error={errors.company_name}
+                            autoFocus
+                        />
+
+                        <TextInput
+                            label={t('auth.tin_label')}
+                            name="tin"
+                            inputMode="numeric"
+                            placeholder={t('auth.tin_placeholder')}
+                            value={data.tin}
+                            onChange={(e) => update('tin', e.target.value)}
+                            error={errors.tin}
+                            hint={t('auth.tin_hint')}
+                        />
+                    </>
+                )}
 
                 <TextInput
-                    label={t('auth.name_label')}
+                    label={t('auth.full_name_label')}
                     name="name"
                     autoComplete="name"
                     required
-                    placeholder={t('auth.name_placeholder')}
+                    placeholder={t('auth.full_name_placeholder')}
                     value={data.name}
                     onChange={(e) => update('name', e.target.value)}
                     error={errors.name}
+                    autoFocus={!legal}
                 />
+
+                {!legal && (
+                    <TextInput
+                        label={t('auth.pinfl_label')}
+                        name="pinfl"
+                        inputMode="numeric"
+                        maxLength={20}
+                        required={freelancer}
+                        placeholder={t('auth.pinfl_placeholder')}
+                        value={data.pinfl}
+                        onChange={(e) => update('pinfl', e.target.value)}
+                        error={errors.pinfl}
+                        hint={freelancer ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')}
+                    />
+                )}
 
                 <TextInput
                     label={t('auth.phone_label')}
@@ -181,6 +244,85 @@ export default function Register() {
                     error={errors.phone}
                     hint={t('auth.phone_hint')}
                 />
+
+                <TextInput
+                    label={t('auth.reg_email_label')}
+                    type="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    name="email"
+                    autoComplete="email"
+                    required
+                    placeholder={t('auth.email_placeholder')}
+                    value={data.email}
+                    onChange={(e) => update('email', e.target.value)}
+                    error={errors.email}
+                    hint={t('auth.email_hint')}
+                />
+
+                {legal && (
+                    <div className="field">
+                        <label className="label" htmlFor="r-cats">
+                            {t('auth.reg_categories_label')} <span className="req">*</span>
+                        </label>
+                        <SelectField
+                            id="r-cats"
+                            ariaLabel={t('auth.reg_categories_label')}
+                            value=""
+                            onChange={(value) => value && toggleCategory(Number(value))}
+                            placeholder={t('auth.categories_add')}
+                            options={categories
+                                .filter((c) => !data.categories.includes(c.id))
+                                .map((c) => ({ value: String(c.id), label: c.name }))}
+                        />
+                        {data.categories.length > 0 && (
+                            <div className="row wrap mt-8" style={{ gap: 6 }}>
+                                {data.categories.map((id) => (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        className="chip chip-active"
+                                        onClick={() => toggleCategory(id)}
+                                    >
+                                        {categories.find((c) => c.id === id)?.name}
+                                        <X aria-hidden className="size-3.5" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <p className={cn('hint', data.categories.length >= MAX_CATEGORIES && 'text-warning')}>
+                            {data.categories.length >= MAX_CATEGORIES
+                                ? t('auth.categories_limit')
+                                : t('auth.reg_categories_hint')}
+                        </p>
+                        {(errors.categories || errors['categories.0' as keyof typeof errors]) && (
+                            <p className="hint" style={{ color: 'var(--danger)' }}>
+                                {errors.categories ?? errors['categories.0' as keyof typeof errors]}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {freelancer && (
+                    <div className="field">
+                        <label className="label" htmlFor="r-section">
+                            {t('auth.service_section_label')} <span className="req">*</span>
+                        </label>
+                        <SelectField
+                            id="r-section"
+                            ariaLabel={t('auth.service_section_label')}
+                            value={data.service_section}
+                            onChange={(value) => update('service_section', value)}
+                            placeholder={t('auth.service_section_placeholder')}
+                            options={serviceSections.map((s) => ({ value: s.code, label: s.label }))}
+                        />
+                        <p className="hint">{t('auth.service_section_hint')}</p>
+                        {errors.service_section && (
+                            <p className="hint" style={{ color: 'var(--danger)' }}>{errors.service_section}</p>
+                        )}
+                    </div>
+                )}
 
                 <div>
                     <PasswordInput

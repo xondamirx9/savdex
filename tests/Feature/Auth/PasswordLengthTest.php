@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -16,6 +17,7 @@ use Tests\TestCase;
  */
 class PasswordLengthTest extends TestCase
 {
+    use LegalRegistration;
     use RefreshDatabase;
 
     /** @return array<string, mixed> */
@@ -28,6 +30,7 @@ class PasswordLengthTest extends TestCase
             'password' => $password,
             'password_confirmation' => $password,
             'terms' => $terms,
+            ...$this->legalFields(),
         ];
     }
 
