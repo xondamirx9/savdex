@@ -4,7 +4,7 @@ import { Download, Lock, Plus, Trash2, Wallet } from 'lucide-react';
 import { useEffect } from 'react';
 import { LimitBar, Panel, formatNumber } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
-import { BillingStore, type Invoice, type PackOffer, type PlanOffer } from '@/components/BillingStore';
+import { BillingStore, usdPrice, type Invoice, type PackOffer, type PlanOffer } from '@/components/BillingStore';
 import { useConfirm } from '@/components/useConfirm';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
@@ -14,6 +14,7 @@ interface Props {
         name: string;
         code: string;
         price_uzs: number;
+        price_usd: number;
         listings_limit: number | null;
         contacts_limit: number | null;
         promo_units: number;
@@ -83,7 +84,8 @@ export default function Billing({
 
         document.getElementById('store')?.scrollIntoView({ block: 'start' });
 
-        const amount = `${formatNumber(offer.price_uzs)} ${t('catalog.currency_uzs')}`;
+        // Сумма в окне — как на карточке: сумы и доллары
+        const amount = `${formatNumber(offer.price_uzs)} ${t('catalog.currency_uzs')} (${usdPrice(offer.price_usd)})`;
 
         confirm({
             title: t('cabinet.billing.checkout_title', { plan: offer.name }),
@@ -130,7 +132,7 @@ export default function Billing({
                     <div className="t-h2 mt-8">{plan.name}</div>
                     <p className="t-sm muted mt-8">
                         {plan.price_uzs > 0
-                            ? t('cabinet.billing.per_month', { price: formatNumber(plan.price_uzs) })
+                            ? `${t('cabinet.billing.per_month', { price: formatNumber(plan.price_uzs) })} · ${usdPrice(plan.price_usd)}`
                             : t('cabinet.billing.free')}
                     </p>
                     <div className="row" style={{ gap: 8, marginTop: 16, flexWrap: 'wrap' }}>

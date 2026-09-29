@@ -11,6 +11,8 @@ export interface PlanOffer {
     code: string;
     name: string;
     price_uzs: number;
+    /** Та же цена в долларах: в них тариф и задан */
+    price_usd: number;
     listings_limit: number | null;
     contacts_limit: number | null;
     responses_limit: number | null;
@@ -23,6 +25,7 @@ export interface PackOffer {
     name: string;
     credits: number;
     price_uzs: number;
+    price_usd: number;
     per_credit: number;
 }
 
@@ -40,6 +43,19 @@ function limit(value: number | null, code?: string): string {
     if (code === 'vip') return 'VIP';
 
     return value === null ? t('cabinet.common.unlimited') : String(value);
+}
+
+/**
+ * Цена в долларах — второй строкой под сумовой.
+ *
+ * Тарифы и пакеты заданы в долларах, сумовая цена выводится из них
+ * по курсу ЦБ и вслед за ним меняется. Компании с валютным бюджетом
+ * (а на площадке они и есть покупатели) считать курс в уме незачем,
+ * поэтому на карточке стоят обе цифры — так же, как на витрине
+ * тарифов. Платёж остаётся в сумах: в них выставляется счёт.
+ */
+export function usdPrice(value: number): string {
+    return `$${formatNumber(value)}`;
 }
 
 function order(kind: 'plan' | 'credits', id: number) {
@@ -286,11 +302,25 @@ export function BillingStore({
                                             textAlign: 'right',
                                         }}
                                     >
-                                        <b className="t-num nowrap">
-                                            {p.price_uzs > 0
-                                                ? `${formatNumber(p.price_uzs)} ${t('catalog.currency_uzs')}`
-                                                : t('cabinet.billing.free')}
-                                        </b>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'flex-end',
+                                                gap: 2,
+                                            }}
+                                        >
+                                            <b className="t-num nowrap">
+                                                {p.price_uzs > 0
+                                                    ? `${formatNumber(p.price_uzs)} ${t('catalog.currency_uzs')}`
+                                                    : t('cabinet.billing.free')}
+                                            </b>
+                                            {/* У бесплатного тарифа долларов нет: «$0»
+                                                под словом «бесплатно» ничего не добавляет */}
+                                            {p.price_uzs > 0 && (
+                                                <span className="t-sm muted nowrap">{usdPrice(p.price_usd)}</span>
+                                            )}
+                                        </div>
                                         {p.orderable && (
                                             <button
                                                 className="btn btn-primary btn-sm"
@@ -331,9 +361,19 @@ export function BillingStore({
                                             textAlign: 'right',
                                         }}
                                     >
-                                        <b className="t-num nowrap">
-                                            {formatNumber(p.price_uzs)} {t('catalog.currency_uzs')}
-                                        </b>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'flex-end',
+                                                gap: 2,
+                                            }}
+                                        >
+                                            <b className="t-num nowrap">
+                                                {formatNumber(p.price_uzs)} {t('catalog.currency_uzs')}
+                                            </b>
+                                            <span className="t-sm muted nowrap">{usdPrice(p.price_usd)}</span>
+                                        </div>
                                         <button
                                             className="btn btn-secondary btn-sm"
                                             onClick={() => order('credits', p.id)}

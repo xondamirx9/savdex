@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\RefusesDeletionWhenReferenced;
+use App\Support\PriceDisplay;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -56,6 +57,22 @@ class CreditPack extends Model
         // Округление до тысяч, как у тарифов: «131 840 сум» читается
         // как ошибка расчёта, а не как назначенная цена
         return (int) (round((float) $this->price_usd * $rate / 1000) * 1000);
+    }
+
+    /**
+     * Цена в долларах — та, из которой сумовая и считается.
+     *
+     * При зафиксированной сумовой цене доллары берутся обратным
+     * пересчётом: показывать price_usd рядом с ценой, которую
+     * перебили вручную, значит показывать две разные цены.
+     */
+    public function priceUsd(float $rate): float
+    {
+        if ($this->price_uzs !== null) {
+            return $rate > 0 ? PriceDisplay::round($this->price_uzs / $rate) : 0.0;
+        }
+
+        return (float) $this->price_usd;
     }
 
     /** Сколько стоит один контакт — так пакеты сравнивают между собой. */
