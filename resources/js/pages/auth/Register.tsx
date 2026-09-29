@@ -9,14 +9,18 @@ import { cn } from '@/lib/cn';
 
 /**
  * Оценка надёжности пароля 0–4.
- * Правила совпадают с серверными (RegisterRequest): минимум 10 символов,
+ * Правила совпадают с серверными (RegisterRequest): от 8 до 20 символов,
  * буквы и цифры. Клиент только подсказывает заранее — решение всё равно
  * принимает сервер, иначе проверку обойдут отключением JavaScript.
  */
+/** Длина пароля — как у сервера (Password::defaults в AppServiceProvider). */
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 20;
+
 function scorePassword(v: string): number {
     let s = 0;
-    if (v.length >= 10) s++;
-    if (v.length >= 14) s++;
+    if (v.length >= PASSWORD_MIN) s++;
+    if (v.length >= 12) s++;
     if (/[a-zа-я]/.test(v) && /[A-ZА-Я]/.test(v)) s++;
     if (/\d/.test(v)) s++;
     if (/[^\w\s]/.test(v)) s++;
@@ -70,14 +74,23 @@ export default function Register() {
         if (!data.password) return null;
         const score = scorePassword(data.password);
         const missing: string[] = [];
-        if (data.password.length < 10) missing.push(t('auth.missing_length', { count: 10 - data.password.length }));
+        if (data.password.length < PASSWORD_MIN) {
+            missing.push(t('auth.missing_length', { count: PASSWORD_MIN - data.password.length }));
+        }
         if (!/\d/.test(data.password)) missing.push(t('auth.missing_digit'));
         if (!/[^\w\s]/.test(data.password)) missing.push(t('auth.missing_special'));
         return { score, missing };
     }, [data.password]);
 
+    const tooLong = data.password.length > PASSWORD_MAX;
+
     function submit(e: FormEvent) {
         e.preventDefault();
+
+        // Без согласия с офертой кнопка неактивна; проверка здесь — на случай
+        // отправки формы клавишей Enter из поля
+        if (!data.terms) return;
+
         post(routes.register, {
             onFinish: () => setData((d) => ({ ...d, password: '', password_confirmation: '' })),
         });
@@ -169,8 +182,17 @@ export default function Register() {
                         value={data.password}
                         onChange={(e) => update('password', e.target.value)}
                         error={errors.password}
+                        hint={!data.password ? t('auth.password_rules') : undefined}
                     />
-                    {strength && !errors.password && (
+                    {/* Больше 20 символов — предупреждение сразу, а не после
+                        отправки: вводить дальше можно, но сервер такой пароль
+                        не примет */}
+                    {tooLong && !errors.password && (
+                        <p className="text-danger mt-1.5 text-[13px]" role="alert">
+                            {t('auth.password_too_long', { count: data.password.length })}
+                        </p>
+                    )}
+                    {strength && !tooLong && !errors.password && (
                         <div className="mt-2">
                             <div className="bg-canvas h-[5px] overflow-hidden rounded-full">
                                 <div
@@ -230,9 +252,26 @@ export default function Register() {
                     {errors.terms && <p className="text-danger mt-1.5 text-[13px]">{errors.terms}</p>}
                 </div>
 
-                <Button type="submit" size="lg" block loading={processing}>
-                    {t('auth.continue')}
-                </Button>
+                {/* Пока оферта не принята, кнопка серая и не нажимается,
+                    а рядом сказано, что нужно сделать */}
+                <div>
+                    <Button
+                        type="submit"
+                        size="lg"
+                        block
+                        loading={processing}
+                        disabled={!data.terms}
+                        aria-describedby={!data.terms ? 'terms-required' : undefined}
+                        className={!data.terms ? 'register-submit-locked' : undefined}
+                    >
+                        {t('auth.continue')}
+                    </Button>
+                    {!data.terms && (
+                        <p id="terms-required" className="text-muted mt-2 text-center text-[13px]">
+                            {t('auth.terms_required')}
+                        </p>
+                    )}
+                </div>
             </form>
 
             <p className="text-muted mt-6 text-center text-sm">

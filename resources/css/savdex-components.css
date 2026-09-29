@@ -2444,3 +2444,8 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
     .banner-slot{margin-bottom:16px;border-radius:8px}
     .banner-slot__image{height:clamp(140px,42vw,220px)}
 }
+
+/* «Продолжить» при регистрации, пока не принята оферта: серая, а не
+   бледно-синяя — полупрозрачный синий читался как «нажимается, но слабо» */
+.register-submit-locked:disabled{background:#CBD5E1!important;border-color:#CBD5E1!important;
+  color:#475569!important;opacity:1!important;box-shadow:none!important;cursor:not-allowed}

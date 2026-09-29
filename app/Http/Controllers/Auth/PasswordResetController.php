@@ -79,6 +79,8 @@ class PasswordResetController extends Controller
             'password' => ['required', 'confirmed', PasswordRule::defaults()],
         ], [
             'password.confirmed' => __('ui.messages.auth.password_mismatch'),
+            'password.min' => __('ui.messages.register.password_min'),
+            'password.max' => __('ui.messages.register.password_max'),
         ]);
 
         $status = Password::reset(

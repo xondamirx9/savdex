@@ -38,6 +38,8 @@ class ForcePasswordController extends Controller
         ], [
             'password.required' => __('ui.messages.auth.password_new'),
             'password.confirmed' => __('ui.messages.auth.password_mismatch'),
+            'password.min' => __('ui.messages.register.password_min'),
+            'password.max' => __('ui.messages.register.password_max'),
         ]);
 
         $user = $request->user();
