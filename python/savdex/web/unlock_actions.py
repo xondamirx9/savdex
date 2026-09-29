@@ -258,7 +258,7 @@ def _unlock(
 @form()
 def unlock(request: HttpRequest, slug: str) -> HttpResponse:
     """ContactUnlockController::store (verified, throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="unlock")
 
     if (refused := _unverified(ctx)) is not None:
         return refused
