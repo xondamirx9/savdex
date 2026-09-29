@@ -47,7 +47,7 @@ class OnboardingTest extends TestCase
     #[Test]
     public function регистрация_ведёт_на_шаг_компании(): void
     {
-        $this->post('/register', [
+        $this->postRegistration([
             'name' => 'Рустам Каримов',
             'email' => 'rustam@company.uz',
             'phone' => '+998 90 123-45-67',

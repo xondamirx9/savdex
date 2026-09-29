@@ -267,6 +267,24 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/register', [RegisteredUserController::class, 'store'])
         ->middleware('throttle:20,10,register');
 
+    /*
+     * Шаги 1–2: почта и код из письма. Отправка кода ограничена строже
+     * проверки: каждое письмо — чужой почтовый ящик, и форма не должна
+     * становиться рассылкой. Код сам гасится после пяти неверных попыток
+     * (EmailVerificationCode), маршрут лишь не даёт долбить форму.
+     */
+    Route::post('/register/email', [RegisteredUserController::class, 'sendCode'])
+        ->middleware('throttle:10,10,register-email')
+        ->name('register.email');
+    Route::get('/register/code', [RegisteredUserController::class, 'code'])->name('register.code');
+    Route::post('/register/code', [RegisteredUserController::class, 'confirmCode'])
+        ->middleware('throttle:10,1,register-code')
+        ->name('register.code.confirm');
+    Route::post('/register/code/resend', [RegisteredUserController::class, 'resendCode'])
+        ->middleware('throttle:10,10,register-email')
+        ->name('register.code.resend');
+    Route::get('/register/details', [RegisteredUserController::class, 'details'])->name('register.details');
+
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
         ->middleware('throttle:20,1,login');

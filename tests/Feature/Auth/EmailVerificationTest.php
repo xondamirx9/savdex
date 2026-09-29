@@ -45,21 +45,22 @@ class EmailVerificationTest extends TestCase
 
     /**
      * Главный тест: регистрация проходит целиком, без исключений.
-     * Именно этот сценарий и падал в бою.
+     * Именно этот сценарий и падал в бою. Почта подтверждена кодом
+     * ещё до анкеты — второе письмо после регистрации не уходит.
      */
     #[Test]
-    public function регистрация_доходит_до_конца_и_шлёт_письмо(): void
+    public function регистрация_доходит_до_конца_без_второго_письма(): void
     {
         Notification::fake();
 
-        // После регистрации идёт шаг данных компании, письмо уходит сразу
-        $this->post('/register', $this->payload())
+        $this->postRegistration($this->payload())
             ->assertRedirect('/onboarding/company')
             ->assertSessionHasNoErrors();
 
         $user = User::where('email', 'rustam@company.uz')->firstOrFail();
 
-        Notification::assertSentTo($user, VerifyEmailCode::class);
+        $this->assertTrue($user->hasVerifiedEmail());
+        Notification::assertNotSentTo($user, VerifyEmailCode::class);
     }
 
     // ── Подтверждение кодом из письма ────────────────────────

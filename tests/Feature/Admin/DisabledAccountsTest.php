@@ -63,7 +63,7 @@ class DisabledAccountsTest extends TestCase
         $old = User::factory()->create(['email' => 'sher@company.uz']);
         $old->delete();
 
-        $this->post('/register', $this->registration('sher@company.uz'))
+        $this->postRegistration($this->registration('sher@company.uz'))
             ->assertRedirect('/onboarding/company');
 
         $this->assertSame(1, User::query()->where('email', 'sher@company.uz')->count(), 'новый аккаунт');
@@ -75,7 +75,8 @@ class DisabledAccountsTest extends TestCase
     {
         User::factory()->create(['email' => 'sher@company.uz']);
 
-        $this->post('/register', $this->registration('sher@company.uz'))
+        // Занятый адрес отклоняется уже на первом шаге, до письма с кодом
+        $this->post('/register/email', ['email' => 'sher@company.uz'])
             ->assertSessionHasErrors('email');
     }
 
@@ -89,7 +90,7 @@ class DisabledAccountsTest extends TestCase
             ->post('/cabinet/settings/delete', ['password' => 'StaryiParol2026'])
             ->assertRedirect('/');
 
-        $this->post('/register', $this->registration('sher@company.uz'))
+        $this->postRegistration($this->registration('sher@company.uz'))
             ->assertRedirect('/onboarding/company');
     }
 

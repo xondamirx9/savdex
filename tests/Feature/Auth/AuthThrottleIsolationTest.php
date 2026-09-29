@@ -53,7 +53,7 @@ class AuthThrottleIsolationTest extends TestCase
 
         $this->browseCompanies();
 
-        $this->post('/register', [
+        $this->postRegistration([
             'name' => 'Рустам Каримов',
             'email' => 'rustam@company.uz',
             'phone' => '+998 90 123-45-67',

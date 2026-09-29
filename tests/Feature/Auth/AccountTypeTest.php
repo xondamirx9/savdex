@@ -50,7 +50,7 @@ class AccountTypeTest extends TestCase
             default => $this->legalFields(),
         };
 
-        $this->post('/register', array_filter([
+        $this->postRegistration(array_filter([
             'name' => 'Алишер Каримов',
             'email' => 'alisher@mail.uz',
             'phone' => '+998 90 123-45-67',
@@ -61,7 +61,7 @@ class AccountTypeTest extends TestCase
             ...$fields,
         ], fn ($v) => $v !== null))->assertSessionHasNoErrors()->assertRedirect(
             // Второй шаг «Данные компании» — только у юрлица
-            in_array($type, ['freelancer', 'individual'], true) ? '/verify-email' : '/onboarding/company'
+            in_array($type, ['freelancer', 'individual'], true) ? '/cabinet' : '/onboarding/company'
         );
     }
 
@@ -123,7 +123,7 @@ class AccountTypeTest extends TestCase
     #[Test]
     public function юрлицу_нужны_название_и_категория_а_инн_по_желанию(): void
     {
-        $this->post('/register', [
+        $this->postRegistration([
             'name' => 'Алишер Каримов',
             'email' => 'alisher@mail.uz',
             'phone' => '+998 90 123-45-67',
@@ -155,7 +155,7 @@ class AccountTypeTest extends TestCase
     #[Test]
     public function фрилансеру_нужны_пинфл_и_направление(): void
     {
-        $this->post('/register', [
+        $this->postRegistration([
             'name' => 'Алишер Каримов',
             'email' => 'alisher@mail.uz',
             'phone' => '+998 90 123-45-67',
@@ -184,7 +184,7 @@ class AccountTypeTest extends TestCase
     #[Test]
     public function неизвестный_тип_отклоняется(): void
     {
-        $this->post('/register', [
+        $this->postRegistration([
             'name' => 'Алишер Каримов',
             'email' => 'alisher@mail.uz',
             'phone' => '+998 90 123-45-67',

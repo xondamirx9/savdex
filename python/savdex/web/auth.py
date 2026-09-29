@@ -94,8 +94,10 @@ def login(request: HttpRequest) -> HttpResponse:
 
 def register(request: HttpRequest) -> HttpResponse:
     """
-    RegisteredUserController::create. Пришёл с тарифов кнопкой «Выбрать»
-    (?plan=код) — после регистрации его ждёт оплата этого тарифа.
+    RegisteredUserController::create — первый шаг регистрации, почта.
+    Пришёл с тарифов кнопкой «Выбрать» (?plan=код) — после регистрации
+    его ждёт оплата этого тарифа. Код и анкета (/register/code,
+    /register/details) — у Laravel.
     """
     ctx = guest(request)
 
@@ -118,28 +120,11 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    from savdex.web.directory import _named
-    from savdex.web.resumes import section_tree
+    # «Изменить почту» со второго шага — адрес уже в поле
+    store = _store(ctx)
+    email = store.get("register.email") if store is not None else None
 
-    names = _named("categories", ctx.locale)
-
-    return inertia.render(
-        ctx,
-        "auth/Register",
-        {
-            # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
-            "categories": [
-                {"id": c["id"], "name": names[c["id"]]}
-                for c in _rows(
-                    "select id from categories where parent_id is null and is_active "
-                    "order by sort, id"
-                )
-            ],
-            # Фрилансер — направление «Доп. услуг», на заказы которого откликается
-            "serviceSections": section_tree(ctx),
-        },
-        _seo(ctx),
-    )
+    return inertia.render(ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx))
 
 
 def _whatsapp_configured() -> bool:

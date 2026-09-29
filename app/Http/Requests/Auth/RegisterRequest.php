@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Models\Company;
 use App\Models\ItTask;
 use App\Rules\Pinfl;
@@ -25,7 +26,8 @@ use Illuminate\Validation\Validator;
  * - юрлицо — название компании, ИНН (по желанию), Ф.И.О., категории каталога;
  * - физлицо — Ф.И.О. и ПИНФЛ (по желанию);
  * - фрилансер — Ф.И.О., ПИНФЛ и направление услуг, всё обязательно.
- * Почта, телефон и пароль нужны всем.
+ * Телефон и пароль нужны всем. Почта подтверждена кодом на первых двух
+ * шагах и приходит из сессии.
  */
 class RegisterRequest extends FormRequest
 {
@@ -45,8 +47,7 @@ class RegisterRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'min:2', 'max:120'],
-            // Отключённый (удалённый) аккаунт адрес не держит
-            'email' => ['required', 'string', 'email:rfc,strict', 'max:190', Rule::unique('users', 'email')->withoutTrashed()],
+            'email' => self::emailRules(),
             'phone' => ['required', 'string', 'regex:/^\+?\d[\d\s\-()]{8,17}$/'],
             'password' => [
                 'required', 'string', 'confirmed',
@@ -95,9 +96,7 @@ class RegisterRequest extends FormRequest
             'name.required' => __('ui.messages.register.full_name_required'),
             'name.min' => __('ui.messages.register.name_min'),
 
-            'email.required' => __('ui.messages.register.email_required'),
-            'email.email' => __('ui.messages.register.email_format'),
-            'email.unique' => __('ui.messages.register.email_taken'),
+            ...self::emailMessages(),
 
             'phone.required' => __('ui.messages.register.phone_required'),
             'phone.regex' => __('ui.messages.phone_format'),
@@ -122,10 +121,6 @@ class RegisterRequest extends FormRequest
         ];
     }
 
-    /**
-     * Уточняем сообщение о почте: «нет собаки» и «адрес неполный» —
-     * разные ошибки, и подсказка должна быть разной (NEG-06b).
-     */
     public function withValidator(Validator $validator): void
     {
         /*
@@ -141,36 +136,71 @@ class RegisterRequest extends FormRequest
             }
         });
 
-        $validator->after(function (Validator $v): void {
-            $email = (string) $this->input('email');
+        $validator->after(fn (Validator $v) => self::refineEmailError($v, (string) $this->input('email')));
+    }
 
-            if ($email === '' || ! $v->errors()->has('email')) {
-                return;
-            }
+    /**
+     * Почта: правила общие для первого шага (RegisterEmailRequest) и
+     * самой регистрации, где адрес берётся из сессии уже подтверждённым.
+     *
+     * @return list<mixed>
+     */
+    public static function emailRules(): array
+    {
+        // Отключённый (удалённый) аккаунт адрес не держит
+        return ['required', 'string', 'email:rfc,strict', 'max:190', Rule::unique('users', 'email')->withoutTrashed()];
+    }
 
-            // Сообщение об уже занятом адресе перекрывать не нужно — оно полезнее.
-            // Смотрим на сработавшее правило, а не на текст: текст переводится
-            if (array_key_exists('Unique', $v->failed()['email'] ?? [])) {
-                return;
-            }
+    /**
+     * @return array<string, string>
+     */
+    public static function emailMessages(): array
+    {
+        return [
+            'email.required' => __('ui.messages.register.email_required'),
+            'email.email' => __('ui.messages.register.email_format'),
+            'email.unique' => __('ui.messages.register.email_taken'),
+        ];
+    }
 
-            $message = ! str_contains($email, '@')
-                ? __('ui.messages.register.email_no_at')
-                : (! str_contains(substr($email, (int) strpos($email, '@')), '.')
-                    ? __('ui.messages.register.email_incomplete')
-                    : null);
+    /**
+     * Уточняем сообщение о почте: «нет собаки» и «адрес неполный» —
+     * разные ошибки, и подсказка должна быть разной (NEG-06b).
+     */
+    public static function refineEmailError(Validator $v, string $email): void
+    {
+        if ($email === '' || ! $v->errors()->has('email')) {
+            return;
+        }
 
-            if ($message !== null) {
-                $v->errors()->forget('email');
-                $v->errors()->add('email', $message);
-            }
-        });
+        // Сообщение об уже занятом адресе перекрывать не нужно — оно полезнее.
+        // Смотрим на сработавшее правило, а не на текст: текст переводится
+        if (array_key_exists('Unique', $v->failed()['email'] ?? [])) {
+            return;
+        }
+
+        $message = ! str_contains($email, '@')
+            ? __('ui.messages.register.email_no_at')
+            : (! str_contains(substr($email, (int) strpos($email, '@')), '.')
+                ? __('ui.messages.register.email_incomplete')
+                : null);
+
+        if ($message !== null) {
+            $v->errors()->forget('email');
+            $v->errors()->add('email', $message);
+        }
     }
 
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'email' => mb_strtolower(trim((string) $this->input('email'))),
+            /*
+             * Почта — не из формы, а подтверждённая кодом на втором шаге
+             * (RegisteredUserController::confirmCode). Адрес из тела запроса
+             * не берётся: иначе код подтверждал бы одну почту, а аккаунт
+             * заводился на другую.
+             */
+            'email' => mb_strtolower(trim((string) $this->session()->get(RegisteredUserController::SESSION_VERIFIED, ''))),
             'name' => trim((string) $this->input('name')),
             'company_name' => trim((string) $this->input('company_name')),
             // Пробелы и дефисы из вставленного номера — не ошибка человека

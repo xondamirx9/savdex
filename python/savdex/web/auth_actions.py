@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import os
 import re
 import time
 from datetime import datetime, timedelta
@@ -311,8 +310,14 @@ def _ordered(errors: dict[str, list[str]], order: list[str]) -> dict[str, list[s
 
 @form()
 def register(request: HttpRequest) -> HttpResponse:
-    """RegisteredUserController::store (guest, throttle:20,10,register) и RegisterRequest."""
-    from savdex.web import password_rule, verification
+    """
+    RegisteredUserController::store (guest, throttle:20,10,register) и
+    RegisterRequest — третий шаг регистрации, анкета. Почта — не из формы,
+    а подтверждённая кодом на втором шаге (сессия register.verified_email);
+    без неё — к первому шагу. Шаги 1–2 (/register/email, /register/code) —
+    у Laravel.
+    """
+    from savdex.web import password_rule
     from savdex.web.company_profile_actions import _tin, _unique_tin
     from savdex.web.resumes import SERVICE_SECTIONS
 
@@ -321,13 +326,19 @@ def register(request: HttpRequest) -> HttpResponse:
     if (refused := _guest(ctx)) is not None:
         return refused
 
+    store = _session(ctx)
+    verified = store.get(SESSION_VERIFIED)
+
+    if not (isinstance(verified, str) and verified != "" and verified == store.get(SESSION_EMAIL)):
+        return _to(ctx, "/register")
+
     data = input_of(request)
     kind = _account_type(data.get("account_type"))
     legal, freelancer = kind == "legal", kind == "freelancer"
 
     # prepareForValidation: почта — строчными без пробелов, имя и название —
     # без пробелов, из ИНН и ПИНФЛ — пробелы и дефисы вставленного номера
-    data["email"] = _php_string(data.get("email")).strip(" \t\n\r\0\x0b").lower()
+    data["email"] = verified.strip(" \t\n\r\0\x0b").lower()
     data["name"] = _php_string(data.get("name")).strip(" \t\n\r\0\x0b")
     data["company_name"] = _php_string(data.get("company_name")).strip(" \t\n\r\0\x0b")
 
@@ -462,11 +473,9 @@ def register(request: HttpRequest) -> HttpResponse:
             "company_role": "owner",
             "updated_at": now,
             "created_at": now,
+            # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified)
+            "email_verified_at": now,
         }
-
-        # Демо-стенд: почта подтверждена сразу, письма нет
-        if (os.environ.get("DEMO_AUTO_VERIFY") or "").lower() in ("1", "true", "on", "yes"):
-            row["email_verified_at"] = now
 
         columns = list(row)
 
@@ -482,24 +491,28 @@ def register(request: HttpRequest) -> HttpResponse:
         throttle.hit(limit, 3600)
 
     user = _row(row["id"])
+    store.forget(SESSION_EMAIL)
+    store.forget(SESSION_VERIFIED)
 
-    # Registered: письмо с кодом — только неподтверждённой почте
-    if user["email_verified_at"] is None:
-        verification.send(ctx, user)
-
+    # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
 
-    # Второй шаг — данные компании — только у юрлица
+    # Второй шаг — данные компании — только у юрлица; остальным —
+    # туда, куда шли (оплата тарифа), иначе в кабинет
     if legal:
         return _to(ctx, "/onboarding/company")
 
     flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
 
-    return _to(ctx, "/verify-email")
+    return _intended(ctx, "/cabinet")
 
 
 #: RegisteredUserController::MAX_PER_HOUR: созданные аккаунты, не отправки формы
 MAX_REGISTRATIONS_PER_HOUR = 5
+
+#: RegisteredUserController::SESSION_EMAIL и SESSION_VERIFIED
+SESSION_EMAIL = "register.email"
+SESSION_VERIFIED = "register.verified_email"
 
 
 def _account_type(value: Any) -> str:  # noqa: ANN401

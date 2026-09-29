@@ -564,13 +564,15 @@ def test_английские_тексты_ошибок_из_laravel(сайт):
 
 @pytest.mark.parametrize("inertia_", [True, False])
 def test_избранное_частота(inertia_):
-    """throttle:60,1 на файловом кэше: Inertia — назад с ошибкой, иначе 429."""
+    """
+    throttle:60,1,favorite на файловом кэше: Inertia — назад с ошибкой,
+    иначе 429. Ключ — приставка «favorite» + sha1 номера пользователя.
+    """
     import hashlib
 
     файловый = {"CACHE_STORE": "file"}
     uid = учётка("forms-throttle@savdex.uz")
     lid = _объявление()
-    # throttle:60,1,favorite — у действия своя приставка ключа
     ключ = "favorite" + hashlib.sha1(str(uid).encode()).hexdigest()
 
     def подготовить(счёт: int) -> Callable[[], None]:
