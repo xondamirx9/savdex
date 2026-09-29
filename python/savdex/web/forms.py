@@ -84,6 +84,11 @@ def _from_query(data: phpquery.Array) -> dict[str, Any]:
     return {str(k): convert(v) for k, v in data.items()}
 
 
+def _string_keys(data: phpquery.Array) -> dict[str, Any]:
+    """Ключи массива PHP — строками, значения как есть."""
+    return {str(k): _string_keys(v) if isinstance(v, dict) else v for k, v in data.items()}
+
+
 def input_of(request: HttpRequest) -> dict[str, Any]:
     """$request->input(): тело поверх строки запроса, очищенное."""
     cached = getattr(request, _ATTR, None)
@@ -108,7 +113,10 @@ def input_of(request: HttpRequest) -> dict[str, Any]:
     elif content_type == "application/x-www-form-urlencoded":
         body = _from_query(phpquery.parse_query(request.body.decode("latin-1"), native=True))
     elif content_type == "multipart/form-data":
-        body = {k: request.POST.get(k) for k in request.POST}
+        # $_POST: «stack[0]» и «stack[]» — массив, как у PHP
+        body = _string_keys(
+            phpquery.parse_pairs([(k, v) for k in request.POST for v in request.POST.getlist(k)])
+        )
 
     query = _from_query(phpquery.parse_query(request.META.get("QUERY_STRING", ""), native=True))
     # getInputSource()->all() + query->all(): ключи тела впереди

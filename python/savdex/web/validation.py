@@ -34,7 +34,7 @@ class Check:
 
 
 #: Validator::$implicitRules (из тех, что есть здесь)
-IMPLICIT = ("required", "required_with")
+IMPLICIT = ("required", "required_with", "required_if")
 
 _MISSING = object()
 
@@ -237,6 +237,10 @@ def _size(value: Any, numeric: bool = False) -> float | None:  # noqa: ANN401
     if isinstance(value, str):
         return float(len(value))
 
+    # mb_strlen($value ?? ''): null — ноль, true — «1», false — пусто
+    if value is None or isinstance(value, bool):
+        return float(len("1" if value is True else ""))
+
     return None
 
 
@@ -245,6 +249,49 @@ def _is_file(value: Any) -> bool:  # noqa: ANN401
     from django.core.files.uploadedfile import UploadedFile
 
     return isinstance(value, UploadedFile)
+
+
+def _required_if(data: Mapping[str, Any], param: str, value: Any) -> bool:  # noqa: ANN401
+    """validateRequiredIf: поле нужно, когда другое поле равно одному из значений."""
+    other, *values = param.split(",")
+    current = _get(data, other.split("."))
+
+    # Arr::has: условия нет во вводе — правило молчит
+    if current is _MISSING:
+        return True
+
+    # parseDependentRuleParameters: для булева и null — строгие true/false/null
+    if isinstance(current, bool) or current is None:
+        choices = [{"true": True, "false": False, "null": None}.get(v, v) for v in values]
+        hit = any(c is current for c in choices)
+    else:
+        hit = any(_php_string(current) == v for v in values)
+
+    return not hit or _passes("required", None, value)
+
+
+def _gte(
+    data: Mapping[str, Any],
+    field_rules: Sequence[str | Check],
+    param: str,
+    value: Any,  # noqa: ANN401
+) -> bool:
+    """validateGte с полем-сравнением: оба числа — сравнение чисел, иначе — нет."""
+    other = _get(data, param.split("."))
+    compared = None if other is _MISSING else other
+
+    def number(v: Any) -> bool:  # noqa: ANN401
+        return not isinstance(v, bool) and (
+            isinstance(v, int | float) or (isinstance(v, str) and _is_numeric(v))
+        )
+
+    if _is_numeric(param):
+        return compared is None and number(value) and float(str(value)) >= float(param)
+
+    if _kind(field_rules, value) == "numeric" and number(value) and number(compared):
+        return float(str(value).strip()) >= float(str(compared).strip())
+
+    return False
 
 
 def _guess_extension(upload: Any) -> str | None:  # noqa: ANN401
@@ -426,6 +473,15 @@ def _message(
         names = [_displayable(p, "." in p and p.split(".")[1].isdigit()) for p in param.split(",")]
         text = text.replace(":values", " / ".join(names))
 
+    if param is not None and rule == "required_if":
+        # replaceRequiredIf: :other — имя поля-условия, :value — его значение
+        other, _, _ = param.partition(",")
+        text = text.replace(":other", _displayable(other, False))
+
+    if param is not None and rule == "gte":
+        # replaceGte: :value — значение поля-сравнения
+        text = text.replace(":value", param)
+
     if param is not None and rule == "after":
         # replaceAfter: дата-параметр как есть («today»)
         text = text.replace(":date", param)
@@ -564,6 +620,10 @@ def validate(
                     passed = all(not _passes("required", None, o) for o in others) or _passes(
                         "required", None, value
                     )
+                elif rule == "required_if":
+                    passed = _required_if(data, param, value)
+                elif rule == "gte":
+                    passed = _gte(data, field_rules, param, value)
                 else:
                     passed = (
                         spec.passes(value)

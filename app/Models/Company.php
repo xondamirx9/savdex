@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -144,6 +145,81 @@ class Company extends Model
 
     public const STATUS_BLOCKED = 'blocked';
 
+    /**
+     * Сведения о компании, которые меняются раз в полгода.
+     *
+     * Заполнить пустое можно когда угодно — это не смена. Поменять уже
+     * заполненное — только из настроек профиля и не чаще раза в
+     * PROFILE_COOLDOWN_MONTHS месяцев: иначе компания с отзывами и
+     * проверкой могла бы за вечер стать другой компанией.
+     */
+    public const PROFILE_FIELDS = [
+        'name', 'legal_name', 'tin', 'country_id', 'city_id', 'address',
+        'employees_range', 'founded_year', 'type', 'description',
+        'is_it_provider', 'it_specializations',
+    ];
+
+    public const PROFILE_COOLDOWN_MONTHS = 6;
+
+    /** До какого момента заполненные сведения менять нельзя; null — можно сейчас. */
+    public function profileLockedUntil(): ?Carbon
+    {
+        $until = $this->profile_changed_at?->copy()->addMonthsNoOverflow(self::PROFILE_COOLDOWN_MONTHS);
+
+        return $until !== null && $until->isFuture() ? $until : null;
+    }
+
+    /**
+     * Какие из заполненных сведений запрос меняет.
+     *
+     * Поля, которых в запросе нет, и пустые сейчас не считаются:
+     * заполнить пустое — не смена.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    public function changedProfileFields(array $data): array
+    {
+        $changed = [];
+
+        foreach (self::PROFILE_FIELDS as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+
+            $current = self::profileValue($field, $this->getAttribute($field));
+
+            if ($current === null) {
+                continue;
+            }
+
+            if ($current !== self::profileValue($field, $data[$field])) {
+                $changed[] = $field;
+            }
+        }
+
+        return $changed;
+    }
+
+    /** Значение для сравнения: пустое — null, список — отсортирован, флаг «нет» — пусто. */
+    private static function profileValue(string $field, mixed $value): ?string
+    {
+        if ($field === 'is_it_provider') {
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : null;
+        }
+
+        if ($field === 'it_specializations') {
+            $list = array_values(array_filter((array) ($value ?? []), fn ($v): bool => $v !== null && $v !== ''));
+            sort($list);
+
+            return $list === [] ? null : implode(',', $list);
+        }
+
+        $text = trim((string) ($value ?? ''));
+
+        return $text === '' ? null : $text;
+    }
+
     protected function casts(): array
     {
         return [
@@ -151,6 +227,7 @@ class Company extends Model
             'it_specializations' => 'array',
             'verified_at' => 'datetime',
             'blocked_at' => 'datetime',
+            'profile_changed_at' => 'datetime',
             'lat' => 'decimal:7',
             'lng' => 'decimal:7',
             'rating' => 'decimal:2',
