@@ -159,11 +159,13 @@ def action(
     throttle: int | None = None,
     throttle_minutes: int = 1,
     password_change: bool = True,
+    throttle_prefix: str = "",
 ) -> Context:
     """
     Контекст формы — или RefusedError с ответом посредника.
 
-    throttle, throttle_minutes — throttle:N,M маршрута. GET (выгрузка
+    throttle, throttle_minutes, throttle_prefix — throttle:N,M,приставка
+    маршрута (приставка — свой счётчик у маршрута). GET (выгрузка
     файла) CSRF не проверяет — как PreventRequestForgery::isReading.
     """
     from savdex.web.cabinet import _authenticate, _require_password_change
@@ -190,7 +192,7 @@ def action(
         raise RefusedError(refused)
 
     if throttle is not None:
-        refused = _throttle(first, bare, throttle, throttle_minutes)
+        refused = _throttle(first, bare, throttle, throttle_minutes, throttle_prefix)
 
         if refused is not None:
             raise RefusedError(refused)
@@ -207,7 +209,7 @@ def action(
 
 
 def _throttle(
-    first: Context, bare: Context, max_attempts: int, minutes: int = 1
+    first: Context, bare: Context, max_attempts: int, minutes: int = 1, prefix: str = ""
 ) -> HttpResponse | None:
     """
     throttle:N,M. Отказ Inertia-формы — назад с ошибкой поля body и
@@ -224,7 +226,8 @@ def _throttle(
 
         return None
 
-    key = throttle.signature(first)
+    # ThrottleRequests: приставка маршрута — перед подписью запроса
+    key = prefix + throttle.signature(first)
 
     if throttle.too_many(key, max_attempts):
         if first.request.headers.get("X-Inertia"):

@@ -17,17 +17,20 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import re
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from django.db import connection
+from django.db import connection, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
+from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, locales
+from savdex.web import eloquent, guard, locales, throttle
 from savdex.web.actions import form
-from savdex.web.forms import _store, action, input_of, invalid
+from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
 from savdex.web.session import Store
 from savdex.web.shared import Context
@@ -161,8 +164,8 @@ def _agent(request: HttpRequest) -> str | None:
 
 @form()
 def login(request: HttpRequest) -> HttpResponse:
-    """AuthenticatedSessionController::store (guest, throttle:20,1)."""
-    ctx = action(request, auth=False, throttle=20, throttle_minutes=1)
+    """AuthenticatedSessionController::store (guest, throttle:20,1,login)."""
+    ctx = action(request, auth=False, throttle=20, throttle_minutes=1, throttle_prefix="login")
 
     if (refused := _guest(ctx)) is not None:
         return refused
@@ -189,7 +192,9 @@ def login(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, {"email": [_lockout(ctx, throttle)]})
 
     remember = _boolean(data.get("remember"))
-    user = guard.attempt(ctx, email, str(data["password"]))
+    user = guard.attempt(ctx, email, str(data["password"])) or guard.attempt_forgiving(
+        ctx, email, str(data["password"])
+    )
 
     if user is None:
         throttle.record_failure(_agent(request))
@@ -289,28 +294,47 @@ def _unique_email() -> Any:  # noqa: ANN401
 
 
 def _ordered(errors: dict[str, list[str]], order: list[str]) -> dict[str, list[str]]:
-    """Ошибки полей в порядке правил, как их копит MessageBag."""
-    return {k: errors[k] for k in order if k in errors}
+    """Ошибки полей в порядке правил, как их копит MessageBag (правило «x.*» — все «x.N»)."""
+    result: dict[str, list[str]] = {}
+
+    for rule in order:
+        if rule.endswith(".*"):
+            head = rule[:-1]
+            result.update({k: v for k, v in errors.items() if k.startswith(head)})
+        elif rule in errors:
+            result[rule] = errors[rule]
+
+    return result
 
 
 @form()
 def register(request: HttpRequest) -> HttpResponse:
-    """RegisteredUserController::store (guest, throttle:5,60) и RegisterRequest."""
+    """RegisteredUserController::store (guest, throttle:20,10,register) и RegisterRequest."""
     from savdex.web import password_rule, verification
+    from savdex.web.company_profile_actions import _tin, _unique_tin
+    from savdex.web.resumes import SERVICE_SECTIONS
 
-    ctx = action(request, auth=False, throttle=5, throttle_minutes=60)
+    ctx = action(request, auth=False, throttle=20, throttle_minutes=10, throttle_prefix="register")
 
     if (refused := _guest(ctx)) is not None:
         return refused
 
     data = input_of(request)
+    kind = _account_type(data.get("account_type"))
+    legal, freelancer = kind == "legal", kind == "freelancer"
 
-    # prepareForValidation: почта — строчными без пробелов, имя — без пробелов
+    # prepareForValidation: почта — строчными без пробелов, имя и название —
+    # без пробелов, из ИНН и ПИНФЛ — пробелы и дефисы вставленного номера
     data["email"] = _php_string(data.get("email")).strip(" \t\n\r\0\x0b").lower()
     data["name"] = _php_string(data.get("name")).strip(" \t\n\r\0\x0b")
+    data["company_name"] = _php_string(data.get("company_name")).strip(" \t\n\r\0\x0b")
+
+    for key in ("tin", "pinfl"):
+        number = re.sub(r"[\s\-]+", "", _php_string(data.get(key)))
+        data[key] = number if number not in ("", "0") else None
 
     custom = {
-        "name.required": ctx.t("messages.register.name_required"),
+        "name.required": ctx.t("messages.register.full_name_required"),
         "name.min": ctx.t("messages.register.name_min"),
         "email.required": ctx.t("messages.register.email_required"),
         "email.email": ctx.t("messages.register.email_format"),
@@ -319,13 +343,21 @@ def register(request: HttpRequest) -> HttpResponse:
         "phone.regex": ctx.t("messages.phone_format"),
         "password.required": ctx.t("messages.auth.password_new"),
         "password.confirmed": ctx.t("messages.auth.password_mismatch"),
-        "password.min": ctx.t("messages.register.password_min"),
-        "password.letters": ctx.t("messages.register.password_letters"),
-        "password.numbers": ctx.t("messages.register.password_numbers"),
-        "password.uncompromised": ctx.t("messages.register.password_leaked"),
+        **password_rule.custom_messages(ctx.t),
         "terms.accepted": ctx.t("messages.register.terms"),
         "account_type.in": ctx.t("messages.register.account_type"),
+        "company_name.required": ctx.t("messages.company.name_required"),
+        "company_name.min": ctx.t("messages.company.name_required"),
+        "tin.unique": ctx.t("messages.company.tin_unique"),
+        "categories.required": ctx.t("messages.register.categories_required"),
+        "categories.min": ctx.t("messages.register.categories_required"),
+        "categories.max": ctx.t("messages.company.categories_max"),
+        "pinfl.required": ctx.t("messages.register.pinfl_required"),
+        "pinfl.unique": ctx.t("messages.register.pinfl_unique"),
+        "service_section.required": ctx.t("messages.register.service_section_required"),
+        "service_section.in": ctx.t("messages.register.service_section_required"),
     }
+    tin_messages: list[str] = []
     rules: dict[str, list[Any]] = {
         "name": ["required", "string", "min:2", "max:120"],
         "email": ["required", "string", "email:rfc,strict", "max:190", _unique_email()],
@@ -335,6 +367,30 @@ def register(request: HttpRequest) -> HttpResponse:
         "account_type": ["nullable", "in:legal,individual,freelancer"],
         "locale": ["nullable", "string", "in:ru,uz,en,zh,tr"],
     }
+
+    # Набор полей — по тому, кто регистрируется; остальное — exclude
+    if legal:
+        rules["company_name"] = ["required", "string", "min:2", "max:190"]
+        rules["tin"] = [
+            "nullable",
+            "string",
+            "max:20",
+            _tin(ctx, "uz", tin_messages),
+            _unique_tin(None),
+        ]
+        rules["categories"] = ["required", "array", "min:1", "max:5"]
+        rules["categories.*"] = ["integer", _top_category()]
+    else:
+        rules["pinfl"] = [
+            "required" if freelancer else "nullable",
+            "string",
+            _pinfl(ctx, tin_messages),
+            _unique_tin(None),
+        ]
+
+    if freelancer:
+        rules["service_section"] = ["required", "string", "in:" + ",".join(SERVICE_SECTIONS)]
+
     errors = validate(data, rules, ctx.locale, custom)
     password = data.get("password")
     confirmed_failed = custom["password.confirmed"] in errors.get("password", [])
@@ -347,6 +403,11 @@ def register(request: HttpRequest) -> HttpResponse:
 
         if merged:
             errors["password"] = merged
+
+    # Текст ошибки правил Tin и Pinfl выбирает само правило
+    for key, rule in (("tin", "validation.tin"), ("pinfl", "validation.pinfl")):
+        if key in errors and tin_messages:
+            errors[key] = [tin_messages[0] if m == rule else m for m in errors[key]]
 
     errors = _ordered(errors, list(rules))
 
@@ -372,33 +433,51 @@ def register(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    locale = data.get("locale", "ru")
+    # Созданные аккаунты с одного адреса сети — не больше MAX_PER_HOUR в час
+    limit = "register:" + (client_ip(ctx.request) or "")
+    counted = laravel_cache.is_file_store()
+
+    if counted and throttle.too_many(limit, MAX_REGISTRATIONS_PER_HOUR):
+        timer = laravel_cache._to_int(laravel_cache.get(f"{limit}:timer") or 0)
+        minutes = max(1, math.ceil(max(0, timer - int(time.time())) / 60))
+        flash(ctx, "error", ctx.t("messages.register.too_many", minutes=minutes))
+
+        return back(ctx)
+
     now = _stamp(eloquent.now())
-    row: dict[str, Any] = {
-        "name": _php_string(data.get("name")),
-        "email": email,
-        "phone": _php_string(data.get("phone")),
-        "password": guard.make(str(password)),
-        "locale": _php_string(locale),
-        "account_type": _php_string(data.get("account_type")) or "legal",
-        "company_role": "owner",
-        "updated_at": now,
-        "created_at": now,
-    }
 
-    # Демо-стенд: почта подтверждена сразу, письма нет
-    if (os.environ.get("DEMO_AUTO_VERIFY") or "").lower() in ("1", "true", "on", "yes"):
-        row["email_verified_at"] = now
+    with transaction.atomic():
+        company_id = _register_company(ctx, data, kind)
+        locale = data.get("locale", "ru")
+        row: dict[str, Any] = {
+            "name": _php_string(data.get("name")),
+            "email": email,
+            "phone": _php_string(data.get("phone")),
+            "password": guard.make(str(password)),
+            "locale": _php_string(locale),
+            "account_type": kind,
+            "company_id": company_id,
+            "company_role": "owner",
+            "updated_at": now,
+            "created_at": now,
+        }
 
-    columns = list(row)
+        # Демо-стенд: почта подтверждена сразу, письма нет
+        if (os.environ.get("DEMO_AUTO_VERIFY") or "").lower() in ("1", "true", "on", "yes"):
+            row["email_verified_at"] = now
 
-    with allowed_writes("users"), connection.cursor() as cursor:
-        cursor.execute(
-            f"insert into users ({', '.join(columns)}) "
-            f"values ({', '.join(['%s'] * len(columns))}) returning id",
-            list(row.values()),
-        )
-        row["id"] = cursor.fetchone()[0]
+        columns = list(row)
+
+        with allowed_writes("users"), connection.cursor() as cursor:
+            cursor.execute(
+                f"insert into users ({', '.join(columns)}) "
+                f"values ({', '.join(['%s'] * len(columns))}) returning id",
+                list(row.values()),
+            )
+            row["id"] = cursor.fetchone()[0]
+
+    if counted:
+        throttle.hit(limit, 3600)
 
     user = _row(row["id"])
 
@@ -408,7 +487,115 @@ def register(request: HttpRequest) -> HttpResponse:
 
     guard.login(ctx, _session(ctx), user)
 
-    return _to(ctx, "/onboarding/company")
+    # Второй шаг — данные компании — только у юрлица
+    if legal:
+        return _to(ctx, "/onboarding/company")
+
+    flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
+
+    return _to(ctx, "/verify-email")
+
+
+#: RegisteredUserController::MAX_PER_HOUR: созданные аккаунты, не отправки формы
+MAX_REGISTRATIONS_PER_HOUR = 5
+
+
+def _account_type(value: Any) -> str:  # noqa: ANN401
+    """RegisterRequest::accountType: без выбора — юрлицо."""
+    kind = _php_string(value)
+
+    return kind if kind in ("legal", "individual", "freelancer") else "legal"
+
+
+def _top_category() -> Any:  # noqa: ANN401
+    """Rule::exists('categories')->whereNull('parent_id')->where('is_active', true)."""
+    from savdex.web.cabinet import _rows
+    from savdex.web.validation import Check
+
+    def passes(value: Any) -> bool:  # noqa: ANN401
+        if isinstance(value, dict | list) or value is None:
+            return False
+
+        try:
+            key = int(str(value).strip())
+        except ValueError:
+            return False
+
+        return bool(
+            _rows(
+                "select 1 from categories where id = %s and parent_id is null and is_active "
+                "limit 1",
+                [key],
+            )
+        )
+
+    return Check("exists", passes)
+
+
+def _pinfl(ctx: Context, messages: list[str]) -> Any:  # noqa: ANN401
+    """App\\Rules\\Pinfl: ровно 14 цифр, не повтор одной цифры."""
+    from savdex.web.validation import Check
+
+    def passes(value: Any) -> bool:  # noqa: ANN401
+        pinfl = _php_string(value)
+
+        if re.fullmatch(r"\d{14}", pinfl, re.ASCII) is None:
+            messages.append(ctx.t("messages.register.pinfl_format"))
+
+            return False
+
+        if re.fullmatch(r"(\d)\1+", pinfl, re.ASCII):
+            messages.append(ctx.t("messages.register.pinfl_invalid"))
+
+            return False
+
+        return True
+
+    return Check("pinfl", passes)
+
+
+def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
+    """
+    RegisteredUserController::companyData и Company::create: профиль
+    заводится вместе с человеком; у юрлица — и выбранные разделы каталога.
+    """
+    from savdex.web.company_profile_actions import CASTS, _search_text, _slug
+    from savdex.web.it_tasks import types_under
+
+    row: dict[str, Any] = {"legal_form": kind, "status": "active", "primary_role": "both"}
+
+    if kind == "legal":
+        row.update(name=data["company_name"], tin=data.get("tin"))
+    else:
+        row.update(name=data["name"], tin=data.get("pinfl"))
+
+    if kind == "freelancer":
+        # $base += [...]: primary_role уже есть — остаётся «both»
+        row.update(
+            is_it_provider=True,
+            it_specializations=types_under(_php_string(data.get("service_section"))),
+        )
+
+    row.update(_search_text(row))
+    row["slug"] = _slug(str(row["name"]))
+    now = _stamp(eloquent.now())
+    row.update(updated_at=now, created_at=now)
+    columns = list(row)
+
+    with allowed_writes("companies"), connection.cursor() as cursor:
+        cursor.execute(
+            f"insert into companies ({', '.join(columns)}) "
+            f"values ({', '.join(['%s'] * len(columns))}) returning id",
+            [eloquent._written(CASTS.get(c), row[c]) for c in columns],
+        )
+        company_id = int(cursor.fetchone()[0])
+
+    if kind == "legal":
+        from savdex.web.onboarding_actions import _sync_categories
+
+        _sync_categories(company_id, list(data.get("categories") or []))
+
+    return company_id
 
 
 def _php_string(value: Any) -> str:  # noqa: ANN401

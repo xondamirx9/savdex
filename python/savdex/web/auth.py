@@ -118,7 +118,28 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    return inertia.render(ctx, "auth/Register", {}, _seo(ctx))
+    from savdex.web.directory import _named
+    from savdex.web.resumes import section_tree
+
+    categories = _named("categories", ctx.locale)
+
+    return inertia.render(
+        ctx,
+        "auth/Register",
+        {
+            # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
+            "categories": [
+                {"id": c["id"], "name": categories[c["id"]]}
+                for c in _rows(
+                    "select id from categories where parent_id is null and is_active "
+                    "order by sort, id"
+                )
+            ],
+            # Фрилансер — направление «Доп. услуг», на заказы которого откликается
+            "serviceSections": section_tree(ctx),
+        },
+        _seo(ctx),
+    )
 
 
 def _whatsapp_configured() -> bool:
@@ -236,6 +257,26 @@ def force_password(request: HttpRequest) -> HttpResponse:
     return inertia.render(ctx, "auth/ForcePassword", {}, _seo(ctx))
 
 
+def onboarding_company_of(company_id: int | None) -> dict[str, Any] | None:
+    """$user->company: не удалённая."""
+    if company_id is None:
+        return None
+
+    rows = _rows("select * from companies where id = %s and deleted_at is null", [company_id])
+
+    return rows[0] if rows else None
+
+
+def onboarding_open(company_id: int | None) -> bool:
+    """
+    OnboardingController::stepOpen: компании ещё нет (старые аккаунты) или
+    юрлицо не дополнило заведённую при регистрации — у неё нет города.
+    """
+    company = onboarding_company_of(company_id)
+
+    return company is None or (company["legal_form"] == "legal" and company["city_id"] is None)
+
+
 def onboarding_company(request: HttpRequest) -> HttpResponse:
     """OnboardingController::company: второй шаг регистрации."""
     from savdex.web.directory import _named, listed_countries, type_options
@@ -247,7 +288,7 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
 
     assert ctx.user is not None
 
-    if ctx.user["company_id"] is not None:
+    if not onboarding_open(ctx.user["company_id"]):
         return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale
@@ -279,6 +320,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             if account["account_type"] in LEGAL_FORMS
             else "legal",
             "personName": ctx.user["name"],
+            # Компания заведена при регистрации — спрашиваем только недостающее
+            "completing": ctx.user["company_id"] is not None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(

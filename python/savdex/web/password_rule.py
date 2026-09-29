@@ -1,11 +1,11 @@
 """
 Правило пароля площадки — Password::defaults() из AppServiceProvider:
-не короче 10 знаков, хотя бы одна буква и одна цифра; на развёрнутом
+от 8 до 20 знаков, хотя бы одна буква и одна цифра; на развёрнутом
 сайте (APP_ENV не local и не testing) — ещё и не из утечек
 (Have I Been Pwned, диапазон по первым пяти знакам SHA-1).
 
 Как Illuminate\\Validation\\Rules\\Password::passes: свой валидатор
-(string и min), затем буквы и цифры — все сообщения разом; проверка по
+(string, min и max), затем буквы и цифры — все сообщения разом; проверка по
 утечкам — только если остальное прошло. Сбой сети — пароль принимается
 (NotPwnedVerifier так же не мешает регистрации, когда сервис молчит).
 """
@@ -23,7 +23,8 @@ import regex
 from savdex.web import ui
 from savdex.web.validation import _displayable, validate
 
-MIN = 10
+MIN = 8
+MAX = 20
 
 _LETTER = regex.compile(r"\p{L}")
 _NUMBER = regex.compile(r"\p{N}")
@@ -77,7 +78,8 @@ def messages(
     custom: Mapping[str, str],
 ) -> list[str]:
     """Ошибки правила Password::defaults() для значения поля."""
-    found = validate({attribute: value}, {attribute: ["string", f"min:{MIN}"]}, locale, custom)
+    inner = {attribute: ["string", f"min:{MIN}", f"max:{MAX}"]}
+    found = validate({attribute: value}, inner, locale, custom)
     result = list(found.get(attribute, []))
 
     if isinstance(value, str):
@@ -91,3 +93,14 @@ def messages(
         result.append(_message("password.uncompromised", attribute, locale, custom))
 
     return result
+
+
+def custom_messages(t: Any) -> dict[str, str]:  # noqa: ANN401
+    """PasswordMessages::all: подписи к правилам пароля, общие для всех форм."""
+    return {
+        "password.min": t("messages.register.password_min"),
+        "password.max": t("messages.register.password_max"),
+        "password.letters": t("messages.register.password_letters"),
+        "password.numbers": t("messages.register.password_numbers"),
+        "password.uncompromised": t("messages.register.password_leaked"),
+    }

@@ -27,7 +27,7 @@ import pytest
 
 from savdex import laravel_session
 
-from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база
+from .pg_admin import APP_KEY, KEY, КОРЕНЬ, php, sql, нужна_база, свежая_база
 from .test_web_forms import SID, ТОКЕН, inertia
 from .test_web_session import СЕССИЯ, завести, кука, строка
 from .web_site import laravel, из_django, из_laravel
@@ -43,6 +43,15 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
+    php(
+        "foreach (['cement', 'metal'] as $slug) {"
+        " App\\Models\\Category::factory()->create(['slug' => $slug, 'parent_id' => null]); }"
+        "$c = App\\Models\\Category::where('slug', 'cement')->value('id');"
+        "App\\Models\\Category::factory()->create(['slug' => 'child', 'parent_id' => $c]);"
+        "App\\Models\\Company::factory()->create(['slug' => 'taken', 'tin' => '305123456']);"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
 
     with laravel(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
         yield root
@@ -106,14 +115,29 @@ def _проверить_письмо(письмо: dict[str, Any], uid: int, а�
     assert части.query.endswith("signature=" + ожидание)
 
 
-def регистрация(сайт: str, body: dict[str, Any], *, занята: bool = False) -> dict[str, Any]:
+def регистрация(
+    сайт: str, body: dict[str, Any], *, занята: bool = False, лимит: bool = False
+) -> dict[str, Any]:
     стороны = {}
 
     for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
         sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
+        sql("delete from companies where slug <> 'taken'")
+        sql("select setval('companies_id_seq', (select max(id) from companies) + 1, false)")
         shutil.rmtree(КЭШ, ignore_errors=True)
         ЖУРНАЛ_LARAVEL.write_text("")
         ЖУРНАЛ_DJANGO.write_text("")
+
+        if лимит:
+            # Пять созданных аккаунтов с этого адреса — полчаса назад
+            import os
+            import time
+
+            from savdex import laravel_cache
+
+            os.environ["CACHE_STORE"] = "file"
+            laravel_cache.put("register:127.0.0.1", 5, 3600)
+            laravel_cache.put("register:127.0.0.1:timer", int(time.time()) + 1800, 3600)
 
         if занята:
             sql(
@@ -166,6 +190,13 @@ def регистрация(сайт: str, body: dict[str, Any], *, занята:
                 "user_id": сессия["user_id"] is not None,
             },
             "users": [r[1:] for r in учётки],
+            "companies": sql(
+                "select name, slug, legal_form, tin, primary_role, status, is_it_provider, "
+                "it_specializations::text, search_text, (select array_agg(c.slug order by c.slug) "
+                "from company_category cc join categories c on c.id = cc.category_id "
+                "where cc.company_id = companies.id)::text from companies "
+                "where slug <> 'taken' order by id"
+            ),
             "mail": [{k: _без_изменчивого(v, сайт) for k, v in п.items()} for п in письма],
         }
 
@@ -216,7 +247,68 @@ def test_регистрация(сайт, body):
     итог = регистрация(сайт, body)
 
     if body is ВЕРНО:
-        assert итог["location"].endswith("/onboarding/company") and len(итог["mail"]) == 1
+        assert итог["location"].endswith("/verify-email") and len(итог["mail"]) == 1
+        assert итог["companies"][0][:3] == ("Азиз Каримов", "aziz-karimov", "individual")
+
+
+def _раздел(slug: str) -> int:
+    return int(sql("select id from categories where slug = %s", [slug])[0][0])
+
+
+ЮРЛИЦО = {
+    **ВЕРНО,
+    "account_type": "legal",
+    "company_name": "  ООО «Цемент Плюс» ",
+    "tin": "302 345-678",
+    "categories": "cement,metal",
+}
+
+
+@pytest.mark.parametrize(
+    "правка",
+    [
+        {},
+        {"tin": None, "company_name": ""},
+        {"tin": "305123456"},
+        {"tin": "30234567"},
+        {"categories": []},
+        {"categories": "cement,cement"},
+        {"categories": "child"},
+        {"categories": ["x", 99999]},
+        {"account_type": "robot"},
+    ],
+)
+def test_регистрация_юрлица(сайт, правка):
+    body = {**ЮРЛИЦО, **правка}
+
+    if isinstance(body["categories"], str):
+        body["categories"] = [_раздел(s) for s in body["categories"].split(",")]
+
+    итог = регистрация(сайт, body)
+
+    if not правка:
+        assert итог["location"].endswith("/onboarding/company")
+        assert итог["companies"][0][3] == "302345678"
+
+
+@pytest.mark.parametrize(
+    "правка",
+    [
+        {"account_type": "freelancer", "pinfl": "3120 5967 8901 23", "service_section": "it"},
+        {"account_type": "freelancer", "pinfl": None, "service_section": "cooking"},
+        {"account_type": "freelancer", "pinfl": "11111111111111", "service_section": "hr_services"},
+        {"account_type": "individual", "pinfl": "123"},
+        {"account_type": "individual", "pinfl": "31205967890123", "company_name": "лишнее"},
+    ],
+)
+def test_регистрация_человека(сайт, правка):
+    регистрация(сайт, {**ВЕРНО, **правка})
+
+
+def test_лимит_регистраций(сайт):
+    итог = регистрация(сайт, ВЕРНО, лимит=True)
+
+    assert итог["users"] == [] and '"error"' in итог["session"]["payload"]
 
 
 def test_почта_занята(сайт):

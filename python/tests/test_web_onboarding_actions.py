@@ -429,3 +429,73 @@ def удаление(
     )
 
     return стороны["django"]
+
+
+# ── Второй шаг у юрлица с компанией из регистрации ─────────────────
+
+
+def сброс_дополнения(*, город: bool = False, форма: str = "legal") -> Callable[[], None]:
+    """Компания заведена при регистрации: название, ИНН, два раздела, без города."""
+
+    def run() -> None:
+        сброс_компаний()()
+        [(cid,)] = sql(
+            "insert into companies (name, slug, legal_form, tin, primary_role, status, "
+            "custom_category, city_id, created_at, updated_at) values ('Цемент Плюс', "
+            "'cement-plus', %s, '302345678', 'both', 'active', 'Бетон', %s, "
+            "now() - interval '1 day', now() - interval '1 day') returning id",
+            [форма, _город() if город else None],
+        )
+        sql(
+            "insert into company_category (company_id, category_id) select %s, id "
+            "from categories where slug in ('cement', 'metal')",
+            [cid],
+        )
+        пользователь(company_id=cid)
+
+    return run
+
+
+def снимок_дополнения() -> Any:
+    return {
+        "companies": sql(
+            "select slug, name, type, country_id, city_id, primary_role, custom_category, "
+            "updated_at > now() - interval '1 hour' from companies where slug = 'cement-plus'"
+        ),
+        "categories": sql(
+            "select c.slug from company_category cc join categories c on c.id = cc.category_id "
+            "join companies k on k.id = cc.company_id where k.slug = 'cement-plus' order by c.slug"
+        ),
+        "journal": _журнал(),
+    }
+
+
+@pytest.mark.parametrize(
+    ("правка", "настройка"),
+    [
+        ({}, {}),
+        ({"categories": ["wood", "glass", "paint", "tiles"]}, {}),
+        ({"categories": ["cement"], "custom_category": None}, {}),
+        ({"type": None, "city_id": None}, {}),
+        ({}, {"город": True}),
+        ({}, {"форма": "individual"}),
+    ],
+)
+def test_дополнение_компании(сайт, правка, настройка):
+    body = {**верно(), "custom_category": "Сухие смеси", **правка}
+
+    if body.get("categories"):
+        body["categories"] = [
+            _номер("categories", s) if isinstance(s, str) and not s.isdigit() else s
+            for s in body["categories"]
+        ]
+
+    uid = пользователь()
+    отправить(
+        сайт,
+        "/onboarding/company",
+        сброс_дополнения(**настройка),
+        снимок_дополнения,
+        uid=uid,
+        body=body,
+    )

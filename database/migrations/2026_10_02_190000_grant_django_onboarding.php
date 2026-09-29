@@ -4,9 +4,9 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Второй шаг регистрации, «Оцените SavdEx» и удаление учётки на Django
- * (этап 5, шаг 47): новая компания с формой собственности и её
- * направления, отзыв о площадке (новый и правка). Удаление учётки
+ * Регистрация с профилем, второй шаг регистрации, «Оцените SavdEx» и
+ * удаление учётки на Django (этап 5, шаг 47): новая компания с формой
+ * собственности и её направления, отзыв о площадке (новый и правка). Удаление учётки
  * обходится уже выданными правами (deleted_at у users, status у
  * listings). Роли нет — делать нечего.
  */
@@ -15,7 +15,7 @@ return new class extends Migration
     private const ROLE = 'savdex_django';
 
     private const GRANTS = [
-        'INSERT ON company_category',
+        'INSERT, DELETE ON company_category',
         'USAGE ON SEQUENCE company_category_id_seq',
         'SELECT, INSERT ON platform_reviews',
         'UPDATE (company_id, rating, rating_usability, rating_search, rating_support, body, status, screening_flags, moderator_note, moderated_by, moderated_at, updated_at) ON platform_reviews',

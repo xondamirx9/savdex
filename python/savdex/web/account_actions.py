@@ -53,13 +53,14 @@ def _with_errors(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
 
 @form()
 def force_password(request: HttpRequest) -> HttpResponse:
-    """ForcePasswordController::update (auth, throttle:10,60)."""
-    ctx = action(request, throttle=10, throttle_minutes=60)
+    """ForcePasswordController::update (auth, throttle:10,60,password-forced)."""
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="password-forced")
     assert ctx.user is not None
     data = input_of(request)
     custom = {
         "password.required": ctx.t("messages.auth.password_new"),
         "password.confirmed": ctx.t("messages.auth.password_mismatch"),
+        **password_rule.custom_messages(ctx.t),
     }
     errors = validate(data, {"password": ["required", "string", "confirmed"]}, ctx.locale, custom)
 
@@ -113,6 +114,18 @@ def force_password(request: HttpRequest) -> HttpResponse:
 
 
 # ── Забыли пароль ───────────────────────────────────────────────────
+
+
+def _normalized_email(data: dict[str, Any]) -> str:
+    """PasswordResetController::normalizedEmail: без пробелов и строчными."""
+    return _string(data.get("email")).strip(" \t\n\r\0\x0b").lower()
+
+
+def _email_messages(ctx: Context) -> dict[str, str]:
+    return {
+        "email.required": ctx.t("messages.auth.email_required"),
+        "email.email": ctx.t("messages.auth.email_invalid"),
+    }
 
 
 def _reset_record(email: str) -> dict[str, Any] | None:
@@ -189,17 +202,22 @@ def _send_reset_message(ctx: Context, email: str, channel: str) -> None:
 
 @form()
 def forgot_password(request: HttpRequest) -> HttpResponse:
-    """PasswordResetController::email (guest, throttle:6,1): ответ один при любом исходе."""
+    """PasswordResetController::email (guest, throttle:6,1,password-email): ответ один всегда."""
     from savdex.web.auth import reset_channels
 
-    ctx = action(request, auth=False, throttle=6, throttle_minutes=1)
+    ctx = action(
+        request, auth=False, throttle=6, throttle_minutes=1, throttle_prefix="password-email"
+    )
 
     if (refused := _guest(ctx)) is not None:
         return refused
 
     data = input_of(request)
     errors = validate(
-        data, {"email": ["required", "email"], "channel": ["nullable", "string"]}, ctx.locale
+        data,
+        {"email": ["required", "email"], "channel": ["nullable", "string"]},
+        ctx.locale,
+        _email_messages(ctx),
     )
 
     if errors:
@@ -210,7 +228,7 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
     if channel not in reset_channels():
         channel = "mail"
 
-    email = str(data["email"])
+    email = _normalized_email(data)
 
     if channel == "mail":
         _send_reset_mail(ctx, email)
@@ -224,14 +242,21 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
 
 @form()
 def reset_password(request: HttpRequest) -> HttpResponse:
-    """PasswordResetController::update (guest, throttle:10,60) и Password::reset."""
-    ctx = action(request, auth=False, throttle=10, throttle_minutes=60)
+    """PasswordResetController::update (guest, throttle:10,60,password-reset) и Password::reset."""
+    ctx = action(
+        request, auth=False, throttle=10, throttle_minutes=60, throttle_prefix="password-reset"
+    )
 
     if (refused := _guest(ctx)) is not None:
         return refused
 
     data = input_of(request)
-    custom = {"password.confirmed": ctx.t("messages.auth.password_mismatch")}
+    custom = {
+        **_email_messages(ctx),
+        "password.required": ctx.t("messages.auth.password_new"),
+        "password.confirmed": ctx.t("messages.auth.password_mismatch"),
+        **password_rule.custom_messages(ctx.t),
+    }
     rules: dict[str, list[Any]] = {
         "token": ["required"],
         "email": ["required", "email"],
@@ -255,8 +280,8 @@ def reset_password(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    user = guard.user_by_email(str(data["email"]))
-    record = _reset_record(str(data["email"])) if user is not None else None
+    user = guard.user_by_email(_normalized_email(data))
+    record = _reset_record(str(user["email"])) if user is not None else None
     fresh = (
         record is not None
         and record["created_at"] is not None
@@ -310,8 +335,8 @@ def _mark_verified(ctx: Context, user: dict[str, Any]) -> bool:
 
 @form()
 def verify_code(request: HttpRequest) -> HttpResponse:
-    """EmailVerificationController::confirm (auth, throttle:6,1)."""
-    ctx = action(request, throttle=6, throttle_minutes=1)
+    """EmailVerificationController::confirm (auth, throttle:6,1,verify-email)."""
+    ctx = action(request, throttle=6, throttle_minutes=1, throttle_prefix="verify-email")
     assert ctx.user is not None
     user = _row(ctx.user["id"])
 
@@ -343,8 +368,8 @@ def verify_code(request: HttpRequest) -> HttpResponse:
 
 @form()
 def verify_send(request: HttpRequest) -> HttpResponse:
-    """EmailVerificationController::send (auth, throttle:6,1): письмо ещё раз."""
-    ctx = action(request, throttle=6, throttle_minutes=1)
+    """EmailVerificationController::send (auth, throttle:6,1,verify-email): письмо ещё раз."""
+    ctx = action(request, throttle=6, throttle_minutes=1, throttle_prefix="verify-email")
     assert ctx.user is not None
     user = _row(ctx.user["id"])
 
@@ -359,11 +384,11 @@ def verify_send(request: HttpRequest) -> HttpResponse:
 
 @form("GET")
 def verify_link(request: HttpRequest, user_id: str, digest: str) -> HttpResponse:
-    """EmailVerificationController::verify (auth, signed, throttle:6,1)."""
+    """EmailVerificationController::verify (auth, signed, throttle:6,1,verify-email)."""
     from savdex.web import signed
     from savdex.web.views import error
 
-    ctx = action(request, throttle=6, throttle_minutes=1)
+    ctx = action(request, throttle=6, throttle_minutes=1, throttle_prefix="verify-email")
     assert ctx.user is not None
 
     # ValidateSignature: адрес запроса без подписи, ключом app.key

@@ -21,7 +21,14 @@ from django.http import HttpRequest, HttpResponse
 from savdex.guards import allowed_writes
 from savdex.web import review_screening as screening
 from savdex.web.actions import form
-from savdex.web.auth import CRITERIA, LEGAL_FORMS, MIN_BODY, _blocked_reason
+from savdex.web.auth import (
+    CRITERIA,
+    LEGAL_FORMS,
+    MIN_BODY,
+    _blocked_reason,
+    onboarding_company_of,
+    onboarding_open,
+)
 from savdex.web.auth_actions import _row, _to
 from savdex.web.cabinet import _rows
 from savdex.web.chat_actions import _php_trim
@@ -50,9 +57,14 @@ def company(request: HttpRequest) -> HttpResponse:
     assert ctx.user is not None
     user = _row(ctx.user["id"])
 
-    # Компания уже есть — шаг пройден
-    if user["company_id"] is not None:
+    # Шаг пройден: компания есть и дополнена
+    if not onboarding_open(user["company_id"]):
         return _to(ctx, "/cabinet")
+
+    existing = onboarding_company_of(user["company_id"])
+
+    if existing is not None:
+        return _complete(ctx, existing)
 
     legal_form = _account_type(user)
     person = legal_form != "legal"
@@ -122,6 +134,92 @@ def company(request: HttpRequest) -> HttpResponse:
     flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
 
     return _to(ctx, "/verify-email")
+
+
+def _complete(ctx: Context, company: dict[str, Any]) -> HttpResponse:
+    """
+    OnboardingController::complete: у юрлица название, ИНН и разделы уже
+    есть — здесь тип, страна, город и роль; направления услуг добавляются
+    к выбранным разделам, всего не больше пяти.
+    """
+    from savdex.web import eloquent
+    from savdex.web.company_profile_actions import CASTS, _search_text
+
+    data = input_of(ctx.request)
+    rules: dict[str, list[str | Check]] = {
+        "type": ["required", "string", "max:30"],
+        "country_id": ["required", _exists("countries")],
+        "city_id": ["required", _exists("cities")],
+        "primary_role": ["required", "in:supplier,buyer,both"],
+        "categories": ["array", "max:5"],
+        "categories.*": ["integer", _exists("categories")],
+        "custom_category": ["nullable", "string", "max:80"],
+    }
+    errors = validate(
+        data,
+        rules,
+        ctx.locale,
+        {
+            "type.required": ctx.t("messages.company.type_required"),
+            "country_id.required": ctx.t("messages.company.country_required"),
+            "city_id.required": ctx.t("messages.company.city_required"),
+            "categories.max": ctx.t("messages.company.categories_max"),
+        },
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    fields = validated(data, rules)
+    eloquent.save(
+        ctx,
+        "companies",
+        company,
+        {
+            "type": fields["type"],
+            "country_id": fields["country_id"],
+            "city_id": fields["city_id"],
+            "primary_role": fields["primary_role"],
+            # $data['custom_category'] ?? $company->custom_category
+            "custom_category": company["custom_category"]
+            if fields.get("custom_category") is None
+            else fields["custom_category"],
+        },
+        section="companies",
+        model="Company",
+        saving=_search_text,
+        casts=CASTS,
+    )
+
+    # Уже выбранные разделы, затем новые; без повторов, не больше пяти
+    current = [
+        r["category_id"]
+        for r in _rows(
+            "select category_id from company_category where company_id = %s",
+            [company["id"]],
+        )
+    ]
+    merged = list(
+        dict.fromkeys([*current, *(int(float(str(c))) for c in fields.get("categories") or [])])
+    )[:5]
+    _sync_to(company["id"], current, merged)
+    flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
+
+    return _to(ctx, "/verify-email")
+
+
+def _sync_to(company_id: int, current: list[int], wanted: list[int]) -> None:
+    """categories()->sync($wanted): лишние связи прочь, недостающие — вставкой."""
+    detach = [c for c in current if c not in wanted]
+
+    if detach:
+        with allowed_writes("company_category"), connection.cursor() as cursor:
+            cursor.execute(
+                "delete from company_category where company_id = %s and category_id = any(%s)",
+                [company_id, detach],
+            )
+
+    _sync_categories(company_id, [c for c in wanted if c not in current])
 
 
 def _sync_categories(company_id: int, categories: list[Any]) -> None:

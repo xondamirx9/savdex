@@ -97,6 +97,48 @@ def attempt(ctx: Context, email: str, password: str) -> dict[str, Any] | None:
     return user
 
 
+def keyboard_variants(password: str) -> list[str]:
+    """
+    AuthenticatedSessionController::keyboardVariants: искажения клавиатуры
+    телефона — первая буква другого регистра, пробел в конце и то и другое.
+    """
+    first, rest = password[:1], password[1:]
+    flipped = first.upper() if first.upper() != first else first.lower()
+    variants: list[str] = []
+
+    for case in dict.fromkeys([password, flipped + rest]):
+        variants += [case, case + " ", case.rstrip(" \t\n\r\0\x0b")]
+
+    return [v for v in dict.fromkeys(variants) if v != ""]
+
+
+def attempt_forgiving(ctx: Context, email: str, password: str) -> dict[str, Any] | None:
+    """
+    AuthenticatedSessionController::attemptForgiving: почта без учёта
+    регистра, пароль — с поправкой на клавиатуру телефона. Подошёл
+    вариант — пароль пересохраняется в набранном сейчас виде.
+    """
+    rows = _rows(
+        "select * from users where lower(email) = %s and deleted_at is null limit 1", [email]
+    )
+
+    if not rows or not rows[0]["password"]:
+        return None
+
+    user = rows[0]
+
+    for variant in keyboard_variants(password):
+        if check(variant, user["password"]):
+            if variant != password:
+                eloquent.save(
+                    ctx, "users", user, {"password": make(password)}, section="users", model="User"
+                )
+
+            return user
+
+    return None
+
+
 def _as(ctx: Context, user_id: int | None) -> None:
     """setUser: кто вошёл — для Auth::user() дальше в запросе (журнал, уведомления)."""
     ctx.visitor = dataclasses.replace(ctx.visitor, user_id=user_id)
