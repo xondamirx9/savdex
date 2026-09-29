@@ -121,6 +121,9 @@ export default function Register() {
                 <TextInput
                     label={t('auth.email_label')}
                     type="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     name="email"
                     autoComplete="email"
                     required
