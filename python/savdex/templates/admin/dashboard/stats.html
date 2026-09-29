@@ -1,0 +1,17 @@
+{% comment %}
+  Плитки с числами (StatsOverviewWidget у Filament): очередь на проверку,
+  контент в работе, показатели за 30 дней. Цвет — у подписи под числом,
+  стрелка — рост или спад к прошлому периоду.
+{% endcomment %}
+<section class="module savdex-widget" aria-labelledby="savdex-w-{{ w.key }}" data-widget="{{ w.key }}">
+  <h2 id="savdex-w-{{ w.key }}">{{ w.heading }}</h2>
+  <div class="savdex-stats">
+  {% for s in w.stats %}
+    {% if s.url %}<a class="savdex-stat" href="{{ s.url }}">{% else %}<div class="savdex-stat">{% endif %}
+      <div class="savdex-stat-label">{{ s.label }}</div>
+      <div class="savdex-stat-value">{{ s.value }}</div>
+      <div class="savdex-stat-description savdex-tone-{{ s.tone }}">{% if s.trend == "up" %}<span aria-hidden="true">↗</span> {% elif s.trend == "down" %}<span aria-hidden="true">↘</span> {% endif %}{{ s.description }}</div>
+    {% if s.url %}</a>{% else %}</div>{% endif %}
+  {% endfor %}
+  </div>
+</section>

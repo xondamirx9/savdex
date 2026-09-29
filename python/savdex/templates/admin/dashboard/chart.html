@@ -1,0 +1,37 @@
+{% comment %}
+  Регистрации по дням (RegistrationsChart у Filament) — SVG без скриптов.
+  Две линии: разрыв между пользователями и компаниями — люди, застрявшие
+  на втором шаге регистрации. При наведении на день — подсказка с числами;
+  те же числа — таблицей под графиком. Координаты — без локализации:
+  «194,0» вместо «194.0» SVG не поймёт.
+{% endcomment %}
+{% load l10n %}
+<section class="module savdex-widget" aria-labelledby="savdex-w-{{ w.key }}" data-widget="{{ w.key }}">
+  <h2 id="savdex-w-{{ w.key }}">Регистрации по дням</h2>
+  <p class="savdex-widget-description">Разрыв между линиями — люди, не дошедшие до создания компании</p>
+  <ul class="savdex-legend">
+    {% for s in w.series %}<li><span class="savdex-key savdex-key--{{ s.key }}" aria-hidden="true"></span>{{ s.label }}</li>{% endfor %}
+    <li class="savdex-muted">за 30 дней: пользователей {{ w.total_users }}, компаний {{ w.total_companies }}</li>
+  </ul>
+  {% localize off %}
+  <svg class="savdex-chart" viewBox="0 0 {{ w.width }} {{ w.height }}" role="img"
+       aria-label="Регистрации по дням за 30 дней: пользователей {{ w.total_users }}, компаний {{ w.total_companies }}">
+    {% for t in w.ticks %}
+    <line class="savdex-gridline" x1="{{ w.left }}" x2="{{ w.right }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
+    <text class="savdex-axis" x="{{ w.left|add:-6 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.label }}</text>
+    {% endfor %}
+    {% for d in w.days %}{% if d.show %}<text class="savdex-axis" x="{{ d.x }}" y="{{ w.height|add:-6 }}" text-anchor="middle">{{ d.label }}</text>{% endif %}{% endfor %}
+    {% for s in w.series %}<path class="savdex-area savdex-series--{{ s.key }}" d="{{ s.area }}"/>{% endfor %}
+    {% for s in w.series %}<path class="savdex-path savdex-series--{{ s.key }}" d="{{ s.line }}"/>{% endfor %}
+    {% for s in w.series %}<circle class="savdex-dot savdex-series--{{ s.key }}" cx="{{ s.end_x }}" cy="{{ s.end_y }}" r="4"/>{% endfor %}
+    {% for d in w.days %}<rect class="savdex-hit" x="{{ d.band_x }}" y="0" width="{{ w.band }}" height="{{ w.baseline }}"><title>{{ d.label }}: пользователей {{ d.users }}, компаний {{ d.companies }}</title></rect>{% endfor %}
+  </svg>
+  {% endlocalize %}
+  <details class="savdex-chart-table">
+    <summary>Числа таблицей</summary>
+    <table>
+      <thead><tr><th scope="col">День</th><th scope="col">Пользователи</th><th scope="col">Компании</th></tr></thead>
+      <tbody>{% for d in w.days %}<tr><td>{{ d.label }}</td><td>{{ d.users }}</td><td>{{ d.companies }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </details>
+</section>

@@ -19,6 +19,7 @@ import pytest
 from django.test import Client
 
 from savdex import access, adminpanel, bridge
+from savdex.dashboard import widgets
 
 APP_KEY = "base64:" + base64.b64encode(b"k" * 32).decode()
 
@@ -161,6 +162,9 @@ class TestСтраницы:
     def база(self, monkeypatch):
         люди: dict[int, access.Admin | None] = {7: сотрудник()}
         monkeypatch.setattr(bridge, "load_admin", lambda _conn, uid: люди.get(uid))
+        # Базы здесь нет, а виджеты главной её читают; они проверены
+        # на PostgreSQL в tests/test_dashboard.py
+        monkeypatch.setattr(widgets, "for_request", lambda request: [])
 
         return люди
 

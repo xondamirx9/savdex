@@ -1,0 +1,106 @@
+{% comment %}
+  Оформление стартового экрана — поверх стилей админки Django (module,
+  таблицы, её цвета светлой и тёмной темы). Свои только цвета состояний
+  и линий графика — у каждой темы свои ступени.
+{% endcomment %}
+<style>
+  :root {
+    --savdex-danger: #b91c1c; --savdex-warning: #b45309; --savdex-success: #15803d;
+    --savdex-info: #0369a1; --savdex-primary: #1d4ed8;
+    --savdex-series-users: #2a78d6; --savdex-series-companies: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --savdex-danger: #f87171; --savdex-warning: #fbbf24; --savdex-success: #4ade80;
+      --savdex-info: #38bdf8; --savdex-primary: #93c5fd;
+      --savdex-series-users: #3987e5; --savdex-series-companies: #d95926;
+    }
+  }
+  html[data-theme="light"] {
+    --savdex-danger: #b91c1c; --savdex-warning: #b45309; --savdex-success: #15803d;
+    --savdex-info: #0369a1; --savdex-primary: #1d4ed8;
+    --savdex-series-users: #2a78d6; --savdex-series-companies: #eb6834;
+  }
+  html[data-theme="dark"] {
+    --savdex-danger: #f87171; --savdex-warning: #fbbf24; --savdex-success: #4ade80;
+    --savdex-info: #38bdf8; --savdex-primary: #93c5fd;
+    --savdex-series-users: #3987e5; --savdex-series-companies: #d95926;
+  }
+
+  /* Главная шире колонки Django в 600 точек: таблицам виджетов тесно */
+  .dashboard #content { width: auto; max-width: 1180px; }
+  .dashboard #content-main { max-width: 760px; }
+  .savdex-dashboard { margin: 8px 0 12px; }
+
+  .savdex-tone-danger { color: var(--savdex-danger); }
+  .savdex-tone-warning { color: var(--savdex-warning); }
+  .savdex-tone-success { color: var(--savdex-success); }
+  .savdex-tone-info { color: var(--savdex-info); }
+  .savdex-tone-primary { color: var(--savdex-primary); }
+  .savdex-tone-gray, .savdex-muted { color: var(--body-quiet-color); }
+  .savdex-loud { color: var(--body-loud-color); }
+
+  .savdex-widget { border: 1px solid var(--hairline-color); border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+  .savdex-widget-description { margin: 8px 0 0; color: var(--body-quiet-color); }
+  .savdex-badge {
+    display: inline-block; padding: 1px 8px; border: 1px solid currentColor; border-radius: 999px;
+    font-size: 0.75rem; line-height: 1.5; white-space: nowrap;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  .savdex-scroll { overflow-x: auto; }
+  .savdex-widget .savdex-table { width: 100%; margin-top: 8px; }
+  .dashboard .savdex-widget table th { width: auto; }
+  .dashboard .savdex-widget table td { white-space: normal; vertical-align: top; }
+  .savdex-table tbody tr { position: relative; }
+  .savdex-table tbody tr:hover { background: var(--darkened-bg); }
+  .dashboard .savdex-widget table td a.savdex-row-link { display: inline; padding: 0; font-weight: 600; }
+  /* Вся строка ведёт в запись, как recordUrl у Filament */
+  .savdex-row-link::after { content: ""; position: absolute; inset: 0; }
+  .savdex-sub { margin-top: 2px; font-size: 0.75rem; color: var(--body-quiet-color); }
+  .savdex-more { margin: 8px 0 10px; text-align: right; }
+  .savdex-empty { padding: 16px 10px; text-align: center; color: var(--body-quiet-color); }
+  .savdex-empty p { margin: 4px 0; }
+
+  .savdex-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 12px; }
+  .savdex-stat { display: block; padding: 12px 14px; border: 1px solid var(--hairline-color); border-radius: 4px; color: inherit; }
+  a.savdex-stat:hover, a.savdex-stat:focus { background: var(--darkened-bg); text-decoration: none; }
+  .savdex-stat-label { color: var(--body-quiet-color); font-size: 0.8125rem; }
+  .savdex-stat-value { margin: 4px 0; font-size: 1.75rem; font-weight: 600; color: var(--body-loud-color); font-variant-numeric: tabular-nums; }
+  .savdex-stat-description { font-size: 0.8125rem; }
+
+  .savdex-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 20px; }
+  @media (min-width: 1100px) { .savdex-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .savdex-widget .savdex-list { list-style: none; margin: 0; padding: 4px 10px 12px; }
+  .savdex-list li { padding: 8px 0; }
+  .savdex-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .savdex-meter { display: block; height: 8px; margin: 6px 0 4px; border-radius: 4px; overflow: hidden; background: var(--darkened-bg); }
+  .savdex-meter span { display: block; height: 100%; border-radius: 4px; background: var(--savdex-series-users); }
+  .savdex-category { display: grid; grid-template-columns: 10rem minmax(0, 1fr) 7rem; gap: 12px; align-items: center; }
+  .savdex-category .savdex-meter { margin: 0; }
+  .savdex-category-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .savdex-category small { text-align: right; font-variant-numeric: tabular-nums; }
+  .savdex-muted b { font-variant-numeric: tabular-nums; }
+
+  .savdex-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 10px 0 0; padding: 0 10px; }
+  .savdex-key { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+  .savdex-key--users { background: var(--savdex-series-users); }
+  .savdex-key--companies { background: var(--savdex-series-companies); }
+  .savdex-chart { display: block; width: 100%; height: auto; padding: 4px 6px 0; box-sizing: border-box; }
+  .savdex-gridline { stroke: var(--hairline-color); stroke-width: 1; }
+  .savdex-axis { fill: var(--body-quiet-color); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .savdex-series--users { --series: var(--savdex-series-users); }
+  .savdex-series--companies { --series: var(--savdex-series-companies); }
+  .savdex-area { fill: var(--series); fill-opacity: 0.1; stroke: none; }
+  .savdex-path { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .savdex-dot { fill: var(--series); stroke: var(--body-bg); stroke-width: 2; }
+  .savdex-hit { fill: var(--body-quiet-color); fill-opacity: 0; }
+  .savdex-hit:hover { fill-opacity: 0.08; }
+  .savdex-chart-table { padding: 0 10px 12px; }
+  .savdex-chart-table summary { cursor: pointer; color: var(--link-fg); }
+  .savdex-chart-table table { margin-top: 8px; }
+
+  .savdex-awaiting { padding: 24px 16px; text-align: center; max-width: 640px; margin: 0 auto; }
+  .savdex-awaiting p { color: var(--body-quiet-color); }
+  .savdex-awaiting .savdex-awaiting-title { font-size: 1.125rem; font-weight: 600; color: var(--body-loud-color); }
+</style>
