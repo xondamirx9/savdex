@@ -666,6 +666,11 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    считают тариф в долларах, а платят в сумах, и обе цифры нужны */
 .plan-price-alt{font-size:15px;font-weight:600;color:var(--text-muted);
   font-variant-numeric:tabular-nums;margin:0 0 2px}
+/* Долларовая цена в кассе кабинета — второй строкой под сумовой.
+   20 px против 32 px у сумов: цифру видно с того же расстояния,
+   но первой остаётся цена, которой платят */
+.price-usd{font-size:20px;line-height:28px;font-weight:600;color:var(--text-muted);
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .plan-price.is-promo{color:var(--primary-700);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .plan-price-old{font-size:18px;font-weight:500;color:var(--text-muted);letter-spacing:0}
 .plan-promo-note{color:var(--success);font-weight:600}

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\Company;
+use App\Models\ItTask;
+use App\Rules\Pinfl;
+use App\Rules\Tin;
 use App\Support\PasswordMessages;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,6 +20,12 @@ use Illuminate\Validation\Validator;
  * Сообщения не общие («поле некорректно»), а объясняющие, что именно не так
  * и как исправить, — правила 1 и 8 из §1 QA.md. Тексты совпадают с прототипом
  * (prototype/states.html, NEG-01).
+ *
+ * Набор полей зависит от того, кто регистрируется:
+ * - юрлицо — название компании, ИНН (по желанию), Ф.И.О., категории каталога;
+ * - физлицо — Ф.И.О. и ПИНФЛ (по желанию);
+ * - фрилансер — Ф.И.О., ПИНФЛ и направление услуг, всё обязательно.
+ * Почта, телефон и пароль нужны всем.
  */
 class RegisterRequest extends FormRequest
 {
@@ -29,6 +39,10 @@ class RegisterRequest extends FormRequest
      */
     public function rules(): array
     {
+        $type = $this->accountType();
+        $legal = $type === Company::LEGAL_ENTITY;
+        $freelancer = $type === Company::LEGAL_FREELANCER;
+
         return [
             'name' => ['required', 'string', 'min:2', 'max:120'],
             // Отключённый (удалённый) аккаунт адрес не держит
@@ -41,7 +55,35 @@ class RegisterRequest extends FormRequest
             'terms' => ['accepted'],
             'account_type' => ['nullable', 'in:legal,individual,freelancer'],
             'locale' => ['nullable', 'string', 'in:ru,uz,en,zh,tr'],
+
+            // Юрлицо: компания заводится сразу, второй шаг только дополняет её
+            'company_name' => $legal ? ['required', 'string', 'min:2', 'max:190'] : ['exclude'],
+            'tin' => $legal
+                ? ['nullable', 'string', 'max:20', new Tin('uz'), Rule::unique('companies', 'tin')->whereNull('deleted_at')]
+                : ['exclude'],
+            'categories' => $legal ? ['required', 'array', 'min:1', 'max:5'] : ['exclude'],
+            'categories.*' => $legal
+                ? ['integer', Rule::exists('categories', 'id')->whereNull('parent_id')->where('is_active', true)]
+                : ['exclude'],
+
+            // Физлицу ПИНФЛ по желанию, фрилансеру — обязательно
+            'pinfl' => $legal
+                ? ['exclude']
+                : [$freelancer ? 'required' : 'nullable', 'string', new Pinfl, Rule::unique('companies', 'tin')->whereNull('deleted_at')],
+
+            // Направление «Доп. услуг», на заказы которого фрилансер откликается
+            'service_section' => $freelancer
+                ? ['required', 'string', Rule::in(array_keys(ItTask::SERVICE_SECTIONS))]
+                : ['exclude'],
         ];
+    }
+
+    /** Кто регистрируется; без выбора — юрлицо, как и по умолчанию в форме. */
+    public function accountType(): string
+    {
+        $type = (string) $this->input('account_type');
+
+        return in_array($type, Company::LEGAL_FORMS, true) ? $type : Company::LEGAL_ENTITY;
     }
 
     /**
@@ -50,7 +92,7 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => __('ui.messages.register.name_required'),
+            'name.required' => __('ui.messages.register.full_name_required'),
             'name.min' => __('ui.messages.register.name_min'),
 
             'email.required' => __('ui.messages.register.email_required'),
@@ -66,6 +108,17 @@ class RegisterRequest extends FormRequest
 
             'terms.accepted' => __('ui.messages.register.terms'),
             'account_type.in' => __('ui.messages.register.account_type'),
+
+            'company_name.required' => __('ui.messages.company.name_required'),
+            'company_name.min' => __('ui.messages.company.name_required'),
+            'tin.unique' => __('ui.messages.company.tin_unique'),
+            'categories.required' => __('ui.messages.register.categories_required'),
+            'categories.min' => __('ui.messages.register.categories_required'),
+            'categories.max' => __('ui.messages.company.categories_max'),
+            'pinfl.required' => __('ui.messages.register.pinfl_required'),
+            'pinfl.unique' => __('ui.messages.register.pinfl_unique'),
+            'service_section.required' => __('ui.messages.register.service_section_required'),
+            'service_section.in' => __('ui.messages.register.service_section_required'),
         ];
     }
 
@@ -119,6 +172,10 @@ class RegisterRequest extends FormRequest
         $this->merge([
             'email' => mb_strtolower(trim((string) $this->input('email'))),
             'name' => trim((string) $this->input('name')),
+            'company_name' => trim((string) $this->input('company_name')),
+            // Пробелы и дефисы из вставленного номера — не ошибка человека
+            'tin' => preg_replace('/[\s\-]+/', '', (string) $this->input('tin')) ?: null,
+            'pinfl' => preg_replace('/[\s\-]+/', '', (string) $this->input('pinfl')) ?: null,
         ]);
     }
 }

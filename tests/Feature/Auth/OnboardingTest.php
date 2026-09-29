@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class OnboardingTest extends TestCase
 {
+    use LegalRegistration;
     use RefreshDatabase;
 
     private function geo(): array
@@ -52,6 +54,7 @@ class OnboardingTest extends TestCase
             'password' => 'Parol-12345',
             'password_confirmation' => 'Parol-12345',
             'terms' => true,
+            ...$this->legalFields(),
         ])->assertRedirect('/onboarding/company');
     }
 

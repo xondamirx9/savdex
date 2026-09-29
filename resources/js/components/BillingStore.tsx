@@ -318,7 +318,7 @@ export function BillingStore({
                                             {/* У бесплатного тарифа долларов нет: «$0»
                                                 под словом «бесплатно» ничего не добавляет */}
                                             {p.price_uzs > 0 && (
-                                                <span className="t-sm muted nowrap">{usdPrice(p.price_usd)}</span>
+                                                <span className="price-usd nowrap">{usdPrice(p.price_usd)}</span>
                                             )}
                                         </div>
                                         {p.orderable && (
@@ -372,7 +372,7 @@ export function BillingStore({
                                             <b className="t-num nowrap">
                                                 {formatNumber(p.price_uzs)} {t('catalog.currency_uzs')}
                                             </b>
-                                            <span className="t-sm muted nowrap">{usdPrice(p.price_usd)}</span>
+                                            <span className="price-usd nowrap">{usdPrice(p.price_usd)}</span>
                                         </div>
                                         <button
                                             className="btn btn-secondary btn-sm"

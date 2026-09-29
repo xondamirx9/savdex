@@ -9,6 +9,7 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ use Tests\TestCase;
  */
 class AuthThrottleIsolationTest extends TestCase
 {
+    use LegalRegistration;
     use RefreshDatabase;
 
     private function browseCompanies(?User $user = null, int $times = 25): void
@@ -58,6 +60,7 @@ class AuthThrottleIsolationTest extends TestCase
             'password' => 'Cement2026!x',
             'password_confirmation' => 'Cement2026!x',
             'terms' => true,
+            ...$this->legalFields(),
         ])->assertRedirect('/onboarding/company');
     }
 
