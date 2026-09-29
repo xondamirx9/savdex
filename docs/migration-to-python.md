@@ -1731,6 +1731,22 @@ Laravel), превью объявления для og:image `/og/listing/<ном
 пометками («Название*», «Цена, UZS»). Сверки — те же файлы, плюс
 `tests/test_import_headers.py`.
 
+**Шаг 51 — данные компании в настройках** (`savdex/web/company_info_actions.py`,
+JSON, группа `forms`): `GET/PATCH /cabinet/settings/company-info` и
+`POST …/support`, только владелец. Заполнить пустое можно всегда,
+смена заполненного ставит `profile_changed_at` и закрывает смену на
+полгода (`addMonthsNoOverflow`); пока срок идёт — 422 с полями и датой,
+а владелец пишет в поддержку (обращение и первое сообщение). Сверка —
+`tests/test_web_company_info_actions.py`. Права роли —
+`grant_django_company_info`.
+
+**Итог этапа 5.** Все адреса сайта и кабинета, кроме денег, есть у
+Django: страницы (группы `cabinet`, `auth` и прочие — включены) и формы
+(группа `forms` — по решению владельца выключена, включается добавлением
+`forms` в `SAVDEX_PY_PAGES`). У Laravel остаются касса кабинета
+`/cabinet/billing` и приём платежей `/payments/…` — этап 7, и админка
+Filament — этап 6.
+
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
 владеет он) и раздел «Закупки» в админке Django (`savdex/tenders`):
