@@ -75,7 +75,11 @@ class AuditObserver
 
     public function deleted(Model $model): void
     {
-        $this->write('deleted', $model);
+        // Удаление навсегда отличается от отключения (SoftDeletes): после
+        // него восстанавливать нечего, и в журнале это должно быть видно
+        $forever = method_exists($model, 'isForceDeleting') && $model->isForceDeleting();
+
+        $this->write($forever ? 'force_deleted' : 'deleted', $model);
     }
 
     public function restored(Model $model): void

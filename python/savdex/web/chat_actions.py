@@ -311,7 +311,7 @@ def thread(request: HttpRequest, thread_id: str) -> HttpResponse:
 @form()
 def send(request: HttpRequest, thread_id: str) -> HttpResponse:
     """ChatController::send (verified, throttle:60,1)."""
-    ctx = action(request, throttle=60)
+    ctx = action(request, throttle=60, throttle_prefix="chat")
 
     if (refused := _unverified(ctx)) is not None:
         return refused
@@ -347,7 +347,7 @@ def send(request: HttpRequest, thread_id: str) -> HttpResponse:
 @form()
 def respond(request: HttpRequest, listing_id: str) -> HttpResponse:
     """ChatController::respond (verified, throttle:60,60): отклик с карточки объявления."""
-    ctx = action(request, throttle=60, throttle_minutes=60)
+    ctx = action(request, throttle=60, throttle_minutes=60, throttle_prefix="listing-respond")
 
     if (refused := _unverified(ctx)) is not None:
         return refused
@@ -397,7 +397,7 @@ def respond(request: HttpRequest, listing_id: str) -> HttpResponse:
 @form()
 def respond_task(request: HttpRequest, task_id: str) -> HttpResponse:
     """ChatController::respondTask (verified, throttle:60,60): отклик IT-исполнителя."""
-    ctx = action(request, throttle=60, throttle_minutes=60)
+    ctx = action(request, throttle=60, throttle_minutes=60, throttle_prefix="task-respond")
 
     if (refused := _unverified(ctx)) is not None:
         return refused

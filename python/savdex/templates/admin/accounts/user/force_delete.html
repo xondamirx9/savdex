@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Подтверждение удаления навсегда (savdex/accounts/admin.py, force_delete).
+  Повторная отправка — то же действие с post=yes и теми же отмеченными.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:accounts_user_changelist' %}">Пользователи</a>
+    › Удалить навсегда
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p>
+    Будут стёрты из базы аккаунты и их личные данные — избранное,
+    уведомления, резюме. Компании, объявления и платежи останутся, но без
+    ссылки на этих людей. <b>Отменить нельзя.</b>
+  </p>
+  <ul>
+    {% for user in targets %}
+      <li>{{ user.name }} — {{ user.email }} (отключён {{ user.deleted_at|date:"d.m.Y" }})</li>
+    {% endfor %}
+  </ul>
+  {% if skipped %}
+    <p>Не будут удалены: {{ skipped }} — действующие аккаунты и свой навсегда не удаляются.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    {% for user in targets %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ user.pk }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="force_delete">
+    <input type="hidden" name="post" value="yes">
+    <div class="submit-row">
+      <input type="submit" class="deletelink" value="Да, удалить навсегда">
+      <a href="{% url 'savdex_admin:accounts_user_changelist' %}" class="button cancel-link">Нет, вернуться</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

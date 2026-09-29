@@ -342,7 +342,7 @@ def _upload(request: HttpRequest, field: str, size: Any, saved: str) -> HttpResp
     """CompanyProfileController::uploadLogo / uploadCover (throttle:30,60)."""
     from savdex.web import image_store
 
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix=f"company-{field}")
     company = company_of(ctx)
 
     if company is None:

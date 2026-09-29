@@ -85,7 +85,7 @@ def _active(company_id: int, exclude: int | None = None) -> int:
 @form("GET")
 def create(request: HttpRequest) -> HttpResponse:
     """ListingWizardController::create (verified, throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="listing-create")
 
     if (refused := _unverified(ctx)) is not None:
         return refused
@@ -338,7 +338,7 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     from savdex.web.cabinet import wizard_tag_options
     from savdex.web.validation import validated
 
-    ctx = action(request, throttle=60)
+    ctx = action(request, throttle=60, throttle_prefix="listing-autosave")
 
     if (refused := _unverified(ctx)) is not None:
         return refused

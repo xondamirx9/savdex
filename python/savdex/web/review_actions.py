@@ -318,7 +318,7 @@ def _create(ctx: Context, target: dict[str, Any], data: dict[str, Any]) -> tuple
 @form()
 def store(request: HttpRequest, slug: str) -> HttpResponse:
     """ReviewController::store (verified, throttle:20,60)."""
-    ctx = action(request, throttle=20, throttle_minutes=60)
+    ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="company-review")
 
     if (refused := _unverified(ctx)) is not None:
         return refused

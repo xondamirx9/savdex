@@ -334,8 +334,8 @@ def _save_review(ctx: Context, data: dict[str, Any]) -> tuple[bool, str]:
 
 @form()
 def review(request: HttpRequest) -> HttpResponse:
-    """ReviewsController::store (auth, throttle:10,60)."""
-    ctx = action(request, throttle=10, throttle_minutes=60)
+    """ReviewsController::store (auth, throttle:10,60,platform-review)."""
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="platform-review")
     data = input_of(request)
     errors = validate(
         data,

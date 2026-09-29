@@ -133,7 +133,7 @@ def favorite_toggle(request: HttpRequest, listing_id: str) -> HttpResponse:
     ниже нуля); не было — добавить живое объявление, счётчик и дневная
     строка — только если строка вставилась.
     """
-    ctx = action(request, throttle=60)
+    ctx = action(request, throttle=60, throttle_prefix="favorite")
     assert ctx.user is not None
     uid, lid = ctx.user["id"], int(listing_id)
     stamp = _now()

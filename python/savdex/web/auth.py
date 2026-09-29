@@ -121,7 +121,7 @@ def register(request: HttpRequest) -> HttpResponse:
     from savdex.web.directory import _named
     from savdex.web.resumes import section_tree
 
-    categories = _named("categories", ctx.locale)
+    names = _named("categories", ctx.locale)
 
     return inertia.render(
         ctx,
@@ -129,7 +129,7 @@ def register(request: HttpRequest) -> HttpResponse:
         {
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": [
-                {"id": c["id"], "name": categories[c["id"]]}
+                {"id": c["id"], "name": names[c["id"]]}
                 for c in _rows(
                     "select id from categories where parent_id is null and is_active "
                     "order by sort, id"
@@ -287,8 +287,13 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
         return ctx
 
     assert ctx.user is not None
+    company = company_of(ctx)
 
-    if not onboarding_open(ctx.user["company_id"]):
+    # OnboardingController::stepOpen: компании нет — или юрлицо завело
+    # её при регистрации, и город ещё не указан
+    if company is not None and not (
+        company["legal_form"] == "legal" and company["city_id"] is None
+    ):
         return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale

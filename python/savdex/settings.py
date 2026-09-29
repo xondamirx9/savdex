@@ -140,6 +140,7 @@ INSTALLED_APPS = [
     "savdex.billing.apps.BillingConfig",
     "savdex.site.apps.SiteConfig",
     "savdex.tenders.apps.TendersConfig",
+    "savdex.accounts.apps.AccountsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

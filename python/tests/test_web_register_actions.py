@@ -116,7 +116,12 @@ def _проверить_письмо(письмо: dict[str, Any], uid: int, а�
 
 
 def регистрация(
-    сайт: str, body: dict[str, Any], *, занята: bool = False, лимит: bool = False
+    сайт: str,
+    body: dict[str, Any],
+    *,
+    занята: bool = False,
+    лимит: bool = False,
+    отключена: bool = True,
 ) -> dict[str, Any]:
     стороны = {}
 
@@ -142,7 +147,8 @@ def регистрация(
         if занята:
             sql(
                 "insert into users (name, email, password, status, deleted_at, created_at, "
-                "updated_at) values ('Был', 'taken@savdex.uz', 'x', 'active', now(), now(), now())"
+                "updated_at) values ('Был', 'taken@savdex.uz', 'x', 'active', %s, now(), now())",
+                ["2026-01-01 00:00:00" if отключена else None],
             )
 
         завести(SID, {"_token": ТОКЕН})
@@ -174,7 +180,8 @@ def регистрация(
         учётки = sql(
             "select id, name, email, phone, password like '$2y$12$%%', locale, account_type, "
             "company_role, email_verified_at is not null, status from users "
-            "where email like '%%@reg.savdex.uz' order by id"
+            "where (email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz') "
+            "and deleted_at is null order by id"
         )
 
         for письмо in письма:
@@ -311,5 +318,14 @@ def test_лимит_регистраций(сайт):
     assert итог["users"] == [] and '"error"' in итог["session"]["payload"]
 
 
+def test_почта_отключённого_свободна(сайт):
+    """Отключённый (удалённый) аккаунт адрес не держит — регистрация проходит."""
+    итог = регистрация(сайт, {**ВЕРНО, "email": "taken@savdex.uz"}, занята=True)
+
+    assert len(итог["users"]) == 1
+
+
 def test_почта_занята(сайт):
-    регистрация(сайт, {**ВЕРНО, "email": "taken@savdex.uz"}, занята=True)
+    итог = регистрация(сайт, {**ВЕРНО, "email": "taken@savdex.uz"}, занята=True, отключена=False)
+
+    assert len(итог["users"]) == 1 and итог["location"].endswith("/register")

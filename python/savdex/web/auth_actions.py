@@ -283,12 +283,14 @@ def either(
 
 
 def _unique_email() -> Any:  # noqa: ANN401
-    """unique:users,email — удалённые учётки тоже в счёт."""
+    """Rule::unique('users', 'email')->withoutTrashed(): отключённый адрес не держит."""
     from savdex.web.cabinet import _rows
     from savdex.web.validation import Check
 
     def passes(value: Any) -> bool:  # noqa: ANN401
-        return not _rows("select 1 from users where email = %s limit 1", [str(value)])
+        return not _rows(
+            "select 1 from users where email = %s and deleted_at is null limit 1", [str(value)]
+        )
 
     return Check("unique", passes)
 

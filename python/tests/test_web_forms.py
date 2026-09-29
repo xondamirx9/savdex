@@ -570,7 +570,8 @@ def test_избранное_частота(inertia_):
     файловый = {"CACHE_STORE": "file"}
     uid = учётка("forms-throttle@savdex.uz")
     lid = _объявление()
-    ключ = hashlib.sha1(str(uid).encode()).hexdigest()
+    # throttle:60,1,favorite — у действия своя приставка ключа
+    ключ = "favorite" + hashlib.sha1(str(uid).encode()).hexdigest()
 
     def подготовить(счёт: int) -> Callable[[], None]:
         def run() -> None:

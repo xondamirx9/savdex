@@ -158,14 +158,14 @@ def action(
     auth: bool = True,
     throttle: int | None = None,
     throttle_minutes: int = 1,
-    password_change: bool = True,
     throttle_prefix: str = "",
+    password_change: bool = True,
 ) -> Context:
     """
     Контекст формы — или RefusedError с ответом посредника.
 
-    throttle, throttle_minutes, throttle_prefix — throttle:N,M,приставка
-    маршрута (приставка — свой счётчик у маршрута). GET (выгрузка
+    throttle, throttle_minutes, throttle_prefix — throttle:N,M,prefix
+    маршрута: у каждого действия свой счётчик. GET (выгрузка
     файла) CSRF не проверяет — как PreventRequestForgery::isReading.
     """
     from savdex.web.cabinet import _authenticate, _require_password_change
@@ -212,7 +212,8 @@ def _throttle(
     first: Context, bare: Context, max_attempts: int, minutes: int = 1, prefix: str = ""
 ) -> HttpResponse | None:
     """
-    throttle:N,M. Отказ Inertia-формы — назад с ошибкой поля body и
+    throttle:N,M,prefix. Ключ — префикс + подпись, как у ThrottleRequests.
+    Отказ Inertia-формы — назад с ошибкой поля body и
     сообщением error (bootstrap/app.php), иначе страница 429.
     """
     from savdex import laravel_cache
@@ -226,7 +227,6 @@ def _throttle(
 
         return None
 
-    # ThrottleRequests: приставка маршрута — перед подписью запроса
     key = prefix + throttle.signature(first)
 
     if throttle.too_many(key, max_attempts):
