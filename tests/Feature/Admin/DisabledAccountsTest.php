@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -27,6 +28,7 @@ use Tests\TestCase;
  */
 class DisabledAccountsTest extends TestCase
 {
+    use LegalRegistration;
     use RefreshDatabase;
 
     private function admin(string $role): User
@@ -48,6 +50,7 @@ class DisabledAccountsTest extends TestCase
             'password' => 'NovyiParol2026',
             'password_confirmation' => 'NovyiParol2026',
             'terms' => true,
+            ...$this->legalFields(),
         ];
     }
 
