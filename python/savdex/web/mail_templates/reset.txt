@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Hello!
+
+You are receiving this email because we received a password reset request for your account.
+
+Reset Password: __URL__
+
+This password reset link will expire in 60 minutes.
+
+If you did not request a password reset, no further action is required.
+
+Regards,
+SAVDEX
+
+If you're having trouble clicking the "Reset Password" button, copy and paste the URL below
+into your web browser: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. All rights reserved.

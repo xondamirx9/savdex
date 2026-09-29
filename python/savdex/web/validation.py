@@ -34,7 +34,7 @@ class Check:
 
 
 #: Validator::$implicitRules (из тех, что есть здесь)
-IMPLICIT = ("required", "required_with", "required_if")
+IMPLICIT = ("required", "required_with", "required_if", "accepted")
 
 _MISSING = object()
 
@@ -93,6 +93,18 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
             return value.strip() != ""
 
         return not (isinstance(value, dict | list) and len(value) == 0)
+
+    if rule == "digits":
+        # validateDigits: только цифры и ровно столько знаков
+        text = _php_string(value) if isinstance(value, str | int | float) else None
+
+        return (
+            text is not None and text.isascii() and text.isdigit() and len(text) == int(param or 0)
+        )
+
+    if rule == "accepted":
+        # validateAccepted: присутствует и одно из «да»
+        return _passes("required", None, value) and value in ("yes", "on", "1", 1, True, "true")
 
     if rule == "numeric":
         # is_numeric: число или числовая строка
@@ -183,7 +195,8 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
         # validateEmail: без параметров и с rfc — RFCValidation
         from savdex.web.email_rfc import is_valid
 
-        return is_valid(value)
+        # «rfc,strict» — NoRFCWarningsValidation: и без предупреждений разбора
+        return is_valid(value, strict="strict" in (param or "").split(","))
 
     if rule == "url":
         from savdex.web.url_rule import is_url
@@ -399,17 +412,41 @@ def _php_string(value: Any) -> str:  # noqa: ANN401
     if value is False or value is None:
         return ""
 
+    if isinstance(value, float):
+        return php_float(value)
+
     return str(value)
 
 
+def php_float(value: float) -> str:
+    """(string) дробного в PHP 8: 14 значащих цифр (precision), 123456.0 — «123456»."""
+    if value != value:
+        return "NAN"
+
+    if value in (float("inf"), float("-inf")):
+        return "INF" if value > 0 else "-INF"
+
+    text = f"{value:.14G}"
+
+    if "E" in text:
+        mantissa, exponent = text.split("E")
+        mantissa = mantissa if "." in mantissa else mantissa + ".0"
+        text = f"{mantissa}E{'-' if exponent.startswith('-') else '+'}{exponent[1:].lstrip('0')}"
+
+    return text
+
+
 def _kind(rules: Sequence[str | Check], value: Any) -> str:  # noqa: ANN401
-    """Validator::getAttributeType: numeric/integer в правилах, массив, иначе строка."""
+    """
+    Validator::getAttributeType: вид — по правилам (numeric/integer, array/list),
+    не по значению: массив без правила array — «строка», файл — «файл».
+    """
     names = [r.partition(":")[0] for r in rules if isinstance(r, str)]
 
     if any(r in ("numeric", "integer", "decimal") for r in names):
         return "numeric"
 
-    if isinstance(value, dict | list):
+    if any(r in ("array", "list") for r in names):
         return "array"
 
     if _is_file(value):
@@ -624,6 +661,10 @@ def validate(
                     passed = _required_if(data, param, value)
                 elif rule == "gte":
                     passed = _gte(data, field_rules, param, value)
+                elif rule == "confirmed":
+                    # validateConfirmed: строгое равенство с полем <имя>_confirmation
+                    other = _get(data, (attribute + "_confirmation").split("."))
+                    passed = other is not _MISSING and type(other) is type(value) and other == value
                 else:
                     passed = (
                         spec.passes(value)

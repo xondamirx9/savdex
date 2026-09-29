@@ -148,6 +148,9 @@ _DQUOTE_INVALID = frozenset({C_NUL, S_HTAB, S_CR, S_LF})
 #: DomainPart::DOMAIN_MAX_LENGTH и LABEL_MAX_LENGTH
 DOMAIN_MAX_LENGTH = 253
 LABEL_MAX_LENGTH = 63
+#: LocalTooLong::LOCAL_PART_LENGTH и EmailParser::EMAIL_MAX_LENGTH — только предупреждения
+LOCAL_MAX_LENGTH = 64
+EMAIL_MAX_LENGTH = 254
 
 
 @dataclass(frozen=True, eq=False)
@@ -225,6 +228,10 @@ class _Lexer:
         self.previous = _NULL
         self.recording = False
         self.accumulator: list[str] = []
+        #: Было хоть одно предупреждение разбора (NoRFCWarningsValidation)
+        self.warned = False
+        #: Локальная часть, как её запомнил LocalPart (для EmailTooLong)
+        self.local = ""
 
     def move_next(self) -> bool:
         if self.recording and self.previous is _NULL:
@@ -289,7 +296,12 @@ def _fws(lx: _Lexer) -> bool:
     if lx.is_next(GENERIC) and previous.type != S_AT:
         return False
 
-    return lx.current.type not in (S_LF, C_NUL)
+    if lx.current.type in (S_LF, C_NUL):
+        return False
+
+    # CFWSNearAt или CFWSWithFWS
+    lx.warned = True
+    return True
 
 
 def _comment(lx: _Lexer, *, domain: bool) -> bool:
@@ -303,6 +315,9 @@ def _comment(lx: _Lexer, *, domain: bool) -> bool:
 
     if lx.current.type == S_CLOSEPARENTHESIS:
         return False
+
+    # WarningComment
+    lx.warned = True
 
     def go_on() -> bool:
         # exitCondition: «true» — продолжать
@@ -354,6 +369,8 @@ def _double_quote(lx: _Lexer) -> bool:
     if prev.type == S_BACKSLASH and not _check_dquote(lx):
         return False
 
+    # QuotedString
+    lx.warned = True
     return lx.is_next(S_AT) or prev.type == S_BACKSLASH
 
 
@@ -389,8 +406,13 @@ def _local_part(lx: _Lexer) -> bool:
 
         lx.move_next()
 
-    # Длина локальной части — только предупреждение
+    # Длина локальной части — только предупреждение (LocalTooLong)
     lx.recording = False
+    lx.local = "".join(lx.accumulator).rstrip("@")
+
+    if len(lx.local.encode()) > LOCAL_MAX_LENGTH:
+        lx.warned = True
+
     return True
 
 
@@ -402,6 +424,9 @@ def _domain_literal(lx: _Lexer) -> bool:
     """
     if not lx.find(S_CLOSEBRACKET):
         return False
+
+    # DomainLiteral, AddressLiteral и отсутствие TLD
+    lx.warned = True
 
     while True:
         if lx.current.type == C_NUL:
@@ -423,6 +448,7 @@ def _domain_literal(lx: _Lexer) -> bool:
 def _domain_body(lx: _Lexer) -> bool:
     """DomainPart::doParseDomainPart."""
     has_comments = False
+    tld_missing = True
     # $this->label: копится со всеми лексемами метки, точка — первой
     label = ""
 
@@ -452,6 +478,9 @@ def _domain_body(lx: _Lexer) -> bool:
             label = ""
         label += lx.current.value
 
+        if lx.current.type == S_DOT and lx.is_next(GENERIC):
+            tld_missing = False
+
         if not _fws(lx):
             return False
 
@@ -477,7 +506,14 @@ def _domain_body(lx: _Lexer) -> bool:
         if lx.current.type == S_EMPTY:
             break
 
-    return not _label_too_long(label)
+    if _label_too_long(label):
+        return False
+
+    # TLD: в домене нет точки перед словом
+    if tld_missing:
+        lx.warned = True
+
+    return True
 
 
 def _domain_part(lx: _Lexer) -> bool:
@@ -504,6 +540,10 @@ def _domain_part(lx: _Lexer) -> bool:
 
     lx.recording = False
     domain = "".join(lx.accumulator)
+
+    # EmailTooLong: весь адрес длиннее 254 байт
+    if len(f"{lx.local}@{domain}".encode()) > EMAIL_MAX_LENGTH:
+        lx.warned = True
 
     return len(domain.encode()) <= DOMAIN_MAX_LENGTH
 
@@ -734,19 +774,19 @@ def _idn_label_too_long(label: str) -> bool:
     return too_long
 
 
-def rfc_valid(email: str) -> bool:
-    """EmailValidator::isValid($email, new RFCValidation)."""
+def _parse(email: str) -> tuple[bool, bool]:
+    """EmailParser::parse: (адрес верен, были ли предупреждения)."""
     try:
         email.encode()
     except UnicodeEncodeError:
         # Одиночные суррогаты: в PHP это был бы неверный UTF-8, preg_split
         # вернул бы false, весь ввод стал бы одной лексемой без «@»
-        return False
+        return False, False
 
     tokens = _scan(email)
 
     if any(t.type == INVALID for t in tokens):
-        return False
+        return False, False
 
     lx = _Lexer(tokens)
 
@@ -754,17 +794,29 @@ def rfc_valid(email: str) -> bool:
     lx.move_next()
     lx.move_next()
     if lx.current.type == S_AT:
-        return False
+        return False, False
 
-    return _local_part(lx) and _domain_part(lx)
+    return _local_part(lx) and _domain_part(lx), lx.warned
 
 
-def is_valid(value: object) -> bool:
-    """ValidatesAttributes::validateEmail без параметров (или «rfc»)."""
+def rfc_valid(email: str) -> bool:
+    """EmailValidator::isValid($email, new RFCValidation)."""
+    return _parse(email)[0]
+
+
+def strict_valid(email: str) -> bool:
+    """NoRFCWarningsValidation: верен и без единого предупреждения."""
+    valid, warned = _parse(email)
+
+    return valid and not warned
+
+
+def is_valid(value: object, strict: bool = False) -> bool:
+    """ValidatesAttributes::validateEmail без параметров, с «rfc» или «rfc,strict»."""
     if not isinstance(value, str):
         return False
 
     if "\r" in value or "\n" in value:
         return False
 
-    return rfc_valid(value)
+    return strict_valid(value) if strict else rfc_valid(value)

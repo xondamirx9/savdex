@@ -94,6 +94,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Этап 2: главная страница. Правятся тексты, вопросы и видимость
         # секций, порядок — как в макете; языки — как у страниц
         "landing_blocks",
+        # Этап 6: контакты CRM. Кроме раздела админки в таблицу никто не
+        # пишет; SoftDeletes и «кто завёл» — в savdex/crm, раздел Filament
+        # убран
+        "crm_contacts",
     }
 )
 
@@ -129,6 +133,37 @@ SHARED_WRITES: dict[str, str] = {
         "удаление навсегда — только отключённого, delete по id (связанные "
         "строки база правит сама по внешним ключам). Журнал — строкой "
         "admin_actions, как AuditObserver"
+        "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
+        "без меток времени, метка последнего входа, как SessionGuard; "
+        "регистрация — новая учётка, как RegisteredUserController::store"
+        "; пароль и почта (шаг 46) — новый пароль, снятие must_change_password, "
+        "email_verified_at; удаление учётки (шаг 47) — мягкое, deleted_at и "
+        "updated_at после выхода, как SoftDeletes; привязка Telegram вебхуком "
+        "бота (шаг 49) — telegram_chat_id, telegram_username, telegram_linked_at"
+    ),
+    "login_attempts": (
+        "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
+        "по почте и IP, как LoginThrottle"
+    ),
+    "support_tickets": (
+        "обращение владельца о смене данных компании (этап 5, шаг 51): новое "
+        "обращение, как CompanyInfoController::support (Ticket::saving — без "
+        "даты закрытия); у администратора — строка журнала"
+    ),
+    "support_messages": ("первое сообщение того же обращения (этап 5, шаг 51) — вставка"),
+    "company_category": (
+        "направления компании со второго шага регистрации (этап 5, шаг 47): "
+        "categories()->sync у только что созданной компании — одна вставка, "
+        "без меток времени (связь без withTimestamps)"
+    ),
+    "platform_reviews": (
+        "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
+        "как PlatformReviewService::save; у модели нет событий и журнала"
+    ),
+    "password_reset_tokens": (
+        "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
+        "прочь, новый хешем bcrypt; после смены пароля строка удаляется, "
+        "как DatabaseTokenRepository"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -203,6 +238,8 @@ SHARED_WRITES: dict[str, str] = {
         "формы, статус, сроки, адрес, как ListingWizardController"
         "; раскрытие контактов (этап 5, шаг 40) — +1 к unlocks_count и "
         "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
+        "; удаление учётки владельцем (этап 5, шаг 47) — активные объявления "
+        "компании в архив одним update, без событий, как activeListings()->update"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -283,6 +320,8 @@ SHARED_WRITES: dict[str, str] = {
         "профиль своей компании (этап 5, форма): правка полей формы и "
         "search_text, новая компания с адресом из названия, как "
         "CompanyProfileController::update; журнал администратора — как AuditObserver"
+        "; данные компании в настройках (шаг 51) — те же поля и profile_changed_at "
+        "при смене заполненного, как CompanyInfoController::update"
         "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
     ),
     "company_site_products": (
