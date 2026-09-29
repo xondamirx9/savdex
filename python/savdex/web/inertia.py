@@ -11,6 +11,7 @@ X-Inertia-Location, браузер перезагрузит страницу ц�
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from django.http import HttpResponse, JsonResponse
@@ -64,8 +65,17 @@ def _partial(ctx: Context, component: str, props: dict[str, Any]) -> dict[str, A
 
 
 def render(
-    ctx: Context, component: str, props: dict[str, Any], seo: Seo, status: int = 200
+    ctx: Context,
+    component: str,
+    props: dict[str, Any],
+    seo: Seo,
+    status: int = 200,
+    html: Callable[[dict[str, Any], str], str] | None = None,
 ) -> HttpResponse:
+    """
+    html — свой корневой шаблон (->rootView(...) у Inertia): страница и
+    теги сборки на входе, документ на выходе.
+    """
     version = vite.version()
 
     if (
@@ -96,9 +106,8 @@ def render(
         response["X-Inertia"] = "true"
     else:
         tags, preloads = vite.assets(ctx.root)
-        response = HttpResponse(
-            _html(ctx, seo, page, tags), status=status, content_type="text/html; charset=utf-8"
-        )
+        document = html(page, tags) if html is not None else _html(ctx, seo, page, tags)
+        response = HttpResponse(document, status=status, content_type="text/html; charset=utf-8")
 
         if preloads:
             response["Link"] = vite.link_header(preloads)

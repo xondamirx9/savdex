@@ -127,10 +127,28 @@ SHARED_WRITES: dict[str, str] = {
         "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
         "без меток времени, метка последнего входа, как SessionGuard; "
         "регистрация — новая учётка, как RegisteredUserController::store"
+        "; пароль и почта (шаг 46) — новый пароль, снятие must_change_password, "
+        "email_verified_at; удаление учётки (шаг 47) — мягкое, deleted_at и "
+        "updated_at после выхода, как SoftDeletes; привязка Telegram вебхуком "
+        "бота (шаг 49) — telegram_chat_id, telegram_username, telegram_linked_at"
     ),
     "login_attempts": (
         "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
         "по почте и IP, как LoginThrottle"
+    ),
+    "company_category": (
+        "направления компании со второго шага регистрации (этап 5, шаг 47): "
+        "categories()->sync у только что созданной компании — одна вставка, "
+        "без меток времени (связь без withTimestamps)"
+    ),
+    "platform_reviews": (
+        "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
+        "как PlatformReviewService::save; у модели нет событий и журнала"
+    ),
+    "password_reset_tokens": (
+        "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
+        "прочь, новый хешем bcrypt; после смены пароля строка удаляется, "
+        "как DatabaseTokenRepository"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -205,6 +223,8 @@ SHARED_WRITES: dict[str, str] = {
         "формы, статус, сроки, адрес, как ListingWizardController"
         "; раскрытие контактов (этап 5, шаг 40) — +1 к unlocks_count и "
         "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
+        "; удаление учётки владельцем (этап 5, шаг 47) — активные объявления "
+        "компании в архив одним update, без событий, как activeListings()->update"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "

@@ -17,6 +17,7 @@ from django.urls import path, re_path
 
 from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
+    account_actions,
     actions,
     auth,
     auth_actions,
@@ -38,15 +39,21 @@ from savdex.web import (
     listing,
     listing_actions,
     listing_image_actions,
+    microsite,
     news,
+    og_image,
+    onboarding_actions,
     pricing,
     promo_actions,
     resume_actions,
     resumes,
     review_actions,
     reviews,
+    seo_files,
+    services,
     settings_actions,
     site_actions,
+    telegram_webhook,
     tenders,
     unlock_actions,
     wizard_actions,
@@ -82,6 +89,11 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index, name="resumes"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?resume/(?P<slug>[^/]+)$", resumes.show, name="resumes.show"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?it-services$", it_tasks.index, name="it-tasks"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?services/(?P<slug>it|hr|recruitment|logistics|customs|accounting)$",
+        services.show,
+        name="services.show",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?it-services/(?P<slug>[^/]+)$", it_tasks.show, name="it-tasks.show"
     ),
@@ -276,8 +288,29 @@ urlpatterns = [
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",
-        auth.forgot_password,
+        auth_actions.either(auth.forgot_password, account_actions.forgot_password),
         name="password.request",
+    ),
+    # Пароль и почта: формы (этап 5, шаг 46, группа forms)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?reset-password$",
+        account_actions.reset_password,
+        name="password.update",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?verify-email/code$",
+        account_actions.verify_code,
+        name="verification.code",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?email/verification-notification$",
+        account_actions.verify_send,
+        name="verification.send",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?verify-email/(?P<user_id>[^/]+)/(?P<digest>[^/]+)$",
+        account_actions.verify_link,
+        name="verification.verify",
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?reset-password/(?P<token>[^/]+)$",
@@ -285,13 +318,31 @@ urlpatterns = [
         name="password.reset",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?verify-email$", auth.verify_email, name="verification.notice"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?password/change$", auth.force_password, name="password.forced"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?password/change$",
+        auth_actions.either(auth.force_password, account_actions.force_password),
+        name="password.forced",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?onboarding/company$",
-        auth.onboarding_company,
+        auth_actions.either(auth.onboarding_company, onboarding_actions.company),
         name="onboarding.company",
     ),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews/new$", auth.review_new, name="reviews.create"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?onboarding/skip$",
+        onboarding_actions.skip,
+        name="onboarding.skip",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?reviews/new$",
+        auth_actions.either(auth.review_new, onboarding_actions.review),
+        name="reviews.create",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/delete$",
+        account_actions.delete_account,
+        name="cabinet.settings.destroy",
+    ),
     # Кабинет (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet$", cabinet.dashboard, name="cabinet"),
     re_path(
@@ -368,6 +419,31 @@ urlpatterns = [
         name="cabinet.it-tasks",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/preview$",
+        microsite.preview,
+        name="cabinet.site.preview",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?s/(?P<subdomain>[a-z0-9-]+)$", microsite.page, name="microsite.page"
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?robots\.txt$", seo_files.robots, name="robots"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?og/listing/(?P<listing_id>[0-9]{1,18})\.jpg$",
+        og_image.listing,
+        name="og.listing",
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?sitemap\.xml$", seo_files.sitemap, name="sitemap"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?sitemap-(?P<part>[a-z0-9-]+)\.xml$",
+        seo_files.sitemap_part,
+        name="sitemap.part",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?telegram/webhook/(?P<secret>[A-Za-z0-9_-]{8,64})$",
+        telegram_webhook.webhook,
+        name="telegram.webhook",
+    ),
     # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
     *[
         re_path(
