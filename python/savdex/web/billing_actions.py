@@ -1,8 +1,14 @@
 """
-Формы кассы кабинета на Django (этап 7, шаг 53): отмена и включение
+Формы кассы кабинета на Django (этап 7, шаг 53): заказ тарифа или
+пакета кредитов, промокод, оплата счёта онлайн, отмена и включение
 автопродления, отвязка карты, отказ от неоплаченного счёта. Копия
-Cabinet\\BillingController::cancel, ::resume, ::removeCard и
-::cancelInvoice (OrderService::cancel).
+Cabinet\\BillingController (сервисы — savdex/web/orders.py, касса Uzum —
+savdex/payments/checkout.py).
+
+Счёт выставляется сразу, доступ — только после оплаты. При включённой
+онлайн-кассе покупатель уходит на платёжную страницу Uzum
+(Inertia::location); отказ кассы оставляет счёт для оплаты переводом.
+Незакрытый счёт на то же самое повторно не выставляется.
 
 Подписка при отмене автопродления не обрывается — оплаченный период
 остаётся. Включить автопродление можно только у оплаченной подписки.
@@ -12,46 +18,38 @@ Cabinet\\BillingController::cancel, ::resume, ::removeCard и
 транзакции. Payment и Subscription у администратора пишутся в журнал
 (AuditObserver), PaymentMethod — нет.
 
-Сверка с настоящим Laravel — tests/test_web_billing_actions.py.
+Сверка с настоящим Laravel — tests/test_web_billing_actions.py и
+tests/test_web_billing_orders.py.
 """
 
 from __future__ import annotations
 
-import os
-import re
-from datetime import timedelta
+import logging
 from typing import Any
 
 from django.db import connection
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex.guards import allowed_writes
-from savdex.web import eloquent
+from savdex.payments import checkout as cashier
+from savdex.web import eloquent, orders
 from savdex.web.actions import form
-from savdex.web.billing import _date
+from savdex.web.billing import _date, amount_label
 from savdex.web.cabinet import _rows, active_subscription, company_of
-from savdex.web.forms import action, back, flash
-from savdex.web.listing_actions import _stamp
+from savdex.web.chat_actions import _unverified
+from savdex.web.forms import _store, action, back, flash, input_of, invalid
+from savdex.web.listing_actions import _as_id
 from savdex.web.shared import Context
+from savdex.web.validation import validate, validated
 from savdex.web.views import not_found
+
+log = logging.getLogger("savdex.payments")
 
 #: Subscription::SOURCE_PAYMENT
 SOURCE_PAYMENT = "payment"
 
 #: Приведения моделей для сравнения «изменилось ли»
 SUBSCRIPTION_CASTS = {"auto_renew": "bool"}
-
-
-def _confirm_timeout() -> int:
-    """(int) env('PAYMENTS_UZUM_CONFIRM_TIMEOUT', 30): ведущие цифры строки."""
-    raw = os.environ.get("PAYMENTS_UZUM_CONFIRM_TIMEOUT")
-
-    if raw is None:
-        return 30
-
-    found = re.match(r"\s*[+-]?\d+", raw)
-
-    return int(found.group(0)) if found else 0
 
 
 @form()
@@ -149,45 +147,6 @@ def remove_card(request: HttpRequest, card_id: str) -> HttpResponse:
     return back(ctx)
 
 
-def _live_card_transaction(payment: dict[str, Any]) -> bool:
-    """OrderService::hasLiveCardTransaction: созданная, ещё не просроченная."""
-    since = eloquent.now() - timedelta(minutes=_confirm_timeout())
-
-    return bool(
-        _rows(
-            "select 1 from payment_transactions where payment_id = %s and state = 'created' "
-            "and created_at > %s limit 1",
-            [payment["id"], _stamp(since)],
-        )
-    )
-
-
-def cancel_payment(ctx: Context, payment: dict[str, Any]) -> None:
-    """OrderService::cancel без администратора: счёт — failed, промокод — в оборот."""
-    # Строго «ждёт оплаты»: повтор отмены не освобождает код второй раз
-    if payment["status"] != "pending":
-        return
-
-    eloquent.save(
-        ctx,
-        "payments",
-        payment,
-        {"status": "failed", "confirmed_by": None, "admin_note": None},
-        section="payments",
-        model="Payment",
-        casts={"amount": "int"},
-    )
-
-    if payment["promo_code_id"] is not None and not _live_card_transaction(payment):
-        with allowed_writes("promo_codes"), connection.cursor() as cursor:
-            cursor.execute(
-                "update promo_codes set used_at = null, used_by_company_id = null, "
-                "used_by_user_id = null, updated_at = %s where id = %s "
-                "and used_by_company_id = %s and subscription_id is null",
-                [_stamp(eloquent.now()), payment["promo_code_id"], payment["company_id"]],
-            )
-
-
 @form()
 def cancel_invoice(request: HttpRequest, payment_id: str) -> HttpResponse:
     """BillingController::cancelInvoice: только свой неоплаченный счёт."""
@@ -205,7 +164,242 @@ def cancel_invoice(request: HttpRequest, payment_id: str) -> HttpResponse:
     if not found:
         return not_found(ctx)
 
-    cancel_payment(ctx, found[0])
+    orders.cancel(ctx, found[0])
     flash(ctx, "success", ctx.t("messages.billing.cancelled", number=found[0]["number"]))
 
     return back(ctx)
+
+
+# ── Заказ, промокод, оплата ─────────────────────────────────────────
+
+
+def _with_errors(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
+    """back()->withErrors(): ошибки в сессию, ввод — нет."""
+    _store(ctx).flash("errors", {"default": {"format": ":message", "messages": errors}})
+
+    return back(ctx)
+
+
+def _location(ctx: Context, url: str) -> HttpResponse:
+    """Inertia::location: запросу Inertia — 409 с X-Inertia-Location, иначе переход."""
+    if ctx.request.headers.get("X-Inertia"):
+        response = HttpResponse("", status=409)
+        response["X-Inertia-Location"] = url
+
+        return response
+
+    return HttpResponseRedirect(url)
+
+
+def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
+    """
+    BillingController::checkout: регистрация в Uzum и уход на его форму.
+    Отказ кассы не роняет покупку — счёт остаётся для оплаты переводом.
+    """
+    try:
+        config = cashier.gateway()
+        result = cashier.create_checkout(config, payment, ctx.locale)
+        # Номер заказа Uzum — мост между колбэком и счётом
+        eloquent.save(
+            ctx,
+            "payments",
+            payment,
+            {"external_id": result["order_id"]},
+            section="payments",
+            model="Payment",
+            casts={"amount": "int"},
+        )
+        # Провайдер — сразу: колбэк должен понять, чьим форматом разбирать
+        eloquent.save(
+            ctx,
+            "payments",
+            payment,
+            {"provider": "uzum"},
+            section="payments",
+            model="Payment",
+            casts={"amount": "int"},
+        )
+
+        return _location(ctx, result["redirect_url"])
+    except cashier.GatewayError as error:
+        log.warning(
+            "payment.checkout.failed",
+            extra={"payment": payment["number"], "error": str(error)},
+        )
+        flash(
+            ctx,
+            "warning",
+            ctx.t("messages.billing.checkout_down_invoice", number=payment["number"]),
+        )
+
+        return back(ctx)
+
+
+@form()
+def order(request: HttpRequest) -> HttpResponse:
+    """BillingController::order (verified, throttle:20,60)."""
+    ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="billing-order")
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
+    assert ctx.user is not None
+    company = company_of(ctx)
+
+    if company is None:
+        flash(ctx, "error", ctx.t("messages.billing.no_company_invoice"))
+
+        return back(ctx)
+
+    data = input_of(request)
+    rules: dict[str, list[Any]] = {
+        "kind": ["required", "in:plan,credits"],
+        "id": ["required", "integer"],
+    }
+    errors = validate(data, rules, ctx.locale)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    valid = validated(data, rules)
+    plan_order = valid["kind"] == "plan"
+    target = _as_id(valid["id"])
+
+    # Незакрытый счёт на то же самое — не второй счёт, а «хочу оплатить»
+    duplicate = _rows(
+        "select * from payments where company_id = %s and status = 'pending' and "
+        + ("plan_id" if plan_order else "credit_pack_id")
+        + " = %s limit 1",
+        [company["id"], target],
+    )
+
+    if duplicate:
+        if cashier.checkout_enabled():
+            return _checkout(ctx, duplicate[0])
+
+        flash(ctx, "warning", ctx.t("messages.billing.duplicate", number=duplicate[0]["number"]))
+
+        return back(ctx)
+
+    found = _rows(
+        f"select * from {'plans' if plan_order else 'credit_packs'} where id = %s", [target]
+    )
+
+    if not found:
+        return not_found(ctx)
+
+    payment = (
+        orders.order_plan(ctx, company, found[0], ctx.user)
+        if plan_order
+        else orders.order_credits(ctx, company, found[0], ctx.user)
+    )
+
+    if cashier.checkout_enabled():
+        return _checkout(ctx, payment)
+
+    flash(
+        ctx,
+        "success",
+        ctx.t("messages.billing.issued", number=payment["number"], amount=amount_label(payment)),
+    )
+
+    return back(ctx)
+
+
+@form()
+def promo(request: HttpRequest) -> HttpResponse:
+    """BillingController::promo (verified, throttle:10,60)."""
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="billing-promo")
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
+    assert ctx.user is not None
+    company = company_of(ctx)
+
+    if company is None:
+        return _with_errors(ctx, {"promo_code": [ctx.t("messages.billing.no_company_promo")]})
+
+    data = input_of(request)
+    rules: dict[str, list[Any]] = {"promo_code": ["required", "string", "max:32"]}
+    errors = validate(
+        data,
+        rules,
+        ctx.locale,
+        {"promo_code.required": ctx.t("messages.billing.promo_required")},
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    try:
+        kind, result = orders.redeem(ctx, validated(data, rules)["promo_code"], company, ctx.user)
+    except orders.PromoCodeRejectedError as rejected:
+        # Ошибка на поле — только пока форма остаётся на странице
+        if orders.eligible(company["id"]):
+            return _with_errors(ctx, {"promo_code": [str(rejected)]})
+
+        flash(ctx, "error", str(rejected))
+
+        return back(ctx)
+
+    if kind == "payment":
+        if cashier.checkout_enabled():
+            return _checkout(ctx, result)
+
+        codes = _rows(
+            "select discount_percent from promo_codes where id = %s", [result["promo_code_id"]]
+        )
+        flash(
+            ctx,
+            "success",
+            ctx.t(
+                "messages.billing.promo_discount",
+                percent=codes[0]["discount_percent"] if codes else None,
+                number=result["number"],
+                amount=amount_label(result),
+            ),
+        )
+
+        return back(ctx)
+
+    until = _date(result["ends_at"])
+    name = result["plan"]["name"]
+    flash(
+        ctx,
+        "success",
+        ctx.t("messages.billing.promo_plan", plan=name)
+        if until is None
+        else ctx.t("messages.billing.promo_free", plan=name, date=until),
+    )
+
+    return back(ctx)
+
+
+@form()
+def pay(request: HttpRequest, payment_id: str) -> HttpResponse:
+    """BillingController::pay (verified, throttle:20,60): свой неоплаченный счёт."""
+    ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="billing-pay")
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
+    company = company_of(ctx)
+
+    if company is None:
+        return not_found(ctx)
+
+    found = _rows(
+        "select * from payments where company_id = %s and id = %s and status = 'pending' limit 1",
+        [company["id"], int(payment_id)],
+    )
+
+    if not found:
+        return not_found(ctx)
+
+    if not cashier.checkout_enabled():
+        flash(ctx, "warning", ctx.t("messages.billing.checkout_down"))
+
+        return back(ctx)
+
+    return _checkout(ctx, found[0])

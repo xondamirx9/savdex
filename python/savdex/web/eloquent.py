@@ -134,10 +134,13 @@ def save(
     if saving is not None:
         after.update(saving(after))
 
+    # Поля, которых у модели не было (только что созданная: в original
+    # лишь заданное при create), Eloquent считает изменёнными всегда
     dirty = {
         column: after[column]
-        for column in row
-        if column != "updated_at" and not _cast_same(casts.get(column), row[column], after[column])
+        for column in after
+        if column != "updated_at"
+        and (column not in row or not _cast_same(casts.get(column), row[column], after[column]))
     }
 
     if not dirty:
@@ -152,8 +155,9 @@ def save(
             [*(_written(casts.get(c), v) for c, v in dirty.items()), _stamp(now), row["id"]],
         )
 
-    # getRawOriginal и getChanges: сырые значения — массив текстом JSON
-    before = {c: _written(casts.get(c), row[c]) for c in dirty}
+    # getRawOriginal и getChanges: сырые значения — массив текстом JSON;
+    # поля, которых в original не было, в «до» не попадают
+    before = {c: _written(casts.get(c), row[c]) for c in dirty if c in row}
     row.update(dirty, updated_at=now)
 
     # Наблюдатель срабатывает после записи: подпись — по новым значениям
