@@ -537,6 +537,73 @@ class ListingWorkbookImportTest extends TestCase
         $this->assertStringContainsString('нет русского листа', $result['errors'][0]);
     }
 
+    // ── Шапка ───────────────────────────────────────────────────
+
+    #[Test]
+    public function шапка_с_пометками_узнаётся(): void
+    {
+        Company::factory()->create(['name' => 'ООО «Стройбаза»']);
+
+        // Звёздочки обязательных полей, пояснения в скобках и единица
+        // через запятую — названия столбцов те же, что в образце
+        $path = $this->sheet('Лист XLSX', [
+            ['Название*', 'Компания:', 'Цена (за штуку)', 'Валюта, код'],
+            ['Профнастил С8', 'ООО «Стройбаза»', '1 200 000', 'сум'],
+        ]);
+
+        $result = $this->import($path);
+
+        $listing = Listing::query()->where('title', 'Профнастил С8')->firstOrFail();
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(1_200_000.0, (float) $listing->price);
+        $this->assertSame('UZS', $listing->currency);
+    }
+
+    #[Test]
+    public function без_шапки_отчёт_показывает_что_стоит_в_строке(): void
+    {
+        $path = $this->sheet('Лист XLSX', [
+            ['Каталог продукции'],
+            [],
+            ['Наименование позиции', 'Производитель', 'Сколько стоит'],
+            ['Профнастил С8', 'ООО «Стройбаза»', '1 200 000'],
+        ]);
+
+        $result = $this->import($path);
+
+        $this->assertSame(0, $result['created']);
+        $this->assertCount(1, $result['errors']);
+
+        // Показана строка с несколькими ячейками, а не заголовок отчёта над ней
+        $this->assertStringContainsString('В строке 3 записано «Наименование позиции», «Производитель»', $result['errors'][0]);
+        $this->assertStringContainsString('Загрузка ждёт: Номер, Название, Компания', $result['errors'][0]);
+        $this->assertStringNotContainsString('Фото', $result['errors'][0]);
+    }
+
+    #[Test]
+    public function шапка_в_одной_ячейке_просит_разбить_по_столбцам(): void
+    {
+        $path = $this->sheet('Лист XLSX', [
+            ['Номер;Название;Компания;Цена'],
+            [';Профнастил С8;ООО «Стройбаза»;1200000'],
+        ]);
+
+        $result = $this->import($path);
+
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('в одной ячейке через «;»', $result['errors'][0]);
+    }
+
+    #[Test]
+    public function пустой_лист_называется_пустым(): void
+    {
+        $result = $this->import($this->sheet('Лист XLSX', []));
+
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('лист пуст', $result['errors'][0]);
+    }
+
     #[Test]
     public function условия_поставки_и_оплаты_читаются_с_русского_листа(): void
     {
@@ -844,6 +911,28 @@ class ListingWorkbookImportTest extends TestCase
             .' Target="../drawings/drawing1.xml"/></Relationships>');
 
         $zip->close();
+    }
+
+    /**
+     * Книга из одного листа — со строками как есть, без готовой шапки.
+     *
+     * @param  list<list<string>>  $rows
+     */
+    private function sheet(string $name, array $rows): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'savdex-test').'.xlsx';
+
+        $writer = new Writer;
+        $writer->openToFile($path);
+        $writer->getCurrentSheet()->setName($name);
+
+        foreach ($rows as $row) {
+            $writer->addRow(Row::fromValues($row === [] ? [''] : $row));
+        }
+
+        $writer->close();
+
+        return $path;
     }
 
     private function city(string $name): City

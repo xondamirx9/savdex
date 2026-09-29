@@ -271,7 +271,34 @@ final class ImportLanguage
      */
     public static function matches(string $header, array $aliases): bool
     {
-        return in_array(self::normalize($header), $aliases, true);
+        $needle = self::normalize($header);
+
+        if (in_array($needle, $aliases, true)) {
+            return true;
+        }
+
+        $bare = self::bareHeader($needle);
+
+        return $bare !== $needle && in_array($bare, $aliases, true);
+    }
+
+    /**
+     * Заголовок без пометок, которые дописывают к названию столбца.
+     *
+     * Звёздочка обязательного поля, двоеточие, пояснение в скобках,
+     * единица через запятую: «Название*», «Описание:», «Цена (сум)»,
+     * «Цена, UZS» — всё это «Название», «Описание» и «Цена». Иначе
+     * шапка с пометками не узнаётся целиком, и книга не загружается,
+     * хотя столбцы названы правильно.
+     *
+     * Сравнивается только после точного: синоним со скобками —
+     * «начальная (максимальная) цена» — узнаётся и так.
+     */
+    private static function bareHeader(string $normalized): string
+    {
+        $bare = preg_replace(['/\([^)]*\)|\[[^\]]*\]/u', '/,.*$/u', '/[*:]/u'], '', $normalized);
+
+        return trim((string) preg_replace('/\s+/u', ' ', (string) $bare));
     }
 
     /** Язык листа по имени вкладки; null — вкладка не про язык. */
