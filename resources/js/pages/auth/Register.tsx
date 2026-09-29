@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
-import { X } from 'lucide-react';
+import { MailCheck, X } from 'lucide-react';
+import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
 import { Button, PasswordInput, TextInput } from '@/components/ui';
@@ -41,6 +42,8 @@ const accountTypes = (): [string, string, string][] => [
 ];
 
 interface Props {
+    /** Почта, подтверждённая кодом на втором шаге. */
+    email?: string;
     /** Разделы каталога — «Категория» юрлица. */
     categories?: { id: number; name: string }[];
     /** Направления «Доп. услуг» — «Категория» фрилансера. */
@@ -53,7 +56,7 @@ const MAX_CATEGORIES = 5;
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
-export default function Register({ categories = [], serviceSections = [] }: Props) {
+export default function Register({ email = '', categories = [], serviceSections = [] }: Props) {
     const { data, setData, post, processing, errors, clearErrors } = useForm({
         // Юрлицо: компания и её категории
         company_name: '',
@@ -63,7 +66,6 @@ export default function Register({ categories = [], serviceSections = [] }: Prop
         pinfl: '',
         service_section: '',
         name: '',
-        email: '',
         phone: '',
         password: '',
         password_confirmation: '',
@@ -144,6 +146,22 @@ export default function Register({ categories = [], serviceSections = [] }: Prop
             heading={t('auth.register_heading')}
             subheading={t('auth.register_subheading')}
         >
+            <RegisterSteps current={3} />
+
+            {/* Почта уже подтверждена кодом — здесь её только показываем */}
+            <div className="bg-primary-50 rounded-card mb-5 flex items-center gap-3 p-3.5 text-sm">
+                <MailCheck aria-hidden className="text-primary-700 size-5 shrink-0" />
+                <span className="min-w-0">
+                    {t('auth.reg_email_verified')}: <b className="break-all">{email}</b>
+                </span>
+            </div>
+            {/* Адрес успели занять между шагами — ошибка почты без поля */}
+            {(errors as Record<string, string | undefined>).email && (
+                <p className="text-danger -mt-3 mb-5 text-[13px]" role="alert">
+                    {(errors as Record<string, string | undefined>).email}
+                </p>
+            )}
+
             <form onSubmit={submit} className="space-y-5" noValidate>
                 {/* Кто вы: от выбора зависит второй шаг — профиль компании
                     или профиль человека без названия и типа бизнеса */}
@@ -245,23 +263,7 @@ export default function Register({ categories = [], serviceSections = [] }: Prop
                     hint={t('auth.phone_hint')}
                 />
 
-                <TextInput
-                    label={t('auth.reg_email_label')}
-                    type="email"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    name="email"
-                    autoComplete="email"
-                    required
-                    placeholder={t('auth.email_placeholder')}
-                    value={data.email}
-                    onChange={(e) => update('email', e.target.value)}
-                    error={errors.email}
-                    hint={t('auth.email_hint')}
-                />
-
-                {legal && (
+{legal && (
                     <div className="field">
                         <label className="label" htmlFor="r-cats">
                             {t('auth.reg_categories_label')} <span className="req">*</span>

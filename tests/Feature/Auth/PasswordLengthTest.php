@@ -47,7 +47,7 @@ class PasswordLengthTest extends TestCase
     #[DataProvider('допустимые')]
     public function пароль_от_8_до_20_принимается(string $password): void
     {
-        $this->post('/register', $this->form($password))->assertSessionHasNoErrors();
+        $this->postRegistration($this->form($password))->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('users', ['email' => 'alisher@mail.uz']);
     }
@@ -55,14 +55,14 @@ class PasswordLengthTest extends TestCase
     #[Test]
     public function короче_8_отклоняется_с_понятным_сообщением(): void
     {
-        $this->post('/register', $this->form('Parol12'))
+        $this->postRegistration($this->form('Parol12'))
             ->assertSessionHasErrors(['password' => __('ui.messages.register.password_min')]);
     }
 
     #[Test]
     public function длиннее_20_отклоняется_с_понятным_сообщением(): void
     {
-        $this->post('/register', $this->form('Parol123Parol123Parol'))
+        $this->postRegistration($this->form('Parol123Parol123Parol'))
             ->assertSessionHasErrors(['password' => __('ui.messages.register.password_max')]);
 
         $this->assertSame(0, User::query()->count());
@@ -71,7 +71,7 @@ class PasswordLengthTest extends TestCase
     #[Test]
     public function без_согласия_с_офертой_регистрации_нет(): void
     {
-        $this->post('/register', $this->form('Parol123', terms: false))
+        $this->postRegistration($this->form('Parol123', terms: false))
             ->assertSessionHasErrors('terms');
 
         $this->assertSame(0, User::query()->count());

@@ -5,24 +5,45 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\RegisterEmailRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\ItTask;
 use App\Models\Plan;
 use App\Models\User;
+use App\Notifications\RegisterEmailCode;
+use App\Support\EmailVerificationCode;
 use App\Support\Locales;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Регистрация в три шага.
+ *
+ * 1. Почта (/register) — адрес проверяется и на него уходит код.
+ * 2. Код (/register/code) — шесть цифр из письма.
+ * 3. Анкета (/register/details) — кто вы, компания, телефон, пароль.
+ *
+ * Аккаунт заводится только на третьем шаге и сразу с подтверждённой
+ * почтой: раньше почту подтверждали уже после входа, и часть людей
+ * так и оставалась с неподтверждённым адресом. Между шагами адрес
+ * живёт в сессии: SESSION_EMAIL — ждёт кода, SESSION_VERIFIED —
+ * код введён верно.
+ */
 class RegisteredUserController extends Controller
 {
+    public const SESSION_EMAIL = 'register.email';
+
+    public const SESSION_VERIFIED = 'register.verified_email';
+
     /**
      * Сколько аккаунтов можно завести с одного адреса сети за час.
      *
@@ -49,7 +70,89 @@ class RegisteredUserController extends Controller
             redirect()->setIntendedUrl(Locales::url('/cabinet/billing?plan='.$plan));
         }
 
+        return Inertia::render('auth/RegisterEmail', [
+            // «Изменить почту» со второго шага — адрес уже в поле
+            'email' => $request->session()->get(self::SESSION_EMAIL),
+        ]);
+    }
+
+    /** Шаг 1 → 2: адрес свободен — выпустить код и отправить письмо. */
+    public function sendCode(RegisterEmailRequest $request): RedirectResponse
+    {
+        $email = $request->string('email')->toString();
+
+        $request->session()->put(self::SESSION_EMAIL, $email);
+        $request->session()->forget(self::SESSION_VERIFIED);
+
+        $this->mailCode($email);
+
+        return redirect()->route('register.code');
+    }
+
+    /** Шаг 2: ввод кода. Без адреса из первого шага — назад на него. */
+    public function code(Request $request): RedirectResponse|Response
+    {
+        $email = $request->session()->get(self::SESSION_EMAIL);
+
+        if (! is_string($email) || $email === '') {
+            return redirect()->route('register');
+        }
+
+        return Inertia::render('auth/RegisterCode', [
+            'email' => $email,
+            'status' => $request->session()->get('status'),
+            // Только на демо-стенде без почты (mailCode)
+            'demoCode' => $request->session()->get('demo_code'),
+        ]);
+    }
+
+    public function confirmCode(Request $request): RedirectResponse
+    {
+        $email = $request->session()->get(self::SESSION_EMAIL);
+
+        if (! is_string($email) || $email === '') {
+            return redirect()->route('register');
+        }
+
+        $request->validate(
+            ['code' => ['required', 'digits:6']],
+            ['code.required' => __('ui.messages.auth.code_required'), 'code.digits' => __('ui.messages.auth.code_digits')],
+        );
+
+        if (! EmailVerificationCode::checkForEmail($email, $request->string('code')->toString())) {
+            return back()->withErrors(['code' => __('ui.messages.auth.code_invalid')]);
+        }
+
+        $request->session()->put(self::SESSION_VERIFIED, $email);
+
+        return redirect()->route('register.details');
+    }
+
+    /** «Отправить код ещё раз» — новый код взамен прежнего. */
+    public function resendCode(Request $request): RedirectResponse
+    {
+        $email = $request->session()->get(self::SESSION_EMAIL);
+
+        if (! is_string($email) || $email === '') {
+            return redirect()->route('register');
+        }
+
+        $this->mailCode($email);
+
+        return back()->with('status', __('ui.messages.auth.mail_resent'));
+    }
+
+    /** Шаг 3: анкета. Только после верного кода. */
+    public function details(Request $request): RedirectResponse|Response
+    {
+        $email = $this->verifiedEmail($request);
+
+        if ($email === null) {
+            return redirect()->route($request->session()->has(self::SESSION_EMAIL) ? 'register.code' : 'register');
+        }
+
         return Inertia::render('auth/Register', [
+            'email' => $email,
             // Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             'categories' => Category::query()->whereNull('parent_id')->where('is_active', true)
                 ->with('translations')->orderBy('sort')->orderBy('id')->get()
@@ -59,8 +162,16 @@ class RegisteredUserController extends Controller
         ]);
     }
 
-    public function store(RegisterRequest $request): RedirectResponse
+    public function store(Request $plain): RedirectResponse
     {
+        // Без подтверждённой почты анкету не принять — к первому шагу
+        if ($this->verifiedEmail($plain) === null) {
+            return redirect()->route('register');
+        }
+
+        // Проверка анкеты — при разрешении запроса из контейнера
+        $request = app(RegisterRequest::class);
+
         $limit = 'register:'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($limit, self::MAX_PER_HOUR)) {
@@ -100,13 +211,11 @@ class RegisteredUserController extends Controller
         RateLimiter::hit($limit, 3600);
 
         /*
-         * Демо-стенд (см. config/app.php): почта помечается подтверждённой
-         * до события Registered — слушатель уведомлений видит это и письмо
-         * не отправляет.
+         * Почта подтверждена кодом ещё до анкеты. Помечается до события
+         * Registered — слушатель видит это и второе письмо не отправляет.
          */
-        if (config('app.demo_auto_verify')) {
-            $user->markEmailAsVerified();
-        }
+        $user->markEmailAsVerified();
+        $request->session()->forget([self::SESSION_EMAIL, self::SESSION_VERIFIED]);
 
         event(new Registered($user));
         Auth::login($user);
@@ -114,14 +223,47 @@ class RegisteredUserController extends Controller
         /*
          * Второй шаг — данные компании — только у юрлица: тип бизнеса,
          * страна, город и роль на площадке. Физлицу и фрилансеру
-         * больше спрашивать нечего — сразу подтверждение почты.
+         * больше спрашивать нечего — сразу туда, куда шли (например,
+         * на оплату тарифа), иначе в кабинет.
          */
         if ($type === Company::LEGAL_ENTITY) {
             return redirect()->route('onboarding.company');
         }
 
-        return redirect()->route('verification.notice')
+        return redirect()->intended(route('cabinet'))
             ->with('success', __('ui.messages.company.created_onboarding'));
+    }
+
+    /** Адрес, подтверждённый кодом, — если он всё ещё совпадает с введённым. */
+    private function verifiedEmail(Request $request): ?string
+    {
+        $verified = $request->session()->get(self::SESSION_VERIFIED);
+
+        return is_string($verified) && $verified !== '' && $verified === $request->session()->get(self::SESSION_EMAIL)
+            ? $verified
+            : null;
+    }
+
+    private function mailCode(string $email): void
+    {
+        $code = EmailVerificationCode::issueForEmail($email);
+
+        /*
+         * Демо-стенд без почты (config/app.php): код в письмо не уходит,
+         * а подставляется на втором шаге — иначе туда не пройти.
+         */
+        if (config('app.demo_auto_verify')) {
+            session()->flash('demo_code', $code);
+
+            return;
+        }
+
+        try {
+            Notification::routes(['mail' => $email])->notify(new RegisterEmailCode($code));
+        } catch (\Throwable $e) {
+            // Сбой почты — не 500: «Отправить ещё раз» остаётся под рукой
+            report($e);
+        }
     }
 
     /**

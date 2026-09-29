@@ -94,8 +94,10 @@ def login(request: HttpRequest) -> HttpResponse:
 
 def register(request: HttpRequest) -> HttpResponse:
     """
-    RegisteredUserController::create. Пришёл с тарифов кнопкой «Выбрать»
-    (?plan=код) — после регистрации его ждёт оплата этого тарифа.
+    RegisteredUserController::create — первый шаг регистрации, почта.
+    Пришёл с тарифов кнопкой «Выбрать» (?plan=код) — после регистрации
+    его ждёт оплата этого тарифа. Код и анкета (/register/code,
+    /register/details) — у Laravel.
     """
     ctx = guest(request)
 
@@ -118,7 +120,11 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    return inertia.render(ctx, "auth/Register", {}, _seo(ctx))
+    # «Изменить почту» со второго шага — адрес уже в поле
+    store = _store(ctx)
+    email = store.get("register.email") if store is not None else None
+
+    return inertia.render(ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx))
 
 
 def _whatsapp_configured() -> bool:
@@ -247,7 +253,15 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
 
     assert ctx.user is not None
 
-    if ctx.user["company_id"] is not None:
+    # OnboardingController::stepOpen: компании нет (удалённая — тоже нет,
+    # SoftDeletes) — или это юрлицо, заведённое при регистрации, без
+    # города (шаг его дополняет)
+    company = _rows(
+        "select legal_form, city_id from companies where id = %s and deleted_at is null",
+        [ctx.user["company_id"]],
+    )
+
+    if company and not (company[0]["legal_form"] == "legal" and company[0]["city_id"] is None):
         return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale
@@ -279,6 +293,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             if account["account_type"] in LEGAL_FORMS
             else "legal",
             "personName": ctx.user["name"],
+            # Компания заведена при регистрации — спрашиваем только недостающее
+            "completing": ctx.user["company_id"] is not None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(
