@@ -29,6 +29,7 @@ export function SelectField({
     ariaLabel,
     className,
     id,
+    disabled = false,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -46,6 +47,8 @@ export function SelectField({
      * поэтому подпись остаётся кликабельной в обоих режимах.
      */
     id?: string;
+    /** Только для чтения: значение видно, выбрать другое нельзя */
+    disabled?: boolean;
 }) {
     const [custom, setCustom] = useState(false);
     const [open, setOpen] = useState(false);
@@ -85,6 +88,7 @@ export function SelectField({
                 className={cn('select', className)}
                 aria-label={ariaLabel}
                 value={value}
+                disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}
             >
                 {all.map((o) => (
@@ -150,6 +154,7 @@ export function SelectField({
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={ariaLabel}
+                disabled={disabled}
                 onKeyDown={onKey}
                 onClick={(e) => {
                     e.stopPropagation();
