@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -94,10 +95,12 @@ class ItTask extends Model
     /**
      * Страницы направлений «Доп. услуг»: адрес → код направления или вида.
      *
-     * Порядок — порядок подменю «Доп. услуги» в шапке. «Подбор
-     * персонала» — вид внутри HR-услуг, но страница у него своя:
-     * заказчик ищет именно его. «Другое» страницы не получает:
-     * о нём нечего рассказать.
+     * «Подбор персонала» — вид внутри HR-услуг, и страница у него своя:
+     * заказчик ищет именно его. «Другое» страницы не получает: о нём
+     * нечего рассказать.
+     *
+     * Это карта адресов, а не меню: в меню часть страниц не попадает,
+     * см. SERVICE_MENU.
      */
     public const SERVICE_PAGES = [
         'it' => 'it',
@@ -107,6 +110,23 @@ class ItTask extends Model
         'customs' => 'customs',
         'accounting' => 'accounting',
     ];
+
+    /**
+     * Направления в меню — подменю «Доп. услуги» в шапке и список
+     * «Другие направления» на самих страницах. Порядок здесь и есть
+     * порядок в меню.
+     *
+     * «Подбор персонала» (страница recruitment) в меню не значится:
+     * рядом с «HR-услугами» он читался вторым HR-пунктом, хотя это
+     * вид внутри них. Страница осталась и открывается ссылкой из
+     * «Что входит в направление» на самой странице HR-услуг.
+     *
+     * @return list<string>
+     */
+    public static function serviceMenu(): array
+    {
+        return array_values(array_diff(array_keys(self::SERVICE_PAGES), ['recruitment']));
+    }
 
     /** Коды, по которым можно фильтровать: конечные виды и направления. */
     public static function filterableTypes(): array
@@ -132,17 +152,31 @@ class ItTask extends Model
      * Дерево направлений для панели фильтра — общее для ленты услуг
      * и раздела «Резюме», который стоит внутри HR-услуг.
      *
-     * @return list<array{code: string, label: string, children: list<array{code: string, label: string}>}>
+     * $counts — число записей по видам (service_type → сколько).
+     * У направления считается сумма по его видам: «IT-услуги» должны
+     * показывать столько, сколько откроется при выборе, а не ноль
+     * оттого, что такого кода в колонке не бывает. Без счётчиков ключ
+     * count не появляется вовсе: у резюме своих чисел нет, и рисовать
+     * им нули незачем.
+     *
+     * @param  Collection<string, int>|null  $counts
+     * @return list<array<string, mixed>>
      */
-    public static function sectionTree(): array
+    public static function sectionTree(?Collection $counts = null): array
     {
-        return array_map(fn (string $code): array => [
-            'code' => $code,
-            'label' => __('ui.it_tasks.types.'.$code),
-            'children' => array_map(fn (string $child): array => [
-                'code' => $child,
-                'label' => __('ui.it_tasks.types.'.$child),
-            ], self::SERVICE_SECTIONS[$code]),
+        $node = function (string $code) use ($counts): array {
+            $node = ['code' => $code, 'label' => __('ui.it_tasks.types.'.$code)];
+
+            if ($counts !== null) {
+                $node['count'] = (int) collect(self::typesUnder($code))
+                    ->sum(fn (string $kind): int => (int) ($counts[$kind] ?? 0));
+            }
+
+            return $node;
+        };
+
+        return array_map(fn (string $code): array => $node($code) + [
+            'children' => array_map($node, self::SERVICE_SECTIONS[$code]),
         ], array_keys(self::SERVICE_SECTIONS));
     }
 

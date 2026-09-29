@@ -7,7 +7,9 @@ import { routes } from '@/routes';
 export interface ServiceSection {
     code: string;
     label: string;
-    children: { code: string; label: string }[];
+    /** Сколько задач найдётся при выборе; нет — страница чисел не считает */
+    count?: number;
+    children: { code: string; label: string; count?: number }[];
 }
 
 /** Пункт «Резюме» в HR-услугах — это не вид задачи, а отдельная страница. */
@@ -21,14 +23,17 @@ const HR_SECTION = 'hr_services';
  * Общие для ленты задач и страницы резюме: резюме стоит внутри
  * HR-услуг, и панель слева на обеих страницах должна быть одной.
  */
-export function serviceFilterOptions(types: ServiceSection[]): FilterOption[] {
+export function serviceFilterOptions(types: ServiceSection[], totalAll?: number): FilterOption[] {
     return [
-        { id: '', label: t('it_tasks.all_types') },
+        { id: '', label: t('it_tasks.all_types'), count: totalAll },
         ...types.map((type) => ({
             id: type.code,
             label: type.label,
+            count: type.count,
             children: [
-                ...type.children.map((child) => ({ id: child.code, label: child.label })),
+                ...type.children.map((child) => ({ id: child.code, label: child.label, count: child.count })),
+                // «Резюме» — страница, а не вид задачи: число задач
+                // ей не полагается
                 ...(type.code === HR_SECTION ? [{ id: RESUMES_OPTION, label: t('nav.resumes') }] : []),
             ],
         })),
@@ -49,10 +54,15 @@ export function openServiceSection(id: string, applyTaskType: (type: string) => 
 /**
  * Страницы направлений «Доп. услуг» — подменю в шапке.
  *
- * Те же адреса и в том же порядке, что ItTask::SERVICE_PAGES
- * на сервере: там по ним открывается страница, здесь строится меню.
+ * Тот же перечень и порядок, что ItTask::serviceMenu() на сервере:
+ * там он строит список «Другие направления», здесь — подменю.
+ *
+ * «Подбор персонала» (recruitment) в меню не значится: рядом
+ * с «HR-услугами» он читался вторым HR-пунктом, хотя это вид внутри
+ * них. Страница осталась и открывается ссылкой со страницы HR-услуг,
+ * поэтому в SERVICE_PAGE_ICONS и SERVICE_PAGE_BY_CODE она есть.
  */
-export const SERVICE_PAGES = ['it', 'hr', 'recruitment', 'logistics', 'customs', 'accounting'] as const;
+export const SERVICE_PAGES = ['it', 'hr', 'logistics', 'customs', 'accounting'] as const;
 
 export const SERVICE_PAGE_ICONS: Record<string, LucideIcon> = {
     it: Code2,

@@ -121,7 +121,7 @@ class ServiceSectionController extends Controller
             'pages' => array_map(fn (string $page): array => [
                 'slug' => $page,
                 'title' => __("ui.service_pages.{$page}.title"),
-            ], array_keys(ItTask::SERVICE_PAGES)),
+            ], ItTask::serviceMenu()),
         ]);
     }
 

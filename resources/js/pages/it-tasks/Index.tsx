@@ -61,6 +61,8 @@ interface Props {
     };
     /** Направления услуг: у IT и HR есть виды внутри, у остальных — нет */
     types: ServiceSection[];
+    /** Число у пункта «Все задачи» */
+    total_all: number;
     /** Только города, где задачи действительно есть */
     cities: { id: number; name: string }[];
     total: number;
@@ -183,7 +185,7 @@ export function TaskCard({ row }: { row: TaskRow }) {
     );
 }
 
-export default function ItTasksIndex({ tasks, filters, types, cities, total, viewer }: Props) {
+export default function ItTasksIndex({ tasks, filters, types, total_all: totalAll, cities, total, viewer }: Props) {
     const [q, setQ] = useState(filters.q);
 
     function apply(next: Partial<Props['filters']>) {
@@ -212,9 +214,10 @@ export default function ItTasksIndex({ tasks, filters, types, cities, total, vie
                 <div className="board-layout">
                     <BoardFilter
                         title={t('it_tasks.filters')}
+                        name="service-section"
                         value={filters.type}
                         onPick={(id) => openServiceSection(id, (type) => apply({ type }))}
-                        options={serviceFilterOptions(types)}
+                        options={serviceFilterOptions(types, totalAll)}
                     >
                         {cities.length > 0 && (
                             <div className="board-group">
