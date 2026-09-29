@@ -304,6 +304,37 @@ def test_шаг_компании_пройден(сайт):
     assert куда(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0]).endswith("/cabinet")
 
 
+def test_шаг_компании_у_юрлица_после_регистрации(сайт):
+    # Компания заведена на первом шаге, города ещё нет — второй шаг
+    # «Данные компании» открывается и спрашивает только недостающее
+    company = php(
+        "echo App\\Models\\Company::factory()"
+        "->create(['legal_form' => 'legal', 'city_id' => null])->id;"
+    ).splitlines()[-1]
+    uid = учётка("legal-step@savdex.uz", company_id=int(company))
+
+    props = пропсы(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0])
+
+    assert props["completing"] is True
+
+
+def test_шаг_компании_не_нужен_физлицу(сайт):
+    company = php(
+        "echo App\\Models\\Company::factory()"
+        "->create(['legal_form' => 'individual', 'city_id' => null])->id;"
+    ).splitlines()[-1]
+    uid = учётка("person-step@savdex.uz", account_type="individual", company_id=int(company))
+
+    assert куда(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0]).endswith("/cabinet")
+
+
+def test_регистрация_отдаёт_категории_и_направления(сайт):
+    props = пропсы(сверить_сессию(сайт, "/register", сессия())[0])
+
+    assert [s["code"] for s in props["serviceSections"]][:2] == ["it", "hr_services"]
+    assert isinstance(props["categories"], list)
+
+
 def test_отзыв_о_площадке(сайт):
     uid = учётка("platform-review@savdex.uz", company_id=None)
 

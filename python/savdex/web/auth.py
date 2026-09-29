@@ -118,7 +118,28 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    return inertia.render(ctx, "auth/Register", {}, _seo(ctx))
+    from savdex.web.directory import _named
+    from savdex.web.resumes import section_tree
+
+    categories = _named("categories", ctx.locale)
+
+    return inertia.render(
+        ctx,
+        "auth/Register",
+        {
+            # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
+            "categories": [
+                {"id": c["id"], "name": categories[c["id"]]}
+                for c in _rows(
+                    "select id from categories where parent_id is null and is_active "
+                    "order by sort, id"
+                )
+            ],
+            # Фрилансер — направление «Доп. услуг», на заказы которого откликается
+            "serviceSections": section_tree(ctx),
+        },
+        _seo(ctx),
+    )
 
 
 def _whatsapp_configured() -> bool:
@@ -247,8 +268,15 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
 
     assert ctx.user is not None
 
+    # OnboardingController::stepOpen: компании нет (старые аккаунты)
+    # или юрлицо не дополнило заведённую при регистрации — нет города
     if ctx.user["company_id"] is not None:
-        return _redirect(ctx, "/cabinet")
+        company = _rows(
+            "select legal_form, city_id from companies where id = %s", [ctx.user["company_id"]]
+        )
+
+        if not company or company[0]["legal_form"] != "legal" or company[0]["city_id"] is not None:
+            return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale
     cities = _named("cities", locale)
@@ -279,6 +307,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             if account["account_type"] in LEGAL_FORMS
             else "legal",
             "personName": ctx.user["name"],
+            # Компания заведена при регистрации — спрашиваем только недостающее
+            "completing": ctx.user["company_id"] is not None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(
