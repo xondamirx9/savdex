@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\PasswordMessages;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -38,6 +39,7 @@ class ForcePasswordController extends Controller
         ], [
             'password.required' => __('ui.messages.auth.password_new'),
             'password.confirmed' => __('ui.messages.auth.password_mismatch'),
+            ...PasswordMessages::all(),
         ]);
 
         $user = $request->user();

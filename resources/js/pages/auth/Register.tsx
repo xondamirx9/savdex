@@ -69,17 +69,27 @@ export default function Register() {
     const strength = useMemo(() => {
         if (!data.password) return null;
         const score = scorePassword(data.password);
+        // Только то, без чего сервер пароль не примет. Спецсимвол сюда
+        // не входит: он повышает оценку, но не обязателен, и «добавьте
+        // спецсимвол» читалось как требование, а про букву молчало
         const missing: string[] = [];
         if (data.password.length < 10) missing.push(t('auth.missing_length', { count: 10 - data.password.length }));
-        if (!/\d/.test(data.password)) missing.push(t('auth.missing_digit'));
-        if (!/[^\w\s]/.test(data.password)) missing.push(t('auth.missing_special'));
+        if (!/\p{L}/u.test(data.password)) missing.push(t('auth.missing_letter'));
+        if (!/\p{N}/u.test(data.password)) missing.push(t('auth.missing_digit'));
         return { score, missing };
     }, [data.password]);
 
     function submit(e: FormEvent) {
         e.preventDefault();
         post(routes.register, {
-            onFinish: () => setData((d) => ({ ...d, password: '', password_confirmation: '' })),
+            // Пароль стирается, только если отклонён он сам. Раньше оба поля
+            // очищались после любой ошибки — опечатка в телефоне стоила
+            // повторного набора двух паролей по десять знаков
+            onError: (errs) => {
+                if (errs.password || errs.password_confirmation) {
+                    setData((d) => ({ ...d, password: '', password_confirmation: '' }));
+                }
+            },
         });
     }
 

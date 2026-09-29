@@ -87,6 +87,18 @@ class ForcePasswordTest extends TestCase
         ])->assertSessionHasErrors(['password' => 'Пароли не совпадают']);
     }
 
+    /** Подписи правил пароля — те же, что при регистрации, а не ключи словаря */
+    #[Test]
+    public function слабый_пароль_объясняется_словами(): void
+    {
+        $user = User::factory()->create(['must_change_password' => true]);
+
+        $this->actingAs($user)->post('/password/change', [
+            'password' => 'bezcifrparol',
+            'password_confirmation' => 'bezcifrparol',
+        ])->assertSessionHasErrors(['password' => 'Добавьте в пароль хотя бы одну цифру']);
+    }
+
     #[Test]
     public function гость_не_имеет_доступа(): void
     {

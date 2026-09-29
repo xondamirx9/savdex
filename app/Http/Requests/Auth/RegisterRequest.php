@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auth;
 
+use App\Support\PasswordMessages;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
@@ -59,10 +60,7 @@ class RegisterRequest extends FormRequest
 
             'password.required' => __('ui.messages.auth.password_new'),
             'password.confirmed' => __('ui.messages.auth.password_mismatch'),
-            'password.min' => __('ui.messages.register.password_min'),
-            'password.letters' => __('ui.messages.register.password_letters'),
-            'password.numbers' => __('ui.messages.register.password_numbers'),
-            'password.uncompromised' => __('ui.messages.register.password_leaked'),
+            ...PasswordMessages::all(),
 
             'terms.accepted' => __('ui.messages.register.terms'),
             'account_type.in' => __('ui.messages.register.account_type'),
