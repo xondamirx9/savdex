@@ -229,3 +229,71 @@ def test_публикация_отказ(сайт, было, лимит):
         body={**ВЕРНО, "category_id": _категория()},
         headers=inertia(),
     )
+
+
+# ── Автосохранение ──────────────────────────────────────────────────
+
+
+def снимок_черновика() -> Any:
+    return {
+        **снимок(),
+        "attributes": sql(
+            "select listing_id, key, value from listing_attributes order by listing_id, key"
+        ),
+        "tags": sql("select tags::text, type, wizard_step from listings order by id"),
+    }
+
+
+def с_деталями() -> None:
+    объявления(("draft", ""))()
+    sql("delete from listing_attributes")
+    sql(
+        "insert into listing_attributes (listing_id, key, value, created_at, updated_at) values "
+        "(1, 'spec_weight', '50 kg', now(), now()), (1, 'spec_voltage', '220', now(), now()), "
+        "(1, 'grade', 'M400', now(), now())"
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"title": "Цемент М400 Ташкент", "step": 2, "type": "demand"},
+        {"title": "", "description": None, "price": "", "bundle_price": None},
+        {"price_negotiable": False, "bundle_price": "12000.5", "min_order": "10"},
+        {"category_id": "cat"},
+        {
+            "category_id": "cat",
+            "attributes": {"spec_color": " серый  ", "spec_dimensions": "x x cm"},
+        },
+        {"attributes": {"spec_weight": "50,5 kg", "spec_color": "<b>серый</b>", "grade": "M500"}},
+        {"attributes": {"spec_weight": "много", "spec_length": None, "spec_unknown": "x"}},
+        {"title": "Цемент М400 Ташкент", "tags": ["цемент", "м400", "ташкент", "чужой"]},
+        {"tags": ["x"] * 9},
+        {"type": "barter", "step": 7, "price": "-1"},
+    ],
+)
+@pytest.mark.parametrize("admin", [False, True])
+def test_автосохранение(сайт, body, admin):
+    uid = владелец(admin=admin)
+    тело = dict(body)
+
+    if тело.get("category_id") == "cat":
+        тело["category_id"] = _категория()
+
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/autosave",
+        с_деталями,
+        снимок_черновика,
+        uid=uid,
+        body=тело,
+        headers={"Accept": "application/json", "X-XSRF-TOKEN": inertia()["X-XSRF-TOKEN"]},
+        drop=("saved_at",),
+    )
+
+    if "tags" in body and len(body["tags"]) < 9:
+        import json
+
+        ответ = json.loads(итог["ответ"]["body"])
+        assert "цемент" in ответ["tag_options"]
+        assert json.loads(итог["база"]["tags"][0][0]) == ["цемент", "м400", "ташкент"]

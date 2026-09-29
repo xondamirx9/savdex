@@ -257,3 +257,178 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     flash(ctx, "success", ctx.t("messages.listing.published"))
 
     return redirect(ctx, ctx.url("/cabinet/listings"))
+
+
+# ── Автосохранение (этап 5, шаг 39) ─────────────────────────────────
+
+#: Currencies::codes()
+CURRENCIES = ("UZS", "USD", "EUR", "CNY", "TRY", "RUB", "KZT")
+
+
+def _attribute(listing_id: int, key: str, value: str | None) -> None:
+    """$listing->attributes(): updateOrCreate по ключу; None — удалить строку."""
+    found = _rows(
+        "select * from listing_attributes where listing_id = %s and key = %s order by id limit 1",
+        [listing_id, key],
+    )
+    now = _stamp(eloquent.now())
+
+    with allowed_writes("listing_attributes"), connection.cursor() as cursor:
+        if value is None:
+            cursor.execute(
+                "delete from listing_attributes where listing_id = %s and key = %s",
+                [listing_id, key],
+            )
+        elif not found:
+            cursor.execute(
+                "insert into listing_attributes (listing_id, key, value, updated_at, created_at) "
+                "values (%s, %s, %s, %s, %s)",
+                [listing_id, key, value, now, now],
+            )
+        elif found[0]["value"] != value:
+            cursor.execute(
+                "update listing_attributes set value = %s, updated_at = %s where id = %s",
+                [value, now, found[0]["id"]],
+            )
+
+
+def _php_string(value: Any) -> str:  # noqa: ANN401
+    """(string) $value для скаляров."""
+    if value is None or value is False:
+        return ""
+
+    if value is True:
+        return "1"
+
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+
+    return str(value)
+
+
+def _allowed_specs(category_id: int | None) -> list[str]:
+    """ProductSpecs::forCategory: ключи деталей товара для категории объявления."""
+    from savdex.web import specs
+
+    if category_id is None:
+        return []
+
+    rows = _rows(
+        "select c.slug, c.parent_id, p.slug as parent_slug from categories c "
+        "left join categories p on p.id = c.parent_id where c.id = %s",
+        [category_id],
+    )
+
+    if not rows:
+        return []
+
+    row = rows[0]
+    parent_slug, child_slug = (
+        (row["parent_slug"], row["slug"]) if row["parent_id"] is not None else (row["slug"], None)
+    )
+
+    return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
+
+
+@form()
+def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
+    """ListingWizardController::autosave (verified, throttle:60,1): черновик без строгости."""
+    from savdex.audit import _php_json
+    from savdex.web import specs
+    from savdex.web.cabinet import wizard_tag_options
+    from savdex.web.validation import validated
+
+    ctx = action(request, throttle=60)
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
+    listing = _owned(ctx, int(listing_id))
+
+    if listing is None:
+        return not_found(ctx)
+
+    data = input_of(request)
+    rules: dict[str, list[Any]] = {
+        "type": ["nullable", "in:supply,demand"],
+        "category_id": ["nullable", _exists("categories")],
+        "title": ["nullable", "string", "max:90"],
+        "description": ["nullable", "string", "max:5000"],
+        "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "currency": ["nullable", "in:" + ",".join(CURRENCIES)],
+        "unit": ["nullable", "string", "max:20"],
+        "price_negotiable": ["nullable", "boolean"],
+        "min_order": ["nullable", "integer", "min:0"],
+        "delivery_terms": ["nullable", "string", "max:500"],
+        "payment_terms": ["nullable", "string", "max:500"],
+        "step": ["nullable", "integer", "between:1,4"],
+        "attributes": ["nullable", "array"],
+        "tags": ["nullable", "array", "max:8"],
+        "tags.*": ["string", "max:40"],
+    }
+    errors = validate(data, rules, ctx.locale)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    fields = validated(data, rules)
+    attributes = fields.pop("attributes", None) or {}
+    chosen = fields.pop("tags", None)
+
+    if fields.get("step") is not None:
+        fields["wizard_step"] = fields.pop("step")
+
+    changes = {k: v for k, v in fields.items() if v is not None and k != "step"}
+
+    # false — валидное значение, array_filter его выбрасывает
+    if "price_negotiable" in data:
+        changes["price_negotiable"] = _php_boolean(data["price_negotiable"])
+
+    # Очистка поля должна доехать до базы
+    if "bundle_price" in data:
+        changes["bundle_price"] = data["bundle_price"]
+
+    _save(ctx, listing, changes)
+
+    items = attributes.items() if isinstance(attributes, dict) else enumerate(attributes)
+
+    for raw_key, value in items:
+        key = str(raw_key)
+
+        if key.startswith(specs.PREFIX):
+            cleaned = specs.clean(key, value)
+
+            if cleaned == "":
+                _attribute(listing["id"], key, None)
+            elif cleaned is not None:
+                _attribute(listing["id"], key, cleaned)
+
+            continue
+
+        _attribute(listing["id"], key, _php_string(value))
+
+    # Сменили категорию — детали, которых у новой нет, убираются
+    allowed = _allowed_specs(listing["category_id"])
+
+    with allowed_writes("listing_attributes"), connection.cursor() as cursor:
+        cursor.execute(
+            "delete from listing_attributes where listing_id = %s and key like %s "
+            "and not (key = any(%s))",
+            [listing["id"], specs.PREFIX + "%", allowed],
+        )
+
+    company = company_of(ctx)
+
+    if chosen is not None:
+        options = wizard_tag_options(ctx.locale, listing, company)
+        picked = chosen.values() if isinstance(chosen, dict) else chosen
+        _save(ctx, listing, {"tags": [str(t) for t in picked if str(t) in options]})
+
+    body = {
+        "saved_at": eloquent.now().strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+        # Свежий список вариантов: заголовок мог измениться
+        "tag_options": wizard_tag_options(ctx.locale, listing, company),
+    }
+
+    return HttpResponse(_php_json(body), content_type="application/json")

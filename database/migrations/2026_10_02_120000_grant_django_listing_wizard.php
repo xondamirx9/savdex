@@ -4,8 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Мастер объявления на Django (этап 5, шаг 38): новый черновик и
- * публикация. Роли нет — делать нечего.
+ * Мастер объявления на Django (этап 5, шаги 38–39): новый черновик,
+ * автосохранение (поля, характеристики, теги) и публикация. Роли нет — делать нечего.
  */
 return new class extends Migration
 {
@@ -14,7 +14,9 @@ return new class extends Migration
     private const GRANTS = [
         'INSERT ON listings',
         'USAGE ON SEQUENCE listings_id_seq',
-        'UPDATE (category_id, title, description, price, bundle_price, currency, unit, price_negotiable, min_order, delivery_terms, payment_terms, wizard_step, slug) ON listings',
+        'INSERT, UPDATE, DELETE ON listing_attributes',
+        'USAGE ON SEQUENCE listing_attributes_id_seq',
+        'UPDATE (type, tags, category_id, title, description, price, bundle_price, currency, unit, price_negotiable, min_order, delivery_terms, payment_terms, wizard_step, slug) ON listings',
     ];
 
     public function up(): void

@@ -210,6 +210,11 @@ urlpatterns = [
         wizard_actions.publish,
         name="cabinet.listings.publish",
     ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/autosave$",
+        wizard_actions.autosave,
+        name="cabinet.listings.autosave",
+    ),
     # Фото объявления (этап 5, шаг 37): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images$",
