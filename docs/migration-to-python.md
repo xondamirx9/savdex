@@ -1966,6 +1966,25 @@ Subscription у администратора — в журнал. Запись �
 `tests/test_web_billing_orders.py`: поддельный сервер Uzum, запросы к
 нему у обеих сторон тоже совпадают.
 
+**Шаг 54. Колбэки шлюза Uzum** ✅ (`savdex/web/payment_callbacks.py`,
+`savdex/web/settlement.py`, новая группа `payments` — по умолчанию
+выключена, это приём денег). Merchant API `POST
+/payments/uzum/callback/{check|create|confirm|reverse|status}`
+(`UzumMerchantController`): Basic-авторизация и `serviceId` из настроек,
+коды ошибок протокола, повтор `create` — «транзакция уже есть»,
+просроченная к `confirm` транзакция гасится, оплаченный переводом счёт
+второй раз не начисляется. Вебхук кассы `POST /payments/uzum/callback`
+(`WebhookController` с `UzumGateway`): белый список адресов, успех
+перепроверяется у Uzum (`getOrderStatus`), проведённая транзакция второй
+раз не проводится; другой провайдер — 404. Выдача купленного — одна
+точка, `settlement.mark_paid` (`OrderService::markPaid`): счёт — оплачен,
+тариф — подпиской по оплате (скидочный промокод — к ней), пакет —
+кредитами в кошелёк с историей, уведомление компании; всё одной
+транзакцией. Права роли — `2026_10_09_120000_grant_django_payment_callbacks`.
+Сверка — `tests/test_web_payment_callbacks.py` (время в ответах — только
+«есть»). Включение: `payments` в `SAVDEX_PY_PAGES` — лучше вместе с
+шагом 55, когда Laravel начнёт пересчитывать и сверять.
+
 ### Этап 8. Выключение Laravel (2–3 недели)
 
 Прокси больше никуда не смотрит. Django становится хозяином схемы:

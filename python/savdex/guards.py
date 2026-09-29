@@ -316,6 +316,8 @@ SHARED_WRITES: dict[str, str] = {
         "; новый тариф (этап 7, шаг 53, SubscriptionService::assign) — кошелёк "
         "firstOrCreate, единицы продвижения тарифа сверху, обнуление раскрытий и "
         "дата сброса периода"
+        "; оплаченный пакет (шаг 54, Wallet::grant) — credits + N и updated_at "
+        "построителем, строка истории purchase"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
@@ -383,7 +385,9 @@ SHARED_WRITES: dict[str, str] = {
         "status failed, confirmed_by и admin_note, updated_at; строка остаётся; "
         "у администратора — строка журнала. Новый счёт (OrderService::create) — "
         "вставка «ждёт оплаты» и номер из id; онлайн-касса — номер заказа Uzum "
-        "(external_id) и провайдер. Оплата и начисление — не здесь"
+        "(external_id) и провайдер. Оплата (шаг 54, колбэки Uzum, "
+        "OrderService::markPaid) — status paid, paid_at, след провайдера "
+        "(provider, external_id) и subscription_id выданной подписки"
     ),
     "promo_codes": (
         "возврат скидочного кода отменённого счёта (этап 7, шаг 53), как "
@@ -392,6 +396,12 @@ SHARED_WRITES: dict[str, str] = {
         "активация (PromoCodeService::capture) — условный захват свободного кода, "
         "одна компания — один код (уникальный индекс); бесплатный период — "
         "subscription_id выданной подписки"
+    ),
+    "payment_transactions": (
+        "транзакции провайдера (этап 7, шаг 54): Merchant API Uzum — create "
+        "вставкой, confirm и reverse — state с performed_at или cancelled_at; "
+        "вебхук кассы — firstOrNew по номеру заказа: payment_id, сумма, валюта, "
+        "payload и state; журнала у модели нет"
     ),
 }
 

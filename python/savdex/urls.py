@@ -46,6 +46,7 @@ from savdex.web import (
     news,
     og_image,
     onboarding_actions,
+    payment_callbacks,
     pricing,
     promo_actions,
     resume_actions,
@@ -500,6 +501,18 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?telegram/webhook/(?P<secret>[A-Za-z0-9_-]{8,64})$",
         telegram_webhook.webhook,
         name="telegram.webhook",
+    ),
+    # Колбэки шлюза Uzum (этап 7, шаг 54): группа payments. Merchant API —
+    # раньше общего вебхука, как у Laravel
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?payments/uzum/callback/(?P<operation>[a-z]+)$",
+        payment_callbacks.merchant,
+        name="payments.uzum.operation",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?payments/(?P<provider>[a-z]+)/callback(?:/(?P<operation>[a-z]+))?$",
+        payment_callbacks.webhook,
+        name="payments.callback",
     ),
     # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
     *[
