@@ -142,6 +142,30 @@ def normalize(value: Any) -> str:  # noqa: ANN401
     return re.sub(r"\s+", " ", text).strip()
 
 
+def matches(header: str, aliases: Iterable[str]) -> bool:
+    """
+    ImportLanguage::matches: заголовок как есть, затем — без пометок
+    («Название*», «Описание:», «Цена (сум)», «Цена, UZS»).
+    """
+    needle = normalize(header)
+
+    if needle in aliases:
+        return True
+
+    bare = _bare_header(needle)
+
+    return bare != needle and bare in aliases
+
+
+def _bare_header(normalized: str) -> str:
+    """ImportLanguage::bareHeader: скобки, хвост после запятой, «*» и «:» — прочь."""
+    bare = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", normalized)
+    bare = re.sub(r",.*$", "", bare, flags=re.S)
+    bare = re.sub(r"[*:]", "", bare)
+
+    return re.sub(r"\s+", " ", bare).strip()
+
+
 def currency(state: str | None) -> str:
     needle = normalize(state)
 
@@ -466,7 +490,7 @@ def column_map(headers: Iterable[str]) -> dict[str, str]:
 
     for column, aliases in HEADERS.items():
         for header in headers:
-            if header not in taken and normalize(header) in aliases:
+            if header not in taken and matches(header, aliases):
                 mapping[column] = header
                 taken.add(header)
                 break
