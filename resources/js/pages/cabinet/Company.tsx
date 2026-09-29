@@ -9,6 +9,7 @@ import { Panel, Tabs } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
+import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
 import { routes } from '@/routes';
 
 interface Company {
@@ -60,8 +61,7 @@ interface Props {
     plan: { name: string; verification_days: number; has_microsite: boolean } | null;
 }
 
-const EMPLOYEE_RANGES = ['1-10', '10-50', '50-100', '100-500', '500+'];
-const TYPES = ['manufacturer', 'distributor', 'trader', 'retailer'];
+const TYPES = COMPANY_TYPES;
 
 export default function CompanyProfile({
     company,
@@ -174,6 +174,13 @@ export default function CompanyProfile({
     }
 
     const availableCities = cities.filter((c) => c.country_id === form.data.country_id);
+
+    /*
+     * Заполненные сведения здесь только читаются: меняются они в
+     * настройках профиля и раз в полгода. Пустое можно заполнить сразу.
+     */
+    const locked = (field: keyof Company) => company !== null && isFilled(company[field]);
+    const anyLocked = company !== null && (['name', 'tin', 'country_id', 'address'] as const).some(locked);
 
     function submit() {
         form.patch(routes.cabinetCompany, { preserveScroll: true });
@@ -335,6 +342,16 @@ export default function CompanyProfile({
                         </div>
                     )}
 
+                    {anyLocked && (
+                        <div className="alert alert-info" style={{ marginBottom: 20 }}>
+                            <Info aria-hidden className="size-4" />
+                            <span>
+                                {t('messages.company.change_in_settings')}.{' '}
+                                <Link href={routes.cabinetSettings}>{t('cabinet.settings.title')} →</Link>
+                            </span>
+                        </div>
+                    )}
+
                     <div className="field">
                         <label className="label" htmlFor="p-name">
                             {t('cabinet.company.name')} <span className="req">*</span>
@@ -343,6 +360,7 @@ export default function CompanyProfile({
                             id="p-name"
                             className="input"
                             value={form.data.name}
+                            disabled={locked('name')}
                             onChange={(e) => form.setData('name', e.target.value)}
                             placeholder={t('cabinet.company.name_placeholder')}
                         />
@@ -357,6 +375,7 @@ export default function CompanyProfile({
                             id="p-legal"
                             className="input"
                             value={form.data.legal_name}
+                            disabled={locked('legal_name')}
                             onChange={(e) => form.setData('legal_name', e.target.value)}
                         />
                     </div>
@@ -370,6 +389,7 @@ export default function CompanyProfile({
                                 id="p-tin"
                                 className="input"
                                 value={form.data.tin}
+                                disabled={locked('tin')}
                                 onChange={(e) => form.setData('tin', e.target.value)}
                             />
                         </div>
@@ -382,6 +402,7 @@ export default function CompanyProfile({
                                 className="input"
                                 type="number"
                                 value={form.data.founded_year ?? ''}
+                                disabled={locked('founded_year')}
                                 onChange={(e) => form.setData('founded_year', e.target.value ? Number(e.target.value) : null)}
                             />
                             {form.errors.founded_year && (
@@ -399,6 +420,7 @@ export default function CompanyProfile({
                                 id="p-country"
                                 ariaLabel={t('cabinet.company.country')}
                                 value={String(form.data.country_id ?? '')}
+                                disabled={locked('country_id')}
                                 onChange={(value) => {
                                     form.setData('country_id', value ? Number(value) : null);
                                     form.setData('city_id', null);
@@ -415,6 +437,7 @@ export default function CompanyProfile({
                                 id="p-city"
                                 ariaLabel={t('cabinet.company.city')}
                                 value={String(form.data.city_id ?? '')}
+                                disabled={locked('city_id')}
                                 onChange={(value) => form.setData('city_id', value ? Number(value) : null)}
                                 placeholder={t('cabinet.company.city_none')}
                                 options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
@@ -430,6 +453,7 @@ export default function CompanyProfile({
                             id="p-addr"
                             className="input"
                             value={form.data.address}
+                            disabled={locked('address')}
                             onChange={(e) => form.setData('address', e.target.value)}
                             placeholder={t('cabinet.company.address_placeholder')}
                         />
@@ -445,6 +469,7 @@ export default function CompanyProfile({
                                 id="p-type"
                                 ariaLabel={t('cabinet.company.type')}
                                 value={form.data.type ?? ''}
+                                disabled={locked('type')}
                                 onChange={(value) => form.setData('type', value)}
                                 options={TYPES.map((value) => ({
                                     value,
@@ -460,6 +485,7 @@ export default function CompanyProfile({
                                 id="p-emp"
                                 ariaLabel={t('cabinet.company.employees')}
                                 value={form.data.employees_range ?? ''}
+                                disabled={locked('employees_range')}
                                 onChange={(value) => form.setData('employees_range', value)}
                                 placeholder={t('cabinet.company.not_set')}
                                 options={EMPLOYEE_RANGES.map((r) => ({ value: r, label: r }))}
@@ -501,6 +527,7 @@ export default function CompanyProfile({
                         </label>
                         {/* Панель форматирования: жирный, галочка, список.
                             Разметку понимает визитка (см. lib/richtext) */}
+                        {!locked('description') && (
                         <div className="row" style={{ gap: 6, marginBottom: 6 }}>
                             <button type="button" className="btn btn-secondary btn-sm" title={t('cabinet.company.bold')}
                                 onClick={() => wrapSelection('**', '**')}>
@@ -515,12 +542,14 @@ export default function CompanyProfile({
                                 •&nbsp;{t('cabinet.company.list')}
                             </button>
                         </div>
+                        )}
                         <textarea
                             id="p-desc"
                             ref={descRef}
                             className="textarea"
                             style={{ minHeight: 140 }}
                             value={form.data.description}
+                            disabled={locked('description')}
                             onChange={(e) => form.setData('description', e.target.value)}
                             placeholder={t('cabinet.company.description_placeholder')}
                         />
@@ -535,6 +564,7 @@ export default function CompanyProfile({
                             <input
                                 type="checkbox"
                                 checked={form.data.is_it_provider}
+                                disabled={locked('is_it_provider')}
                                 onChange={(e) => form.setData('is_it_provider', e.target.checked)}
                             />
                             {t('cabinet.company.it_provider')}
@@ -550,6 +580,7 @@ export default function CompanyProfile({
                                             type="button"
                                             className={cn('chip', on && 'chip-active')}
                                             aria-pressed={on}
+                                            disabled={locked('it_specializations')}
                                             onClick={() =>
                                                 form.setData(
                                                     'it_specializations',

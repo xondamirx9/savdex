@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { Send, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Panel } from '@/components/cabinet';
+import { CompanyInfoPanel } from '@/components/cabinet/CompanyInfoPanel';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
 import { SelectField } from '@/components/SelectField';
@@ -62,43 +63,49 @@ export default function Settings({ profile, notifications, telegram, security, i
     return (
         <CabinetLayout title={t('cabinet.settings.title')} heading={t('cabinet.settings.title')}>
             <div className="grid grid-2">
-                <Panel title={t('cabinet.settings.notifications')}>
-                    <div className="table-wrap" style={{ border: 'none' }}>
-                        <table className="table" style={{ minWidth: 0 }}>
-                            <thead>
-                                <tr>
-                                    <th>{t('cabinet.settings.event')}</th>
-                                    <th className="center">{t('cabinet.settings.email')}</th>
-                                    <th className="center">Telegram</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((r) => (
-                                    <tr key={r.event}>
-                                        <td>{r.label}</td>
-                                        <td className="center">
-                                            <input
-                                                type="checkbox"
-                                                aria-label={t('cabinet.settings.email_aria', { label: r.label })}
-                                                checked={r.email}
-                                                onChange={() => toggle(r.event, 'email')}
-                                            />
-                                        </td>
-                                        <td className="center">
-                                            <input
-                                                type="checkbox"
-                                                aria-label={`${r.label} — Telegram`}
-                                                checked={r.telegram}
-                                                onChange={() => toggle(r.event, 'telegram')}
-                                            />
-                                        </td>
+                <div className="stack-16">
+                    <Panel title={t('cabinet.settings.notifications')}>
+                        <div className="table-wrap" style={{ border: 'none' }}>
+                            <table className="table" style={{ minWidth: 0 }}>
+                                <thead>
+                                    <tr>
+                                        <th>{t('cabinet.settings.event')}</th>
+                                        <th className="center">{t('cabinet.settings.email')}</th>
+                                        <th className="center">Telegram</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    <p className="t-sm muted mt-16">{t('cabinet.settings.saved_instantly')}</p>
-                </Panel>
+                                </thead>
+                                <tbody>
+                                    {rows.map((r) => (
+                                        <tr key={r.event}>
+                                            <td>{r.label}</td>
+                                            <td className="center">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={t('cabinet.settings.email_aria', { label: r.label })}
+                                                    checked={r.email}
+                                                    onChange={() => toggle(r.event, 'email')}
+                                                />
+                                            </td>
+                                            <td className="center">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`${r.label} — Telegram`}
+                                                    checked={r.telegram}
+                                                    onChange={() => toggle(r.event, 'telegram')}
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p className="t-sm muted mt-16">{t('cabinet.settings.saved_instantly')}</p>
+                    </Panel>
+
+                    {/* Данные компании меняет только владелец: сотрудник
+                        видит их на странице «Компания» */}
+                    {is_owner && <CompanyInfoPanel />}
+                </div>
 
                 <div className="stack-16">
                     <Panel title={t('cabinet.settings.profile')}>

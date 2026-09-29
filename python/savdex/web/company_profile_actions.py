@@ -15,6 +15,7 @@ users).
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -40,6 +41,63 @@ FAKE_TINS = ("123456789", "987654321", "123123123")
 
 #: Приведения Company для сравнения
 CASTS = {"is_it_provider": "bool", "it_specializations": "json", "founded_year": "int"}
+
+
+#: Company::PROFILE_FIELDS — сведения, которые меняются раз в полгода
+PROFILE_FIELDS = (
+    "name",
+    "legal_name",
+    "tin",
+    "country_id",
+    "city_id",
+    "address",
+    "employees_range",
+    "founded_year",
+    "type",
+    "description",
+    "is_it_provider",
+    "it_specializations",
+)
+
+
+def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
+    """Company::profileValue: пустое — None, список — отсортирован, флаг «нет» — пусто."""
+    if field == "is_it_provider":
+        truthy = ("1", "true", "on", "yes")
+        on = value if isinstance(value, bool) else str(value).strip().lower() in truthy
+
+        return "1" if on else None
+
+    if field == "it_specializations":
+        if isinstance(value, str):
+            value = json.loads(value) if value.strip() else []
+
+        items = sorted(str(v) for v in (value or []) if v not in (None, ""))
+
+        return ",".join(items) if items else None
+
+    text = "" if value is None else str(value).strip()
+
+    return text or None
+
+
+def changed_profile_fields(company: dict[str, Any], data: dict[str, Any]) -> list[str]:
+    """Company::changedProfileFields: какие из заполненных сведений запрос меняет."""
+    changed = []
+
+    for field in PROFILE_FIELDS:
+        if field not in data:
+            continue
+
+        current = _profile_value(field, company.get(field))
+
+        if current is None:
+            continue
+
+        if current != _profile_value(field, data[field]):
+            changed.append(field)
+
+    return changed
 
 
 def _tin(ctx: Context, country: str | None, messages: list[str]) -> Check:
@@ -182,6 +240,13 @@ def update(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, errors)
 
     fields = validated(data, rules)
+
+    # Заполненные сведения здесь не меняются — только из настроек
+    # профиля и раз в полгода (CompanyInfoController у Laravel)
+    locked = changed_profile_fields(company, fields) if company is not None else []
+
+    if locked:
+        return invalid(ctx, {f: [ctx.t("messages.company.change_in_settings")] for f in locked})
 
     if company is None:
         _create(ctx, fields)
