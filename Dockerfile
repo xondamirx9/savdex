@@ -30,10 +30,11 @@ FROM php:8.3-apache
 
 # python3 — для Python-половины площадки (python/, перенос на Django):
 # команды, выгрузка в Excel и страницы, которые Apache отдаёт Django
-# (docker/apache-python.conf); proxy и proxy_http — для этой передачи
+# (docker/apache-python.conf); proxy и proxy_http — для этой передачи; libmagic1 — тип
+# загруженного файла по содержимому, как finfo у PHP (savdex/web/filetype.py)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev libpq-dev \
-        python3 \
+        python3 libmagic1 \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache pdo_pgsql \
     && a2enmod rewrite headers proxy proxy_http \
