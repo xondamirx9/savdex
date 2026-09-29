@@ -26,12 +26,13 @@
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from typing import Any
 
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -45,16 +46,27 @@ from savdex.guards import allowed_writes
 from savdex.moderation import services
 from savdex.moderation.models import (
     DISPUTES,
+    DOC_APPROVED,
+    DOC_PENDING,
+    DOC_REJECTED,
+    DOC_STATUSES,
     HIDDEN,
     MODERATION,
     ORIGINS,
     PUBLISHED,
+    RESUME_BLOCKED,
+    RESUME_PUBLISHED,
+    RESUME_STATUSES,
     SHOWCASE,
+    VERIFICATION_TYPES,
+    CompanyDocument,
     Listing,
     PlatformReview,
+    Resume,
     Review,
 )
 from savdex.tenders import importer
+from savdex.web import ui
 
 #: Формулировка решения — не отписка
 MIN_NOTE = 15
@@ -90,7 +102,8 @@ def _short(text: str | None, limit: int) -> str:
 class Waiting(OpenFilter):
     """«Ждут решения» — премодерация и споры одной очередью, по умолчанию."""
 
-    parameter_name = "all"
+    # Не «all»: так ChangeList называет «показать всё без страниц»
+    parameter_name = "queue"
     title = "очередь"
     open_label = "Ждут решения"
     all_label = "Все отзывы"
@@ -183,6 +196,10 @@ class ReviewForm(forms.ModelForm):  # type: ignore[type-arg]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+
+        # Только просмотр (право «смотреть»): полей в форме нет
+        if "company" not in self.fields:
+            return
 
         for name in ("company", "author_company"):
             field = self.fields[name]
@@ -684,7 +701,7 @@ def _company_named(name: str) -> Company | None:
 
 
 class PlatformWaiting(OpenFilter):
-    parameter_name = "all"
+    parameter_name = "queue"
     title = "очередь"
     open_label = "Ждут решения"
     all_label = "Все отзывы"
@@ -829,5 +846,465 @@ class PlatformReviewAdmin(SavdexModelAdmin):
         if isinstance(review, PlatformReview):
             extra["decisions"] = self.decisions(review) if self.can_decide(request) else []
             extra["min_note"] = MIN_NOTE
+
+        return super().change_view(request, object_id, form_url, extra)
+
+
+# ── Документы на проверку ────────────────────────────────────────────
+
+
+def doc_type(code: str) -> str:
+    """CompanyDocument::typeLabel."""
+    label = ui.t(f"cabinet.files.types.{code}", "ru")
+
+    return code if label.startswith("ui.") else label
+
+
+class DocPending(OpenFilter):
+    parameter_name = "queue"
+    title = "очередь"
+    open_label = "Ждут проверки"
+    all_label = "Все документы"
+    open_q = Q(moderation_status=DOC_PENDING)
+
+
+class DocStatus(admin.SimpleListFilter):
+    title = "проверка"
+    parameter_name = "state"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return list(DOC_STATUSES.items())
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        return queryset.filter(moderation_status=self.value()) if self.value() else queryset
+
+
+class DocType(admin.SimpleListFilter):
+    title = "тип"
+    parameter_name = "type"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [(code, doc_type(code)) for code in VERIFICATION_TYPES]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        return queryset.filter(type=self.value()) if self.value() else queryset
+
+
+@register(CompanyDocument, section="documents")
+class CompanyDocumentAdmin(SavdexModelAdmin):
+    """
+    Очередь документов: принять или отклонить с причиной. Ни создать, ни
+    править: подменять чужой файл — подделывать основание проверки.
+    Материалы (презентации, прайсы) сюда не попадают — публикуются сразу.
+    """
+
+    laravel_model = "App\\Models\\CompanyDocument"
+    title_list = "Документы на проверку"
+    title_change = "Документ"
+    change_form_template = "admin/moderation/companydocument/change_form.html"
+
+    list_display = ("company_name", "document", "size", "valid", "verdict", "public", "loaded")
+    list_filter = (DocPending, DocStatus, DocType)
+    list_select_related = ("company",)
+    search_fields = ("company__name", "title")
+    ordering = ("-created_at", "-id")
+    list_per_page = 50
+
+    fields = ("company_name", "document", "size", "valid", "verdict", "public", "loaded", "file")
+    readonly_fields = fields
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[CompanyDocument]:
+        queryset: QuerySet[CompanyDocument] = super().get_queryset(request)
+
+        return queryset.filter(type__in=VERIFICATION_TYPES)
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
+        return False
+
+    @admin.display(description="компания", ordering="company__name")
+    def company_name(self, obj: CompanyDocument) -> str:
+        company = obj.company
+        level = _verification_level(obj.company_id)
+
+        return format_html(
+            "{}<br><small>уровень проверки: {}</small>",
+            company.name if company is not None else "—",
+            level,
+        )
+
+    @admin.display(description="документ", ordering="title")
+    def document(self, obj: CompanyDocument) -> str:
+        return format_html("{}<br><small>{}</small>", obj.title, doc_type(obj.type))
+
+    @admin.display(description="размер")
+    def size(self, obj: CompanyDocument) -> str:
+        return obj.size_label() or "—"
+
+    @admin.display(description="действует до", ordering="valid_until")
+    def valid(self, obj: CompanyDocument) -> str:
+        if obj.valid_until is None:
+            return "бессрочно"
+
+        text = obj.valid_until.strftime("%d.%m.%Y")
+
+        # Просроченный документ ничего не подтверждает — видно до открытия
+        return _badge(text, "danger") if obj.valid_until < date.today() else text
+
+    @admin.display(description="проверка", ordering="moderation_status")
+    def verdict(self, obj: CompanyDocument) -> str:
+        tone = {DOC_APPROVED: "success", DOC_REJECTED: "danger"}.get(
+            obj.moderation_status, "warning"
+        )
+
+        return format_html(
+            "{}<br><small>{}</small>",
+            _badge(DOC_STATUSES.get(obj.moderation_status, "Ждёт"), tone),
+            obj.moderation_note or "",
+        )
+
+    @admin.display(description="на визитке", boolean=True)
+    def public(self, obj: CompanyDocument) -> bool:
+        return obj.is_public
+
+    @admin.display(description="загружен", ordering="created_at")
+    def loaded(self, obj: CompanyDocument) -> str:
+        return obj.created_at.strftime("%d.%m.%Y") if obj.created_at else ""
+
+    @admin.display(description="файл")
+    def file(self, obj: CompanyDocument) -> str:
+        # Решать, не открыв документ, нельзя — ссылка на скачивание
+        return format_html(
+            '<a href="/files/{}" target="_blank" rel="noopener">Открыть файл</a>', obj.pk
+        )
+
+    # ── Решения ──
+
+    def can_decide(self, request: HttpRequest) -> bool:
+        return _admin_of(request).can("documents.moderate")
+
+    def decisions(self, document: CompanyDocument) -> list[tuple[str, str, bool]]:
+        found = []
+
+        if document.moderation_status != DOC_APPROVED:
+            found.append(("approve", "Принять", False))
+
+        if document.moderation_status != DOC_REJECTED:
+            found.append(("reject", "Отклонить", True))
+
+        return found
+
+    def get_urls(self) -> list[Any]:
+        return [
+            path(
+                "<path:object_id>/decide/",
+                self.admin_site.admin_view(self.decide_view),
+                name="moderation_companydocument_decide",
+            ),
+            *super().get_urls(),
+        ]
+
+    def decide_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        if request.method != "POST" or not self.can_decide(request):
+            raise PermissionDenied
+
+        document = self.get_object(request, object_id)
+
+        if not isinstance(document, CompanyDocument):
+            raise PermissionDenied
+
+        page = reverse("savdex_admin:moderation_companydocument_change", args=[document.pk])
+        decision = request.POST.get("decision", "")
+        allowed = {code: needs for code, _, needs in self.decisions(document)}
+        note = (request.POST.get("note") or "").strip()
+
+        if decision not in allowed:
+            self.message_user(request, "Это решение по документу уже недоступно.", messages.WARNING)
+
+            return HttpResponseRedirect(page)
+
+        if allowed[decision] and len(note) < MIN_NOTE:
+            self.message_user(
+                request,
+                f"Напишите причину отказа — не короче {MIN_NOTE} знаков: её увидит компания.",
+                messages.ERROR,
+            )
+
+            return HttpResponseRedirect(page)
+
+        if decision == "approve":
+            services.approve_document(request, document)
+            self.message_user(request, "Документ принят.", messages.SUCCESS)
+        else:
+            services.reject_document(request, document, note)
+            self.message_user(request, "Документ отклонён.", messages.WARNING)
+
+        return HttpResponseRedirect(page)
+
+    def change_view(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        form_url: str = "",
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        document = self.get_object(request, object_id)
+        extra = dict(extra_context or {})
+
+        if isinstance(document, CompanyDocument):
+            extra["decisions"] = self.decisions(document) if self.can_decide(request) else []
+            extra["min_note"] = MIN_NOTE
+
+        return super().change_view(request, object_id, form_url, extra)
+
+
+def _verification_level(company_id: int | None) -> Any:  # noqa: ANN401
+    if company_id is None:
+        return ""
+
+    with connection.cursor() as cursor:
+        cursor.execute("select verification_level from companies where id = %s", [company_id])
+        row = cursor.fetchone()
+
+    return row[0] if row else ""
+
+
+# ── Резюме ───────────────────────────────────────────────────────────
+
+#: Причина снятия — не отписка (у Filament minLength 10)
+MIN_RESUME_NOTE = 10
+
+
+class ResumeStatus(admin.SimpleListFilter):
+    title = "состояние"
+    parameter_name = "status"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return list(RESUME_STATUSES.items())
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        return queryset.filter(status=self.value()) if self.value() else queryset
+
+
+class ResumeField(admin.SimpleListFilter):
+    title = "сфера"
+    parameter_name = "field"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        from savdex.web.resumes import FIELDS
+
+        return [(code, ui.t(f"resume.field_{code}", "ru")) for code in FIELDS]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        return queryset.filter(field=self.value()) if self.value() else queryset
+
+
+class Fresh(admin.SimpleListFilter):
+    """Свежие — резюме публикуются сразу, беглый просмотр заменяет очередь."""
+
+    title = "свежие"
+    parameter_name = "fresh"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("1", "Опубликованы за неделю")]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        if self.value() != "1":
+            return queryset
+
+        from savdex.catalog import now
+
+        return queryset.filter(
+            status=RESUME_PUBLISHED, published_at__gte=now() - timedelta(weeks=1)
+        )
+
+
+def _experience(months: int) -> str:
+    if months == 0:
+        return "без опыта"
+
+    years, rest = divmod(months, 12)
+
+    return ((f"{years} г. " if years else "") + (f"{rest} мес." if rest else "")).strip()
+
+
+@register(Resume, section="resumes")
+class ResumeAdmin(SavdexModelAdmin):
+    """
+    Резюме — работа модератора: остаётся в разделе или снимается с
+    причиной, которую соискатель видит в кабинете. Формы правки нет —
+    модератор не переписывает чужую биографию. Удаление — крайняя мера.
+    """
+
+    laravel_model = "App\\Models\\Resume"
+    title_list = "Резюме"
+    title_change = "Резюме"
+    change_form_template = "admin/moderation/resume/change_form.html"
+
+    list_display = ("position", "sphere", "experience", "city", "state", "views", "published")
+    list_filter = (ResumeStatus, ResumeField, Fresh)
+    list_select_related = ("user",)
+    search_fields = ("title",)
+    ordering = ("-published_at", "-id")
+    list_per_page = 50
+
+    fields = ("position", "sphere", "experience", "city", "state", "views", "published", "page")
+    readonly_fields = fields
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
+        return False
+
+    @admin.display(description="должность", ordering="title")
+    def position(self, obj: Resume) -> str:
+        user = obj.user
+
+        return format_html(
+            "{}<br><small>{}</small>",
+            obj.title,
+            obj.contact_name or (user.name if user is not None else "—"),
+        )
+
+    @admin.display(description="сфера", ordering="field")
+    def sphere(self, obj: Resume) -> str:
+        return ui.t(f"resume.field_{obj.field}", "ru") if obj.field else "—"
+
+    @admin.display(description="опыт", ordering="experience_months")
+    def experience(self, obj: Resume) -> str:
+        return _experience(int(obj.experience_months or 0))
+
+    @admin.display(description="город")
+    def city(self, obj: Resume) -> str:
+        if obj.city_id is None:
+            return "—"
+
+        from savdex.geo.models import City
+
+        city = City.objects.filter(pk=obj.city_id).first()
+
+        return city.name() if city is not None else "—"
+
+    @admin.display(description="состояние", ordering="status")
+    def state(self, obj: Resume) -> str:
+        tone = {RESUME_PUBLISHED: "success", RESUME_BLOCKED: "danger"}.get(obj.status, "gray")
+
+        # Причина снятия — сразу под состоянием
+        return format_html(
+            "{}<br><small>{}</small>",
+            _badge(RESUME_STATUSES.get(obj.status, obj.status), tone),
+            obj.moderation_note or "",
+        )
+
+    @admin.display(description="просмотров", ordering="views_count")
+    def views(self, obj: Resume) -> int:
+        return int(obj.views_count or 0)
+
+    @admin.display(description="опубликовано", ordering="published_at")
+    def published(self, obj: Resume) -> str:
+        return obj.published_at.strftime("%d.%m.%Y") if obj.published_at else "—"
+
+    @admin.display(description="на сайте")
+    def page(self, obj: Resume) -> str:
+        if obj.status != RESUME_PUBLISHED:
+            return "—"
+
+        return format_html(
+            '<a href="/resume/{}" target="_blank" rel="noopener">Открыть</a>', obj.slug
+        )
+
+    # ── Снять, вернуть, удалить ──
+
+    def can_decide(self, request: HttpRequest) -> bool:
+        return _admin_of(request).can("resumes.moderate")
+
+    def decisions(self, resume: Resume) -> list[tuple[str, str, bool]]:
+        if resume.status == RESUME_BLOCKED:
+            return [("restore", "Вернуть", False)]
+
+        return [("block", "Снять", True)]
+
+    def delete_model(self, request: HttpRequest, obj: Any) -> None:  # noqa: ANN401
+        """SoftDeletes: deleted_at и updated_at; строка журнала «удалено»."""
+        from savdex.catalog import now
+
+        stamp = now()
+
+        with allowed_writes("resumes"):
+            Resume.everything.filter(pk=obj.pk).update(deleted_at=stamp, updated_at=stamp)
+
+        self.journal(request, "deleted", obj)
+        request._savdex_done = f"Удалено: {obj}"  # type: ignore[attr-defined]
+
+    def delete_queryset(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        for obj in list(queryset):
+            self.delete_model(request, obj)
+
+    def get_urls(self) -> list[Any]:
+        return [
+            path(
+                "<path:object_id>/decide/",
+                self.admin_site.admin_view(self.decide_view),
+                name="moderation_resume_decide",
+            ),
+            *super().get_urls(),
+        ]
+
+    def decide_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        if request.method != "POST" or not self.can_decide(request):
+            raise PermissionDenied
+
+        resume = self.get_object(request, object_id)
+
+        if not isinstance(resume, Resume):
+            raise PermissionDenied
+
+        page = reverse("savdex_admin:moderation_resume_change", args=[resume.pk])
+        decision = request.POST.get("decision", "")
+        allowed = {code: needs for code, _, needs in self.decisions(resume)}
+        note = (request.POST.get("note") or "").strip()
+
+        if decision not in allowed:
+            self.message_user(request, "Это решение по резюме уже недоступно.", messages.WARNING)
+
+            return HttpResponseRedirect(page)
+
+        if allowed[decision] and len(note) < MIN_RESUME_NOTE:
+            self.message_user(
+                request,
+                f"Напишите причину — не короче {MIN_RESUME_NOTE} знаков: её видит соискатель.",
+                messages.ERROR,
+            )
+
+            return HttpResponseRedirect(page)
+
+        if decision == "block":
+            services.block_resume(request, resume, note)
+            self.message_user(request, "Резюме снято с публикации.", messages.SUCCESS)
+        else:
+            services.restore_resume(request, resume)
+            self.message_user(request, "Резюме вернулось в раздел.", messages.SUCCESS)
+
+        return HttpResponseRedirect(page)
+
+    def change_view(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        form_url: str = "",
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        resume = self.get_object(request, object_id)
+        extra = dict(extra_context or {})
+
+        if isinstance(resume, Resume):
+            extra["decisions"] = self.decisions(resume) if self.can_decide(request) else []
+            extra["min_note"] = MIN_RESUME_NOTE
 
         return super().change_view(request, object_id, form_url, extra)

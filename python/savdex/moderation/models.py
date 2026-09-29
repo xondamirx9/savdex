@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 
 from savdex.accounts.models import User
@@ -162,3 +164,101 @@ class PlatformReview(Timestamped):
 
     def __str__(self) -> str:
         return f"PlatformReview #{self.pk}"
+
+
+#: CompanyDocument::VERIFICATION_TYPES — подтверждают статус, идут на проверку
+VERIFICATION_TYPES = ("registration", "license", "certificate", "quality")
+
+DOC_PENDING = "pending"
+DOC_APPROVED = "approved"
+DOC_REJECTED = "rejected"
+
+#: Подписи проверки в списке
+DOC_STATUSES = {DOC_PENDING: "Ждёт", DOC_APPROVED: "Принят", DOC_REJECTED: "Отклонён"}
+
+
+class CompanyDocument(Timestamped):
+    """App\\Models\\CompanyDocument: документ компании (только проверка)."""
+
+    company = _ref(Company, "компания")
+    type = models.CharField("тип", max_length=255)
+    title = models.CharField("документ", max_length=255)
+    file_path = models.CharField(max_length=255)
+    file_size = models.IntegerField(null=True)
+    mime = models.CharField(max_length=255, null=True)
+    valid_until = models.DateField("действует до", null=True)
+    is_public = models.BooleanField("на визитке", default=False)
+    moderation_status = models.CharField("проверка", max_length=255, default=DOC_PENDING)
+    moderation_note = models.TextField(null=True)
+    moderated_by = _ref(User, "решение принял", column="moderated_by")
+    moderated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "company_documents"
+        verbose_name = "документ"
+        verbose_name_plural = "документы на проверку"
+        ordering = ("-created_at", "-id")
+
+    def __str__(self) -> str:
+        return self.title
+
+    def size_label(self) -> str | None:
+        """CompanyDocument::sizeLabel: «1,5 МБ» или «320 КБ»."""
+        if self.file_size is None:
+            return None
+
+        if self.file_size >= 1048576:
+            return f"{self.file_size / 1048576:,.1f}".replace(",", " ").replace(".", ",") + " МБ"
+
+        # number_format: половина — вверх, не к чётному
+        return f"{int(self.file_size / 1024 + 0.5):,}".replace(",", " ") + " КБ"
+
+
+RESUME_PUBLISHED = "published"
+RESUME_BLOCKED = "blocked"
+
+#: ResumesTable::STATUSES
+RESUME_STATUSES = {
+    "draft": "Черновик",
+    RESUME_PUBLISHED: "В разделе",
+    "hidden": "Снято автором",
+    RESUME_BLOCKED: "Снято модерацией",
+}
+
+
+class Alive(models.Manager):  # type: ignore[type-arg]
+    """SoftDeletingScope."""
+
+    def get_queryset(self) -> models.QuerySet[Any]:
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
+class Resume(Timestamped):
+    """App\\Models\\Resume: резюме соискателя (только модерация)."""
+
+    user = _ref(User, "соискатель")
+    slug = models.CharField(max_length=255)
+    title = models.CharField("должность", max_length=255)
+    field = models.CharField("сфера", max_length=255, null=True)
+    city_id = models.BigIntegerField(null=True)
+    experience_months = models.SmallIntegerField("опыт", default=0)
+    contact_name = models.CharField(max_length=255, null=True)
+    status = models.CharField("состояние", max_length=255)
+    moderation_note = models.CharField(max_length=255, null=True)
+    published_at = UTCDateTimeField("опубликовано", null=True)
+    views_count = models.IntegerField("просмотров", default=0)
+    deleted_at = UTCDateTimeField(null=True, editable=False)
+
+    objects = Alive()
+    everything = models.Manager()
+
+    class Meta:
+        managed = False
+        db_table = "resumes"
+        verbose_name = "резюме"
+        verbose_name_plural = "резюме"
+        ordering = ("-published_at", "-id")
+
+    def __str__(self) -> str:
+        return self.title

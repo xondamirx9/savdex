@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
+use App\Models\CompanyDocument;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Task;
 use App\Models\PlatformReview;
@@ -189,6 +190,28 @@ class AdminPanelProvider extends PanelProvider
                     ->badge(fn (): ?string => ($waiting = PlatformReview::query()
                         ->where('status', PlatformReview::STATUS_MODERATION)->count()) > 0 ? (string) $waiting : null, color: 'warning')
                     ->visible(fn (): bool => AdminAccess::allows('reviews.view')),
+                NavigationItem::make('IT-задачи')
+                    ->url('/admin/python?next=/py/admin/data/ittask/')
+                    ->icon('heroicon-o-code-bracket')
+                    ->group('Данные')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('ittasks.view')),
+                NavigationItem::make('Документы на проверку')
+                    ->url('/admin/python?next=/py/admin/moderation/companydocument/')
+                    ->icon('heroicon-o-document-check')
+                    ->group('Модерация')
+                    ->sort(3)
+                    ->badge(fn (): ?string => ($pending = CompanyDocument::query()
+                        ->where('moderation_status', CompanyDocument::STATUS_PENDING)
+                        ->whereIn('type', CompanyDocument::VERIFICATION_TYPES)
+                        ->count()) > 0 ? (string) $pending : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('documents.view')),
+                NavigationItem::make('Резюме')
+                    ->url('/admin/python?next=/py/admin/moderation/resume/')
+                    ->icon('heroicon-o-identification')
+                    ->group('Модерация')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('resumes.view')),
                 NavigationItem::make('Обращения')
                     ->url('/admin/python?next=/py/admin/support/ticket/')
                     ->icon('heroicon-o-lifebuoy')
@@ -215,6 +238,12 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Контент')
                     ->sort(3)
                     ->visible(fn (): bool => AdminAccess::allows('content.view')),
+                NavigationItem::make('Тендеры')
+                    ->url('/admin/python?next=/py/admin/tenders/tender/')
+                    ->icon('heroicon-o-megaphone')
+                    ->group('Контент')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('tenders.view')),
                 NavigationItem::make('Баннеры')
                     ->url('/admin/python?next=/py/admin/site/banner/')
                     ->icon('heroicon-o-megaphone')

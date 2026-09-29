@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\Complaints;
-use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
 use App\Filament\Resources\Listings\ListingResource;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
@@ -60,7 +59,8 @@ class ModerationQueue extends StatsOverviewWidget
                 CompanyDocument::where('moderation_status', 'pending')->count(),
                 CompanyDocument::where('moderation_status', 'pending')->min('created_at'),
                 'heroicon-o-document-check',
-                CompanyDocumentResource::getUrl(),
+                // Раздел «Документы на проверку» — на Django (этап 6)
+                '/admin/python?next=/py/admin/moderation/companydocument/',
             );
         }
 

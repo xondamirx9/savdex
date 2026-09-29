@@ -5,22 +5,18 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Imports\TenderImporter;
-use App\Filament\Resources\Tenders\Pages\CreateTender;
-use App\Filament\Resources\Tenders\TenderResource;
 use App\Models\Category;
 use App\Models\Tender;
 use App\Models\User;
 use Filament\Actions\Imports\Models\Import;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Тендеры в админке: по одному через форму и массово из таблицы.
- *
- * Раздел доступен модератору — размещение закупок это работа
- * контент-менеджера, а не право суперадмина.
+ * Загрузка тендеров из таблицы — TenderImporter Laravel, образец для
+ * копии на Python (savdex/tenders/importer.py). Сам раздел «Тендеры» —
+ * в админке на Python (tests/test_tenders_admin.py).
  */
 class TenderAdminTest extends TestCase
 {
@@ -33,80 +29,6 @@ class TenderAdminTest extends TestCase
             'admin_role' => $role,
             'status' => 'active',
         ]);
-    }
-
-    #[Test]
-    public function раздел_доступен_и_модератору_и_суперадмину(): void
-    {
-        $this->actingAs($this->admin(User::ADMIN_MODERATOR));
-        $this->assertTrue(TenderResource::canViewAny());
-        $this->get('/admin/tenders')->assertOk();
-
-        $this->actingAs($this->admin(User::ADMIN_SUPERADMIN));
-        $this->assertTrue(TenderResource::canViewAny());
-    }
-
-    #[Test]
-    public function тендер_создаётся_через_форму_с_адресом_и_автором(): void
-    {
-        $admin = $this->admin();
-        $this->actingAs($admin);
-
-        $category = Category::factory()->named('Стройматериалы')->create();
-
-        Livewire::test(CreateTender::class)
-            ->fillForm([
-                'title' => 'Поставка цемента М400 для школы',
-                'description' => 'Нужно 500 тонн.',
-                'customer' => 'ГУП «Тошкент шахар курилиш»',
-                'category_id' => $category->id,
-                'budget' => 250000000,
-                'currency' => 'UZS',
-                'deadline_at' => now()->addDays(20)->format('Y-m-d H:i:s'),
-                'status' => Tender::STATUS_PUBLISHED,
-                'published_at' => now()->format('Y-m-d H:i:s'),
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $tender = Tender::query()->firstOrFail();
-
-        $this->assertSame('postavka-tsementa-m400-dlia-shkoly-'.$tender->id, $tender->slug);
-        $this->assertSame($admin->id, $tender->author_id);
-        $this->assertSame(Tender::STATUS_PUBLISHED, $tender->status);
-
-        // Опубликованный тендер сразу виден на витрине
-        $this->get('/tenders/'.$tender->slug)->assertOk();
-    }
-
-    #[Test]
-    public function справочники_в_админке_на_языке_площадки(): void
-    {
-        $this->actingAs($this->admin());
-
-        $category = Category::factory()->named('Стройматериалы')->create();
-        $category->translations()->create(['locale' => 'en', 'name' => 'Construction materials']);
-
-        // Так выглядит сервер, где APP_LOCALE не задана
-        app()->setLocale('en');
-
-        $this->get('/admin/tenders/create')
-            ->assertOk()
-            ->assertSee('Стройматериалы')
-            ->assertDontSee('Construction materials');
-
-        $this->assertSame('ru', app()->getLocale());
-    }
-
-    #[Test]
-    public function заголовок_обязателен(): void
-    {
-        $this->actingAs($this->admin());
-
-        Livewire::test(CreateTender::class)
-            ->fillForm(['title' => '', 'currency' => 'UZS', 'status' => Tender::STATUS_DRAFT])
-            ->call('create')
-            ->assertHasFormErrors(['title']);
     }
 
     #[Test]

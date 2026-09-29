@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Pages\Complaints;
-use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
-use App\Filament\Resources\CompanyDocuments\Pages\ListCompanyDocuments;
 use App\Models\Company;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
@@ -169,85 +167,6 @@ class ModerationQueuesTest extends TestCase
         ]);
     }
 
-    #[Test]
-    public function принятый_документ_появляется_на_визитке(): void
-    {
-        $document = $this->document();
-
-        $this->assertFalse($document->isVisibleOnCard(), 'до проверки документ на визитке не показывается');
-
-        Livewire::test(ListCompanyDocuments::class)
-            ->callAction(TestAction::make('approve')->table($document));
-
-        $document->refresh();
-
-        $this->assertSame(CompanyDocument::STATUS_APPROVED, $document->moderation_status);
-        $this->assertTrue($document->isVisibleOnCard());
-        $this->assertSame($this->moderator->id, $document->moderated_by);
-    }
-
-    /**
-     * Одобрение документа не выдаёт бейдж «Проверена»: он вручается
-     * отдельным решением по совокупности, иначе его давала бы загрузка файла.
-     */
-    #[Test]
-    public function одобрение_документа_не_поднимает_уровень_проверки(): void
-    {
-        $document = $this->document();
-        $level = $document->company->verification_level;
-
-        Livewire::test(ListCompanyDocuments::class)
-            ->callAction(TestAction::make('approve')->table($document));
-
-        $this->assertSame($level, $document->company->fresh()->verification_level);
-    }
-
-    #[Test]
-    public function отклонение_документа_требует_причины(): void
-    {
-        $document = $this->document();
-
-        Livewire::test(ListCompanyDocuments::class)
-            ->callAction(TestAction::make('reject')->table($document), ['reason' => 'плохо'])
-            ->assertHasActionErrors(['reason']);
-
-        $this->assertSame(CompanyDocument::STATUS_PENDING, $document->fresh()->moderation_status);
-    }
-
-    #[Test]
-    public function отклонённый_документ_объясняет_причину_компании(): void
-    {
-        $document = $this->document();
-        $owner = User::factory()->for($document->company)->create();
-
-        Livewire::test(ListCompanyDocuments::class)
-            ->callAction(TestAction::make('reject')->table($document), [
-                'reason' => 'Скан нечитаемый: печать и номер лицензии не видны',
-            ]);
-
-        $document->refresh();
-
-        $this->assertSame(CompanyDocument::STATUS_REJECTED, $document->moderation_status);
-        $this->assertStringContainsString('нечитаемый', $document->moderation_note);
-        $this->assertSame(1, $owner->alerts()->count());
-    }
-
-    /** Материалы модерации не подлежат и в очередь не попадают. */
-    #[Test]
-    public function презентации_в_очередь_не_попадают(): void
-    {
-        $material = CompanyDocument::create([
-            'company_id' => Company::factory()->create()->id,
-            'type' => 'presentation',
-            'title' => 'Презентация компании',
-            'file_path' => 'companies/1/documents/deck.pdf',
-            'is_public' => true,
-            'moderation_status' => CompanyDocument::STATUS_APPROVED,
-        ]);
-
-        Livewire::test(ListCompanyDocuments::class)->assertCanNotSeeTableRecords([$material]);
-    }
-
     // ── Доступ ───────────────────────────────────────────────
 
     /** Модерация — работа модератора, разделы должны быть ему открыты. */
@@ -255,7 +174,7 @@ class ModerationQueuesTest extends TestCase
     public function модератор_видит_все_три_очереди(): void
     {
         $this->assertTrue(AdminAccess::allows('reviews.edit'));
-        $this->assertTrue(CompanyDocumentResource::canViewAny());
+        $this->assertTrue(AdminAccess::allows('documents.moderate'));
         $this->assertTrue(Complaints::canAccess());
     }
 
@@ -273,7 +192,7 @@ class ModerationQueuesTest extends TestCase
         $this->complaint();
         $this->document();
 
-        foreach (['/admin/complaints', '/admin/company-documents'] as $url) {
+        foreach (['/admin/complaints'] as $url) {
             $this->get($url)->assertSuccessful();
         }
     }
@@ -287,6 +206,5 @@ class ModerationQueuesTest extends TestCase
         $this->document();
 
         $this->assertSame('1', Complaints::getNavigationBadge());
-        $this->assertSame('1', CompanyDocumentResource::getNavigationBadge());
     }
 }

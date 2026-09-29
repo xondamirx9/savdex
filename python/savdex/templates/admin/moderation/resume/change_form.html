@@ -1,0 +1,12 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Резюме (savdex/moderation/admin.py, ResumeAdmin):
+  только просмотр и решения модератора.
+{% endcomment %}
+{% block content %}
+  {{ block.super }}
+  {% if original %}
+    {% url 'savdex_admin:moderation_resume_decide' original.pk as decide_url %}
+    {% include "admin/moderation/decision_panel.html" %}
+  {% endif %}
+{% endblock %}

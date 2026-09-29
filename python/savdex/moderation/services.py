@@ -27,7 +27,18 @@ from savdex import audit
 from savdex.adminsite import SavdexModelAdmin, _admin_of
 from savdex.catalog import now
 from savdex.guards import allowed_writes
-from savdex.moderation.models import HIDDEN, PUBLISHED, PlatformReview, Review
+from savdex.moderation.models import (
+    DOC_APPROVED,
+    DOC_REJECTED,
+    HIDDEN,
+    PUBLISHED,
+    RESUME_BLOCKED,
+    RESUME_PUBLISHED,
+    CompanyDocument,
+    PlatformReview,
+    Resume,
+    Review,
+)
 from savdex.web import ui
 from savdex.web.cabinet import _rows
 from savdex.web.chat_actions import str_limit
@@ -114,15 +125,16 @@ def notify_user(
 def _decision(
     request: HttpRequest,
     action: str,
-    subject: Review | PlatformReview,
+    subject: Review | PlatformReview | CompanyDocument | Resume,
     laravel_model: str,
     note: str | None,
+    section: str = "reviews",
 ) -> None:
     """AdminLog::record: решение по существу, с формулировкой."""
     audit.record(
         connection,
         action=action,
-        section="reviews",
+        section=section,
         actor=_admin_of(request),
         subject_type=laravel_model,
         subject_id=subject.pk,
@@ -170,6 +182,11 @@ def _save_review(request: HttpRequest, review: Review, changes: dict[str, Any]) 
         )
 
     return bool({"rating", "status", "company_id"} & set(changed))
+
+
+def _fields(changes: dict[str, Any]) -> list[str]:
+    """Имена полей для update_fields: роль правит только выданные столбцы."""
+    return [name.removesuffix("_id") if name.endswith("_by_id") else name for name in changes]
 
 
 def _decided(request: HttpRequest, **fields: Any) -> dict[str, Any]:
@@ -305,7 +322,9 @@ def _decide_platform(
     review.moderated_at = now()
 
     with allowed_writes("platform_reviews"):
-        review.save()
+        review.save(
+            update_fields=["status", "moderator_note", "moderated_by", "moderated_at", "updated_at"]
+        )
 
 
 def _author_locale(review: PlatformReview) -> tuple[int, str] | None:
@@ -356,3 +375,120 @@ def reject_platform(request: HttpRequest, review: PlatformReview, note: str) -> 
 def restore_platform(request: HttpRequest, review: PlatformReview) -> None:
     _decide_platform(request, review, PUBLISHED, None)
     _decision(request, "restored", review, PLATFORM, None)
+
+
+# ── Документы на проверку ────────────────────────────────────────────
+
+DOCUMENT = "App\\Models\\CompanyDocument"
+
+
+def _save_document(
+    request: HttpRequest, document: CompanyDocument, changes: dict[str, Any]
+) -> None:
+    """forceFill($changes)->save() и строка «изменено» (AuditObserver, documents)."""
+    before = SavdexModelAdmin.attributes(document)
+
+    for field, value in changes.items():
+        setattr(document, field, value)
+
+    with allowed_writes("company_documents"):
+        document.save(update_fields=[*_fields(changes), "updated_at"])
+
+    after = SavdexModelAdmin.attributes(document)
+    changed = {k: v for k, v in after.items() if before.get(k) != v and k not in audit.NOISE}
+
+    if changed:
+        audit.record(
+            connection,
+            action="updated",
+            section="documents",
+            actor=_admin_of(request),
+            subject_type=DOCUMENT,
+            subject_id=document.pk,
+            subject_label=audit.label(after, "CompanyDocument", document.pk),
+            changes={"before": {k: before.get(k) for k in changed}, "after": changed},
+            ip=audit.client_ip(request),
+        )
+
+
+def approve_document(request: HttpRequest, document: CompanyDocument) -> None:
+    """Документ принят: на визитке, если компания разрешила показ."""
+    ctx = context_of(request)
+    _save_document(
+        request,
+        document,
+        _decided(request, moderation_status=DOC_APPROVED, moderation_note=None),
+    )
+
+    if document.company_id is not None and live_company(document.company_id) is not None:
+        notify_company(
+            ctx,
+            document.company_id,
+            "moderation",
+            f"Документ «{document.title}» принят",
+            "success",
+            "/cabinet/company",
+            None,
+        )
+
+    _decision(request, "approved", document, DOCUMENT, None, section="documents")
+
+
+def reject_document(request: HttpRequest, document: CompanyDocument, reason: str) -> None:
+    """Документ отклонён: без причины человек пришлёт тот же файл."""
+    ctx = context_of(request)
+    _save_document(
+        request,
+        document,
+        _decided(request, moderation_status=DOC_REJECTED, moderation_note=reason),
+    )
+
+    if document.company_id is not None and live_company(document.company_id) is not None:
+        notify_company(
+            ctx,
+            document.company_id,
+            "moderation",
+            f"Документ «{document.title}» отклонён",
+            "danger",
+            "/cabinet/company",
+            reason,
+        )
+
+    _decision(request, "rejected", document, DOCUMENT, reason, section="documents")
+
+
+# ── Резюме ───────────────────────────────────────────────────────────
+
+RESUME = "App\\Models\\Resume"
+
+
+def _save_resume(resume: Resume, changes: dict[str, Any]) -> None:
+    """
+    forceFill($changes)->save(): статус, заметка, дата публикации. Resume::saving
+    сбрасывает переводы только при смене текста — здесь его не трогают;
+    перевод вернувшегося резюме подбирает обработчик Python.
+    """
+    for field, value in changes.items():
+        setattr(resume, field, value)
+
+    with allowed_writes("resumes"):
+        resume.save(update_fields=[*_fields(changes), "updated_at"])
+
+
+def block_resume(request: HttpRequest, resume: Resume, note: str) -> None:
+    """Снять с публикации: причину видит соискатель в кабинете."""
+    _save_resume(resume, {"status": RESUME_BLOCKED, "moderation_note": note})
+    _decision(request, "hidden", resume, RESUME, note, section="resumes")
+
+
+def restore_resume(request: HttpRequest, resume: Resume) -> None:
+    """Вернуть в раздел: заметка модерации снимается."""
+    _save_resume(
+        resume,
+        {
+            "status": RESUME_PUBLISHED,
+            "published_at": resume.published_at or now(),
+            "moderation_note": None,
+        },
+    )
+    _decision(request, "restored", resume, RESUME, None, section="resumes")

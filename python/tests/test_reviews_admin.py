@@ -110,7 +110,9 @@ def test_очередь_ждут_решения(люди):
     _отзыв(about, other, dispute_status="pending", dispute_reason="Не работали с ними")
     _отзыв(author, about, body="Давно опубликованный отзыв")
 
-    _, очередь, все = django(люди["moderator"], ("get", LIST, None), ("get", LIST + "?all=1", None))
+    _, очередь, все = django(
+        люди["moderator"], ("get", LIST, None), ("get", LIST + "?queue=1", None)
+    )
 
     assert "Ждёт проверки модератора" in очередь["body"]
     assert "Не работали с ними" in очередь["body"]
@@ -140,7 +142,10 @@ def test_опубликовать(люди):
         )
     ]
     assert журнал("approved")["subject_label"] == f"Review #{pk}"
-    assert журнал("updated")["changes"]["after"]["status"] == "published"
+    [(changes,)] = sql(
+        "select changes from admin_actions where section = 'reviews' and action = 'updated'"
+    )
+    assert changes["after"]["status"] == "published", "AuditObserver у Review"
 
 
 def test_не_пропускать_с_формулировкой(люди):
