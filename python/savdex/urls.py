@@ -21,6 +21,7 @@ from savdex.web import (
     actions,
     auth,
     auth_actions,
+    billing,
     cabinet,
     catalog,
     chat_actions,
@@ -430,6 +431,14 @@ urlpatterns = [
         name="cabinet.it-tasks",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing$", billing.billing_page, name="cabinet.billing"
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/billing/invoice/(?P<payment_id>[0-9]{1,18})$",
+        billing.invoice,
+        name="cabinet.billing.invoice",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/preview$",
         microsite.preview,
