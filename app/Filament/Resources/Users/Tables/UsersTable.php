@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Users\Tables;
 
 use App\Filament\Exports\UserExporter;
+use App\Filament\Resources\Users\UserDeletionActions;
 use App\Models\ActivityEvent;
 use App\Models\User;
 use App\Support\AdminAccess;
@@ -12,7 +13,6 @@ use App\Support\AdminLog;
 use App\Support\Notifier;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
@@ -59,7 +59,8 @@ class UsersTable
             ->columns([
                 TextColumn::make('name')
                     ->label('Имя')
-                    ->searchable()
+                    // И по почте: удалённый аккаунт ищут именно по адресу
+                    ->searchable(['name', 'email', 'phone'])
                     ->description(fn (User $record): string => $record->email),
 
                 TextColumn::make('company.name')
@@ -99,8 +100,21 @@ class UsersTable
                 TextColumn::make('status')
                     ->label('Статус')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => $state === 'active' ? 'Активен' : 'Заблокирован')
-                    ->color(fn (string $state): string => $state === 'active' ? 'success' : 'danger'),
+                    // Отключённый (удалённый) — отдельным статусом: блокировка
+                    // и отключение для человека выглядят одинаково, а в
+                    // админке ведут к разным кнопкам
+                    ->state(fn (User $record): string => $record->trashed() ? 'disabled' : $record->status)
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'active' => 'Активен',
+                        'disabled' => 'Отключён',
+                        default => 'Заблокирован',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'active' => 'success',
+                        'disabled' => 'gray',
+                        default => 'danger',
+                    })
+                    ->description(fn (User $record): ?string => $record->deleted_at?->format('d.m.Y H:i')),
 
                 TextColumn::make('last_login_at')
                     ->label('Был')
@@ -116,7 +130,11 @@ class UsersTable
                     'blocked' => 'Заблокирован',
                 ]),
                 TernaryFilter::make('is_admin')->label('Администратор'),
-                TrashedFilter::make(),
+                TrashedFilter::make()
+                    ->label('Отключённые аккаунты')
+                    ->placeholder('Без отключённых')
+                    ->trueLabel('Все, с отключёнными')
+                    ->falseLabel('Только отключённые'),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -139,6 +157,7 @@ class UsersTable
                     ->icon('heroicon-o-envelope-open')
                     ->color('success')
                     ->visible(fn (User $record): bool => $record->email_verified_at === null
+                        && ! $record->trashed()
                         && AdminAccess::allows('users.edit'))
                     ->requiresConfirmation()
                     ->modalHeading('Подтвердить почту вручную?')
@@ -184,6 +203,7 @@ class UsersTable
                     ->label('Выдать пароль')
                     ->icon('heroicon-o-key')
                     ->color('warning')
+                    ->hidden(fn (User $record): bool => $record->trashed())
                     ->requiresConfirmation()
                     ->modalHeading('Выдать новый пароль?')
                     ->modalDescription('Текущий пароль перестанет работать. Новый нужно передать человеку лично — показан он будет один раз.')
@@ -209,7 +229,7 @@ class UsersTable
                     ->color('danger')
                     // Заблокировать себя — верный способ остаться без доступа
                     // к панели, из которой блокировку можно снять
-                    ->visible(fn (User $record): bool => $record->id !== Auth::id())
+                    ->visible(fn (User $record): bool => $record->id !== Auth::id() && ! $record->trashed())
                     ->requiresConfirmation()
                     ->action(function (User $record): void {
                         $record->forceFill([
@@ -218,16 +238,21 @@ class UsersTable
 
                         Notification::make()->title('Статус изменён')->success()->send();
                     }),
+
+                UserDeletionActions::disable(),
+                UserDeletionActions::restore(),
+                UserDeletionActions::forceDelete(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     /*
-                     * Ограничение суперадмином — прямо на действии:
+                     * Права — прямо на действиях (UserDeletionActions):
                      * canDeleteAny ресурса массовые действия не прячет,
                      * и без visible() модератор мог удалять записи пачкой.
                      */
-                    DeleteBulkAction::make()
-                        ->visible(fn (): bool => AdminAccess::allows('users.delete')),
+                    UserDeletionActions::disableBulk(),
+                    UserDeletionActions::restoreBulk(),
+                    UserDeletionActions::forceDeleteBulk(),
                 ]),
             ]);
     }

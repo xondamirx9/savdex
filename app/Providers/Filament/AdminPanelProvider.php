@@ -149,6 +149,16 @@ class AdminPanelProvider extends PanelProvider
                     // Значок считает висящие сейчас, а не все заведённые
                     ->badge(fn (): ?string => ($live = Banner::query()->live()->count()) > 0 ? (string) $live : null)
                     ->visible(fn (): bool => AdminAccess::allows('content.view')),
+                // Тот же поиск и те же действия, что у фильтра «Отключённые»
+                // в «Пользователях», — раздел на Python (savdex/accounts)
+                NavigationItem::make('Отключённые аккаунты')
+                    ->url('/admin/python?next=/py/admin/accounts/user/%3Fstate%3Ddisabled')
+                    ->icon('heroicon-o-user-minus')
+                    ->group('Система')
+                    // После «Пользователей» (1): при равном порядке пункт
+                    // меню идёт раньше раздела «Рассылки» (2)
+                    ->sort(2)
+                    ->visible(fn (): bool => AdminAccess::allows('users.view')),
                 NavigationItem::make('Настройки')
                     ->url('/admin/python?next=/py/admin/site/setting/')
                     ->icon('heroicon-o-adjustments-horizontal')

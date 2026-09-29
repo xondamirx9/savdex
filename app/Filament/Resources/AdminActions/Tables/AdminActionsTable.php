@@ -31,6 +31,7 @@ class AdminActionsTable
         'unblocked' => 'success',
         'restored' => 'success',
         'deleted' => 'danger',
+        'force_deleted' => 'danger',
         'rejected' => 'danger',
         'blocked' => 'danger',
         'revoked' => 'danger',

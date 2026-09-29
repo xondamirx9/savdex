@@ -112,7 +112,8 @@ def _python(*args: str) -> subprocess.CompletedProcess[str]:
 def _строка(email: str) -> dict[str, Any] | None:
     rows = _sql(
         f"select {', '.join(СТОЛБЦЫ)}, password, email_verified_at, created_at, updated_at "
-        "from users where email = %s",
+        # Удалённая и действующая на одной почте — смотрим действующую
+        "from users where email = %s order by deleted_at is not null, id",
         [email],
     )
 
@@ -244,6 +245,17 @@ def _без_времени(итог: dict[str, Any]) -> dict[str, Any]:
             "gone@savdex.uz",
             ("gone@savdex.uz",),
             id="удалённая учётка",
+        ),
+        pytest.param(
+            [
+                "insert into users (name, email, password, created_at, updated_at, deleted_at) "
+                "values ('Ушёл', 'same@savdex.uz', 'x', now(), now(), '2026-05-06 07:08:09')",
+                "insert into users (name, email, password, created_at, updated_at) "
+                "values ('Вернулся', 'same@savdex.uz', 'x', now(), now())",
+            ],
+            "same@savdex.uz",
+            ("same@savdex.uz", "--role=support"),
+            id="удалённая и действующая на одной почте",
         ),
         pytest.param(
             [], "new@savdex.uz", ("new@savdex.uz", "--role=sales-manager"), id="неизвестная роль"
