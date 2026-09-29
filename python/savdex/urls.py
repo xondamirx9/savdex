@@ -44,6 +44,7 @@ from savdex.web import (
     settings_actions,
     site_actions,
     tenders,
+    wizard_actions,
 )
 from savdex.web import views as web
 
@@ -198,6 +199,17 @@ urlpatterns = [
         )
         for verb in ("reply", "dispute")
     ],
+    # Мастер объявления (этап 5, шаг 38): новый черновик и публикация, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/create$",
+        wizard_actions.create,
+        name="cabinet.listings.create",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/publish$",
+        wizard_actions.publish,
+        name="cabinet.listings.publish",
+    ),
     # Фото объявления (этап 5, шаг 37): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images$",
