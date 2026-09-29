@@ -1,0 +1,26 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Пользователь (savdex/accounts/admin.py): «Подтвердить почту», «Выдать
+  пароль» (новый показывается один раз), «Заблокировать» — не себя.
+{% endcomment %}
+{% block object-tools-items %}
+  {% if original %}
+    {% url 'savdex_admin:accounts_user_act' original.pk as act_url %}
+    {% if can_verify %}
+      <li><form method="post" action="{{ act_url }}" style="display:inline">{% csrf_token %}
+        <button type="submit" name="act" value="verify" class="button" onclick="return confirm('Адрес {{ original.email }} будет считаться подтверждённым без письма. Пользователь сразу сможет публиковать объявления и открывать контакты. Убедитесь, что адрес принадлежит именно этому человеку.')">Подтвердить почту</button>
+      </form></li>
+    {% endif %}
+    {% if can_password %}
+      <li><form method="post" action="{{ act_url }}" style="display:inline">{% csrf_token %}
+        <button type="submit" name="act" value="password" class="button" onclick="return confirm('Текущий пароль перестанет работать. Новый нужно передать человеку лично — показан он будет один раз.')">Выдать пароль</button>
+      </form></li>
+    {% endif %}
+    {% if can_status %}
+      <li><form method="post" action="{{ act_url }}" style="display:inline">{% csrf_token %}
+        <button type="submit" name="act" value="status" class="button" onclick="return confirm('Изменить статус пользователя?')">{% if original.status == "active" %}Заблокировать{% else %}Разблокировать{% endif %}</button>
+      </form></li>
+    {% endif %}
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

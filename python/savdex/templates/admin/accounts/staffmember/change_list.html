@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Роли и права (savdex/accounts/roles_admin.py): «Выдать доступ» —
+  действие страницы: человека в таблице сотрудников ещё нет.
+{% endcomment %}
+{% block object-tools-items %}
+  {% if can_grant %}
+    <li><a href="{{ grant_url }}" class="addlink">Выдать доступ</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

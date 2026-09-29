@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from django.db import models
 
-from savdex.catalog import UTCDateTimeField
+from savdex.catalog import LaravelJSONField, UTCDateTimeField
 
 #: Статус аккаунта (status); отключённый (deleted_at) — поверх него
 STATUSES = {"active": "Активен", "blocked": "Заблокирован"}
@@ -31,6 +31,9 @@ class User(models.Model):
     created_at = UTCDateTimeField("зарегистрирован", null=True, blank=True)
     updated_at = UTCDateTimeField("изменён", null=True, blank=True)
     deleted_at = UTCDateTimeField("отключён", null=True, blank=True)
+    locale = models.CharField("язык интерфейса", max_length=8, default="ru")
+    must_change_password = models.BooleanField("требовать смену пароля при входе", default=False)
+    admin_permissions = LaravelJSONField("личные права", null=True, blank=True)
 
     class Meta:
         managed = False

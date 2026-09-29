@@ -44,4 +44,5 @@ def test_общий_счёт():
     total = progress.summary()
 
     assert total["tables_done"] == len(OWNED_TABLES)
-    assert total["tables_total"] == len(progress.MOVING) - 4
+    # Оставленные за Laravel: 4 справочника этапа 2 и 5 таблиц этапа 6
+    assert total["tables_total"] == len(progress.MOVING) - 4 - 5

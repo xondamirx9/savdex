@@ -1,0 +1,64 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Объявление (savdex/data/admin.py, ListingAdmin): над формой — статус,
+  источник и заметка модерации; под формой — решения модератора,
+  фотографии (ImagesRelationManager) и корзина.
+{% endcomment %}
+{% block form_top %}
+  {% if original %}
+    <div class="module aligned">
+      <div class="form-row"><p><b>Статус:</b> {{ status_label }} · <b>Источник:</b> {{ source_label }}{% if trashed %} · <b style="color:#b91c1c">в корзине</b>{% endif %}</p></div>
+      {% if original.slug and original.status == "active" %}
+        <div class="form-row"><p><a href="/listing/{{ original.slug }}" target="_blank" rel="noopener">Открыть на сайте</a></p></div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
+{% block content %}
+  {{ block.super }}
+  {% if original %}
+    {% url 'savdex_admin:data_listing_decide' original.pk as decide_url %}
+    {% include "admin/moderation/decision_panel.html" %}
+
+    <div class="module aligned" id="photos">
+      <h2>Фотографии</h2>
+      {% for photo in photos %}
+        <div class="form-row">
+          <img src="/storage/{{ photo.thumb_path|default:photo.path }}" alt="" style="height:64px;vertical-align:middle">
+          {% if forloop.first %}<b>обложка</b>{% endif %}
+          {% if can_photos %}
+            <form method="post" action="{% url 'savdex_admin:data_listing_photos' original.pk %}" style="display:inline">
+              {% csrf_token %}
+              <input type="hidden" name="image" value="{{ photo.pk }}">
+              {% if not forloop.first %}<button type="submit" name="photo_action" value="cover" class="button">Сделать обложкой</button>{% endif %}
+              <button type="submit" name="photo_action" value="remove" class="button" onclick="return confirm('Удалить фотографию? Файл будет удалён безвозвратно вместе с миниатюрой.')">Удалить</button>
+            </form>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="form-row"><p>Фотографий нет. Загрузите снимки — первая фотография станет обложкой в каталоге.</p></div>
+      {% endfor %}
+      {% if can_photos %}
+        <form method="post" enctype="multipart/form-data" action="{% url 'savdex_admin:data_listing_photos' original.pk %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <input type="file" name="photos" accept="image/*" multiple>
+            <button type="submit" name="photo_action" value="upload" class="button">Загрузить фото</button>
+            <div class="help">JPG, PNG или WebP до 8 МБ. Пережимаются и получают миниатюру автоматически.</div>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+
+    {% if can_trash %}
+      <form method="post" action="{% url 'savdex_admin:data_listing_trash' original.pk %}" class="module aligned">
+        {% csrf_token %}
+        <h2>Корзина</h2>
+        <div class="submit-row">
+          <button type="submit" name="trash_action" value="restore" class="button default">Восстановить</button>
+          <button type="submit" name="trash_action" value="force" class="button" onclick="return confirm('Удалить объявление насовсем? Вернуть его будет нельзя.')">Удалить насовсем</button>
+        </div>
+      </form>
+    {% endif %}
+  {% endif %}
+{% endblock %}

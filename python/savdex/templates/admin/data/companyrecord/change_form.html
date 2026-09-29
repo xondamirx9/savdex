@@ -1,0 +1,102 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Компания (savdex/data/companies_admin.py, CompanyAdmin): решения — не
+  поля формы, а отдельные действия под формой: верификация, партнёрство,
+  логотип, обложка и эмблема, блокировка; корзина.
+{% endcomment %}
+{% block form_top %}
+  {% if original %}
+    <div class="module aligned">
+      <div class="form-row"><p>
+        <b>Статус:</b> {% if original.status == "active" %}активна{% else %}<b style="color:#b91c1c">заблокирована</b>{% if original.blocked_reason %} — {{ original.blocked_reason }}{% endif %}{% endif %}
+        {% if trashed %} · <b style="color:#b91c1c">в корзине</b>{% endif %}
+        · <a href="/company/{{ original.slug }}" target="_blank" rel="noopener">визитка на сайте</a>
+      </p></div>
+    </div>
+  {% endif %}
+{% endblock %}
+{% block content %}
+  {{ block.super }}
+  {% if original and can_act %}
+    {% url 'savdex_admin:data_companyrecord_act' original.pk as act_url %}
+    <div class="module aligned" id="company-actions">
+      <h2>Решения по компании</h2>
+
+      <form method="post" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="verify">
+        <label for="level">Верификация:</label>
+        <select name="level" id="level">
+          {% for code, label in levels %}<option value="{{ code }}"{% if code == original.verification_level %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="button">Сохранить уровень</button>
+        <div class="help">«Проверена» — сверены свидетельство и ИНН. «Проверена+» — ещё лицензии и адрес. Владелец получит уведомление.</div>
+      </form>
+
+      <form method="post" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="partner">
+        <label for="tier">Партнёрство:</label>
+        <select name="tier" id="tier">
+          <option value="none">Не партнёр</option>
+          {% for code, label in tiers %}<option value="{{ code }}"{% if code == original.partner_tier %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <label for="sort">порядок</label>
+        <input type="number" min="0" name="sort" id="sort" value="{{ original.partner_sort }}" style="width:6em">
+        <button type="submit" class="button">Сохранить</button>
+        <div class="help">Меньше порядок — выше во вкладке «Партнёры». При равном — по рейтингу.</div>
+      </form>
+
+      <form method="post" enctype="multipart/form-data" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="logo">
+        <label>Логотип:</label>
+        {% if original.logo_path %}<img src="/storage/{{ original.logo_path }}" alt="" style="height:40px;vertical-align:middle">{% endif %}
+        <input type="file" name="file" accept="image/*">
+        <button type="submit" class="button">Загрузить или снять</button>
+        <div class="help">JPG, PNG или WebP до 8 МБ, лучше квадратный. Без файла — убрать логотип, вернутся инициалы.</div>
+      </form>
+
+      <form method="post" enctype="multipart/form-data" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="cover">
+        <label>Обложка:</label>
+        {% if original.cover_path %}<img src="/storage/{{ original.cover_path }}" alt="" style="height:40px;vertical-align:middle">{% endif %}
+        <input type="file" name="file" accept="image/*">
+        <button type="submit" class="button">Загрузить или снять</button>
+        <div class="help">Широкий кадр до 8 МБ: полоса в шапке визитки. Без файла — вернуть фирменный градиент.</div>
+      </form>
+
+      <form method="post" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="emblem">
+        <label>Эмблема:</label>
+        <button type="submit" class="button" onclick="return confirm('{% if original.logo_path %}У компании уже есть логотип — он будет заменён сгенерированной эмблемой.{% else %}Компания получит плашку с инициалами в цвете своего региона.{% endif %}')">Сгенерировать эмблему</button>
+        <div class="help">Настоящие знаки площадка использовать не может (авторское право), а плашка с инициалами в цвете региона — своя и единообразная.</div>
+      </form>
+
+      <form method="post" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="block">
+        {% if original.status == "active" %}
+          <label for="reason">Причина блокировки:</label>
+          <textarea name="reason" id="reason" rows="2" cols="60"></textarea>
+          <button type="submit" class="button">Заблокировать</button>
+          <div class="help">Не короче {{ min_block }} знаков — компания увидит причину в кабинете. Активные объявления уйдут из выдачи.</div>
+        {% else %}
+          <button type="submit" class="button" onclick="return confirm('Разблокировать компанию?')">Разблокировать</button>
+        {% endif %}
+      </form>
+    </div>
+  {% endif %}
+  {% if original and can_trash %}
+    <form method="post" action="{% url 'savdex_admin:data_companyrecord_act' original.pk %}" class="module aligned">
+      {% csrf_token %}
+      <h2>Корзина</h2>
+      <div class="submit-row">
+        <button type="submit" name="act" value="restore" class="button default">Восстановить</button>
+        <button type="submit" name="act" value="force" class="button" onclick="return confirm('Удалить компанию насовсем? Вместе с ней база удалит её объявления, сотрудников отвяжет. Вернуть будет нельзя.')">Удалить насовсем</button>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

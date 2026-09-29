@@ -1,0 +1,71 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Сотрудник (savdex/accounts/roles_admin.py): роль, личные права, что
+  доступно, отключение доступа.
+{% endcomment %}
+{% block content %}
+  {{ block.super }}
+  {% if original %}
+    {% url 'savdex_admin:accounts_staffmember_act' original.pk as act_url %}
+    {% if can_role %}
+      <form method="post" action="{{ act_url }}" class="module aligned">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="role">
+        <h2>Роль</h2>
+        {% for code, label, description in roles %}
+          <div class="form-row">
+            <label><input type="radio" name="admin_role" value="{{ code }}"{% if code == current_role %} checked{% endif %}> <b>{{ label }}</b></label>
+            <div class="help">{{ description }}</div>
+          </div>
+        {% endfor %}
+        <div class="submit-row"><button type="submit" class="button default">Сохранить роль</button></div>
+      </form>
+    {% endif %}
+
+    {% if can_rights %}
+      <form method="post" action="{{ act_url }}" class="module aligned">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="rights">
+        <h2>Личные права</h2>
+        <div class="form-row"><p>Поверх роли. Отзыв сильнее выдачи: право в обоих списках не достанется никому.</p></div>
+        <table>
+          <thead><tr><th>Право</th><th>Выдать дополнительно</th><th>Отобрать у роли</th></tr></thead>
+          <tbody>
+            {% for code, label, granted, revoked in grantable %}
+              <tr>
+                <td>{{ label }}</td>
+                <td><input type="checkbox" name="grant" value="{{ code }}"{% if granted %} checked{% endif %}></td>
+                <td><input type="checkbox" name="revoke" value="{{ code }}"{% if revoked %} checked{% endif %}></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="submit-row"><button type="submit" class="button default">Сохранить личные права</button></div>
+      </form>
+    {% endif %}
+
+    <div class="module aligned">
+      <h2>Что доступно</h2>
+      <table>
+        <thead><tr><th>Раздел</th><th>От роли</th><th>Лично</th></tr></thead>
+        <tbody>
+          {% for name, from_role, personal in rows %}
+            <tr><td>{{ name }}</td><td>{{ from_role|join:", " }}</td><td>{{ personal|join:", " }}</td></tr>
+          {% empty %}
+            <tr><td colspan="3">Ничего.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if can_access %}
+      <form method="post" action="{{ act_url }}" class="module aligned">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="access">
+        <div class="submit-row">
+          <button type="submit" class="button" onclick="return confirm('Доступ в панель снимается целиком. Роль и личные права сохраняются — если доступ вернут, они окажутся прежними.')">Отключить доступ</button>
+        </div>
+      </form>
+    {% endif %}
+  {% endif %}
+{% endblock %}
