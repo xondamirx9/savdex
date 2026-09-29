@@ -7,16 +7,16 @@ import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 import { cn } from '@/lib/cn';
 
+/** Длина пароля — как у сервера (Password::defaults в AppServiceProvider). */
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 20;
+
 /**
  * Оценка надёжности пароля 0–4.
  * Правила совпадают с серверными (RegisterRequest): от 8 до 20 символов,
  * буквы и цифры. Клиент только подсказывает заранее — решение всё равно
  * принимает сервер, иначе проверку обойдут отключением JavaScript.
  */
-/** Длина пароля — как у сервера (Password::defaults в AppServiceProvider). */
-const PASSWORD_MIN = 8;
-const PASSWORD_MAX = 20;
-
 function scorePassword(v: string): number {
     let s = 0;
     if (v.length >= PASSWORD_MIN) s++;
