@@ -44,6 +44,7 @@ from savdex.web import (
     settings_actions,
     site_actions,
     tenders,
+    unlock_actions,
     wizard_actions,
 )
 from savdex.web import views as web
@@ -214,6 +215,12 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/autosave$",
         wizard_actions.autosave,
         name="cabinet.listings.autosave",
+    ),
+    # Раскрытие контактов на визитке (этап 5, шаг 40): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)/unlock$",
+        unlock_actions.unlock,
+        name="companies.unlock",
     ),
     # Фото объявления (этап 5, шаг 37): группа forms
     re_path(

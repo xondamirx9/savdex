@@ -193,11 +193,13 @@ SHARED_WRITES: dict[str, str] = {
         "saving, у администратора — строка журнала)"
         " Мастер (этап 5, шаг 38): новый черновик и публикация — поля "
         "формы, статус, сроки, адрес, как ListingWizardController"
+        "; раскрытие контактов (этап 5, шаг 40) — +1 к unlocks_count и "
+        "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
         "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily (показы, "
-        "просмотры, с этапа 5 — избранное)"
+        "просмотры, с этапа 5 — избранное и раскрытия контактов)"
     ),
     "search_hits": (
         "«по каким запросам вас находили» (этап 4): insert … on conflict do "
@@ -233,6 +235,8 @@ SHARED_WRITES: dict[str, str] = {
         "«Мои контакты» (этап 5, форма): статус и заметка, жалоба — "
         "update изменившихся полей своей строки и updated_at, как "
         "ContactController; событий и журнала у модели нет"
+        "; раскрытие на визитке (этап 5, шаг 40) — новая строка, как "
+        "ContactUnlockService::charge"
     ),
     "reviews": (
         "отзывы о своей компании (этап 5, форма): ответ и спор — update "
@@ -248,6 +252,13 @@ SHARED_WRITES: dict[str, str] = {
         "квота откликов (этап 5, чат): новый кошелёк компании, как "
         "Wallet::firstOrCreate, и условное списание отклика — "
         "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
+        "; раскрытие контактов (этап 5, шаг 40) — под блокировкой строки "
+        "contacts_used_this_period + 1 или условное списание кредита, как "
+        "ContactUnlockService::charge и Wallet::spend"
+    ),
+    "wallet_transactions": (
+        "история кошелька (этап 5, шаг 40): строка списания кредита за "
+        "раскрытие контактов, как Wallet::spend; событий у модели нет"
     ),
     "companies": (
         "профиль своей компании (этап 5, форма): правка полей формы и "
