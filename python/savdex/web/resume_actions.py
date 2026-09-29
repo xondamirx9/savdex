@@ -24,6 +24,7 @@ import re
 from datetime import UTC, date, datetime
 from typing import Any
 
+from django.core.files.uploadedfile import UploadedFile
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
@@ -44,7 +45,7 @@ from savdex.web.resumes import (
     SCHEDULE,
 )
 from savdex.web.shared import Context
-from savdex.web.validation import Check, validate, validated
+from savdex.web.validation import Check, _passes, validate, validated
 from savdex.web.views import not_found
 
 PUBLISHED, HIDDEN, BLOCKED = "published", "hidden", "blocked"
@@ -419,3 +420,48 @@ def _update(resume: dict[str, Any], fields: dict[str, Any], now: str) -> None:
                 "update resumes set slug = %s, updated_at = %s where id = %s",
                 [slug, now, resume["id"]],
             )
+
+
+# ── Фото резюме (этап 5, шаг 44) ────────────────────────────────────
+
+#: Правило image у Laravel: картинка по содержимому, без svg
+IMAGE_MIMES = "jpg,jpeg,png,gif,bmp,webp"
+
+
+@form()
+def photo(request: HttpRequest) -> HttpResponse:
+    """
+    ResumeController::photo — сразу рабочая. У Laravel каждая загрузка
+    кончается ошибкой 500 (размер [400, 400] вместо ['w' => 400, 'h' => 400]);
+    по решению владельца форма переезжает исправленной: фото 400×400
+    в WebP (ImageStore::THUMB), прежнее удаляется после замены.
+    """
+    from savdex.web import image_store
+
+    ctx = action(request)
+    data: dict[str, Any] = {**input_of(request), **request.FILES.dict()}
+    # Правило image: файл-картинка по содержимому, текст ошибки — validation.image
+    image = Check("image", lambda value: _passes("mimes", IMAGE_MIMES, value))
+    errors = validate(data, {"photo": ["required", image, "max:5120"]}, ctx.locale)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    resume = _own(ctx)
+
+    if resume is None:
+        return not_found(ctx)
+
+    try:
+        upload = data["photo"]
+        assert isinstance(upload, UploadedFile)
+        path = image_store.store(upload.read(), "resumes", image_store.THUMB)
+    except image_store.UnreadableImageError:
+        return invalid(ctx, {"photo": [ctx.t("messages.image.none_readable")]})
+
+    previous = resume["photo_path"]
+    _save(ctx, resume, {"photo_path": path})
+    image_store.delete(previous)
+    flash(ctx, "status", ctx.t("messages.resume.photo_saved"))
+
+    return back(ctx)

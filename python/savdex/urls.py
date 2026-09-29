@@ -29,6 +29,7 @@ from savdex.web import (
     company_profile_actions,
     contact_actions,
     directory,
+    downloads,
     home,
     it_task_actions,
     it_tasks,
@@ -38,6 +39,7 @@ from savdex.web import (
     listing_image_actions,
     news,
     pricing,
+    promo_actions,
     resume_actions,
     resumes,
     review_actions,
@@ -84,6 +86,17 @@ urlpatterns = [
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index, name="companies.index"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)$", company.show, name="companies.show"),
+    # Скачивание файлов с приватного диска (этап 5, шаг 44)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?files/(?P<document_id>[0-9]{1,18})$",
+        downloads.company_file,
+        name="files.download",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?it-services/files/(?P<file_id>[0-9]{1,18})$",
+        downloads.it_task_file,
+        name="it-tasks.file",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?catalog$", catalog.catalog, name="catalog"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?listing/(?P<slug>[^/]+)$", listing.show, name="listings.show"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?tenders/(?P<slug>[^/]+)$", tenders.show, name="tenders.show"),
@@ -172,7 +185,7 @@ urlpatterns = [
     ],
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})$",
-        it_task_actions.destroy,
+        it_task_actions.task,
         name="cabinet.it-tasks.destroy",
     ),
     re_path(
@@ -276,7 +289,8 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/incoming$", cabinet.incoming, name="cabinet.incoming"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings$", cabinet.listings, name="cabinet.listings"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
+    # Продвижение: GET — страница, POST — запуск (этап 5, шаг 44, группа forms)
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", promo_actions.page, name="cabinet.promo"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
     # Файлы своей компании (этап 5, шаг 42): группа forms
     re_path(
@@ -318,7 +332,7 @@ urlpatterns = [
             getattr(resume_actions, verb),
             name=f"cabinet.resume.{verb}",
         )
-        for verb in ("publish", "hide")
+        for verb in ("publish", "hide", "photo")
     ],
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company$",
@@ -336,7 +350,12 @@ urlpatterns = [
         company_profile_actions.cover,
         name="cabinet.company.cover",
     ),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
+    # IT-задачи: GET — список, POST — новая задача (этап 5, шаг 43, группа forms)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$",
+        it_task_actions.tasks,
+        name="cabinet.it-tasks",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
     # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
     *[

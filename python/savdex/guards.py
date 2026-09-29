@@ -168,10 +168,13 @@ SHARED_WRITES: dict[str, str] = {
         "как $task->increment('responses_count'), с той же строкой журнала; "
         "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
         "search_text и удаление, как ItTaskController, с журналом администратора"
+        "; новая задача и правка (этап 5, шаг 43) — insert и поля формы, адрес "
+        "из заголовка (событие created), как ItTaskController::store и ::update"
     ),
     "it_task_files": (
         "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
         "с диска, как ItTaskController::destroyFile; событий у модели нет"
+        "; загрузка с задачей (этап 5, шаг 43) — insert, как storeFiles"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
@@ -257,10 +260,15 @@ SHARED_WRITES: dict[str, str] = {
         "; раскрытие контактов (этап 5, шаг 40) — под блокировкой строки "
         "contacts_used_this_period + 1 или условное списание кредита, как "
         "ContactUnlockService::charge и Wallet::spend"
+        "; продвижение (этап 5, шаг 44) — условное списание единиц, Wallet::spend"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
         "удаление, как CompanyFileController; у администратора — строка журнала"
+    ),
+    "promotions": (
+        "продвижение объявления за единицы (этап 5, шаг 44): новая строка "
+        "с active_key, как PromotionController::store и событие saving"
     ),
     "wallet_transactions": (
         "история кошелька (этап 5, шаг 40): строка списания кредита за "

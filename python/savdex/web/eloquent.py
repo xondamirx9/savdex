@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from datetime import datetime
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
@@ -75,6 +75,10 @@ def _cast_same(cast: str | None, before: Any, after: Any) -> bool:  # noqa: ANN4
         except InvalidOperation:
             return _same(before, after)
 
+    if cast == "date":
+        # fromDateTime обоих: «Y-m-d H:i:s», день из базы — с полуночью
+        return (before is None) == (after is None) and _date_text(before) == _date_text(after)
+
     if cast == "int":
         try:
             return int(float(str(before))) == int(float(str(after)))
@@ -84,10 +88,25 @@ def _cast_same(cast: str | None, before: Any, after: Any) -> bool:  # noqa: ANN4
     return _same(before, after)
 
 
+def _date_text(value: Any) -> Any:  # noqa: ANN401
+    """Дата из базы (date) — «Y-m-d 00:00:00», момент — «Y-m-d H:i:s»."""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d 00:00:00")
+
+    return value
+
+
 def _written(cast: str | None, value: Any) -> Any:  # noqa: ANN401
     """Значение столбца: массив с кастом array — текстом json_encode."""
     if cast == "json" and value is not None:
         return _php_json(value)
+
+    # Сырой день из базы — строкой, как его отдаёт PDO
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()
 
     return _stamp(value)
 

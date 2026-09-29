@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import base64
+import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -216,3 +218,80 @@ def test_правка_на_языке(сайт, prefix):
         method="PATCH",
         headers=inertia(),
     )
+
+
+# ── Фото резюме: только Django ──────────────────────────────────────
+#
+# У Laravel загрузка фото всегда кончается ошибкой 500 (ImageStore::store
+# получает [400, 400] вместо ['w' => 400, 'h' => 400]). По решению
+# владельца форма переезжает сразу рабочей, поэтому сверять не с чем:
+# проверяется сам Django.
+
+
+def _фото(сайт: str, файл: tuple[str, bytes] | None) -> tuple[dict[str, Any], Any]:
+    import json
+
+    from savdex import laravel_session
+
+    from .test_web_company_profile_actions import multipart
+    from .test_web_forms import SID, ТОКЕН
+    from .test_web_session import СЕССИЯ, завести, кука
+    from .web_site import из_django
+
+    завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: соискатель()})
+    тело, тип = multipart({"photo": файл} if файл else {"note": "x"})
+    ответ = из_django(
+        сайт,
+        "/cabinet/resume/photo",
+        {СЕССИЯ: кука(СЕССИЯ, SID)},
+        {**inertia(), "Referer": сайт + "/cabinet/resume"},
+        method="POST",
+        body=тело,
+        content_type=тип,
+    )
+    сессия = sql("select payload from sessions where id = %s", [SID])[0][0]
+
+    return ответ, json.loads(base64.b64decode(сессия).decode()) if сессия else {}
+
+
+@pytest.mark.parametrize("было", [True, False])
+def test_фото(сайт, было):
+    from .test_web_company_profile_actions import картинка
+
+    резюме("draft")()
+
+    if not было:
+        sql("update resumes set photo_path = null")
+
+    ответ, сессия = _фото(сайт, ("face.png", картинка(900, 600)))
+    путь = sql("select photo_path from resumes")[0][0]
+
+    assert ответ["status"] == 302
+    assert re.fullmatch(r"resumes/[A-Za-z0-9]{40}\.webp", путь)
+    assert (Path(КОРЕНЬ) / "storage/app/public" / путь).exists()
+    # Прежнее фото с диска уходит; не было прежнего — чужой файл не трогаем
+    assert (Path(КОРЕНЬ) / "storage/app/public" / ФОТО).exists() is not было
+    assert сессия.get("status") == "Фотография сохранена."
+
+
+@pytest.mark.parametrize("файл", [("fake.png", b"nope"), None])
+def test_фото_отказ(сайт, файл):
+    резюме("draft")()
+    ответ, сессия = _фото(сайт, файл)
+
+    assert ответ["status"] == 302
+    assert sql("select photo_path from resumes")[0][0] == ФОТО
+    assert "photo" in json_errors(сессия)
+
+
+def test_фото_без_резюме(сайт):
+    from .test_web_company_profile_actions import картинка
+
+    резюме(None)()
+    ответ, _ = _фото(сайт, ("face.png", картинка(10, 10)))
+
+    assert ответ["status"] == 404
+
+
+def json_errors(сессия: dict[str, Any]) -> dict[str, Any]:
+    return (сессия.get("errors") or {}).get("default", {}).get("messages", {})

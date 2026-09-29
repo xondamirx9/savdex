@@ -11,6 +11,7 @@ Inertia, теги <head>.
 from __future__ import annotations
 
 import base64
+import hashlib
 import html
 import json
 import re
@@ -67,7 +68,9 @@ print(json.dumps({
         k: {"value": m.value, **{a: m[a] for a in m.keys() if m[a] not in ("", None)}}
         for k, m in r.cookies.items()
     },
-    "body": r.content.decode(),
+    # Двоичный ответ (скачивание файла) сверяется по отпечатку
+    "body": r.content.decode(errors="replace"),
+    "sha256": __import__("hashlib").sha256(r.content).hexdigest(),
 }))
 """
 
@@ -230,6 +233,7 @@ def из_laravel(
         "headers": dict(r.headers),
         "cookies": dict(_куки_ответа(r.headers.get_list("set-cookie"))),
         "body": r.text,
+        "sha256": hashlib.sha256(r.content).hexdigest(),
     }
 
 
