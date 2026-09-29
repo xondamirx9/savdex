@@ -258,6 +258,10 @@ SHARED_WRITES: dict[str, str] = {
         "contacts_used_this_period + 1 или условное списание кредита, как "
         "ContactUnlockService::charge и Wallet::spend"
     ),
+    "company_documents": (
+        "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
+        "удаление, как CompanyFileController; у администратора — строка журнала"
+    ),
     "wallet_transactions": (
         "история кошелька (этап 5, шаг 40): строка списания кредита за "
         "раскрытие контактов, как Wallet::spend; событий у модели нет"

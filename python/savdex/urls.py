@@ -25,6 +25,7 @@ from savdex.web import (
     companies,
     company,
     company_contact_actions,
+    company_file_actions,
     company_profile_actions,
     contact_actions,
     directory,
@@ -277,6 +278,17 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
+    # Файлы своей компании (этап 5, шаг 42): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/files$",
+        company_file_actions.store,
+        name="cabinet.company.files.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/files/(?P<document_id>[0-9]{1,18})$",
+        company_file_actions.document,
+        name="cabinet.company.files.update",
+    ),
     # Контакты своей компании (этап 5, шаг 31): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/contacts$",
