@@ -242,9 +242,13 @@ Route::middleware('guest')->group(function (): void {
      * Ограничение частоты регистраций с одного адреса.
      * Без него фейковые компании заводятся пачками, а на старте
      * маркетплейса доверие к базе — единственный актив.
+     *
+     * Созданные аккаунты считает контроллер (MAX_PER_HOUR). Здесь —
+     * только защита от долбёжки формой: человеку, поправляющему
+     * пароль и телефон, двадцати отправок за десять минут хватает.
      */
     Route::post('/register', [RegisteredUserController::class, 'store'])
-        ->middleware('throttle:5,60');
+        ->middleware('throttle:20,10');
 
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])

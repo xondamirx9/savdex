@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
+use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -203,5 +206,57 @@ class RegistrationTest extends TestCase
             'password' => 'Пароли не совпадают',
             'password_confirmation' => 'Пароли не совпадают',
         ]);
+    }
+
+    /**
+     * Ошибки ввода не расходуют лимит регистраций с адреса. Раньше
+     * лимит (5 в час) считал отправки формы: пять поправок пароля и
+     * телефона — и шестая, уже верная, отклонялась на час.
+     */
+    #[Test]
+    public function ошибки_ввода_не_расходуют_лимит_регистраций(): void
+    {
+        Notification::fake();
+
+        foreach (range(1, 8) as $attempt) {
+            $this->post('/register', $this->validPayload([
+                'password' => 'korotkiy1',
+                'password_confirmation' => 'korotkiy1',
+            ]))->assertSessionHasErrors('password');
+        }
+
+        $this->post('/register', $this->validPayload())
+            ->assertRedirect('/onboarding/company');
+
+        $this->assertDatabaseHas('users', ['email' => 'rustam@company.uz']);
+    }
+
+    /**
+     * Лимит считает созданные аккаунты. Упёршийся в него видит причину
+     * на форме, а не кнопку, которая молча ничего не делает.
+     */
+    #[Test]
+    public function сверх_лимита_аккаунт_не_создаётся_и_причина_видна_на_форме(): void
+    {
+        Notification::fake();
+
+        foreach (range(1, RegisteredUserController::MAX_PER_HOUR) as $i) {
+            $this->post('/register', $this->validPayload(['email' => "user{$i}@company.uz"]))
+                ->assertRedirect('/onboarding/company');
+
+            Auth::logout();
+        }
+
+        $this->from('/register')
+            ->post('/register', $this->validPayload(['email' => 'lishniy@company.uz']))
+            ->assertRedirect('/register')
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseMissing('users', ['email' => 'lishniy@company.uz']);
+
+        $this->get('/register')->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('auth/Register')
+            ->where('flash.error', fn (?string $error): bool => str_contains((string) $error, 'Попробуйте через')),
+        );
     }
 }

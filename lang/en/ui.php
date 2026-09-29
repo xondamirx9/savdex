@@ -96,7 +96,7 @@ return [
         'strength_add' => 'add :list',
         'missing_length' => ':count more chars',
         'missing_digit' => 'a digit',
-        'missing_special' => 'a special character',
+        'missing_letter' => 'a letter',
         // The consent phrase is assembled from parts: in Uzbek and
         // Turkish the verb goes at the end, hence prefix and suffix
         'terms_prefix' => 'I accept the',
@@ -2167,6 +2167,7 @@ return [
             'password_letters' => 'Add at least one letter to the password',
             'password_numbers' => 'Add at least one digit to the password',
             'password_leaked' => 'This password appears in data leaks. Choose another',
+            'too_many' => 'Several accounts have already been registered from this network in the last hour. Try again in :minutes min or from another network',
             'terms' => 'You need to accept the offer and the privacy policy',
             'account_type' => 'Choose who you are: legal entity, individual or freelancer',
         ],

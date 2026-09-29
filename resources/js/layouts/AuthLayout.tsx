@@ -1,10 +1,11 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Logo } from '@/components/ui';
+import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
+import type { SharedProps } from '@/types';
 
 /**
  * Аргументы левой панели. Функция, а не константа модуля: подписи
@@ -40,6 +41,14 @@ export function AuthLayout({
     subheading?: string;
     children: ReactNode;
 }) {
+    /*
+     * Ошибка формы без поля: «слишком много попыток» (429 у отправки
+     * формы возвращается сюда же с flash error, см. bootstrap/app.php)
+     * и лимит регистраций. Без неё кнопка молча ничего не делала —
+     * со стороны это «регистрация не проходит».
+     */
+    const { flash } = usePage<SharedProps>().props;
+
     return (
         <>
             <Head title={title} />
@@ -99,6 +108,12 @@ export function AuthLayout({
 
                         <h1 className="text-h2 font-bold">{heading}</h1>
                         {subheading && <p className="text-muted mt-2 text-sm">{subheading}</p>}
+
+                        {flash?.error && (
+                            <Alert tone="danger" className="mt-6">
+                                {flash.error}
+                            </Alert>
+                        )}
 
                         <div className="mt-6">{children}</div>
                     </div>
