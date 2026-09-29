@@ -39,6 +39,7 @@ class AdminAction extends Model
         'created' => 'Создание',
         'updated' => 'Изменение',
         'deleted' => 'Удаление',
+        'force_deleted' => 'Удаление навсегда',
         'restored' => 'Восстановление',
         'approved' => 'Одобрение',
         'rejected' => 'Отклонение',

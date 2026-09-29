@@ -6,6 +6,7 @@ namespace App\Http\Requests\Auth;
 
 use App\Support\PasswordMessages;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
@@ -30,7 +31,8 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'min:2', 'max:120'],
-            'email' => ['required', 'string', 'email:rfc,strict', 'max:190', 'unique:users,email'],
+            // Отключённый (удалённый) аккаунт адрес не держит
+            'email' => ['required', 'string', 'email:rfc,strict', 'max:190', Rule::unique('users', 'email')->withoutTrashed()],
             'phone' => ['required', 'string', 'regex:/^\+?\d[\d\s\-()]{8,17}$/'],
             'password' => [
                 'required', 'string', 'confirmed',

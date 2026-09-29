@@ -177,8 +177,13 @@ def grant(
         connection.cursor() as cursor,
         allowed_writes("users"),
     ):
-        # Удалённых PHP-поиск не видит, а почта уникальна и для них
-        cursor.execute("select id, deleted_at from users where email = %s", [email])
+        # Действующий аккаунт — раньше удалённого, как в PHP: почта
+        # удалённого свободна, и на один адрес их может быть два
+        cursor.execute(
+            "select id, deleted_at from users where email = %s "
+            "order by deleted_at is not null, id desc limit 1",
+            [email],
+        )
         row = cursor.fetchone()
 
         if row is not None and row[1] is not None:

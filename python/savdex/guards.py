@@ -123,7 +123,12 @@ SHARED_WRITES: dict[str, str] = {
         "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
         "форма) — имя, телефон, язык и сброс подтверждения телефона; "
         "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
-        "новая компания — company_id и company_role владельца"
+        "новая компания — company_id и company_role владельца; раздел "
+        "«Пользователи» админки Django (savdex/accounts) — отключение и "
+        "восстановление, как SoftDeletes: только deleted_at и updated_at; "
+        "удаление навсегда — только отключённого, delete по id (связанные "
+        "строки база правит сама по внешним ключам). Журнал — строкой "
+        "admin_actions, как AuditObserver"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "

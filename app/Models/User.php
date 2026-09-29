@@ -59,6 +59,30 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public const ADMIN_ROLES = AdminAccess::ROLES;
 
     /**
+     * Удаление аккаунта — отключение (deleted_at): запись остаётся, а адрес
+     * почты сразу свободен для новой регистрации (индекс уникальности —
+     * только среди действующих). Навсегда стирается лишь уже отключённый
+     * аккаунт: администратор сначала находит его среди отключённых.
+     *
+     * Восстановить отключённый нельзя, если его адрес успел занять новый
+     * аккаунт: двух действующих с одной почтой быть не может.
+     */
+    protected static function booted(): void
+    {
+        static::forceDeleting(static fn (User $user): bool => $user->trashed());
+        static::restoring(static fn (User $user): bool => ! $user->emailTakenByAnother());
+    }
+
+    /** Адрес этого аккаунта занят другим действующим аккаунтом. */
+    public function emailTakenByAnother(): bool
+    {
+        return static::query()
+            ->where('email', $this->email)
+            ->whereKeyNot($this->getKey())
+            ->exists();
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

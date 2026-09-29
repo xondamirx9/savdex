@@ -153,6 +153,8 @@ class AdminLogTest extends TestCase
         $this->actingAs($actor);
         Company::factory()->create();
 
+        // Навсегда удаляется только отключённый аккаунт — сначала отключение
+        $actor->delete();
         $actor->forceDelete();
 
         $entry = AdminAction::where('subject_type', Company::class)->where('action', 'created')->sole();
@@ -162,7 +164,7 @@ class AdminLogTest extends TestCase
         $this->assertNull($entry->user, 'но никуда уже не ведёт');
 
         $this->assertTrue(
-            AdminAction::where('section', 'users')->where('action', 'deleted')->exists(),
+            AdminAction::where('section', 'users')->where('action', 'force_deleted')->exists(),
             'удаление сотрудника записано',
         );
     }
