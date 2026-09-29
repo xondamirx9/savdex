@@ -27,8 +27,8 @@ use Tests\TestCase;
  */
 class EmailVerificationTest extends TestCase
 {
-    use RefreshDatabase;
     use LegalRegistration;
+    use RefreshDatabase;
 
     private function payload(array $overrides = []): array
     {

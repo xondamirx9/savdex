@@ -21,8 +21,8 @@ use Tests\TestCase;
  */
 class AuthThrottleIsolationTest extends TestCase
 {
-    use RefreshDatabase;
     use LegalRegistration;
+    use RefreshDatabase;
 
     private function browseCompanies(?User $user = null, int $times = 25): void
     {

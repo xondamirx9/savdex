@@ -23,8 +23,8 @@ use Tests\TestCase;
  */
 class RegistrationTest extends TestCase
 {
-    use RefreshDatabase;
     use LegalRegistration;
+    use RefreshDatabase;
 
     /** @return array<string, mixed> */
     private function validPayload(array $overrides = []): array

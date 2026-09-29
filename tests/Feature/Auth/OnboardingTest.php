@@ -24,8 +24,8 @@ use Tests\TestCase;
  */
 class OnboardingTest extends TestCase
 {
-    use RefreshDatabase;
     use LegalRegistration;
+    use RefreshDatabase;
 
     private function geo(): array
     {

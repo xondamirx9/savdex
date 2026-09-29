@@ -22,8 +22,8 @@ use Tests\TestCase;
  */
 class AccountTypeTest extends TestCase
 {
-    use RefreshDatabase;
     use LegalRegistration;
+    use RefreshDatabase;
 
     private function geo(): array
     {
