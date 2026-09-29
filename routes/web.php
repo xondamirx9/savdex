@@ -13,6 +13,7 @@ use App\Http\Controllers\Cabinet\BillingController;
 use App\Http\Controllers\Cabinet\ChatController;
 use App\Http\Controllers\Cabinet\CompanyContactController;
 use App\Http\Controllers\Cabinet\CompanyFileController;
+use App\Http\Controllers\Cabinet\CompanyInfoController;
 use App\Http\Controllers\Cabinet\CompanyProfileController;
 use App\Http\Controllers\Cabinet\ContactController;
 use App\Http\Controllers\Cabinet\DashboardController;
@@ -554,6 +555,19 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::patch('/cabinet/settings/notifications', [SettingsController::class, 'notifications'])->name('cabinet.settings.notifications');
     Route::patch('/cabinet/settings/profile', [SettingsController::class, 'profile'])->name('cabinet.settings.profile');
     Route::post('/cabinet/settings/delete', [SettingsController::class, 'destroy'])->name('cabinet.settings.destroy');
+
+    /*
+     * Данные компании в настройках: заполненное меняется раз в полгода,
+     * а пока срок не вышел — обращение в поддержку. Ответ JSON: страницу
+     * настроек на боевом отдаёт Django, блок грузится отдельно.
+     */
+    Route::get('/cabinet/settings/company-info', [CompanyInfoController::class, 'show'])->name('cabinet.settings.company');
+    Route::patch('/cabinet/settings/company-info', [CompanyInfoController::class, 'update'])
+        ->middleware('throttle:20,1')
+        ->name('cabinet.settings.company.update');
+    Route::post('/cabinet/settings/company-info/support', [CompanyInfoController::class, 'support'])
+        ->middleware('throttle:5,60')
+        ->name('cabinet.settings.company.support');
 
     /*
      * «Моё резюме». Одно на человека, поэтому адреса без номера:

@@ -240,6 +240,8 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
   font-size:14px;color:var(--text);transition:border-color var(--t-fast),background var(--t-fast)}
 a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-decoration:none}
 .chip-active{background:var(--primary-700);color:#fff;border-color:var(--primary-700)}
+/* Заблокированный выбор (данные компании в срок ожидания) */
+.chip:disabled{opacity:.55;cursor:not-allowed}
 .chip-remove{margin-left:2px;opacity:.6;line-height:1}
 .chip-remove:hover{opacity:1}
 
