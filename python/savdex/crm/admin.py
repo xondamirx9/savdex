@@ -13,14 +13,20 @@ CRM в админке Django (этап 6) — вместо разделов Fila
 превращается в сделку — кнопками на странице лида и действием над
 отмеченными в списке.
 
-Удаление везде — в корзину (SoftDeletes), право только у суперадмина.
+Задачи и коммуникации — тоже «только свои»: задачи по исполнителю (список
+дел отвечает на вопрос «что мне делать»), разговоры — по тому, кто
+записал. Привязка к лиду или сделке — одним списком из тех, что видны
+сотруднику; прежняя привязка остаётся, даже если лид ему не виден.
+
+Удаление — в корзину (SoftDeletes), кроме записей разговоров: их удаляют
+насовсем, как Filament. Право — только у суперадмина.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
 
 from django import forms
@@ -32,19 +38,28 @@ from django.db.models.expressions import RawSQL
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.timesince import timesince
 
 from savdex import access, audit
 from savdex.accounts.models import User
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.catalog import now
 from savdex.crm.models import (
+    COMMUNICATION_TYPES,
     DEAL_STAGES,
     LEAD_SOURCES,
     LEAD_STATUSES,
+    SUBJECTS,
+    Communication,
     Company,
     Contact,
     Deal,
     Lead,
+    Task,
+    WithSubject,
 )
 
 #: Цвета значков — как у бейджей Filament
@@ -174,6 +189,8 @@ class Scoped(CrmAdmin):
 
     owner_column: ClassVar[str] = "owner"
     orphans_visible: ClassVar[bool] = False
+    #: Ответственный по умолчанию — тот, кто заводит (поле в форме)
+    owner_by_default: ClassVar[bool] = True
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
         queryset: QuerySet[Any] = super().get_queryset(request)
@@ -208,8 +225,13 @@ class Scoped(CrmAdmin):
         return allowed if obj is None or not allowed else self._visible(request, obj)
 
     def get_changeform_initial_data(self, request: HttpRequest) -> dict[str, Any]:
+        initial: dict[str, Any] = dict(super().get_changeform_initial_data(request))
+
         # Ответственный по умолчанию — тот, кто заводит
-        return {**super().get_changeform_initial_data(request), "owner": _admin_of(request).id}
+        if self.owner_by_default:
+            initial[self.owner_column] = _admin_of(request).id
+
+        return initial
 
     def owner_field(self, request: HttpRequest, **kwargs: Any) -> forms.ModelChoiceField:  # type: ignore[type-arg]
         field = forms.ModelChoiceField(
@@ -732,3 +754,473 @@ class DealAdmin(Scoped):
                 response.context_data["crm_total"] = f"{total:,}".replace(",", " ")
 
         return response
+
+
+# ── Задачи и коммуникации: общее ────────────────────────────────────
+
+
+def local_datetime(label: str, *, required: bool, help_text: str = "") -> forms.DateTimeField:
+    """
+    Одно поле с календарём браузера (DateTimePicker ->seconds(false));
+    время — ташкентское (TIME_ZONE), в базу — UTC.
+    """
+    return forms.DateTimeField(
+        label=label,
+        required=required,
+        help_text=help_text,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+    )
+
+
+def when(value: datetime | None) -> str:
+    """dateTime('d.m.Y H:i') в часовом поясе админки."""
+    return timezone.localtime(value).strftime("%d.%m.%Y %H:%M") if value is not None else ""
+
+
+def _subject_key(subject_type: str | None, subject_id: int | None) -> str:
+    return f"{subject_type}:{subject_id}" if subject_type and subject_id else ""
+
+
+class SubjectForm(forms.ModelForm):  # type: ignore[type-arg]
+    """
+    MorphToSelect «Связана с»: лид или сделка одним списком. Выбор — из
+    видимых сотруднику (заполняет раздел), прежняя привязка остаётся.
+    """
+
+    subject = forms.ChoiceField(label="Связана с", required=False)
+
+    #: Группы выбора: [(«Лиды», [(ключ, название), …]), …] — от раздела
+    subject_groups: ClassVar[list[tuple[str, list[tuple[str, str]]]]] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        instance: WithSubject = self.instance
+        current = _subject_key(instance.subject_type, instance.subject_id)
+        groups = [(title, list(options)) for title, options in self.subject_groups]
+        known = {key for _, options in groups for key, _ in options}
+
+        if current and current not in known:
+            label = instance.subject_title() or f"№{instance.subject_id}"
+            kind = SUBJECTS.get(str(instance.subject_type), ("Запись", Lead))[0]
+            groups.insert(0, ("Сейчас", [(current, f"{kind}: {label}")]))
+
+        field = self.fields["subject"]
+        assert isinstance(field, forms.ChoiceField)
+        field.choices = [("", "— ни к чему"), *groups]
+        field.initial = current
+
+    def clean_subject(self) -> tuple[str | None, int | None]:
+        value = self.cleaned_data.get("subject") or ""
+
+        if not value:
+            return None, None
+
+        subject_type, _, subject_id = value.rpartition(":")
+
+        return subject_type, int(subject_id)
+
+    def save(self, commit: bool = True) -> Any:  # noqa: ANN401
+        self.instance.subject_type, self.instance.subject_id = self.cleaned_data["subject"]
+
+        return super().save(commit)
+
+
+class WithSubjectAdmin(Scoped):
+    """Выбор «к чему относится» — лиды и сделки, видимые сотруднику."""
+
+    def subject_groups(self, request: HttpRequest) -> list[tuple[str, list[tuple[str, str]]]]:
+        staff = _admin_of(request)
+        groups = []
+
+        for laravel, (_, model) in SUBJECTS.items():
+            section = "leads" if model is Lead else "deals"
+
+            if not staff.can(f"{section}.view"):
+                continue
+
+            queryset = self.admin_site._registry[model].get_queryset(request)
+            title = "Лиды" if model is Lead else "Сделки"
+            groups.append(
+                (
+                    title,
+                    [
+                        (f"{laravel}:{obj.pk}", str(obj))
+                        for obj in queryset.order_by("-created_at", "-id").only("id", "title")
+                    ],
+                )
+            )
+
+        return groups
+
+    def get_form(
+        self,
+        request: HttpRequest,
+        obj: Any = None,  # noqa: ANN401
+        change: bool = False,
+        **kwargs: Any,
+    ) -> Any:  # noqa: ANN401
+        form = super().get_form(request, obj, change=change, **kwargs)
+        form.subject_groups = self.subject_groups(request)
+
+        return form
+
+    def formfield_for_foreignkey(self, db_field: Any, request: HttpRequest, **kwargs: Any) -> Any:  # noqa: ANN401
+        if db_field.name == "assignee":
+            return self.owner_field(request, required=True, label="Исполнитель")
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+# ── Задачи ──────────────────────────────────────────────────────────
+
+
+class TaskForm(SubjectForm):
+    due_at = local_datetime("Срок", required=False, help_text="Задача без срока не напомнит о себе")
+    done_at = local_datetime("Выполнена", required=False, help_text="Пусто — ещё нет")
+
+    class Meta:
+        model = Task
+        fields = ("title", "assignee", "due_at", "done_at", "description")
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["title"].label = "Что сделать"
+        self.fields["title"].widget.attrs["placeholder"] = "Позвонить и уточнить объём"
+        self.fields["description"].label = "Что именно"
+
+
+class TaskOpen(OpenFilter):
+    title = "выполнение"
+    open_label = "Только невыполненные"
+    open_q = Q(done_at__isnull=True)
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("1", "Все, и выполненные")]
+
+    def choices(self, changelist: Any) -> Iterator[Any]:  # noqa: ANN401
+        for choice in super().choices(changelist):
+            if choice["display"] == "Все, и закрытые":
+                choice["display"] = "Все, и выполненные"
+
+            yield choice
+
+
+def _today() -> tuple[datetime, datetime]:
+    """Сутки по часовому поясу админки — в UTC."""
+    start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    return start, start + timedelta(days=1)
+
+
+class TaskDue(admin.SimpleListFilter):
+    title = "срок"
+    parameter_name = "due"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("overdue", "Просроченные"), ("today", "На сегодня")]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Task]) -> QuerySet[Task]:
+        if self.value() == "overdue":
+            return queryset.filter(done_at__isnull=True, due_at__lt=now())
+
+        if self.value() == "today":
+            start, end = _today()
+
+            return queryset.filter(done_at__isnull=True, due_at__gte=start, due_at__lt=end)
+
+        return queryset
+
+
+class Mine(admin.SimpleListFilter):
+    """Фильтр «Мои» у Filament: по столбцу «своего» у раздела."""
+
+    title = "чьи"
+    parameter_name = "mine"
+
+    def __init__(
+        self,
+        request: HttpRequest,
+        params: dict[str, Any],
+        model: Any,  # noqa: ANN401
+        model_admin: Any,  # noqa: ANN401
+    ) -> None:
+        super().__init__(request, params, model, model_admin)
+        self.column = f"{model_admin.owner_column}_id"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("1", "Мои")]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        if self.value() == "1":
+            return queryset.filter(**{self.column: _admin_of(request).id})
+
+        return queryset
+
+
+@register(Task, section="tasks")
+class TaskAdmin(WithSubjectAdmin):
+    laravel_model = "App\\Models\\Crm\\Task"
+    title_list = "Задачи"
+    title_add = "Поставить задачу"
+    title_change = "Задача"
+    change_form_template = "admin/crm/task/change_form.html"
+
+    form = TaskForm
+    owner_column = "assignee"
+    fieldsets = (
+        ("Задача", {"fields": ("title", "assignee", "due_at", "done_at")}),
+        (
+            "К чему относится",
+            {"fields": ("subject",), "description": "Необязательно: бывают задачи сами по себе"},
+        ),
+        ("Подробности", {"fields": ("description",)}),
+    )
+    list_display = ("task", "due", "assignee_name", "done", "toggle")
+    list_filter = (TaskOpen, TaskDue, Mine)
+    list_select_related = ("assignee",)
+    search_fields = ("title",)
+    ordering = ("due_at", "id")
+    actions = ("done_selected", "reopen_selected")
+
+    @admin.display(description="что сделать", ordering="title")
+    def task(self, obj: Task) -> str:
+        # Выполненное — серым, а не пропадает: «я это уже делал» —
+        # частый и законный вопрос
+        return format_html(
+            '<span style="color:{}">{}</span><br><small>{}</small>',
+            TONES["gray"] if obj.is_done else "inherit",
+            obj.title,
+            obj.subject_title() or "",
+        )
+
+    @admin.display(description="срок", ordering="due_at")
+    def due(self, obj: Task) -> str:
+        if obj.due_at is None:
+            return "без срока"
+
+        if obj.is_overdue:
+            return format_html(
+                '{}<br><small style="color:{}">просрочена</small>',
+                _badge(when(obj.due_at), "danger"),
+                TONES["danger"],
+            )
+
+        return when(obj.due_at)
+
+    @admin.display(description="исполнитель", ordering="assignee__name")
+    def assignee_name(self, obj: Task) -> str:
+        return obj.assignee.name if obj.assignee is not None else "—"
+
+    @admin.display(description="выполнена", ordering="done_at")
+    def done(self, obj: Task) -> str:
+        return when(obj.done_at) or "—"
+
+    @admin.display(description="")
+    def toggle(self, obj: Task) -> str:
+        """
+        Отметка одной кнопкой: открывать форму ради одной галочки никто не
+        станет. Кнопка отправляет форму списка (в ней токен) на свой адрес.
+        """
+        return format_html(
+            '<button type="submit" class="button" formaction="{}" formmethod="post">{}</button>',
+            reverse("savdex_admin:crm_task_done", args=[obj.pk]),
+            "Вернуть в работу" if obj.is_done else "Выполнена",
+        )
+
+    def get_list_display(self, request: HttpRequest) -> Any:  # noqa: ANN401
+        shown = super().get_list_display(request)
+
+        return shown if self.has_done_permission(request) else [c for c in shown if c != "toggle"]
+
+    # ── Выполнена ──
+
+    def has_done_permission(self, request: HttpRequest) -> bool:
+        return _admin_of(request).can("tasks.edit")
+
+    def mark(self, request: HttpRequest, task: Task, *, done: bool) -> bool:
+        """forceFill(['done_at' => …])->save(): строка журнала «изменено»."""
+        if task.is_done == done:
+            return False
+
+        before = self.snapshot(task)
+        task.done_at = now() if done else None
+        task.save()
+        self.journal_update(request, task, before)
+
+        return True
+
+    @admin.action(description="Выполнена", permissions=["done"])
+    def done_selected(self, request: HttpRequest, queryset: QuerySet[Task]) -> None:
+        count = sum(self.mark(request, task, done=True) for task in queryset)
+        self.message_user(request, f"Выполнено: {count}.", messages.SUCCESS)
+
+    @admin.action(description="Вернуть в работу", permissions=["done"])
+    def reopen_selected(self, request: HttpRequest, queryset: QuerySet[Task]) -> None:
+        count = sum(self.mark(request, task, done=False) for task in queryset)
+        self.message_user(request, f"Снова в работе: {count}.", messages.SUCCESS)
+
+    def get_urls(self) -> list[Any]:
+        return [
+            path(
+                "<path:object_id>/done/",
+                self.admin_site.admin_view(self.done_view),
+                name="crm_task_done",
+            ),
+            *super().get_urls(),
+        ]
+
+    def done_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        if request.method != "POST" or not self.has_done_permission(request):
+            raise PermissionDenied
+
+        task = self.get_object(request, object_id)
+
+        if not isinstance(task, Task) or not self.has_change_permission(request, task):
+            raise PermissionDenied
+
+        self.mark(request, task, done=not task.is_done)
+        self.message_user(
+            request,
+            "Задача выполнена." if task.is_done else "Задача снова в работе.",
+            messages.SUCCESS,
+        )
+
+        # Назад — туда, откуда нажали: в список с его отбором или в задачу
+        back = request.headers.get("Referer", "")
+
+        if not url_has_allowed_host_and_scheme(
+            back, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            back = reverse("savdex_admin:crm_task_changelist")
+
+        return HttpResponseRedirect(back)
+
+    def change_view(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        form_url: str = "",
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        task = self.get_object(request, object_id)
+        extra = dict(extra_context or {})
+
+        if isinstance(task, Task) and self.has_change_permission(request, task):
+            extra["can_mark"] = self.has_done_permission(request)
+            extra["task_done"] = task.is_done
+
+        return super().change_view(request, object_id, form_url, extra)
+
+    def save_model(self, request: HttpRequest, obj: Any, form: Any, change: bool) -> None:  # noqa: ANN401
+        # CreateTask::mutateFormDataBeforeCreate: кто поставил
+        if not change:
+            obj.created_by = _admin_of(request).id
+
+        super().save_model(request, obj, form, change)
+
+
+# ── Коммуникации ────────────────────────────────────────────────────
+
+COMMUNICATION_TONES = {"call": "success", "meeting": "warning", "email": "info"}
+
+
+class CommunicationForm(SubjectForm):
+    happened_at = local_datetime("Когда", required=True)
+
+    class Meta:
+        model = Communication
+        fields = ("type", "happened_at", "contact", "summary", "body")
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["subject"].label = "Связан с"
+        self.fields["summary"].widget.attrs["placeholder"] = "Договорились о пробной партии 20 тонн"
+
+
+class LastWeek(admin.SimpleListFilter):
+    title = "когда"
+    parameter_name = "week"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("1", "За неделю")]
+
+    def queryset(
+        self, request: HttpRequest, queryset: QuerySet[Communication]
+    ) -> QuerySet[Communication]:
+        if self.value() == "1":
+            return queryset.filter(happened_at__gte=now() - timedelta(weeks=1))
+
+        return queryset
+
+
+@register(Communication, section="communications")
+class CommunicationAdmin(WithSubjectAdmin):
+    laravel_model = "App\\Models\\Crm\\Communication"
+    title_list = "Коммуникации"
+    title_add = "Записать разговор"
+    title_change = "Запись разговора"
+
+    form = CommunicationForm
+    owner_column = "author"
+    # Кто записал — тот, кто записывает: в форме этого поля нет
+    owner_by_default = False
+    fieldsets = (
+        ("Разговор", {"fields": ("type", "happened_at", "contact", "summary")}),
+        ("К чему относится", {"fields": ("subject",)}),
+        ("Подробности", {"fields": ("body",)}),
+    )
+    list_display = ("moment", "kind", "summary", "contact_name", "subject_name", "author_name")
+    list_filter = ("type", Mine, LastWeek)
+    list_select_related = ("author", "contact")
+    search_fields = ("summary",)
+    ordering = ("-happened_at", "-id")
+
+    def get_changeform_initial_data(self, request: HttpRequest) -> dict[str, Any]:
+        return {**super().get_changeform_initial_data(request), "happened_at": now()}
+
+    @admin.display(description="когда", ordering="happened_at")
+    def moment(self, obj: Communication) -> str:
+        ago = timesince(obj.happened_at, depth=1) if obj.happened_at <= now() else ""
+
+        return format_html(
+            "{}<br><small>{}</small>", when(obj.happened_at), f"{ago} назад" if ago else ""
+        )
+
+    @admin.display(description="что", ordering="type")
+    def kind(self, obj: Communication) -> str:
+        return _badge(
+            COMMUNICATION_TYPES.get(obj.type, obj.type),
+            COMMUNICATION_TONES.get(obj.type, "gray"),
+        )
+
+    @admin.display(description="с кем")
+    def contact_name(self, obj: Communication) -> str:
+        contact = obj.contact
+
+        return contact.name if contact is not None and contact.deleted_at is None else "—"
+
+    @admin.display(description="по чему")
+    def subject_name(self, obj: Communication) -> str:
+        return obj.subject_title() or "—"
+
+    @admin.display(description="кто записал", ordering="author__name")
+    def author_name(self, obj: Communication) -> str:
+        return obj.author.name if obj.author is not None else "—"
+
+    def save_model(self, request: HttpRequest, obj: Any, form: Any, change: bool) -> None:  # noqa: ANN401
+        # CreateCommunication::mutateFormDataBeforeCreate: автор — сам
+        if not change:
+            obj.author_id = _admin_of(request).id
+
+        super().save_model(request, obj, form, change)
+
+    def delete_model(self, request: HttpRequest, obj: Any) -> None:  # noqa: ANN401
+        """
+        Насовсем — мягкого удаления у разговоров нет. Номер записи нужен
+        журналу после удаления, а Model.delete() его обнуляет.
+        """
+        label = str(obj)
+        Communication.objects.filter(pk=obj.pk).delete()
+        self.journal(request, "deleted", obj)
+        request._savdex_done = f"Удалено: {label}"  # type: ignore[attr-defined]

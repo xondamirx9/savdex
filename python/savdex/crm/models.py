@@ -7,9 +7,14 @@ CRM — таблицы crm_* глазами Django (этап 6). Схема — 
 
 - SoftDeletes у всех, кроме коммуникаций: удаление — deleted_at и
   updated_at, строка остаётся; списки её не видят (менеджер Alive).
-- Кто завёл контакт — created_by, ставит раздел при создании.
+  Запись разговора удаляется насовсем: «удалённая, но восстановимая»
+  история переговоров — история, которой нельзя верить.
+- Кто завёл контакт и задачу — created_by, кто записал разговор —
+  author_id; ставит раздел при создании.
 - Сделка (Deal::saving): выиграна или проиграна — дата закрытия ставится
   сама, если её нет; вернулась в работу — снимается.
+- Задача и разговор привязаны к лиду или сделке полиморфно, как у
+  Eloquent: subject_type — имя класса Laravel, subject_id — номер.
 """
 
 from __future__ import annotations
@@ -253,3 +258,113 @@ class Deal(SoftDeleting):
             self.closed_at = None
 
         super().save(*args, **kwargs)
+
+
+#: Полиморфная привязка (morphTo): имя класса Laravel → модель
+SUBJECTS: dict[str, tuple[str, type[SoftDeleting]]] = {
+    "App\\Models\\Crm\\Lead": ("Лид", Lead),
+    "App\\Models\\Crm\\Deal": ("Сделка", Deal),
+}
+
+
+class WithSubject(models.Model):
+    """nullableMorphs('subject'): к лиду, к сделке или ни к чему."""
+
+    subject_type = models.CharField(max_length=255, null=True, blank=True, editable=False)
+    subject_id = models.BigIntegerField(null=True, blank=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+    def subject(self) -> SoftDeleting | None:
+        """$record->subject: удалённый в корзину — как и у Eloquent, не найден."""
+        kind = SUBJECTS.get(self.subject_type or "")
+
+        if kind is None or self.subject_id is None:
+            return None
+
+        cache: dict[tuple[str, int], SoftDeleting | None] = self.__dict__.setdefault(
+            "_subject_cache", {}
+        )
+        key = (str(self.subject_type), int(self.subject_id))
+
+        if key not in cache:
+            cache[key] = kind[1].objects.filter(pk=self.subject_id).first()
+
+        return cache[key]
+
+    def subject_title(self) -> str | None:
+        subject = self.subject()
+
+        return str(subject) if subject is not None else None
+
+
+class Task(SoftDeleting, WithSubject):
+    """App\\Models\\Crm\\Task: что сделать и к какому сроку."""
+
+    title = models.CharField("что сделать", max_length=200)
+    description = models.TextField("что именно", null=True, blank=True)
+    assignee = _owner("исполнитель")
+    created_by = models.BigIntegerField(null=True, editable=False)
+    due_at = UTCDateTimeField("срок", null=True, blank=True)
+    done_at = UTCDateTimeField("выполнена", null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = "crm_tasks"
+        verbose_name = "задача"
+        verbose_name_plural = "задачи"
+        ordering = ("due_at", "id")
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def is_done(self) -> bool:
+        return self.done_at is not None
+
+    @property
+    def is_overdue(self) -> bool:
+        """
+        Task::isOverdue: выполненная просроченной не считается, даже если
+        сделана позже срока — список «горит» показывает то, что ещё
+        требует действий.
+        """
+        return not self.is_done and self.due_at is not None and self.due_at < now()
+
+
+#: Communication::TYPES
+COMMUNICATION_TYPES = {
+    "call": "Звонок",
+    "email": "Письмо",
+    "meeting": "Встреча",
+    "message": "Сообщение",
+}
+
+
+class Communication(Timestamped, WithSubject):
+    """App\\Models\\Crm\\Communication: запись состоявшегося разговора."""
+
+    type = models.CharField(
+        "что было", max_length=20, default="call", choices=list(COMMUNICATION_TYPES.items())
+    )
+    happened_at = UTCDateTimeField("когда")
+    summary = models.CharField("о чём", max_length=200)
+    body = models.TextField(
+        "как прошло",
+        null=True,
+        blank=True,
+        help_text="Что просили, о чём договорились, что обещали и к какому сроку",
+    )
+    author = _owner("кто записал")
+    contact = _link(Contact, "с кем")
+
+    class Meta:
+        managed = False
+        db_table = "crm_communications"
+        verbose_name = "запись разговора"
+        verbose_name_plural = "коммуникации"
+        ordering = ("-happened_at", "-id")
+
+    def __str__(self) -> str:
+        return self.summary

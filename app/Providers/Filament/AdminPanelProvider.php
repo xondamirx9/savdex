@@ -22,6 +22,7 @@ use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
 use App\Models\Crm\Lead;
+use App\Models\Crm\Task;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
 use App\Support\Appearance;
@@ -149,6 +150,22 @@ class AdminPanelProvider extends PanelProvider
                     ->group('CRM')
                     ->sort(3)
                     ->visible(fn (): bool => AdminAccess::allows('contacts.view')),
+                NavigationItem::make('Задачи')
+                    ->url('/admin/python?next=/py/admin/crm/task/')
+                    ->icon('heroicon-o-check-circle')
+                    ->group('CRM')
+                    ->sort(4)
+                    // Счётчик — просроченные: срок, который уже прошёл, сам
+                    // о себе не напомнит. По исполнителю, как в списке
+                    ->badge(fn (): ?string => ($overdue = AdminScope::apply(Task::query(), 'tasks', 'assignee_id')
+                        ->open()->whereNotNull('due_at')->where('due_at', '<', now())->count()) > 0 ? (string) $overdue : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('tasks.view')),
+                NavigationItem::make('Коммуникации')
+                    ->url('/admin/python?next=/py/admin/crm/communication/')
+                    ->icon('heroicon-o-phone-arrow-up-right')
+                    ->group('CRM')
+                    ->sort(5)
+                    ->visible(fn (): bool => AdminAccess::allows('communications.view')),
                 NavigationItem::make('Главная страница')
                     ->url('/admin/python?next=/py/admin/site/landingblock/')
                     ->icon('heroicon-o-home')
