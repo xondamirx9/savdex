@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\AdminActions\AdminActionResource;
 use App\Models\AdminAction;
 use App\Models\Category;
 use App\Models\City;
@@ -227,22 +226,6 @@ class AdminLogTest extends TestCase
         AdminAction::where('subject_type', Company::class)->sole()->delete();
     }
 
-    /** Ни у кого, включая суперадмина: в панели этих кнопок нет вовсе. */
-    #[Test]
-    public function в_панели_журнал_только_на_чтение(): void
-    {
-        $this->actingAs($this->admin());
-        Company::factory()->create();
-
-        $entry = AdminAction::where('subject_type', Company::class)->sole();
-
-        $this->assertTrue(AdminActionResource::canViewAny());
-        $this->assertFalse(AdminActionResource::canCreate());
-        $this->assertFalse(AdminActionResource::canEdit($entry));
-        $this->assertFalse(AdminActionResource::canDelete($entry));
-        $this->assertFalse(AdminActionResource::canForceDelete($entry));
-    }
-
     // ── Кто видит журнал ────────────────────────────────────────────
 
     #[Test]
@@ -257,7 +240,7 @@ class AdminLogTest extends TestCase
                 AdminAccess::SUPERADMIN, AdminAccess::ADMIN, AdminAccess::FINANCE,
             ], true);
 
-            $this->assertSame($expected, AdminActionResource::canViewAny(), $label);
+            $this->assertSame($expected, AdminAccess::allows('audit.view'), $label);
         }
     }
 

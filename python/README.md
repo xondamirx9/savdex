@@ -72,6 +72,8 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/billing/` | Пакеты контактов и тарифы |
 | `savdex/accounts/` | Пользователи: поиск, отключение, восстановление и удаление навсегда |
 | `savdex/crm/` | CRM (этап 6): контакты, лиды, сделки, задачи и коммуникации — все разделы CRM |
+| `savdex/journal/` | Журнал действий (этап 6): только чтение, «что изменилось» |
+| `savdex/support/` | Обращения в поддержку (этап 6): очередь, «Взять», ответ и внутренняя заметка, переписка |
 | `savdex/site/` | Настройки площадки, баннеры (с предпросмотром), новости, страницы и вопросы помощи, главная (поля под языки — `pages_admin.py`, `landing_admin.py`) |
 | `savdex/laravel_cache.py`, `savdex/laravel_storage.py`, `savdex/images.py` | Общее с Laravel: сброс его кэша, его публичный диск, пересборка картинок как ImageStore |
 | `savdex/laravel_session.py`, `savdex/visitor.py` | Кто вошёл на сайт — по сессии Laravel (этап 3); `/py/whoami` |
