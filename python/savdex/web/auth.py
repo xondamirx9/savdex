@@ -118,7 +118,28 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    return inertia.render(ctx, "auth/Register", {}, _seo(ctx))
+    from savdex.web.directory import _named
+    from savdex.web.resumes import section_tree
+
+    names = _named("categories", ctx.locale)
+
+    return inertia.render(
+        ctx,
+        "auth/Register",
+        {
+            # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
+            "categories": [
+                {"id": c["id"], "name": names[c["id"]]}
+                for c in _rows(
+                    "select id from categories where parent_id is null and is_active "
+                    "order by sort, id"
+                )
+            ],
+            # Фрилансер — направление «Доп. услуг», на заказы которого откликается
+            "serviceSections": section_tree(ctx),
+        },
+        _seo(ctx),
+    )
 
 
 def _whatsapp_configured() -> bool:
@@ -246,8 +267,13 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
         return ctx
 
     assert ctx.user is not None
+    company = company_of(ctx)
 
-    if ctx.user["company_id"] is not None:
+    # OnboardingController::stepOpen: компании нет — или юрлицо завело
+    # её при регистрации, и город ещё не указан
+    if company is not None and not (
+        company["legal_form"] == "legal" and company["city_id"] is None
+    ):
         return _redirect(ctx, "/cabinet")
 
     locale = ctx.locale
@@ -279,6 +305,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             if account["account_type"] in LEGAL_FORMS
             else "legal",
             "personName": ctx.user["name"],
+            # Компания заведена при регистрации — спрашиваем только недостающее
+            "completing": ctx.user["company_id"] is not None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(
