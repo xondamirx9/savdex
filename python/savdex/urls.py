@@ -172,7 +172,7 @@ urlpatterns = [
     ],
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})$",
-        it_task_actions.destroy,
+        it_task_actions.task,
         name="cabinet.it-tasks.destroy",
     ),
     re_path(
@@ -336,7 +336,12 @@ urlpatterns = [
         company_profile_actions.cover,
         name="cabinet.company.cover",
     ),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
+    # IT-задачи: GET — список, POST — новая задача (этап 5, шаг 43, группа forms)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$",
+        it_task_actions.tasks,
+        name="cabinet.it-tasks",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
     # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
     *[

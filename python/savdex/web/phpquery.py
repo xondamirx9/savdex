@@ -122,6 +122,30 @@ def _native_name(name: str) -> str:
     return base + name[start:]
 
 
+def parse_pairs(pairs: list[tuple[str, str]]) -> Array:
+    """
+    Поля multipart, как их раскладывает PHP в $_POST (php_register_variable):
+    имена портятся, как у parse_str, «a[]» и «a[0]» — массивы. Значения —
+    уже текст, без раскодирования.
+    """
+    result: Array = {}
+
+    for name, value in pairs:
+        key = name.split("\0", 1)[0].lstrip(" ")
+
+        if key == "":
+            continue
+
+        path = _path(_native_name(key))
+
+        if path is None or path[0] == "":
+            continue
+
+        _assign(result, path, value)
+
+    return result
+
+
 def parse_query(qs: str, native: bool = False) -> Array:
     """
     HeaderUtils::parseQuery: пары через «&», повтор — последний.

@@ -1560,6 +1560,22 @@ Y-m-d, Y/m/d, d.m.Y, d-m-Y, m/d/Y, YYYYMMDD со временем, «30 февр
 `tests/test_web_company_file_actions.py`, 49 случаев. Права роли —
 миграция `grant_django_company_files`.
 
+**Шаг 43 — новая IT-задача и её правка** (`it_task_actions.store`,
+`update`): форма с файлами — `POST /cabinet/it-tasks` (`verified`,
+`throttle:20,60`) и правка. Правку с файлами браузер шлёт `POST` с
+`_method=patch` (PHP не разбирает multipart у PATCH): Django подменяет
+метод сам, как `Request::getMethod` (`_method` в теле или заголовок
+`X-HTTP-Method-Override`), так же `_method=delete` удаляет задачу; `POST`
+без подмены отвечает голым 405, а не страницей Laravel — формы так не
+шлют. Проверка ввода: бюджет (`required_if`, `gte` — новые правила
+валидатора), стек (чистка, без дублей, «0» и пустые — прочь), срок позже
+сегодня, до пяти файлов с типом по содержимому. Адрес — из заголовка и
+номера после вставки (событие `created`, запись без событий). Для этого
+же: поля multipart раскладываются по правилам `$_POST` (`stack[0]` —
+массив), у `null` длина 0 (как `mb_strlen($value ?? '')`), помощник
+записи сравнивает даты (`date`). Сверка — `tests/test_web_it_task_form.py`,
+46 случаев. Права роли — миграция `grant_django_it_task_form`.
+
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
 владеет он) и раздел «Закупки» в админке Django (`savdex/tenders`):

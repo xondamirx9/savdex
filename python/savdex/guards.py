@@ -168,10 +168,13 @@ SHARED_WRITES: dict[str, str] = {
         "как $task->increment('responses_count'), с той же строкой журнала; "
         "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
         "search_text и удаление, как ItTaskController, с журналом администратора"
+        "; новая задача и правка (этап 5, шаг 43) — insert и поля формы, адрес "
+        "из заголовка (событие created), как ItTaskController::store и ::update"
     ),
     "it_task_files": (
         "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
         "с диска, как ItTaskController::destroyFile; событий у модели нет"
+        "; загрузка с задачей (этап 5, шаг 43) — insert, как storeFiles"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
