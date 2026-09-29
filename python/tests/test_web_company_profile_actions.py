@@ -121,6 +121,14 @@ def снимок() -> Any:
         {**ВЕРНО, "it_specializations": ["web", "space"], "primary_role": "boss"},
         {**ВЕРНО, "name": ""},
         {**ВЕРНО, "tin": None, "legal_name": None},
+        # Заполненное здесь не меняется (раз в полгода — из настроек),
+        # пустое заполняется: название и ИНН те же, остальное — впервые
+        {
+            **ВЕРНО,
+            "name": "Цемент Трейд",
+            "tin": "301234567",
+            "it_specializations": ["erp", "web"],
+        },
     ],
 )
 @pytest.mark.parametrize("admin", [False, True])

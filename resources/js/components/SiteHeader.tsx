@@ -27,7 +27,7 @@ import { createPortal } from 'react-dom';
 import { useBrandLogo } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { stripLocale } from '@/lib/locale';
-import { t, tChoice } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
 import { servicePages } from '@/lib/serviceSections';
 import { useDismiss } from '@/lib/useDismiss';
 import { PARTNER_TIERS, TIER_LOOK } from '@/lib/partnerTiers';
@@ -482,13 +482,13 @@ function ContactsLeft({ wallet }: { wallet: SharedProps['contactsLeft'] }) {
             {!unlimited && (
                 <span className={cn('hd-badge', empty && 'hd-badge--zero')}>{wallet.total}</span>
             )}
-            <span>
-                {empty
-                    ? t('header.topup')
-                    : unlimited
-                      ? t('header.contacts_word')
-                      : tChoice('header.contacts_choice', wallet.total ?? 0)}
-            </span>
+            {/* Подпись одна на все состояния — «Контакты», как
+                «Избранное» и «Сообщения» рядом. Число стоит в значке
+                над ней, и склонять его словом («3 контакта») значит
+                говорить одно и то же дважды, да ещё и строчными
+                посреди строки заголовков. Пустой кошелёк —
+                исключение: там подпись зовёт пополнить. */}
+            <span>{empty ? t('header.topup') : t('header.contacts')}</span>
         </Link>
     );
 }

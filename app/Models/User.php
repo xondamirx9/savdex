@@ -13,6 +13,7 @@ use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -57,6 +58,46 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public const ADMIN_SUPERADMIN = AdminAccess::SUPERADMIN;
 
     public const ADMIN_ROLES = AdminAccess::ROLES;
+
+    /**
+     * Удаление аккаунта — отключение (deleted_at): запись остаётся, а адрес
+     * почты сразу свободен для новой регистрации (индекс уникальности —
+     * только среди действующих). Навсегда стирается лишь уже отключённый
+     * аккаунт: администратор сначала находит его среди отключённых.
+     *
+     * Восстановить отключённый нельзя, если его адрес успел занять новый
+     * аккаунт: двух действующих с одной почтой быть не может.
+     */
+    protected static function booted(): void
+    {
+        static::forceDeleting(static fn (User $user): bool => $user->trashed());
+        static::restoring(static fn (User $user): bool => ! $user->emailTakenByAnother());
+    }
+
+    /** Адрес этого аккаунта занят другим действующим аккаунтом. */
+    public function emailTakenByAnother(): bool
+    {
+        // Без учёта регистра, как ищет вход: «Sher@…» и «sher@…» для
+        // него один адрес
+        return static::query()
+            ->whereRaw('lower(email) = ?', [mb_strtolower((string) $this->email)])
+            ->whereKeyNot($this->getKey())
+            ->exists();
+    }
+
+    /**
+     * Почта хранится в нижнем регистре и без пробелов по краям.
+     *
+     * Вход ищет адрес в нижнем регистре, и почта, сохранённая с
+     * заглавной буквой (правка в админке, телефон с автозаглавной),
+     * не находилась — человек видел «неверный пароль».
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value): ?string => $value === null ? null : mb_strtolower(trim($value)),
+        );
+    }
 
     /**
      * @return array<string, string>

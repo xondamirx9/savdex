@@ -84,6 +84,11 @@ def _from_query(data: phpquery.Array) -> dict[str, Any]:
     return {str(k): convert(v) for k, v in data.items()}
 
 
+def _string_keys(data: phpquery.Array) -> dict[str, Any]:
+    """Ключи массива PHP — строками, значения как есть."""
+    return {str(k): _string_keys(v) if isinstance(v, dict) else v for k, v in data.items()}
+
+
 def input_of(request: HttpRequest) -> dict[str, Any]:
     """$request->input(): тело поверх строки запроса, очищенное."""
     cached = getattr(request, _ATTR, None)
@@ -108,7 +113,10 @@ def input_of(request: HttpRequest) -> dict[str, Any]:
     elif content_type == "application/x-www-form-urlencoded":
         body = _from_query(phpquery.parse_query(request.body.decode("latin-1"), native=True))
     elif content_type == "multipart/form-data":
-        body = {k: request.POST.get(k) for k in request.POST}
+        # $_POST: «stack[0]» и «stack[]» — массив, как у PHP
+        body = _string_keys(
+            phpquery.parse_pairs([(k, v) for k in request.POST for v in request.POST.getlist(k)])
+        )
 
     query = _from_query(phpquery.parse_query(request.META.get("QUERY_STRING", ""), native=True))
     # getInputSource()->all() + query->all(): ключи тела впереди
@@ -150,12 +158,14 @@ def action(
     auth: bool = True,
     throttle: int | None = None,
     throttle_minutes: int = 1,
+    throttle_prefix: str = "",
     password_change: bool = True,
 ) -> Context:
     """
     Контекст формы — или RefusedError с ответом посредника.
 
-    throttle, throttle_minutes — throttle:N,M маршрута. GET (выгрузка
+    throttle, throttle_minutes, throttle_prefix — throttle:N,M,prefix
+    маршрута: у каждого действия свой счётчик. GET (выгрузка
     файла) CSRF не проверяет — как PreventRequestForgery::isReading.
     """
     from savdex.web.cabinet import _authenticate, _require_password_change
@@ -182,7 +192,7 @@ def action(
         raise RefusedError(refused)
 
     if throttle is not None:
-        refused = _throttle(first, bare, throttle, throttle_minutes)
+        refused = _throttle(first, bare, throttle, throttle_minutes, throttle_prefix)
 
         if refused is not None:
             raise RefusedError(refused)
@@ -199,10 +209,11 @@ def action(
 
 
 def _throttle(
-    first: Context, bare: Context, max_attempts: int, minutes: int = 1
+    first: Context, bare: Context, max_attempts: int, minutes: int = 1, prefix: str = ""
 ) -> HttpResponse | None:
     """
-    throttle:N,M. Отказ Inertia-формы — назад с ошибкой поля body и
+    throttle:N,M,prefix. Ключ — префикс + подпись, как у ThrottleRequests.
+    Отказ Inertia-формы — назад с ошибкой поля body и
     сообщением error (bootstrap/app.php), иначе страница 429.
     """
     from savdex import laravel_cache
@@ -216,7 +227,7 @@ def _throttle(
 
         return None
 
-    key = throttle.signature(first)
+    key = prefix + throttle.signature(first)
 
     if throttle.too_many(key, max_attempts):
         if first.request.headers.get("X-Inertia"):

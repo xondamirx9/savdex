@@ -174,7 +174,7 @@ def export(request: HttpRequest) -> HttpResponse:
     ContactController::export (throttle:10,60): CSV с BOM (иначе Excel
     путает кириллицу), разделитель «;», свежие раскрытия первыми.
     """
-    ctx = action(request, throttle=10, throttle_minutes=60)
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="contacts-export")
     company = company_of(ctx)
 
     if company is None:

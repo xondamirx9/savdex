@@ -114,7 +114,9 @@ class AppServiceProvider extends ServiceProvider
     private function configurePasswordRules(): void
     {
         Password::defaults(function (): Password {
-            $rule = Password::min(10)->letters()->numbers();
+            // 8–20 символов: короче — легко подобрать, длиннее — пароль
+            // набирают с ошибками на телефоне и не могут войти
+            $rule = Password::min(8)->max(20)->letters()->numbers();
 
             // Проверка по базе утечек нужна везде, где пароли заводят
             // живые люди, — то есть на любом развёрнутом сайте, а не

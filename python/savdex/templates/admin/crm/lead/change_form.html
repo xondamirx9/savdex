@@ -1,0 +1,25 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Кнопки лида (savdex/crm/admin.py, LeadAdmin): «Взять себе» —
+  нераспределённому, «В сделку» — лиду в работе. POST с токеном формы.
+{% endcomment %}
+{% block object-tools-items %}
+  {% if can_claim %}
+    <li>
+      <form method="post" action="{% url 'savdex_admin:crm_lead_claim' original.pk %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="button">Взять себе</button>
+      </form>
+    </li>
+  {% endif %}
+  {% if can_convert %}
+    <li>
+      <form method="post" action="{% url 'savdex_admin:crm_lead_convert' original.pk %}" style="display:inline"
+            onsubmit="return confirm('Лид получит статус «Стал сделкой». Компания, контакт и ответственный перенесутся в новую сделку.')">
+        {% csrf_token %}
+        <button type="submit" class="button">В сделку</button>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

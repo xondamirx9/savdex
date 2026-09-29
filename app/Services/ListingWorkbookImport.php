@@ -10,6 +10,7 @@ use App\Support\CatalogLookup;
 use App\Support\Currencies;
 use App\Support\ImageStore;
 use App\Support\ImportLanguage;
+use App\Support\ListingWorkbookTemplate;
 use App\Support\WorkbookImages;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -159,7 +160,7 @@ final class ListingWorkbookImport
      * за зелёным «Загрузка завершена».
      *
      * @param  array{notes: list<string>}  $result
-     * @return list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>
+     * @return list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}>
      */
     private function sheets(string $workbook, array &$result): array
     {
@@ -209,13 +210,19 @@ final class ListingWorkbookImport
      * стоит над шапкой; по нему сходятся фотографии. Смещение от
      * шапки — ключ массива: по нему сходятся листы между собой.
      *
+     * Пока шапка не нашлась, запоминается образец того, что лежит
+     * над ней: первая строка хотя бы с двумя заполненными ячейками
+     * (скорее всего, это и есть шапка, названная не так), а без таких —
+     * первая непустая. По нему отчёт объясняет, почему шапки нет.
+     *
      * @param  iterable<Row>  $rows
-     * @return array{header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}
+     * @return array{header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}
      */
     private function readSheet(iterable $rows): array
     {
         $columns = null;
         $header = null;
+        $sample = null;
         $number = 0;
         $last = 0;
         $parsed = [];
@@ -231,6 +238,11 @@ final class ListingWorkbookImport
                 // или пустые строки перед таблицей
                 if ($columns === []) {
                     $columns = null;
+                    $cells = array_values(array_filter(array_map($this->text(...), $values), fn (string $text): bool => $text !== ''));
+
+                    if ($cells !== [] && ($sample === null || (count($sample['cells']) < 2 && count($cells) >= 2))) {
+                        $sample = ['number' => $number, 'cells' => $cells];
+                    }
                 } else {
                     $header = $number;
                 }
@@ -247,15 +259,60 @@ final class ListingWorkbookImport
             }
         }
 
-        return ['header' => $header, 'last' => $last, 'rows' => $parsed];
+        return ['header' => $header, 'last' => $last, 'rows' => $parsed, 'sample' => $header === null ? $sample : null];
+    }
+
+    /**
+     * Почему на листе не нашлась шапка — по тому, что на нём лежит.
+     *
+     * «Не найдена строка с названиями столбцов» без подробностей
+     * ставит в тупик: человек заполнял по образцу и уверен, что всё
+     * названо верно. Показать, что загрузка увидела в самой строке, —
+     * и расхождение видно сразу: «Наименование позиции» вместо
+     * «Название», пустой лист, вся шапка в одной ячейке через «;».
+     *
+     * @param  array{name: string, sample: array{number: int, cells: list<string>}|null}  $sheet
+     * @param  list<string>  $expected  как называются столбцы в образце
+     */
+    private function missingHeader(array $sheet, array $expected): string
+    {
+        $where = 'Лист «'.$sheet['name'].'»';
+        $sample = $sheet['sample'];
+
+        if ($sample === null) {
+            return $where.': не найдено ни одной заполненной ячейки — лист пуст.';
+        }
+
+        $cells = $sample['cells'];
+
+        // CSV, пересохранённый в XLSX как текст: вся строка лежит
+        // в первой ячейке, столбцы разделены точкой с запятой
+        if (count($cells) === 1) {
+            foreach (["\t" => 'табуляцию', ';' => '«;»', ',' => '«,»', '|' => '«|»'] as $separator => $label) {
+                if (str_contains($cells[0], $separator) && $this->columns(explode($separator, $cells[0])) !== []) {
+                    return $where.', строка '.$sample['number'].': названия всех столбцов записаны в одной ячейке '
+                        .'через '.$label.'. Так бывает, когда CSV сохранён как XLSX без разбивки. Разнесите '
+                        .'их по отдельным столбцам: в Excel «Данные → Текст по столбцам», разделитель '.$label.'.';
+                }
+            }
+        }
+
+        $shown = array_map(
+            fn (string $cell): string => '«'.mb_strimwidth($cell, 0, 40, '…').'»',
+            array_slice($cells, 0, 6),
+        );
+
+        return $where.': не найдена строка с названиями столбцов. В строке '.$sample['number'].' записано '
+            .implode(', ', $shown).(count($cells) > 6 ? ' и ещё '.(count($cells) - 6) : '')
+            .' — ни одно не совпало с названием столбца. Загрузка ждёт: '.implode(', ', $expected).'.';
     }
 
     /**
      * Какой лист главный и какие — переводы.
      *
-     * @param  list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>  $sheets
+     * @param  list<array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}>  $sheets
      * @param  array{errors: list<string>, notes: list<string>}  $result
-     * @return array{0: array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}, 1: array<string, array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>}|null
+     * @return array{0: array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}, 1: array<string, array{name: string, locale: string|null, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}>}|null
      */
     private function roles(array $sheets, array &$result): ?array
     {
@@ -297,8 +354,10 @@ final class ListingWorkbookImport
         }
 
         if ($master['header'] === null) {
-            $result['errors'][] = 'Лист «'.$master['name'].'»: не найдена строка с названиями столбцов. '
-                .'Скачайте образец книги — в нём столбцы названы так, как их ждёт загрузка.';
+            $result['errors'][] = $this->missingHeader(
+                $master,
+                array_values(array_diff(ListingWorkbookTemplate::HEADERS, ['Фото'])),
+            ).' Скачайте образец книги — в нём столбцы названы так, как их ждёт загрузка.';
 
             return null;
         }
@@ -322,15 +381,17 @@ final class ListingWorkbookImport
      * язык, это отмечается, но не мешает загрузке.
      *
      * @param  array{name: string, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}  $master
-     * @param  array<string, array{name: string, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>}>  $translations
+     * @param  array<string, array{name: string, header: int|null, last: int, rows: array<int, array{number: int, fields: array<string, string>}>, sample: array{number: int, cells: list<string>}|null}>  $translations
      * @param  array{errors: list<string>, notes: list<string>}  $result
      */
     private function aligned(array $master, array &$translations, array &$result): bool
     {
         foreach ($translations as $locale => $sheet) {
             if ($sheet['header'] === null) {
-                $result['errors'][] = 'Лист «'.$sheet['name'].'»: не найдена строка с названиями столбцов '
-                    .'(Заголовок, Описание, Условия поставки, Условия оплаты). Книга не загружена.';
+                $result['errors'][] = $this->missingHeader(
+                    $sheet,
+                    ['Заголовок', 'Описание', 'Условия поставки', 'Условия оплаты'],
+                ).' Книга не загружена.';
 
                 return false;
             }

@@ -84,9 +84,11 @@ def отправить(
     method: str = "POST",
     env: dict[str, str] | None = None,
     drop: tuple[str, ...] = (),
+    чистка: Callable[[str], str] = lambda payload: payload,
 ) -> dict[str, Any]:
     """
-    drop — ключи ответа, которые не сверяются (время в JSON-ответе).
+    drop — ключи ответа, которые не сверяются (время в JSON-ответе);
+    чистка — изменчивое в сессии (свежий хеш пароля) прочь перед сверкой.
 
     POST на обе стороны с одинаковой подготовкой; ответ, сессия и снимок
     базы после каждой — одинаковые. Итог — ответ Django, строка сессии
@@ -124,10 +126,10 @@ def отправить(
 
     assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:800])
 
-    for header in ("location", "x-ratelimit-limit", "x-ratelimit-remaining"):
+    for header in ("location", "x-inertia-location", "x-ratelimit-limit", "x-ratelimit-remaining"):
         assert д["headers"].get(header) == л["headers"].get(header), header
 
-    if д["status"] not in (301, 302, 303):
+    if д["status"] not in (301, 302, 303) and (д["body"] or л["body"]):
         стр_д, стр_л = страница(д["body"]), страница(л["body"])
 
         for key in drop:
@@ -139,8 +141,11 @@ def отправить(
     assert set(куки_ответа(д)) == set(куки_ответа(л)), (куки_ответа(д), куки_ответа(л))
     assert сессия_д is not None and сессия_л is not None
 
-    for ключ in ("payload", "user_id"):
-        assert сессия_д[ключ] == сессия_л[ключ], (ключ, сессия_д[ключ], сессия_л[ключ])
+    assert чистка(сессия_д["payload"]) == чистка(сессия_л["payload"]), (
+        сессия_д["payload"],
+        сессия_л["payload"],
+    )
+    assert сессия_д["user_id"] == сессия_л["user_id"]
 
     assert база_д == база_л, json.dumps([база_д, база_л], ensure_ascii=False, default=str)
 
@@ -565,7 +570,8 @@ def test_избранное_частота(inertia_):
     файловый = {"CACHE_STORE": "file"}
     uid = учётка("forms-throttle@savdex.uz")
     lid = _объявление()
-    ключ = hashlib.sha1(str(uid).encode()).hexdigest()
+    # throttle:60,1,favorite — у действия своя приставка ключа
+    ключ = "favorite" + hashlib.sha1(str(uid).encode()).hexdigest()
 
     def подготовить(счёт: int) -> Callable[[], None]:
         def run() -> None:

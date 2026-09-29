@@ -7,12 +7,7 @@ namespace Tests\Feature\Finance;
 use App\Filament\Pages\FinanceOperations;
 use App\Filament\Pages\Roles;
 use App\Filament\Resources\AdminActions\Pages\ListAdminActions;
-use App\Filament\Resources\Communications\Pages\ListCommunications;
-use App\Filament\Resources\Contacts\Pages\ListContacts;
-use App\Filament\Resources\Deals\Pages\ListDeals;
-use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Resources\Refunds\Pages\ListRefunds;
-use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Models\Company;
 use App\Models\Crm\Communication;
@@ -57,11 +52,6 @@ class RenderTest extends TestCase
         return [
             'журнал действий' => [ListAdminActions::class],
             'роли и права' => [Roles::class],
-            'лиды' => [ListLeads::class],
-            'сделки' => [ListDeals::class],
-            'контакты' => [ListContacts::class],
-            'задачи' => [ListTasks::class],
-            'коммуникации' => [ListCommunications::class],
             'обращения' => [ListTickets::class],
             'возвраты' => [ListRefunds::class],
             'финансовые операции' => [FinanceOperations::class],

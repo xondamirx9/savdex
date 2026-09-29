@@ -16,6 +16,7 @@ use App\Support\ImageStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -145,7 +146,47 @@ class CompanyProfileController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        $data = $request->validate(self::rules($request), self::messages());
+
+        $user = $request->user();
+        $company = $user->company;
+
+        if ($company === null) {
+            $company = Company::create([...$data, 'status' => 'active']);
+
+            $user->forceFill(['company_id' => $company->id, 'company_role' => 'owner'])->save();
+
+            return redirect()->route('cabinet.company')
+                ->with('success', __('ui.messages.company.created'));
+        }
+
+        /*
+         * Заполненные сведения здесь не меняются: только из настроек
+         * профиля и раз в полгода. Форма присылает их как есть —
+         * отличие значит попытку обойти ограничение.
+         */
+        $locked = $company->changedProfileFields($data);
+
+        if ($locked !== []) {
+            throw ValidationException::withMessages(array_fill_keys(
+                $locked,
+                __('ui.messages.company.change_in_settings'),
+            ));
+        }
+
+        $company->fill($data)->save();
+
+        return back()->with('success', __('ui.messages.company.saved'));
+    }
+
+    /**
+     * Правила полей компании — общие для этой формы и настроек профиля.
+     *
+     * @return array<string, mixed>
+     */
+    public static function rules(Request $request): array
+    {
+        return [
             'name' => ['required', 'string', 'min:2', 'max:190'],
             'legal_name' => ['nullable', 'string', 'max:255'],
             'tin' => [
@@ -168,27 +209,17 @@ class CompanyProfileController extends Controller
             'is_it_provider' => ['nullable', 'boolean'],
             'it_specializations' => ['nullable', 'array', 'max:'.count(ItTask::SERVICE_TYPES)],
             'it_specializations.*' => [Rule::in(array_keys(ItTask::SERVICE_TYPES))],
-        ], [
+        ];
+    }
+
+    /** @return array<string, string> */
+    public static function messages(): array
+    {
+        return [
             'name.required' => __('ui.messages.company.name_required'),
             'founded_year.between' => __('ui.messages.company.founded_between', ['year' => now()->year]),
             'tin.unique' => __('ui.messages.company.tin_unique'),
-        ]);
-
-        $user = $request->user();
-        $company = $user->company;
-
-        if ($company === null) {
-            $company = Company::create([...$data, 'status' => 'active']);
-
-            $user->forceFill(['company_id' => $company->id, 'company_role' => 'owner'])->save();
-
-            return redirect()->route('cabinet.company')
-                ->with('success', __('ui.messages.company.created'));
-        }
-
-        $company->fill($data)->save();
-
-        return back()->with('success', __('ui.messages.company.saved'));
+        ];
     }
 
     /**

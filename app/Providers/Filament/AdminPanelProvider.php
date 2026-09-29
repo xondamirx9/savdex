@@ -21,7 +21,10 @@ use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
+use App\Models\Crm\Lead;
+use App\Models\Crm\Task;
 use App\Support\AdminAccess;
+use App\Support\AdminScope;
 use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -123,6 +126,46 @@ class AdminPanelProvider extends PanelProvider
             // ведёт через пропуск (/admin/python) в раздел на Python.
             // Видимость — по тем же правам AdminAccess, что и у раздела
             ->navigationItems([
+                // CRM на Django (этап 6): раздел Filament убран, порядок в
+                // группе — прежний (Лиды 1, Сделки 2, Контакты 3, …)
+                NavigationItem::make('Лиды')
+                    ->url('/admin/python?next=/py/admin/crm/lead/')
+                    ->icon('heroicon-o-inbox-arrow-down')
+                    ->group('CRM')
+                    ->sort(1)
+                    // Счётчик — необработанные: лид, до которого не дошли
+                    // руки, остывает. Свои и нераспределённые, как в списке
+                    ->badge(fn (): ?string => ($new = AdminScope::apply(Lead::query(), 'leads', 'owner_id', orphansVisible: true)
+                        ->where('status', Lead::STATUS_NEW)->count()) > 0 ? (string) $new : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('leads.view')),
+                NavigationItem::make('Сделки')
+                    ->url('/admin/python?next=/py/admin/crm/deal/')
+                    ->icon('heroicon-o-briefcase')
+                    ->group('CRM')
+                    ->sort(2)
+                    ->visible(fn (): bool => AdminAccess::allows('deals.view')),
+                NavigationItem::make('Контакты')
+                    ->url('/admin/python?next=/py/admin/crm/contact/')
+                    ->icon('heroicon-o-users')
+                    ->group('CRM')
+                    ->sort(3)
+                    ->visible(fn (): bool => AdminAccess::allows('contacts.view')),
+                NavigationItem::make('Задачи')
+                    ->url('/admin/python?next=/py/admin/crm/task/')
+                    ->icon('heroicon-o-check-circle')
+                    ->group('CRM')
+                    ->sort(4)
+                    // Счётчик — просроченные: срок, который уже прошёл, сам
+                    // о себе не напомнит. По исполнителю, как в списке
+                    ->badge(fn (): ?string => ($overdue = AdminScope::apply(Task::query(), 'tasks', 'assignee_id')
+                        ->open()->whereNotNull('due_at')->where('due_at', '<', now())->count()) > 0 ? (string) $overdue : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('tasks.view')),
+                NavigationItem::make('Коммуникации')
+                    ->url('/admin/python?next=/py/admin/crm/communication/')
+                    ->icon('heroicon-o-phone-arrow-up-right')
+                    ->group('CRM')
+                    ->sort(5)
+                    ->visible(fn (): bool => AdminAccess::allows('communications.view')),
                 NavigationItem::make('Главная страница')
                     ->url('/admin/python?next=/py/admin/site/landingblock/')
                     ->icon('heroicon-o-home')
@@ -149,6 +192,16 @@ class AdminPanelProvider extends PanelProvider
                     // Значок считает висящие сейчас, а не все заведённые
                     ->badge(fn (): ?string => ($live = Banner::query()->live()->count()) > 0 ? (string) $live : null)
                     ->visible(fn (): bool => AdminAccess::allows('content.view')),
+                // Тот же поиск и те же действия, что у фильтра «Отключённые»
+                // в «Пользователях», — раздел на Python (savdex/accounts)
+                NavigationItem::make('Отключённые аккаунты')
+                    ->url('/admin/python?next=/py/admin/accounts/user/%3Fstate%3Ddisabled')
+                    ->icon('heroicon-o-user-minus')
+                    ->group('Система')
+                    // После «Пользователей» (1): при равном порядке пункт
+                    // меню идёт раньше раздела «Рассылки» (2)
+                    ->sort(2)
+                    ->visible(fn (): bool => AdminAccess::allows('users.view')),
                 NavigationItem::make('Настройки')
                     ->url('/admin/python?next=/py/admin/site/setting/')
                     ->icon('heroicon-o-adjustments-horizontal')

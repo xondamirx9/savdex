@@ -73,7 +73,7 @@ def _date_attribute(value: Any) -> str | None:  # noqa: ANN401
 @form()
 def store(request: HttpRequest) -> HttpResponse:
     """CompanyFileController::store (throttle:20,60)."""
-    ctx = action(request, throttle=20, throttle_minutes=60)
+    ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="company-file")
     company = company_of(ctx)
 
     if company is None:

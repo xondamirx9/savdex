@@ -172,6 +172,8 @@ class Store:
     root: str = ""
     #: Форма отклонена по токену CSRF (419) — без куки XSRF-TOKEN
     csrf_refused: bool = False
+    #: Cookie::queue: (имя, значение или None — забыть, минуты жизни)
+    queued: list[tuple[str, str | None, int]] = field(default_factory=list)
 
     def get(self, key: str, default: Any = None) -> Any:  # noqa: ANN401
         return arr_get(self.data, key, default)
@@ -213,6 +215,15 @@ class Store:
 
         self.exists = False
         self.id = random_string()
+
+    def regenerate_token(self) -> None:
+        """Store::regenerateToken."""
+        self.data["_token"] = random_string()
+
+    def invalidate(self) -> None:
+        """Store::invalidate: всё прочь, номер — новый."""
+        self.data.clear()
+        self.migrate()
 
 
 def _read(session_id: str) -> tuple[dict[str, Any], bool]:
@@ -459,6 +470,33 @@ def _set_cookie(
     )
 
 
+def _queued_cookie(
+    response: HttpResponse,
+    store: Store,
+    name: str,
+    value: str | None,
+    minutes: int,
+    key: bytes,
+) -> None:
+    """CookieJar::make и ::forget (значение null, срок в прошлом), зашифрованные."""
+    secure = _env_bool("SESSION_SECURE_COOKIE", None)
+
+    if secure is None:
+        secure = store.root.startswith("https://")
+
+    response.set_cookie(
+        name,
+        quote(laravel_session.encrypt_cookie(name, value or "", key), safe=""),
+        max_age=max(0, minutes * 60),
+        expires=None if value is not None else "Thu, 01 Jan 1970 00:00:00 GMT",
+        path=_env_str("SESSION_PATH", "/") or "/",
+        domain=_env_str("SESSION_DOMAIN", None) or None,
+        secure=secure,
+        httponly=True,
+        samesite=_same_site(_env_str("SESSION_SAME_SITE", "lax")),
+    )
+
+
 def _same_site(value: str | None) -> Literal["Lax", "Strict", "None"] | None:
     """same_site из config/session.php — так, как его понимает Django."""
     match (value or "").lower():
@@ -521,6 +559,10 @@ def finish(request: HttpRequest, response: HttpResponse) -> HttpResponse:
         _set_cookie(
             response, store, "XSRF-TOKEN", store.token, key, http_only=False, session_cookie=False
         )
+
+    # AddQueuedCookiesToResponse: «запомнить меня» и её удаление
+    for name, value, minutes in store.queued:
+        _queued_cookie(response, store, name, value, minutes, key)
 
     store.age_flash()
 

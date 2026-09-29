@@ -29,6 +29,9 @@ export default function ResetPassword({ token, email }: { token: string; email: 
                 <TextInput
                     label={t('auth.email_short_label')}
                     type="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     name="email"
                     autoComplete="email"
                     required

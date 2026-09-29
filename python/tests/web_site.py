@@ -11,6 +11,7 @@ Inertia, теги <head>.
 from __future__ import annotations
 
 import base64
+import hashlib
 import html
 import json
 import re
@@ -67,7 +68,9 @@ print(json.dumps({
         k: {"value": m.value, **{a: m[a] for a in m.keys() if m[a] not in ("", None)}}
         for k, m in r.cookies.items()
     },
-    "body": r.content.decode(),
+    # Двоичный ответ (скачивание файла) сверяется по отпечатку
+    "body": r.content.decode(errors="replace"),
+    "sha256": __import__("hashlib").sha256(r.content).hexdigest(),
 }))
 """
 
@@ -230,6 +233,7 @@ def из_laravel(
         "headers": dict(r.headers),
         "cookies": dict(_куки_ответа(r.headers.get_list("set-cookie"))),
         "body": r.text,
+        "sha256": hashlib.sha256(r.content).hexdigest(),
     }
 
 
@@ -369,9 +373,13 @@ def сверить(
     env: dict[str, str] | None = None,
     перед: Callable[[], object] | None = None,
     после: Callable[[dict[str, Any]], object] | None = None,
+    чистка: Callable[[dict[str, Any]], object] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Django, затем Laravel; статус, страница и шапка должны совпасть.
+
+    чистка — правит пропсы обеих сторон перед сравнением: то, что
+    зависит от мгновения ответа (сколько дней осталось до даты).
 
     перед — вызывается перед каждой из сторон: страницы, которые пишут
     (счётчик просмотров), иначе видели бы запись друг друга; после —
@@ -402,6 +410,11 @@ def сверить(
         return д, л
 
     стр_д, стр_л = страница(д["body"]), страница(л["body"])
+
+    if чистка is not None:
+        чистка(стр_д["props"])
+        чистка(стр_л["props"])
+
     # Словарь интерфейса у сторон общий (lang/*/ui.php) — его не трогаем
     стр_д["props"] = {
         k: v if k == "translations" else без_новых(v) for k, v in стр_д["props"].items()

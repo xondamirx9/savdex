@@ -99,7 +99,7 @@ def _plan_required(ctx: Context) -> HttpResponse:
 @form("PATCH")
 def update(request: HttpRequest) -> HttpResponse:
     """SiteController::update (throttle:60,1): адрес и оформление черновика."""
-    ctx = action(request, throttle=60)
+    ctx = action(request, throttle=60, throttle_prefix="site-update")
     company = company_of(ctx)
 
     if company is None or not _available(company):
@@ -234,7 +234,7 @@ def _replace_hero(ctx: Context, site: dict[str, Any], path: str | None) -> None:
 @form()
 def upload_hero(request: HttpRequest) -> HttpResponse:
     """SiteController::uploadHero (throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="site-hero")
     company = company_of(ctx)
 
     if company is None or not _available(company):
@@ -371,7 +371,7 @@ def _attach(company_id: int, product: dict[str, Any], image: Any) -> dict[str, A
 @form()
 def product_store(request: HttpRequest) -> HttpResponse:
     """SiteProductController::store (throttle:60,60)."""
-    ctx = action(request, throttle=60, throttle_minutes=60)
+    ctx = action(request, throttle=60, throttle_minutes=60, throttle_prefix="site-product")
     company = _product_company(ctx)
 
     if company is None:
@@ -417,7 +417,7 @@ def product_store(request: HttpRequest) -> HttpResponse:
 @form()
 def product_update(request: HttpRequest, product_id: str) -> HttpResponse:
     """SiteProductController::update (throttle:60,60): правка — POST, фото в той же форме."""
-    ctx = action(request, throttle=60, throttle_minutes=60)
+    ctx = action(request, throttle=60, throttle_minutes=60, throttle_prefix="site-product-update")
     company = _product_company(ctx)
 
     if company is None:

@@ -140,6 +140,8 @@ INSTALLED_APPS = [
     "savdex.billing.apps.BillingConfig",
     "savdex.site.apps.SiteConfig",
     "savdex.tenders.apps.TendersConfig",
+    "savdex.accounts.apps.AccountsConfig",
+    "savdex.crm.apps.CrmConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -160,6 +162,8 @@ MIDDLEWARE = [
     "savdex.visitor.VisitorMiddleware",
     # Сессия Laravel, начатая страницей сайта, — сохранить (этап 5)
     "savdex.web.session.SessionMiddleware",
+    # Домен мини-сайтов: сам сайт на поддомене, остальное — 404 (этап 5)
+    "savdex.web.microsite.HostMiddleware",
 ]
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"

@@ -25,6 +25,7 @@ from django.http import HttpRequest, HttpResponse
 from savdex import audit
 from savdex.guards import allowed_writes
 from savdex.web import eloquent
+from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.catalog import bump_daily
@@ -73,31 +74,6 @@ def _existing(company_id: int, target_id: int) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-def _spend_credit(wallet_id: int, user_id: int, target: dict[str, Any]) -> bool:
-    """Wallet::spend('credits', 1, 'unlock', $target, $userId): условное списание и история."""
-    now = _stamp(eloquent.now())
-
-    with allowed_writes("wallets", "wallet_transactions"), connection.cursor() as cursor:
-        cursor.execute(
-            "update wallets set credits = credits - 1, updated_at = %s "
-            "where id = %s and credits >= 1",
-            [now, wallet_id],
-        )
-
-        if cursor.rowcount == 0:
-            return False
-
-        fresh = _rows("select company_id, credits from wallets where id = %s", [wallet_id])[0]
-        cursor.execute(
-            "insert into wallet_transactions (company_id, user_id, kind, amount, "
-            "balance_after, reason, subject_type, subject_id, updated_at, created_at) "
-            "values (%s, %s, 'credits', -1, %s, 'unlock', 'App\\Models\\Company', %s, %s, %s)",
-            [fresh["company_id"], user_id, fresh["credits"], target["id"], now, now],
-        )
-
-    return True
-
-
 def _charge(
     ctx: Context,
     company: dict[str, Any],
@@ -132,7 +108,9 @@ def _charge(
 
             spent = 0
         else:
-            if not _spend_credit(wallet["id"], ctx.user["id"], target):
+            if not wallet_store.spend(
+                wallet["id"], "credits", 1, "unlock", ("Company", target["id"]), ctx.user["id"]
+            ):
                 return None
 
             spent = 1
@@ -280,7 +258,7 @@ def _unlock(
 @form()
 def unlock(request: HttpRequest, slug: str) -> HttpResponse:
     """ContactUnlockController::store (verified, throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="unlock")
 
     if (refused := _unverified(ctx)) is not None:
         return refused

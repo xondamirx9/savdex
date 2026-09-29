@@ -15,7 +15,9 @@ users).
 
 from __future__ import annotations
 
+import json
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -42,8 +44,68 @@ FAKE_TINS = ("123456789", "987654321", "123123123")
 CASTS = {"is_it_provider": "bool", "it_specializations": "json", "founded_year": "int"}
 
 
-def _tin(ctx: Context, country: str | None, messages: list[str]) -> Check:
-    """App\\Rules\\Tin (не для физлица): текст ошибки — свой у каждого случая."""
+#: Company::PROFILE_FIELDS — сведения, которые меняются раз в полгода
+PROFILE_FIELDS = (
+    "name",
+    "legal_name",
+    "tin",
+    "country_id",
+    "city_id",
+    "address",
+    "employees_range",
+    "founded_year",
+    "type",
+    "description",
+    "is_it_provider",
+    "it_specializations",
+)
+
+
+def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
+    """Company::profileValue: пустое — None, список — отсортирован, флаг «нет» — пусто."""
+    if field == "is_it_provider":
+        truthy = ("1", "true", "on", "yes")
+        on = value if isinstance(value, bool) else str(value).strip().lower() in truthy
+
+        return "1" if on else None
+
+    if field == "it_specializations":
+        if isinstance(value, str):
+            value = json.loads(value) if value.strip() else []
+
+        items = sorted(str(v) for v in (value or []) if v not in (None, ""))
+
+        return ",".join(items) if items else None
+
+    text = "" if value is None else str(value).strip()
+
+    return text or None
+
+
+def changed_profile_fields(company: dict[str, Any], data: dict[str, Any]) -> list[str]:
+    """Company::changedProfileFields: какие из заполненных сведений запрос меняет."""
+    changed = []
+
+    for field in PROFILE_FIELDS:
+        if field not in data:
+            continue
+
+        current = _profile_value(field, company.get(field))
+
+        if current is None:
+            continue
+
+        if current != _profile_value(field, data[field]):
+            changed.append(field)
+
+    return changed
+
+
+def _tin(ctx: Context, country: str | None, messages: list[str], *, person: bool = False) -> Check:
+    """
+    App\\Rules\\Tin: текст ошибки — свой у каждого случая. Физлицу и
+    фрилансеру в Узбекистане годится и ПИНФЛ (14 цифр).
+    """
 
     def passes(value: Any) -> bool:  # noqa: ANN401
         tin = "" if value is None else str(value)
@@ -59,8 +121,13 @@ def _tin(ctx: Context, country: str | None, messages: list[str]) -> Check:
             return False
 
         if country in (None, "uz"):
+            if person and len(tin) == 14:
+                return True
+
             if len(tin) != 9:
-                messages.append(ctx.t("messages.tin.uz_length"))
+                messages.append(
+                    ctx.t("messages.tin.uz_person_length" if person else "messages.tin.uz_length")
+                )
 
                 return False
 
@@ -183,6 +250,13 @@ def update(request: HttpRequest) -> HttpResponse:
 
     fields = validated(data, rules)
 
+    # Заполненные сведения здесь не меняются — только из настроек
+    # профиля и раз в полгода (CompanyInfoController у Laravel)
+    locked = changed_profile_fields(company, fields) if company is not None else []
+
+    if locked:
+        return invalid(ctx, {f: [ctx.t("messages.company.change_in_settings")] for f in locked})
+
     if company is None:
         _create(ctx, fields)
         flash(ctx, "success", ctx.t("messages.company.created"))
@@ -204,8 +278,16 @@ def update(request: HttpRequest) -> HttpResponse:
     return back(ctx)
 
 
-def _create(ctx: Context, fields: dict[str, Any]) -> None:
-    """Company::create([...$data, 'status' => 'active']), затем владелец — пользователь."""
+def _create(
+    ctx: Context,
+    fields: dict[str, Any],
+    before_owner: Callable[[int], None] | None = None,
+) -> int:
+    """
+    Company::create([...$data, 'status' => 'active']), затем владелец —
+    пользователь; before_owner — то, что контроллер делает между ними
+    (направления второго шага регистрации). Итог — номер компании.
+    """
     assert ctx.user is not None
     row: dict[str, Any] = {**fields, "status": "active"}
     row.update(_search_text(row))
@@ -227,6 +309,9 @@ def _create(ctx: Context, fields: dict[str, Any]) -> None:
     after = {c: eloquent._written(CASTS.get(c), v) for c, v in row.items()}
     eloquent.journal(ctx, "created", "companies", "Company", row, {"after": after})
 
+    if before_owner is not None:
+        before_owner(company_id)
+
     user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
     eloquent.save(
         ctx,
@@ -236,6 +321,8 @@ def _create(ctx: Context, fields: dict[str, Any]) -> None:
         section="users",
         model="User",
     )
+
+    return int(company_id)
 
 
 def page(request: HttpRequest) -> HttpResponse:
@@ -255,7 +342,7 @@ def _upload(request: HttpRequest, field: str, size: Any, saved: str) -> HttpResp
     """CompanyProfileController::uploadLogo / uploadCover (throttle:30,60)."""
     from savdex.web import image_store
 
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix=f"company-{field}")
     company = company_of(ctx)
 
     if company is None:

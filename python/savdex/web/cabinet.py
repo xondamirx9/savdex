@@ -127,7 +127,8 @@ def _require_password_change(ctx: Context) -> HttpResponse | None:
     match = ctx.request.resolver_match
     name = (match.url_name if match is not None else None) or ""
 
-    if name == "password.forced" or name.startswith("verification."):
+    # RequirePasswordChange::ALLOWED
+    if name in ("password.forced", "logout", "locale.update") or name.startswith("verification."):
         return None
 
     store = _store(ctx)

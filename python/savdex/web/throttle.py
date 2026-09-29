@@ -5,9 +5,11 @@ RateLimiter), с общим счётчиком.
 Laravel считает запросы одного посетителя в файловом кэше (на боевом
 CACHE_STORE=file, та же служба): ключ — sha1 номера пользователя или,
 у гостя, sha1(«домен маршрута|IP»). Маршрут в ключ не входит, так что
-у всех адресов с throttle счётчик один — и у Django тоже должен быть
-тот же, иначе половина сайта на Django удваивала бы лимит. Django
-пишет те же файлы тем же форматом (laravel_cache).
+у адресов с throttle без приставки счётчик один — и у Django тоже должен
+быть тот же, иначе половина сайта на Django удваивала бы лимит. У форм
+кабинета и входа приставка своя (throttle:N,M,prefix, forms.action) —
+ключ «приставка + подпись», счётчик у каждого действия отдельный.
+Django пишет те же файлы тем же форматом (laravel_cache).
 
 Порядок, как у ThrottleRequests::handleRequest: сначала проверка
 «слишком много» (тогда 429 без засчитывания), потом засчитать, потом
@@ -73,10 +75,14 @@ def hit(key: str, decay: int = DECAY_SECONDS) -> int:
 
 
 def throttled(
-    request: HttpRequest, max_attempts: int, view: Callable[[Context], HttpResponse]
+    request: HttpRequest,
+    max_attempts: int,
+    view: Callable[[Context], HttpResponse],
+    domain: str = "",
 ) -> HttpResponse:
     """
-    throttle:max,1 вокруг страницы.
+    throttle:max,1 вокруг страницы; domain — домен маршрута как он
+    записан (Route::domain, с «{subdomain}»), у гостя он входит в ключ.
 
     У Laravel throttle стоит раньше SetLocale и HandleInertiaRequests:
     отказ 429 не уводит на запомненный язык, а страница ошибки собрана
@@ -95,7 +101,7 @@ def throttled(
 
         return ctx if isinstance(ctx, HttpResponse) else view(ctx)
 
-    key = signature(first)
+    key = signature(first, domain)
 
     if too_many(key, max_attempts):
         bare = replace(first, locale=first.url_locale or locales.DEFAULT)

@@ -23,13 +23,18 @@ use Inertia\Response;
  * полей в форме регистрации заметно снижают долю дошедших до конца.
  * Здесь же есть «заполнить позже» — аккаунт уже создан, и терять
  * человека из-за незаполненного ИНН нельзя.
+ *
+ * Юрлицо приходит сюда с уже заведённой компанией: название, ИНН
+ * и категории указаны при регистрации, шаг дополняет её типом,
+ * страной, городом и ролью. Физлицо и фрилансер этот шаг не проходят.
+ * Полная форма (с названием и ИНН) осталась для аккаунтов, заведённых
+ * до этого порядка и пропустивших шаг, — у них компании ещё нет.
  */
 class OnboardingController extends Controller
 {
     public function company(Request $request): RedirectResponse|Response
     {
-        // Компания уже есть — шаг пройден, повторять его незачем
-        if ($request->user()->company_id !== null) {
+        if (! self::stepOpen($request)) {
             return redirect()->route('cabinet');
         }
 
@@ -54,6 +59,9 @@ class OnboardingController extends Controller
             'accountType' => self::accountType($request),
             'personName' => $request->user()->name,
 
+            // Компания заведена при регистрации — спрашиваем только недостающее
+            'completing' => $request->user()->company_id !== null,
+
             /*
              * Направления раздела «Услуги» — для блока, который
              * появляется при выборе типа компании «Услуги»: эйчар,
@@ -71,8 +79,12 @@ class OnboardingController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        if ($request->user()->company_id !== null) {
+        if (! self::stepOpen($request)) {
             return redirect()->route('cabinet');
+        }
+
+        if ($request->user()->company !== null) {
+            return $this->complete($request, $request->user()->company);
         }
 
         $form = self::accountType($request);
@@ -125,6 +137,60 @@ class OnboardingController extends Controller
 
         return redirect()->route('verification.notice')
             ->with('success', __('ui.messages.company.created_onboarding'));
+    }
+
+    /**
+     * Дополнить компанию, заведённую при регистрации юрлица.
+     *
+     * Название, ИНН и категории уже указаны — здесь тип, страна, город
+     * и роль. Направления услуг (при типе «Услуги») добавляются к уже
+     * выбранным категориям, общий предел — пять.
+     */
+    private function complete(Request $request, Company $company): RedirectResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'string', 'max:30'],
+            'country_id' => ['required', 'exists:countries,id'],
+            'city_id' => ['required', 'exists:cities,id'],
+            'primary_role' => ['required', 'in:supplier,buyer,both'],
+            'categories' => ['array', 'max:5'],
+            'categories.*' => ['integer', 'exists:categories,id'],
+            'custom_category' => ['nullable', 'string', 'max:80'],
+        ], [
+            'type.required' => __('ui.messages.company.type_required'),
+            'country_id.required' => __('ui.messages.company.country_required'),
+            'city_id.required' => __('ui.messages.company.city_required'),
+            'categories.max' => __('ui.messages.company.categories_max'),
+        ]);
+
+        $company->update([
+            'type' => $data['type'],
+            'country_id' => $data['country_id'],
+            'city_id' => $data['city_id'],
+            'primary_role' => $data['primary_role'],
+            'custom_category' => $data['custom_category'] ?? $company->custom_category,
+        ]);
+
+        $categories = array_values(array_unique([
+            ...$company->categories()->pluck('categories.id')->all(),
+            ...array_map('intval', $data['categories'] ?? []),
+        ]));
+        $company->categories()->sync(array_slice($categories, 0, 5));
+
+        return redirect()->route('verification.notice')
+            ->with('success', __('ui.messages.company.created_onboarding'));
+    }
+
+    /**
+     * Нужен ли шаг: компании ещё нет (старые аккаунты) или юрлицо
+     * не дополнило заведённую при регистрации — у неё нет города.
+     */
+    private static function stepOpen(Request $request): bool
+    {
+        $company = $request->user()->company;
+
+        return $company === null
+            || ($company->legal_form === Company::LEGAL_ENTITY && $company->city_id === null);
     }
 
     /** Выбор с первого шага регистрации; неизвестное значение — юрлицо. */

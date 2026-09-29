@@ -94,6 +94,20 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Этап 2: главная страница. Правятся тексты, вопросы и видимость
         # секций, порядок — как в макете; языки — как у страниц
         "landing_blocks",
+        # Этап 6: контакты CRM. Кроме раздела админки в таблицу никто не
+        # пишет; SoftDeletes и «кто завёл» — в savdex/crm, раздел Filament
+        # убран
+        "crm_contacts",
+        # Этап 6: лиды и сделки — вместе («В сделку» пишет в обе). Правило
+        # Deal::saving (дата закрытия) — в savdex/crm/models.py, разделы
+        # Filament убраны, виджет «Лиды в работе» только читает
+        "crm_leads",
+        "crm_deals",
+        # Этап 6: задачи и коммуникации. Разделы Filament убраны, виджет
+        # «Задачи на сегодня» и счётчик просроченных у пункта меню только
+        # читают; запись разговора удаляется насовсем (DELETE)
+        "crm_tasks",
+        "crm_communications",
     }
 )
 
@@ -123,7 +137,43 @@ SHARED_WRITES: dict[str, str] = {
         "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
         "форма) — имя, телефон, язык и сброс подтверждения телефона; "
         "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
-        "новая компания — company_id и company_role владельца"
+        "новая компания — company_id и company_role владельца; раздел "
+        "«Пользователи» админки Django (savdex/accounts) — отключение и "
+        "восстановление, как SoftDeletes: только deleted_at и updated_at; "
+        "удаление навсегда — только отключённого, delete по id (связанные "
+        "строки база правит сама по внешним ключам). Журнал — строкой "
+        "admin_actions, как AuditObserver"
+        "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
+        "без меток времени, метка последнего входа, как SessionGuard; "
+        "регистрация — новая учётка, как RegisteredUserController::store"
+        "; пароль и почта (шаг 46) — новый пароль, снятие must_change_password, "
+        "email_verified_at; удаление учётки (шаг 47) — мягкое, deleted_at и "
+        "updated_at после выхода, как SoftDeletes; привязка Telegram вебхуком "
+        "бота (шаг 49) — telegram_chat_id, telegram_username, telegram_linked_at"
+    ),
+    "login_attempts": (
+        "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
+        "по почте и IP, как LoginThrottle"
+    ),
+    "support_tickets": (
+        "обращение владельца о смене данных компании (этап 5, шаг 51): новое "
+        "обращение, как CompanyInfoController::support (Ticket::saving — без "
+        "даты закрытия); у администратора — строка журнала"
+    ),
+    "support_messages": ("первое сообщение того же обращения (этап 5, шаг 51) — вставка"),
+    "company_category": (
+        "направления компании со второго шага регистрации (этап 5, шаг 47): "
+        "categories()->sync у только что созданной компании — одна вставка, "
+        "без меток времени (связь без withTimestamps)"
+    ),
+    "platform_reviews": (
+        "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
+        "как PlatformReviewService::save; у модели нет событий и журнала"
+    ),
+    "password_reset_tokens": (
+        "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
+        "прочь, новый хешем bcrypt; после смены пароля строка удаляется, "
+        "как DatabaseTokenRepository"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
@@ -168,10 +218,13 @@ SHARED_WRITES: dict[str, str] = {
         "как $task->increment('responses_count'), с той же строкой журнала; "
         "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
         "search_text и удаление, как ItTaskController, с журналом администратора"
+        "; новая задача и правка (этап 5, шаг 43) — insert и поля формы, адрес "
+        "из заголовка (событие created), как ItTaskController::store и ::update"
     ),
     "it_task_files": (
         "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
         "с диска, как ItTaskController::destroyFile; событий у модели нет"
+        "; загрузка с задачей (этап 5, шаг 43) — insert, как storeFiles"
     ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
@@ -195,6 +248,8 @@ SHARED_WRITES: dict[str, str] = {
         "формы, статус, сроки, адрес, как ListingWizardController"
         "; раскрытие контактов (этап 5, шаг 40) — +1 к unlocks_count и "
         "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
+        "; удаление учётки владельцем (этап 5, шаг 47) — активные объявления "
+        "компании в архив одним update, без событий, как activeListings()->update"
     ),
     "listing_stats": (
         "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
@@ -257,10 +312,15 @@ SHARED_WRITES: dict[str, str] = {
         "; раскрытие контактов (этап 5, шаг 40) — под блокировкой строки "
         "contacts_used_this_period + 1 или условное списание кредита, как "
         "ContactUnlockService::charge и Wallet::spend"
+        "; продвижение (этап 5, шаг 44) — условное списание единиц, Wallet::spend"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
         "удаление, как CompanyFileController; у администратора — строка журнала"
+    ),
+    "promotions": (
+        "продвижение объявления за единицы (этап 5, шаг 44): новая строка "
+        "с active_key, как PromotionController::store и событие saving"
     ),
     "wallet_transactions": (
         "история кошелька (этап 5, шаг 40): строка списания кредита за "
@@ -270,6 +330,8 @@ SHARED_WRITES: dict[str, str] = {
         "профиль своей компании (этап 5, форма): правка полей формы и "
         "search_text, новая компания с адресом из названия, как "
         "CompanyProfileController::update; журнал администратора — как AuditObserver"
+        "; данные компании в настройках (шаг 51) — те же поля и profile_changed_at "
+        "при смене заполненного, как CompanyInfoController::update"
         "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
     ),
     "company_site_products": (
@@ -298,6 +360,27 @@ SHARED_WRITES: dict[str, str] = {
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
         "только delete по ключу — то же, что Cache::forget(), когда кэш "
         "лежит в базе. На боевом кэш в файлах, и таблицу это не трогает"
+    ),
+    # Этап 7 (деньги). Хозяин таблиц — Laravel, пока месяц сверки не
+    # пройдёт без расхождений; Django пишет только формы кассы
+    "subscriptions": (
+        "автопродление в кассе кабинета (этап 7, шаг 53): отмена — auto_renew "
+        "и cancelled_at, включение — только у оплаченной подписки; updated_at, "
+        "у администратора — строка журнала, как AuditObserver"
+    ),
+    "payment_methods": (
+        "отвязка карты в кассе кабинета (этап 7, шаг 53): delete своей карты, "
+        "основную при автопродлении — нельзя; событий и журнала у модели нет"
+    ),
+    "payments": (
+        "отказ от неоплаченного счёта (этап 7, шаг 53), как OrderService::cancel: "
+        "status failed, confirmed_by и admin_note, updated_at; строка остаётся; "
+        "у администратора — строка журнала"
+    ),
+    "promo_codes": (
+        "возврат скидочного кода отменённого счёта (этап 7, шаг 53), как "
+        "OrderService::cancel: used_at, used_by_company_id, used_by_user_id и "
+        "updated_at — только если код не сработал и живой карточной транзакции нет"
     ),
 }
 
