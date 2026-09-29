@@ -6,7 +6,6 @@ namespace Tests\Feature\Finance;
 
 use App\Filament\Pages\FinanceOperations;
 use App\Filament\Pages\Roles;
-use App\Filament\Resources\AdminActions\Pages\ListAdminActions;
 use App\Filament\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Company;
 use App\Models\Crm\Communication;
@@ -49,7 +48,6 @@ class RenderTest extends TestCase
     public static function страницы(): array
     {
         return [
-            'журнал действий' => [ListAdminActions::class],
             'роли и права' => [Roles::class],
             'возвраты' => [ListRefunds::class],
             'финансовые операции' => [FinanceOperations::class],

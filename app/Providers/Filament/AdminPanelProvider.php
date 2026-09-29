@@ -217,6 +217,12 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Система')
                     ->sort(3)
                     ->visible(fn (): bool => AdminAccess::allows('settings.view')),
+                NavigationItem::make('Журнал действий')
+                    ->url('/admin/python?next=/py/admin/journal/adminaction/')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->group('Система')
+                    ->sort(4)
+                    ->visible(fn (): bool => AdminAccess::allows('audit.view')),
                 NavigationItem::make('Тарифы')
                     ->url('/admin/python?next=/py/admin/billing/plan/')
                     ->icon('heroicon-o-currency-dollar')
