@@ -8,6 +8,7 @@ import {
     Globe,
     Heart,
     LayoutDashboard,
+    LayoutGrid,
     LogOut,
     Megaphone,
     Menu,
@@ -90,10 +91,12 @@ function menu(): MenuItem[] {
             // страницы направлений — тоже часть раздела
             match: (path) =>
                 path.startsWith(routes.itTasks) || path.startsWith('/resume') || path.startsWith('/services/'),
-            // Направления — каждое со своей страницей; последним — общая лента
+            // Направления — каждое со своей страницей; последним — общая лента.
+            // У ленты тоже значок: без него она выпадала из столбика
+            // и читалась подписью, а не пунктом меню
             children: [
                 ...servicePages().map(({ href, label, Icon }) => ({ href, label, Icon })),
-                { href: routes.itTasks, label: t('service_pages.menu_all') },
+                { href: routes.itTasks, label: t('service_pages.menu_all'), Icon: LayoutGrid },
             ],
         },
         {
