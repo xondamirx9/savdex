@@ -222,6 +222,12 @@ urlpatterns = [
         unlock_actions.unlock,
         name="companies.unlock",
     ),
+    # Отзыв о компании на визитке (этап 5, шаг 41): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)/review$",
+        review_actions.store,
+        name="companies.review",
+    ),
     # Фото объявления (этап 5, шаг 37): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images$",
