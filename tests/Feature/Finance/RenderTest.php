@@ -8,7 +8,6 @@ use App\Filament\Pages\FinanceOperations;
 use App\Filament\Pages\Roles;
 use App\Filament\Resources\AdminActions\Pages\ListAdminActions;
 use App\Filament\Resources\Communications\Pages\ListCommunications;
-use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Deals\Pages\ListDeals;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Resources\Refunds\Pages\ListRefunds;
@@ -59,7 +58,6 @@ class RenderTest extends TestCase
             'роли и права' => [Roles::class],
             'лиды' => [ListLeads::class],
             'сделки' => [ListDeals::class],
-            'контакты' => [ListContacts::class],
             'задачи' => [ListTasks::class],
             'коммуникации' => [ListCommunications::class],
             'обращения' => [ListTickets::class],
