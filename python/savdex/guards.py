@@ -98,6 +98,16 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # пишет; SoftDeletes и «кто завёл» — в savdex/crm, раздел Filament
         # убран
         "crm_contacts",
+        # Этап 6: лиды и сделки — вместе («В сделку» пишет в обе). Правило
+        # Deal::saving (дата закрытия) — в savdex/crm/models.py, разделы
+        # Filament убраны, виджет «Лиды в работе» только читает
+        "crm_leads",
+        "crm_deals",
+        # Этап 6: задачи и коммуникации. Разделы Filament убраны, виджет
+        # «Задачи на сегодня» и счётчик просроченных у пункта меню только
+        # читают; запись разговора удаляется насовсем (DELETE)
+        "crm_tasks",
+        "crm_communications",
     }
 )
 

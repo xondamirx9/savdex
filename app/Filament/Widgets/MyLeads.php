@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Leads\LeadResource;
 use App\Models\Crm\Lead;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
@@ -75,7 +74,8 @@ class MyLeads extends TableWidget
                     ->state(fn (Lead $record): string => $record->created_at->diffForHumans(syntax: true))
                     ->color(fn (Lead $record): string => $record->created_at->diffInDays() >= 3 ? 'danger' : 'gray'),
             ])
-            ->recordUrl(fn (Lead $record): string => LeadResource::getUrl('edit', ['record' => $record]))
+            // Лид открывается в админке на Python — через пропуск
+            ->recordUrl(fn (Lead $record): string => '/admin/python?next='.rawurlencode("/py/admin/crm/lead/{$record->id}/change/"))
             ->emptyStateHeading('Лидов в работе нет')
             ->emptyStateDescription('Новые обращения появятся здесь сами.');
     }

@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Сделки: «Итого» по отобранным — как Sum у Filament (DealAdmin.changelist_view).
+{% endcomment %}
+{% block result_list %}
+  {% if crm_total is not None %}<p><b>Итого:</b> {{ crm_total }}</p>{% endif %}
+  {{ block.super }}
+{% endblock %}
