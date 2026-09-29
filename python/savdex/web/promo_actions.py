@@ -54,7 +54,7 @@ def _free_slot(kind: dict[str, Any], category_id: int | None) -> bool:
 @form()
 def store(request: HttpRequest) -> HttpResponse:
     """PromotionController::store (throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="promo")
     assert ctx.user is not None
     company = company_of(ctx)
 

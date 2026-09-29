@@ -104,7 +104,7 @@ def telegram_link(request: HttpRequest) -> HttpResponse:
     кэш на 15 минут — его заберёт вебхук Laravel, — и уход к боту.
     Inertia::location: запросу Inertia — 409 с X-Inertia-Location.
     """
-    ctx = action(request, throttle=10)
+    ctx = action(request, throttle=10, throttle_prefix="telegram-link")
     assert ctx.user is not None
 
     if not _telegram_configured():

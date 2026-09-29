@@ -92,7 +92,7 @@ def _files(request: HttpRequest) -> list[Any]:
 @form()
 def store(request: HttpRequest, listing_id: str) -> HttpResponse:
     """ListingImageController::store (verified, throttle:30,60)."""
-    ctx = action(request, throttle=30, throttle_minutes=60)
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="listing-image")
 
     if (refused := _unverified(ctx)) is not None:
         return refused

@@ -247,6 +247,11 @@ Route::middleware('throttle:120,1')->group(function (): void {
  * «Забыли пароль» (6 в минуту) отвечал «слишком много действий»;
  * пять — и не проходила регистрация. Со стороны это выглядело как
  * «иногда не получается зарегистрироваться».
+ *
+ * То же у действий кабинета: у каждого своя приставка. Иначе
+ * автосохранение мастера объявления (раз в 20 секунд) и просмотры
+ * страниц съедали общий счётчик, и загрузка фото (30 в час) на
+ * шаге «Фото и документы» отвечала «Слишком много действий подряд».
  */
 Route::middleware('guest')->group(function (): void {
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
@@ -338,7 +343,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites');
     Route::post('/favorites/{id}', [FavoriteController::class, 'toggle'])
         ->whereNumber('id')
-        ->middleware('throttle:60,1')
+        ->middleware('throttle:60,1,favorite')
         ->name('favorites.toggle');
 
     /*
@@ -347,7 +352,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      */
     Route::get('/reviews/new', [ReviewsController::class, 'create'])->name('reviews.create');
     Route::post('/reviews/new', [ReviewsController::class, 'store'])
-        ->middleware('throttle:10,60')
+        ->middleware('throttle:10,60,platform-review')
         ->name('reviews.store');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
@@ -369,12 +374,12 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      */
     Route::middleware('verified')->group(function (): void {
         Route::get('/cabinet/listings/create', [ListingWizardController::class, 'create'])
-            ->middleware('throttle:30,60')
+            ->middleware('throttle:30,60,listing-create')
             ->name('cabinet.listings.create');
         Route::get('/cabinet/listings/{id}/edit', [ListingWizardController::class, 'edit'])->name('cabinet.listings.edit');
         // Интерфейс сохраняет раз в 20 секунд — 60 в час с запасом
         Route::post('/cabinet/listings/{id}/autosave', [ListingWizardController::class, 'autosave'])
-            ->middleware('throttle:60,1')
+            ->middleware('throttle:60,1,listing-autosave')
             ->name('cabinet.listings.autosave');
         Route::post('/cabinet/listings/{id}/publish', [ListingWizardController::class, 'publish'])->name('cabinet.listings.publish');
 
@@ -384,7 +389,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
          * на любое разумное заполнение и отсекает перебор.
          */
         Route::post('/cabinet/listings/{id}/images', [ListingImageController::class, 'store'])
-            ->middleware('throttle:30,60')
+            ->middleware('throttle:30,60,listing-image')
             ->name('cabinet.listings.images.store');
         Route::delete('/cabinet/listings/{id}/images/{imageId}', [ListingImageController::class, 'destroy'])
             ->name('cabinet.listings.images.destroy');
@@ -396,7 +401,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::patch('/cabinet/contacts/{id}', [ContactController::class, 'update'])->name('cabinet.contacts.update');
     Route::post('/cabinet/contacts/{id}/complaint', [ContactController::class, 'complain'])->name('cabinet.contacts.complain');
     Route::get('/cabinet/contacts/export', [ContactController::class, 'export'])
-        ->middleware('throttle:10,60')
+        ->middleware('throttle:10,60,contacts-export')
         ->name('cabinet.contacts.export');
 
     Route::get('/cabinet/incoming', [IncomingController::class, 'index'])->name('cabinet.incoming');
@@ -405,7 +410,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::get('/cabinet/promo', [PromotionController::class, 'index'])->name('cabinet.promo');
     // Тратит единицы продвижения — ограничение обязательно
     Route::post('/cabinet/promo', [PromotionController::class, 'store'])
-        ->middleware('throttle:30,60')
+        ->middleware('throttle:30,60,promo')
         ->name('cabinet.promo.store');
 
     Route::get('/cabinet/reviews', [ReviewController::class, 'index'])->name('cabinet.reviews');
@@ -418,7 +423,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * и только один раз — иначе рейтинг накручивается за вечер.
      */
     Route::post('/company/{slug}/review', [ReviewController::class, 'store'])
-        ->middleware(['verified', 'throttle:20,60'])
+        ->middleware(['verified', 'throttle:20,60,company-review'])
         ->name('companies.review');
 
     /*
@@ -427,7 +432,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * контакты всей базы за минуту, пока хватает кредитов.
      */
     Route::post('/company/{slug}/unlock', [ContactUnlockController::class, 'store'])
-        ->middleware(['verified', 'throttle:30,60'])
+        ->middleware(['verified', 'throttle:30,60,unlock'])
         ->name('companies.unlock');
 
     // Контакты компании — тот самый товар, который продаётся
@@ -441,24 +446,24 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      */
     Route::get('/cabinet/site', [CabinetSiteController::class, 'edit'])->name('cabinet.site');
     Route::patch('/cabinet/site', [CabinetSiteController::class, 'update'])
-        ->middleware('throttle:60,1')
+        ->middleware('throttle:60,1,site-update')
         ->name('cabinet.site.update');
     Route::post('/cabinet/site/publish', [CabinetSiteController::class, 'publish'])->name('cabinet.site.publish');
     Route::post('/cabinet/site/unpublish', [CabinetSiteController::class, 'unpublish'])->name('cabinet.site.unpublish');
     Route::get('/cabinet/site/preview', [CabinetSiteController::class, 'preview'])->name('cabinet.site.preview');
     Route::post('/cabinet/site/hero', [CabinetSiteController::class, 'uploadHero'])
-        ->middleware('throttle:30,60')
+        ->middleware('throttle:30,60,site-hero')
         ->name('cabinet.site.hero');
     Route::delete('/cabinet/site/hero', [CabinetSiteController::class, 'removeHero'])->name('cabinet.site.hero.remove');
 
     // Товары мини-сайта. Правка — POST: с фотографией форма идёт
     // multipart, а PATCH с файлом PHP не разбирает
     Route::post('/cabinet/site/products', [SiteProductController::class, 'store'])
-        ->middleware('throttle:60,60')
+        ->middleware('throttle:60,60,site-product')
         ->name('cabinet.site.products.store');
     Route::post('/cabinet/site/products/{id}', [SiteProductController::class, 'update'])
         ->whereNumber('id')
-        ->middleware('throttle:60,60')
+        ->middleware('throttle:60,60,site-product-update')
         ->name('cabinet.site.products.update');
     Route::delete('/cabinet/site/products/{id}', [SiteProductController::class, 'destroy'])
         ->whereNumber('id')
@@ -472,20 +477,20 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * а делать multipart из каждого сохранения профиля незачем.
      */
     Route::post('/cabinet/company/logo', [CompanyProfileController::class, 'uploadLogo'])
-        ->middleware('throttle:30,60')
+        ->middleware('throttle:30,60,company-logo')
         ->name('cabinet.company.logo');
     Route::delete('/cabinet/company/logo', [CompanyProfileController::class, 'removeLogo'])
         ->name('cabinet.company.logo.remove');
 
     Route::post('/cabinet/company/cover', [CompanyProfileController::class, 'uploadCover'])
-        ->middleware('throttle:30,60')
+        ->middleware('throttle:30,60,company-cover')
         ->name('cabinet.company.cover');
     Route::delete('/cabinet/company/cover', [CompanyProfileController::class, 'removeCover'])
         ->name('cabinet.company.cover.remove');
 
     // 20 МБ на файл: без ограничения частоты диск заполняется за вечер
     Route::post('/cabinet/company/files', [CompanyFileController::class, 'store'])
-        ->middleware('throttle:20,60')
+        ->middleware('throttle:20,60,company-file')
         ->name('cabinet.company.files.store');
     Route::patch('/cabinet/company/files/{id}', [CompanyFileController::class, 'update'])->name('cabinet.company.files.update');
     Route::delete('/cabinet/company/files/{id}', [CompanyFileController::class, 'destroy'])->name('cabinet.company.files.destroy');
@@ -498,7 +503,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * тем, за кого себя выдаёт.
      */
     Route::post('/cabinet/billing/order', [BillingController::class, 'order'])
-        ->middleware(['verified', 'throttle:20,60'])
+        ->middleware(['verified', 'throttle:20,60,billing-order'])
         ->name('cabinet.billing.order');
     /*
      * Активация промокода. Ограничение частоты жёстче, чем у заказа:
@@ -506,13 +511,13 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * и десяти попыток в час хватает тому, кто читает код с листовки.
      */
     Route::post('/cabinet/billing/promo', [BillingController::class, 'promo'])
-        ->middleware(['verified', 'throttle:10,60'])
+        ->middleware(['verified', 'throttle:10,60,billing-promo'])
         ->name('cabinet.billing.promo');
     Route::post('/cabinet/billing/invoice/{id}/cancel', [BillingController::class, 'cancelInvoice'])
         ->name('cabinet.billing.invoice.cancel');
     // Онлайн-оплата выставленного счёта: увод на страницу провайдера
     Route::post('/cabinet/billing/invoice/{id}/pay', [BillingController::class, 'pay'])
-        ->middleware(['verified', 'throttle:20,60'])
+        ->middleware(['verified', 'throttle:20,60,billing-pay'])
         ->name('cabinet.billing.invoice.pay');
     // Печатная форма: браузер сам сохранит её в PDF
     Route::get('/cabinet/billing/invoice/{id}', [BillingController::class, 'invoice'])
@@ -533,14 +538,14 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
         ->name('cabinet.chats.show');
     Route::post('/cabinet/chats/{id}', [ChatController::class, 'send'])
         ->whereNumber('id')
-        ->middleware(['verified', 'throttle:60,1'])
+        ->middleware(['verified', 'throttle:60,1,chat'])
         ->name('cabinet.chats.send');
     // 60 в час: активный закупщик за утро обходит десятки объявлений,
     // и 20 откликов в час он выбирал простым усердием, а не спамом.
     // Настоящий барьер — квота откликов тарифа, она считается в базе
     Route::post('/it-services/{id}/respond', [ChatController::class, 'respondTask'])
         ->whereNumber('id')
-        ->middleware(['verified', 'throttle:60,60'])
+        ->middleware(['verified', 'throttle:60,60,task-respond'])
         ->name('it-tasks.respond');
     Route::get('/it-services/files/{id}', [ItTaskController::class, 'file'])
         ->whereNumber('id')
@@ -550,7 +555,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::get('/cabinet/it-tasks', [CabinetItTaskController::class, 'index'])->name('cabinet.it-tasks');
     Route::get('/cabinet/it-tasks/create', [CabinetItTaskController::class, 'create'])->name('cabinet.it-tasks.create');
     Route::post('/cabinet/it-tasks', [CabinetItTaskController::class, 'store'])
-        ->middleware(['verified', 'throttle:20,60'])
+        ->middleware(['verified', 'throttle:20,60,task-create'])
         ->name('cabinet.it-tasks.store');
     Route::get('/cabinet/it-tasks/{id}/edit', [CabinetItTaskController::class, 'edit'])->whereNumber('id')->name('cabinet.it-tasks.edit');
     Route::patch('/cabinet/it-tasks/{id}', [CabinetItTaskController::class, 'update'])->whereNumber('id')->name('cabinet.it-tasks.update');
@@ -563,7 +568,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
 
     Route::post('/listing/{id}/respond', [ChatController::class, 'respond'])
         ->whereNumber('id')
-        ->middleware(['verified', 'throttle:60,60'])
+        ->middleware(['verified', 'throttle:60,60,listing-respond'])
         ->name('listing.respond');
 
     Route::get('/cabinet/settings', [SettingsController::class, 'index'])->name('cabinet.settings');
@@ -578,10 +583,10 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      */
     Route::get('/cabinet/settings/company-info', [CompanyInfoController::class, 'show'])->name('cabinet.settings.company');
     Route::patch('/cabinet/settings/company-info', [CompanyInfoController::class, 'update'])
-        ->middleware('throttle:20,1')
+        ->middleware('throttle:20,1,company-info')
         ->name('cabinet.settings.company.update');
     Route::post('/cabinet/settings/company-info/support', [CompanyInfoController::class, 'support'])
-        ->middleware('throttle:5,60')
+        ->middleware('throttle:5,60,company-info-support')
         ->name('cabinet.settings.company.support');
 
     /*
@@ -593,7 +598,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
     Route::post('/cabinet/resume/publish', [ResumeController::class, 'publish'])->name('cabinet.resume.publish');
     Route::post('/cabinet/resume/hide', [ResumeController::class, 'hide'])->name('cabinet.resume.hide');
     Route::post('/cabinet/resume/photo', [ResumeController::class, 'photo'])
-        ->middleware('throttle:30,60')
+        ->middleware('throttle:30,60,resume-photo')
         ->name('cabinet.resume.photo');
     Route::delete('/cabinet/resume', [ResumeController::class, 'destroy'])->name('cabinet.resume.destroy');
 
@@ -602,7 +607,7 @@ Route::middleware(['auth', RequirePasswordChange::class])->group(function (): vo
      * пароля тому, кто потерял доступ к рабочей почте.
      */
     Route::post('/cabinet/settings/telegram', [TelegramLinkController::class, 'store'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:10,1,telegram-link')
         ->name('cabinet.settings.telegram');
     Route::delete('/cabinet/settings/telegram', [TelegramLinkController::class, 'destroy'])
         ->name('cabinet.settings.telegram.destroy');

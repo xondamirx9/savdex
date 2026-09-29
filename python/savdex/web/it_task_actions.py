@@ -380,7 +380,7 @@ def _store_files(task_id: int, files: list[Any]) -> None:
 @form()
 def store(request: HttpRequest) -> HttpResponse:
     """ItTaskController::store (verified, throttle:20,60): сразу на витрину."""
-    ctx = action(request, throttle=20, throttle_minutes=60)
+    ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="task-create")
 
     if (refused := _unverified(ctx)) is not None:
         return refused
