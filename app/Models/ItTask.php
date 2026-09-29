@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -151,17 +152,31 @@ class ItTask extends Model
      * Дерево направлений для панели фильтра — общее для ленты услуг
      * и раздела «Резюме», который стоит внутри HR-услуг.
      *
-     * @return list<array{code: string, label: string, children: list<array{code: string, label: string}>}>
+     * $counts — число записей по видам (service_type → сколько).
+     * У направления считается сумма по его видам: «IT-услуги» должны
+     * показывать столько, сколько откроется при выборе, а не ноль
+     * оттого, что такого кода в колонке не бывает. Без счётчиков ключ
+     * count не появляется вовсе: у резюме своих чисел нет, и рисовать
+     * им нули незачем.
+     *
+     * @param  Collection<string, int>|null  $counts
+     * @return list<array<string, mixed>>
      */
-    public static function sectionTree(): array
+    public static function sectionTree(?Collection $counts = null): array
     {
-        return array_map(fn (string $code): array => [
-            'code' => $code,
-            'label' => __('ui.it_tasks.types.'.$code),
-            'children' => array_map(fn (string $child): array => [
-                'code' => $child,
-                'label' => __('ui.it_tasks.types.'.$child),
-            ], self::SERVICE_SECTIONS[$code]),
+        $node = function (string $code) use ($counts): array {
+            $node = ['code' => $code, 'label' => __('ui.it_tasks.types.'.$code)];
+
+            if ($counts !== null) {
+                $node['count'] = (int) collect(self::typesUnder($code))
+                    ->sum(fn (string $kind): int => (int) ($counts[$kind] ?? 0));
+            }
+
+            return $node;
+        };
+
+        return array_map(fn (string $code): array => $node($code) + [
+            'children' => array_map($node, self::SERVICE_SECTIONS[$code]),
         ], array_keys(self::SERVICE_SECTIONS));
     }
 
