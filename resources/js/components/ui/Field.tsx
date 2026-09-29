@@ -106,6 +106,16 @@ export function PasswordInput({ label, error, hint, required, ...rest }: TextInp
                         {...rest}
                         required={required}
                         type={visible ? 'text' : 'password'}
+                        /*
+                         * Показанный пароль — обычное текстовое поле, и клавиатура
+                         * телефона начинала его «исправлять»: заглавная первая
+                         * буква, автозамена, пробел после подсказки. При
+                         * регистрации сохранялся не тот пароль, что человек
+                         * набирал, и потом вход отвечал «неверный пароль».
+                         */
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className={cn(attrs.className, 'pr-12')}
                     />
                     <button
