@@ -6,12 +6,8 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Pages\Complaints;
 use App\Filament\Pages\Invoices;
-use App\Filament\Resources\Broadcasts\BroadcastResource;
-use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Listings\ListingResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
-use App\Filament\Resources\Users\UserResource;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Facades\Filament;
@@ -37,14 +33,10 @@ class AdminAccessTest extends TestCase
 
     /** Все разделы панели, у которых есть экран. */
     private const ALL = [
-        UserResource::class,
-        CompanyResource::class,
-        ListingResource::class,
         Complaints::class,
         Invoices::class,
         SubscriptionResource::class,
         PromoCodeResource::class,
-        BroadcastResource::class,
     ];
 
     private function admin(string $role): User
@@ -67,43 +59,32 @@ class AdminAccessTest extends TestCase
             'суперадмин' => [AdminAccess::SUPERADMIN, self::ALL],
 
             'администратор' => [AdminAccess::ADMIN, [
-                UserResource::class, CompanyResource::class, ListingResource::class,
                 Complaints::class,
-                BroadcastResource::class,
             ]],
 
             'продажи' => [AdminAccess::SALES, [
-                CompanyResource::class, ListingResource::class,
                 PromoCodeResource::class,
             ]],
 
-            'менеджер поставщиков' => [AdminAccess::SUPPLIER_MANAGER, [
-                CompanyResource::class, ListingResource::class,
-            ]],
+            'менеджер поставщиков' => [AdminAccess::SUPPLIER_MANAGER, []],
 
-            'менеджер покупателей' => [AdminAccess::BUYER_MANAGER, [
-                CompanyResource::class, ListingResource::class,
-            ]],
+            'менеджер покупателей' => [AdminAccess::BUYER_MANAGER, []],
 
             'модератор' => [AdminAccess::MODERATOR, [
-                CompanyResource::class, ListingResource::class,
                 Complaints::class,
             ]],
 
             'финансы' => [AdminAccess::FINANCE, [
-                CompanyResource::class, Invoices::class, SubscriptionResource::class,
+                Invoices::class, SubscriptionResource::class,
                 PromoCodeResource::class,
             ]],
 
             'поддержка' => [AdminAccess::SUPPORT, [
-                UserResource::class, CompanyResource::class, ListingResource::class,
                 Complaints::class,
                 SubscriptionResource::class,
             ]],
 
-            'контент' => [AdminAccess::CONTENT_MANAGER, [
-                BroadcastResource::class,
-            ]],
+            'контент' => [AdminAccess::CONTENT_MANAGER, []],
         ];
     }
 

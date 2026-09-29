@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Public;
 
-use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Models\Company;
-use App\Models\User;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -19,7 +15,8 @@ use Tests\TestCase;
  * партнёры и мультипартнёры.
  *
  * Страница раздела показывает только виды со счётчиками, списки —
- * на отдельных страницах. Состав назначает администратор.
+ * на отдельных страницах. Состав назначает администратор — в разделе
+ * «Компании» на Python (python/tests/test_companies_admin.py).
  */
 class PartnersPageTest extends TestCase
 {
@@ -84,29 +81,5 @@ class PartnersPageTest extends TestCase
         $this->get('/partners/regular')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('partners.0.slug', $first->slug)
             ->where('partners.1.slug', $second->slug));
-    }
-
-    /** Назначить и снять партнёра администратор может в любой момент. */
-    #[Test]
-    public function администратор_назначает_мультипартнёра_и_снимает(): void
-    {
-        $this->actingAs(User::factory()->create([
-            'is_admin' => true,
-            'admin_role' => User::ADMIN_SUPERADMIN,
-            'status' => 'active',
-        ]));
-
-        $company = Company::factory()->create();
-
-        Livewire::test(ListCompanies::class)
-            ->callAction(TestAction::make('partner')->table($company), ['tier' => Company::PARTNER_MULTI, 'sort' => 3]);
-
-        $this->assertSame(Company::PARTNER_MULTI, $company->fresh()->partner_tier);
-        $this->assertSame(3, (int) $company->fresh()->partner_sort);
-
-        Livewire::test(ListCompanies::class)
-            ->callAction(TestAction::make('partner')->table($company), ['tier' => 'none', 'sort' => 0]);
-
-        $this->assertNull($company->fresh()->partner_tier);
     }
 }

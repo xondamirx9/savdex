@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Resources\Listings\Pages\ListListings;
+use App\Filament\Widgets\ModerationQueue;
 use App\Jobs\TranslateListing;
 use App\Models\Company;
 use App\Models\Listing;
 use App\Models\User;
 use App\Support\AdminAccess;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -18,16 +17,20 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Публикация загруженного объявления из админки.
+ * Публикация загруженного объявления.
  *
  * Загрузка из книги кладёт объявления в «На проверке» — на витрину
- * они попадают только кнопкой «Одобрить». Кнопка ставит срок и видна
- * лишь тем, кому положено модерировать: раньше её видел любой, кто
- * видит список, включая поддержку с правом только смотреть.
+ * они попадают только кнопкой «Одобрить». Сами решения модератора
+ * («Одобрить», «Вернуть на исправление», «Отклонить») — в разделе
+ * «Объявления» на Python (python/tests/test_listings_admin.py). Здесь —
+ * пункт меню и очередь на панели, которые туда ведут, и то, что от
+ * админки не зависит.
  */
 class ListingApprovalTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const LINK = '/admin/python?next=/py/admin/data/listing/';
 
     private function admin(string $role): User
     {
@@ -48,61 +51,47 @@ class ListingApprovalTest extends TestCase
         ]);
     }
 
+    /** Счётчик у пункта меню — очередь модерации: сюда заходят именно за ней. */
     #[Test]
-    public function одобрение_публикует_и_ставит_срок(): void
+    public function пункт_меню_считает_очередь_на_проверку(): void
     {
-        $listing = $this->pending();
+        $this->pending();
+        $this->pending();
+        Listing::factory()->for(Company::factory())->create(['status' => Listing::STATUS_ACTIVE]);
+
+        $html = $this->actingAs($this->admin(AdminAccess::MODERATOR))->get('/admin')->getContent();
+        $at = strpos($html, 'href="'.self::LINK.'"');
+
+        $this->assertNotFalse($at, 'пункт «Объявления» ведёт в раздел на Python');
+
+        $item = substr($html, $at, 3000);
+
+        $this->assertMatchesRegularExpression('/>\s*2\s*</', $item, 'в значке — два объявления на проверке');
+
+        // Финансам раздел не положен — и пункта нет
+        $this->actingAs($this->admin(AdminAccess::FINANCE))
+            ->get('/admin')
+            ->assertDontSee(self::LINK, false);
+    }
+
+    /** Плашка «Объявления» на панели модератора ведёт сразу в очередь. */
+    #[Test]
+    public function очередь_на_панели_ведёт_в_раздел_с_фильтром(): void
+    {
+        $this->pending();
 
         Livewire::actingAs($this->admin(AdminAccess::MODERATOR))
-            ->test(ListListings::class)
-            ->callAction(TestAction::make('approve')->table($listing))
-            ->assertHasNoActionErrors();
-
-        $fresh = $listing->fresh();
-
-        $this->assertSame(Listing::STATUS_ACTIVE, $fresh->status);
-        $this->assertNotNull($fresh->published_at);
-        $this->assertNotNull($fresh->expires_at);
-
-        // Одобренное объявление видно на витрине
-        $this->get('/listing/'.$fresh->slug)->assertOk();
+            ->test(ModerationQueue::class)
+            ->assertSeeHtml(e(self::LINK.urlencode('?status=moderation')));
     }
 
     /**
-     * Загружает книги роль admin, а права модерировать у неё нет.
-     * Загруженное она обязана уметь опубликовать сама — иначе
-     * загружает то, что повесит в «На проверке» до прихода модератора.
-     */
-    #[Test]
-    public function загрузивший_публикует_загруженное_без_права_модерировать(): void
-    {
-        $listing = $this->pending();
-
-        Livewire::actingAs($this->admin(AdminAccess::ADMIN))
-            ->test(ListListings::class)
-            ->callAction(TestAction::make('approve')->table($listing))
-            ->assertHasNoActionErrors();
-
-        $this->assertSame(Listing::STATUS_ACTIVE, $listing->fresh()->status);
-
-        // А написанное в кабинете — нет: это уже модерация
-        $cabinet = Listing::factory()->for(Company::factory())->create([
-            'status' => Listing::STATUS_MODERATION,
-            'source' => Listing::SOURCE_CABINET,
-        ]);
-
-        Livewire::actingAs($this->admin(AdminAccess::ADMIN))
-            ->test(ListListings::class)
-            ->assertActionHidden(TestAction::make('approve')->table($cabinet));
-    }
-
-    /**
-     * Книга дала английский, остальных языков нет: одобрение должно
+     * Книга дала английский, остальных языков нет: публикация должна
      * позвать машинный перевод за недостающими, а не считать, что раз
      * переводы «есть», добирать нечего.
      */
     #[Test]
-    public function одобрение_с_частью_языков_запускает_добор_перевода(): void
+    public function публикация_с_частью_языков_запускает_добор_перевода(): void
     {
         config()->set('services.machine_translation.enabled', true);
         Queue::fake();
@@ -112,25 +101,9 @@ class ListingApprovalTest extends TestCase
 
         Queue::assertNothingPushed();
 
-        Livewire::actingAs($this->admin(AdminAccess::MODERATOR))
-            ->test(ListListings::class)
-            ->callAction(TestAction::make('approve')->table($listing));
+        $listing->forceFill(['status' => Listing::STATUS_ACTIVE, 'published_at' => now()])->save();
 
         Queue::assertPushed(TranslateListing::class, fn (TranslateListing $job): bool => $job->listingId === $listing->id);
-    }
-
-    #[Test]
-    public function без_права_модерировать_кнопки_одобрить_нет(): void
-    {
-        $listing = $this->pending();
-
-        // Поддержка видит объявления, но не публикует их
-        Livewire::actingAs($this->admin(AdminAccess::SUPPORT))
-            ->test(ListListings::class)
-            ->assertActionHidden(TestAction::make('approve')->table($listing))
-            ->assertActionHidden(TestAction::make('reject')->table($listing));
-
-        $this->assertSame(Listing::STATUS_MODERATION, $listing->fresh()->status);
     }
 
     #[Test]
