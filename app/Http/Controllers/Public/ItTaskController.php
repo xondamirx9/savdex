@@ -14,6 +14,7 @@ use App\Support\DateHelper;
 use App\Support\Seo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -44,12 +45,16 @@ class ItTaskController extends Controller
         $verified = $request->boolean('verified');
         $withBudget = $request->boolean('with_budget');
 
-        $tasks = ItTask::query()
-            ->with(['company.city.translations', 'contractor'])
+        /*
+         * Отбор без направления — общая основа для ленты и для счётчиков
+         * в панели. Счётчики показывают, сколько найдётся при переключении
+         * направления, поэтому сам фильтр направления в основу не входит:
+         * иначе у выбранного стояло бы его число, а у остальных нули.
+         */
+        $base = fn (): Builder => ItTask::query()
             ->when($done, fn (Builder $q) => $q->completed(), fn (Builder $q) => $q->active())
             ->whereHas('company', fn (Builder $q) => $q->where('status', 'active'))
             ->when($query !== '', fn (Builder $q) => $q->search($query))
-            ->when($type !== '', fn (Builder $q) => $q->whereIn('service_type', ItTask::typesUnder($type)))
             ->when($city !== 0, fn (Builder $q) => $q->whereHas(
                 'company',
                 fn (Builder $c) => $c->where('city_id', $city),
@@ -62,11 +67,21 @@ class ItTaskController extends Controller
                 fn (Builder $c) => $c->where('verification_level', '>=', 2),
             ))
             // «Договорной» — это отсутствие суммы, а не сумма ноль
-            ->when($withBudget, fn (Builder $q) => $q->where('budget_type', '!=', 'negotiable'))
+            ->when($withBudget, fn (Builder $q) => $q->where('budget_type', '!=', 'negotiable'));
+
+        $tasks = $base()
+            ->with(['company.city.translations', 'contractor'])
+            ->when($type !== '', fn (Builder $q) => $q->whereIn('service_type', ItTask::typesUnder($type)))
             ->tap(fn (Builder $q) => $done ? $q->orderByDesc('completed_at') : $q->orderByDesc('published_at'))
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
+
+        /** @var Collection<string, int> $counts */
+        $counts = $base()
+            ->selectRaw('service_type, count(*) as total')
+            ->groupBy('service_type')
+            ->pluck('total', 'service_type');
 
         app(Seo::class)
             ->title(__('ui.it_tasks.meta_title'))
@@ -87,7 +102,9 @@ class ItTaskController extends Controller
                 'verified' => $verified,
                 'with_budget' => $withBudget,
             ],
-            'types' => ItTask::sectionTree(),
+            'types' => ItTask::sectionTree($counts),
+            // Число у пункта «Все задачи»
+            'total_all' => (int) $counts->sum(),
             'cities' => $this->cities(),
             'total' => $tasks->total(),
             'viewer' => $this->viewer($request),

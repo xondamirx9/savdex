@@ -76,6 +76,7 @@ export default function ResumesIndex({ resumes, filters, options, cities, total,
                 <div className="board-layout">
                     <BoardFilter
                         title={t('it_tasks.filters')}
+                        name="service-section"
                         value={RESUMES_OPTION}
                         onPick={(id) =>
                             openServiceSection(id, (type) => router.get(routes.itTasks, type === '' ? {} : { type }))
