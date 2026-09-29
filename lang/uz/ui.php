@@ -101,7 +101,7 @@ return [
         'strength_add' => ':list qo‘shing',
         'missing_length' => 'yana :count ta belgi',
         'missing_digit' => 'raqam',
-        'missing_special' => 'maxsus belgi',
+        'missing_letter' => 'harf',
         // Rozilik iborasi qismlardan yig‘iladi: o‘zbek va turk
         // tillarida fe’l ibora oxirida keladi, shuning uchun
         // prefiks va suffiks bor
@@ -2174,6 +2174,7 @@ return [
             'password_letters' => 'Parolga kamida bitta harf qo‘shing',
             'password_numbers' => 'Parolga kamida bitta raqam qo‘shing',
             'password_leaked' => 'Bu parol ma’lumot sizib chiqishlarida uchraydi. Boshqasini o‘ylab toping',
+            'too_many' => 'So‘nggi bir soatda bu tarmoqdan bir nechta akkaunt ro‘yxatdan o‘tgan. :minutes daqiqadan keyin yoki boshqa tarmoqdan urinib ko‘ring',
             'terms' => 'Oferta va maxfiylik siyosatini qabul qilish kerak',
             'account_type' => 'Kimligingizni tanlang: yuridik shaxs, jismoniy shaxs yoki frilanser',
         ],

@@ -99,7 +99,7 @@ return [
         'strength_add' => ':list ekleyin',
         'missing_length' => ':count karakter daha',
         'missing_digit' => 'rakam',
-        'missing_special' => 'özel karakter',
+        'missing_letter' => 'harf',
         // Onay cümlesi parçalardan kurulur: Özbekçe ve Türkçede
         // fiil cümlenin sonunda gelir, bu yüzden önek ve sonek var
         'terms_prefix' => '',
@@ -2171,6 +2171,7 @@ return [
             'password_letters' => 'Parolaya en az bir harf ekleyin',
             'password_numbers' => 'Parolaya en az bir rakam ekleyin',
             'password_leaked' => 'Bu parola veri sızıntılarında geçiyor. Başka bir tane belirleyin',
+            'too_many' => 'Son bir saatte bu ağdan birkaç hesap kaydedildi. :minutes dk sonra veya başka bir ağdan tekrar deneyin',
             'terms' => 'Sözleşmeyi ve gizlilik politikasını kabul etmeniz gerekir',
             'account_type' => 'Kim olduğunuzu seçin: tüzel kişi, gerçek kişi veya serbest çalışan',
         ],

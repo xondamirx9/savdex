@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\PasswordResetDelivery;
+use App\Support\PasswordMessages;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class PasswordResetController extends Controller
         $request->validate([
             'email' => ['required', 'email'],
             'channel' => ['nullable', 'string'],
-        ]);
+        ], $this->emailMessages());
 
         $channel = $request->string('channel')->toString();
 
@@ -52,7 +53,7 @@ class PasswordResetController extends Controller
             $channel = PasswordResetDelivery::MAIL;
         }
 
-        $this->delivery->send($request->string('email')->toString(), $channel);
+        $this->delivery->send($this->normalizedEmail($request), $channel);
 
         /*
          * Ответ одинаков независимо от того, есть такой адрес или нет,
@@ -78,13 +79,14 @@ class PasswordResetController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'confirmed', PasswordRule::defaults()],
         ], [
+            ...$this->emailMessages(),
+            'password.required' => __('ui.messages.auth.password_new'),
             'password.confirmed' => __('ui.messages.auth.password_mismatch'),
-            'password.min' => __('ui.messages.register.password_min'),
-            'password.max' => __('ui.messages.register.password_max'),
+            ...PasswordMessages::all(),
         ]);
 
         $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
+            ['email' => $this->normalizedEmail($request)] + $request->only('password', 'password_confirmation', 'token'),
             function ($user) use ($request): void {
                 $user->forceFill([
                     'password' => $request->string('password')->toString(),
@@ -104,5 +106,27 @@ class PasswordResetController extends Controller
         }
 
         return redirect()->route('login')->with('status', __('ui.messages.auth.password_reset'));
+    }
+
+    /**
+     * Почта так же, как при входе и регистрации: без пробелов и в нижнем
+     * регистре. Телефон сам пишет первую букву заглавной, адреса в базе
+     * строчные, и «Rustam@company.uz» не находил никого — а ответ формы
+     * одинаковый при любом исходе, так что письма просто не приходило.
+     */
+    private function normalizedEmail(Request $request): string
+    {
+        return mb_strtolower(trim($request->string('email')->toString()));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function emailMessages(): array
+    {
+        return [
+            'email.required' => __('ui.messages.auth.email_required'),
+            'email.email' => __('ui.messages.auth.email_invalid'),
+        ];
     }
 }

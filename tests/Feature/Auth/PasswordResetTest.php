@@ -6,9 +6,11 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Contracts\Validation\UncompromisedVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -139,5 +141,64 @@ class PasswordResetTest extends TestCase
             'password' => 'NovyiParol-2026',
             'password_confirmation' => 'DrugoiParol-2026',
         ])->assertSessionHasErrors(['password' => 'Пароли не совпадают']);
+    }
+
+    /**
+     * Телефон пишет первую букву адреса заглавной, а адреса в базе
+     * строчные. Ответ формы одинаков при любом исходе, поэтому раньше
+     * человек видел «письмо отправлено» — и письма не получал.
+     */
+    #[Test]
+    public function адрес_с_заглавной_буквы_находит_учётку(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'rustam@company.uz']);
+
+        $this->post('/forgot-password', ['email' => 'Rustam@Company.uz'])
+            ->assertSessionHas('status');
+
+        Notification::assertSentTo($user, ResetPassword::class);
+    }
+
+    /**
+     * Словаря validation.php у площадки нет: без своих подписей на
+     * форму нового пароля выходили ключи «validation.min.string».
+     */
+    #[Test]
+    public function слабый_пароль_объясняется_словами_а_не_ключом(): void
+    {
+        $user = User::factory()->create();
+
+        $this->post('/reset-password', [
+            'token' => 'token',
+            'email' => $user->email,
+            'password' => 'korot1',
+            'password_confirmation' => 'korot1',
+        ])->assertSessionHasErrors(['password' => 'Пароль должен быть не короче 8 символов']);
+
+        $this->assertStringNotContainsString('validation.', implode(' ', session('errors')->get('password')));
+    }
+
+    #[Test]
+    public function пароль_из_утечки_объясняется_словами_а_не_ключом(): void
+    {
+        // Проверка по базе утечек включена на развёрнутом сайте, в тестах — нет
+        Password::defaults(fn (): Password => Password::min(8)->max(20)->letters()->numbers()->uncompromised());
+        $this->app->instance(UncompromisedVerifier::class, new class implements UncompromisedVerifier
+        {
+            public function verify($data): bool
+            {
+                return false;
+            }
+        });
+
+        $user = User::factory()->create();
+
+        $this->post('/reset-password', [
+            'token' => 'token',
+            'email' => $user->email,
+            'password' => 'Toshkent2026',
+            'password_confirmation' => 'Toshkent2026',
+        ])->assertSessionHasErrors(['password' => 'Этот пароль встречается в утечках данных. Придумайте другой']);
     }
 }

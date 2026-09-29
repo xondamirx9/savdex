@@ -22,49 +22,94 @@ export interface FilterOption {
 }
 
 /**
- * Пункт — переключатель, как в фильтрах каталога и компаний.
+ * Пункт списка.
  *
- * Кружок сразу показывает, что выбор один из списка и что выбрано
- * сейчас: прежний список ссылок отличал выбранный пункт только цветом,
- * и на длинном перечне его приходилось искать глазами.
+ * Выбор и раскрытие разведены. Раньше подрубрики показывались только
+ * у выбранной ветки: посмотреть, что внутри «IT-услуг», не выбрав их,
+ * было нельзя, а выбрав — лента уже перезагружалась. Теперь у ветки
+ * с подпунктами своя стрелка: она раскрывает список и ничего не
+ * фильтрует.
+ *
+ * Ветка выбранного пункта раскрыта сразу: страница, открытая по
+ * ссылке с фильтром, должна показывать, где этот фильтр стоит.
  */
 function Option({
     option,
     name,
     value,
     onPick,
+    expanded,
+    onToggle,
     nested = false,
 }: {
     option: FilterOption;
     name: string;
     value: string;
     onPick: (id: string) => void;
+    expanded: Record<string, boolean>;
+    onToggle: (id: string, next: boolean) => void;
     nested?: boolean;
 }) {
+    const children = option.children ?? [];
     const active = value === option.id;
-    const childActive = (option.children ?? []).some((child) => child.id === value);
+    const childActive = children.some((child) => child.id === value);
+    const open = expanded[option.id] ?? (active || childActive);
 
     return (
         <>
-            <label className={cn('check board-filter', nested && 'board-filter--child')}>
-                <input
-                    type="radio"
-                    name={name}
-                    checked={active}
-                    onChange={() => onPick(option.id)}
-                />
-                <span className={cn('board-filter-label', (active || childActive) && 'is-active')}>
-                    {option.label}
-                </span>
-                {option.count !== undefined && <span className="check-count">{option.count}</span>}
-            </label>
+            <div className={cn('board-filter-row', (active || childActive) && 'is-active', nested && 'board-filter-row--child')}>
+                {/* Кружок переключателя спрятан, а не выброшен: выбранное
+                    видно по подложке, а разметка остаётся группой
+                    переключателей — скринридер по-прежнему читает «выбрано
+                    одно из четырнадцати», и стрелки клавиатуры водят
+                    по списку. Сам <label> ловит нажатие целиком. */}
+                <label className="check board-filter">
+                    <input
+                        type="radio"
+                        className="sr-only"
+                        name={name}
+                        checked={active}
+                        onChange={() => {
+                            onPick(option.id);
+                            // Выбор ветки её же и раскрывает: человек
+                            // выбрал направление — дальше он выбирает
+                            // вид внутри него
+                            if (children.length > 0) onToggle(option.id, true);
+                        }}
+                    />
+                    <span className="board-filter-label">{option.label}</span>
+                    {option.count !== undefined && <span className="check-count">{option.count}</span>}
+                </label>
 
-            {/* Подрубрики раскрываются только у выбранной ветки: полный
-                список второго уровня превращает панель в простыню */}
-            {(active || childActive) &&
-                (option.children ?? []).map((child) => (
-                    <Option key={child.id} option={child} name={name} value={value} onPick={onPick} nested />
-                ))}
+                {children.length > 0 && (
+                    <button
+                        type="button"
+                        className="board-filter-toggle"
+                        aria-expanded={open}
+                        aria-label={option.label}
+                        onClick={() => onToggle(option.id, !open)}
+                    >
+                        <ChevronDown aria-hidden className="size-4" />
+                    </button>
+                )}
+            </div>
+
+            {open && children.length > 0 && (
+                <div className="board-filter-kids">
+                    {children.map((child) => (
+                        <Option
+                            key={child.id}
+                            option={child}
+                            name={name}
+                            value={value}
+                            onPick={onPick}
+                            expanded={expanded}
+                            onToggle={onToggle}
+                            nested
+                        />
+                    ))}
+                </div>
+            )}
         </>
     );
 }
@@ -91,6 +136,14 @@ export function BoardFilter({
     children?: ReactNode;
 }) {
     const [open, setOpen] = useState(false);
+    /*
+     * Какие ветки раскрыты. Пункта тут нет, пока его не трогали: до
+     * первого нажатия раскрытой считается ветка выбранного пункта,
+     * дальше решает человек.
+     */
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+    const toggle = (id: string, next: boolean) => setExpanded((prev) => ({ ...prev, [id]: next }));
 
     return (
         <aside className="board-panel">
@@ -121,6 +174,8 @@ export function BoardFilter({
                                 name={name}
                                 value={value}
                                 onPick={onPick}
+                                expanded={expanded}
+                                onToggle={toggle}
                             />
                         ))}
                     </div>

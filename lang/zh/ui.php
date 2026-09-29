@@ -98,7 +98,7 @@ return [
         'strength_add' => '请添加:list',
         'missing_length' => '还差 :count 个字符',
         'missing_digit' => '数字',
-        'missing_special' => '特殊字符',
+        'missing_letter' => '字母',
         // 同意条款的句子由多个部分拼接：乌兹别克语和土耳其语
         // 的动词位于句末，因此需要前缀和后缀
         'terms_prefix' => '我接受',
@@ -2170,6 +2170,7 @@ return [
             'password_letters' => '请在密码中至少加入一个字母',
             'password_numbers' => '请在密码中至少加入一个数字',
             'password_leaked' => '该密码出现在数据泄露记录中。请换一个',
+            'too_many' => '过去一小时内已有多个账户从该网络注册。请 :minutes 分钟后再试，或换一个网络',
             'terms' => '需要接受服务协议和隐私政策',
             'account_type' => '请选择您的身份：法人、个人或自由职业者',
         ],

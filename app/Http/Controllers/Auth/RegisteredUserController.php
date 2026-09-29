@@ -14,11 +14,23 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    /**
+     * Сколько аккаунтов можно завести с одного адреса сети за час.
+     *
+     * Считаются только созданные аккаунты, а не отправки формы. Раньше
+     * лимит висел на маршруте (throttle:5,60) и съедался ошибками ввода:
+     * короткий пароль, пароль из утечки, опечатка в телефоне — пять
+     * поправок, и шестая, уже верная, отклонялась на час. Фейковые
+     * компании пачками заводят успешными регистрациями, а не ошибками.
+     */
+    public const MAX_PER_HOUR = 5;
+
     public function create(Request $request): Response
     {
         /*
@@ -39,6 +51,15 @@ class RegisteredUserController extends Controller
 
     public function store(RegisterRequest $request): RedirectResponse
     {
+        $limit = 'register:'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($limit, self::MAX_PER_HOUR)) {
+            // Назад с сообщением, а не 429: набранное в форме остаётся на месте
+            return back()->with('error', __('ui.messages.register.too_many', [
+                'minutes' => max(1, (int) ceil(RateLimiter::availableIn($limit) / 60)),
+            ]));
+        }
+
         // Компания создаётся на следующем шаге онбординга, здесь только человек.
         // Транзакция нужна, чтобы событие Registered не ушло при неудачной записи.
         $user = DB::transaction(function () use ($request): User {
@@ -54,6 +75,8 @@ class RegisteredUserController extends Controller
                 'company_role' => User::ROLE_OWNER,
             ]);
         });
+
+        RateLimiter::hit($limit, 3600);
 
         /*
          * Демо-стенд (см. config/app.php): почта помечается подтверждённой
