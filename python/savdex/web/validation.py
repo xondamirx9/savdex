@@ -15,9 +15,11 @@
 
 from __future__ import annotations
 
+import calendar
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from savdex.web import ui
@@ -92,17 +94,44 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
 
         return not (isinstance(value, dict | list) and len(value) == 0)
 
+    if rule == "numeric":
+        # is_numeric: число или числовая строка
+        if isinstance(value, bool):
+            return False
+
+        return isinstance(value, int | float) or (isinstance(value, str) and _is_numeric(value))
+
+    if rule == "lowercase":
+        # Str::lower($value) === $value
+        return isinstance(value, str) and value.lower() == value
+
     if rule == "file":
         return _is_file(value)
+
+    if rule == "date":
+        # validateDate: strtotime понял и date_parse дал настоящий день (checkdate)
+        parsed = _strtotime(value)
+
+        return parsed is not None and parsed[1]
+
+    if rule == "after":
+        # compareDates: strtotime значения больше strtotime параметра
+        parsed = _strtotime(value)
+        bound = _strtotime(param)
+
+        return parsed is not None and bound is not None and parsed[0] > bound[0]
 
     if rule == "mimes":
         # validateMimes: расширение по содержимому; jpg и jpeg — одно и то же
         extensions = set((param or "").split(","))
 
+        if not _is_file(value) or _blocks_php(value, extensions):
+            return False
+
         if extensions & {"jpg", "jpeg"}:
             extensions |= {"jpg", "jpeg"}
 
-        return _is_file(value) and _guess_extension(value) in extensions
+        return _guess_extension(value) in extensions
 
     if rule == "array":
         return isinstance(value, dict | list)
@@ -219,24 +248,92 @@ def _is_file(value: Any) -> bool:  # noqa: ANN401
 
 
 def _guess_extension(upload: Any) -> str | None:  # noqa: ANN401
-    """UploadedFile::guessExtension: по первым байтам (finfo), не по имени."""
-    head = upload.read(64)
+    """UploadedFile::guessExtension: по содержимому (finfo), не по имени."""
+    from savdex.web.filetype import guess_extension
+
+    data = upload.read()
     upload.seek(0)
 
-    if head.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
+    return guess_extension(data)
 
-    if head.startswith(b"\xff\xd8\xff"):
-        return "jpg"
 
-    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
-        return "webp"
+#: ValidatesAttributes::shouldBlockPhpUpload
+_PHP_EXTENSIONS = ("php", "php3", "php4", "php5", "php7", "php8", "phtml", "phar")
 
-    if head[:6] in (b"GIF87a", b"GIF89a"):
-        return "gif"
 
-    if head.startswith(b"%PDF-"):
-        return "pdf"
+def _blocks_php(upload: Any, extensions: set[str]) -> bool:  # noqa: ANN401
+    """Файл с расширением PHP в имени от клиента отвергается, если php не разрешён явно."""
+    if "php" in extensions:
+        return False
+
+    name = str(getattr(upload, "name", "") or "").replace("\\", "/").rsplit("/", 1)[-1]
+    extension = name.rsplit(".", 1)[1] if "." in name else ""
+
+    return extension.lower().strip() in _PHP_EXTENSIONS
+
+
+#: Даты, которые понимает strtotime и где date_parse видит год, месяц и
+#: день: Y-m-d и Y/m/d, d.m.Y и d-m-Y, m/d/Y (американский), со временем
+_DATES = (
+    (re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})"), ("y", "m", "d")),
+    (re.compile(r"(\d{4})/(\d{1,2})/(\d{1,2})"), ("y", "m", "d")),
+    (re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})"), ("d", "m", "y")),
+    (re.compile(r"(\d{1,2})-(\d{1,2})-(\d{4})"), ("d", "m", "y")),
+    (re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})"), ("m", "d", "y")),
+    (re.compile(r"(\d{4})(\d{2})(\d{2})"), ("y", "m", "d")),
+)
+_TIME = re.compile(r"(?:[t ](\d{1,2}):(\d{2})(?::(\d{2}))?)?", re.ASCII)
+
+
+def _strtotime(value: Any) -> tuple[datetime, bool] | None:  # noqa: ANN401
+    """
+    strtotime (часовой пояс приложения — UTC): момент и настоящий ли это
+    день (checkdate). День сверх месяца strtotime переносит дальше
+    («30 февраля» — 2 марта), checkdate такой день отвергает. Слова
+    today, tomorrow и now — как у PHP, без года-месяца-дня. Прочие
+    вольности strtotime (названия месяцев, часовые пояса буквой) не
+    поддержаны: такая дата не проходит ни date, ни after.
+    """
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+
+    text = str(value).strip().lower()
+    now = datetime.now(UTC).replace(tzinfo=None)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    words = {"today": midnight, "midnight": midnight, "now": now}
+
+    if text in words:
+        return words[text], False
+
+    if text == "tomorrow":
+        return midnight + timedelta(days=1), False
+
+    if text == "yesterday":
+        return midnight - timedelta(days=1), False
+
+    for pattern, order in _DATES:
+        match = pattern.match(text)
+
+        if match is None:
+            continue
+
+        rest = _TIME.fullmatch(text[match.end() :])
+
+        if rest is None:
+            continue
+
+        parts = dict(zip(order, (int(g) for g in match.groups()), strict=True))
+        hour, minute, second = (int(g) if g else 0 for g in rest.groups())
+
+        if parts["m"] > 12 or parts["d"] > 31 or hour > 23 or minute > 59:
+            return None
+
+        # Месяц 0 strtotime понимает как декабрь прошлого года
+        year, month = (parts["y"] - 1, 12) if parts["m"] == 0 else (parts["y"], parts["m"])
+        base = datetime(year, month, 1, hour, minute, second or 0)
+        real = parts["m"] > 0 and 1 <= parts["d"] <= calendar.monthrange(year, month)[1]
+
+        return base + timedelta(days=parts["d"] - 1), real
 
     return None
 
@@ -284,6 +381,17 @@ def _displayable(attribute: str, implicit: bool) -> str:
     return snake.replace("_", " ")
 
 
+def _wildcard_message(messages: Mapping[str, str], key: str) -> str | None:
+    """getFromLocalArray: свой текст по образцу со «*» (Str::is)."""
+    for pattern, text in messages.items():
+        if "*" in pattern and re.fullmatch(
+            ".*".join(re.escape(p) for p in pattern.split("*")), key
+        ):
+            return text
+
+    return None
+
+
 def _message(
     rule: str,
     attribute: str,
@@ -294,7 +402,8 @@ def _message(
     param: str | None = None,
 ) -> str:
     """FormatsMessages::getMessage и makeReplacements."""
-    text = messages.get(f"{attribute}.{rule}") or messages.get(rule)
+    text = messages.get(f"{attribute}.{rule}") or _wildcard_message(messages, f"{attribute}.{rule}")
+    text = text or messages.get(rule)
 
     if text is None:
         # Правила размера — текст по виду значения (validation.min.array)
@@ -316,6 +425,10 @@ def _message(
         # replaceRequiredWith: поля-условия — как их показывает getDisplayableAttribute
         names = [_displayable(p, "." in p and p.split(".")[1].isdigit()) for p in param.split(",")]
         text = text.replace(":values", " / ".join(names))
+
+    if param is not None and rule == "after":
+        # replaceAfter: дата-параметр как есть («today»)
+        text = text.replace(":date", param)
 
     return (
         text.replace(":attribute", name)

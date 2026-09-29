@@ -25,6 +25,7 @@ from savdex.web import (
     companies,
     company,
     company_contact_actions,
+    company_file_actions,
     company_profile_actions,
     contact_actions,
     directory,
@@ -34,6 +35,7 @@ from savdex.web import (
     legal,
     listing,
     listing_actions,
+    listing_image_actions,
     news,
     pricing,
     resume_actions,
@@ -41,7 +43,10 @@ from savdex.web import (
     review_actions,
     reviews,
     settings_actions,
+    site_actions,
     tenders,
+    unlock_actions,
+    wizard_actions,
 )
 from savdex.web import views as web
 
@@ -196,6 +201,52 @@ urlpatterns = [
         )
         for verb in ("reply", "dispute")
     ],
+    # Мастер объявления (этап 5, шаг 38): новый черновик и публикация, группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/create$",
+        wizard_actions.create,
+        name="cabinet.listings.create",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/publish$",
+        wizard_actions.publish,
+        name="cabinet.listings.publish",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/autosave$",
+        wizard_actions.autosave,
+        name="cabinet.listings.autosave",
+    ),
+    # Раскрытие контактов на визитке (этап 5, шаг 40): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)/unlock$",
+        unlock_actions.unlock,
+        name="companies.unlock",
+    ),
+    # Отзыв о компании на визитке (этап 5, шаг 41): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)/review$",
+        review_actions.store,
+        name="companies.review",
+    ),
+    # Фото объявления (этап 5, шаг 37): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images$",
+        listing_image_actions.store,
+        name="cabinet.listings.images.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images/"
+        r"(?P<image_id>[0-9]{1,18})$",
+        listing_image_actions.destroy,
+        name="cabinet.listings.images.destroy",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/images/"
+        r"(?P<image_id>[0-9]{1,18})/cover$",
+        listing_image_actions.cover,
+        name="cabinet.listings.images.cover",
+    ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
     re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
@@ -227,6 +278,17 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats$", cabinet.chats, name="cabinet.chats"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", cabinet.promo, name="cabinet.promo"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
+    # Файлы своей компании (этап 5, шаг 42): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/files$",
+        company_file_actions.store,
+        name="cabinet.company.files.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/files/(?P<document_id>[0-9]{1,18})$",
+        company_file_actions.document,
+        name="cabinet.company.files.update",
+    ),
     # Контакты своей компании (этап 5, шаг 31): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/contacts$",
@@ -275,7 +337,30 @@ urlpatterns = [
         name="cabinet.company.cover",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks$", cabinet.it_tasks, name="cabinet.it-tasks"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", cabinet.site_page, name="cabinet.site"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/site$", site_actions.page, name="cabinet.site"),
+    # Мини-сайт (этап 5, шаг 35): публикация и фон, группа forms
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/site/{verb}$",
+            getattr(site_actions, verb),
+            name=f"cabinet.site.{verb}",
+        )
+        for verb in ("publish", "unpublish")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/hero$", site_actions.hero, name="cabinet.site.hero"
+    ),
+    # Товары мини-сайта (этап 5, шаг 36): группа forms
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/products$",
+        site_actions.product_store,
+        name="cabinet.site.products.store",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/site/products/(?P<product_id>[0-9]{1,18})$",
+        site_actions.product,
+        name="cabinet.site.products.update",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]+)/edit$",
         cabinet.listing_wizard,

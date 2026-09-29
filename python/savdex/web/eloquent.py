@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from django.db import connection
@@ -59,6 +60,20 @@ def _cast_same(cast: str | None, before: Any, after: Any) -> bool:  # noqa: ANN4
 
     if cast == "json":
         return json.dumps(before) == json.dumps(after)
+
+    if cast is not None and cast.startswith("decimal:"):
+        # asDecimal: строки с заданным числом знаков, округление HalfUp
+        places = Decimal(1).scaleb(-int(cast.split(":")[1]))
+
+        try:
+            return (before is None and after is None) or (
+                before is not None
+                and after is not None
+                and Decimal(str(before)).quantize(places, ROUND_HALF_UP)
+                == Decimal(str(after)).quantize(places, ROUND_HALF_UP)
+            )
+        except InvalidOperation:
+            return _same(before, after)
 
     if cast == "int":
         try:

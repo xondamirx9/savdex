@@ -28,6 +28,10 @@ MAX_PIXELS = 48_000_000
 LOGO: Mapping[str, Any] = {"w": 512, "h": 512, "quality": 85, "lossless": True}
 COVER: Mapping[str, Any] = {"w": 2000, "h": 2000, "quality": 80}
 
+#: ImageStore::PHOTO и ::THUMB
+PHOTO: Mapping[str, Any] = {"w": 1600, "h": 1600, "quality": 82}
+THUMB: Mapping[str, Any] = {"w": 400, "h": 400, "quality": 80}
+
 
 class UnreadableImageError(RuntimeError):
     """RuntimeException у ImageStore: не картинка, слишком большая, не записалась."""
@@ -99,6 +103,14 @@ def store(data: bytes, directory: str, size: Mapping[str, Any]) -> str:
         raise UnreadableImageError("Файл не удалось сохранить") from e
 
     return path
+
+
+def store_with_thumb(data: bytes, directory: str) -> dict[str, str]:
+    """ImageStore::storeWithThumb: оригинал и уменьшенная копия."""
+    return {
+        "path": store(data, directory, PHOTO),
+        "thumb_path": store(data, f"{directory}/thumb", THUMB),
+    }
 
 
 def delete(*paths: str | None) -> None:
