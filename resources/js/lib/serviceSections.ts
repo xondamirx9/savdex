@@ -49,10 +49,15 @@ export function openServiceSection(id: string, applyTaskType: (type: string) => 
 /**
  * Страницы направлений «Доп. услуг» — подменю в шапке.
  *
- * Те же адреса и в том же порядке, что ItTask::SERVICE_PAGES
- * на сервере: там по ним открывается страница, здесь строится меню.
+ * Тот же перечень и порядок, что ItTask::serviceMenu() на сервере:
+ * там он строит список «Другие направления», здесь — подменю.
+ *
+ * «Подбор персонала» (recruitment) в меню не значится: рядом
+ * с «HR-услугами» он читался вторым HR-пунктом, хотя это вид внутри
+ * них. Страница осталась и открывается ссылкой со страницы HR-услуг,
+ * поэтому в SERVICE_PAGE_ICONS и SERVICE_PAGE_BY_CODE она есть.
  */
-export const SERVICE_PAGES = ['it', 'hr', 'recruitment', 'logistics', 'customs', 'accounting'] as const;
+export const SERVICE_PAGES = ['it', 'hr', 'logistics', 'customs', 'accounting'] as const;
 
 export const SERVICE_PAGE_ICONS: Record<string, LucideIcon> = {
     it: Code2,
