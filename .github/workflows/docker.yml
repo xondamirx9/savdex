@@ -78,6 +78,10 @@ jobs:
         run: |
           docker run --rm --entrypoint /var/www/html/python/.venv/bin/python savdex:ci \
             -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography; print('Django', django.get_version())"
+          # Тип загруженного файла — libmagic, как finfo у PHP: без него docx и xlsx не пройдут
+          docker run --rm --entrypoint /var/www/html/python/.venv/bin/python \
+            -w /var/www/html/python savdex:ci \
+            -c "from savdex.web.filetype import _magic, mime_type; assert _magic() is not None; print(mime_type(b'%PDF-1.4'))"
 
       # Ключ одноразовый, живёт только в этом прогоне
       - name: Выгрузка как по кнопке и выдача прав — внутри образа
