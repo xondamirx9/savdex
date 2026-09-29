@@ -58,9 +58,15 @@ function Option({
     return (
         <>
             <div className={cn('board-filter-row', (active || childActive) && 'is-active', nested && 'board-filter-row--child')}>
+                {/* Кружок переключателя спрятан, а не выброшен: выбранное
+                    видно по подложке, а разметка остаётся группой
+                    переключателей — скринридер по-прежнему читает «выбрано
+                    одно из четырнадцати», и стрелки клавиатуры водят
+                    по списку. Сам <label> ловит нажатие целиком. */}
                 <label className="check board-filter">
                     <input
                         type="radio"
+                        className="sr-only"
                         name={name}
                         checked={active}
                         onChange={() => {

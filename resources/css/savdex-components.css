@@ -572,9 +572,11 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 /* Пункт-переключатель: разметка та же, что у фильтров каталога
    и компаний (.check), поэтому кружок, отступы и число справа
    выглядят одинаково на всех трёх страницах */
-.board-filter{flex:1;min-width:0;padding:5px 8px;font-size:14px;line-height:20px;
+.board-filter{flex:1;min-width:0;gap:0;padding:6px 8px;font-size:14px;line-height:20px;
   color:var(--text-muted);min-height:32px;align-items:center}
-.board-filter input{margin-top:0}
+/* Кружок спрятан: выбранное показывает подложка строки. Разметка
+   остаётся группой переключателей — см. комментарий в BoardFilter */
+.board-filter-row:has(input:focus-visible){outline:2px solid var(--primary-500);outline-offset:1px}
 /* Подпись переносится, а не обрезается многоточием: «Поддержка
    и администрирование» — одно длинное слово, и в узкой панели от него
    оставался огрызок «администрир…» */
