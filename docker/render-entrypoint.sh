@@ -327,6 +327,21 @@ if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
         done
     ) &
 
+    # Сверка денег (этап 7, шаг 55, python/savdex/payments/reconcile.py):
+    # раз в час — что должна была выдать каждая свежая оплата и что
+    # лежит в базе; расхождение — в журнал и письмом (BILLING_RECONCILE_EMAIL,
+    # иначе суперадминам). Только чтение. Выключить — SAVDEX_PY_RECONCILE=0
+    if [ "${SAVDEX_PY_RECONCILE:-1}" != "0" ]; then
+        (
+            set +e
+            while true; do
+                runuser -u www-data -- python/.venv/bin/python python/manage.py reconcile_billing
+                echo "ВНИМАНИЕ: сверка денег остановилась, перезапуск через 60 секунд." >&2
+                sleep 60
+            done
+        ) &
+    fi
+
     # Машинный перевод на Python: проход раз в минуту (см. выше про флаг)
     if [ -n "${PY_MACHINE_TRANSLATION_ENABLED:-}" ]; then
         (
