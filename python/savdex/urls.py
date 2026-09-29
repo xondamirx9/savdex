@@ -28,6 +28,7 @@ from savdex.web import (
     company,
     company_contact_actions,
     company_file_actions,
+    company_info_actions,
     company_profile_actions,
     contact_actions,
     directory,
@@ -337,6 +338,16 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?reviews/new$",
         auth_actions.either(auth.review_new, onboarding_actions.review),
         name="reviews.create",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/company-info$",
+        company_info_actions.info,
+        name="cabinet.settings.company",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/company-info/support$",
+        company_info_actions.support,
+        name="cabinet.settings.company.support",
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/delete$",

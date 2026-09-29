@@ -145,6 +145,12 @@ SHARED_WRITES: dict[str, str] = {
         "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
         "по почте и IP, как LoginThrottle"
     ),
+    "support_tickets": (
+        "обращение владельца о смене данных компании (этап 5, шаг 51): новое "
+        "обращение, как CompanyInfoController::support (Ticket::saving — без "
+        "даты закрытия); у администратора — строка журнала"
+    ),
+    "support_messages": ("первое сообщение того же обращения (этап 5, шаг 51) — вставка"),
     "company_category": (
         "направления компании со второго шага регистрации (этап 5, шаг 47): "
         "categories()->sync у только что созданной компании — одна вставка, "
@@ -314,6 +320,8 @@ SHARED_WRITES: dict[str, str] = {
         "профиль своей компании (этап 5, форма): правка полей формы и "
         "search_text, новая компания с адресом из названия, как "
         "CompanyProfileController::update; журнал администратора — как AuditObserver"
+        "; данные компании в настройках (шаг 51) — те же поля и profile_changed_at "
+        "при смене заполненного, как CompanyInfoController::update"
         "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
     ),
     "company_site_products": (
