@@ -21,7 +21,9 @@ use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
+use App\Models\Crm\Lead;
 use App\Support\AdminAccess;
+use App\Support\AdminScope;
 use App\Support\Appearance;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -125,6 +127,22 @@ class AdminPanelProvider extends PanelProvider
             ->navigationItems([
                 // CRM на Django (этап 6): раздел Filament убран, порядок в
                 // группе — прежний (Лиды 1, Сделки 2, Контакты 3, …)
+                NavigationItem::make('Лиды')
+                    ->url('/admin/python?next=/py/admin/crm/lead/')
+                    ->icon('heroicon-o-inbox-arrow-down')
+                    ->group('CRM')
+                    ->sort(1)
+                    // Счётчик — необработанные: лид, до которого не дошли
+                    // руки, остывает. Свои и нераспределённые, как в списке
+                    ->badge(fn (): ?string => ($new = AdminScope::apply(Lead::query(), 'leads', 'owner_id', orphansVisible: true)
+                        ->where('status', Lead::STATUS_NEW)->count()) > 0 ? (string) $new : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('leads.view')),
+                NavigationItem::make('Сделки')
+                    ->url('/admin/python?next=/py/admin/crm/deal/')
+                    ->icon('heroicon-o-briefcase')
+                    ->group('CRM')
+                    ->sort(2)
+                    ->visible(fn (): bool => AdminAccess::allows('deals.view')),
                 NavigationItem::make('Контакты')
                     ->url('/admin/python?next=/py/admin/crm/contact/')
                     ->icon('heroicon-o-users')
