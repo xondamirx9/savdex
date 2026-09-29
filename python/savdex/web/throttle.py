@@ -75,10 +75,14 @@ def hit(key: str, decay: int = DECAY_SECONDS) -> int:
 
 
 def throttled(
-    request: HttpRequest, max_attempts: int, view: Callable[[Context], HttpResponse]
+    request: HttpRequest,
+    max_attempts: int,
+    view: Callable[[Context], HttpResponse],
+    domain: str = "",
 ) -> HttpResponse:
     """
-    throttle:max,1 вокруг страницы.
+    throttle:max,1 вокруг страницы; domain — домен маршрута как он
+    записан (Route::domain, с «{subdomain}»), у гостя он входит в ключ.
 
     У Laravel throttle стоит раньше SetLocale и HandleInertiaRequests:
     отказ 429 не уводит на запомненный язык, а страница ошибки собрана
@@ -97,7 +101,7 @@ def throttled(
 
         return ctx if isinstance(ctx, HttpResponse) else view(ctx)
 
-    key = signature(first)
+    key = signature(first, domain)
 
     if too_many(key, max_attempts):
         bare = replace(first, locale=first.url_locale or locales.DEFAULT)

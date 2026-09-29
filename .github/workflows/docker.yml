@@ -186,14 +186,23 @@ jobs:
           curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/tenders/nothing
           ! grep -qi '^x-powered-by: php' /tmp/page.h
           # Каталог объявлений и страница объявления — тоже Django
-          # (группа catalog), картинка превью — Laravel
+          # (группа catalog), и картинка превью объявления
           for page in 'catalog' 'catalog?type=supply' 'catalog?type=tender&type=supply'; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
           curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/listing/nothing
           ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/og/listing/1.jpg | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/og/listing/1.jpg
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          # robots.txt и карта сайта (группа home), направления «Доп. услуг»
+          # (services) и мини-сайт /s/<адрес> (companies) — Django
+          for page in robots.txt sitemap.xml sitemap-static.xml services/it; do
+            curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
+            ! grep -qi '^x-powered-by: php' /tmp/page.h
+          done
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/s/nothing
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
           # «Резюме», «IT-услуги» (со страницами) и каталог компаний — Django
           for page in resumes it-services companies; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"

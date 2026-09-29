@@ -162,6 +162,8 @@ MIDDLEWARE = [
     "savdex.visitor.VisitorMiddleware",
     # Сессия Laravel, начатая страницей сайта, — сохранить (этап 5)
     "savdex.web.session.SessionMiddleware",
+    # Домен мини-сайтов: сам сайт на поддомене, остальное — 404 (этап 5)
+    "savdex.web.microsite.HostMiddleware",
 ]
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"

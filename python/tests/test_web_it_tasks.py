@@ -190,3 +190,45 @@ def test_просмотр_администратора_в_журнале(сай�
     )
     assert л[:6] == д[:6] and л[2] == "ittasks"
     assert д[6]["after"]["views_count"] == л[6]["after"]["views_count"] + 1
+
+
+@pytest.fixture(scope="module")
+def направления(сайт):
+    """Исполнители со специализациями и опубликованные резюме — для страниц «Доп. услуг»."""
+    php(
+        "$c = App\\Models\\Company::where('is_it_provider', true)->first();"
+        "$c->update(['it_specializations' => ['hr', 'web', 'erp'], 'rating' => 4.5]);"
+        "App\\Models\\Company::factory()->create(['is_it_provider' => true,"
+        " 'it_specializations' => ['logistics'], 'verification_level' => 2]);"
+        "App\\Models\\Company::factory()->create(['is_it_provider' => true,"
+        " 'it_specializations' => ['web'], 'status' => 'blocked']);"
+        "foreach (range(1, 3) as $i) { $u = App\\Models\\User::factory()->create();"
+        " (new App\\Models\\Resume())->forceFill(['user_id' => $u->id, 'slug' => 'cv-'.$i,"
+        "  'title' => 'Менеджер '.$i, 'field' => 'sales', 'experience_months' => 14 * $i,"
+        "  'employment' => ['full'], 'status' => $i === 3 ? 'draft' : 'published',"
+        "  'published_at' => Carbon\\Carbon::parse('2026-09-01 12:00:00')->subHours($i)])"
+        "->save(); }"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+
+    return сайт
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/services/it",
+        "/services/hr",
+        "/en/services/recruitment",
+        "/services/logistics",
+        "/uz/services/customs",
+        "/zh/services/accounting",
+    ],
+)
+def test_направление(направления, path):
+    д, _ = сверить(направления, path)
+
+    if path == "/services/it":
+        props = страница(д["body"])["props"]
+        assert props["providers"] and props["tasks"]
