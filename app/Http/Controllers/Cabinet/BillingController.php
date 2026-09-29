@@ -68,6 +68,10 @@ class BillingController extends Controller
                 'name' => $plan->name,
                 'code' => $plan->code,
                 'price_uzs' => $plan->priceUzs($rate),
+                // Та же цена в долларах: тариф в них и задан, а сумовая
+                // ходит за курсом ЦБ. Клиенту с валютным бюджетом
+                // пересчитывать курс в уме незачем
+                'price_usd' => $plan->priceUsd($rate),
                 'listings_limit' => $plan->listings_limit,
                 'contacts_limit' => $plan->contacts_limit,
                 'promo_units' => $plan->promo_units,
@@ -117,6 +121,7 @@ class BillingController extends Controller
                     'code' => $p->code,
                     'name' => $p->name,
                     'price_uzs' => $p->priceUzs($rate),
+                    'price_usd' => $p->priceUsd($rate),
                     'listings_limit' => $p->listings_limit,
                     'contacts_limit' => $p->contacts_limit,
                     'responses_limit' => $p->responses_limit,
@@ -132,6 +137,7 @@ class BillingController extends Controller
                     'name' => ContentTranslation::text($p->name),
                     'credits' => $p->credits,
                     'price_uzs' => $p->priceUzs($rate),
+                    'price_usd' => $p->priceUsd($rate),
                     'per_credit' => $p->perCredit($rate),
                 ]),
 
