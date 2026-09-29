@@ -559,18 +559,38 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .board-panel-toggle{display:none}
 .board-filter-list{display:flex;flex-direction:column}
 .board-filter-items{display:flex;flex-direction:column}
+/* Строка пункта: слева переключатель с подписью и числом, справа —
+   стрелка раскрытия у веток. Стрелка вынесена из <label>: внутри неё
+   нажатие на стрелку переключало бы и сам фильтр. */
+.board-filter-row{display:flex;align-items:center;gap:4px;border-radius:var(--r-btn);
+  padding-right:4px;transition:background var(--t-fast)}
+/* Выбранный пункт — подложкой, а не только цветом: на перечне
+   из четырнадцати строк цвет приходилось искать глазами */
+.board-filter-row.is-active{background:var(--primary-50)}
+.board-filter-row.is-active .board-filter-label{color:var(--primary-700);font-weight:600}
+
 /* Пункт-переключатель: разметка та же, что у фильтров каталога
    и компаний (.check), поэтому кружок, отступы и число справа
    выглядят одинаково на всех трёх страницах */
-.board-filter{padding:5px 0;font-size:14px;line-height:20px;color:var(--text-muted);
-  min-height:30px;align-items:center}
+.board-filter{flex:1;min-width:0;padding:5px 8px;font-size:14px;line-height:20px;
+  color:var(--text-muted);min-height:32px;align-items:center}
 .board-filter input{margin-top:0}
-.board-filter-label{min-width:0;overflow:hidden;text-overflow:ellipsis;
-  transition:color var(--t-fast)}
-.board-filter:hover .board-filter-label{color:var(--primary-600)}
-.board-filter-label.is-active{color:var(--primary-700);font-weight:600}
-/* Подрубрика: сдвиг и кегль отделяют второй уровень от первого */
-.board-filter--child{padding-left:22px;font-size:13.5px}
+/* Подпись переносится, а не обрезается многоточием: «Поддержка
+   и администрирование» — одно длинное слово, и в узкой панели от него
+   оставался огрызок «администрир…» */
+.board-filter-label{min-width:0;overflow-wrap:anywhere;transition:color var(--t-fast)}
+.board-filter-row:hover .board-filter-label{color:var(--primary-600)}
+
+/* Стрелка раскрытия: поворачивается на развёрнутой ветке */
+.board-filter-toggle{display:grid;place-items:center;width:28px;height:28px;flex-shrink:0;
+  border-radius:var(--r-btn);color:var(--text-muted);cursor:pointer;
+  transition:background var(--t-fast),color var(--t-fast),transform var(--t-mid)}
+.board-filter-toggle:hover{background:var(--white);color:var(--primary-600)}
+.board-filter-toggle[aria-expanded='true']{transform:rotate(180deg)}
+
+/* Подпункты: сдвиг и черта слева показывают, что это второй уровень */
+.board-filter-kids{margin:2px 0 4px 17px;padding-left:9px;border-left:1px solid var(--border)}
+.board-filter-row--child .board-filter{font-size:13.5px;min-height:30px}
 /* Группа панели: разделы, город, галочки. Те же размеры, что
    у .filter-group в каталоге, — панели на двух страницах должны
    читаться как одна и та же вещь */
@@ -599,7 +619,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .board-panel-toggle[aria-expanded="true"] svg:last-child{transform:rotate(180deg)}
   .board-filter-list{display:none}
   .board-filter-list.is-open{display:flex}
-  .board-filter{padding:7px 0}
+  .board-filter{padding:7px 8px}
 }
 @media (max-width:560px){
   .board-page .toolbar>*{width:100%}
