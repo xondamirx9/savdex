@@ -304,6 +304,29 @@ def test_шаг_компании_пройден(сайт):
     assert куда(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0]).endswith("/cabinet")
 
 
+@pytest.mark.parametrize(
+    ("legal_form", "город", "открыт"),
+    [("legal", False, True), ("legal", True, False), ("individual", False, False)],
+)
+def test_шаг_компании_после_регистрации(сайт, legal_form, город, открыт):
+    """
+    Юрлицо заводит компанию на первом шаге регистрации: пока город не
+    указан, второй шаг открыт и дозаполняет недостающее (completing).
+    """
+    city = "App\\Models\\City::query()->value('id')" if город else "null"
+    company = php(
+        "echo App\\Models\\Company::factory()->create("
+        f"['legal_form' => '{legal_form}', 'city_id' => {city}])->id;"
+    ).splitlines()[-1]
+    uid = учётка("registered@savdex.uz", company_id=int(company))
+    ответ, _ = сверить_сессию(сайт, "/onboarding/company", сессия(uid))
+
+    if открыт:
+        assert пропсы(ответ)["completing"] is True
+    else:
+        assert куда(ответ).endswith("/cabinet")
+
+
 def test_отзыв_о_площадке(сайт):
     uid = учётка("platform-review@savdex.uz", company_id=None)
 
