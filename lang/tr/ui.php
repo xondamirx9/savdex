@@ -1349,6 +1349,10 @@ return [
         'settings' => [
             'title' => 'Ayarlar',
             'company_title' => 'Şirket bilgileri',
+            'company_cooldown_locked_title' => 'Değişiklik :date tarihine kadar yapılamaz',
+            'company_cooldown_days_left' => ':count gün kaldı',
+            'company_cooldown_open_title' => 'Şirket bilgilerini şimdi değiştirebilirsiniz',
+            'company_cooldown_open_text' => 'Değiştirilen alanları kaydettikten sonra bir sonraki değişiklik :date tarihinden itibaren — altı ay sonra yapılabilir.',
             'company_lead' => 'Doldurulmuş şirket bilgileri altı ayda bir değiştirilebilir. Boş alanlar istediğiniz zaman doldurulabilir.',
             'company_locked' => 'Şirket bilgileri zaten değiştirildi. Sonraki değişiklik :date tarihinden itibaren.',
             'company_locked_field' => 'Bu alan süre dolduktan sonra değiştirilebilir',

@@ -2076,6 +2076,19 @@ a.product-title::after{content:'';position:absolute;inset:0;z-index:1}
 .feature-b2b h3{font-size:14.5px;font-weight:700;margin-bottom:4px}
 .feature-b2b p{font-size:13px;color:var(--text-muted);line-height:1.5}
 
+/* ── Срок смены данных компании (настройки профиля) ── */
+.cooldown-card{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:var(--r-card);
+  margin-bottom:18px;border:1px solid var(--border)}
+.cooldown-card p{margin:0}
+.cooldown-card-head{display:flex;align-items:center;gap:8px;font-size:15px}
+.cooldown-card.is-locked{background:#fff7ed;border-color:#fed7aa}
+.cooldown-card.is-locked .cooldown-card-head svg{color:#ea580c}
+.cooldown-card.is-open{background:#f0fdf4;border-color:#bbf7d0}
+.cooldown-card.is-open .cooldown-card-head svg{color:var(--success,#15803d)}
+.cooldown-card-days{font-size:22px;font-weight:700;letter-spacing:-.01em;color:#c2410c}
+.cooldown-bar{height:6px;border-radius:999px;background:#fed7aa;overflow:hidden}
+.cooldown-bar span{display:block;height:100%;border-radius:inherit;background:#ea580c}
+
 /* ── Страница направления «Доп. услуг» ── */
 .service-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:20px;align-items:center;margin-bottom:28px}
 .service-hero-ico{width:72px;height:72px;border-radius:18px;display:grid;place-items:center;color:#fff;

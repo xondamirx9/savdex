@@ -1352,6 +1352,10 @@ return [
         'settings' => [
             'title' => 'Sozlamalar',
             'company_title' => 'Kompaniya ma’lumotlari',
+            'company_cooldown_locked_title' => 'Ma’lumotlarni :date gacha o‘zgartirib bo‘lmaydi',
+            'company_cooldown_days_left' => ':count kun qoldi',
+            'company_cooldown_open_title' => 'Hozir kompaniya ma’lumotlarini o‘zgartirish mumkin',
+            'company_cooldown_open_text' => 'O‘zgartirilgan maydonlar saqlangach, keyingi o‘zgartirish :date dan — yarim yildan keyin mumkin bo‘ladi.',
             'company_lead' => 'To‘ldirilgan kompaniya ma’lumotlarini yarim yilda bir marta o‘zgartirish mumkin. Bo‘sh maydonlarni istalgan vaqtda to‘ldirish mumkin.',
             'company_locked' => 'Kompaniya ma’lumotlari allaqachon o‘zgartirilgan. Keyingi o‘zgartirish — :date dan.',
             'company_locked_field' => 'Maydonni muddat tugagach o‘zgartirish mumkin',

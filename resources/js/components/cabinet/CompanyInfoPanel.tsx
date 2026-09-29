@@ -1,10 +1,10 @@
-import { Clock, LifeBuoy } from 'lucide-react';
+import { CheckCircle2, Clock, LifeBuoy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SelectField } from '@/components/SelectField';
 import { Panel } from '@/components/cabinet';
 import { cn } from '@/lib/cn';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
-import { t } from '@/lib/i18n';
+import { t, tChoice } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 import { routes } from '@/routes';
 
@@ -28,6 +28,13 @@ interface Payload {
     /** До какой даты заполненное менять нельзя; null — можно сейчас */
     locked_until: string | null;
     changed_at: string | null;
+    cooldown_months: number;
+    /** Дней до конца срока; null — менять можно сейчас */
+    days_left: number | null;
+    /** Какая часть срока прошла, 0…1 */
+    cooldown_progress: number | null;
+    /** С какого дня откроется следующая смена, если сохранить сейчас */
+    next_if_changed: string;
     countries: { id: number; name: string }[];
     cities: { id: number; name: string; country_id: number }[];
     serviceTypes: Record<string, string>;
@@ -172,10 +179,49 @@ export function CompanyInfoPanel() {
                 {t('cabinet.settings.company_lead')}
             </p>
 
-            {cooling && (
-                <div className="alert alert-info" style={{ marginBottom: 16 }}>
-                    <Clock aria-hidden className="size-4" />
-                    <span>{t('cabinet.settings.company_locked', { date: payload.locked_until ?? '' })}</span>
+            {/* Срок смены данных: сколько осталось или что будет после сохранения */}
+            {cooling ? (
+                <div className="cooldown-card is-locked" role="status">
+                    <div className="cooldown-card-head">
+                        <Clock aria-hidden className="size-5" />
+                        <b>{t('cabinet.settings.company_cooldown_locked_title', { date: payload.locked_until ?? '' })}</b>
+                    </div>
+                    {payload.days_left !== null && (
+                        <p className="cooldown-card-days">
+                            {tChoice('cabinet.settings.company_cooldown_days_left', payload.days_left)}
+                        </p>
+                    )}
+                    {payload.cooldown_progress !== null && (
+                        <div
+                            className="cooldown-bar"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(payload.cooldown_progress * 100)}
+                        >
+                            <span style={{ width: `${payload.cooldown_progress * 100}%` }} />
+                        </div>
+                    )}
+                    {payload.changed_at && (
+                        <p className="t-sm muted">
+                            {t('cabinet.settings.company_changed_at', { date: payload.changed_at })}
+                        </p>
+                    )}
+                </div>
+            ) : (
+                <div className="cooldown-card is-open" role="status">
+                    <div className="cooldown-card-head">
+                        <CheckCircle2 aria-hidden className="size-5" />
+                        <b>{t('cabinet.settings.company_cooldown_open_title')}</b>
+                    </div>
+                    <p className="t-sm">
+                        {t('cabinet.settings.company_cooldown_open_text', { date: payload.next_if_changed })}
+                    </p>
+                    {payload.changed_at && (
+                        <p className="t-sm muted">
+                            {t('cabinet.settings.company_changed_at', { date: payload.changed_at })}
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -382,10 +428,6 @@ export function CompanyInfoPanel() {
                     {notice}
                 </p>
             )}
-            {payload.changed_at && (
-                <p className="t-sm muted">{t('cabinet.settings.company_changed_at', { date: payload.changed_at })}</p>
-            )}
-
             <button type="button" className="btn btn-primary mt-16" disabled={saving} onClick={save}>
                 {t('cabinet.settings.company_save')}
             </button>

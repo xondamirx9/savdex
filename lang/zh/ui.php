@@ -1348,6 +1348,10 @@ return [
         'settings' => [
             'title' => '设置',
             'company_title' => '公司信息',
+            'company_cooldown_locked_title' => ':date 之前无法修改',
+            'company_cooldown_days_left' => '还剩 :count 天',
+            'company_cooldown_open_title' => '现在可以修改公司信息',
+            'company_cooldown_open_text' => '保存修改后的字段后，下次可在 :date（半年后）修改。',
             'company_lead' => '已填写的公司信息每半年可修改一次。空白字段可随时填写。',
             'company_locked' => '公司信息已修改过。下次可修改日期：:date。',
             'company_locked_field' => '期限结束后才能修改此字段',

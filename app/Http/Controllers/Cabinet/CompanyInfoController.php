@@ -182,6 +182,15 @@ class CompanyInfoController extends Controller
             'locked_until' => $until?->translatedFormat('d.m.Y'),
             'changed_at' => $company->profile_changed_at?->translatedFormat('d.m.Y'),
             'cooldown_months' => Company::PROFILE_COOLDOWN_MONTHS,
+            // Сколько ждать и какая часть срока прошла — для плашки над формой
+            'days_left' => $until !== null ? (int) ceil(now()->diffInSeconds($until) / 86400) : null,
+            'cooldown_progress' => $until !== null && $company->profile_changed_at !== null
+                ? round(min(1, max(0,
+                    $company->profile_changed_at->diffInSeconds(now()) / max(1, $company->profile_changed_at->diffInSeconds($until)),
+                )), 3)
+                : null,
+            // С какого дня откроется следующая смена, если сохранить изменения сейчас
+            'next_if_changed' => now()->addMonthsNoOverflow(Company::PROFILE_COOLDOWN_MONTHS)->translatedFormat('d.m.Y'),
             'countries' => Country::listed()
                 ->map(fn (Country $c): array => ['id' => $c->id, 'name' => $c->name()])
                 ->values(),

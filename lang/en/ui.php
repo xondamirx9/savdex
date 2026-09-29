@@ -1349,6 +1349,10 @@ return [
         'settings' => [
             'title' => 'Settings',
             'company_title' => 'Company details',
+            'company_cooldown_locked_title' => 'Changes are unavailable until :date',
+            'company_cooldown_days_left' => ':count day left|:count days left',
+            'company_cooldown_open_title' => 'You can change the company details now',
+            'company_cooldown_open_text' => 'After you save changed fields, the next change will be available from :date — in six months.',
             'company_lead' => 'Filled-in company details can be changed once every six months. Empty fields can be filled in at any time.',
             'company_locked' => 'The company details have already been changed. Next change available from :date.',
             'company_locked_field' => 'This field can be changed once the period is over',
