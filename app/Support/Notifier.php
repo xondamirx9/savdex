@@ -36,7 +36,10 @@ class Notifier
             'url' => $attributes['url'] ?? null,
         ]);
 
-        foreach ($company->users()->get() as $user) {
+        // По порядку номеров, как у Django (listing_actions._notify_company):
+        // без сортировки PostgreSQL отдаёт строки в физическом порядке,
+        // и после правки пользователя уведомления ложились иначе
+        foreach ($company->users()->orderBy('id')->get() as $user) {
             UserNotification::deliver($user, [
                 'type' => $type,
                 'title' => $title,
