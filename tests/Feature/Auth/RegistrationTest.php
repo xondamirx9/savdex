@@ -220,8 +220,8 @@ class RegistrationTest extends TestCase
 
         foreach (range(1, 8) as $attempt) {
             $this->post('/register', $this->validPayload([
-                'password' => 'korotkiy1',
-                'password_confirmation' => 'korotkiy1',
+                'password' => 'korot1',
+                'password_confirmation' => 'korot1',
             ]))->assertSessionHasErrors('password');
         }
 

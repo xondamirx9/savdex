@@ -22,6 +22,7 @@ final class PasswordMessages
     {
         return [
             'password.min' => __('ui.messages.register.password_min'),
+            'password.max' => __('ui.messages.register.password_max'),
             'password.letters' => __('ui.messages.register.password_letters'),
             'password.numbers' => __('ui.messages.register.password_numbers'),
             'password.uncompromised' => __('ui.messages.register.password_leaked'),

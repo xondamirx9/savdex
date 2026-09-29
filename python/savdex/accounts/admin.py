@@ -177,7 +177,10 @@ class UserAdmin(SavdexModelAdmin):
         for user in queryset.filter(deleted_at__isnull=False):
             # Двух действующих с одной почтой быть не может: адрес мог
             # занять новый аккаунт, пока этот был отключён
-            if User.objects.filter(email=user.email, deleted_at__isnull=True).exclude(pk=user.pk):
+            # (без учёта регистра, как ищет вход)
+            if User.objects.filter(email__iexact=user.email, deleted_at__isnull=True).exclude(
+                pk=user.pk
+            ):
                 self.message_user(
                     request,
                     f"Не восстановлен: адрес {user.email} уже занят другим аккаунтом.",

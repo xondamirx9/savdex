@@ -172,9 +172,9 @@ class PasswordResetTest extends TestCase
         $this->post('/reset-password', [
             'token' => 'token',
             'email' => $user->email,
-            'password' => 'korotkiy',
-            'password_confirmation' => 'korotkiy',
-        ])->assertSessionHasErrors(['password' => 'Пароль должен быть не короче 10 символов']);
+            'password' => 'korot1',
+            'password_confirmation' => 'korot1',
+        ])->assertSessionHasErrors(['password' => 'Пароль должен быть не короче 8 символов']);
 
         $this->assertStringNotContainsString('validation.', implode(' ', session('errors')->get('password')));
     }
@@ -183,7 +183,7 @@ class PasswordResetTest extends TestCase
     public function пароль_из_утечки_объясняется_словами_а_не_ключом(): void
     {
         // Проверка по базе утечек включена на развёрнутом сайте, в тестах — нет
-        Password::defaults(fn (): Password => Password::min(10)->letters()->numbers()->uncompromised());
+        Password::defaults(fn (): Password => Password::min(8)->max(20)->letters()->numbers()->uncompromised());
         $this->app->instance(UncompromisedVerifier::class, new class implements UncompromisedVerifier
         {
             public function verify($data): bool

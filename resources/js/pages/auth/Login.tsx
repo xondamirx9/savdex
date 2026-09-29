@@ -35,6 +35,9 @@ export default function Login({ status }: { status?: string }) {
                 <TextInput
                     label={t('auth.email_short_label')}
                     type="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     name="email"
                     autoComplete="email"
                     required
