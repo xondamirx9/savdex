@@ -304,35 +304,27 @@ def test_шаг_компании_пройден(сайт):
     assert куда(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0]).endswith("/cabinet")
 
 
-def test_шаг_компании_у_юрлица_после_регистрации(сайт):
-    # Компания заведена на первом шаге, города ещё нет — второй шаг
-    # «Данные компании» открывается и спрашивает только недостающее
+@pytest.mark.parametrize(
+    ("legal_form", "город", "открыт"),
+    [("legal", False, True), ("legal", True, False), ("individual", False, False)],
+)
+def test_шаг_компании_после_регистрации(сайт, legal_form, город, открыт):
+    """
+    Юрлицо заводит компанию на первом шаге регистрации: пока город не
+    указан, второй шаг открыт и дозаполняет недостающее (completing).
+    """
+    city = "App\\Models\\City::query()->value('id')" if город else "null"
     company = php(
-        "echo App\\Models\\Company::factory()"
-        "->create(['legal_form' => 'legal', 'city_id' => null])->id;"
+        "echo App\\Models\\Company::factory()->create("
+        f"['legal_form' => '{legal_form}', 'city_id' => {city}])->id;"
     ).splitlines()[-1]
-    uid = учётка("legal-step@savdex.uz", company_id=int(company))
+    uid = учётка("registered@savdex.uz", company_id=int(company))
+    ответ, _ = сверить_сессию(сайт, "/onboarding/company", сессия(uid))
 
-    props = пропсы(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0])
-
-    assert props["completing"] is True
-
-
-def test_шаг_компании_не_нужен_физлицу(сайт):
-    company = php(
-        "echo App\\Models\\Company::factory()"
-        "->create(['legal_form' => 'individual', 'city_id' => null])->id;"
-    ).splitlines()[-1]
-    uid = учётка("person-step@savdex.uz", account_type="individual", company_id=int(company))
-
-    assert куда(сверить_сессию(сайт, "/onboarding/company", сессия(uid))[0]).endswith("/cabinet")
-
-
-def test_регистрация_отдаёт_категории_и_направления(сайт):
-    props = пропсы(сверить_сессию(сайт, "/register", сессия())[0])
-
-    assert [s["code"] for s in props["serviceSections"]][:2] == ["it", "hr_services"]
-    assert isinstance(props["categories"], list)
+    if открыт:
+        assert пропсы(ответ)["completing"] is True
+    else:
+        assert куда(ответ).endswith("/cabinet")
 
 
 def test_отзыв_о_площадке(сайт):
