@@ -34,7 +34,7 @@ class Check:
 
 
 #: Validator::$implicitRules (из тех, что есть здесь)
-IMPLICIT = ("required", "required_with", "required_if")
+IMPLICIT = ("required", "required_with", "required_if", "accepted")
 
 _MISSING = object()
 
@@ -93,6 +93,10 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
             return value.strip() != ""
 
         return not (isinstance(value, dict | list) and len(value) == 0)
+
+    if rule == "accepted":
+        # validateAccepted: присутствует и одно из «да»
+        return _passes("required", None, value) and value in ("yes", "on", "1", 1, True, "true")
 
     if rule == "numeric":
         # is_numeric: число или числовая строка
@@ -625,6 +629,10 @@ def validate(
                     passed = _required_if(data, param, value)
                 elif rule == "gte":
                     passed = _gte(data, field_rules, param, value)
+                elif rule == "confirmed":
+                    # validateConfirmed: строгое равенство с полем <имя>_confirmation
+                    other = _get(data, (attribute + "_confirmation").split("."))
+                    passed = other is not _MISSING and type(other) is type(value) and other == value
                 else:
                     passed = (
                         spec.passes(value)

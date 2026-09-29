@@ -105,12 +105,32 @@ def is_file_store() -> bool:
     return _store() == "file"
 
 
-def _serialize(value: int | bool) -> bytes:
-    """serialize() PHP для того, что пишут счётчики: целое или логическое."""
+#: Что кладёт в кэш Django: счётчики, флаги, строки и массивы (код почты)
+Value = int | bool | str | None | dict[str | int, "Value"]
+
+
+def _serialize(value: Value) -> bytes:
+    """serialize() PHP: целое, логическое, строка, null и массив."""
+    if value is None:
+        return b"N;"
+
     if isinstance(value, bool):
         return b"b:1;" if value else b"b:0;"
 
-    return f"i:{int(value)};".encode()
+    if isinstance(value, int):
+        return f"i:{value};".encode()
+
+    if isinstance(value, str):
+        data = value.encode()
+
+        return b's:%d:"%b";' % (len(data), data)
+
+    parts = [
+        (f"i:{k};".encode() if isinstance(k, int) else _serialize(k)) + _serialize(v)
+        for k, v in value.items()
+    ]
+
+    return b"a:%d:{%b}" % (len(parts), b"".join(parts))
 
 
 def _expiration(seconds: int) -> int:
@@ -157,7 +177,7 @@ def _write(path: Path, content: bytes) -> None:
         fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def put(key: str, value: int | bool, seconds: int) -> None:
+def put(key: str, value: Value, seconds: int) -> None:
     """Cache::put: перезаписать значение со сроком."""
     _write(file_path(key), str(_expiration(seconds)).rjust(10, "0").encode() + _serialize(value))
 

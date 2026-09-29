@@ -125,7 +125,8 @@ SHARED_WRITES: dict[str, str] = {
         "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
         "новая компания — company_id и company_role владельца"
         "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
-        "без меток времени, метка последнего входа, как SessionGuard"
+        "без меток времени, метка последнего входа, как SessionGuard; "
+        "регистрация — новая учётка, как RegisteredUserController::store"
     ),
     "login_attempts": (
         "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "

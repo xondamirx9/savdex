@@ -269,7 +269,11 @@ urlpatterns = [
         name="login",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?logout$", auth_actions.logout, name="logout"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register$",
+        auth_actions.either(auth.register, auth_actions.register),
+        name="register",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",
         auth.forgot_password,

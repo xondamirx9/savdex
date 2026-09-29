@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -271,3 +272,158 @@ def either(
         return handler(request, *args, **kwargs)  # type: ignore[no-any-return]
 
     return view
+
+
+# ── Регистрация ─────────────────────────────────────────────────────
+
+
+def _unique_email() -> Any:  # noqa: ANN401
+    """unique:users,email — удалённые учётки тоже в счёт."""
+    from savdex.web.cabinet import _rows
+    from savdex.web.validation import Check
+
+    def passes(value: Any) -> bool:  # noqa: ANN401
+        return not _rows("select 1 from users where email = %s limit 1", [str(value)])
+
+    return Check("unique", passes)
+
+
+def _ordered(errors: dict[str, list[str]], order: list[str]) -> dict[str, list[str]]:
+    """Ошибки полей в порядке правил, как их копит MessageBag."""
+    return {k: errors[k] for k in order if k in errors}
+
+
+@form()
+def register(request: HttpRequest) -> HttpResponse:
+    """RegisteredUserController::store (guest, throttle:5,60) и RegisterRequest."""
+    from savdex.web import password_rule, verification
+
+    ctx = action(request, auth=False, throttle=5, throttle_minutes=60)
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    data = input_of(request)
+
+    # prepareForValidation: почта — строчными без пробелов, имя — без пробелов
+    data["email"] = _php_string(data.get("email")).strip(" \t\n\r\0\x0b").lower()
+    data["name"] = _php_string(data.get("name")).strip(" \t\n\r\0\x0b")
+
+    custom = {
+        "name.required": ctx.t("messages.register.name_required"),
+        "name.min": ctx.t("messages.register.name_min"),
+        "email.required": ctx.t("messages.register.email_required"),
+        "email.email": ctx.t("messages.register.email_format"),
+        "email.unique": ctx.t("messages.register.email_taken"),
+        "phone.required": ctx.t("messages.register.phone_required"),
+        "phone.regex": ctx.t("messages.phone_format"),
+        "password.required": ctx.t("messages.auth.password_new"),
+        "password.confirmed": ctx.t("messages.auth.password_mismatch"),
+        "password.min": ctx.t("messages.register.password_min"),
+        "password.letters": ctx.t("messages.register.password_letters"),
+        "password.numbers": ctx.t("messages.register.password_numbers"),
+        "password.uncompromised": ctx.t("messages.register.password_leaked"),
+        "terms.accepted": ctx.t("messages.register.terms"),
+        "account_type.in": ctx.t("messages.register.account_type"),
+    }
+    rules: dict[str, list[Any]] = {
+        "name": ["required", "string", "min:2", "max:120"],
+        "email": ["required", "string", "email:rfc,strict", "max:190", _unique_email()],
+        "phone": ["required", "string", r"regex:/^\+?\d[\d\s\-()]{8,17}$/"],
+        "password": ["required", "string", "confirmed"],
+        "terms": ["accepted"],
+        "account_type": ["nullable", "in:legal,individual,freelancer"],
+        "locale": ["nullable", "string", "in:ru,uz,en,zh,tr"],
+    }
+    errors = validate(data, rules, ctx.locale, custom)
+    password = data.get("password")
+    confirmed_failed = custom["password.confirmed"] in errors.get("password", [])
+
+    # Password::defaults() — после required, string и confirmed
+    if _filled(password):
+        extra = password_rule.messages("password", password, ctx.locale, custom)
+        merged = errors.get("password", [])
+        merged += [m for m in extra if m not in merged]
+
+        if merged:
+            errors["password"] = merged
+
+    errors = _ordered(errors, list(rules))
+
+    # after(): «пароли не совпадают» — и под вторым полем
+    if confirmed_failed:
+        errors["password_confirmation"] = [custom["password.confirmed"]]
+
+    # after(): почта без «@» или без точки после неё — своя подсказка
+    email = data["email"]
+
+    if email != "" and "email" in errors and errors["email"] != [custom["email.unique"]]:
+        hint = None
+
+        if "@" not in email:
+            hint = ctx.t("messages.register.email_no_at")
+        elif "." not in email[email.index("@") :]:
+            hint = ctx.t("messages.register.email_incomplete")
+
+        if hint is not None:
+            del errors["email"]
+            errors["email"] = [hint]
+
+    if errors:
+        return invalid(ctx, errors)
+
+    locale = data.get("locale", "ru")
+    now = _stamp(eloquent.now())
+    row: dict[str, Any] = {
+        "name": _php_string(data.get("name")),
+        "email": email,
+        "phone": _php_string(data.get("phone")),
+        "password": guard.make(str(password)),
+        "locale": _php_string(locale),
+        "account_type": _php_string(data.get("account_type")) or "legal",
+        "company_role": "owner",
+        "updated_at": now,
+        "created_at": now,
+    }
+
+    # Демо-стенд: почта подтверждена сразу, письма нет
+    if (os.environ.get("DEMO_AUTO_VERIFY") or "").lower() in ("1", "true", "on", "yes"):
+        row["email_verified_at"] = now
+
+    columns = list(row)
+
+    with allowed_writes("users"), connection.cursor() as cursor:
+        cursor.execute(
+            f"insert into users ({', '.join(columns)}) "
+            f"values ({', '.join(['%s'] * len(columns))}) returning id",
+            list(row.values()),
+        )
+        row["id"] = cursor.fetchone()[0]
+
+    user = _row(row["id"])
+
+    # Registered: письмо с кодом — только неподтверждённой почте
+    if user["email_verified_at"] is None:
+        verification.send(ctx, user)
+
+    guard.login(ctx, _session(ctx), user)
+
+    return _to(ctx, "/onboarding/company")
+
+
+def _php_string(value: Any) -> str:  # noqa: ANN401
+    """$request->string(): (string) значения, null — пусто."""
+    if value is None:
+        return ""
+
+    if value is True:
+        return "1"
+
+    if value is False:
+        return ""
+
+    return str(value)
+
+
+def _filled(value: Any) -> bool:  # noqa: ANN401
+    return value is not None and not (isinstance(value, str) and value.strip() == "")
