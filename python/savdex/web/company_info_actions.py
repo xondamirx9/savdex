@@ -20,7 +20,6 @@ from typing import Any
 from django.db import connection, transaction
 from django.http import HttpRequest, HttpResponse
 
-from savdex.guards import allowed_writes
 from savdex.web import eloquent
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
@@ -294,7 +293,8 @@ def support(request: HttpRequest) -> HttpResponse:
     }
 
     with transaction.atomic():
-        with allowed_writes("support_tickets", "support_messages"), connection.cursor() as cursor:
+        # Обращения — таблицы Django (этап 6, раздел «Обращения»)
+        with connection.cursor() as cursor:
             cursor.execute(
                 f"insert into support_tickets ({', '.join(ticket)}) "
                 f"values ({', '.join(['%s'] * len(ticket))}) returning id",

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Support\Ticket;
 use App\Support\AdminAccess;
 use Filament\Tables\Columns\TextColumn;
@@ -80,7 +79,8 @@ class SupportQueue extends TableWidget
                     ->state(fn (Ticket $record): string => $record->created_at->diffForHumans(syntax: true))
                     ->color(fn (Ticket $record): string => $record->created_at->diffInHours() >= 24 ? 'danger' : 'gray'),
             ])
-            ->recordUrl(fn (Ticket $record): string => TicketResource::getUrl('edit', ['record' => $record]))
+            // Раздел «Обращения» — на Django (этап 6): строка ведёт туда через пропуск
+            ->recordUrl(fn (Ticket $record): string => '/admin/python?next='.rawurlencode("/py/admin/support/ticket/{$record->id}/change/"))
             ->emptyStateHeading('Открытых обращений нет')
             ->emptyStateDescription('Всё разобрано.');
     }

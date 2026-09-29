@@ -23,6 +23,7 @@ use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Task;
+use App\Models\Support\Ticket;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
 use App\Support\Appearance;
@@ -166,6 +167,14 @@ class AdminPanelProvider extends PanelProvider
                     ->group('CRM')
                     ->sort(5)
                     ->visible(fn (): bool => AdminAccess::allows('communications.view')),
+                NavigationItem::make('Обращения')
+                    ->url('/admin/python?next=/py/admin/support/ticket/')
+                    ->icon('heroicon-o-lifebuoy')
+                    ->group('Поддержка')
+                    ->sort(1)
+                    // Счётчик — открытые: обращение без ответа это долг перед клиентом
+                    ->badge(fn (): ?string => ($open = Ticket::query()->open()->count()) > 0 ? (string) $open : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('support.view')),
                 NavigationItem::make('Главная страница')
                     ->url('/admin/python?next=/py/admin/site/landingblock/')
                     ->icon('heroicon-o-home')

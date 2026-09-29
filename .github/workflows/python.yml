@@ -104,6 +104,7 @@ on:
       - 'app/Support/DatabaseExports.php'
       - 'app/Models/User.php'
       - 'app/Models/Crm/**'
+      - 'app/Models/Support/**'
       - 'database/migrations/**'
   pull_request:
     paths:
@@ -186,6 +187,7 @@ on:
       - 'app/Support/DatabaseExports.php'
       - 'app/Models/User.php'
       - 'app/Models/Crm/**'
+      - 'app/Models/Support/**'
       - 'database/migrations/**'
 
 defaults:

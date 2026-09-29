@@ -8,7 +8,6 @@ use App\Filament\Pages\FinanceOperations;
 use App\Filament\Pages\Roles;
 use App\Filament\Resources\AdminActions\Pages\ListAdminActions;
 use App\Filament\Resources\Refunds\Pages\ListRefunds;
-use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Models\Company;
 use App\Models\Crm\Communication;
 use App\Models\Crm\Contact;
@@ -52,7 +51,6 @@ class RenderTest extends TestCase
         return [
             'журнал действий' => [ListAdminActions::class],
             'роли и права' => [Roles::class],
-            'обращения' => [ListTickets::class],
             'возвраты' => [ListRefunds::class],
             'финансовые операции' => [FinanceOperations::class],
         ];

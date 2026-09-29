@@ -142,6 +142,7 @@ INSTALLED_APPS = [
     "savdex.tenders.apps.TendersConfig",
     "savdex.accounts.apps.AccountsConfig",
     "savdex.crm.apps.CrmConfig",
+    "savdex.support.apps.SupportConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
