@@ -144,6 +144,7 @@ INSTALLED_APPS = [
     "savdex.crm.apps.CrmConfig",
     "savdex.support.apps.SupportConfig",
     "savdex.journal.apps.JournalConfig",
+    "savdex.moderation.apps.ModerationConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

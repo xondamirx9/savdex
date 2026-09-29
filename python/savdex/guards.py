@@ -170,6 +170,8 @@ SHARED_WRITES: dict[str, str] = {
     "platform_reviews": (
         "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
         "как PlatformReviewService::save; у модели нет событий и журнала"
+        "; решения модератора (этап 6) — статус, формулировка, кто и когда, "
+        "как PlatformReviewService::decide"
     ),
     "password_reset_tokens": (
         "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
@@ -274,10 +276,12 @@ SHARED_WRITES: dict[str, str] = {
         "read_at и updated_at, как UserNotification::markRead и update() у "
         "Laravel; событий у модели нет"
         "; уведомления компании (этап 5, шаг 23) — insert, как Notifier::company"
+        "; решения по отзывам (этап 6) — Notifier::company и Notifier::user"
     ),
     "activity_events": (
         "лента кабинета (этап 5, форма): insert события, как Notifier::company "
         "при повторной публикации объявления; событий у модели нет"
+        "; решения по отзывам в админке (этап 6) — то же событие компании"
     ),
     "favorites": (
         "избранное (этап 5, форма): insert … on conflict do nothing и delete "
@@ -301,6 +305,9 @@ SHARED_WRITES: dict[str, str] = {
         "смене оценки, статуса, компании), у администратора — строка журнала"
         "; отзыв на визитке (этап 5, шаг 41) — новая строка, как "
         "ReviewService::create (журнал created у администратора)"
+        "; раздел «Отзывы» админки (этап 6): правка, заведение, загрузка файлом, "
+        "удаление и решения модератора, как ModerationService — у Review "
+        "журнал AuditObserver и строка о решении"
     ),
     "messages": (
         "чат (этап 5, форма): новое сообщение в разговор, как ChatService::send "
@@ -334,6 +341,7 @@ SHARED_WRITES: dict[str, str] = {
         "; данные компании в настройках (шаг 51) — те же поля и profile_changed_at "
         "при смене заполненного, как CompanyInfoController::update"
         "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
+        " (и после решений по отзывам в админке, этап 6)"
     ),
     "company_site_products": (
         "товары мини-сайта (этап 5, форма): добавить, изменить, удалить, как "

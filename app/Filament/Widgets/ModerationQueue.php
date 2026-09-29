@@ -7,7 +7,6 @@ namespace App\Filament\Widgets;
 use App\Filament\Pages\Complaints;
 use App\Filament\Resources\CompanyDocuments\CompanyDocumentResource;
 use App\Filament\Resources\Listings\ListingResource;
-use App\Filament\Resources\Reviews\ReviewResource;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
 use App\Models\Listing;
@@ -71,7 +70,8 @@ class ModerationQueue extends StatsOverviewWidget
                 Review::where('dispute_status', 'pending')->count(),
                 Review::where('dispute_status', 'pending')->min('updated_at'),
                 'heroicon-o-chat-bubble-left-right',
-                ReviewResource::getUrl(),
+                // Раздел «Отзывы» — на Django (этап 6)
+                '/admin/python?next=/py/admin/moderation/review/',
             );
         }
 

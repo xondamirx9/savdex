@@ -251,10 +251,11 @@ class OpenFilter(admin.SimpleListFilter):
     # Не «all»: так ChangeList называет «показать всё без страниц»
     parameter_name = "closed"
     open_label = "Только в работе"
+    all_label = "Все, и закрытые"
     open_q: ClassVar[Q]
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return [("1", "Все, и закрытые")]
+        return [("1", self.all_label)]
 
     def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
         return queryset if self.value() == "1" else queryset.filter(self.open_q)
@@ -268,7 +269,7 @@ class OpenFilter(admin.SimpleListFilter):
         yield {
             "selected": self.value() == "1",
             "query_string": changelist.get_query_string({self.parameter_name: "1"}),
-            "display": "Все, и закрытые",
+            "display": self.all_label,
         }
 
 
@@ -893,17 +894,8 @@ class TaskForm(SubjectForm):
 class TaskOpen(OpenFilter):
     title = "выполнение"
     open_label = "Только невыполненные"
+    all_label = "Все, и выполненные"
     open_q = Q(done_at__isnull=True)
-
-    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return [("1", "Все, и выполненные")]
-
-    def choices(self, changelist: Any) -> Iterator[Any]:  # noqa: ANN401
-        for choice in super().choices(changelist):
-            if choice["display"] == "Все, и закрытые":
-                choice["display"] = "Все, и выполненные"
-
-            yield choice
 
 
 def _today() -> tuple[datetime, datetime]:

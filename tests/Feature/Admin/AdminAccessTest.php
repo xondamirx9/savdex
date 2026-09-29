@@ -13,7 +13,6 @@ use App\Filament\Resources\ItTasks\ItTaskResource;
 use App\Filament\Resources\Listings\ListingResource;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Resumes\ResumeResource;
-use App\Filament\Resources\Reviews\ReviewResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Resources\Tenders\TenderResource;
 use App\Filament\Resources\Users\UserResource;
@@ -49,7 +48,6 @@ class AdminAccessTest extends TestCase
         ItTaskResource::class,
         CompanyDocumentResource::class,
         ResumeResource::class,
-        ReviewResource::class,
         Complaints::class,
         Invoices::class,
         SubscriptionResource::class,
@@ -79,7 +77,7 @@ class AdminAccessTest extends TestCase
             'администратор' => [AdminAccess::ADMIN, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
                 TenderResource::class, ItTaskResource::class, CompanyDocumentResource::class,
-                ResumeResource::class, ReviewResource::class, Complaints::class,
+                ResumeResource::class, Complaints::class,
                 BroadcastResource::class,
             ]],
 
@@ -101,7 +99,7 @@ class AdminAccessTest extends TestCase
             'модератор' => [AdminAccess::MODERATOR, [
                 CompanyResource::class, ListingResource::class, TenderResource::class,
                 ItTaskResource::class, CompanyDocumentResource::class,
-                ResumeResource::class, ReviewResource::class, Complaints::class,
+                ResumeResource::class, Complaints::class,
             ]],
 
             'финансы' => [AdminAccess::FINANCE, [
@@ -111,7 +109,7 @@ class AdminAccessTest extends TestCase
 
             'поддержка' => [AdminAccess::SUPPORT, [
                 UserResource::class, CompanyResource::class, ListingResource::class,
-                ItTaskResource::class, ResumeResource::class, ReviewResource::class, Complaints::class,
+                ItTaskResource::class, ResumeResource::class, Complaints::class,
                 SubscriptionResource::class,
             ]],
 

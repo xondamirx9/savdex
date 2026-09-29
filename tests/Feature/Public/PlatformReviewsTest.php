@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Public;
 
-use App\Filament\Resources\PlatformReviews\Pages\ListPlatformReviews;
 use App\Models\Company;
 use App\Models\ContactUnlock;
 use App\Models\PlatformReview;
 use App\Models\Review;
 use App\Models\Setting;
 use App\Models\User;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -125,29 +122,6 @@ class PlatformReviewsTest extends TestCase
     }
 
     // ── Модерация ────────────────────────────────────────────
-
-    #[Test]
-    public function модератор_публикует_и_отклоняет_с_причиной_автору(): void
-    {
-        $this->actingAs(User::factory()->create([
-            'is_admin' => true,
-            'admin_role' => User::ADMIN_MODERATOR,
-            'status' => 'active',
-        ]));
-
-        $good = $this->review(['status' => PlatformReview::STATUS_MODERATION]);
-        $bad = $this->review(['status' => PlatformReview::STATUS_MODERATION]);
-
-        Livewire::test(ListPlatformReviews::class)
-            ->callAction(TestAction::make('approve')->table($good))
-            ->callAction(TestAction::make('reject')->table($bad), ['note' => 'В тексте реклама стороннего сайта']);
-
-        $this->assertSame(PlatformReview::STATUS_PUBLISHED, $good->fresh()->status);
-        $this->assertSame(PlatformReview::STATUS_HIDDEN, $bad->fresh()->status);
-        $this->assertSame('В тексте реклама стороннего сайта', $bad->fresh()->moderator_note);
-        $this->assertSame(1, $good->user->alerts()->count());
-        $this->assertSame('В тексте реклама стороннего сайта', $bad->user->alerts()->first()->body);
-    }
 
     // ── Лента ────────────────────────────────────────────────
 

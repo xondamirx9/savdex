@@ -1,0 +1,358 @@
+"""
+Решения модератора по отзывам — копия ModerationService (отзывы о
+компаниях) и PlatformReviewService (отзывы о площадке).
+
+Порядок — как у Laravel: запись и пересчёт рейтинга, потом уведомления,
+потом строка журнала о решении. Правка отзыва пишет в журнал ещё и
+«изменено» (AuditObserver у Review); у отзыва о площадке наблюдателя нет.
+
+Одно отличие: рейтинг компании пересчитывается один раз. У Laravel —
+дважды (событие saved и сама служба), и при смене оценки в журнале две
+одинаковые строки о компании.
+
+Общие части сайта (пересчёт рейтинга, уведомления, журнал правок чужих
+таблиц) ждут контекст запроса сайта; раздел передаёт им AdminContext —
+вошедшего сотрудника и запрос.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, cast
+
+from django.db import connection, transaction
+from django.http import HttpRequest
+
+from savdex import audit
+from savdex.adminsite import SavdexModelAdmin, _admin_of
+from savdex.catalog import now
+from savdex.guards import allowed_writes
+from savdex.moderation.models import HIDDEN, PUBLISHED, PlatformReview, Review
+from savdex.web import ui
+from savdex.web.cabinet import _rows
+from savdex.web.chat_actions import str_limit
+from savdex.web.listing_actions import _notify_company
+from savdex.web.review_actions import recalculate
+from savdex.web.shared import Context
+
+
+@dataclass
+class AdminContext:
+    """Сколько нужно общим частям сайта: кто действует и сам запрос."""
+
+    request: HttpRequest
+    user: dict[str, Any]
+
+
+def context_of(request: HttpRequest) -> Context:
+    staff = _admin_of(request)
+    ctx = AdminContext(
+        request=request,
+        user={"id": staff.id, "name": staff.name, "email": staff.email, "is_admin": True},
+    )
+
+    return cast(Context, ctx)
+
+
+def live_company(company_id: int | None) -> dict[str, Any] | None:
+    """Company::find: компания без мягкого удаления — вся строка."""
+    if company_id is None:
+        return None
+
+    rows = _rows("select * from companies where id = %s and deleted_at is null", [company_id])
+
+    return rows[0] if rows else None
+
+
+def recalculate_companies(ctx: Context, *company_ids: int | None) -> None:
+    """ReviewService::recalculate по каждой (без повторов), кроме удалённых."""
+    seen: set[int] = set()
+
+    for company_id in company_ids:
+        if company_id is None or company_id in seen:
+            continue
+
+        seen.add(company_id)
+        company = live_company(company_id)
+
+        if company is not None:
+            recalculate(ctx, company)
+
+
+def notify_company(
+    ctx: Context,
+    company_id: int,
+    type_: str,
+    title: str,
+    tone: str,
+    url: str | None,
+    body: str | None,
+) -> None:
+    """Notifier::company: лента кабинета и уведомление каждому сотруднику."""
+    _notify_company(ctx, {"id": company_id}, type_, title, tone, cast(str, url), body)
+
+
+def notify_user(
+    user_id: int, type_: str, title: str, tone: str, url: str | None, body: str | None = None
+) -> None:
+    """Notifier::user — UserNotification::deliver: компания — с пользователя."""
+    rows = _rows("select id, company_id from users where id = %s and deleted_at is null", [user_id])
+
+    if not rows:
+        return
+
+    stamp = now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with allowed_writes("user_notifications"), connection.cursor() as cursor:
+        cursor.execute(
+            "insert into user_notifications (user_id, company_id, type, title, tone, url, body, "
+            "created_at, updated_at) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            [user_id, rows[0]["company_id"], type_, title, tone, url, body, stamp, stamp],
+        )
+
+
+def _decision(
+    request: HttpRequest,
+    action: str,
+    subject: Review | PlatformReview,
+    laravel_model: str,
+    note: str | None,
+) -> None:
+    """AdminLog::record: решение по существу, с формулировкой."""
+    audit.record(
+        connection,
+        action=action,
+        section="reviews",
+        actor=_admin_of(request),
+        subject_type=laravel_model,
+        subject_id=subject.pk,
+        subject_label=audit.label(
+            SavdexModelAdmin.attributes(subject), laravel_model.rsplit("\\", 1)[-1], subject.pk
+        ),
+        changes=None,
+        note=note,
+        ip=audit.client_ip(request),
+    )
+
+
+# ── Отзывы о компаниях ───────────────────────────────────────────────
+
+REVIEW = "App\\Models\\Review"
+
+
+def _save_review(request: HttpRequest, review: Review, changes: dict[str, Any]) -> bool:
+    """
+    forceFill($changes)->save(): запись, строка «изменено» (AuditObserver);
+    вернуть, нужен ли пересчёт (Review::saved — оценка, статус, компания).
+    """
+    before = SavdexModelAdmin.attributes(review)
+
+    for field, value in changes.items():
+        setattr(review, field, value)
+
+    with allowed_writes("reviews"):
+        review.save()
+
+    after = SavdexModelAdmin.attributes(review)
+    changed = {k: v for k, v in after.items() if before.get(k) != v and k not in audit.NOISE}
+
+    if changed:
+        audit.record(
+            connection,
+            action="updated",
+            section="reviews",
+            actor=_admin_of(request),
+            subject_type=REVIEW,
+            subject_id=review.pk,
+            subject_label=audit.label(after, "Review", review.pk),
+            changes={"before": {k: before.get(k) for k in changed}, "after": changed},
+            ip=audit.client_ip(request),
+        )
+
+    return bool({"rating", "status", "company_id"} & set(changed))
+
+
+def _decided(request: HttpRequest, **fields: Any) -> dict[str, Any]:
+    return {**fields, "moderated_by_id": _admin_of(request).id, "moderated_at": now()}
+
+
+def approve_review(request: HttpRequest, review: Review) -> None:
+    """Отзыв прошёл проверку: на витрину, компании — уведомление."""
+    ctx = context_of(request)
+
+    with transaction.atomic():
+        if _save_review(request, review, _decided(request, status=PUBLISHED)):
+            recalculate_companies(ctx, review.company_id)
+
+    author = live_company(review.author_company_id)
+
+    if author is not None and live_company(review.company_id) is not None:
+        # ReviewService::publishedNotice
+        notify_company(
+            ctx,
+            review.company_id,
+            "review",
+            f"Компания «{author['name']}» оставила отзыв: {review.rating} из 5",
+            "success" if review.rating >= 4 else "warning",
+            "/cabinet/reviews",
+            str_limit(review.body, 140),
+        )
+
+    _decision(request, "approved", review, REVIEW, None)
+
+
+def reject_review(request: HttpRequest, review: Review, note: str) -> None:
+    """Отзыв не пропущен: автору — причина словами модератора."""
+    ctx = context_of(request)
+
+    with transaction.atomic():
+        if _save_review(request, review, _decided(request, status=HIDDEN, moderator_note=note)):
+            recalculate_companies(ctx, review.company_id)
+
+    if live_company(review.author_company_id) is not None:
+        notify_company(
+            ctx,
+            review.author_company_id,
+            "moderation",
+            "Ваш отзыв не прошёл проверку",
+            "warning",
+            None,
+            note,
+        )
+
+    _decision(request, "rejected", review, REVIEW, note)
+
+
+def accept_dispute(request: HttpRequest, review: Review, note: str) -> None:
+    """Спор удовлетворён: отзыв скрыт; уведомлены обе стороны."""
+    ctx = context_of(request)
+    changes = _decided(request, status=HIDDEN, dispute_status="accepted", moderator_note=note)
+
+    with transaction.atomic():
+        if _save_review(request, review, changes):
+            recalculate_companies(ctx, review.company_id)
+
+    if live_company(review.company_id) is not None:
+        notify_company(
+            ctx,
+            review.company_id,
+            "moderation",
+            "Спор по отзыву удовлетворён — отзыв скрыт",
+            "success",
+            "/cabinet/reviews",
+            note,
+        )
+
+    if live_company(review.author_company_id) is not None:
+        notify_company(
+            ctx,
+            review.author_company_id,
+            "moderation",
+            "Ваш отзыв скрыт по результатам проверки",
+            "warning",
+            None,
+            note,
+        )
+
+    # В журнале — что случилось с записью: искать будут «куда делся отзыв»
+    _decision(request, "hidden", review, REVIEW, note)
+
+
+def decline_dispute(request: HttpRequest, review: Review, note: str) -> None:
+    """Спор отклонён: отзыв остаётся, компании — объяснение."""
+    ctx = context_of(request)
+    _save_review(request, review, _decided(request, dispute_status="declined", moderator_note=note))
+
+    if live_company(review.company_id) is not None:
+        notify_company(
+            ctx,
+            review.company_id,
+            "moderation",
+            "Спор по отзыву отклонён — отзыв остаётся",
+            "warning",
+            "/cabinet/reviews",
+            note,
+        )
+
+    _decision(request, "rejected", review, REVIEW, note)
+
+
+def restore_review(request: HttpRequest, review: Review) -> None:
+    """Вернуть скрытый на витрину: решение бывает ошибочным."""
+    ctx = context_of(request)
+
+    with transaction.atomic():
+        if _save_review(
+            request, review, _decided(request, status=PUBLISHED, dispute_status="declined")
+        ):
+            recalculate_companies(ctx, review.company_id)
+
+    _decision(request, "restored", review, REVIEW, None)
+
+
+# ── Отзывы о площадке ────────────────────────────────────────────────
+
+PLATFORM = "App\\Models\\PlatformReview"
+
+
+def _decide_platform(
+    request: HttpRequest, review: PlatformReview, status: str, note: str | None
+) -> None:
+    """PlatformReviewService::decide — forceFill и save; наблюдателя нет."""
+    review.status = status
+    review.moderator_note = note
+    review.moderated_by_id = _admin_of(request).id
+    review.moderated_at = now()
+
+    with allowed_writes("platform_reviews"):
+        review.save()
+
+
+def _author_locale(review: PlatformReview) -> tuple[int, str] | None:
+    """Автор (не удалён) и его язык — уведомление пишется на нём."""
+    if review.user_id is None:
+        return None
+
+    rows = _rows(
+        "select id, locale from users where id = %s and deleted_at is null", [review.user_id]
+    )
+
+    return (rows[0]["id"], rows[0]["locale"] or "ru") if rows else None
+
+
+def approve_platform(request: HttpRequest, review: PlatformReview) -> None:
+    _decide_platform(request, review, PUBLISHED, None)
+    author = _author_locale(review)
+
+    if author is not None:
+        notify_user(
+            author[0],
+            "review",
+            ui.t("platform_reviews.notice_published", author[1]),
+            "success",
+            "/reviews?type=platform",
+        )
+
+    _decision(request, "approved", review, PLATFORM, None)
+
+
+def reject_platform(request: HttpRequest, review: PlatformReview, note: str) -> None:
+    _decide_platform(request, review, HIDDEN, note)
+    author = _author_locale(review)
+
+    if author is not None:
+        notify_user(
+            author[0],
+            "moderation",
+            ui.t("platform_reviews.notice_rejected", author[1]),
+            "warning",
+            "/reviews/new",
+            note,
+        )
+
+    _decision(request, "rejected", review, PLATFORM, note)
+
+
+def restore_platform(request: HttpRequest, review: PlatformReview) -> None:
+    _decide_platform(request, review, PUBLISHED, None)
+    _decision(request, "restored", review, PLATFORM, None)
