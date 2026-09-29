@@ -202,9 +202,10 @@ def _notify_company(
             [company["id"], type_, tone, title, url, now, now],
         )
 
+        # $company->users()->get(): без сортировки — тот же запрос, что у
+        # Laravel, отдаёт строки в том же порядке
         for user in _rows(
-            "select id, company_id from users where company_id = %s and deleted_at is null "
-            "order by id",
+            "select id, company_id from users where company_id = %s and deleted_at is null",
             [company["id"]],
         ):
             cursor.execute(
