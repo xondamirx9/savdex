@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\RefusesDeletionWhenReferenced;
+use App\Support\PriceDisplay;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -83,6 +84,24 @@ class Plan extends Model
         }
 
         return (int) (round((float) $this->price_usd * $rate / 1000) * 1000);
+    }
+
+    /**
+     * Цена в долларах — та, из которой сумовая и считается.
+     *
+     * Зафиксированная витринная цена в сумах своей долларовой пары
+     * не имеет: price_usd рядом с ней показывал бы цену, которую
+     * отменили. Поэтому при зафиксированной цене доллары берутся
+     * обратным пересчётом по тому же курсу — две цифры на карточке
+     * обязаны сходиться между собой.
+     */
+    public function priceUsd(float $rate): float
+    {
+        if ($this->price_uzs !== null) {
+            return $rate > 0 ? PriceDisplay::round($this->price_uzs / $rate) : 0.0;
+        }
+
+        return (float) $this->price_usd;
     }
 
     /** null в лимите означает «без ограничений», а не «ноль». */
