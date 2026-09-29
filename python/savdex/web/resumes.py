@@ -68,16 +68,24 @@ def labels(ctx: Context, group: str, values: tuple[str, ...] | list[str]) -> dic
     return {value: ctx.t(f"resume.{group}_{value}") for value in values}
 
 
-def section_tree(ctx: Context) -> list[dict[str, Any]]:
-    """ItTask::sectionTree — дерево направлений для панели фильтра."""
+def section_tree(ctx: Context, counts: dict[str, int] | None = None) -> list[dict[str, Any]]:
+    """
+    ItTask::sectionTree — дерево направлений для панели фильтра. С
+    counts (вид → сколько) у пункта есть count — сумма по его видам;
+    без них (резюме) ключа нет вовсе.
+    """
+
+    def node(code: str) -> dict[str, Any]:
+        item: dict[str, Any] = {"code": code, "label": ctx.t(f"it_tasks.types.{code}")}
+
+        if counts is not None:
+            kinds = SERVICE_SECTIONS.get(code) or [code]
+            item["count"] = sum(counts.get(kind, 0) for kind in kinds)
+
+        return item
+
     return [
-        {
-            "code": code,
-            "label": ctx.t(f"it_tasks.types.{code}"),
-            "children": [
-                {"code": child, "label": ctx.t(f"it_tasks.types.{child}")} for child in children
-            ],
-        }
+        {**node(code), "children": [node(child) for child in children]}
         for code, children in SERVICE_SECTIONS.items()
     ]
 

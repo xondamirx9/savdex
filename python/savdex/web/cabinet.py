@@ -2271,9 +2271,38 @@ def _category_tree(locale: str) -> list[dict[str, Any]]:
     ]
 
 
-def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
+def wizard_tag_options(
+    locale: str, row: dict[str, Any], company: dict[str, Any] | None
+) -> list[str]:
+    """ListingTags::suggestions для мастера: разделы, заголовок, характеристики, город."""
     from savdex.web.directory import _named
     from savdex.web.listing import suggestions
+
+    categories = _named("categories", locale)
+    category = parent = None
+
+    if row["category_id"]:
+        category = categories.get(row["category_id"])
+        found_parent = _rows("select parent_id from categories where id = %s", [row["category_id"]])
+        parent_id = found_parent[0]["parent_id"] if found_parent else None
+        parent = categories.get(parent_id) if parent_id is not None else None
+
+    attributes = _rows(
+        "select key, value from listing_attributes where listing_id = %s order by id", [row["id"]]
+    )
+    city_id = company["city_id"] if company else None
+    city = _named("cities", locale).get(city_id) if city_id else None
+
+    return suggestions(
+        row,
+        category,
+        parent,
+        [str(a["value"] or "") for a in attributes if not specs.owns(str(a["key"]))],
+        city,
+    )
+
+
+def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
     from savdex.web.views import not_found
 
     ctx = page(request)
@@ -2300,21 +2329,15 @@ def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
         return not_found(ctx)
 
     row = found[0]
-    categories = _named("categories", ctx.locale)
     parent_id = None
-    category = parent = None
 
     if row["category_id"]:
-        category = categories.get(row["category_id"])
         found_parent = _rows("select parent_id from categories where id = %s", [row["category_id"]])
         parent_id = found_parent[0]["parent_id"] if found_parent else None
-        parent = categories.get(parent_id) if parent_id is not None else None
 
     attributes = _rows(
         "select key, value from listing_attributes where listing_id = %s order by id", [row["id"]]
     )
-    city_id = company["city_id"] if company else None
-    city = _named("cities", ctx.locale).get(city_id) if city_id else None
     plan = company_plan(company["id"]) if company else None
 
     return inertia.render(
@@ -2364,13 +2387,7 @@ def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
                 else 0,
                 "total": plan["listings_limit"] if plan else None,
             },
-            "tagOptions": suggestions(
-                row,
-                category,
-                parent,
-                [str(a["value"] or "") for a in attributes if not specs.owns(str(a["key"]))],
-                city,
-            ),
+            "tagOptions": wizard_tag_options(ctx.locale, row, company),
         },
         _seo(ctx),
     )

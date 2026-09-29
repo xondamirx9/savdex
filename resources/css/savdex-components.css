@@ -559,12 +559,18 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .board-panel-toggle{display:none}
 .board-filter-list{display:flex;flex-direction:column}
 .board-filter-items{display:flex;flex-direction:column}
-.board-filter{padding:5px 0;text-align:left;font-size:14px;line-height:20px;
-  color:var(--text-muted);cursor:pointer;transition:color var(--t-fast)}
-.board-filter:hover{color:var(--primary-600)}
-.board-filter.is-active{color:var(--primary-700);font-weight:600}
+/* Пункт-переключатель: разметка та же, что у фильтров каталога
+   и компаний (.check), поэтому кружок, отступы и число справа
+   выглядят одинаково на всех трёх страницах */
+.board-filter{padding:5px 0;font-size:14px;line-height:20px;color:var(--text-muted);
+  min-height:30px;align-items:center}
+.board-filter input{margin-top:0}
+.board-filter-label{min-width:0;overflow:hidden;text-overflow:ellipsis;
+  transition:color var(--t-fast)}
+.board-filter:hover .board-filter-label{color:var(--primary-600)}
+.board-filter-label.is-active{color:var(--primary-700);font-weight:600}
 /* Подрубрика: сдвиг и кегль отделяют второй уровень от первого */
-.board-filter--child{padding-left:12px;font-size:13.5px}
+.board-filter--child{padding-left:22px;font-size:13.5px}
 /* Группа панели: разделы, город, галочки. Те же размеры, что
    у .filter-group в каталоге, — панели на двух страницах должны
    читаться как одна и та же вещь */

@@ -92,6 +92,17 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
 
         return not (isinstance(value, dict | list) and len(value) == 0)
 
+    if rule == "numeric":
+        # is_numeric: число или числовая строка
+        if isinstance(value, bool):
+            return False
+
+        return isinstance(value, int | float) or (isinstance(value, str) and _is_numeric(value))
+
+    if rule == "lowercase":
+        # Str::lower($value) === $value
+        return isinstance(value, str) and value.lower() == value
+
     if rule == "file":
         return _is_file(value)
 
@@ -284,6 +295,17 @@ def _displayable(attribute: str, implicit: bool) -> str:
     return snake.replace("_", " ")
 
 
+def _wildcard_message(messages: Mapping[str, str], key: str) -> str | None:
+    """getFromLocalArray: свой текст по образцу со «*» (Str::is)."""
+    for pattern, text in messages.items():
+        if "*" in pattern and re.fullmatch(
+            ".*".join(re.escape(p) for p in pattern.split("*")), key
+        ):
+            return text
+
+    return None
+
+
 def _message(
     rule: str,
     attribute: str,
@@ -294,7 +316,8 @@ def _message(
     param: str | None = None,
 ) -> str:
     """FormatsMessages::getMessage и makeReplacements."""
-    text = messages.get(f"{attribute}.{rule}") or messages.get(rule)
+    text = messages.get(f"{attribute}.{rule}") or _wildcard_message(messages, f"{attribute}.{rule}")
+    text = text or messages.get(rule)
 
     if text is None:
         # Правила размера — текст по виду значения (validation.min.array)
