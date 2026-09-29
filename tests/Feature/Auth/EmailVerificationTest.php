@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -27,6 +28,7 @@ use Tests\TestCase;
 class EmailVerificationTest extends TestCase
 {
     use RefreshDatabase;
+    use LegalRegistration;
 
     private function payload(array $overrides = []): array
     {
@@ -37,6 +39,7 @@ class EmailVerificationTest extends TestCase
             'password' => 'Cement2026!x',
             'password_confirmation' => 'Cement2026!x',
             'terms' => true,
+            ...$this->legalFields(),
         ], $overrides);
     }
 

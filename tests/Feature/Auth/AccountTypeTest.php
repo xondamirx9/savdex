@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use Tests\TestCase;
 class AccountTypeTest extends TestCase
 {
     use RefreshDatabase;
+    use LegalRegistration;
 
     private function geo(): array
     {
@@ -42,6 +44,12 @@ class AccountTypeTest extends TestCase
 
     private function register(?string $type): void
     {
+        $fields = match ($type) {
+            'freelancer' => ['pinfl' => '31234567890123', 'service_section' => 'it'],
+            'individual' => [],
+            default => $this->legalFields(),
+        };
+
         $this->post('/register', array_filter([
             'name' => 'Алишер Каримов',
             'email' => 'alisher@mail.uz',
@@ -50,7 +58,11 @@ class AccountTypeTest extends TestCase
             'password_confirmation' => 'Parol-12345',
             'terms' => true,
             'account_type' => $type,
-        ], fn ($v) => $v !== null))->assertRedirect('/onboarding/company');
+            ...$fields,
+        ], fn ($v) => $v !== null))->assertSessionHasNoErrors()->assertRedirect(
+            // Второй шаг «Данные компании» — только у юрлица
+            in_array($type, ['freelancer', 'individual'], true) ? '/verify-email' : '/onboarding/company'
+        );
     }
 
     #[Test]
@@ -61,9 +73,112 @@ class AccountTypeTest extends TestCase
 
         auth()->logout();
         User::query()->forceDelete();
+        Company::query()->forceDelete();
 
         $this->register(null);
         $this->assertSame('legal', User::where('email', 'alisher@mail.uz')->value('account_type'));
+    }
+
+    #[Test]
+    public function юрлицо_заводит_компанию_с_первого_шага(): void
+    {
+        $this->register('legal');
+
+        $company = User::where('email', 'alisher@mail.uz')->firstOrFail()->company;
+
+        $this->assertNotNull($company);
+        $this->assertSame('ООО «Стройбаза»', $company->name);
+        $this->assertSame(Company::LEGAL_ENTITY, $company->legal_form);
+        $this->assertCount(1, $company->categories);
+    }
+
+    #[Test]
+    public function второй_шаг_юрлица_дополняет_компанию_без_повторных_вопросов(): void
+    {
+        [$country, $city] = $this->geo();
+        $this->register('legal');
+        $user = User::where('email', 'alisher@mail.uz')->firstOrFail();
+
+        $this->actingAs($user)->get('/onboarding/company')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('completing', true));
+
+        $this->actingAs($user)->post('/onboarding/company', [
+            'type' => 'distributor',
+            'country_id' => $country->id,
+            'city_id' => $city->id,
+            'primary_role' => 'supplier',
+        ])->assertSessionHasNoErrors();
+
+        $company = $user->fresh()->company;
+
+        $this->assertSame('ООО «Стройбаза»', $company->name);
+        $this->assertSame($city->id, $company->city_id);
+        $this->assertSame('supplier', $company->primary_role);
+        // Категории с первого шага не потерялись
+        $this->assertCount(1, $company->categories);
+        // Шаг пройден — второй раз не показывается
+        $this->actingAs($user)->get('/onboarding/company')->assertRedirect('/cabinet');
+    }
+
+    #[Test]
+    public function юрлицу_нужны_название_и_категория_а_инн_по_желанию(): void
+    {
+        $this->post('/register', [
+            'name' => 'Алишер Каримов',
+            'email' => 'alisher@mail.uz',
+            'phone' => '+998 90 123-45-67',
+            'password' => 'Parol-12345',
+            'password_confirmation' => 'Parol-12345',
+            'terms' => true,
+            'account_type' => 'legal',
+        ])->assertSessionHasErrors(['company_name', 'categories'])
+            ->assertSessionDoesntHaveErrors(['tin', 'pinfl', 'service_section']);
+    }
+
+    #[Test]
+    public function физлицо_регистрируется_без_второго_шага_и_пинфл_по_желанию(): void
+    {
+        $this->register('individual');
+
+        $user = User::where('email', 'alisher@mail.uz')->firstOrFail();
+
+        $this->assertSame(Company::LEGAL_INDIVIDUAL, $user->company->legal_form);
+        // Профиль человека называется по Ф.И.О.
+        $this->assertSame('Алишер Каримов', $user->company->name);
+        $this->assertNull($user->company->tin);
+        $this->assertNull($user->company->city_id);
+
+        // Второй шаг физлицу не показывается
+        $this->actingAs($user)->get('/onboarding/company')->assertRedirect('/cabinet');
+    }
+
+    #[Test]
+    public function фрилансеру_нужны_пинфл_и_направление(): void
+    {
+        $this->post('/register', [
+            'name' => 'Алишер Каримов',
+            'email' => 'alisher@mail.uz',
+            'phone' => '+998 90 123-45-67',
+            'password' => 'Parol-12345',
+            'password_confirmation' => 'Parol-12345',
+            'terms' => true,
+            'account_type' => 'freelancer',
+            'pinfl' => '123456789',
+        ])->assertSessionHasErrors(['pinfl', 'service_section'])
+            ->assertSessionDoesntHaveErrors(['company_name', 'categories']);
+    }
+
+    #[Test]
+    public function фрилансер_сразу_исполнитель_своего_направления(): void
+    {
+        $this->register('freelancer');
+
+        $company = User::where('email', 'alisher@mail.uz')->firstOrFail()->company;
+
+        $this->assertSame(Company::LEGAL_FREELANCER, $company->legal_form);
+        $this->assertSame('31234567890123', $company->tin);
+        $this->assertTrue((bool) $company->is_it_provider);
+        $this->assertContains('web', $company->it_specializations);
     }
 
     #[Test]

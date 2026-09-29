@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\LegalRegistration;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
 class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
+    use LegalRegistration;
 
     /** @return array<string, mixed> */
     private function validPayload(array $overrides = []): array
@@ -34,6 +36,7 @@ class RegistrationTest extends TestCase
             'password' => 'Cement2026!x',
             'password_confirmation' => 'Cement2026!x',
             'terms' => true,
+            ...$this->legalFields(),
         ], $overrides);
     }
 
@@ -46,7 +49,9 @@ class RegistrationTest extends TestCase
     #[Test]
     public function корректные_данные_создают_пользователя(): void
     {
-        Event::fake();
+        // Только событие регистрации: полная подмена событий отключила бы
+        // и события модели, а на них держится адрес (slug) компании
+        Event::fake([Registered::class]);
 
         // Второй шаг регистрации — данные компании (пропускаемый),
         // подтверждение почты идёт после него
