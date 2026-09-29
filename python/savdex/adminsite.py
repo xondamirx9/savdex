@@ -168,10 +168,21 @@ class SavdexAdminSite(admin.AdminSite):
         ]
 
     def index(self, request: HttpRequest, extra_context: Any = None) -> TemplateResponse:  # noqa: ANN401
-        """Главная: разделы и ход переноса (savdex/progress.py)."""
+        """
+        Главная: стартовый экран сотрудника (savdex/dashboard/ — вместо
+        виджетов Filament), разделы и ход переноса (savdex/progress.py).
+        """
         from savdex import progress
+        from savdex.dashboard import widgets
 
-        return super().index(request, {"progress": progress.summary(), **(extra_context or {})})
+        return super().index(
+            request,
+            {
+                "dashboard": widgets.for_request(request),
+                "progress": progress.summary(),
+                **(extra_context or {}),
+            },
+        )
 
     def each_context(self, request: HttpRequest) -> dict[str, Any]:
         context = super().each_context(request)

@@ -13,6 +13,7 @@ Inertia\\Middleware::share: тот же набор, тот же порядок, 
 
 from __future__ import annotations
 
+import calendar
 import json
 import math
 import re
@@ -167,14 +168,19 @@ def _calendar_diff(earlier: datetime, later: datetime) -> tuple[int, int, int, i
         mi, h = mi + 60, h - 1
     if h < 0:
         h, d = h + 24, d - 1
-    if d < 0:
-        # Дни предыдущего месяца относительно «позже» — как PHP
-        month = later.month - 1 or 12
-        year = later.year if later.month != 1 else later.year - 1
-        days = (datetime(year + (month == 12), month % 12 + 1, 1) - datetime(year, month, 1)).days
-        d, mo = d + days, mo - 1
-    if mo < 0:
-        mo, y = mo + 12, y - 1
+
+    # Дни занимаются у месяцев перед «позже», по одному, пока не хватит —
+    # как timelib (do_range_limit_days_relative). Одного месяца мало:
+    # с 31 января до 1 марта февраль короче, и выходило «1 месяц» с
+    # минусом дней вместо «4 недели» у PHP
+    year, month = later.year, later.month
+
+    while d < 0:
+        year, month = (year, month - 1) if month > 1 else (year - 1, 12)
+        d, mo = d + calendar.monthrange(year, month)[1], mo - 1
+
+    # Месяцы в минусе — занять у лет (у timelib — do_range_limit)
+    y, mo = y + mo // 12, mo % 12
 
     return y, mo, d, h, mi, s
 

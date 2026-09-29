@@ -1,0 +1,34 @@
+{% comment %}
+  Таблица виджета (TableWidget у Filament): лиды, задачи, новые компании,
+  обращения. Строка ведёт в запись — ссылка на первой ячейке растянута
+  на всю строку. Вместо листания — сколько всего и ссылка в раздел.
+{% endcomment %}
+<section class="module savdex-widget" aria-labelledby="savdex-w-{{ w.key }}" data-widget="{{ w.key }}">
+  <h2 id="savdex-w-{{ w.key }}">{{ w.heading }}</h2>
+  <p class="savdex-widget-description">{{ w.description }}</p>
+  {% if w.rows %}
+  <div class="savdex-scroll">
+    <table class="savdex-table">
+      <thead><tr>{% for column in w.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for row in w.rows %}
+        <tr>
+        {% for c in row.cells %}
+          <td>
+            {% if forloop.first %}<a class="savdex-row-link" href="{{ row.url }}">{% endif %}{% if c.badge %}<span class="savdex-badge savdex-tone-{{ c.tone|default:'gray' }}">{{ c.text }}</span>{% else %}<span{% if c.tone %} class="savdex-tone-{{ c.tone }}"{% endif %}>{{ c.text }}</span>{% endif %}{% if forloop.first %}</a>{% endif %}
+            {% if c.sub %}<div class="savdex-sub">{{ c.sub }}</div>{% endif %}
+          </td>
+        {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if w.more_url %}<p class="savdex-more"><a href="{{ w.more_url }}">Все {{ w.total }} в разделе →</a></p>{% endif %}
+  {% else %}
+  <div class="savdex-empty">
+    <p><b>{{ w.empty_heading }}</b></p>
+    <p>{{ w.empty_description }}</p>
+  </div>
+  {% endif %}
+</section>

@@ -8,8 +8,20 @@
 
   Над разделами — ход переноса (savdex/progress.py): заказчик хотел
   видеть, как идёт перенос, не читая документы.
+
+  Выше всего — стартовый экран сотрудника (savdex/dashboard/, вместо
+  виджетов Filament): то, что требует действия сегодня, по его роли.
+  Колонка «Последние действия» убрана, поэтому страница в одну колонку.
 {% endcomment %}
+{% block coltype %}colM{% endblock %}
 {% block content_subtitle %}
+{% if dashboard %}
+{% include "admin/dashboard/styles.html" %}
+<div class="savdex-dashboard">
+  {% for widget in dashboard %}{% include widget.template with w=widget %}{% endfor %}
+  {% comment %}Деньги за сегодня (FinanceToday у Filament) — на этапе 7, вместе с разделами денег{% endcomment %}
+</div>
+{% endif %}
 <p>Разделы переезжают сюда из админки по одному. Правки здесь попадают в тот же журнал действий, что и в основной админке.</p>
 {% if progress %}
 <section class="savdex-progress" aria-labelledby="savdex-progress-title">

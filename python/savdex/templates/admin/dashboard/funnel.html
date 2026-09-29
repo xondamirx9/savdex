@@ -1,0 +1,56 @@
+{% comment %}
+  Воронка активации, здоровье площадки и категории (ActivationFunnel).
+  Шаги сверху вниз с долей от регистраций; потери — к предыдущему шагу:
+  так видно, на каком именно шаге теряется больше всего.
+{% endcomment %}
+<div class="savdex-columns" data-widget="{{ w.key }}">
+  <section class="module savdex-widget" aria-labelledby="savdex-w-funnel">
+    <h2 id="savdex-w-funnel">Воронка активации</h2>
+    <p class="savdex-widget-description">От регистрации до объявления, которое видно покупателям</p>
+    <ol class="savdex-list">
+    {% for step in w.steps %}
+      <li>
+        <div class="savdex-line"><b>{{ step.label }}</b><span class="savdex-muted"><b class="savdex-loud">{{ step.value }}</b> · {{ step.share }} %</span></div>
+        <div class="savdex-meter"><span style="width: {{ step.width }}%"></span></div>
+        <div class="savdex-line">
+          <small class="savdex-muted">{{ step.hint }}</small>
+          {% if step.drop %}<small class="savdex-tone-{{ step.drop_tone }}">−{{ step.drop }} % к прошлому шагу</small>{% endif %}
+        </div>
+      </li>
+    {% endfor %}
+    </ol>
+  </section>
+
+  <div>
+    <section class="module savdex-widget" aria-labelledby="savdex-w-health">
+      <h2 id="savdex-w-health">Здоровье площадки</h2>
+      <p class="savdex-widget-description">Показатели, по которым проблему видно раньше, чем по выручке</p>
+      <ul class="savdex-list">
+      {% for item in w.health %}
+        <li class="savdex-line">
+          <span><b>{{ item.label }}</b><br><small class="savdex-muted">{{ item.hint }}</small></span>
+          <span class="savdex-badge savdex-tone-{{ item.tone }}">{{ item.value }}</span>
+        </li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section class="module savdex-widget" aria-labelledby="savdex-w-categories">
+      <h2 id="savdex-w-categories">Категории по числу активных объявлений</h2>
+      <p class="savdex-widget-description">Где идёт торговля, а где справочник заполнен зря</p>
+      {% if w.categories %}
+      <ul class="savdex-list">
+      {% for category in w.categories %}
+        <li class="savdex-category">
+          <span class="savdex-category-name">{{ category.label }}</span>
+          <span class="savdex-meter"><span style="width: {{ category.width }}%"></span></span>
+          <small class="savdex-muted">{{ category.listings }} / {{ category.companies }} комп.</small>
+        </li>
+      {% endfor %}
+      </ul>
+      {% else %}
+      <div class="savdex-empty"><p>Пока нет опубликованных объявлений с категорией.</p></div>
+      {% endif %}
+    </section>
+  </div>
+</div>
