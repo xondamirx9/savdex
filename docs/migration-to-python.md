@@ -1905,6 +1905,21 @@ Filament, которое не повторяем: `AdminScope::owns` пуска�
 `tests/test_web_billing.py`. Намеренное расхождение: `?plan[]=x` у
 Laravel падает с 500, Django просто не выбирает тариф.
 
+**Шаг 53, часть 1. Простые формы кассы** ✅ (`savdex/web/billing_actions.py`,
+группа `forms`). `POST /cabinet/billing/cancel` и `…/resume` —
+автопродление (включить — только у оплаченной подписки, `source =
+payment`), `DELETE /cabinet/billing/card/{id}` — отвязка карты (основную
+при автопродлении — нельзя), `POST /cabinet/billing/invoice/{id}/cancel`
+— отказ от счёта, как `OrderService::cancel`: счёт остаётся со статусом
+`failed`, скидочный промокод возвращается в оборот, если по счёту нет
+живой карточной транзакции (`PAYMENTS_UZUM_CONFIRM_TIMEOUT`). Payment и
+Subscription у администратора — в журнал. Запись заявлена в
+`SHARED_WRITES` (`subscriptions`, `payment_methods`, `payments`,
+`promo_codes`), права роли — `2026_10_09_100000_grant_django_billing_forms`
+(даты `2026_10_09_*` — миграции этапа 7). Сверка —
+`tests/test_web_billing_actions.py`. Заказ, промокод и оплата онлайн —
+часть 2.
+
 ### Этап 8. Выключение Laravel (2–3 недели)
 
 Прокси больше никуда не смотрит. Django становится хозяином схемы:

@@ -68,7 +68,7 @@ class TestУзкоеРазрешение:
             guards.check("update companies set status = 'active'")
 
     def test_незаявленную_таблицу_разрешить_нельзя(self):
-        with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("payments"):
+        with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("refunds"):
             pass
 
     def test_исключение_внутри_блока_снимает_разрешение(self):
