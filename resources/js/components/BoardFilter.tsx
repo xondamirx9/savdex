@@ -16,16 +16,27 @@ export interface FilterOption {
     /** Пустая строка — «все»: такой пункт сбрасывает фильтр. */
     id: string;
     label: string;
+    /** Сколько найдётся при выборе. undefined — числа нет, ничего не рисуем */
+    count?: number;
     children?: FilterOption[];
 }
 
+/**
+ * Пункт — переключатель, как в фильтрах каталога и компаний.
+ *
+ * Кружок сразу показывает, что выбор один из списка и что выбрано
+ * сейчас: прежний список ссылок отличал выбранный пункт только цветом,
+ * и на длинном перечне его приходилось искать глазами.
+ */
 function Option({
     option,
+    name,
     value,
     onPick,
     nested = false,
 }: {
     option: FilterOption;
+    name: string;
     value: string;
     onPick: (id: string) => void;
     nested?: boolean;
@@ -35,20 +46,24 @@ function Option({
 
     return (
         <>
-            <button
-                type="button"
-                className={cn('board-filter', nested && 'board-filter--child', (active || childActive) && 'is-active')}
-                aria-pressed={active}
-                onClick={() => onPick(option.id)}
-            >
-                {option.label}
-            </button>
+            <label className={cn('check board-filter', nested && 'board-filter--child')}>
+                <input
+                    type="radio"
+                    name={name}
+                    checked={active}
+                    onChange={() => onPick(option.id)}
+                />
+                <span className={cn('board-filter-label', (active || childActive) && 'is-active')}>
+                    {option.label}
+                </span>
+                {option.count !== undefined && <span className="check-count">{option.count}</span>}
+            </label>
 
             {/* Подрубрики раскрываются только у выбранной ветки: полный
                 список второго уровня превращает панель в простыню */}
             {(active || childActive) &&
                 (option.children ?? []).map((child) => (
-                    <Option key={child.id} option={child} value={value} onPick={onPick} nested />
+                    <Option key={child.id} option={child} name={name} value={value} onPick={onPick} nested />
                 ))}
         </>
     );
@@ -56,12 +71,15 @@ function Option({
 
 export function BoardFilter({
     title,
+    name,
     options,
     value,
     onPick,
     children,
 }: {
     title: string;
+    /** Имя группы переключателей: у двух панелей на странице оно своё */
+    name: string;
     options: FilterOption[];
     value: string;
     onPick: (id: string) => void;
@@ -97,7 +115,13 @@ export function BoardFilter({
 
                     <div className="board-filter-items">
                         {options.map((option) => (
-                            <Option key={option.id || 'all'} option={option} value={value} onPick={onPick} />
+                            <Option
+                                key={option.id || 'all'}
+                                option={option}
+                                name={name}
+                                value={value}
+                                onPick={onPick}
+                            />
                         ))}
                     </div>
                 </div>

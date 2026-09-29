@@ -265,8 +265,9 @@ def _unverified(ctx: Context) -> HttpResponse | None:
     if _expects_json(ctx.request):
         return error(ctx, 403)
 
-    # Redirector::guest у POST запоминает previous()
-    _store(ctx).put("url.intended", previous(ctx))
+    # Redirector::guest: страница (GET) — её адрес, остальное — previous()
+    store = _store(ctx)
+    store.put("url.intended", store.full_url if ctx.request.method == "GET" else previous(ctx))
 
     return redirect(ctx, ctx.url("/verify-email"))
 
