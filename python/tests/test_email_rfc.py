@@ -562,9 +562,19 @@ def _точки() -> list[str]:
     return строки
 
 
-def _php(values: list[str]) -> list[bool]:
+def _php(values: list[str], strict: bool = False) -> list[bool]:
+    код = PHP
+
+    if strict:
+        # email:rfc,strict у Laravel — RFCValidation и NoRFCWarningsValidation
+        код = PHP.replace(
+            "new MultipleValidationWithAnd([new RFCValidation])",
+            "new MultipleValidationWithAnd([new RFCValidation,"
+            " new \\Egulias\\EmailValidator\\Validation\\NoRFCWarningsValidation])",
+        )
+
     вывод = subprocess.run(
-        ["php", "-r", PHP],
+        ["php", "-r", код],
         cwd=КОРЕНЬ,
         input=json.dumps(values),
         capture_output=True,
@@ -665,6 +675,38 @@ def test_как_у_laravel():
     assert not расхождения, расхождения[:20]
     assert sum(ожидание) > 1000
     assert len(строки) - sum(ожидание) > 1000
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
+def test_строго_как_у_laravel():
+    """email:rfc,strict: верен и без предупреждений разбора."""
+    строки = [
+        *АДРЕСА,
+        *(f"{левая}@{правая}" for левая in ЛЕВЫЕ for правая in ПРАВЫЕ),
+        *_случайные(),
+        *_похожие(),
+        *_домены(),
+        *_точки(),
+        # Длинные: локальная часть больше 64 байт, весь адрес больше 254
+        "a" * 64 + "@savdex.uz",
+        "a" * 65 + "@savdex.uz",
+        "я" * 33 + "@savdex.uz",
+        "a" * 60 + "@" + ".".join(["b" * 60] * 3) + ".uz",
+        "a" * 64 + "@" + ".".join(["b" * 60] * 3) + ".uzb",
+        "user@localhost",
+        "user@[127.0.0.1]",
+        '"quoted"@savdex.uz',
+        "user(comment)@savdex.uz",
+        "user @savdex.uz",
+    ]
+    строки = _та_же_версия_unicode(строки)
+    ожидание = _php(строки, strict=True)
+    расхождения = [
+        (s, e) for s, e in zip(строки, ожидание, strict=True) if is_valid(s, strict=True) is not e
+    ]
+
+    assert not расхождения, расхождения[:20]
+    assert sum(ожидание) > 500
 
 
 def test_не_строка():

@@ -124,6 +124,12 @@ SHARED_WRITES: dict[str, str] = {
         "форма) — имя, телефон, язык и сброс подтверждения телефона; "
         "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
         "новая компания — company_id и company_role владельца"
+        "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
+        "без меток времени, метка последнего входа, как SessionGuard"
+    ),
+    "login_attempts": (
+        "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
+        "по почте и IP, как LoginThrottle"
     ),
     "message_threads": (
         "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "

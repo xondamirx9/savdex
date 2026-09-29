@@ -19,6 +19,7 @@ from savdex import adminpanel, adminsite, visitor
 from savdex.web import (
     actions,
     auth,
+    auth_actions,
     cabinet,
     catalog,
     chat_actions,
@@ -261,7 +262,13 @@ urlpatterns = [
         name="cabinet.listings.images.cover",
     ),
     # Вход, регистрация и пароль (этап 5): страницы, открываемые GET-запросом
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?login$", auth.login, name="login"),
+    # Вход и выход: GET — страница, POST — форма (этап 5, шаг 45, группа forms)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?login$",
+        auth_actions.either(auth.login, auth_actions.login),
+        name="login",
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?logout$", auth_actions.logout, name="logout"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?register$", auth.register, name="register"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",

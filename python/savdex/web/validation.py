@@ -183,7 +183,8 @@ def _passes(rule: str, param: str | None, value: Any, numeric: bool = False) -> 
         # validateEmail: без параметров и с rfc — RFCValidation
         from savdex.web.email_rfc import is_valid
 
-        return is_valid(value)
+        # «rfc,strict» — NoRFCWarningsValidation: и без предупреждений разбора
+        return is_valid(value, strict="strict" in (param or "").split(","))
 
     if rule == "url":
         from savdex.web.url_rule import is_url
