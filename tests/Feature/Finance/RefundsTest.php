@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Finance;
 
-use App\Filament\Pages\FinanceOperations;
 use App\Models\AdminAction;
 use App\Models\Company;
 use App\Models\Payment;
@@ -66,7 +65,6 @@ class RefundsTest extends TestCase
             $expected = in_array($role, [AdminAccess::SUPERADMIN, AdminAccess::FINANCE], true);
 
             $this->assertSame($expected, AdminAccess::allows('refunds.view'), $label);
-            $this->assertSame($expected, FinanceOperations::canAccess(), $label);
         }
     }
 

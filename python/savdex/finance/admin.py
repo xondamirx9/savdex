@@ -305,6 +305,7 @@ class PaymentAdmin(SavdexModelAdmin):
 # Остальные разделы денег — в своих модулях; Django читает только admin.py
 from savdex.finance import (  # noqa: E402, F401
     complaints_admin,
+    operations_admin,
     promo_admin,
     refunds_admin,
     subscriptions_admin,

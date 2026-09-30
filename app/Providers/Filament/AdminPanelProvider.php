@@ -362,6 +362,12 @@ class AdminPanelProvider extends PanelProvider
                     ->badge(fn (): ?string => ($requested = Refund::query()->where('status', Refund::STATUS_REQUESTED)
                         ->count()) > 0 ? (string) $requested : null, color: 'danger')
                     ->visible(fn (): bool => AdminAccess::allows('refunds.view')),
+                NavigationItem::make('Финансовые операции')
+                    ->url('/admin/python?next=/py/admin/finance/wallettransaction/')
+                    ->icon('heroicon-o-arrows-right-left')
+                    ->group('Монетизация')
+                    ->sort(4)
+                    ->visible(fn (): bool => AdminAccess::allows('refunds.view')),
                 NavigationItem::make('Пакеты контактов')
                     ->url('/admin/python?next=/py/admin/billing/creditpack/')
                     ->icon('heroicon-o-ticket')
