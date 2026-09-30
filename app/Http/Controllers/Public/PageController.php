@@ -91,6 +91,8 @@ class PageController extends Controller
             ]);
         }
 
+        $latest = $this->latestListings();
+
         return Inertia::render('Home', [
             'blocks' => $blocks,
             'stats' => $stats,
@@ -108,7 +110,11 @@ class PageController extends Controller
             'services' => $this->popularServices(),
             // Лента товаров первого экрана: только предложения —
             // запросы идут отдельной лентой ниже
-            'latest' => $this->latestListings(),
+            'latest' => $latest,
+            // Лента «Товары»: свежие предложения всех компаний. Витрина
+            // VIP выше — только для высшего тарифа и часто пуста, а без
+            // этой ленты между категориями и поставщиками товаров не было
+            'products' => $this->latestProducts(array_column($latest, 'id')),
             // Лента запросов на закупку (RFQ): другая сторона площадки
             'requests' => $this->latestRequests(),
             // Витрина поставщиков: покупатель фильтруется по блокам —
@@ -745,6 +751,37 @@ class PageController extends Controller
             // порядок таких объявлений менялся от запроса к запросу
             ->orderByDesc('id')
             ->limit(12)
+            ->get()
+            ->map(fn (Listing $l): array => ListingCard::present($l))
+            ->all();
+    }
+
+    /**
+     * Лента «Товары» на главной: свежие предложения всех компаний.
+     *
+     * Витрина VIP показывает только компании высшего тарифа и пуста,
+     * пока таких нет, — товаров на главной тогда не было вовсе. Эта
+     * лента открыта всем. Объявления из витрины VIP сюда не попадают:
+     * два соседних ряда с одними и теми же карточками — пустое место.
+     * Продвинутые (ТОП/Срочно) — первыми, как в витрине: это оплаченное место.
+     *
+     * @param  list<int>  $shown  объявления витрины VIP
+     * @return list<array<string, mixed>>
+     */
+    private function latestProducts(array $shown): array
+    {
+        return Listing::query()
+            ->with(ListingCard::relations())
+            ->withCount(['promotions as boosted' => fn ($q) => $q->where('status', 'active')])
+            ->where('status', Listing::STATUS_ACTIVE)
+            ->visibleIn()
+            ->where('type', Listing::TYPE_SUPPLY)
+            ->whereHas('company', fn ($q) => $q->where('status', Company::STATUS_ACTIVE))
+            ->whereNotIn('id', $shown)
+            ->orderByDesc('boosted')
+            ->latest('published_at')
+            ->orderByDesc('id')
+            ->limit(8)
             ->get()
             ->map(fn (Listing $l): array => ListingCard::present($l))
             ->all();

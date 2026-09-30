@@ -34,7 +34,7 @@ class LandingBlock extends Model
 
     /** Секции главной в порядке макета. */
     public const KEYS = [
-        'hero', 'stats', 'categories', 'vip', 'requests', 'suppliers',
+        'hero', 'stats', 'categories', 'vip', 'products', 'requests', 'suppliers',
         'how', 'reviews', 'faq', 'news', 'cta',
     ];
 
