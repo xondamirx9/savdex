@@ -490,7 +490,10 @@ MAX_WORKBOOK_BYTES = 50 * 1024 * 1024
 
 
 class WorkbooksForm(forms.Form):
-    """Окно importWorkbook у ListingsTable: книги и «заменить фотографии»."""
+    """
+    Окно importWorkbook у ListingsTable: книги, «заменить фотографии»,
+    компания для строк без компании и тип новых объявлений.
+    """
 
     workbooks = BooksField(label="Книги Excel")
     replace = forms.BooleanField(
@@ -501,6 +504,40 @@ class WorkbooksForm(forms.Form):
             "повторная загрузка того же файла не плодит одинаковые."
         ),
     )
+    default_company = forms.CharField(
+        label="Компания для строк без компании",
+        required=False,
+        max_length=190,
+        help_text=(
+            "Название или ИНН компании из раздела «Компании». Ей достанутся строки, где "
+            "столбец «Компания» пуст или компании нет в справочнике. Оставьте пустым — "
+            "такие строки не загрузятся."
+        ),
+    )
+    default_type = forms.ChoiceField(
+        label="Тип новых объявлений",
+        choices=[("supply", "Предложение (продаю)"), ("demand", "Запрос (куплю)")],
+        initial="supply",
+        required=False,
+        help_text="Когда в книге нет столбца «Тип» или ячейка в нём пуста.",
+    )
+
+    def clean_default_company(self) -> int | None:
+        from savdex.data.workbook import company_id
+
+        name = str(self.cleaned_data.get("default_company") or "").strip()
+
+        if name == "":
+            return None
+
+        found = company_id(name)
+
+        if found is None:
+            raise forms.ValidationError(
+                f"Компании «{name}» нет в разделе «Компании» — проверьте название или ИНН."
+            )
+
+        return found
 
     def clean_workbooks(self) -> list[Any]:
         from savdex.data.workbook import MAX_WORKBOOKS
@@ -851,6 +888,8 @@ class ListingAdmin(SavdexModelAdmin):
                     admin_id=_admin_of(request).id,
                     replace=bool(form.cleaned_data["replace"]),
                     ip=audit.client_ip(request),
+                    default_company=form.cleaned_data["default_company"],
+                    default_type=str(form.cleaned_data.get("default_type") or "supply"),
                 )
             except workbook.UnreadableWorkbookError as error:
                 form.add_error(
