@@ -1837,7 +1837,7 @@ return [
             'until' => ':plan · valid until :date, auto-renewal is off',
             'forever' => ':plan · unlimited in time, no charges',
             'current_plan' => 'Current plan',
-            'per_month' => ':price sum / month',
+            'per_month' => ':price UZS / month',
             'free' => 'free',
             'change_plan' => 'Change plan',
             'auto_off_title' => 'Turn off auto-renewal?',
@@ -1903,7 +1903,7 @@ return [
             'plan_limits' => 'listings: :listings · contacts: :contacts · replies: :responses',
             'packs' => 'Contact packs',
             'packs_text' => 'Credits are spent once the monthly plan limit is used up. They never expire.',
-            'per_contact' => ':price sum per contact',
+            'per_contact' => ':price UZS per contact',
         ],
 
         // ── IT projects ──────────────────────────────────────

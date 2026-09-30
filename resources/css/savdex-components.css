@@ -666,10 +666,22 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    считают тариф в долларах, а платят в сумах, и обе цифры нужны */
 .plan-price-alt{font-size:15px;font-weight:600;color:var(--text-muted);
   font-variant-numeric:tabular-nums;margin:0 0 2px}
-/* Долларовая цена в кассе кабинета — второй строкой под сумовой.
-   20 px против 32 px у сумов: цифру видно с того же расстояния,
-   но первой остаётся цена, которой платят */
-.price-usd{font-size:20px;line-height:28px;font-weight:600;color:var(--text-muted);
+/* Карточка предложения в кассе: слева название с лимитами, справа
+   цена и кнопка. Цена тянется во всю строку, когда рядом с названием
+   уже не помещается, — иначе сумма вставала у левого края, а доллары
+   с кнопкой оставались справа, и блок читался как сломанный.
+   В кассе число мельче, чем в сводке кабинета (26 px против 32):
+   «1 024 000 UZS» в тридцати двух не помещается в карточку тарифа
+   ни на одном языке, и перенос начинался уже на ноутбуке. */
+.offer-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.offer-main{flex:1 1 200px;min-width:0}
+.offer-price{flex:1 1 auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;text-align:right}
+.offer-amount{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.offer-amount .t-num{font-size:26px;line-height:34px}
+/* Долларовая цена — второй строкой под сумовой: приглушённее и мельче,
+   но той же величины, что подписи вокруг, — её видно, а первой
+   остаётся цена, которой платят */
+.price-usd{font-size:18px;line-height:26px;font-weight:600;color:var(--text-muted);
   font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .plan-price.is-promo{color:var(--primary-700);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .plan-price-old{font-size:18px;font-weight:500;color:var(--text-muted);letter-spacing:0}
