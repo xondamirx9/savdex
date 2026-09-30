@@ -171,6 +171,16 @@ def test_витрина_vip_и_цены(сайт):
     assert props["banner"]["image"].endswith("/storage/banners/en.png")
 
 
+def test_лента_товаров_без_карточек_витрины_vip(сайт):
+    д, _ = сверить(сайт, "/", env=ФАЙЛОВЫЙ)
+    props = страница(д["body"])["props"]
+    vip = {card["id"] for card in props["latest"]}
+
+    assert props["products"]
+    assert not vip & {card["id"] for card in props["products"]}
+    assert props["blocks"]["products"]["heading"] == "Товары"
+
+
 def test_вошедший(сайт):
     пользователь("home@savdex.uz")
     куки = войти(сайт, "home@savdex.uz")

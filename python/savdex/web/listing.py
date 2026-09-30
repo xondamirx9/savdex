@@ -150,15 +150,8 @@ def _localized(row: dict[str, Any], field: str, locale: str) -> str | None:
 
 
 def _visible_locales(row: dict[str, Any]) -> list[str]:
-    """Listing::visibleLocales: импортированное — только с переводом заголовка."""
-    if row["source"] != "import":
-        return list(LOCALES)
-
-    titles = row["title_i18n"] or {}
-
-    return [
-        code for code in LOCALES if code == "ru" or str(titles.get(code) or "").strip(_TRIM) != ""
-    ]
+    """Listing::visibleLocales: все языки — и у загруженного из книги."""
+    return list(LOCALES)
 
 
 def _count_view(ctx: Context, row: dict[str, Any], visitor: str | None) -> None:

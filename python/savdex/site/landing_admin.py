@@ -47,6 +47,7 @@ LANDING_FIELDS: dict[str, dict[str, tuple[str, str]]] = {
     "stats": {},
     "categories": {"heading": ("Заголовок секции", "")},
     "vip": {"heading": ("Заголовок секции", "")},
+    "products": {"heading": ("Заголовок секции", "")},
     "requests": {"heading": ("Заголовок секции", "")},
     "suppliers": {"heading": ("Заголовок секции", "")},
     "how": {

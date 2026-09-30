@@ -49,14 +49,12 @@ def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
 
 
 def visible_in(locale: str, alias: str = "l") -> tuple[str, list[Any]]:
-    """Listing::scopeVisibleIn: импортированное — только с заголовком на языке."""
-    if locale == locales.DEFAULT:
-        return "", []
-
-    return (
-        f" and ({alias}.source != 'import' or coalesce(({alias}.title_i18n)::jsonb ? %s, false))",
-        [locale],
-    )
+    """
+    Listing::scopeVisibleIn: объявления показываются на всех языках, и
+    загруженные из книги тоже — до перевода русским текстом. Условие
+    оставлено функцией, чтобы запросы витрины не менялись.
+    """
+    return "", []
 
 
 def php_round(value: float, places: int = 0) -> float:
@@ -308,6 +306,22 @@ def latest_listings(cards: Cards) -> list[dict[str, Any]]:
     )
 
 
+def latest_products(cards: Cards, shown: list[int]) -> list[dict[str, Any]]:
+    """PageController::latestProducts: лента «Товары», без карточек витрины VIP."""
+    visible, params = visible_in(cards.locale)
+    skip = f" and l.id not in ({', '.join(['%s'] * len(shown))})" if shown else ""
+
+    return cards.present(
+        _listings(
+            f"{visible} and l.type = 'supply'{skip}",
+            [*params, *shown],
+            "(select count(*) from promotions p where p.listing_id = l.id "
+            "and p.status = 'active') desc, l.published_at desc, l.id desc",
+            8,
+        )
+    )
+
+
 def latest_requests(cards: Cards) -> list[dict[str, Any]]:
     """PageController::latestRequests: запросы на закупку."""
     visible, params = visible_in(cards.locale)
@@ -325,6 +339,7 @@ KEYS = (
     "stats",
     "categories",
     "vip",
+    "products",
     "requests",
     "suppliers",
     "how",
@@ -626,6 +641,7 @@ def home(request: HttpRequest) -> HttpResponse:
         )
 
     cards = Cards(ctx, values, translations)
+    latest = latest_listings(cards)
 
     return inertia.render(
         ctx,
@@ -638,7 +654,8 @@ def home(request: HttpRequest) -> HttpResponse:
             "heroRatio": hero_ratio(values),
             "categories": popular_categories(ctx.locale),
             "services": popular_services(ctx.locale),
-            "latest": latest_listings(cards),
+            "latest": latest,
+            "products": latest_products(cards, [row["id"] for row in latest]),
             "requests": latest_requests(cards),
             "suppliers": top_suppliers(ctx),
             "countries": [
