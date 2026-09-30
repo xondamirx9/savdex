@@ -32,7 +32,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex.guards import allowed_writes
 from savdex.payments import checkout as cashier
-from savdex.web import eloquent, orders
+from savdex.web import eloquent, locales, orders
 from savdex.web.actions import form
 from savdex.web.billing import _date, amount_label
 from savdex.web.cabinet import _rows, active_subscription, company_of
@@ -198,7 +198,13 @@ def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
     """
     try:
         config = cashier.gateway()
-        result = cashier.create_checkout(config, payment, ctx.locale)
+        # Назад — на тарифы того же домена и языка, а не ко входу
+        result = cashier.create_checkout(
+            config,
+            payment,
+            ctx.locale,
+            back_url=locales.url(ctx.root, "/cabinet/billing", ctx.locale),
+        )
         # Номер заказа Uzum — мост между колбэком и счётом
         eloquent.save(
             ctx,

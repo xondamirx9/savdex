@@ -18,6 +18,7 @@ use App\Services\Payments\PaymentGatewayManager;
 use App\Services\PromoCodeService;
 use App\Support\ContentTranslation;
 use App\Support\CurrencyRate;
+use App\Support\Locales;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -389,7 +390,11 @@ class BillingController extends Controller
 
         try {
             $gateway = $gateways->default();
-            $result = $gateway->createCheckout($payment);
+            // Назад — на тарифы того же домена и языка: по крестику на форме
+            // Uzum покупатель должен вернуться к выбору, а не ко входу
+            $result = $gateway->createCheckout($payment, [
+                'return_url' => Locales::url('/cabinet/billing'),
+            ]);
             $url = $result['redirect_url'] ?? null;
 
             if ($url === null) {
