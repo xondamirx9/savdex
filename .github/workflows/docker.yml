@@ -158,12 +158,15 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/cabinet.h
           # Машинный перевод ведёт Python: обработчик запущен
           docker exec savdex sh -c 'grep -al "manage.py" /proc/[0-9]*/cmdline | xargs -r cat | tr "\0" " " | grep -q "manage.py translate"'
-          # Формы (группа forms) по умолчанию выключены: POST — у Laravel
+          # Формы (группа forms) включены по умолчанию: POST — у Django
           curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/locale/uz
-          grep -qi '^x-powered-by: php' /tmp/form.h
+          ! grep -qi '^x-powered-by: php' /tmp/form.h
           curl -s -D /tmp/form.h -o /dev/null http://127.0.0.1:18080/cabinet/contacts/export
-          grep -qi '^x-powered-by: php' /tmp/form.h
-          # Вход и регистрация (группа auth) — Django; отправка формы — Laravel
+          ! grep -qi '^x-powered-by: php' /tmp/form.h
+          # Приём денег от шлюза (группа payments) — тоже Django
+          curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/payments/uzum/callback/check
+          ! grep -qi '^x-powered-by: php' /tmp/form.h
+          # Вход и регистрация (группа auth) — Django, и страницы, и отправка
           for page in login register forgot-password reset-password/abc; do
             curl -fsS -D /tmp/auth.h -o /tmp/auth.html "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/auth.h
@@ -212,10 +215,10 @@ jobs:
             curl -s -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
             ! grep -qi '^x-powered-by: php' /tmp/page.h
           done
-          # Файл задачи — Laravel (проверка доступа)
-          curl -s -D - -o /dev/null http://127.0.0.1:18080/it-services/files/1 | grep -qi '^x-powered-by: php'
-          # Форма «Оцените SavdEx» — страница Django (гостя уводит на вход),
-          # отправка — Laravel
+          # Файл задачи — Django (группа forms, проверка доступа)
+          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/it-services/files/1
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          # Форма «Оцените SavdEx» — страница Django (гостя уводит на вход)
           curl -s -D /tmp/rnew.h -o /dev/null http://127.0.0.1:18080/reviews/new
           ! grep -qi '^x-powered-by: php' /tmp/rnew.h
           grep -qi '^location: http://127.0.0.1:18080/login' /tmp/rnew.h
