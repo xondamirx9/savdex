@@ -105,9 +105,10 @@ class TestЗапретЗаписи:
     @pytest.mark.parametrize(
         "sql",
         [
-            "insert into listings (id) values (1)",
-            "update companies set rating = 5",
-            "delete from reviews where id = 1",
+            # Деньги — у Laravel дольше всех (этап 7, месяц сверки)
+            "insert into payments (id) values (1)",
+            "update wallets set credits = 5",
+            "delete from refunds where id = 1",
         ],
     )
     def test_чужая_таблица_отказывает(self, sql):
@@ -116,8 +117,8 @@ class TestЗапретЗаписи:
 
     def test_в_сообщении_названа_таблица(self):
         """Иначе разбираться придётся по стеку вызовов."""
-        with pytest.raises(WriteToForeignTableError, match="«listings»"):
-            guards.check("insert into listings (id) values (1)")
+        with pytest.raises(WriteToForeignTableError, match="«payments»"):
+            guards.check("insert into payments (id) values (1)")
 
     def test_чтение_проходит(self):
         guards.check("select * from listings where status = 'active'")
@@ -170,7 +171,7 @@ class TestПредохранительНаСоединении:
 
     def test_запись_через_курсор_отказывает(self, db):
         with pytest.raises(WriteToForeignTableError), connection.cursor() as cursor:
-            cursor.execute("insert into listings (id) values (1)")
+            cursor.execute("insert into payments (id) values (1)")
 
     def test_чтение_через_курсор_проходит(self, db):
         with connection.cursor() as cursor:
