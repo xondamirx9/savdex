@@ -315,3 +315,21 @@ def test_laravel_пускает_администратора_от_python():
 
     assert итоги["python"]["password_ok"] is True, итоги["python"]
     assert итоги["python"] == итоги["php"]
+
+
+def test_деплой_не_сбрасывает_пароль():
+    """
+    --if-missing (шаг 73, вместо проверки через tinker в entrypoint): уже
+    администратор — ничего не меняется; ещё нет — выдаётся, как обычно.
+    """
+    email = "deploy@savdex.uz"
+    _sql("delete from users where email = %s", [email])
+
+    первый = _python(email, "--if-missing", "--password=Первый-пароль-1")
+    assert первый.returncode == 0 and "создан" in первый.stdout, первый.stderr
+    было = _sql("select password, updated_at from users where email = %s", [email])
+
+    второй = _python(email, "--if-missing", "--password=Другой-пароль-2")
+
+    assert второй.returncode == 0 and "уже есть" in второй.stdout
+    assert _sql("select password, updated_at from users where email = %s", [email]) == было

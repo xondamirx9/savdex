@@ -46,37 +46,38 @@ class TestРазборЗапроса:
 
 class TestУзкоеРазрешение:
     """
-    Неделя 5: команда admin пишет в users, которой Django не владеет.
+    Сессии Laravel: Django пишет в sessions, которой не владеет (Laravel
+    ведёт свою сессию на оставшихся у него адресах).
 
     Разрешение действует только внутри блока, который его заявил, и
     только на заявленную таблицу.
     """
 
     def test_внутри_блока_запись_проходит(self):
-        with guards.allowed_writes("users"):
-            guards.check("update users set is_admin = true where id = 1")
+        with guards.allowed_writes("sessions"):
+            guards.check("update sessions set payload = '' where id = 'x'")
 
     def test_вне_блока_снова_запрет(self):
-        with guards.allowed_writes("users"):
+        with guards.allowed_writes("sessions"):
             pass
 
-        with pytest.raises(WriteToForeignTableError, match="«users»"):
-            guards.check("update users set is_admin = true where id = 1")
+        with pytest.raises(WriteToForeignTableError, match="«sessions»"):
+            guards.check("update sessions set payload = '' where id = 'x'")
 
     def test_разрешение_не_распространяется_на_другие_таблицы(self):
-        with guards.allowed_writes("users"), pytest.raises(WriteToForeignTableError):
-            guards.check("update wallets set credits = 0")
+        with guards.allowed_writes("sessions"), pytest.raises(WriteToForeignTableError):
+            guards.check("update activity_events set read_at = null")
 
     def test_незаявленную_таблицу_разрешить_нельзя(self):
         with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("failed_jobs"):
             pass
 
     def test_исключение_внутри_блока_снимает_разрешение(self):
-        with pytest.raises(RuntimeError), guards.allowed_writes("users"):
+        with pytest.raises(RuntimeError), guards.allowed_writes("sessions"):
             raise RuntimeError("сбой посреди записи")
 
         with pytest.raises(WriteToForeignTableError):
-            guards.check("delete from users where id = 1")
+            guards.check("delete from sessions where id = 'x'")
 
     def test_разрешение_не_утекает_в_другой_поток(self):
         import threading
@@ -85,13 +86,13 @@ class TestУзкоеРазрешение:
 
         def сосед() -> None:
             try:
-                guards.check("update users set status = 'blocked'")
+                guards.check("update sessions set user_id = null")
             except WriteToForeignTableError:
                 итог.append("запрет")
             else:
                 итог.append("прошло")
 
-        with guards.allowed_writes("users"):
+        with guards.allowed_writes("sessions"):
             поток = threading.Thread(target=сосед)
             поток.start()
             поток.join()
@@ -105,10 +106,10 @@ class TestЗапретЗаписи:
     @pytest.mark.parametrize(
         "sql",
         [
-            # Деньги — у Laravel дольше всех (этап 7, месяц сверки)
-            "insert into payments (id) values (1)",
-            "update wallets set credits = 5",
-            "delete from refunds where id = 1",
+            # Очередь и миграции — служебное Laravel
+            "insert into jobs (id) values (1)",
+            "update failed_jobs set payload = ''",
+            "delete from migrations where id = 1",
         ],
     )
     def test_чужая_таблица_отказывает(self, sql):
@@ -117,8 +118,8 @@ class TestЗапретЗаписи:
 
     def test_в_сообщении_названа_таблица(self):
         """Иначе разбираться придётся по стеку вызовов."""
-        with pytest.raises(WriteToForeignTableError, match="«payments»"):
-            guards.check("insert into payments (id) values (1)")
+        with pytest.raises(WriteToForeignTableError, match="«jobs»"):
+            guards.check("insert into jobs (id) values (1)")
 
     def test_чтение_проходит(self):
         guards.check("select * from listings where status = 'active'")
@@ -171,7 +172,7 @@ class TestПредохранительНаСоединении:
 
     def test_запись_через_курсор_отказывает(self, db):
         with pytest.raises(WriteToForeignTableError), connection.cursor() as cursor:
-            cursor.execute("insert into payments (id) values (1)")
+            cursor.execute("insert into jobs (id) values (1)")
 
     def test_чтение_через_курсор_проходит(self, db):
         with connection.cursor() as cursor:

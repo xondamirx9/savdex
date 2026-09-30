@@ -135,9 +135,6 @@ def _сервер(окружение: dict[str, str]) -> Iterator[str]:
     port = _порт()
     root = f"http://127.0.0.1:{port}"
     env = {**ОКРУЖЕНИЕ, **САЙТ, **окружение, "APP_URL": root}
-    subprocess.run(
-        ["php", "artisan", "savdex:export-ui"], cwd=КОРЕНЬ, env=env, check=True, capture_output=True
-    )
     сервер = subprocess.Popen(
         ["php", "artisan", "serve", "--host=127.0.0.1", f"--port={port}"],
         cwd=КОРЕНЬ,

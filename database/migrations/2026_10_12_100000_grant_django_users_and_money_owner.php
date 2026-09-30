@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\DB;
  * Последние живые писатели Laravel перенесены в Django: смена языка ?hl=
  * и регистрация по коду (users), продвижения и расчётные периоды
  * (promotions:finish, billing:reset-periods — python/savdex/schedule.py).
- * Хозяин этих таблиц теперь Django (OWNED_TABLES). Роли нет — делать нечего.
+ * Хозяин этих таблиц теперь Django (OWNED_TABLES). Справочники деплоя
+ * (шаг 73) заводит manage.py seed — поля категорий и типы продвижения
+ * тоже переходят к Django. Роли нет — делать нечего.
  */
 return new class extends Migration
 {
@@ -27,6 +29,8 @@ return new class extends Migration
         'payment_transactions',
         'promo_codes',
         'refunds',
+        'category_fields',
+        'promotion_types',
     ];
 
     public function up(): void

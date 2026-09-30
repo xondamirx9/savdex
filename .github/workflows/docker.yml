@@ -84,7 +84,7 @@ jobs:
             -c "from savdex.web.filetype import _magic, mime_type; assert _magic() is not None; print(mime_type(b'%PDF-1.4'))"
 
       # Ключ одноразовый, живёт только в этом прогоне
-      - name: Выгрузка как по кнопке и выдача прав — внутри образа
+      - name: Схема, справочники, выгрузка и выдача прав — внутри образа
         run: |
           docker run --rm --network host \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
@@ -94,8 +94,14 @@ jobs:
             -e CACHE_STORE=array -e SESSION_DRIVER=database -e QUEUE_CONNECTION=sync \
             --entrypoint bash savdex:ci -c '
               set -eo pipefail
-              php artisan migrate --force
-              php artisan db:seed --force
+              # Схема и справочники — Python, без Laravel (шаг 73): после
+              # снимка миграциям Laravel применять нечего
+              (cd python && .venv/bin/python manage.py schema | tee /tmp/schema.txt)
+              grep -q "Схема создана" /tmp/schema.txt
+              php artisan migrate --force | tee /tmp/migrate.txt
+              grep -q "Nothing to migrate" /tmp/migrate.txt
+              (cd python && .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt)
+              grep -q "countries 33" /tmp/seed.txt
               php artisan savdex:export-run | tee /tmp/run.txt
               grep -q "Итог: done" /tmp/run.txt
               grep -q "Сверка с Python: match" /tmp/run.txt

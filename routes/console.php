@@ -11,10 +11,6 @@ use App\Models\NewsPost;
 use App\Models\Resume;
 use App\Models\Tender;
 use App\Services\MachineTranslator;
-use App\Services\Payments\PaymentGatewayManager;
-use App\Services\Payments\UzumGateway;
-use App\Support\CurrencyRate;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -35,20 +31,11 @@ use Illuminate\Support\Facades\Schedule;
 // docker/render-entrypoint.sh, те же 06:00). Сама команда осталась:
 // ею сверяется Python-версия (python/tests/test_listing_expiry.py)
 
-/*
- * Каждый час, а не раз в сутки: слоты «ТОП категории» и «ТОП главной»
- * ограничены, и сутки простоя занятого места — это сутки, которые
- * никто не может купить.
- */
-Schedule::command('promotions:finish')
-    ->hourly()
-    ->withoutOverlapping()
-    ->onOneServer();
-
-Schedule::command('billing:reset-periods')
-    ->dailyAt('00:30')
-    ->withoutOverlapping()
-    ->onOneServer();
+// Завершение продвижений (promotions:finish, каждый час) и расчётные
+// периоды (billing:reset-periods, 00:30) ведёт Django — хозяин таблиц денег
+// с шага 72 (python/savdex/payments/periods.py, задачи promotions_finish и
+// billing_reset_periods в python/savdex/schedule.py). Команды остались:
+// ими сверяется Python-версия (python/tests/test_billing_periods.py)
 
 // Пересчёт рейтингов (ratings:recalculate, 03:00) ведёт Django — хозяин
 // companies с этапа 5 (python/savdex/schedule.py). Команда осталась:
@@ -58,17 +45,8 @@ Schedule::command('billing:reset-periods')
 // user_notifications с этапа 5 (python/savdex/schedule.py). Команда
 // осталась: ею сверяется Python-версия (python/tests/test_review_ask.py)
 
-/*
- * Курсы ЦБ — заранее, а не первым посетителем: кэш живёт сутки,
- * и без обновления по расписанию тот, кто откроет каталог сразу
- * после его истечения, ждал бы ответа cbu.uz до пяти секунд.
- * Каждые четыре часа: ЦБ публикует курс раз в день, но в какой час —
- * не обещает.
- */
-Schedule::call(fn () => app(CurrencyRate::class)->refresh())
-    ->everyFourHours()
-    ->name('cbu-rates:refresh')
-    ->onOneServer();
+// Курсы ЦБ заранее, каждые четыре часа (cbu-rates:refresh), ведёт Django
+// (python/savdex/web/currency.py, задача cbu_rates): тот же кэш, тот же формат
 
 // Экспорты и импорты Filament уходят в очередь; на проде нужен
 // постоянный воркер, но раз в час подбираем зависшие задания
@@ -166,29 +144,5 @@ Schedule::command('translations:fill --limit=20')
     ->withoutOverlapping()
     ->onOneServer();
 
-/*
- * Прозвон Uzum Checkout: доступен ли API с нашего адреса (прямо или
- * через прокси со статическим IP) и приняты ли ключи. Касса при сбое
- * молча откатывается на оплату по счёту, и без проверки об упавшем
- * прокси или отозванном ключе узнали бы по отсутствию платежей.
- * Запись в лог — LOG_CHANNEL=stderr, то есть видно в логах Render.
- */
-Schedule::call(function (): void {
-    if (! config('payments.providers.uzum.enabled') || ! config('payments.providers.uzum.checkout')) {
-        return;
-    }
-
-    $gateway = app(PaymentGatewayManager::class)->for('uzum');
-
-    if (! $gateway instanceof UzumGateway) {
-        return;
-    }
-
-    $result = $gateway->probe();
-
-    if ($result['ok']) {
-        Log::info('payment.uzum.probe_ok', ['message' => $result['message']]);
-    } else {
-        Log::error('payment.uzum.probe_failed', ['message' => $result['message']]);
-    }
-})->hourly()->name('uzum-probe')->onOneServer();
+// Прозвон Uzum Checkout (uzum-probe, каждый час) ведёт Django — задача
+// uzum_probe в python/savdex/schedule.py; итог — в журнал контейнера
