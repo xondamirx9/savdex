@@ -97,6 +97,7 @@ def test_первый_запуск_после_часа_день_пропуска
         "audience_views_prune": now.date().isoformat(),
         "expire_listings": now.date().isoformat(),
         "ratings_recalculate": now.date().isoformat(),
+        "reviews_ask": now.date().isoformat(),
     }
     assert sql("select count(*) from audience_views") == [(5,)]
 
@@ -156,3 +157,4 @@ def test_список_задач(компании, tmp_path):
 
     assert "ratings_recalculate\t03:00" in вывод
     assert "audience_views_prune\t04:00" in вывод and "expire_listings\t06:00" in вывод
+    assert "reviews_ask\t06:00" in вывод

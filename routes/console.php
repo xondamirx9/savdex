@@ -54,12 +54,9 @@ Schedule::command('billing:reset-periods')
 // companies с этапа 5 (python/savdex/schedule.py). Команда осталась:
 // ею сверяется Python-версия (python/tests/test_schedule.py)
 
-// Просьбы оставить отзыв — днём по Ташкенту, а не ночью: уведомление
-// в колокольчике читают, когда человек на площадке (AskForReviews)
-Schedule::command('reviews:ask')
-    ->dailyAt('06:00')
-    ->withoutOverlapping()
-    ->onOneServer();
+// Просьбы оставить отзыв (reviews:ask, 06:00) ведёт Django — хозяин
+// user_notifications с этапа 5 (python/savdex/schedule.py). Команда
+// осталась: ею сверяется Python-версия (python/tests/test_review_ask.py)
 
 /*
  * Курсы ЦБ — заранее, а не первым посетителем: кэш живёт сутки,

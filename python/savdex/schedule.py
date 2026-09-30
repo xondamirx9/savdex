@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.db import connection
@@ -115,10 +116,105 @@ def recalculate_ratings(now: datetime, due: datetime) -> str:
     )
 
 
+def ask_for_reviews(now: datetime, due: datetime, limit: int = 300) -> str:
+    """
+    reviews:ask (06:00): просьба оставить отзыв — в колокольчик, по одной
+    на повод. О площадке — через неделю после регистрации; о компании —
+    через 3–30 дней после раскрытия её контактов, если отзыва от компании
+    ещё нет и на контакты не жаловались. Повтор отсекается по уже
+    отправленному уведомлению того же вида (и адреса — для компании).
+    Язык — профиля человека, без него — русский (app.locale у Laravel).
+    """
+    from datetime import timedelta
+
+    from savdex.web import ui
+    from savdex.web.cabinet import _rows
+
+    def deliver(user: dict[str, Any], type_: str, title: str, body: str, url: str) -> None:
+        """Notifier::user → UserNotification::deliver."""
+        stamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        with allowed_writes("user_notifications"), connection.cursor() as cursor:
+            cursor.execute(
+                "insert into user_notifications (user_id, company_id, type, title, body, tone, "
+                "url, created_at, updated_at) values (%s, %s, %s, %s, %s, 'info', %s, %s, %s)",
+                [user["id"], user["company_id"], type_, title, body, url, stamp, stamp],
+            )
+
+    users = _rows(
+        "select id, company_id, locale from users u where deleted_at is null "
+        "and status = 'active' and is_admin = false and email_verified_at is not null "
+        "and created_at <= %s "
+        "and not exists (select 1 from platform_reviews p where p.user_id = u.id) "
+        "and not exists (select 1 from user_notifications n where n.user_id = u.id "
+        "and n.type = 'platform_review_ask') order by id limit %s",
+        [now - timedelta(days=7), limit],
+    )
+
+    for user in users:
+        locale = user["locale"] or "ru"
+        deliver(
+            user,
+            "platform_review_ask",
+            ui.t("platform_reviews.ask_title", locale),
+            ui.t("platform_reviews.ask_body", locale),
+            "/reviews/new",
+        )
+
+    unlocks = _rows(
+        "select cu.user_id, cu.target_company_id, u.company_id, u.locale, t.slug, t.name "
+        "from contact_unlocks cu "
+        "join users u on u.id = cu.user_id and u.deleted_at is null and u.status = 'active' "
+        "join companies t on t.id = cu.target_company_id and t.deleted_at is null "
+        "and t.status = 'active' "
+        "where cu.user_id is not null and cu.complaint_status is null "
+        "and cu.created_at between %s and %s "
+        "and not exists (select 1 from reviews r where r.company_id = cu.target_company_id "
+        "and r.author_company_id = cu.company_id) order by cu.id",
+        [now - timedelta(days=30), now - timedelta(days=3)],
+    )
+    seen: set[tuple[int, int]] = set()
+    sent = 0
+
+    for unlock in unlocks:
+        # ->unique(user_id:target_company_id): первое раскрытие пары
+        pair = (unlock["user_id"], unlock["target_company_id"])
+
+        if pair in seen:
+            continue
+
+        seen.add(pair)
+
+        if sent >= limit:
+            break
+
+        url = f"/company/{unlock['slug']}#reviews"
+
+        if _rows(
+            "select 1 from user_notifications where user_id = %s and type = 'review_ask' "
+            "and url = %s limit 1",
+            [unlock["user_id"], url],
+        ):
+            continue
+
+        locale = unlock["locale"] or "ru"
+        deliver(
+            {"id": unlock["user_id"], "company_id": unlock["company_id"]},
+            "review_ask",
+            ui.t("platform_reviews.ask_company_title", locale, name=unlock["name"]),
+            ui.t("platform_reviews.ask_company_body", locale),
+            url,
+        )
+        sent += 1
+
+    return f"Просьб о площадке: {len(users)}, о компаниях: {sent}."
+
+
 JOBS: tuple[Job, ...] = (
     Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
     Job("expire_listings", time(6, 0), expire_listings),
+    Job("reviews_ask", time(6, 0), ask_for_reviews),
 )
 
 

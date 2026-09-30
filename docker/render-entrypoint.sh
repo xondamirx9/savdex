@@ -347,8 +347,9 @@ if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
     # Ежедневные задачи для таблиц Django (python/savdex/schedule.py) —
     # вместо расписания Laravel: пересчёт рейтингов в 03:00 UTC (было
     # ratings:recalculate), чистка «Кто смотрел» в 04:00 (было
-    # audience-views:prune), снятие истёкших объявлений в 06:00 (было
-    # listings:expire). Пройденные дни помнит storage/app/schedule.json
+    # audience-views:prune), снятие истёкших объявлений и просьбы об отзыве
+    # в 06:00 (было listings:expire и reviews:ask). Пройденные дни помнит
+    # storage/app/schedule.json
     (
         set +e
         while true; do
