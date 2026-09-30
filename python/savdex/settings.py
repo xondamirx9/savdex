@@ -161,7 +161,8 @@ MIDDLEWARE = [
     "savdex.web.forms.MethodOverrideMiddleware",
     # Стили и скрипты админки — из самого Django, без отдельного сервера
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    # CSRF Django — только админка (/py/); у форм сайта свой токен Laravel
+    "savdex.csrf.SavdexCsrfMiddleware",
     # Сообщения «сохранено» живут в куке: таблицы сессий нет
     "django.contrib.messages.middleware.MessageMiddleware",
     # Кто открыл раздел админки на Django (вход — пропуском из Laravel)

@@ -171,6 +171,9 @@ jobs:
           # Формы (группа forms) включены по умолчанию: POST — у Django
           curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/locale/uz
           ! grep -qi '^x-powered-by: php' /tmp/form.h
+          # Форма на общем со страницей адресе (вход): токен сверяет сама
+          # форма — без него 419, как у Laravel, а не 403 CSRF Django
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/login)" = 419
           curl -s -D /tmp/form.h -o /dev/null http://127.0.0.1:18080/cabinet/contacts/export
           ! grep -qi '^x-powered-by: php' /tmp/form.h
           # Этап 4, шаг 62: подмена метода (POST с _method) — у Django
