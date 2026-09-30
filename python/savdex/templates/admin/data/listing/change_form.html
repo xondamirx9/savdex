@@ -7,7 +7,7 @@
 {% block form_top %}
   {% if original %}
     <div class="module aligned">
-      <div class="form-row"><p><b>Статус:</b> {{ status_label }} · <b>Источник:</b> {{ source_label }}{% if trashed %} · <b style="color:#b91c1c">в корзине</b>{% endif %}</p></div>
+      <div class="form-row"><p><b>Статус:</b> {{ status_label }} · <b>Источник:</b> {{ source_label }}{% if trashed %} · <b style="color:var(--sx-status-danger, #b91c1c)">в корзине</b>{% endif %}</p></div>
       {% if original.slug and original.status == "active" %}
         <div class="form-row"><p><a href="/listing/{{ original.slug }}" target="_blank" rel="noopener">Открыть на сайте</a></p></div>
       {% endif %}

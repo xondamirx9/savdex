@@ -35,7 +35,7 @@
           <p>
             <b>{% if message.author %}{{ message.author.name }}{% elif message.from_staff %}Поддержка{% else %}Клиент{% endif %}</b>
             · {{ message.created_at|date:"d.m.Y H:i" }}
-            {% if message.is_internal %}· <b style="color:#b45309">внутренняя заметка — клиент её не видит</b>{% endif %}
+            {% if message.is_internal %}· <b style="color:var(--sx-status-warning, #b45309)">внутренняя заметка — клиент её не видит</b>{% endif %}
           </p>
           <div>{{ message.body|linebreaksbr }}</div>
         </div>

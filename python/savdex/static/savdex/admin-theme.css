@@ -40,6 +40,13 @@ html[data-theme="light"] {
     --sx-danger-ring: #fecaca;
     --sx-success-text: #166534;
     --sx-warning-text: #92400e;
+    /* Цвета статусов: подписи «активна», «в корзине», суммы и т. п. */
+    --sx-status-danger: #b91c1c;
+    --sx-status-warning: #b45309;
+    --sx-status-success: #15803d;
+    --sx-status-info: #0369a1;
+    --sx-status-primary: #1d4ed8;
+    --sx-status-gray: #6b7280;
     --sx-ring: 0 0 0 1px rgba(3, 7, 18, .05);
     --sx-card-shadow: 0 1px 2px rgba(0, 0, 0, .05);
 
@@ -73,6 +80,12 @@ html[data-theme="dark"] {
     --sx-danger-ring: rgba(248, 113, 113, .35);
     --sx-success-text: #86efac;
     --sx-warning-text: #fcd34d;
+    --sx-status-danger: #f87171;
+    --sx-status-warning: #fbbf24;
+    --sx-status-success: #4ade80;
+    --sx-status-info: #38bdf8;
+    --sx-status-primary: #60a5fa;
+    --sx-status-gray: #9ca3af;
     --sx-ring: 0 0 0 1px rgba(255, 255, 255, .1);
     --sx-card-shadow: 0 0 #0000;
 
@@ -106,6 +119,12 @@ html[data-theme="dark"] {
         --sx-danger-ring: rgba(248, 113, 113, .35);
         --sx-success-text: #86efac;
         --sx-warning-text: #fcd34d;
+        --sx-status-danger: #f87171;
+        --sx-status-warning: #fbbf24;
+        --sx-status-success: #4ade80;
+        --sx-status-info: #38bdf8;
+        --sx-status-primary: #60a5fa;
+        --sx-status-gray: #9ca3af;
         --sx-ring: 0 0 0 1px rgba(255, 255, 255, .1);
         --sx-card-shadow: 0 0 #0000;
 
@@ -861,3 +880,18 @@ ul.messagelist li.error {
 #user-tools .theme-toggle:hover svg {
     fill: var(--sx-text);
 }
+
+/* ── Цвета статусов из разделов ──
+   Разделы красят подписи прямо в разметке (style="color:#b91c1c"): на
+   тёмном фоне тёмно-красный и тёмно-зелёный почти не видны. Подменяем
+   их светлыми вариантами из токенов; в светлой теме цвета те же */
+
+[style^="color:#b91c1c"] { color: var(--sx-status-danger) !important; }
+[style^="color:#b45309"],
+[style^="color:#d97706"] { color: var(--sx-status-warning) !important; }
+[style^="color:#15803d"],
+[style^="color:#16a34a"] { color: var(--sx-status-success) !important; }
+[style^="color:#0369a1"] { color: var(--sx-status-info) !important; }
+[style^="color:#1d4ed8"] { color: var(--sx-status-primary) !important; }
+[style^="color:#6b7280"],
+[style^="color:#9ca3af"] { color: var(--sx-status-gray) !important; }

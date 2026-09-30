@@ -8,7 +8,7 @@
   .fin-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .fin-tiles { display: flex; flex-wrap: wrap; gap: 24px; margin: 8px 0 16px; }
   .fin-tiles div b { display: block; font-size: 1.4em; font-variant-numeric: tabular-nums; }
-  .fin-good { color: #15803d; } .fin-bad { color: #b91c1c; } .fin-warn { color: #b45309; }
+  .fin-good { color: var(--sx-status-success, #15803d); } .fin-bad { color: var(--sx-status-danger, #b91c1c); } .fin-warn { color: var(--sx-status-warning, #b45309); }
   .fin-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 </style>
 {% endblock %}
