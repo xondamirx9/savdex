@@ -11,14 +11,14 @@
 {# Оформление как у админки Laravel (Filament): шрифт Inter и светлая/тёмная тема #}
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap">
-<link rel="stylesheet" href="{% static 'savdex/admin-theme.css' %}">
+<link rel="stylesheet" href="{% static 'savdex/admin-theme.css' %}?v={{ savdex_theme_version }}">
 {% if savdex_logo %}<link rel="icon" href="{{ savdex_logo }}">{% endif %}
 {% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo">{% endif %}<span>{{ site_header }}</span></a> <span class="sx-brand-note">· разделы на Python</span></div>
+<div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo" height="32" style="height:32px;width:auto">{% endif %}<span>{{ site_header }}</span></a> <span class="sx-brand-note">· разделы на Python</span></div>
 {% endblock %}
 
 {% block usertools %}

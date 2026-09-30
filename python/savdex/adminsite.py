@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import functools
+import hashlib
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -175,6 +177,23 @@ ICONS = {
 DEFAULT_ICON = "rectangle-stack"
 
 
+@functools.cache
+def _theme_version() -> str:
+    """
+    Метка версии стилей админки для ссылки ?v=…: имя файла у WhiteNoise
+    без хеша, и кеш браузера или прокси иначе держит старые стили.
+    """
+    from django.contrib.staticfiles import finders
+
+    path = finders.find("savdex/admin-theme.css")
+
+    if not isinstance(path, str):
+        return "0"
+
+    with open(path, "rb") as file:
+        return hashlib.sha256(file.read()).hexdigest()[:10]
+
+
 class SavdexAdminSite(admin.AdminSite):
     site_header = "SAVDEX · Управление"
     site_title = "SAVDEX · разделы на Python"
@@ -235,6 +254,7 @@ class SavdexAdminSite(admin.AdminSite):
         from savdex.web import shared
 
         context["savdex_logo"] = shared.appearance_logo(shared.settings_values())
+        context["savdex_theme_version"] = _theme_version()
 
         return context
 
