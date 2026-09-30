@@ -49,6 +49,9 @@ return [
     ],
 
     'common' => [
+        'prev_page' => 'Previous',
+        'next_page' => 'Next',
+        'page_n' => 'Page :page',
         'close' => 'Close',
         'cancel' => 'Cancel',
         'confirm' => 'Confirm',

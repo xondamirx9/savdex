@@ -48,6 +48,9 @@ return [
     ],
 
     'common' => [
+        'prev_page' => '上一页',
+        'next_page' => '下一页',
+        'page_n' => '第 :page 页',
         'close' => '关闭',
         'cancel' => '取消',
         'confirm' => '确认',

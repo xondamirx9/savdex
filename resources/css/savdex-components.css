@@ -1573,14 +1573,28 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .filter-link:hover{color:var(--text)}
 .filter-link.is-active{color:var(--primary-700);font-weight:600}
 
-.pagination{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.pagination{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}
 .page-link{
-  display:grid;place-items:center;min-width:40px;height:40px;padding:0 12px;
-  border:1px solid var(--border);border-radius:var(--r-btn);
-  font-size:14px;font-weight:500;color:var(--text)}
-.page-link:hover{border-color:var(--primary-500);text-decoration:none}
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:40px;height:40px;padding:0 12px;
+  border:1px solid var(--border);border-radius:var(--r-btn);background:var(--surface);
+  font-size:14px;font-weight:500;color:var(--text);font-variant-numeric:tabular-nums;
+  transition:border-color var(--t-mid),color var(--t-mid),background var(--t-mid)}
+.page-link:hover{border-color:var(--primary-500);color:var(--primary-700);text-decoration:none}
 .page-link.is-active{background:var(--primary-700);color:#fff;border-color:var(--primary-700)}
 .page-link.is-disabled{opacity:.4;pointer-events:none}
+/* «Назад» и «Вперёд»: стрелка и подпись */
+.page-step{padding:0 14px}
+/* Пропуск номеров «…» — не кнопка, без рамки */
+.page-gap{display:inline-flex;align-items:flex-end;justify-content:center;min-width:24px;height:40px;
+  padding-bottom:10px;color:var(--text-muted);user-select:none}
+@media(max-width:560px){
+  .pagination{gap:4px}
+  .page-link{min-width:32px;height:36px;padding:0 6px}
+  /* На телефоне у «назад/вперёд» остаются стрелки — ряд помещается в одну строку */
+  .page-step{padding:0 10px}
+  .page-step-text{display:none}
+  .page-gap{height:36px;min-width:16px;padding-bottom:8px}
+}
 
 @media(max-width:768px){
   .listing-row{flex-wrap:wrap}

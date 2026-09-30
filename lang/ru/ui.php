@@ -52,6 +52,9 @@ return [
     ],
 
     'common' => [
+        'prev_page' => 'Назад',
+        'next_page' => 'Вперёд',
+        'page_n' => 'Страница :page',
         'close' => 'Закрыть',
         'cancel' => 'Отмена',
         'confirm' => 'Подтвердить',

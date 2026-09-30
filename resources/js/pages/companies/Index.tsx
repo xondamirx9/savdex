@@ -6,6 +6,7 @@ import { VerificationBadge } from '@/components/VerificationBadge';
 import { t, tChoice } from '@/lib/i18n';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
+import { Pagination } from '@/components/Pagination';
 
 interface CompanyRow {
     slug: string;
@@ -309,25 +310,7 @@ export default function CompaniesIndex({
                             </div>
                         )}
 
-                        {companies.links.length > 3 && (
-                            <nav className="row mt-32" style={{ justifyContent: 'center', gap: 6, flexWrap: 'wrap' }} aria-label={t('companies_page.pages')}>
-                                {companies.links.map((l) =>
-                                    l.url ? (
-                                        <Link
-                                            key={l.label}
-                                            href={l.url}
-                                            className={`btn btn-sm ${l.active ? 'btn-primary' : 'btn-secondary'}`}
-                                            aria-current={l.active ? 'page' : undefined}
-                                            dangerouslySetInnerHTML={{ __html: l.label }}
-                                        />
-                                    ) : (
-                                        <span key={l.label} className="muted" style={{ padding: '0 6px' }}>
-                                            …
-                                        </span>
-                                    ),
-                                )}
-                            </nav>
-                        )}
+                        <Pagination links={companies.links} label={t('companies_page.pages')} className="mt-32" />
                     </div>
                 </div>
             </div>

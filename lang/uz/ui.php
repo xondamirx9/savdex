@@ -51,6 +51,9 @@ return [
     ],
 
     'common' => [
+        'prev_page' => 'Orqaga',
+        'next_page' => 'Oldinga',
+        'page_n' => ':page-sahifa',
         'close' => 'Yopish',
         'cancel' => 'Bekor qilish',
         'confirm' => 'Tasdiqlash',

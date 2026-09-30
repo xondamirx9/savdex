@@ -1,15 +1,14 @@
 import { router } from '@inertiajs/react';
 import { Users } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from '@/components/ui/Link';
 import { BoardFilter } from '@/components/BoardFilter';
 import { ResumeCard, type ResumeRow } from '@/components/ResumeCard';
 import { SelectField } from '@/components/SelectField';
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import { openServiceSection, RESUMES_OPTION, serviceFilterOptions, type ServiceSection } from '@/lib/serviceSections';
+import { Pagination } from '@/components/Pagination';
 
 interface Props {
     resumes: {
@@ -171,26 +170,7 @@ export default function ResumesIndex({ resumes, filters, options, cities, total,
                         )}
 
                         {resumes.last_page > 1 && (
-                            <nav className="pagination mt-32" aria-label={t('resume.pages')}>
-                                {resumes.links.map((link, i) =>
-                                    link.url ? (
-                                        <Link
-                                            key={i}
-                                            href={link.url}
-                                            className={cn('page-link', link.active && 'is-active')}
-                                            aria-current={link.active ? 'page' : undefined}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ) : (
-                                        <span
-                                            key={i}
-                                            className="page-link is-disabled"
-                                            aria-disabled="true"
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ),
-                                )}
-                            </nav>
+                            <Pagination links={resumes.links} label={t('resume.pages')} className="mt-32" />
                         )}
                     </div>
                 </div>
