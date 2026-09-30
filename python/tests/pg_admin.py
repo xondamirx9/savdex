@@ -76,7 +76,7 @@ for method, url, data in steps:
     data = {k: upload(v) for k, v in (data or {}).items()}
     r = client.get(url) if method == "get" else client.post(url, data)
     # Двоичный ответ (XLSX) — текстом с заменой: проверкам хватает начала
-    body = r.content.decode(errors="replace")
+    body = r.getvalue().decode(errors="replace")
     out.append({"status": r.status_code, "location": r.get("Location"), "body": body})
 
 print(json.dumps(out, ensure_ascii=False))

@@ -4,7 +4,7 @@
   Шапка админки на Python.
 
   «Сменить пароль» — страница сайта (пароль у сотрудника тот же, что на
-  сайте). «Выгрузка в Excel» — пока страница Filament (шаг 67).
+  сайте). «Выгрузка в Excel» — страница Django (savdex/system/exports_view.py).
 {% endcomment %}
 {% block extrahead %}
 {{ block.super }}
@@ -25,7 +25,7 @@
 {% if has_permission and savdex_admin %}
 <div id="user-tools">
   {{ savdex_admin.name }} · {{ savdex_role }} /
-  {% if savdex_exports %}<a href="/admin/excel-exports">Выгрузка в Excel</a> /{% endif %}
+  {% if savdex_exports %}<a href="{% url 'admin:system_exports' %}">Выгрузка в Excel</a> /{% endif %}
   <a href="/password/change">Сменить пароль</a> /
   <a href="{{ site_url }}">На сайт</a> /
   <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
