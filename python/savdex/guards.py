@@ -157,6 +157,12 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # пересчёт рейтингов ratings:recalculate — перенесён в
         # savdex/schedule.py; событие saving (search_text) у Django своё
         "companies",
+        # Этап 5 (шаг 65): колокольчик. Просьбы об отзыве (reviews:ask) —
+        # savdex/schedule.py. Исключение, как у переводов новостей: пока
+        # деньги у Laravel, его billing:reset-periods и OrderService ещё
+        # добавляют строки (продление, конец подписки) — простая вставка,
+        # у модели UserNotification событий нет
+        "user_notifications",
     }
 )
 
@@ -222,15 +228,6 @@ SHARED_WRITES: dict[str, str] = {
         "translations:fill"
         "; машинный перевод (этап 5, manage.py translate) — перевод и число "
         "попыток, как translations:fill"
-    ),
-    "user_notifications": (
-        "прочтение уведомлений (этап 5, форма): одно или все свои — только "
-        "read_at и updated_at, как UserNotification::markRead и update() у "
-        "Laravel; событий у модели нет"
-        "; уведомления компании (этап 5, шаг 23) — insert, как Notifier::company"
-        "; решения по отзывам (этап 6) — Notifier::company и Notifier::user"
-        "; рассылка (этап 6) — пачками по 500 с is_broadcast и sent_by, как "
-        "Notifier::broadcast"
     ),
     "activity_events": (
         "лента кабинета (этап 5, форма): insert события, как Notifier::company "
