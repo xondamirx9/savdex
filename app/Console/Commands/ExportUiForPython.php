@@ -21,12 +21,14 @@ use Illuminate\Support\Facades\File;
  * и другое на Python значит однажды разойтись. Поэтому Laravel сам
  * выгружает их в JSON, а Django читает готовое.
  *
- * Запускается при старте службы (docker/render-entrypoint.sh), до
- * Django; словарь меняется только с релизом.
+ * С шага 73 выгрузка лежит в самом коде Python (python/savdex/locale/ui,
+ * `php artisan savdex:export-ui --to=python/savdex/locale/ui` после правки
+ * lang/*): Django не нужен Laravel при старте. Что выгрузка не отстала от
+ * lang/*, следит tests/Feature/ExportUiForPythonTest.
  */
 class ExportUiForPython extends Command
 {
-    protected $signature = 'savdex:export-ui';
+    protected $signature = 'savdex:export-ui {--to= : Каталог вместо storage/app/python/ui — например, python/savdex/locale/ui}';
 
     protected $description = 'Словарь и подписи «назад» для страниц на Django';
 
@@ -48,7 +50,11 @@ class ExportUiForPython extends Command
 
     public function handle(): int
     {
-        File::ensureDirectoryExists(self::directory());
+        $directory = $this->option('to') !== null && $this->option('to') !== ''
+            ? base_path((string) $this->option('to'))
+            : self::directory();
+
+        File::ensureDirectoryExists($directory);
 
         /** @var array<string, mixed> $base */
         $base = trans('ui', locale: Locales::DEFAULT);
@@ -64,14 +70,14 @@ class ExportUiForPython extends Command
                 'dates' => $this->dates($locale),
             ];
 
-            $path = self::directory()."/{$locale}.json";
+            $path = $directory."/{$locale}.json";
             // Сначала во временный файл: Django не должен прочитать
             // наполовину записанный словарь
             File::put($path.'.tmp', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             File::move($path.'.tmp', $path);
         }
 
-        $this->info('Словарь выгружен: '.self::directory());
+        $this->info('Словарь выгружен: '.$directory);
 
         return self::SUCCESS;
     }

@@ -390,6 +390,45 @@ def _assert_usable(ctx: Context, promo: dict[str, Any]) -> None:
         raise PromoCodeRejectedError(ctx.t("messages.promo_code.disabled"))
 
 
+def preview(ctx: Context, raw: str) -> dict[str, Any]:
+    """
+    PromoCodeService::preview: проверить код, ничего не погашая, — для
+    страницы тарифов. Условия компании проверит активация в кабинете.
+    """
+    code = normalize(raw)
+
+    if code == "":
+        raise PromoCodeRejectedError(ctx.t("messages.billing.promo_required"))
+
+    found = _rows("select * from promo_codes where code = %s limit 1", [code])
+
+    if not found:
+        raise PromoCodeRejectedError(ctx.t("messages.promo_code.unknown"))
+
+    promo = found[0]
+    _assert_usable(ctx, promo)
+    plan = _plan_of(promo) if promo["plan_id"] is not None else None
+
+    if plan is None or not plan["is_active"]:
+        raise PromoCodeRejectedError(ctx.t("messages.promo_code.plan_gone"))
+
+    discount = promo["discount_percent"] is not None
+
+    if discount:
+        if not 1 <= int(promo["discount_percent"]) <= 99:
+            raise PromoCodeRejectedError(ctx.t("messages.promo_code.no_discount"))
+    elif int(promo["days"] or 0) < 1:
+        raise PromoCodeRejectedError(ctx.t("messages.promo_code.no_period"))
+
+    return {
+        "code": promo["code"],
+        "plan_id": plan["id"],
+        "plan_code": plan["code"],
+        "discount_percent": int(promo["discount_percent"]) if discount else None,
+        "days": None if discount else int(promo["days"]),
+    }
+
+
 def _assert_no_redeemed(ctx: Context, company_id: int) -> None:
     if _rows("select 1 from promo_codes where used_by_company_id = %s limit 1", [company_id]):
         raise PromoCodeRejectedError(ctx.t("messages.promo_code.company_used"))

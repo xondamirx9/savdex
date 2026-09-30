@@ -147,20 +147,58 @@ fi
 
 php artisan package:discover --ansi
 
+# Схема, справочники и администратор (шаг 73 переноса) — Python, без
+# Laravel: схема из снимка миграций (python/savdex/schema.py), справочники
+# вместо сидеров (python/savdex/seeds.py), администратор — manage.py admin.
+# Владельцем базы, как миграции (DB_URL), а не ролью Django: ей схему
+# менять нельзя. Для SQLite (разработка без Postgres) — прежний путь Laravel.
+py_owner() {
+    if [ -n "${DB_URL:-}" ]; then
+        DJANGO_DATABASE_URL="$DB_URL" python/.venv/bin/python python/manage.py "$@"
+    else
+        env -u DJANGO_DATABASE_URL python/.venv/bin/python python/manage.py "$@"
+    fi
+}
+
 FRESH_DB=0
-HAS_USERS=$(php artisan tinker --execute='echo Schema::hasTable("users") ? "yes" : "no";' 2>/dev/null | tail -1 || true)
-if [ "$HAS_USERS" != "yes" ]; then
-    FRESH_DB=1
+if [ "${DB_CONNECTION:-sqlite}" = "pgsql" ] && [ -x python/.venv/bin/python ]; then
+    if [ "$(py_owner schema --status | tail -1)" = "empty" ]; then
+        FRESH_DB=1
+    fi
+    py_owner schema
+
+    # Миграции Laravel, пока он в образе: на снимке — «нечего применять»,
+    # на живой базе — новые, если они есть
+    php artisan migrate --force
+
+    # Справочники: на свежей базе — как db:seed, на каждом деплое —
+    # недостающие тарифы, категории, страны, города и настройки (правки
+    # из админки не трогаются)
+    if [ "$FRESH_DB" = "1" ]; then
+        py_owner seed --fresh
+    else
+        py_owner seed
+    fi
+else
+    HAS_USERS=$(php artisan tinker --execute='echo Schema::hasTable("users") ? "yes" : "no";' 2>/dev/null | tail -1 || true)
+    if [ "$HAS_USERS" != "yes" ]; then
+        FRESH_DB=1
+    fi
+
+    php artisan migrate --force
+
+    if [ "$FRESH_DB" = "1" ]; then
+        php artisan db:seed --force
+    fi
+    for seeder in PlanSeeder CategorySeeder GeoSeeder SettingSeeder; do
+        php artisan db:seed --class="$seeder" --force
+    done
 fi
 
-php artisan migrate --force
-
-# Сидируем только свежую базу, иначе каждый перезапуск плодил бы дубли.
-if [ "$FRESH_DB" = "1" ]; then
-    php artisan db:seed --force
-    if [ "${SEED_DEMO:-false}" = "true" ]; then
-        php artisan db:seed --class=DemoDataSeeder --force
-    fi
+# Демо-стенд (SEED_DEMO, SEED_SHOWCASE; на боевом выключены) — сидеры
+# Laravel: выдуманные компании и объявления для показа, на Python их нет.
+if [ "$FRESH_DB" = "1" ] && [ "${SEED_DEMO:-false}" = "true" ]; then
+    php artisan db:seed --class=DemoDataSeeder --force
 fi
 
 # Демо-витрина обновляется и на уже засеянной базе: правки демо-объявлений
@@ -170,27 +208,6 @@ fi
 if [ "$FRESH_DB" = "0" ] && [ "${SEED_DEMO:-false}" = "true" ]; then
     php artisan db:seed --class=CabinetDemoSeeder --force
 fi
-
-# Тарифы — на каждом деплое, а не только на свежей базе: новый тариф
-# из сидера иначе не появился бы на проде. Досоздаёт недостающие по
-# коду; цены и лимиты существующих задаёт админка и сидер их не трогает.
-php artisan db:seed --class=PlanSeeder --force
-
-# Категории — по той же причине: новые разделы (например, «Другое»)
-# должны появляться на проде без консоли. Досоздаёт недостающие по slug,
-# существующие (их правят в админке) не трогает.
-php artisan db:seed --class=CategorySeeder --force
-
-# География — по той же причине: страна, добавленная после прошлого
-# релиза, иначе появилась бы на проде только при пересоздании базы.
-# Досоздаёт недостающие страны и города, существующие не трогает.
-php artisan db:seed --class=GeoSeeder --force
-
-# Настройки — по той же причине: настройка, добавленная после прошлого
-# релиза (например, «Логотип площадки»), иначе доезжает до прода только
-# миграцией, а миграция срабатывает один раз и молча. Заводит только
-# недостающие строки, заполненные значения не трогает.
-php artisan db:seed --class=SettingSeeder --force
 
 # Наполнение витрины: описания пустым карточкам компаний и картинки
 # объявлениям без фото. По умолчанию выключено: на живом сайте это
@@ -202,18 +219,23 @@ if [ "${SEED_SHOWCASE:-false}" = "true" ]; then
 fi
 
 # Администратор заводится из переменных окружения: на хостинге нет
-# консоли, где можно было бы выполнить savdex:admin руками. Повторные
-# запуски пропускаются — иначе каждый рестарт сбрасывал бы пароль.
+# консоли, где можно было бы выполнить команду руками. --if-missing:
+# уже администратор — ничего не меняется, иначе каждый рестарт
+# сбрасывал бы пароль.
 if [ -n "${ADMIN_EMAIL:-}" ]; then
-    IS_ADMIN=$(php artisan tinker \
-        --execute='echo \App\Models\User::where("email", mb_strtolower(trim((string) getenv("ADMIN_EMAIL"))))->where("is_admin", true)->exists() ? "yes" : "no";' \
-        2>/dev/null | tail -1 || true)
-    if [ "$IS_ADMIN" != "yes" ]; then
-        ADMIN_ARGS=("$ADMIN_EMAIL")
-        if [ -n "${ADMIN_PASSWORD:-}" ]; then
-            ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+    ADMIN_ARGS=("$ADMIN_EMAIL" --if-missing)
+    if [ -n "${ADMIN_PASSWORD:-}" ]; then
+        ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+    fi
+    if [ "${DB_CONNECTION:-sqlite}" = "pgsql" ] && [ -x python/.venv/bin/python ]; then
+        py_owner admin "${ADMIN_ARGS[@]}"
+    else
+        IS_ADMIN=$(php artisan tinker \
+            --execute='echo \App\Models\User::where("email", mb_strtolower(trim((string) getenv("ADMIN_EMAIL"))))->where("is_admin", true)->exists() ? "yes" : "no";' \
+            2>/dev/null | tail -1 || true)
+        if [ "$IS_ADMIN" != "yes" ]; then
+            php artisan savdex:admin "${ADMIN_ARGS[@]:0:1}" "${ADMIN_ARGS[@]:2}"
         fi
-        php artisan savdex:admin "${ADMIN_ARGS[@]}"
     fi
 fi
 
@@ -297,11 +319,8 @@ fi
 # Слушает только 127.0.0.1: снаружи до Django не достучаться, только
 # через Apache. Два процесса: сейчас через Django идут считанные
 # адреса; больше — PYTHON_WORKERS.
-# Страницам сайта на Django нужны словарь интерфейса и подписи «N минут
-# назад» — ровно те, что у Laravel (app/Console/Commands/ExportUiForPython.php).
-# Выгружаются до старта Django: словарь меняется только с релизом.
-runuser -u www-data -- php artisan savdex:export-ui \
-    || echo "ВНИМАНИЕ: словарь для Django не выгружен — страницы сайта на Django отдадут 503." >&2
+# Словарь интерфейса для страниц Django лежит в самом коде Python
+# (python/savdex/locale/ui, шаг 73) — выгружать его при старте не нужно.
 
 # Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
 # все снова отдаёт Laravel: это откат без выкладки, через переменную в

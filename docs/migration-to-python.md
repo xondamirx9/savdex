@@ -342,6 +342,7 @@ Python показывает ход переноса, а `tests/test_progress_sch
 | Этап 3, шаг 1: Django читает вход Laravel | сделано: `laravel_session.py`, проверка на боевом — `/py/whoami` |
 | Этап 3, шаг 2: первые страницы сайта на Django | сделано: «Помощь», «Инструкция», «Правила»; сверка с Laravel; включение — `SAVDEX_PY_PAGES` |
 | Этап 3, шаг 3: новости, «О компании», «Контакты» | сделано: группы `news`, `about` |
+| Шаги 67–73: админка, регистрация по коду, `?hl=`, деньги, деплой без Laravel | сделано: у Laravel не осталось ни живых писателей, ни шагов деплоя, кроме `php artisan migrate`; впереди этап 8 — выключение |
 
 Что выяснилось по дороге:
 
@@ -2319,6 +2320,122 @@ PostgreSQL, с сессией Laravel в базе: вход в любом рег
 них, а `/admin` уводит в Django (группа `admin`). Панель Filament
 убирается вместе с Laravel.
 
+**Попутно — формы сайта отвечали 403** (PR #290, 30.09.2026).
+`CsrfViewMiddleware` Django не пускал формы, адрес которых общий со
+страницей (вход, регистрация, смена пароля, продвижение, мини-сайт,
+профиль компании и др.): такие виды не помечены `csrf_exempt`, а куки
+Django у браузера на сайте нет. Токен Laravel у форм сверяет
+`forms.action` (419). Теперь CSRF Django проверяет только `/py/`
+(`savdex/csrf.py`); `tests/test_csrf.py` — с настоящей проверкой (тестовый
+клиент Django её выключает, поэтому сверки с Laravel ошибку не видели),
+в проверке контейнера — POST `/login` без токена даёт 419.
+
+**Шаг 69. Регистрация по коду — Django** ✅ (30.09.2026). Первые шаги
+регистрации (`savdex/web/register_code.py`) вместо
+`RegisteredUserController::sendCode`, `code`, `confirmCode`, `resendCode`,
+`details`: POST `/register/email` (почта, как `RegisterEmailRequest`, —
+«нет собаки» и «адрес неполный» своими подсказками; `throttle:10,10`),
+`/register/code` (страница и проверка, `throttle:10,1`), POST
+`/register/code/resend`, `/register/details` (анкета — только с
+подтверждённым адресом). Код для адреса — в кэше Laravel хешем под
+`register_email_code.<sha1 почты>` на 15 минут, пять неверных попыток
+гасят код; письмо — снимок `RegisterEmailCode`
+(`mail_templates/register_code.*`); демо-стенд без почты
+(`DEMO_AUTO_VERIFY`) — код на второй странице. Apache: шаги — в группах
+`auth` и `forms`. Сверка — `tests/test_web_register_code.py` (27: ответ,
+сессия, запись кода в кэше, письмо).
+
+**Шаг 70. Смена языка `?hl=`, промокод на тарифах, хозяин `users` —
+Django** ✅ (30.09.2026).
+
+- `?hl=<язык>` (`SetLocale`) — в разборе запроса Django
+  (`web/request.py`): выбор в сессию и профиль, переход на чистый адрес
+  выбранного языка; префикс страницы, с которой уходят, не возвращается;
+  остальные параметры — как `http_build_query` после `TrimStrings` и
+  `ConvertEmptyStringsToNull` (`phpquery.build_query(..., rfc1738=True)`).
+  Неизвестный язык, пустой и массив — страница как обычно. Исключение
+  `?hl=` во всех правилах Apache снято. Сверка —
+  `tests/test_web_locale_switch.py`.
+- `/pricing?promo=КОД` (`PageController::pricingPromo`,
+  `PromoCodeService::preview` — `orders.preview`): код проверяется, а не
+  гасится; цена по нему — тем же расчётом, что счёт; десять проверок в
+  час с адреса (`pricing-promo:<IP>`, счётчик общий с Laravel);
+  `?promo[]=` — страница 500, как у PHP. Сверка —
+  `tests/test_web_pricing.py`.
+- `users` и `password_reset_tokens` — в `OWNED_TABLES`: последние живые
+  писатели Laravel (смена языка, регистрация по коду) на Django.
+  Осознанно у Laravel остались: страницы, которых нет у Django (404 с
+  префиксом языка пишет язык в профиль, как `SetLocale`), аварийный
+  откат форм и команда `savdex:admin` (деплой её больше не зовёт).
+
+**Шаг 71. Курсы ЦБ и прозвон Uzum — расписание Django** ✅ (30.09.2026).
+Расписание Django (`savdex/schedule.py`) умеет задачи «каждые N часов»
+(`Job.every`; суточные, как раньше, первый день после часа пропускают,
+повторяющиеся безвредно повторить — идут сразу). Курсы ЦБ (`cbu_rates`,
+каждые 4 часа) — `currency.refresh`: таблица с cbu.uz в кэш Laravel на
+сутки и последней удачной на месяц, тем же форматом (`laravel_cache`
+пишет числа с дробью, как `serialize()` PHP), поэтому Laravel, пока жив,
+видит те же курсы; сбой ЦБ кэш не трогает. Прозвон Uzum (`uzum_probe`,
+каждый час) — `payments.uzum.probe`, итог в журнал контейнера. Из
+`routes/console.php` обе задачи убраны. Сверка —
+`tests/test_currency_refresh.py` (разбор как у `CurrencyRate::fetch`,
+запись читает сам Laravel).
+
+**Шаг 72. Деньги — хозяин Django** ✅ (30.09.2026; по решению владельца —
+раньше конца месяца параллельной работы). `promotions:finish` (каждый
+час) и `billing:reset-periods` (00:30) — `savdex/payments/periods.py`,
+задачи `promotions_finish` и `billing_reset_periods`: завершение
+продвижений (показы на момент завершения, `active_key`), счёт на
+продление за неделю до конца подписки с автопродлением (не второй раз),
+закрытие истёкших подписок с уведомлением компании, сброс кошельков по
+тарифу. В `OWNED_TABLES` — `wallets`, `wallet_transactions`, `promotions`,
+`subscriptions`, `payment_methods`, `payments`, `payment_transactions`,
+`promo_codes`, `refunds`; права хозяина —
+`2026_10_12_110000_grant_django_users_and_money_owner`. Сверка денег
+(`manage.py reconcile_billing`, раз в час) продолжает работать. Из
+расписания Laravel задачи убраны, команды остались для сверки —
+`tests/test_billing_periods.py` (те же продвижения, подписки, кошельки,
+счета, уведомления и лента, что после команд Laravel).
+
+**Шаг 73. Деплой без Laravel** ✅ (30.09.2026). Всё, что делал при старте
+службы Laravel, для Django больше не нужно:
+
+- **Словарь интерфейса** — в самом коде Python (`savdex/locale/ui`,
+  `php artisan savdex:export-ui --to=python/savdex/locale/ui` после
+  правки `lang/*`), а не выгрузка при старте. Что выгрузка не отстала
+  от `lang/*`, следит `tests/Feature/ExportUiForPythonTest` (в CI).
+- **Схема базы** — `manage.py schema`: на пустой базе создаёт схему из
+  снимка миграций (`savdex/bootstrap/baseline.sql` — таблицы, индексы,
+  строки миграций и таблица `migrations` целиком; `grants.sql` — права
+  `savdex_django`, если роль есть), непустую не трогает. После снимка
+  `php artisan migrate` применять нечего. Снимок снимается
+  `manage.py schema --export` с базы после `migrate:fresh`; сверка —
+  `tests/test_schema.py` (снимок не отстал; пустая база после него —
+  та же, что после миграций, вплоть до прав).
+- **Справочники** — `manage.py seed` вместо `PlanSeeder`,
+  `CategorySeeder`, `GeoSeeder`, `SettingSeeder` (и на свежей базе —
+  `PromotionTypeSeeder`, новостей `CmsSeeder`): снимок
+  `savdex/bootstrap/seeds.json` и та же логика — недостающее
+  досоздаётся, правки из админки не откатываются, поля категорий
+  возвращаются к снимку. `category_fields` и `promotion_types` — в
+  `OWNED_TABLES`. Сверка — `tests/test_seeds.py` (снимок не отстал;
+  пустая база — номер в номер как после `db:seed`; деплой на
+  заполненной базе — как сидеры).
+- **Администратор** — `manage.py admin <почта> --if-missing` вместо
+  проверки через tinker и `savdex:admin`.
+- **Кэш** — Django сам пишет и читает всё, что лежит в файловом кэше
+  (счётчики частоты, коды из писем, курсы ЦБ, токен Telegram): формат
+  Laravel остался, но производитель данных в нём — только Django.
+
+`docker/render-entrypoint.sh` на Postgres идёт путём Python (схема,
+`php artisan migrate` — пока Laravel в образе, справочники,
+администратор), на SQLite — прежним путём Laravel. Демо-стенд
+(`SEED_DEMO`, `SEED_SHOWCASE`, на боевом выключены) — по-прежнему
+сидеры Laravel. Проверка контейнера в CI создаёт пустую базу схемой и
+справочниками Python. Остаётся этап 8: выключить Laravel и Filament,
+убрать PHP из образа — и с ним `php artisan migrate`; следующие правки
+схемы — уже снимком Django.
+
 ### Этап 7. Деньги (6–8 недель)
 
 Платежи, шлюз Uzum, возвраты, подписки, кошельки, продвижения.
@@ -2820,10 +2937,11 @@ PHP-команда остаётся рядом, пока Python-версией �
 | Команда | Пишет | Почему позже |
 |---|---|---|
 | `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 — перенесено (шаг 62, задача `expire_listings` в `manage.py schedule`) |
-| `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 |
+| `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 — перенесено (шаг 72, задача `promotions_finish` в `manage.py schedule`) |
 | `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 — перенесено (шаг 64, задача `ratings_recalculate` в `manage.py schedule`) |
 | `reviews:ask` | `user_notifications` | Просьбы оставить отзыв о площадке и о компании — колокольчик переезжает с кабинетом. Этап 5 — перенесено (шаг 65, задача `reviews_ask` в `manage.py schedule`) |
-| `billing:reset-periods` | `wallets`, `subscriptions`, `companies` | Деньги. Этап 7 |
+| `billing:reset-periods` | `wallets`, `subscriptions`, `companies` | Деньги. Этап 7 — перенесено (шаг 72, задача `billing_reset_periods`) |
+| курсы ЦБ, прозвон Uzum | кэш, журнал | Шаг 71 — задачи `cbu_rates` и `uzum_probe` |
 | `savdex:copy-database` | чужая база | Разовый инструмент переезда на PostgreSQL, переносить незачем |
 
 ---

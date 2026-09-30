@@ -84,7 +84,7 @@ jobs:
             -c "from savdex.web.filetype import _magic, mime_type; assert _magic() is not None; print(mime_type(b'%PDF-1.4'))"
 
       # Ключ одноразовый, живёт только в этом прогоне
-      - name: Выгрузка как по кнопке и выдача прав — внутри образа
+      - name: Схема, справочники, выгрузка и выдача прав — внутри образа
         run: |
           docker run --rm --network host \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
@@ -94,8 +94,14 @@ jobs:
             -e CACHE_STORE=array -e SESSION_DRIVER=database -e QUEUE_CONNECTION=sync \
             --entrypoint bash savdex:ci -c '
               set -eo pipefail
-              php artisan migrate --force
-              php artisan db:seed --force
+              # Схема и справочники — Python, без Laravel (шаг 73): после
+              # снимка миграциям Laravel применять нечего
+              (cd python && .venv/bin/python manage.py schema | tee /tmp/schema.txt)
+              grep -q "Схема создана" /tmp/schema.txt
+              php artisan migrate --force | tee /tmp/migrate.txt
+              grep -q "Nothing to migrate" /tmp/migrate.txt
+              (cd python && .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt)
+              grep -q "countries 33" /tmp/seed.txt
               php artisan savdex:export-run | tee /tmp/run.txt
               grep -q "Итог: done" /tmp/run.txt
               grep -q "Сверка с Python: match" /tmp/run.txt
@@ -146,11 +152,14 @@ jobs:
           # Стили админки Django собраны при сборке и отдаются через Apache
           curl -fsS -o /dev/null http://127.0.0.1:18080/py/static/admin/css/base.css
           # Страницы сайта на Django (этап 3): «Помощь» отдаёт Django — без
-          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — Laravel
+          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — тоже
+          # Django (шаг 70): переход на адрес выбранного языка
           curl -fsS -D /tmp/help.h -o /tmp/help.html http://127.0.0.1:18080/help
           ! grep -qi '^x-powered-by: php' /tmp/help.h
           grep -q '"component":"DocPage"' /tmp/help.html
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/help?hl=uz'
+          ! grep -qi '^x-powered-by: php' /tmp/hl.h
+          grep -qi '^location: http://127.0.0.1:18080/uz/help' /tmp/hl.h
           # Новости, «О компании», страны, партнёры, документы и тарифы — тоже Django
           for page in news about contact countries partners terms privacy pricing reviews; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
@@ -179,10 +188,12 @@ jobs:
           # Этап 4, шаг 62: подмена метода (POST с _method) — у Django
           curl -s -D /tmp/form.h -o /dev/null -X POST -d '_method=DELETE' http://127.0.0.1:18080/cabinet/listings/1
           ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — Laravel
+          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — тоже (шаг 70)
           curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=de'
           ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz' | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz'
+          ! grep -qi '^x-powered-by: php' /tmp/hl.h
+          grep -qi '^location: http://127.0.0.1:18080/uz/catalog' /tmp/hl.h
           # /index.php/<адрес> — на чистый адрес, мимо Laravel
           test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/index.php/about)" \
             = "301 http://127.0.0.1:18080/about"
@@ -245,8 +256,14 @@ jobs:
           curl -s -D /tmp/rnew.h -o /dev/null http://127.0.0.1:18080/reviews/new
           ! grep -qi '^x-powered-by: php' /tmp/rnew.h
           grep -qi '^location: http://127.0.0.1:18080/login' /tmp/rnew.h
-          # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
+          # Тарифы с промокодом — тоже Django (шаг 70)
+          curl -fsS -D /tmp/promo.h -o /tmp/promo.html 'http://127.0.0.1:18080/pricing?promo=TEST'
+          ! grep -qi '^x-powered-by: php' /tmp/promo.h
+          grep -q '"promoError"' /tmp/promo.html
+          # Регистрация по коду — Django (шаг 69): без почты из первого шага — назад
+          curl -s -D /tmp/rcode.h -o /dev/null http://127.0.0.1:18080/register/code
+          ! grep -qi '^x-powered-by: php' /tmp/rcode.h
+          grep -qi '^location: http://127.0.0.1:18080/register' /tmp/rcode.h
 
       - name: Журнал контейнера
         if: always()

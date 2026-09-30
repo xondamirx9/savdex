@@ -158,11 +158,32 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # savdex/schedule.py; событие saving (search_text) у Django своё
         "companies",
         # Этап 5 (шаг 65): колокольчик. Просьбы об отзыве (reviews:ask) —
-        # savdex/schedule.py. Исключение, как у переводов новостей: пока
-        # деньги у Laravel, его billing:reset-periods и OrderService ещё
-        # добавляют строки (продление, конец подписки) — простая вставка,
-        # у модели UserNotification событий нет
+        # savdex/schedule.py; с шага 72 и денежные уведомления (продление,
+        # конец подписки) — savdex/payments/periods.py
         "user_notifications",
+        # Шаг 70: пользователи. Последние живые писатели Laravel — смена
+        # языка ?hl= (SetLocale) и регистрация по коду — на Django
+        # (web/request.py, web/register_code.py). Сброс пароля — формы Django
+        "users",
+        "password_reset_tokens",
+        # Шаг 72: деньги — по решению владельца раньше конца месяца сверки
+        # (docs/migration-to-python.md). promotions:finish и
+        # billing:reset-periods — savdex/payments/periods.py; касса, шлюз
+        # Uzum, возвраты и разделы денег в админке — Django с этапа 7.
+        # Сверка денег (manage.py reconcile_billing) продолжает работать
+        "wallets",
+        "wallet_transactions",
+        "promotions",
+        "subscriptions",
+        "payment_methods",
+        "payments",
+        "payment_transactions",
+        "promo_codes",
+        "refunds",
+        # Шаг 73: справочники деплоя (manage.py seed вместо сидеров
+        # Laravel). Поля категорий и типы продвижения писали только сидеры
+        "category_fields",
+        "promotion_types",
     }
 )
 
@@ -183,38 +204,6 @@ APPEND_ONLY_SHARED: frozenset[str] = frozenset({"admin_actions"})
 #: делает тем же простым путём. Против каждой — кто пишет и почему
 #: это безопасно.
 SHARED_WRITES: dict[str, str] = {
-    "users": (
-        "выдача прав администратора (команда admin, неделя 5): у модели "
-        "User нет событий, PHP-команда пишет те же поля простым save(); "
-        "язык из префикса адреса страницы сайта (этап 5, SetLocale) — "
-        "только locale и updated_at, когда язык сменился; то же — форма смены "
-        "языка /locale/<язык> (LocaleController); правка администратора — "
-        "строка журнала, как AuditObserver; профиль в настройках (этап 5, "
-        "форма) — имя, телефон, язык и сброс подтверждения телефона; "
-        "отвязка Telegram — telegram_chat_id, telegram_username, telegram_linked_at; "
-        "новая компания — company_id и company_role владельца; раздел "
-        "«Пользователи» админки Django (savdex/accounts) — отключение и "
-        "восстановление, как SoftDeletes: только deleted_at и updated_at; "
-        "удаление навсегда — только отключённого, delete по id (связанные "
-        "строки база правит сама по внешним ключам). Журнал — строкой "
-        "admin_actions, как AuditObserver"
-        "; вход и выход (этап 5, шаг 45) — пересчёт хеша пароля, remember_token "
-        "без меток времени, метка последнего входа, как SessionGuard; "
-        "регистрация — новая учётка, как RegisteredUserController::store"
-        "; пароль и почта (шаг 46) — новый пароль, снятие must_change_password, "
-        "email_verified_at; удаление учётки (шаг 47) — мягкое, deleted_at и "
-        "updated_at после выхода, как SoftDeletes; привязка Telegram вебхуком "
-        "бота (шаг 49) — telegram_chat_id, telegram_username, telegram_linked_at"
-        "; раздел «Пользователи» админки (этап 6, savdex/accounts/editing.py) — "
-        "новый (bcrypt $2y$) и правка полей формы, роль и личные права только с "
-        "roles.edit, «Подтвердить почту», «Выдать пароль», блокировка; «Роли и "
-        "права» — роль, is_admin и admin_permissions, как RoleResource"
-    ),
-    "password_reset_tokens": (
-        "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
-        "прочь, новый хешем bcrypt; после смены пароля строка удаляется, "
-        "как DatabaseTokenRepository"
-    ),
     "sessions": (
         "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
         "StartSession и DatabaseSessionHandler, — продлевает, стирает "
@@ -234,29 +223,6 @@ SHARED_WRITES: dict[str, str] = {
         "при повторной публикации объявления; событий у модели нет"
         "; решения по отзывам в админке (этап 6) — то же событие компании"
     ),
-    "wallets": (
-        "квота откликов (этап 5, чат): новый кошелёк компании, как "
-        "Wallet::firstOrCreate, и условное списание отклика — "
-        "responses_used_this_period + 1 и updated_at, как ChatService::spendResponse"
-        "; раскрытие контактов (этап 5, шаг 40) — под блокировкой строки "
-        "contacts_used_this_period + 1 или условное списание кредита, как "
-        "ContactUnlockService::charge и Wallet::spend"
-        "; продвижение (этап 5, шаг 44) — условное списание единиц, Wallet::spend"
-        "; новый тариф (этап 7, шаг 53, SubscriptionService::assign) — кошелёк "
-        "firstOrCreate, единицы продвижения тарифа сверху, обнуление раскрытий и "
-        "дата сброса периода"
-        "; оплаченный пакет (шаг 54, Wallet::grant) — credits + N и updated_at "
-        "построителем, строка истории purchase; обоснованная жалоба (шаг 59) — "
-        "кредит обратно (complaint_refund) или contacts_used_this_period - 1"
-    ),
-    "promotions": (
-        "продвижение объявления за единицы (этап 5, шаг 44): новая строка "
-        "с active_key, как PromotionController::store и событие saving"
-    ),
-    "wallet_transactions": (
-        "история кошелька (этап 5, шаг 40): строка списания кредита за "
-        "раскрытие контактов, как Wallet::spend; событий у модели нет"
-    ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
         "только delete по ключу — то же, что Cache::forget(), когда кэш "
@@ -265,54 +231,6 @@ SHARED_WRITES: dict[str, str] = {
     # Этап 7 (деньги). Хозяин таблиц — Laravel, пока месяц сверки не
     # пройдёт без расхождений; Django пишет через те же службы: касса,
     # колбэки Uzum и разделы денег в админке
-    "subscriptions": (
-        "автопродление в кассе кабинета (этап 7, шаг 53): отмена — auto_renew "
-        "и cancelled_at, включение — только у оплаченной подписки; updated_at, "
-        "у администратора — строка журнала, как AuditObserver; промокод на "
-        "бесплатный период — SubscriptionService::assign: прежние действующие "
-        "истекают запросом (status, cancelled_at, updated_at), новая — вставкой "
-        "со строкой журнала"
-        "; «Назначить тариф», «Сменить или продлить» и «Отменить» в админке "
-        "(шаг 57) — то же вручную, отмена — status, cancelled_at, auto_renew"
-    ),
-    "payment_methods": (
-        "отвязка карты в кассе кабинета (этап 7, шаг 53): delete своей карты, "
-        "основную при автопродлении — нельзя; событий и журнала у модели нет"
-    ),
-    "payments": (
-        "отказ от неоплаченного счёта (этап 7, шаг 53), как OrderService::cancel: "
-        "status failed, confirmed_by и admin_note, updated_at; строка остаётся; "
-        "у администратора — строка журнала. Новый счёт (OrderService::create) — "
-        "вставка «ждёт оплаты» и номер из id; онлайн-касса — номер заказа Uzum "
-        "(external_id) и провайдер. Оплата (шаг 54, колбэки Uzum, "
-        "OrderService::markPaid) — status paid, paid_at, след провайдера "
-        "(provider, external_id) и subscription_id выданной подписки"
-        "; «Деньги пришли» и «Отменить счёт» в админке (шаг 56) — то же через "
-        "OrderService::confirm и ::cancel, с confirmed_by и admin_note; полный "
-        "возврат (шаг 58) — status refunded"
-    ),
-    "promo_codes": (
-        "возврат скидочного кода отменённого счёта (этап 7, шаг 53), как "
-        "OrderService::cancel: used_at, used_by_company_id, used_by_user_id и "
-        "updated_at — только если код не сработал и живой карточной транзакции нет; "
-        "активация (PromoCodeService::capture) — условный захват свободного кода, "
-        "одна компания — один код (уникальный индекс); бесплатный период — "
-        "subscription_id выданной подписки"
-        "; выпуск пачкой и выключатель is_active в админке (шаг 57), как "
-        "PromoCodesTable — строка журнала на каждый код"
-    ),
-    "refunds": (
-        "«Возвраты» в админке Django (этап 7, шаг 58), как RefundService: "
-        "заявка — вставка «Заявлен» по оплаченному счёту не больше остатка; решение — "
-        "status, decided_by, decided_at, decision_note и updated_at. Журнал — строка "
-        "наблюдателя и строка службы с пометкой"
-    ),
-    "payment_transactions": (
-        "транзакции провайдера (этап 7, шаг 54): Merchant API Uzum — create "
-        "вставкой, confirm и reverse — state с performed_at или cancelled_at; "
-        "вебхук кассы — firstOrNew по номеру заказа: payment_id, сумма, валюта, "
-        "payload и state; журнала у модели нет"
-    ),
 }
 
 #: Какие из SHARED_WRITES разрешены прямо сейчас. ContextVar, а не

@@ -1,6 +1,6 @@
 """
-Ежедневные задачи Django — вместо расписания Laravel (routes/console.php)
-для таблиц, хозяин которых перешёл к Django.
+Задачи по расписанию Django — вместо расписания Laravel (routes/console.php):
+раз в сутки в свой час или каждые N часов.
 
 У Laravel задачу раз в сутки запускает schedule:work; здесь — команда
 manage.py schedule (цикл в docker/render-entrypoint.sh), проверка раз в
@@ -21,7 +21,7 @@ import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,13 +34,29 @@ from savdex.guards import allowed_writes
 @dataclass(frozen=True)
 class Job:
     name: str
-    #: dailyAt у Laravel
+    #: dailyAt у Laravel; у повторяющихся — минута часа
     at: time
-    #: (сейчас, назначенный момент сегодня) → строка для журнала
+    #: (сейчас, назначенный момент) → строка для журнала
     run: Callable[[datetime, datetime], str]
+    #: Повтор каждые N часов (hourly — 1, everyFourHours — 4), от полуночи;
+    #: None — раз в сутки
+    every: int | None = None
 
     def due(self, now: datetime) -> datetime:
-        return datetime.combine(now.date(), self.at)
+        """Последний назначенный момент (у суточной — сегодняшний, даже будущий)."""
+        if self.every is None:
+            return datetime.combine(now.date(), self.at)
+
+        slot = datetime.combine(now.date(), time(now.hour - now.hour % self.every, self.at.minute))
+
+        return slot if slot <= now else slot - timedelta(hours=self.every)
+
+    def mark(self, due: datetime) -> str:
+        """Запись пройденного: у суточной — день, у повторяющейся — момент."""
+        if self.every is None:
+            return due.date().isoformat()
+
+        return due.isoformat(timespec="minutes")
 
 
 # ── Задачи ───────────────────────────────────────────────────────────
@@ -210,11 +226,64 @@ def ask_for_reviews(now: datetime, due: datetime, limit: int = 300) -> str:
     return f"Просьб о площадке: {len(users)}, о компаниях: {sent}."
 
 
+def finish_promotions(now: datetime, due: datetime) -> str:
+    """promotions:finish (каждый час): истёкшие продвижения — завершить, слоты свободны."""
+    from savdex.payments import periods
+
+    return f"Завершено продвижений: {periods.finish_promotions(now)}."
+
+
+def reset_billing_periods(now: datetime, due: datetime) -> str:
+    """billing:reset-periods (00:30): счета на продление, конец подписок, сброс лимитов."""
+    from savdex.payments import periods
+
+    issued, expired, wallets = periods.reset_periods(now)
+
+    return (
+        f"Выставлено счетов на продление: {issued}. Закрыто подписок: {expired}. "
+        f"Сброшено кошельков: {wallets}."
+    )
+
+
+def refresh_rates(now: datetime, due: datetime) -> str:
+    """cbu-rates:refresh (каждые четыре часа): курсы ЦБ заранее, а не первым посетителем."""
+    from savdex.web.currency import refresh
+
+    return "Курсы ЦБ обновлены." if refresh() else "Курсы ЦБ: ЦБ недоступен, остались прежние."
+
+
+def probe_uzum(now: datetime, due: datetime) -> str:
+    """uzum-probe (каждый час): доступен ли Uzum Checkout и приняты ли ключи."""
+    import logging
+
+    from savdex.payments.uzum import UzumConfig, probe
+
+    config = UzumConfig.from_env()
+
+    if not config.enabled or not config.checkout:
+        return "Uzum Checkout выключен — прозвон не нужен."
+
+    result = probe(config)
+    log = logging.getLogger("savdex.payments")
+
+    if result.ok:
+        log.info("payment.uzum.probe_ok: %s", result.message)
+    else:
+        log.error("payment.uzum.probe_failed: %s", result.message)
+
+    return f"Uzum: {'доступен' if result.ok else 'СБОЙ'} — {result.message}"
+
+
 JOBS: tuple[Job, ...] = (
     Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
     Job("expire_listings", time(6, 0), expire_listings),
     Job("reviews_ask", time(6, 0), ask_for_reviews),
+    # Деньги (шаг 72) и курсы с прозвоном (шаг 71) — вместо routes/console.php
+    Job("billing_reset_periods", time(0, 30), reset_billing_periods),
+    Job("promotions_finish", time(0, 0), finish_promotions, every=1),
+    Job("cbu_rates", time(0, 0), refresh_rates, every=4),
+    Job("uzum_probe", time(0, 0), probe_uzum, every=1),
 )
 
 
@@ -247,29 +316,33 @@ def load() -> dict[str, str]:
     return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
 
 
-def remember(name: str, day: date) -> None:
+def remember(name: str, day: date | str) -> None:
     state = load()
-    state[name] = day.isoformat()
+    state[name] = day if isinstance(day, str) else day.isoformat()
     path = state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, sort_keys=True))
 
 
 def adopt(now: datetime) -> None:
-    """Задачи без записи, чей час сегодня уже прошёл, — сделаны Laravel."""
+    """
+    Суточные задачи без записи, чей час сегодня уже прошёл, — сделаны
+    Laravel. Повторяющиеся (раз в час, раз в четыре часа) безвредно
+    повторить: первый проход — сразу.
+    """
     state = load()
 
     for item in JOBS:
-        if item.name not in state and now >= item.due(now):
+        if item.every is None and item.name not in state and now >= item.due(now):
             remember(item.name, now.date())
 
 
 def pending(now: datetime) -> list[Job]:
-    """Задачи, чей час сегодня настал, а день ещё не пройден."""
+    """Задачи, чей назначенный момент настал, а пройден ещё не был."""
     state = load()
 
     return [
         item
         for item in JOBS
-        if now >= item.due(now) and state.get(item.name) != now.date().isoformat()
+        if now >= item.due(now) and state.get(item.name) != item.mark(item.due(now))
     ]

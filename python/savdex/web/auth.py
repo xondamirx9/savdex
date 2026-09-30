@@ -96,8 +96,7 @@ def register(request: HttpRequest) -> HttpResponse:
     """
     RegisteredUserController::create — первый шаг регистрации, почта.
     Пришёл с тарифов кнопкой «Выбрать» (?plan=код) — после регистрации
-    его ждёт оплата этого тарифа. Код и анкета (/register/code,
-    /register/details) — у Laravel.
+    его ждёт оплата этого тарифа. Код и анкета — savdex/web/register_code.py.
     """
     ctx = guest(request)
 

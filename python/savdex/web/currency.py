@@ -6,10 +6,12 @@
 месяц про запас. На боевом кэш файловый (CACHE_STORE=file, render.yaml),
 в той же службе, поэтому Django читает те же файлы и видит тот же курс.
 
-Сам Django к ЦБ не ходит и в кэш не пишет: если основной таблицы нет
-(ЦБ недоступен сутки, кэш не файловый), он берёт то же, что Laravel
-взял бы при сбое ЦБ, — последнюю удачную таблицу, затем курс доллара
-под старым ключом, затем запасной курс.
+С шага 71 таблицу обновляет расписание Django (refresh ниже, задача
+cbu_rates каждые четыре часа) — в тот же кэш тем же форматом, поэтому
+Laravel, пока жив, видит те же курсы. Страница к ЦБ не ходит: если
+основной таблицы нет (ЦБ недоступен сутки, кэш не файловый), она берёт то
+же, что Laravel взял бы при сбое ЦБ, — последнюю удачную таблицу, затем
+курс доллара под старым ключом, затем запасной курс.
 """
 
 from __future__ import annotations
@@ -19,8 +21,12 @@ import math
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
+
+#: CurrencyRate::URL
+URL = "https://cbu.uz/oz/arkhiv-kursov-valyut/json/"
 
 CACHE_KEY = "cbu.rates"
 FALLBACK_KEY = "cbu.rates.last"
@@ -193,3 +199,82 @@ def _number(value: object) -> float:
 def php_round(value: float) -> float:
     """round() PHP: половина — от нуля, а не к чётному, как у Python."""
     return math.copysign(math.floor(abs(value) + 0.5), value)
+
+
+def fetch(client: Any = None) -> dict[str, float] | None:  # noqa: ANN401
+    """
+    CurrencyRate::fetch: таблица ЦБ — код → сумов за единицу (курс
+    некоторых валют ЦБ даёт за 10 или 100 единиц). Сбой — None.
+    """
+    import logging
+
+    import httpx
+
+    log = logging.getLogger("savdex.currency")
+
+    try:
+        own = client is None
+        client = client or httpx.Client(timeout=5)
+
+        try:
+            response = client.get(URL)
+        finally:
+            if own:
+                client.close()
+
+        if response.is_success:
+            rates: dict[str, float] = {}
+            rows = response.json()
+
+            for row in rows if isinstance(rows, list) else []:
+                if not isinstance(row, dict):
+                    continue
+
+                code = str(row.get("Ccy") or "").strip().upper()
+                nominal = _number(row.get("Nominal", 1)) or 1.0
+                rate = _number(row.get("Rate", 0)) / nominal
+
+                if code != "" and rate > 0:
+                    rates[code] = rate
+
+            if rates:
+                return rates
+
+        log.warning("Курс ЦБ: неожиданный ответ, код %s", response.status_code)
+    except Exception as error:
+        log.warning("Курс ЦБ недоступен: %s", error)
+
+    return None
+
+
+def refresh(client: Any = None) -> bool:  # noqa: ANN401
+    """
+    CurrencyRate::refresh: свежая таблица — в кэш на сутки и последней
+    удачной на месяц (now()->addMonth()). ЦБ недоступен — кэш не трогаем.
+    """
+    from datetime import UTC, datetime
+
+    from savdex import laravel_cache
+
+    fresh = fetch(client)
+
+    if fresh is None:
+        return False
+
+    now = datetime.now(UTC)
+    month = _add_month(now)
+    table: dict[str | int, laravel_cache.Value] = {k: v for k, v in fresh.items()}
+    laravel_cache.put(CACHE_KEY, table, 86400)
+    laravel_cache.put(FALLBACK_KEY, table, int((month - now).total_seconds()))
+
+    return True
+
+
+def _add_month(moment: Any) -> Any:  # noqa: ANN401
+    """Carbon::addMonth с переполнением: 31 января + месяц — 3 марта."""
+    from datetime import timedelta
+
+    year, month = (moment.year, moment.month + 1) if moment.month < 12 else (moment.year + 1, 1)
+    first = moment.replace(year=year, month=month, day=1)
+
+    return first + timedelta(days=moment.day - 1)

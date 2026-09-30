@@ -30,11 +30,13 @@ def test_счёт_этапов():
     by_number = {p.stage.number: p for p in progress.stage_progress()}
 
     assert by_number[1].state == "done"
-    # Этап 2 сделан: оставшиеся четыре таблицы — решения заказчика
-    assert (by_number[2].done, by_number[2].total, by_number[2].state) == (17, 17, "done")
+    # Этап 2 сделан целиком: поля категорий и типы продвижения — с шага 73
+    # (справочники деплоя), способы оплаты и промокоды — с деньгами (шаг 72)
+    assert (by_number[2].done, by_number[2].total, by_number[2].state) == (21, 21, "done")
     # Этап 3 без своих таблиц — по шагам: вход Laravel, первая страница, остальные
     assert (by_number[3].done, by_number[3].total, by_number[3].state) == (3, 3, "done")
-    assert by_number[7].state == "ahead"
+    # Деньги — у Django с шага 72
+    assert by_number[7].state == "done"
 
     # Ничего не перенесено — этап 2 «впереди»
     assert progress.stage_progress(frozenset())[1].state == "ahead"
@@ -44,5 +46,5 @@ def test_общий_счёт():
     total = progress.summary()
 
     assert total["tables_done"] == len(OWNED_TABLES)
-    # Оставленные за Laravel: 4 справочника этапа 2 и 5 таблиц этапа 6
-    assert total["tables_total"] == len(progress.MOVING) - 4 - 5
+    # Оставленные за Laravel до его выключения: 5 таблиц этапа 6
+    assert total["tables_total"] == len(progress.MOVING) - 5

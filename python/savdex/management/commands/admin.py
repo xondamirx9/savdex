@@ -38,6 +38,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--database", default="default", help="Имя подключения из settings.DATABASES"
         )
+        parser.add_argument(
+            "--if-missing",
+            action="store_true",
+            help="Ничего не делать, если такой администратор уже есть (деплой: "
+            "перезапуск не сбрасывает пароль)",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         email = admins.normalize_email(str(options["email"]))
@@ -48,6 +54,17 @@ class Command(BaseCommand):
             raise SystemExit(1)
 
         role = self._role(_filled(options["role"]), bool(options["moderator"]))
+
+        if options["if_missing"]:
+            with connections[str(options["database"])].cursor() as cursor:
+                cursor.execute(
+                    "select 1 from users where email = %s and is_admin = true limit 1", [email]
+                )
+
+                if cursor.fetchone() is not None:
+                    self.stdout.write(f"Администратор {email} уже есть — не трогаю.")
+
+                    return
 
         # Пустой --password, как и в PHP, значит «сгенерировать»
         password = _filled(options["password"]) or admins.generate_password()

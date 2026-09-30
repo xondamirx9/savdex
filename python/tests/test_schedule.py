@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -80,6 +81,10 @@ def test_чистка_как_у_laravel(компании, tmp_path):
     assert "Удалено просмотров: 3." in вывод
 
 
+#: Суточные задачи, которые Laravel делал раньше Django
+ДНЕВНЫЕ = {"audience_views_prune", "expire_listings", "ratings_recalculate", "reviews_ask"}
+
+
 def test_первый_запуск_после_часа_день_пропускает(компании, tmp_path):
     now = datetime.now(UTC)
 
@@ -89,11 +94,33 @@ def test_первый_запуск_после_часа_день_пропуска
     просмотры(компании)
     state = tmp_path / "state"
 
-    with pytest.raises(subprocess.TimeoutExpired):
-        schedule("--every", "1", state=state, timeout=4)
+    # Цикл без конца: ждём, пока он отметит задачи дня (запуск Django
+    # под нагрузкой — секунды), и останавливаем
+    loop = subprocess.Popen(
+        [sys.executable, "manage.py", "schedule", "--every", "1"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "PYTHONPATH": str(PYTHON), "SAVDEX_SCHEDULE_STATE": str(state)},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
-    # Обе задачи дня отмечены пройденными, а не выполнены второй раз
-    assert json.loads(state.read_text()) == {
+    try:
+        for _ in range(120):
+            if state.exists() and set(json.loads(state.read_text() or "{}")) >= ДНЕВНЫЕ:
+                break
+
+            time.sleep(0.5)
+
+        # Второй проход цикла ничего не меняет
+        time.sleep(2)
+    finally:
+        loop.terminate()
+        loop.wait(timeout=10)
+
+    # Суточные задачи дня отмечены пройденными, а не выполнены второй раз
+    # (повторяющиеся — раз в час и т. п. — проходят сразу, их безвредно повторить)
+    отмечено = json.loads(state.read_text())
+    assert {k: v for k, v in отмечено.items() if k in ДНЕВНЫЕ} == {
         "audience_views_prune": now.date().isoformat(),
         "expire_listings": now.date().isoformat(),
         "ratings_recalculate": now.date().isoformat(),
