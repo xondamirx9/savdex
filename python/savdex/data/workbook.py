@@ -57,9 +57,11 @@ ListingWorkbookTemplate и частью ImportLanguage и CatalogLookup, кот�
 Добавлено сверх Laravel — для книг заявок, собранных с других площадок,
 где нет продавца из справочника и столбца «Тип»:
 
-- компания из окна загрузки (default_company) достаётся строкам, где
-  компания не указана или не нашлась; существующему объявлению продавца
-  не меняет;
+- компания из окна загрузки (default_company), а без неё — служебная
+  (Anjir Group, service_company_id) достаётся строкам, где компания не
+  указана или не нашлась; существующему объявлению продавца не меняет;
+  повторная загрузка с настоящей компанией передаёт ей заявку служебной,
+  а не заводит вторую;
 - тип новых объявлений из окна (default_type), когда ячейки «Тип» нет;
 - «Раздел → Подраздел»: «Прочее» — это «Другое» каталога, неизвестный
   подраздел — сам раздел с заметкой (listing_category);
@@ -79,6 +81,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import os
 import posixpath
 import re
 import tempfile
@@ -496,6 +499,42 @@ def city_id(value: str | None) -> int | None:
             return int(row["city_id"])
 
     return None
+
+
+#: Служебная компания площадки: ей достаются заявки без компании, пока
+#: не найден настоящий владелец (потом их передают из админки)
+SERVICE_COMPANY = "Anjir Group"
+
+
+def service_company_id() -> int | None:
+    """
+    Служебная компания: SAVDEX_SERVICE_COMPANY (номер, ИНН или название),
+    иначе компания, в названии которой есть «Anjir Group» — с любым
+    «ООО» впереди, латиницей или кириллицей.
+    """
+    configured = _trim(os.environ.get("SAVDEX_SERVICE_COMPANY") or "")
+
+    if configured.isdigit() and _rows(
+        "select 1 from companies where id = %s and deleted_at is null", [int(configured)]
+    ):
+        return int(configured)
+
+    if configured:
+        return company_id(configured)
+
+    needle = importer.normalize(SERVICE_COMPANY)
+
+    for row in _rows("select id, name from companies where deleted_at is null order by id"):
+        if needle in importer.normalize(row["name"]):
+            return int(row["id"])
+
+    return None
+
+
+def company_name(company: int | None) -> str:
+    rows = _rows("select name from companies where id = %s", [company]) if company else []
+
+    return str(rows[0]["name"]) if rows else ""
 
 
 def company_id(value: str | None) -> int | None:
@@ -1245,9 +1284,12 @@ class _Import:
     replace: bool
     observer: access.Admin | None
     ip: str | None
-    #: Компания для строк, где она не указана или не нашлась в справочнике
-    #: (выбирается в окне загрузки); None — такие строки не создаются
+    #: Компания для строк, где она не указана или не нашлась в справочнике:
+    #: выбранная в окне загрузки, иначе служебная (service_company_id —
+    #: ищется при первой надобности); нет ни той, ни другой — такие строки
+    #: не создаются
     default_company: int | None = None
+    service_looked_up: bool = False
     #: Тип новых объявлений, когда в книге нет столбца «Тип» или ячейка пуста
     default_type: str = "supply"
     #: Ячейки, которые пришлось пропустить в текущей строке: незнакомая
@@ -1560,6 +1602,26 @@ class _Import:
         if found:
             return found[0]
 
+        # Заявку раньше загрузили без компании (она у служебной), а теперь
+        # в строке настоящая компания — заявка переходит к ней, а не
+        # заводится второй раз
+        fallback = self._fallback() if company is not None else None
+
+        if company is not None and fallback is not None and company != fallback:
+            parked = _rows(
+                "select * from listings where title = %s and company_id = %s "
+                "and deleted_at is null limit 2",
+                [title, fallback],
+            )
+
+            if len(parked) == 1:
+                self.skipped.append(
+                    f"объявление передано от «{company_name(fallback)}» компании "
+                    f"«{company_name(company)}»"
+                )
+
+                return parked[0]
+
         if company is None:
             raise _RowError(
                 f"компания «{self.unknown_company}» не найдена в справочнике, а без компании "
@@ -1572,6 +1634,14 @@ class _Import:
 
         return {"company_id": company}
 
+    def _fallback(self) -> int | None:
+        """Компания из окна загрузки, иначе служебная — одна на всю книгу."""
+        if self.default_company is None and not self.service_looked_up:
+            self.service_looked_up = True
+            self.default_company = service_company_id()
+
+        return self.default_company
+
     def _company_id(self, fields: dict[str, str], *, fallback: bool = False) -> int | None:
         """
         Компания строки из справочника. fallback — для поиска и нового
@@ -1583,19 +1653,19 @@ class _Import:
         self.unknown_company = None
 
         if name == "":
-            return self.default_company if fallback else None
+            return self._fallback() if fallback else None
 
         found = company_id(name)
 
         if found is None:
-            if fallback and self.default_company is not None:
+            if fallback and self._fallback() is not None:
                 if f"компания «{name}»" not in " ".join(self.skipped):
                     self.skipped.append(
                         f"компания «{name}» не найдена в справочнике — объявление отнесено "
-                        "к компании из окна загрузки"
+                        f"к «{company_name(self._fallback())}»"
                     )
 
-                return self.default_company
+                return self._fallback()
 
             # У нового объявления без компании нет продавца — строку это
             # остановит (_resolve); у существующего продавец уже есть
