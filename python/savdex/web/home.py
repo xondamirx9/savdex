@@ -49,14 +49,12 @@ def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
 
 
 def visible_in(locale: str, alias: str = "l") -> tuple[str, list[Any]]:
-    """Listing::scopeVisibleIn: импортированное — только с заголовком на языке."""
-    if locale == locales.DEFAULT:
-        return "", []
-
-    return (
-        f" and ({alias}.source != 'import' or coalesce(({alias}.title_i18n)::jsonb ? %s, false))",
-        [locale],
-    )
+    """
+    Listing::scopeVisibleIn: объявления показываются на всех языках, и
+    загруженные из книги тоже — до перевода русским текстом. Условие
+    оставлено функцией, чтобы запросы витрины не менялись.
+    """
+    return "", []
 
 
 def php_round(value: float, places: int = 0) -> float:

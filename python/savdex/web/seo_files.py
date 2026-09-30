@@ -242,18 +242,8 @@ def _dated(
 
 
 def _listing_locales(row: dict[str, Any]) -> list[str]:
-    """Listing::visibleLocales: импортированное — только с заголовком на языке."""
-    if row["source"] != "import":
-        return list(locales.CODES)
-
-    names = row["title_i18n"] or {}
-    found = []
-
-    for code in locales.CODES:
-        if code == locales.DEFAULT or str(names.get(code) or "").strip(" \t\n\r\0\x0b") != "":
-            found.append(code)
-
-    return found
+    """Listing::visibleLocales: все языки — и у загруженного из книги."""
+    return list(locales.CODES)
 
 
 def _listings(ctx: Context, page: int) -> list[dict[str, Any]]:
