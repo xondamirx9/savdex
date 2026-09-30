@@ -11,6 +11,15 @@ declare(strict_types=1);
  */
 
 return [
+    // ── События уведомлений (раздел «Настройки» кабинета) ──
+
+    'notification_events' => [
+        'contact_unlocked' => 'İletişim bilgilerim açıldı',
+        'new_review' => 'Yeni yorum',
+        'moderation' => 'İlan moderasyonu',
+        'listing_expiring' => 'İlanın süresi doluyor',
+        'digest' => 'Abonelik özeti',
+    ],
 
     // ── Gezinme ve üst bölüm ─────────────────────────────────
 

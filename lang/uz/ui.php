@@ -13,6 +13,15 @@ declare(strict_types=1);
  */
 
 return [
+    // ── События уведомлений (раздел «Настройки» кабинета) ──
+
+    'notification_events' => [
+        'contact_unlocked' => 'Kontaktimni ochishdi',
+        'new_review' => 'Yangi sharh',
+        'moderation' => 'E’lon moderatsiyasi',
+        'listing_expiring' => 'E’lon muddati tugayapti',
+        'digest' => 'Obunalar bo‘yicha dayjest',
+    ],
 
     // ── Navigatsiya va sarlavha ──────────────────────────────
 
