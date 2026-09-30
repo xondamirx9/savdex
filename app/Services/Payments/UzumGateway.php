@@ -66,7 +66,10 @@ class UzumGateway implements PaymentGateway
     {
         $this->require(['base_url', 'terminal_id', 'secret_key']);
 
-        $returnUrl = (string) ($this->config['return_url'] ?? '');
+        // Явный адрес из окружения; иначе — откуда ушёл покупатель
+        // (BillingController передаёт страницу тарифов текущего домена)
+        $returnUrl = (string) ($this->config['return_url']
+            ?: ($options['return_url'] ?? rtrim((string) config('app.url'), '/').'/cabinet/billing'));
 
         $result = $this->post('/api/v1/payment/register', [
             'amount' => $payment->amountMinor(),

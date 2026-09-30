@@ -106,6 +106,44 @@ class UzumCheckoutTest extends TestCase
     }
 
     #[Test]
+    public function return_url_follows_the_buyer_domain_when_not_configured(): void
+    {
+        // Без явного адреса в окружении возврат — туда, откуда ушёл
+        // покупатель: вход живёт только на его домене, и APP_URL другого
+        // домена (адрес Render) выбрасывал по крестику на форму входа
+        config(['payments.providers.uzum.return_url' => null, 'app.url' => 'https://savdex.onrender.com']);
+
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        app(PaymentGatewayManager::class)->for('uzum')
+            ->createCheckout($this->payment, ['return_url' => 'https://savdex.uz/en/cabinet/billing']);
+
+        Http::assertSent(fn (ClientRequest $request): bool => $request['successUrl'] === 'https://savdex.uz/en/cabinet/billing'
+            && $request['failureUrl'] === 'https://savdex.uz/en/cabinet/billing');
+    }
+
+    #[Test]
+    public function configured_return_url_wins(): void
+    {
+        Http::fake([
+            self::BASE_URL.'/api/v1/payment/register' => Http::response([
+                'errorCode' => 0,
+                'result' => ['orderId' => self::ORDER_ID, 'paymentRedirectUrl' => self::PAY_URL],
+            ]),
+        ]);
+
+        app(PaymentGatewayManager::class)->for('uzum')
+            ->createCheckout($this->payment, ['return_url' => 'https://savdex.uz/cabinet/billing']);
+
+        Http::assertSent(fn (ClientRequest $request): bool => $request['successUrl'] === 'https://savdex.test/cabinet/billing');
+    }
+
+    #[Test]
     public function register_error_code_becomes_exception(): void
     {
         Http::fake([

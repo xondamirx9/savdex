@@ -165,14 +165,20 @@ def create_checkout(
     payment: dict[str, Any],
     locale: str,
     client: httpx.Client | None = None,
+    back_url: str | None = None,
 ) -> dict[str, str]:
     """
     UzumGateway::createCheckout: регистрация платежа, ссылка на форму и
     номер заказа Uzum. Сбой сети и отказ Uzum — GatewayError.
     """
     _require(config)
-    return_url = os.environ.get(
-        "PAYMENTS_UZUM_RETURN_URL", os.environ.get("APP_URL", "") + "/cabinet/billing"
+    # Явный адрес из окружения; иначе — страница тарифов того домена
+    # и языка, откуда ушёл покупатель (back_url): вход живёт только на
+    # одном домене, и возврат на APP_URL другого выбрасывал ко входу
+    return_url = (
+        os.environ.get("PAYMENTS_UZUM_RETURN_URL")
+        or back_url
+        or os.environ.get("APP_URL", "").rstrip("/") + "/cabinet/billing"
     )
     body: dict[str, Any] = {
         "amount": int(payment["amount"]) * 100,
