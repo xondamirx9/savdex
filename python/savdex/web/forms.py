@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hmac
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
@@ -125,6 +126,50 @@ def input_of(request: HttpRequest) -> dict[str, Any]:
     setattr(request, _ATTR, cleaned)
 
     return cleaned
+
+
+# ── Подмена метода ───────────────────────────────────────────────────
+
+#: Какие методы можно подменить POST-ом. Symfony сверх этих пускает любой,
+#: кроме GET, HEAD, CONNECT и TRACE, но маршрутов на прочие у сайта нет
+OVERRIDABLE = ("PUT", "PATCH", "DELETE")
+
+
+def spoofed_method(request: HttpRequest) -> str:
+    """Request::getMethod у Laravel: POST с заголовком X-HTTP-Method-Override или _method."""
+    if request.method != "POST":
+        return str(request.method)
+
+    override = request.headers.get("X-HTTP-Method-Override") or input_of(request).get("_method")
+
+    if isinstance(override, str) and override.upper() in OVERRIDABLE:
+        return override.upper()
+
+    return "POST"
+
+
+class MethodOverrideMiddleware:
+    """
+    POST с _method — это PATCH или DELETE, как у Laravel (этап 4, шаг 62).
+
+    Тело разбирается до подмены: Django читает форму только у POST, а
+    input_of запоминает разобранное — виды дальше читают его. Адреса
+    админки (/py/…) — свои формы Django, их не трогаем.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if request.method == "POST" and not request.path.startswith("/py/"):
+            method = spoofed_method(request)
+
+            if method != "POST":
+                # FILES разбираются вместе с формой — пока метод ещё POST
+                _ = request.FILES
+                request.method = method
+
+        return self.get_response(request)
 
 
 # ── Посредники ───────────────────────────────────────────────────────

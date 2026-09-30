@@ -59,10 +59,12 @@ def _search_text(row: dict[str, Any]) -> str:
     return index(" ".join(str(p) for p in parts if p not in (None, "", "0")))
 
 
-def save_listing(ctx: Context, row: dict[str, Any], changes: dict[str, Any]) -> bool:
+def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, Any]) -> bool:
     """
     $listing->forceFill($changes)->save(): изменившиеся поля и
-    search_text, updated_at; у администратора — строка журнала.
+    search_text, updated_at; у администратора — строка журнала. Без
+    запроса (ctx None — команда по расписанию) журнала нет, как у
+    AuditObserver без вошедшего администратора.
     """
     after = {**row, **changes}
     after["search_text"] = _search_text(after)
@@ -112,9 +114,12 @@ def delete_listing(ctx: Context, row: dict[str, Any]) -> None:
 
 
 def _journal(
-    ctx: Context, action_: str, row: dict[str, Any], changes: dict[str, Any] | None
+    ctx: Context | None, action_: str, row: dict[str, Any], changes: dict[str, Any] | None
 ) -> None:
     """AuditObserver: только действия администратора."""
+    if ctx is None:
+        return
+
     admin = _admin(ctx)
 
     if admin is None:
@@ -184,7 +189,7 @@ def _activate(ctx: Context, row: dict[str, Any], plan: dict[str, Any]) -> None:
 
 
 def _notify_company(
-    ctx: Context,
+    ctx: Context | None,
     company: dict[str, Any],
     type_: str,
     title: str,

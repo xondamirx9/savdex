@@ -163,6 +163,16 @@ jobs:
           ! grep -qi '^x-powered-by: php' /tmp/form.h
           curl -s -D /tmp/form.h -o /dev/null http://127.0.0.1:18080/cabinet/contacts/export
           ! grep -qi '^x-powered-by: php' /tmp/form.h
+          # Этап 4, шаг 62: подмена метода (POST с _method) — у Django
+          curl -s -D /tmp/form.h -o /dev/null -X POST -d '_method=DELETE' http://127.0.0.1:18080/cabinet/listings/1
+          ! grep -qi '^x-powered-by: php' /tmp/form.h
+          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — Laravel
+          curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=de'
+          ! grep -qi '^x-powered-by: php' /tmp/page.h
+          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz' | grep -qi '^x-powered-by: php'
+          # /index.php/<адрес> — на чистый адрес, мимо Laravel
+          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/index.php/about)" \
+            = "301 http://127.0.0.1:18080/about"
           # Приём денег от шлюза (группа payments) — тоже Django
           curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/payments/uzum/callback/check
           ! grep -qi '^x-powered-by: php' /tmp/form.h

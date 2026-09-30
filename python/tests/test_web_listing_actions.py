@@ -198,6 +198,37 @@ def test_снять_и_удалить(сайт, admin):
     assert итог["база"]["listings"][0][5] is True
 
 
+def test_удалить_подменой_метода(сайт):
+    """
+    POST с _method=DELETE Laravel понимает как DELETE (шаг 62: Apache
+    отдаёт такой POST Django, и Django подменяет метод так же).
+    """
+    uid = продавец()
+    итог = сверить(
+        сайт, "/cabinet/listings/{id}", ("active",), uid=uid, body={"_method": "DELETE"}
+    )
+
+    assert итог["ответ"]["status"] == 303
+    assert итог["база"]["listings"][0][5] is True
+
+
+def test_удалить_заголовком_подмены(сайт):
+    uid = продавец()
+    подготовка = объявления("active")
+    ids = подготовка()
+    итог = отправить(
+        сайт,
+        f"/cabinet/listings/{ids[0]}",
+        lambda: _повторить(подготовка, ids),
+        снимок(),
+        uid=uid,
+        headers={**inertia(), "X-HTTP-Method-Override": "delete"},
+    )
+
+    assert итог["ответ"]["status"] == 303
+    assert итог["база"]["listings"][0][5] is True
+
+
 @pytest.mark.parametrize("status", ["needs_changes", "active", "rejected"])
 @pytest.mark.parametrize("prefix", ["", "/en"])
 def test_опубликовать_заново(сайт, status, prefix):

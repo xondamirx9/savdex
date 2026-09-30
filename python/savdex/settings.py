@@ -157,6 +157,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # POST с _method — PATCH или DELETE, как у Laravel (этап 4, шаг 62)
+    "savdex.web.forms.MethodOverrideMiddleware",
     # Стили и скрипты админки — из самого Django, без отдельного сервера
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
