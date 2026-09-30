@@ -58,13 +58,13 @@ if a["action"]:
     # Кнопка «Загрузить» в списке объявлений: от имени администратора
     out = workbook.import_workbooks(
         files, admin_id=a["admin"], replace=a["replace"], ip="203.0.113.7",
-        default_company=a["company"], default_type=a["type"],
+        default_company=a["company"], default_type=a["type"], publish=a["publish"],
     )
 else:
     # ListingWorkbookImport::run, как его зовёт тест Laravel: без входа
     out = workbook.import_workbook(
         files[0][1], author_id=a["admin"], replace=a["replace"],
-        default_company=a["company"], default_type=a["type"],
+        default_company=a["company"], default_type=a["type"], publish=a["publish"],
     )
 
 print(json.dumps(out, ensure_ascii=False))
@@ -106,6 +106,7 @@ def загрузить(
     кнопкой: bool = False,
     компания_по_умолчанию: int | None = None,
     тип: str = "supply",
+    опубликовать: bool = False,
 ) -> dict[str, Any]:
     """
     Загрузить книги в Django; кнопкой — как действие админки (с журналом).
@@ -129,6 +130,7 @@ def загрузить(
                 "action": кнопкой,
                 "company": компания_по_умолчанию,
                 "type": тип,
+                "publish": опубликовать,
             }
         ),
         capture_output=True,
@@ -1260,6 +1262,41 @@ def test_повторная_загрузка_с_компанией_переда�
     ]
     assert по_номеру(номер)["company_id"] == владелец
     assert len(строки("select id from listings where deleted_at is null")) == 1
+
+
+def test_галочка_сразу_опубликовать(диск):
+    """
+    Новые строки — сразу на витрине (с датой публикации и сроком);
+    ждавшие проверки с прошлой загрузки — тоже; отклонённое — нет.
+    """
+    компания()
+    книга_ = лист(
+        "Русский",
+        [
+            ЗАЯВКИ,
+            ["", "Куплю цемент М400", "", "ООО «Стройбаза»", "", ""],
+            ["", "Куплю арматуру А500", "", "ООО «Стройбаза»", "", ""],
+        ],
+    )
+
+    загрузить(диск, книга_)
+    assert {r["status"] for r in строки("select status from listings")} == {"moderation"}
+    sql("update listings set status = 'rejected' where title = 'Куплю арматуру А500'")
+
+    result = загрузить(диск, книга_, опубликовать=True)
+
+    assert (result["updated"], result["errors"]) == (2, [])
+    цемент = объявление("Куплю цемент М400")
+    assert цемент["status"] == "active"
+    assert цемент["published_at"] is not None and цемент["expires_at"] is not None
+    assert объявление("Куплю арматуру А500")["status"] == "rejected"
+
+    новая = загрузить(
+        диск,
+        лист("Русский", [ЗАЯВКИ, ["", "Куплю кирпич М150", "", "ООО «Стройбаза»", "", ""]]),
+        опубликовать=True,
+    )
+    assert новая["created"] == 1 and объявление("Куплю кирпич М150")["status"] == "active"
 
 
 def test_компания_из_строки_важнее_компании_окна(диск):

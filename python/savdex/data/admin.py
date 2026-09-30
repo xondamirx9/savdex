@@ -541,6 +541,14 @@ class WorkbooksForm(forms.Form):
             "повторная загрузка того же файла не плодит одинаковые."
         ),
     )
+    publish = forms.BooleanField(
+        label="Сразу опубликовать",
+        required=False,
+        help_text=(
+            "Новые объявления из книги сразу появятся на сайте, без проверки. "
+            "Ждавшие проверки с прошлой загрузки тоже опубликуются; отклонённые — нет."
+        ),
+    )
     default_company = forms.CharField(
         label="Компания для строк без компании",
         required=False,
@@ -690,7 +698,7 @@ class ListingAdmin(SavdexModelAdmin):
     search_fields = ("title", "company__name")
     ordering = ("-created_at", "-id")
     list_per_page = 50
-    actions = ("delete_selected", "transfer_to_company")
+    actions = ("delete_selected", "approve_selected", "transfer_to_company")
 
     def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
         languages = tuple(
@@ -807,6 +815,37 @@ class ListingAdmin(SavdexModelAdmin):
     def delete_queryset(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         for obj in list(queryset):
             self.delete_model(request, obj)
+
+    # ── Публикация пачкой ──
+
+    @admin.action(description="Опубликовать отмеченные (одобрить)")
+    def approve_selected(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        """
+        «Одобрить» для всех отмеченных сразу — как кнопка на странице
+        объявления: на проверке или отклонённые, и только те, что этому
+        сотруднику можно одобрять (can_moderate). Остальные пропускаются.
+        """
+        from savdex.data import services
+
+        approved = skipped = 0
+
+        for listing in queryset:
+            allowed = {code for code, _, _ in self.decisions(listing)}
+
+            if "approve" not in allowed or not self.can_moderate(request, listing):
+                skipped += 1
+
+                continue
+
+            services.approve_listing(request, listing)
+            approved += 1
+
+        self.message_user(
+            request,
+            f"Опубликовано: {approved}."
+            + (f" Пропущено {skipped} — уже опубликованы или нет права." if skipped else ""),
+            messages.SUCCESS if approved else messages.WARNING,
+        )
 
     # ── Передача настоящему владельцу ──
 
@@ -1010,6 +1049,7 @@ class ListingAdmin(SavdexModelAdmin):
                     books,
                     admin_id=_admin_of(request).id,
                     replace=bool(form.cleaned_data["replace"]),
+                    publish=bool(form.cleaned_data.get("publish")),
                     ip=audit.client_ip(request),
                     default_company=form.cleaned_data["default_company"],
                     default_type=str(form.cleaned_data.get("default_type") or "supply"),
