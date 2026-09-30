@@ -271,8 +271,8 @@ export function BillingStore({
                                     borderColor: p.current ? 'var(--primary-100)' : undefined,
                                 }}
                             >
-                                <div className="row-between wrap" style={{ gap: 12, alignItems: 'flex-start' }}>
-                                    <div style={{ minWidth: 0 }}>
+                                <div className="offer-row">
+                                    <div className="offer-main">
                                         <b>{p.name}</b>
                                         {p.current && (
                                             <>
@@ -293,23 +293,8 @@ export function BillingStore({
                                     </div>
                                     {/* Цена над кнопкой, а не в одну строку с ней:
                                         инлайновая пара слипалась в «107 000 сум[кнопка]» */}
-                                    <div
-                                        style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'flex-end',
-                                            gap: 8,
-                                            textAlign: 'right',
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'flex-end',
-                                                gap: 2,
-                                            }}
-                                        >
+                                    <div className="offer-price">
+                                        <div className="offer-amount">
                                             <b className="t-num nowrap">
                                                 {p.price_uzs > 0
                                                     ? `${formatNumber(p.price_uzs)} ${t('catalog.currency_uzs')}`
@@ -343,8 +328,8 @@ export function BillingStore({
                     <div className="stack-16">
                         {packs.map((p) => (
                             <div key={p.id} className="card" style={{ background: 'var(--bg)' }}>
-                                <div className="row-between wrap" style={{ gap: 12, alignItems: 'flex-start' }}>
-                                    <div style={{ minWidth: 0 }}>
+                                <div className="offer-row">
+                                    <div className="offer-main">
                                         <b>{p.name}</b>
                                         <p className="t-xs">
                                             {t('cabinet.billing.per_contact', {
@@ -352,23 +337,8 @@ export function BillingStore({
                                             })}
                                         </p>
                                     </div>
-                                    <div
-                                        style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'flex-end',
-                                            gap: 8,
-                                            textAlign: 'right',
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'flex-end',
-                                                gap: 2,
-                                            }}
-                                        >
+                                    <div className="offer-price">
+                                        <div className="offer-amount">
                                             <b className="t-num nowrap">
                                                 {formatNumber(p.price_uzs)} {t('catalog.currency_uzs')}
                                             </b>
