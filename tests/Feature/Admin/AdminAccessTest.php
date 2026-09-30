@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Pages\Complaints;
-use App\Filament\Pages\Invoices;
 use App\Filament\Resources\PromoCodes\PromoCodeResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Models\User;
@@ -34,7 +33,6 @@ class AdminAccessTest extends TestCase
     /** Все разделы панели, у которых есть экран. */
     private const ALL = [
         Complaints::class,
-        Invoices::class,
         SubscriptionResource::class,
         PromoCodeResource::class,
     ];
@@ -75,7 +73,7 @@ class AdminAccessTest extends TestCase
             ]],
 
             'финансы' => [AdminAccess::FINANCE, [
-                Invoices::class, SubscriptionResource::class,
+                SubscriptionResource::class,
                 PromoCodeResource::class,
             ]],
 
@@ -171,7 +169,6 @@ class AdminAccessTest extends TestCase
     {
         $this->actingAs($this->admin(AdminAccess::ADMIN));
 
-        $this->assertFalse(Invoices::canAccess());
         $this->assertFalse(AdminAccess::allows('payments.view'));
     }
 

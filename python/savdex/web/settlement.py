@@ -16,7 +16,7 @@ from typing import Any
 from django.db import connection, transaction
 
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, orders
+from savdex.web import eloquent, orders, ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.shared import Context
@@ -76,7 +76,12 @@ def _wallet(company_id: int) -> dict[str, Any]:
     )
 
 
-def _grant_plan(ctx: Context, payment: dict[str, Any], company: dict[str, Any]) -> None:
+def _grant_plan(
+    ctx: Context,
+    payment: dict[str, Any],
+    company: dict[str, Any],
+    admin: dict[str, Any] | None,
+) -> None:
     """OrderService::grantPlan: подписка по оплате, скидочный код — к ней."""
     plans = _rows("select * from plans where id = %s", [payment["plan_id"]])
 
@@ -88,6 +93,7 @@ def _grant_plan(ctx: Context, payment: dict[str, Any], company: dict[str, Any]) 
         company,
         plans[0],
         source=orders.SOURCE_PAYMENT,
+        granted_by=admin,
         reason=f"Оплата счёта {payment['number']}",
     )
     eloquent.save(
@@ -114,7 +120,9 @@ def _grant_plan(ctx: Context, payment: dict[str, Any], company: dict[str, Any]) 
             )
 
 
-def _grant_credits(payment: dict[str, Any], company: dict[str, Any]) -> None:
+def _grant_credits(
+    payment: dict[str, Any], company: dict[str, Any], admin: dict[str, Any] | None
+) -> None:
     """OrderService::grantCredits: кредиты пакета — в кошелёк, с историей."""
     packs = _rows("select * from credit_packs where id = %s", [payment["credit_pack_id"]])
 
@@ -127,8 +135,15 @@ def _grant_credits(payment: dict[str, Any], company: dict[str, Any]) -> None:
         int(packs[0]["credits"]),
         "purchase",
         ("Payment", payment["id"]),
-        None,
+        admin["id"] if admin is not None else None,
     )
+
+
+def _t(ctx: Context, key: str) -> str:
+    """__() у Laravel: у страницы сайта — её язык, у админки — русский."""
+    translate = getattr(ctx, "t", None)
+
+    return translate(key) if callable(translate) else ui.t(key, "ru")
 
 
 def mark_paid(ctx: Context, payment: dict[str, Any], meta: dict[str, Any]) -> tuple[bool, str]:
@@ -136,17 +151,32 @@ def mark_paid(ctx: Context, payment: dict[str, Any], meta: dict[str, Any]) -> tu
     OrderService::markPaid: оплату подтвердил провайдер. meta — след
     провайдера (provider, external_id, payment_method_id), пустое — прочь.
     """
-    stamp = {k: v for k, v in meta.items() if v is not None}
+    return settle(ctx, payment, {k: v for k, v in meta.items() if v is not None}, None)
 
+
+def confirm(
+    ctx: Context, payment: dict[str, Any], admin: dict[str, Any], note: str | None
+) -> tuple[bool, str]:
+    """OrderService::confirm: деньги пришли переводом — отметил администратор."""
+    return settle(ctx, payment, {"confirmed_by": admin["id"], "admin_note": note}, admin)
+
+
+def settle(
+    ctx: Context,
+    payment: dict[str, Any],
+    stamp: dict[str, Any],
+    admin: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    """OrderService::settle: отметка об оплате и начисление — одной транзакцией."""
     if payment["status"] == "paid":
-        return False, ctx.t("messages.order.already_paid")
+        return False, _t(ctx, "messages.order.already_paid")
 
     companies = _rows(
         "select * from companies where id = %s and deleted_at is null", [payment["company_id"]]
     )
 
     if not companies:
-        return False, ctx.t("messages.order.company_gone")
+        return False, _t(ctx, "messages.order.company_gone")
 
     company = companies[0]
 
@@ -162,9 +192,9 @@ def mark_paid(ctx: Context, payment: dict[str, Any], meta: dict[str, Any]) -> tu
         )
 
         if payment["purpose"] == "subscription":
-            _grant_plan(ctx, payment, company)
+            _grant_plan(ctx, payment, company, admin)
         elif payment["purpose"] == "credits":
-            _grant_credits(payment, company)
+            _grant_credits(payment, company, admin)
 
     _notify_company(
         ctx,
@@ -176,4 +206,4 @@ def mark_paid(ctx: Context, payment: dict[str, Any], meta: dict[str, Any]) -> tu
         payment["description"],
     )
 
-    return True, ctx.t("messages.order.credited")
+    return True, _t(ctx, "messages.order.credited")

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Cabinet;
 
-use App\Filament\Pages\Invoices;
 use App\Models\Company;
 use App\Models\CreditPack;
 use App\Models\Payment;
@@ -15,10 +14,8 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\OrderService;
 use Database\Seeders\PlanSeeder;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -188,10 +185,9 @@ class OrderFlowTest extends TestCase
         $this->actingAs($this->user)->post('/cabinet/billing/order', ['kind' => 'plan', 'id' => $plan->id]);
         $payment = Payment::firstOrFail();
 
-        $this->actingAs($this->admin);
-
-        Livewire::test(Invoices::class)
-            ->callAction(TestAction::make('confirm')->table($payment), ['note' => 'п/п 214 от 29.07']);
+        // Кнопка «Деньги пришли» — в админке Django (python/savdex/finance),
+        // здесь — та же служба, что за ней у Laravel
+        app(OrderService::class)->confirm($payment, $this->admin, 'п/п 214 от 29.07');
 
         $payment->refresh();
 

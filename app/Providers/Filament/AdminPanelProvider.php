@@ -25,6 +25,7 @@ use App\Models\CompanyDocument;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Task;
 use App\Models\Listing;
+use App\Models\Payment;
 use App\Models\PlatformReview;
 use App\Models\Review;
 use App\Models\Support\Ticket;
@@ -321,6 +322,15 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Монетизация')
                     ->sort(1)
                     ->visible(fn (): bool => AdminAccess::allows('plans.view')),
+                NavigationItem::make('Счета и оплаты')
+                    ->url('/admin/python?next=/py/admin/finance/payment/')
+                    ->icon('heroicon-o-banknotes')
+                    ->group('Монетизация')
+                    ->sort(3)
+                    // Счётчик — неоплаченные: деньги, которые ещё не пришли
+                    ->badge(fn (): ?string => ($pending = Payment::query()->where('status', 'pending')
+                        ->count()) > 0 ? (string) $pending : null, color: 'warning')
+                    ->visible(fn (): bool => AdminAccess::allows('payments.view')),
                 NavigationItem::make('Пакеты контактов')
                     ->url('/admin/python?next=/py/admin/billing/creditpack/')
                     ->icon('heroicon-o-ticket')

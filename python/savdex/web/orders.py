@@ -232,8 +232,13 @@ def _live_card_transaction(payment: dict[str, Any]) -> bool:
     )
 
 
-def cancel(ctx: Context, payment: dict[str, Any], note: str | None = None) -> None:
-    """OrderService::cancel без администратора: счёт — failed, промокод — в оборот."""
+def cancel(
+    ctx: Context,
+    payment: dict[str, Any],
+    note: str | None = None,
+    admin: dict[str, Any] | None = None,
+) -> None:
+    """OrderService::cancel: счёт — failed (кто отменил — confirmed_by), промокод — в оборот."""
     # Строго «ждёт оплаты»: повтор отмены не освобождает код второй раз
     if payment["status"] != "pending":
         return
@@ -242,7 +247,11 @@ def cancel(ctx: Context, payment: dict[str, Any], note: str | None = None) -> No
         ctx,
         "payments",
         payment,
-        {"status": "failed", "confirmed_by": None, "admin_note": note},
+        {
+            "status": "failed",
+            "confirmed_by": admin["id"] if admin is not None else None,
+            "admin_note": note,
+        },
         section="payments",
         model="Payment",
         casts={"amount": "int"},
