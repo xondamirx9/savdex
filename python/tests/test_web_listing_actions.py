@@ -204,9 +204,7 @@ def test_удалить_подменой_метода(сайт):
     отдаёт такой POST Django, и Django подменяет метод так же).
     """
     uid = продавец()
-    итог = сверить(
-        сайт, "/cabinet/listings/{id}", ("active",), uid=uid, body={"_method": "DELETE"}
-    )
+    итог = сверить(сайт, "/cabinet/listings/{id}", ("active",), uid=uid, body={"_method": "DELETE"})
 
     assert итог["ответ"]["status"] == 303
     assert итог["база"]["listings"][0][5] is True

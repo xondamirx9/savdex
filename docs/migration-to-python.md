@@ -1088,11 +1088,12 @@ Laravel: цены в валюте языка Django считает по курс
 таблицы. Что нашлось и что сделано:
 
 - **`listings:expire`** (каждый день в 06:00) — единственный живой
-  писатель. Перенесён: `savdex/web/listing_expiry.py` и команда
-  `manage.py expire_listings`, цикл в `docker/render-entrypoint.sh`;
-  из расписания Laravel убран (сама команда осталась — ею сверяется
-  Python-версия). Пройденный день помнит
-  `storage/app/listings-expire.json`: перезапуск не повторяет проход,
+  писатель. Перенесён: `savdex/web/listing_expiry.py`, задача
+  `expire_listings` общего расписания Django (`savdex/schedule.py`,
+  `manage.py schedule`, цикл в `docker/render-entrypoint.sh`; с шага 63 —
+  вместо отдельной команды); из расписания Laravel убран (сама команда
+  осталась — ею сверяется Python-версия). Пройденный день помнит
+  `storage/app/schedule.json`: перезапуск не повторяет проход,
   поднявшийся после 06:00 контейнер свой день догоняет, самый первый
   запуск после 06:00 день пропускает (его уже сделал Laravel). Отличие:
   окно предупреждения «за три дня» считается от 06:00, а не от момента
@@ -1798,6 +1799,37 @@ Django: страницы (группы `cabinet`, `auth` и прочие — в�
 `/cabinet/billing` и приём платежей `/payments/…` — этап 7, и админка
 Filament — этап 6. (Страница кассы и печатный счёт перешли к Django
 на шаге 52 этапа 7.)
+
+**Шаг 63. Хозяин таблиц кабинета — Django** ✅ (30.09.2026). В
+`OWNED_TABLES` перешли 17 таблиц этапа 5: `login_attempts`,
+`company_attributes`, `company_category`, `company_contacts`,
+`company_documents`, `company_invitations`, `company_sites`,
+`company_site_products`, `reviews`, `platform_reviews`,
+`contact_unlocks`, `audience_views`, `message_threads`, `messages`,
+`notifications`, `notification_preferences`, `broadcasts`. Права хозяина —
+`2026_10_11_110000_grant_django_cabinet_owner`.
+
+По описи живой писатель Laravel в них был один — ежедневная чистка «Кто
+смотрел» (`audience-views:prune`, 04:00, старше 90 дней). Перенесена в
+общее расписание Django `savdex/schedule.py` (`manage.py schedule`):
+задачи с часом запуска, пройденные дни — в `storage/app/schedule.json`,
+перезапуск не повторяет, поздний запуск догоняет, первый запуск после
+часа задачи день пропускает (его сделал Laravel). Туда же переехало
+снятие истёкших объявлений шага 62. Сверка — `tests/test_schedule.py`
+(та же чистка, что у Laravel; первый запуск; список задач).
+
+Обходные пути (POST с `_method`, `?hl=` с чужим языком, `/index.php/…`)
+закрыты ещё на шаге 62 — они вели и к этим таблицам. Осознанно у Laravel
+остались те же исключения: аварийный откат форм, демо-стенд
+(`CabinetDemoSeeder` — отзывы и раскрытия), ручной
+`savdex:copy-database`, код без вызовов (`ModerationService`,
+`PlatformReviewService::approve`, `Notifier::broadcast`).
+
+Не в этом шаге: `companies` (пересчёт рейтингов `ratings:recalculate` —
+шаг 64), `user_notifications` (просьбы об отзыве `reviews:ask` — шаг 65;
+денежный `billing:reset-periods` пишет туда же, поэтому таблица станет
+общей на добавление до передачи денег), `users` (смена языка `?hl=` и
+вход в админку Filament — шаг 66).
 
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
@@ -2684,7 +2716,7 @@ PHP-команда остаётся рядом, пока Python-версией �
 
 | Команда | Пишет | Почему позже |
 |---|---|---|
-| `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 — перенесено (шаг 62, `manage.py expire_listings`) |
+| `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 — перенесено (шаг 62, задача `expire_listings` в `manage.py schedule`) |
 | `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 |
 | `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 |
 | `reviews:ask` | `user_notifications` | Просьбы оставить отзыв о площадке и о компании — колокольчик переезжает с кабинетом. Этап 5 |

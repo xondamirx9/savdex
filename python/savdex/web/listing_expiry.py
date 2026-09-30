@@ -3,8 +3,8 @@
 (app/Console/Commands/ExpireListings.php), этап 4: хозяин listings —
 Django, и расписание переехало вместе с таблицей.
 
-Без неё expires_at — просто дата в базе: объявления висели бы в выдаче
-вечно. Раз в сутки:
+Запускает savdex/schedule.py в 06:00 UTC. Без неё expires_at — просто
+дата в базе: объявления висели бы в выдаче вечно. Раз в сутки:
 
 - активные с истёкшим сроком — в «истёкшие» (сохранение как у модели:
   search_text и updated_at), компании — событие в ленте и уведомление
@@ -20,17 +20,13 @@ Django, и расписание переехало вместе с таблиц�
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _now, save_listing
 
 EXPIRED = "expired"
-
-#: dailyAt('06:00') у Laravel — по часам приложения (UTC)
-RUN_AT = time(6, 0)
-
 
 Row = dict[str, Any]
 
@@ -95,11 +91,6 @@ def warn(anchor: datetime) -> int:
         )
 
     return len(found)
-
-
-def scheduled_for(now: datetime) -> datetime:
-    """Назначенное время сегодняшнего прохода (UTC без пояса, как в базе)."""
-    return datetime.combine(now.date(), RUN_AT)
 
 
 def run(now: datetime | None = None, anchor: datetime | None = None) -> tuple[int, int]:

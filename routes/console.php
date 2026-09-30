@@ -6,7 +6,6 @@ use App\Jobs\TranslateListing;
 use App\Jobs\TranslateNewsPost;
 use App\Jobs\TranslateResume;
 use App\Jobs\TranslateTender;
-use App\Models\AudienceView;
 use App\Models\Listing;
 use App\Models\NewsPost;
 use App\Models\Resume;
@@ -32,7 +31,7 @@ use Illuminate\Support\Facades\Schedule;
 */
 
 // Снятие истёкших объявлений (listings:expire) ведёт Django — хозяин
-// таблицы listings с этапа 4 (python/manage.py expire_listings, цикл в
+// таблицы listings с этапа 4 (python/savdex/schedule.py, цикл в
 // docker/render-entrypoint.sh, те же 06:00). Сама команда осталась:
 // ею сверяется Python-версия (python/tests/test_listing_expiry.py)
 
@@ -82,14 +81,8 @@ Schedule::call(fn () => app(CurrencyRate::class)->refresh())
 Schedule::command('queue:prune-batches --hours=48')->daily();
 Schedule::command('queue:prune-failed --hours=336')->weekly();
 
-// «Кто смотрел» полезен свежим: кабинет показывает месяц, ещё два
-// держим про запас, старше — просто занимает место в базе
-Schedule::call(fn () => AudienceView::query()
-    ->where('created_at', '<', now()->subDays(90))
-    ->delete())
-    ->name('audience-views:prune')
-    ->dailyAt('04:00')
-    ->onOneServer();
+// Чистку «Кто смотрел» (audience-views:prune, старше 90 дней) ведёт
+// Django — хозяин audience_views с этапа 5 (python/savdex/schedule.py)
 
 /*
  * Добор переводов объявлений: несложившиеся при публикации (сеть,
