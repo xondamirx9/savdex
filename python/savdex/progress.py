@@ -27,7 +27,6 @@ SHARED: frozenset[str] = frozenset(
         "jobs",
         "job_batches",
         "failed_jobs",
-        "password_reset_tokens",
         "sessions",
         "migrations",
         # Очередь машинного перевода: ставят в неё страницы, переводит
@@ -91,12 +90,6 @@ STAGES: tuple[Stage, ...] = (
             "banners",
             "banner_images",
         ),
-        kept={
-            "category_fields": "поля категорий заводит только сидер Laravel",
-            "promotion_types": "в админке не правятся — решение заказчика",
-            "payment_methods": "в админке не правятся — решение заказчика",
-            "promo_codes": "сайт пишет в них сам — переезжают с кабинетом, этап 5",
-        },
     ),
     Stage(
         3,
@@ -134,6 +127,7 @@ STAGES: tuple[Stage, ...] = (
         "Кабинет",
         tables=(
             "users",
+            "password_reset_tokens",
             "login_attempts",
             "companies",
             "company_attributes",
