@@ -49,6 +49,9 @@ return [
     ],
 
     'common' => [
+        'prev_page' => 'Önceki',
+        'next_page' => 'Sonraki',
+        'page_n' => 'Sayfa :page',
         'close' => 'Kapat',
         'cancel' => 'İptal',
         'confirm' => 'Onayla',

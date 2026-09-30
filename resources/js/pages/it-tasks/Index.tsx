@@ -11,6 +11,7 @@ import { t, tChoice } from '@/lib/i18n';
 import { getLocale } from '@/lib/locale';
 import { openServiceSection, serviceFilterOptions, type ServiceSection } from '@/lib/serviceSections';
 import { routes } from '@/routes';
+import { Pagination } from '@/components/Pagination';
 
 export interface TaskRow {
     id: number;
@@ -324,26 +325,7 @@ export default function ItTasksIndex({ tasks, filters, types, total_all: totalAl
                         )}
 
                         {tasks.last_page > 1 && (
-                            <nav className="pagination mt-32" aria-label={t('it_tasks.pages')}>
-                                {tasks.links.map((link, i) =>
-                                    link.url ? (
-                                        <Link
-                                            key={i}
-                                            href={link.url}
-                                            className={cn('page-link', link.active && 'is-active')}
-                                            aria-current={link.active ? 'page' : undefined}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ) : (
-                                        <span
-                                            key={i}
-                                            className="page-link is-disabled"
-                                            aria-disabled="true"
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ),
-                                )}
-                            </nav>
+                            <Pagination links={tasks.links} label={t('it_tasks.pages')} className="mt-32" />
                         )}
                     </div>
                 </div>

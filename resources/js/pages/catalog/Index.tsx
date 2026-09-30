@@ -10,6 +10,7 @@ import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
+import { Pagination } from '@/components/Pagination';
 
 interface Page<Row> {
     data: Row[];
@@ -317,28 +318,7 @@ export default function CatalogIndex({ banner, listings, tenders, filters, sorts
                     )}
 
                     {feed !== undefined && feed.last_page > 1 && (
-                        <nav className="pagination mt-32" aria-label={t('catalog.pages')}>
-                            {feed.links.map((link, i) =>
-                                link.url ? (
-                                    <Link
-                                        key={i}
-                                        href={link.url}
-                                        className={cn('page-link', link.active && 'is-active')}
-                                        aria-current={link.active ? 'page' : undefined}
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                    />
-                                ) : (
-                                    /* Недоступная страница — не ссылка: pointer-events
-                                       глушит только мышь, а с клавиатуры «#» открывался */
-                                    <span
-                                        key={i}
-                                        className="page-link is-disabled"
-                                        aria-disabled="true"
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                    />
-                                ),
-                            )}
-                        </nav>
+                        <Pagination links={feed.links} label={t('catalog.pages')} className="mt-32" />
                     )}
                 </div>
             </div>
