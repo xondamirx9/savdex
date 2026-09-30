@@ -1056,10 +1056,12 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
    поэтому они переносятся как обычный текст. Раньше значение было
    соседом по флексу: подпись «профиль заполнен на» забирала ширину
    ячейки, а процент сжимался и обрезался до «7…». */
-.co-fact{display:flex;gap:7px;align-items:flex-start;color:var(--text-muted);min-width:0}
+.co-fact{display:flex;gap:8px;align-items:flex-start;color:var(--text-muted);min-width:0;line-height:20px}
 .co-fact>span{min-width:0}
-/* Иконка не сжимается и не уезжает на свою строку */
-.co-fact>svg{flex-shrink:0}
+/* Иконка не сжимается, не уезжает на свою строку и стоит по центру
+   первой строки текста: без отступа она прижималась к верху строки
+   и торчала выше подписи */
+.co-fact>svg{flex-shrink:0;margin-top:2px}
 .co-fact b{color:var(--text);font-weight:600;white-space:nowrap}
 
 .co-cats{display:flex;flex-wrap:wrap;gap:6px}
