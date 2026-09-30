@@ -196,6 +196,7 @@ def по_порядку(html: str, *тексты: str) -> bool:
                 "intake_queue",
                 "moderation_queue",
                 "support_queue",
+                "finance_today",
                 "content_drafts",
                 "platform_stats",
                 "activation_funnel",
@@ -219,8 +220,7 @@ def по_порядку(html: str, *тексты: str) -> bool:
         ("moderator", ["moderation_queue"]),
         ("support", ["my_tasks", "support_queue"]),
         ("content_manager", ["content_drafts"]),
-        # Деньги за сегодня — этап 7: пока финансам на главной нечего показать
-        ("finance", []),
+        ("finance", ["finance_today"]),
         ("nobody", ["awaiting_role"]),
         ("revoked", ["awaiting_role"]),
     ],
@@ -511,6 +511,66 @@ def test_очередь_на_проверку_и_два_часа(люди):
     очередь = блок(body, "moderation_queue")
     assert 'href="/py/admin/data/listing/?status=moderation"' in очередь
     assert 'href="/py/admin/finance/complaint/"' in очередь
+
+
+# ── Деньги за сегодня ───────────────────────────────────────────────
+
+
+def test_деньги_за_сегодня_по_ташкенту(люди):
+    sql("delete from refunds")
+    sql("delete from payments")
+    покупатель = _компания("Плательщик")
+    зона = ZoneInfo("Asia/Tashkent")
+    полночь = (
+        datetime.now(зона)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(UTC)
+        .replace(tzinfo=None)
+    )
+
+    def счёт(status: str, amount: int, paid_at: datetime | None = None) -> int:
+        return _вставить(
+            "payments", company_id=покупатель, purpose="subscription", description="x",
+            amount=amount, currency="UZS", status=status, paid_at=paid_at,
+        )  # fmt: skip
+
+    счёт("paid", 1000000, полночь + timedelta(seconds=1))
+    возвращённый = счёт("refunded", 500000, полночь + timedelta(minutes=5))
+    счёт("paid", 700000, полночь - timedelta(seconds=1))  # вчера по Ташкенту
+    счёт("pending", 250000)
+    счёт("pending", 499000)
+    _вставить(
+        "refunds", payment_id=возвращённый, company_id=покупатель, amount=200000,
+        currency="UZS", reason="x", status="requested",
+    )  # fmt: skip
+
+    body = _главная(люди["finance"])
+
+    assert плитка(body, "Оплачено сегодня") == {
+        "value": "1 500 000 сум",
+        "tone": "success",
+        "description": "2 счёта",
+    }
+    assert плитка(body, "Ждут оплаты") == {
+        "value": "2",
+        "tone": "warning",
+        "description": "на 749 000 сум",
+    }
+    assert плитка(body, "Возвраты на решении") == {
+        "value": "1",
+        "tone": "danger",
+        "description": "на 200 000 сум",
+    }
+    деньги = блок(body, "finance_today")
+    assert 'href="/py/admin/finance/payment/"' in деньги
+    assert 'href="/py/admin/finance/refund/"' in деньги
+
+    sql("delete from refunds")
+    sql("delete from payments")
+    пусто = _главная(люди["finance"])
+
+    assert плитка(пусто, "Возвраты на решении")["description"] == "ничего не ждёт"
+    assert плитка(пусто, "Ждут оплаты")["tone"] == "gray"
 
 
 # ── Контент ─────────────────────────────────────────────────────────

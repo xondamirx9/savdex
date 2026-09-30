@@ -19,9 +19,7 @@
 - «Новые компании» показывают город (или страну): у Filament строка
   компании с городом падала — $record->city?->name у модели City не
   столбец, а метод;
-- у таблиц вместо листания — число всех записей и ссылка в раздел;
-- деньги за сегодня (FinanceToday) — не здесь: финансы переезжают на
-  этапе 7.
+- у таблиц вместо листания — число всех записей и ссылка в раздел.
 
 Главная ничего не пишет: только чтение.
 """
@@ -789,6 +787,73 @@ def registrations_chart(ctx: Context) -> dict[str, Any]:
     }
 
 
+# ── Деньги за сегодня ───────────────────────────────────────────────
+
+
+def _sum(money: int) -> str:
+    return f"{int(money):,}".replace(",", " ") + " сум"
+
+
+def finance_today(ctx: Context) -> dict[str, Any]:
+    """
+    FinanceToday: сколько пришло сегодня, сколько ждёт оплаты и сколько
+    заявлено к возврату. Первое — выручка, два других — долг перед
+    клиентом. «Сегодня» — ташкентское (Business::today).
+    """
+    from savdex.finance import reports
+
+    today = timezone.localtime(ctx.now).date()
+
+    with connections["default"].cursor() as cursor:
+        cursor.execute(
+            f"select count(*), coalesce(sum(amount), 0) from payments where {reports.RECEIVED} "
+            "and paid_at between %s and %s",
+            [reports.start_of_day(today), reports.end_of_day(today)],
+        )
+        paid, paid_sum = cursor.fetchone()
+        cursor.execute(
+            "select count(*), coalesce(sum(amount), 0) from payments where status = 'pending'"
+        )
+        pending, pending_sum = cursor.fetchone()
+        cursor.execute(
+            "select count(*), coalesce(sum(amount), 0) from refunds where status = 'requested'"
+        )
+        refunds, refunds_sum = cursor.fetchone()
+
+    payments_url = _list("finance_payment")
+
+    return {
+        "heading": "Деньги за сегодня",
+        "stats": [
+            {
+                "label": "Оплачено сегодня",
+                "value": _sum(paid_sum),
+                "description": f"{paid} {_plural(paid, ('счёт', 'счёта', 'счетов'))}",
+                "tone": "success",
+                "url": payments_url,
+                "trend": None,
+            },
+            {
+                "label": "Ждут оплаты",
+                "value": str(pending),
+                # Выставленные, но неоплаченные — ещё не выручка
+                "description": f"на {_sum(pending_sum)}",
+                "tone": "warning" if pending > 0 else "gray",
+                "url": payments_url,
+                "trend": None,
+            },
+            {
+                "label": "Возвраты на решении",
+                "value": str(refunds),
+                "description": f"на {_sum(refunds_sum)}" if refunds > 0 else "ничего не ждёт",
+                "tone": "danger" if refunds > 0 else "gray",
+                "url": _list("finance_refund"),
+                "trend": None,
+            },
+        ],
+    }
+
+
 # ── Порядок ─────────────────────────────────────────────────────────
 
 AWAITING_ROLE = Widget(
@@ -807,7 +872,12 @@ WIDGETS: tuple[Widget, ...] = (
         lambda a: a.can("support.view"),
         support_queue,
     ),
-    # FinanceToday (-26, payments.view) — на этапе 7, вместе с разделами денег
+    Widget(
+        "finance_today",
+        "admin/dashboard/stats.html",
+        lambda a: a.can("payments.view"),
+        finance_today,
+    ),
     Widget(
         "content_drafts",
         "admin/dashboard/stats.html",

@@ -19,7 +19,6 @@
 {% include "admin/dashboard/styles.html" %}
 <div class="savdex-dashboard">
   {% for widget in dashboard %}{% include widget.template with w=widget %}{% endfor %}
-  {% comment %}Деньги за сегодня (FinanceToday у Filament) — на этапе 7, вместе с разделами денег{% endcomment %}
 </div>
 {% endif %}
 <p>Разделы переезжают сюда из админки по одному. Правки здесь попадают в тот же журнал действий, что и в основной админке.</p>

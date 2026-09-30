@@ -1,0 +1,9 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  «Итого» под списком — сумма колонки «Сколько» по отфильтрованному, как
+  у Filament (savdex/finance/operations_admin.py).
+{% endcomment %}
+{% block result_list %}
+  {{ block.super }}
+  {% if total is not None %}<p><b>Итого: {{ total }}</b></p>{% endif %}
+{% endblock %}

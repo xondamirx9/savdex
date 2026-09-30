@@ -254,3 +254,49 @@ class Complaint(models.Model):
 
     def __str__(self) -> str:
         return f"Жалоба #{self.pk}"
+
+
+# ── Финансовые операции ────────────────────────────────────────────
+
+#: FinanceOperations::REASONS
+WALLET_REASONS = {
+    "unlock": "Раскрытие контакта",
+    "purchase": "Покупка",
+    "refund": "Возврат",
+    "complaint_refund": "Возврат по жалобе",
+    "plan_grant": "Начисление по тарифу",
+    "promotion": "Продвижение",
+}
+
+WALLET_KINDS = {"credits": "Кредиты", "promo_units": "Продвижение"}
+
+
+class WalletTransaction(models.Model):
+    """App\\Models\\WalletTransaction: движение по кошельку компании."""
+
+    company = models.ForeignKey(
+        Company, verbose_name="компания", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    user = models.ForeignKey(
+        User, verbose_name="кто провёл", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, related_name="+",
+    )  # fmt: skip
+    kind = models.CharField("что", max_length=255)
+    amount = models.IntegerField("сколько")
+    balance_after = models.IntegerField("остаток после")
+    reason = models.CharField("основание", max_length=255)
+    subject_type = models.CharField(max_length=255, null=True)
+    subject_id = models.BigIntegerField(null=True)
+    comment = models.CharField("комментарий", max_length=255, null=True)
+    created_at = UTCDateTimeField("когда", null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "wallet_transactions"
+        verbose_name = "операция"
+        verbose_name_plural = "Финансовые операции"
+
+    def __str__(self) -> str:
+        return f"Операция #{self.pk}"
