@@ -2389,7 +2389,7 @@ Django** ✅ (30.09.2026).
 тарифу. В `OWNED_TABLES` — `wallets`, `wallet_transactions`, `promotions`,
 `subscriptions`, `payment_methods`, `payments`, `payment_transactions`,
 `promo_codes`, `refunds`; права хозяина —
-`2026_10_12_100000_grant_django_users_and_money_owner`. Сверка денег
+`2026_10_12_110000_grant_django_users_and_money_owner`. Сверка денег
 (`manage.py reconcile_billing`, раз в час) продолжает работать. Из
 расписания Laravel задачи убраны, команды остались для сверки —
 `tests/test_billing_periods.py` (те же продвижения, подписки, кошельки,
