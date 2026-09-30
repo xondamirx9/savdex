@@ -282,6 +282,8 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "profile_completeness": int(_php_round(sum(checks) / len(checks) * 100)),
         "blocked": company["status"] == "blocked",
         "blocked_reason": company["blocked_reason"],
+        # Company::isPerson: в меню «Мой профиль», а не «Моя компания»
+        "person": company["legal_form"] in ("individual", "freelancer"),
     }
 
     return card, company

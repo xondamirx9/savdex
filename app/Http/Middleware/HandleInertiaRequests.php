@@ -86,6 +86,8 @@ class HandleInertiaRequests extends Middleware
                     // ищет поломку вместо причины
                     'blocked' => $user->company->isBlocked(),
                     'blocked_reason' => $user->company->blocked_reason,
+                    // Физлицо или фрилансер: в меню «Мой профиль», а не «Моя компания»
+                    'person' => $user->company->isPerson(),
                 ] : null,
             ],
 

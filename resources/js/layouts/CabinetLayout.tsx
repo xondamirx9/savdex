@@ -3,6 +3,7 @@ import { Link } from '@/components/ui/Link';
 import {
     BarChart3,
     Building2,
+    CircleUserRound,
     Code2,
     CreditCard,
     Eye,
@@ -51,7 +52,11 @@ interface NavGroup {
  * посчитанное при импорте модуля, успевало взяться раньше словаря,
  * и в меню выходили сами ключи — «cabinet.nav.dashboard».
  */
-function groups(): NavGroup[] {
+/**
+ * Разделы меню. person — физлицо или фрилансер: их профиль — человек,
+ * а не организация, и пункт называется «Мой профиль».
+ */
+function groups(person = false): NavGroup[] {
     return [
         {
             items: [
@@ -81,7 +86,9 @@ function groups(): NavGroup[] {
         {
             title: t('cabinet.nav.account_group'),
             items: [
-                { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
+                person
+                    ? { href: routes.cabinetCompany, label: t('cabinet.nav.profile'), icon: CircleUserRound }
+                    : { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
                 { href: routes.cabinetSite, label: t('cabinet.nav.site'), icon: Globe },
                 { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
                 { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
@@ -111,7 +118,7 @@ export function CabinetLayout({
     children: ReactNode;
 }) {
     const { auth, flash, counts } = usePage<SharedProps>().props;
-    const GROUPS = groups();
+    const GROUPS = groups(Boolean(auth?.company?.person));
     const path = typeof window !== 'undefined' ? window.location.pathname : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
 
