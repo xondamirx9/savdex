@@ -222,7 +222,7 @@ def test_блокировка_действует_сразу():
 
     assert вход["status"] == 302
     assert до["status"] == 200
-    assert после["status"] == 302 and после["location"].startswith("/admin/python?next=")
+    assert после["status"] == 302 and после["location"].startswith("/py/admin/login/?next=")
 
 
 def test_чужой_адрес_в_пропуске_laravel_не_уводит_с_сайта():
