@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Сверка со шлюзом (savdex/finance/reports_view.py). Расхождения
+  сгруппированы по видам в порядке срочности: одна строка «деньги взяли и
+  не начислили» важнее сотни «закрыт без транзакции».
+{% endcomment %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .fin-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .fin-good { color: #15803d; }
+  .fin-kind { margin-top: 24px; }
+  .fin-kind h2 .fin-count { display: inline-block; min-width: 1.6em; padding: 0 6px; border-radius: 9px; text-align: center; color: #fff; }
+  .fin-danger { background: #b91c1c; } .fin-warning { background: #b45309; }
+</style>
+{% endblock %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a> › Сверка со шлюзом
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p>{{ lead }}</p>
+
+  <form method="get">
+    <label>С <input type="date" name="from" value="{{ from }}"></label>
+    <label>По <input type="date" name="to" value="{{ to }}"></label>
+    <input type="submit" value="Показать">
+    {% for p in periods %}
+      <a class="button" href="?from={{ p.from }}&amp;to={{ p.to }}">{{ p.label }}</a>
+    {% endfor %}
+  </form>
+
+  {% if not total %}
+    <h2 class="fin-good">Расхождений нет</h2>
+    <p>За выбранный период площадка и шлюз говорят одно и то же.</p>
+  {% endif %}
+
+  {% for group in groups %}
+    <div class="fin-kind">
+      <h2>{{ group.title }} <span class="fin-count fin-{{ group.severity }}">{{ group.rows|length }}</span></h2>
+      <p><small>{{ group.hint }}</small></p>
+      <table>
+        <thead><tr><th>Счёт</th><th>Компания</th><th>Заведён</th><th class="fin-num">У площадки</th><th class="fin-num">У шлюза</th><th>Примечание</th></tr></thead>
+        <tbody>
+          {% for row in group.rows %}
+            <tr><td><b>{{ row.number }}</b></td><td>{{ row.company }}</td><td>{{ row.at }}</td><td class="fin-num">{{ row.ours }}</td><td class="fin-num">{{ row.theirs }}</td><td>{{ row.note }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

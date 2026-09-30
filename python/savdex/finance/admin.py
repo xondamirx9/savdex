@@ -180,13 +180,30 @@ class PaymentAdmin(SavdexModelAdmin):
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_edit = self.has_edit(request)
+        extra_context = {
+            **(extra_context or {}),
+            "can_reports": _admin_of(request).can("finreports.view"),
+        }
 
         return super().changelist_view(request, extra_context)
 
     # ── Деньги пришли, отменить ──
 
     def get_urls(self) -> list[Any]:
+        from savdex.finance import reports_view
+
         return [
+            # Отчёты и сверка — страницы, не разделы модели; права — finreports.view
+            path(
+                "reports/",
+                self.admin_site.admin_view(reports_view.view),
+                name="finance_reports",
+            ),
+            path(
+                "reconciliation/",
+                self.admin_site.admin_view(reports_view.reconciliation),
+                name="finance_reconciliation",
+            ),
             path(
                 "<path:object_id>/confirm/",
                 self.admin_site.admin_view(self.confirm_view),

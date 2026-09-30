@@ -201,4 +201,18 @@ final class GatewayReconciliation
 
         return $counts;
     }
+
+    /**
+     * Срочное — для значка в меню: «деньги взяты, счёт не закрыт»,
+     * двойное списание и расхождение сумм. «Закрыт без транзакции»
+     * бывает законным (оплату завёл администратор) и значок не зажигает.
+     */
+    public static function urgent(Carbon $from, Carbon $to): int
+    {
+        $summary = self::summary($from, $to);
+
+        return $summary[self::PERFORMED_WITHOUT_PAID]
+            + $summary[self::DOUBLE_PERFORMED]
+            + $summary[self::AMOUNT_MISMATCH];
+    }
 }
