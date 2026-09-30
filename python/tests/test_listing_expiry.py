@@ -1,6 +1,6 @@
 """
-Этап 4: снятие истёкших объявлений на Django (manage.py expire_listings)
-вместо расписания Laravel listings:expire.
+Этап 4: снятие истёкших объявлений на Django (задача expire_listings в
+manage.py schedule) вместо расписания Laravel listings:expire.
 
 На одних данных команда Django оставляет ту же базу, что команда
 Laravel: истёкшие активные — «истёкшие» с пересчитанным search_text,
@@ -14,6 +14,7 @@ Laravel: истёкшие активные — «истёкшие» с пере�
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -99,9 +100,9 @@ def снимок() -> dict[str, Any]:
 
 def django(*args: str, state: Path) -> str:
     out = subprocess.run(
-        [sys.executable, "manage.py", "expire_listings", *args],
+        [sys.executable, "manage.py", "schedule", *args],
         cwd=PYTHON,
-        env={**ОКРУЖЕНИЕ, "PYTHONPATH": str(PYTHON), "LISTINGS_EXPIRE_STATE": str(state)},
+        env={**ОКРУЖЕНИЕ, "PYTHONPATH": str(PYTHON), "SAVDEX_SCHEDULE_STATE": str(state)},
         capture_output=True,
         text=True,
         check=True,
@@ -116,7 +117,7 @@ def test_как_у_laravel(компании, tmp_path):
     л = снимок()
 
     подготовка(компании)
-    вывод = django("--once", state=tmp_path / "state")
+    вывод = django("--once", "expire_listings", state=tmp_path / "state")
     д = снимок()
 
     assert д == л, (д, л)
@@ -135,16 +136,16 @@ def test_день_не_повторяется(компании, tmp_path):
     from datetime import UTC, datetime
 
     state = tmp_path / "state"
-    state.write_text(datetime.now(UTC).date().isoformat())
+    state.write_text(json.dumps({"expire_listings": datetime.now(UTC).date().isoformat()}))
     подготовка(компании)
 
     # Бесконечный режим с проходом сегодня уже сделанным: одна проверка
     # и ни одной записи. Прерываем через таймаут — это цикл
     with pytest.raises(subprocess.TimeoutExpired):
         subprocess.run(
-            [sys.executable, "manage.py", "expire_listings", "--every", "1"],
+            [sys.executable, "manage.py", "schedule", "--every", "1"],
             cwd=PYTHON,
-            env={**ОКРУЖЕНИЕ, "PYTHONPATH": str(PYTHON), "LISTINGS_EXPIRE_STATE": str(state)},
+            env={**ОКРУЖЕНИЕ, "PYTHONPATH": str(PYTHON), "SAVDEX_SCHEDULE_STATE": str(state)},
             capture_output=True,
             timeout=4,
         )

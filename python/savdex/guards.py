@@ -131,6 +131,28 @@ OWNED_TABLES: frozenset[str] = frozenset(
         "it_tasks",
         "it_task_files",
         "resumes",
+        # Этап 5 (шаг 63): кабинет, кроме users, companies и
+        # user_notifications (у тех ещё есть живые писатели Laravel — шаги
+        # 64–66). Все формы — на Django; чистка «Кто смотрел» —
+        # savdex/schedule.py вместо audience-views:prune. Остальное у
+        # Laravel — только аварийный откат и демо-стенд, как на шаге 62
+        "login_attempts",
+        "company_attributes",
+        "company_category",
+        "company_contacts",
+        "company_documents",
+        "company_invitations",
+        "company_sites",
+        "company_site_products",
+        "reviews",
+        "platform_reviews",
+        "contact_unlocks",
+        "audience_views",
+        "message_threads",
+        "messages",
+        "notifications",
+        "notification_preferences",
+        "broadcasts",
     }
 )
 
@@ -178,47 +200,16 @@ SHARED_WRITES: dict[str, str] = {
         "roles.edit, «Подтвердить почту», «Выдать пароль», блокировка; «Роли и "
         "права» — роль, is_admin и admin_permissions, как RoleResource"
     ),
-    "login_attempts": (
-        "неудачные и удачные входы (этап 5, шаг 45): insert и сброс неудач "
-        "по почте и IP, как LoginThrottle"
-    ),
-    "company_category": (
-        "направления компании со второго шага регистрации (этап 5, шаг 47): "
-        "categories()->sync у только что созданной компании — одна вставка, "
-        "без меток времени (связь без withTimestamps)"
-    ),
-    "broadcasts": (
-        "рассылки в админке (этап 6): черновик — вставка и правка формой, "
-        "отправка — автор, число получателей и время, как Notifier::broadcast; "
-        "удаление с правом удалять; у администратора — строка журнала"
-    ),
-    "platform_reviews": (
-        "«Оцените SavdEx» (этап 5, шаг 47): updateOrCreate по пользователю, "
-        "как PlatformReviewService::save; у модели нет событий и журнала"
-        "; решения модератора (этап 6) — статус, формулировка, кто и когда, "
-        "как PlatformReviewService::decide"
-    ),
     "password_reset_tokens": (
         "сброс пароля (этап 5, шаг 46): токен брокера Laravel — прежний "
         "прочь, новый хешем bcrypt; после смены пароля строка удаляется, "
         "как DatabaseTokenRepository"
-    ),
-    "message_threads": (
-        "разговор в кабинете (этап 5): открытие отмечает прочитанное, как "
-        "MessageThread::markReadFor, — только время прочтения своей стороны "
-        "и updated_at; событий у модели нет. Чат (этап 5, форма): новый "
-        "разговор по отклику и last_message_at с отметкой прочтения отправителя"
     ),
     "sessions": (
         "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
         "StartSession и DatabaseSessionHandler, — продлевает, стирает "
         "одноразовые сообщения, заводит сессию гостю, запоминает адрес и "
         "язык; вход по «запомнить меня» переносит сессию на новый номер"
-    ),
-    "audience_views": (
-        "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
-        "как StatsRecorder::companyView, — только insert строки просмотра, не "
-        "чаще раза в 30 минут на пару компаний; у модели AudienceView событий нет"
     ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
@@ -242,35 +233,6 @@ SHARED_WRITES: dict[str, str] = {
         "при повторной публикации объявления; событий у модели нет"
         "; решения по отзывам в админке (этап 6) — то же событие компании"
     ),
-    "notification_preferences": (
-        "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
-        "строка или email/telegram/updated_at своей; событий у модели нет"
-    ),
-    "contact_unlocks": (
-        "«Мои контакты» (этап 5, форма): статус и заметка, жалоба — "
-        "update изменившихся полей своей строки и updated_at, как "
-        "ContactController; событий и журнала у модели нет"
-        "; раскрытие на визитке (этап 5, шаг 40) — новая строка, как "
-        "ContactUnlockService::charge"
-        "; решение по жалобе в админке (этап 7, шаг 59) — complaint_status, "
-        "refunded, moderator_note, moderated_by, moderated_at, как "
-        "ModerationService::acceptComplaint и ::declineComplaint"
-    ),
-    "reviews": (
-        "отзывы о своей компании (этап 5, форма): ответ и спор — update "
-        "изменившихся полей своей строки и updated_at, как ReviewController; "
-        "рейтинг они не трогают (событие saved пересчитывает его только при "
-        "смене оценки, статуса, компании), у администратора — строка журнала"
-        "; отзыв на визитке (этап 5, шаг 41) — новая строка, как "
-        "ReviewService::create (журнал created у администратора)"
-        "; раздел «Отзывы» админки (этап 6): правка, заведение, загрузка файлом, "
-        "удаление и решения модератора, как ModerationService — у Review "
-        "журнал AuditObserver и строка о решении"
-    ),
-    "messages": (
-        "чат (этап 5, форма): новое сообщение в разговор, как ChatService::send "
-        "(текст уже с маскировкой контактов); событий у модели нет"
-    ),
     "wallets": (
         "квота откликов (этап 5, чат): новый кошелёк компании, как "
         "Wallet::firstOrCreate, и условное списание отклика — "
@@ -285,12 +247,6 @@ SHARED_WRITES: dict[str, str] = {
         "; оплаченный пакет (шаг 54, Wallet::grant) — credits + N и updated_at "
         "построителем, строка истории purchase; обоснованная жалоба (шаг 59) — "
         "кредит обратно (complaint_refund) или contacts_used_this_period - 1"
-    ),
-    "company_documents": (
-        "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "
-        "удаление, как CompanyFileController; у администратора — строка журнала"
-        "; проверка в админке (этап 6): принять и отклонить с причиной, как "
-        "ModerationService — журнал AuditObserver и строка о решении"
     ),
     "promotions": (
         "продвижение объявления за единицы (этап 5, шаг 44): новая строка "
@@ -313,19 +269,6 @@ SHARED_WRITES: dict[str, str] = {
         "загрузка таблицей (savdex/data/company_import.py) — новые компании и "
         "изменившиеся поля найденных, как CompanyImporter; эмблема — logo_path, "
         "как CompanyEmblem::assign"
-    ),
-    "company_site_products": (
-        "товары мини-сайта (этап 5, форма): добавить, изменить, удалить, как "
-        "SiteProductController; событий и журнала у модели нет"
-    ),
-    "company_sites": (
-        "мини-сайт своей компании (этап 5, форма): адрес и оформление "
-        "черновика, публикация и снятие, фон первого экрана, как "
-        "SiteController и CompanySite; событий и журнала у модели нет"
-    ),
-    "company_contacts": (
-        "контакты своей компании (этап 5, форма): добавить, изменить, удалить, "
-        "как CompanyContactController; событий и журнала у модели нет"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "

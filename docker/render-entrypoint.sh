@@ -344,15 +344,15 @@ if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
         ) &
     fi
 
-    # Снятие истёкших объявлений и предупреждение за три дня (этап 4,
-    # шаг 62, python/savdex/web/listing_expiry.py) — вместо расписания
-    # Laravel listings:expire: раз в сутки в 06:00 UTC, пройденный день
-    # помнит storage/app/listings-expire.json
+    # Ежедневные задачи для таблиц Django (python/savdex/schedule.py) —
+    # вместо расписания Laravel: снятие истёкших объявлений в 06:00 UTC
+    # (было listings:expire), чистка «Кто смотрел» в 04:00 (было
+    # audience-views:prune). Пройденные дни помнит storage/app/schedule.json
     (
         set +e
         while true; do
-            runuser -u www-data -- python/.venv/bin/python python/manage.py expire_listings
-            echo "ВНИМАНИЕ: снятие истёкших объявлений остановилось, перезапуск через 60 секунд." >&2
+            runuser -u www-data -- python/.venv/bin/python python/manage.py schedule
+            echo "ВНИМАНИЕ: ежедневные задачи Django остановились, перезапуск через 60 секунд." >&2
             sleep 60
         done
     ) &
