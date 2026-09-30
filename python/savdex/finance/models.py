@@ -209,3 +209,48 @@ class Refund(models.Model):
     def money(self) -> str:
         """Refund::money: «429 500 сум» — с пробелами."""
         return f"{int(self.amount):,}".replace(",", " ") + f" {self.currency}"
+
+
+# ── Жалобы на контакты ──────────────────────────────────────────────
+
+#: Решения по жалобе у Filament
+COMPLAINT_STATUSES = {"pending": "Ждёт", "accepted": "Возвращено", "declined": "Отказано"}
+
+
+class Complaint(models.Model):
+    """
+    App\\Models\\ContactUnlock с жалобой: раскрытый контакт, который
+    покупатель назвал нерабочим. Обоснованная жалоба возвращает кредит —
+    поэтому раздел денежный.
+    """
+
+    company = models.ForeignKey(
+        Company, verbose_name="жалуется", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    target_company = models.ForeignKey(
+        Company, verbose_name="на кого", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    credits_spent = models.IntegerField("списано")
+    complaint_status = models.CharField("решение", max_length=255, null=True)
+    complaint_reason = models.TextField("суть жалобы", null=True)
+    complained_at = UTCDateTimeField("подана", null=True)
+    refunded = models.BooleanField(default=False)
+    moderator_note = models.TextField(null=True)
+    moderated_by = models.ForeignKey(
+        User, verbose_name="решил", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, db_column="moderated_by", related_name="+",
+    )  # fmt: skip
+    moderated_at = UTCDateTimeField(null=True)
+    created_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "contact_unlocks"
+        verbose_name = "жалоба на контакт"
+        verbose_name_plural = "Жалобы на контакты"
+
+    def __str__(self) -> str:
+        return f"Жалоба #{self.pk}"

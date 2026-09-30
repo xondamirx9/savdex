@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Pages\Complaints;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -28,11 +26,6 @@ class AdminAccessTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Все разделы панели, у которых есть экран. */
-    private const ALL = [
-        Complaints::class,
-    ];
-
     private function admin(string $role): User
     {
         return User::factory()->create([
@@ -41,64 +34,6 @@ class AdminAccessTest extends TestCase
             'status' => 'active',
         ]);
     }
-
-    /**
-     * Что каждая роль видит. Всё, чего нет в списке, видеть не должна.
-     *
-     * @return array<string, array{string, list<class-string>}>
-     */
-    public static function разделыРолей(): array
-    {
-        return [
-            'суперадмин' => [AdminAccess::SUPERADMIN, self::ALL],
-
-            'администратор' => [AdminAccess::ADMIN, [
-                Complaints::class,
-            ]],
-
-            'продажи' => [AdminAccess::SALES, []],
-
-            'менеджер поставщиков' => [AdminAccess::SUPPLIER_MANAGER, []],
-
-            'менеджер покупателей' => [AdminAccess::BUYER_MANAGER, []],
-
-            'модератор' => [AdminAccess::MODERATOR, [
-                Complaints::class,
-            ]],
-
-            'финансы' => [AdminAccess::FINANCE, []],
-
-            'поддержка' => [AdminAccess::SUPPORT, [
-                Complaints::class,
-            ]],
-
-            'контент' => [AdminAccess::CONTENT_MANAGER, []],
-        ];
-    }
-
-    /**
-     * @param  list<class-string>  $visible
-     */
-    #[Test]
-    #[DataProvider('разделыРолей')]
-    public function роль_видит_ровно_свои_разделы(string $role, array $visible): void
-    {
-        $this->actingAs($this->admin($role));
-
-        foreach (self::ALL as $section) {
-            $expected = in_array($section, $visible, true);
-
-            $this->assertSame(
-                $expected,
-                $section::canAccess(),
-                $expected
-                    ? "роль «{$role}» должна видеть {$section}"
-                    : "роль «{$role}» не должна видеть {$section}",
-            );
-        }
-    }
-
-    // ── Вход в панель ───────────────────────────────────────────────
 
     #[Test]
     public function обычный_пользователь_в_панель_не_попадает(): void

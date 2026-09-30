@@ -316,6 +316,9 @@ SHARED_WRITES: dict[str, str] = {
         "ContactController; событий и журнала у модели нет"
         "; раскрытие на визитке (этап 5, шаг 40) — новая строка, как "
         "ContactUnlockService::charge"
+        "; решение по жалобе в админке (этап 7, шаг 59) — complaint_status, "
+        "refunded, moderator_note, moderated_by, moderated_at, как "
+        "ModerationService::acceptComplaint и ::declineComplaint"
     ),
     "reviews": (
         "отзывы о своей компании (этап 5, форма): ответ и спор — update "
@@ -344,7 +347,8 @@ SHARED_WRITES: dict[str, str] = {
         "firstOrCreate, единицы продвижения тарифа сверху, обнуление раскрытий и "
         "дата сброса периода"
         "; оплаченный пакет (шаг 54, Wallet::grant) — credits + N и updated_at "
-        "построителем, строка истории purchase"
+        "построителем, строка истории purchase; обоснованная жалоба (шаг 59) — "
+        "кредит обратно (complaint_refund) или contacts_used_this_period - 1"
     ),
     "company_documents": (
         "файлы своей компании (этап 5, шаг 42): загрузка, показ на визитке, "

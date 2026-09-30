@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Pages\Complaints;
 use App\Models\Company;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
@@ -13,9 +12,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\ModerationService;
 use App\Support\AdminAccess;
-use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -79,10 +76,8 @@ class ModerationQueuesTest extends TestCase
         $unlock = $this->complaint();
         $wallet = Wallet::create(['company_id' => $unlock->company_id, 'credits' => 2]);
 
-        Livewire::test(Complaints::class)
-            ->callAction(TestAction::make('accept')->table($unlock), [
-                'note' => 'Контакт проверен, компания не отвечает — возвращаем',
-            ]);
+        // Кнопка — в админке Django (python/savdex/finance); здесь — служба Laravel
+        app(ModerationService::class)->acceptComplaint($unlock, $this->moderator, 'Контакт проверен, компания не отвечает — возвращаем');
 
         $unlock->refresh();
 
@@ -111,10 +106,8 @@ class ModerationQueuesTest extends TestCase
             'contacts_used_this_period' => 3,
         ]);
 
-        Livewire::test(Complaints::class)
-            ->callAction(TestAction::make('accept')->table($unlock), [
-                'note' => 'Контакт проверен, компания не отвечает — возвращаем',
-            ]);
+        // Кнопка — в админке Django (python/savdex/finance); здесь — служба Laravel
+        app(ModerationService::class)->acceptComplaint($unlock, $this->moderator, 'Контакт проверен, компания не отвечает — возвращаем');
 
         $wallet->refresh();
 
@@ -128,10 +121,7 @@ class ModerationQueuesTest extends TestCase
         $unlock = $this->complaint();
         $wallet = Wallet::create(['company_id' => $unlock->company_id, 'credits' => 2]);
 
-        Livewire::test(Complaints::class)
-            ->callAction(TestAction::make('decline')->table($unlock), [
-                'note' => 'Контакт рабочий, дозвонились с первого раза',
-            ]);
+        app(ModerationService::class)->declineComplaint($unlock, $this->moderator, 'Контакт рабочий, дозвонились с первого раза');
 
         $this->assertSame('declined', $unlock->fresh()->complaint_status);
         $this->assertFalse($unlock->fresh()->refunded);
@@ -175,36 +165,6 @@ class ModerationQueuesTest extends TestCase
     {
         $this->assertTrue(AdminAccess::allows('reviews.edit'));
         $this->assertTrue(AdminAccess::allows('documents.moderate'));
-        $this->assertTrue(Complaints::canAccess());
-    }
-
-    /**
-     * Страницы открываются с данными.
-     *
-     * Права и действия проверяются выше по отдельности, но между
-     * рабочим действием и открывающейся страницей есть зазор: битая
-     * колонка или связь без with() роняет список целиком.
-     */
-    #[Test]
-    public function страницы_очередей_открываются(): void
-    {
-        $this->disputed();
-        $this->complaint();
-        $this->document();
-
-        foreach (['/admin/complaints'] as $url) {
-            $this->get($url)->assertSuccessful();
-        }
-    }
-
-    /** Счётчики в меню считают именно нерешённое. */
-    #[Test]
-    public function счётчики_в_меню_показывают_очередь(): void
-    {
-        $this->disputed();
-        $this->complaint();
-        $this->document();
-
-        $this->assertSame('1', Complaints::getNavigationBadge());
+        $this->assertTrue(AdminAccess::allows('complaints.view'));
     }
 }

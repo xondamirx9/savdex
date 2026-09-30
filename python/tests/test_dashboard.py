@@ -510,7 +510,7 @@ def test_очередь_на_проверку_и_два_часа(люди):
     }
     очередь = блок(body, "moderation_queue")
     assert 'href="/py/admin/data/listing/?status=moderation"' in очередь
-    assert 'href="/admin/complaints"' in очередь
+    assert 'href="/py/admin/finance/complaint/"' in очередь
 
 
 # ── Контент ─────────────────────────────────────────────────────────

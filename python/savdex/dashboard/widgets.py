@@ -56,9 +56,6 @@ from savdex.web.shared import _calendar_diff
 #: Строк в таблице виджета — paginated([5]) у Filament
 ROWS = 5
 
-#: Жалобы на контакты ещё в Filament — ссылка в админку Laravel
-COMPLAINTS_URL = "/admin/complaints"
-
 
 @dataclass(frozen=True)
 class Context:
@@ -509,7 +506,13 @@ def moderation_queue(ctx: Context) -> dict[str, Any]:
             count, oldest = cursor.fetchone()
 
         stats.append(
-            _queue("Жалобы на контакты", int(count), _aware(oldest), COMPLAINTS_URL, ctx.now)
+            _queue(
+                "Жалобы на контакты",
+                int(count),
+                _aware(oldest),
+                _list("finance_complaint"),
+                ctx.now,
+            )
         )
 
     return {"heading": "Очередь на проверку", "stats": stats}

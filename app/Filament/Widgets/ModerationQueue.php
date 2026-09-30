@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Pages\Complaints;
 use App\Models\CompanyDocument;
 use App\Models\ContactUnlock;
 use App\Models\Listing;
@@ -82,7 +81,8 @@ class ModerationQueue extends StatsOverviewWidget
                 ContactUnlock::where('complaint_status', 'pending')->count(),
                 ContactUnlock::where('complaint_status', 'pending')->min('complained_at'),
                 'heroicon-o-exclamation-triangle',
-                Complaints::getUrl(),
+                // Раздел «Жалобы на контакты» — на Django (этап 7)
+                '/admin/python?next=/py/admin/finance/complaint/',
             );
         }
 
