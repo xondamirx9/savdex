@@ -29,6 +29,9 @@ class Payment extends Model
         'refunded' => 'Возвращён',
     ];
 
+    /** Что попадает в «Историю платежей» кабинета: деньги действительно пришли. */
+    public const HISTORY_STATUSES = ['paid', 'refunded'];
+
     protected function casts(): array
     {
         return ['paid_at' => 'datetime', 'amount' => 'integer'];
