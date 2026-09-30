@@ -65,7 +65,7 @@ class TestУзкоеРазрешение:
 
     def test_разрешение_не_распространяется_на_другие_таблицы(self):
         with guards.allowed_writes("users"), pytest.raises(WriteToForeignTableError):
-            guards.check("update companies set status = 'active'")
+            guards.check("update wallets set credits = 0")
 
     def test_незаявленную_таблицу_разрешить_нельзя(self):
         with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("failed_jobs"):
