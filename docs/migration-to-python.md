@@ -1825,11 +1825,25 @@ Filament — этап 6. (Страница кассы и печатный счё
 `savdex:copy-database`, код без вызовов (`ModerationService`,
 `PlatformReviewService::approve`, `Notifier::broadcast`).
 
-Не в этом шаге: `companies` (пересчёт рейтингов `ratings:recalculate` —
-шаг 64), `user_notifications` (просьбы об отзыве `reviews:ask` — шаг 65;
+Не в этом шаге: `companies` (пересчёт рейтингов — шаг 64, ниже), `user_notifications` (просьбы об отзыве `reviews:ask` — шаг 65;
 денежный `billing:reset-periods` пишет туда же, поэтому таблица станет
 общей на добавление до передачи денег), `users` (смена языка `?hl=` и
 вход в админку Filament — шаг 66).
+
+**Шаг 64. Хозяин `companies` — Django** ✅ (30.09.2026). Последний живой
+писатель Laravel — ежедневный пересчёт рейтингов `ratings:recalculate`
+(03:00) — перенесён в общее расписание Django (`savdex/schedule.py`,
+задача `ratings_recalculate`): байесовская формула
+`(5 × среднее по площадке + сумма оценок) / (5 + число отзывов)` по
+опубликованным отзывам, без отзывов вообще — среднее 4,0; сохранение как
+`forceFill()->save()` — `search_text` заново, `updated_at` только при
+изменении, удалённые компании не трогаются. Из расписания Laravel убран
+(команда осталась для сверки). `companies` — в `OWNED_TABLES`, права
+хозяина — `2026_10_11_120000_grant_django_companies_owner`. Сверка —
+`test_рейтинги_как_у_laravel` в `tests/test_schedule.py` (та же база, что
+после команды Laravel). Остальные писатели Laravel — те же исключения,
+что на шаге 62: аварийный откат форм, демо-стенд (`ShowcaseSeeder`,
+`CabinetDemoSeeder`), ручной `savdex:copy-database`.
 
 **Госзакупки** (задача владельца, первая новая возможность только на
 Python). Признак `tenders.is_government` (миграция Laravel — схемой пока
@@ -2718,7 +2732,7 @@ PHP-команда остаётся рядом, пока Python-версией �
 |---|---|---|
 | `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 — перенесено (шаг 62, задача `expire_listings` в `manage.py schedule`) |
 | `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 |
-| `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 |
+| `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 — перенесено (шаг 64, задача `ratings_recalculate` в `manage.py schedule`) |
 | `reviews:ask` | `user_notifications` | Просьбы оставить отзыв о площадке и о компании — колокольчик переезжает с кабинетом. Этап 5 |
 | `billing:reset-periods` | `wallets`, `subscriptions`, `companies` | Деньги. Этап 7 |
 | `savdex:copy-database` | чужая база | Разовый инструмент переезда на PostgreSQL, переносить незачем |

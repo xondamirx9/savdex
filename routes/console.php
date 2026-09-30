@@ -50,12 +50,9 @@ Schedule::command('billing:reset-periods')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Рейтинг байесовский и зависит от среднего по площадке: он меняется
-// у всех, когда появляются новые отзывы, поэтому считается целиком
-Schedule::command('ratings:recalculate')
-    ->dailyAt('03:00')
-    ->withoutOverlapping()
-    ->onOneServer();
+// Пересчёт рейтингов (ratings:recalculate, 03:00) ведёт Django — хозяин
+// companies с этапа 5 (python/savdex/schedule.py). Команда осталась:
+// ею сверяется Python-версия (python/tests/test_schedule.py)
 
 // Просьбы оставить отзыв — днём по Ташкенту, а не ночью: уведомление
 // в колокольчике читают, когда человек на площадке (AskForReviews)

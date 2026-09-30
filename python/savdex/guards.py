@@ -153,6 +153,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         "notifications",
         "notification_preferences",
         "broadcasts",
+        # Этап 5 (шаг 64): компании. Последний живой писатель Laravel —
+        # пересчёт рейтингов ratings:recalculate — перенесён в
+        # savdex/schedule.py; событие saving (search_text) у Django своё
+        "companies",
     }
 )
 
@@ -255,20 +259,6 @@ SHARED_WRITES: dict[str, str] = {
     "wallet_transactions": (
         "история кошелька (этап 5, шаг 40): строка списания кредита за "
         "раскрытие контактов, как Wallet::spend; событий у модели нет"
-    ),
-    "companies": (
-        "профиль своей компании (этап 5, форма): правка полей формы и "
-        "search_text, новая компания с адресом из названия, как "
-        "CompanyProfileController::update; журнал администратора — как AuditObserver"
-        "; данные компании в настройках (шаг 51) — те же поля и profile_changed_at "
-        "при смене заполненного, как CompanyInfoController::update"
-        "; рейтинг и число отзывов (этап 5, шаг 41) — ReviewService::recalculate"
-        " (и после решений по отзывам в админке, этап 6)"
-        "; раздел «Компании» админки (этап 6, savdex/data) — правка формой, "
-        "верификация, партнёрство, логотип и обложка, блокировка, корзина; "
-        "загрузка таблицей (savdex/data/company_import.py) — новые компании и "
-        "изменившиеся поля найденных, как CompanyImporter; эмблема — logo_path, "
-        "как CompanyEmblem::assign"
     ),
     "cache": (
         "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "

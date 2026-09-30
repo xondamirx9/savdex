@@ -112,7 +112,7 @@ def _written(cast: str | None, value: Any) -> Any:  # noqa: ANN401
 
 
 def save(
-    ctx: Context,
+    ctx: Context | None,
     table: str,
     row: dict[str, Any],
     changes: dict[str, Any],
@@ -161,7 +161,7 @@ def save(
     row.update(dirty, updated_at=now)
 
     # Наблюдатель срабатывает после записи: подпись — по новым значениям
-    if section is not None:
+    if section is not None and ctx is not None:
         journal(
             ctx,
             "updated",

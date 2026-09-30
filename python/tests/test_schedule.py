@@ -30,7 +30,7 @@ pytestmark = нужна_база
 def компании() -> list[int]:
     свежая_база()
     php(
-        "App\\Models\\Company::factory()->count(2)->create(); echo 'ok';",
+        "App\\Models\\Company::factory()->count(4)->create(); echo 'ok';",
         БЕЗ_ПЕРЕВОДА,
     )
 
@@ -96,11 +96,63 @@ def test_первый_запуск_после_часа_день_пропуска
     assert json.loads(state.read_text()) == {
         "audience_views_prune": now.date().isoformat(),
         "expire_listings": now.date().isoformat(),
+        "ratings_recalculate": now.date().isoformat(),
     }
     assert sql("select count(*) from audience_views") == [(5,)]
+
+
+def рейтинги(компании: list[int]) -> None:
+    sql(
+        "update companies set deleted_at = null, rating = 0, reviews_count = 0, "
+        "search_text = 'stale', updated_at = '2026-01-01 00:00:00'"
+    )
+    sql("truncate reviews restart identity cascade")
+    a, b, c, d = компании
+    # (о ком, от кого, оценка, статус)
+    for company, author, rating, status in (
+        (a, b, 5, "published"),
+        (a, c, 4, "published"),
+        (a, d, 1, "moderation"),
+        (b, a, 3, "published"),
+        (d, a, 5, "published"),
+        (d, b, 5, "published"),
+    ):
+        sql(
+            "insert into reviews (company_id, author_company_id, rating, body, status, "
+            "created_at, updated_at) values (%s, %s, %s, 'Отзыв', %s, now(), now())",
+            [company, author, rating, status],
+        )
+    # Удалённую компанию Laravel не пересчитывает (SoftDeletes)
+    sql("update companies set deleted_at = now() where id = %s", [d])
+
+
+def рейтинги_снимок() -> list[tuple]:
+    return sql(
+        "select id, rating::text, reviews_count, search_text, "
+        "updated_at > '2026-01-01 00:00:00' from companies order by id"
+    )
+
+
+def test_рейтинги_как_у_laravel(компании, tmp_path):
+    рейтинги(компании)
+    php(
+        "Illuminate\\Support\\Facades\\Artisan::call('ratings:recalculate'); echo 'ok';",
+        БЕЗ_ПЕРЕВОДА,
+    )
+    л = рейтинги_снимок()
+
+    рейтинги(компании)
+    вывод = schedule("--once", "ratings_recalculate", state=tmp_path / "state")
+    д = рейтинги_снимок()
+
+    assert д == л, (д, л)
+    # Среднее по площадке — (5 + 4 + 3 + 5 + 5) / 5 = 4,4: у a (5×4,4+9)/7
+    assert д[0][1:3] == ("4.43", 2) and д[2][1:3] == ("0.00", 0)
+    assert "Пересчитано компаний: 3." in вывод
 
 
 def test_список_задач(компании, tmp_path):
     вывод = schedule("--list", state=tmp_path / "state")
 
+    assert "ratings_recalculate\t03:00" in вывод
     assert "audience_views_prune\t04:00" in вывод and "expire_listings\t06:00" in вывод

@@ -70,7 +70,53 @@ def prune_audience_views(now: datetime, due: datetime) -> str:
     return f"Удалено просмотров: {deleted}."
 
 
+def recalculate_ratings(now: datetime, due: datetime) -> str:
+    """
+    ratings:recalculate (03:00): байесовский рейтинг каждой компании —
+    (5 × среднее по площадке + сумма оценок) / (5 + число отзывов), только
+    опубликованные. Среднее меняется у всех с каждым новым отзывом, поэтому
+    целиком. Сохранение — как forceFill()->save(): search_text заново,
+    updated_at, только если что-то изменилось; журнала нет (не администратор).
+    """
+    from savdex.web import eloquent
+    from savdex.web.cabinet import _rows
+    from savdex.web.company_profile_actions import _search_text
+    from savdex.web.review_actions import COMPANY_CASTS, WEIGHT, _php_round
+
+    average = _rows("select avg(rating) as a from reviews where status = 'published'")[0]["a"]
+    # Отзывов нет вообще — нейтральная середина, а не «5» первой же компании
+    global_average = float(average or 0) or 4.0
+    stats = {
+        row["company_id"]: (int(row["total"]), float(row["sum_rating"] or 0))
+        for row in _rows(
+            "select company_id, count(*) as total, sum(rating) as sum_rating from reviews "
+            "where status = 'published' group by company_id"
+        )
+    }
+    companies = _rows("select * from companies where deleted_at is null order by id")
+
+    for company in companies:
+        count, total = stats.get(company["id"], (0, 0.0))
+        rating = (WEIGHT * global_average + total) / (WEIGHT + count) if count > 0 else 0.0
+        eloquent.save(
+            None,
+            "companies",
+            company,
+            {"rating": _php_round(rating, 2), "reviews_count": count},
+            section=None,
+            model="Company",
+            saving=_search_text,
+            casts=COMPANY_CASTS,
+        )
+
+    return (
+        f"Пересчитано компаний: {len(companies)}. "
+        f"Среднее по площадке: {_php_round(global_average, 2)}"
+    )
+
+
 JOBS: tuple[Job, ...] = (
+    Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
     Job("expire_listings", time(6, 0), expire_listings),
 )
