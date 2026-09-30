@@ -835,8 +835,9 @@ Django не переписывает: их выгружает сам Laravel к�
 сессии, скрытая страница (404), машинный перевод, SEO-робот.
 
 **Включение и откат.** Адреса страницы доходят до Django, только если
-её группа есть в переменной `SAVDEX_PY_PAGES` (сейчас `docs,news,about,directory,legal,pricing,home,reviews`,
-`docker/apache-python.conf`). Откат без выкладки: в настройках Render
+её группа есть в переменной `SAVDEX_PY_PAGES` (по умолчанию — все группы:
+`docs,news,about,directory,legal,pricing,home,reviews,tenders,services,companies,catalog,cabinet,auth,forms,payments`;
+`docker/render-entrypoint.sh`, `docker/apache-python.conf`). Откат без выкладки: в настройках Render
 задать `SAVDEX_PY_PAGES` пустой и перезапустить — страницы снова отдаёт
 Laravel. Django получает только читающие запросы (GET, HEAD) основного
 домена и без `?hl=`: смена языка, формы, мини-сайты компаний и служебный
@@ -1316,9 +1317,9 @@ conversion»; Django отдаёт ту же страницу 500 с кодом �
 могло. Перенесено; сверка — `tests/test_web_auth.py`
 (`test_шаг_компании_после_регистрации`).
 
-**Шаг 21 — основа форм и первые формы** (группа `forms`, по умолчанию
-**выключена** — включается добавлением `forms` в `SAVDEX_PY_PAGES`, когда
-страницы поработают на боевом). Основа — `savdex/web/forms.py`: порядок
+**Шаг 21 — основа форм и первые формы** (группа `forms`; до 30.09.2026
+была выключена, теперь включена по умолчанию — выключается, если убрать
+`forms` из `SAVDEX_PY_PAGES`). Основа — `savdex/web/forms.py`: порядок
 посредников Laravel для POST после сортировки по приоритетам — CSRF →
 `auth` → `throttle` → `SetLocale` → `HandleInertiaRequests` →
 `RequirePasswordChange`. CSRF — как `PreventRequestForgery`: пропуск при
@@ -1742,8 +1743,8 @@ JSON, группа `forms`): `GET/PATCH /cabinet/settings/company-info` и
 
 **Итог этапа 5.** Все адреса сайта и кабинета, кроме денег, есть у
 Django: страницы (группы `cabinet`, `auth` и прочие — включены) и формы
-(группа `forms` — по решению владельца выключена, включается добавлением
-`forms` в `SAVDEX_PY_PAGES`). У Laravel остаются касса кабинета
+(группа `forms` — по решению владельца включена по умолчанию с 30.09.2026,
+выключается, если убрать `forms` из `SAVDEX_PY_PAGES`). У Laravel остаются касса кабинета
 `/cabinet/billing` и приём платежей `/payments/…` — этап 7, и админка
 Filament — этап 6. (Страница кассы и печатный счёт перешли к Django
 на шаге 52 этапа 7.)
@@ -2211,8 +2212,9 @@ Subscription у администратора — в журнал. Запись �
 кредитами в кошелёк с историей, уведомление компании; всё одной
 транзакцией. Права роли — `2026_10_09_120000_grant_django_payment_callbacks`.
 Сверка — `tests/test_web_payment_callbacks.py` (время в ответах — только
-«есть»). Включение: `payments` в `SAVDEX_PY_PAGES` — лучше вместе с
-шагом 55, когда Laravel начнёт пересчитывать и сверять.
+«есть»). Группа `payments` в `SAVDEX_PY_PAGES` включена по умолчанию с
+30.09.2026 (вместе с `forms`, сверка шага 55 уже идёт); откат — убрать
+её из переменной.
 
 **Шаг 55. Сверка денег** ✅ (`savdex/payments/reconcile.py`, команда
 `manage.py reconcile_billing`, в контейнере — проход раз в час, откат —

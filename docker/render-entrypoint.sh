@@ -305,9 +305,11 @@ runuser -u www-data -- php artisan savdex:export-ui \
 
 # Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
 # все снова отдаёт Laravel: это откат без выкладки, через переменную в
-# настройках Render и перезапуск. Формы кабинета (группа forms) по
-# умолчанию выключены: включаются, когда страницы поработают на боевом.
-export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing,home,reviews,tenders,services,companies,catalog,cabinet,auth}"
+# настройках Render и перезапуск. Формы сайта и кабинета (forms, с кассой)
+# и приём денег от шлюза (payments) включены по решению владельца;
+# выключить одну группу — перечислить в переменной остальные. Если
+# SAVDEX_PY_PAGES задана в настройках Render, действует она, а не этот список.
+export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing,home,reviews,tenders,services,companies,catalog,cabinet,auth,forms,payments}"
 # Основной домен (хост из APP_URL): только его страницы отдаёт Django
 export SAVDEX_HOST="$(printf '%s' "${APP_URL:-}" | sed -E 's#^[a-z]+://##; s#/.*$##')"
 
