@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia
+from savdex.web import content, inertia, platform
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
@@ -549,10 +549,12 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     card = business_card(ctx, c, translations)
     seo = _seo(ctx, c, card)
     visible, params = visible_in(ctx.locale)
+    # Заявки площадки у служебной компании — не её объявления (PlatformListings)
+    hidden, hidden_params = platform.exclude_sql(platform.service_company_id())
     listings = _rows(
         "select count(*) as n from listings l where l.company_id = %s and l.status = 'active' "
-        f"and l.deleted_at is null{visible}",
-        [c["id"], *params],
+        f"and l.deleted_at is null{hidden}{visible}",
+        [c["id"], *hidden_params, *params],
     )[0]["n"]
 
     return inertia.render(

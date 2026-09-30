@@ -425,6 +425,8 @@ return [
         'moq_label' => 'Min. partiya',
         'verified_seller' => 'Tekshirilgan sotuvchi',
         'responds_in' => ':hours soatda javob beradi',
+        'platform_badge' => 'Platforma arizasi',
+        'platform_note' => 'Bu arizani SavdEx platformasi to‘pladi. Javob bering — sizni xaridor bilan bog‘laymiz.',
         'open_offer' => 'Taklifni ochish',
         'trust' => 'Obro‘ :percent%',
         'trust_hint' => 'Yetkazib beruvchi profilining to‘ldirilganligi: rekvizitlar, kontaktlar, tavsif, hujjatlar',

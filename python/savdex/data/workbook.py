@@ -81,7 +81,6 @@ from __future__ import annotations
 import io
 import json
 import logging
-import os
 import posixpath
 import re
 import tempfile
@@ -501,34 +500,11 @@ def city_id(value: str | None) -> int | None:
     return None
 
 
-#: Служебная компания площадки: ей достаются заявки без компании, пока
-#: не найден настоящий владелец (потом их передают из админки)
-SERVICE_COMPANY = "Anjir Group"
-
-
 def service_company_id() -> int | None:
-    """
-    Служебная компания: SAVDEX_SERVICE_COMPANY (номер, ИНН или название),
-    иначе компания, в названии которой есть «Anjir Group» — с любым
-    «ООО» впереди, латиницей или кириллицей.
-    """
-    configured = _trim(os.environ.get("SAVDEX_SERVICE_COMPANY") or "")
+    """Служебная компания — как у витрины (savdex/web/platform.py)."""
+    from savdex.web.platform import service_company_id as lookup
 
-    if configured.isdigit() and _rows(
-        "select 1 from companies where id = %s and deleted_at is null", [int(configured)]
-    ):
-        return int(configured)
-
-    if configured:
-        return company_id(configured)
-
-    needle = importer.normalize(SERVICE_COMPANY)
-
-    for row in _rows("select id, name from companies where deleted_at is null order by id"):
-        if needle in importer.normalize(row["name"]):
-            return int(row["id"])
-
-    return None
+    return lookup()
 
 
 def company_name(company: int | None) -> str:

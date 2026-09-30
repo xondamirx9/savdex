@@ -23,8 +23,11 @@ class SeoBuilders
     /** Карточка объявления — главная посадочная страница площадки. */
     public function listing(Listing $listing): void
     {
+        // Заявка площадки подписана SavdEx, а не служебной компанией
+        $platform = PlatformListings::owns($listing);
         $company = $listing->company;
-        $city = $company?->city?->name();
+        $city = $platform ? $listing->city?->name() : $company?->city?->name();
+        $seller = $platform ? PlatformListings::NAME : $company?->name;
 
         $price = $listing->price_negotiable || $listing->price === null
             ? 'цена договорная'
@@ -32,7 +35,7 @@ class SeoBuilders
 
         $this->seo
             ->title($listing->localizedTitle().($city !== null ? " — {$city}" : ''))
-            ->description($listing->localizedDescription() ?: "{$listing->localizedTitle()}. {$price}. Поставщик: {$company?->name}.")
+            ->description($listing->localizedDescription() ?: "{$listing->localizedTitle()}. {$price}. Поставщик: {$seller}.")
             ->canonical(url('/listing/'.$listing->slug))
             ->onlyLocales($listing->visibleLocales())
             /*
@@ -44,7 +47,7 @@ class SeoBuilders
             ->image(url("/og/listing/{$listing->id}.jpg"))
             ->imageMeta(1200, 630, 'image/jpeg')
             ->type('product')
-            ->schema($this->productSchema($listing, $company))
+            ->schema($this->productSchema($listing, $seller))
             ->schema($this->breadcrumbs([
                 'Каталог' => url('/catalog'),
                 $listing->category?->name() ?? 'Объявления' => $listing->category_id !== null
@@ -62,7 +65,7 @@ class SeoBuilders
      *
      * @return array<string, mixed>
      */
-    private function productSchema(Listing $listing, ?Company $company): array
+    private function productSchema(Listing $listing, ?string $seller): array
     {
         $schema = [
             '@type' => 'Product',
@@ -84,7 +87,7 @@ class SeoBuilders
                 'priceCurrency' => $listing->currency,
                 'availability' => 'https://schema.org/InStock',
                 'url' => url('/listing/'.$listing->slug),
-                'seller' => ['@type' => 'Organization', 'name' => $company?->name],
+                'seller' => ['@type' => 'Organization', 'name' => $seller],
             ];
         }
 

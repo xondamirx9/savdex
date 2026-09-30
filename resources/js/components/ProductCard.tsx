@@ -44,6 +44,8 @@ export interface ProductRow {
         trust: number;
         /** За сколько часов компания обычно отвечает; null — не измеряли */
         response_hours: number | null;
+        /** Заявка площадки: подписана SavdEx, а не служебной компанией */
+        platform?: boolean;
     };
     badges: string[];
     promoted: boolean;
@@ -213,6 +215,7 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         {/* Имя собственное: браузерный переводчик превращал
                             «OOO Tranquil» в «ООО Спокойствие» */}
                         <b className="notranslate" translate="no">{row.company.name}</b>
+                        {row.company.platform && <span className="muted">· {t('catalog.platform_badge')}</span>}
                         {row.company.rating > 0 && (
                             <span className="listing-rating">
                                 <Star aria-hidden className="size-3" style={{ fill: 'currentColor', color: 'var(--warning)' }} />

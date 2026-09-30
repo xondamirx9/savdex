@@ -422,6 +422,8 @@ return [
         'moq_label' => 'Min. parti',
         'verified_seller' => 'Doğrulanmış satıcı',
         'responds_in' => ':hours saatte yanıtlıyor',
+        'platform_badge' => 'Platform talebi',
+        'platform_note' => 'Bu talebi SavdEx topladı. Yanıt verin, sizi alıcıyla buluşturalım.',
         'open_offer' => 'Teklifi aç',
         'trust' => 'İtibar %:percent',
         'trust_hint' => 'Tedarikçi profilinin doluluk oranı: bilgiler, iletişim, açıklama, belgeler',

@@ -25,7 +25,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 
-from savdex.web import content, inertia, locales
+from savdex.web import content, inertia, locales, platform
 from savdex.web.cabinet import (
     _microsite_domain,
     _rows,
@@ -219,12 +219,14 @@ def _products(ctx: Context, company_id: int) -> list[dict[str, Any]]:
         )
     ]
     visible, params = visible_in(ctx.locale)
+    # Заявки площадки у служебной компании — не её товары (PlatformListings)
+    hidden, hidden_params = platform.exclude_sql(platform.service_company_id())
     rows = _rows(
         f"select l.*, {_LISTING_COMPANY} from listings l "
         "left join companies c on c.id = l.company_id and c.deleted_at is null "
         "where l.company_id = %s and l.status = 'active' and l.deleted_at is null"
-        f"{visible} order by l.published_at desc limit %s",
-        [company_id, *params, LISTINGS],
+        f"{hidden}{visible} order by l.published_at desc limit %s",
+        [company_id, *hidden_params, *params, LISTINGS],
     )
     cards = Cards(ctx, settings_values(), content.Translations(ctx.locale)).present(rows)
     listings = [
