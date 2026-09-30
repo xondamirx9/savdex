@@ -19,6 +19,9 @@ use Tests\TestCase;
  * Место на первом экране продаётся вместе с тарифом, поэтому в ленту
  * попадают только объявления компаний с действующей подпиской VIP.
  * Остальные видны в каталоге, куда ведёт ссылка «Все товары».
+ *
+ * Ниже витрины — лента «Товары»: свежие предложения всех компаний,
+ * без карточек, что уже стоят в витрине VIP.
  */
 class HomeVipFeedTest extends TestCase
 {
@@ -104,6 +107,50 @@ class HomeVipFeedTest extends TestCase
         $this->listing($forever, 'Цемент бессрочного VIP');
 
         $this->assertSame(['Цемент бессрочного VIP'], $this->feedTitles());
+    }
+
+    /** @return list<string> */
+    private function productTitles(): array
+    {
+        $page = $this->get('/')->assertOk()->viewData('page');
+
+        return array_column($page['props']['products'], 'title');
+    }
+
+    #[Test]
+    public function лента_товаров_показывает_всех_кроме_витрины_vip(): void
+    {
+        $this->listing($this->company('VIP-поставщик', Plan::VIP), 'Цемент от VIP');
+        $this->listing($this->company('Бесплатный поставщик', null), 'Цемент без тарифа');
+        $this->listing($this->company('Премиум-поставщик', 'premium'), 'Цемент от Premium');
+
+        $this->assertEqualsCanonicalizing(['Цемент без тарифа', 'Цемент от Premium'], $this->productTitles());
+    }
+
+    #[Test]
+    public function в_ленте_товаров_нет_запросов_и_чужих_компаний(): void
+    {
+        $company = $this->company('Обычный поставщик', null);
+        $this->listing($company, 'Цемент без тарифа');
+        $this->listing($company, 'Куплю цемент')->update(['type' => Listing::TYPE_DEMAND]);
+        $blocked = $this->company('Заблокированная', null);
+        $this->listing($blocked, 'Цемент заблокированной');
+        $blocked->update(['status' => Company::STATUS_BLOCKED]);
+
+        $this->assertSame(['Цемент без тарифа'], $this->productTitles());
+    }
+
+    #[Test]
+    public function у_ленты_товаров_своя_секция_в_админке(): void
+    {
+        $this->listing($this->company('Обычный поставщик', null), 'Цемент без тарифа');
+
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('blocks.products.heading', 'Товары')
+            ->where('blocks.products.visible', true));
+
+        $this->get('/en')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('blocks.products.heading', 'Products'));
     }
 
     #[Test]

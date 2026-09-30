@@ -512,6 +512,7 @@ LANDING_KEYS: tuple[str, ...] = (
     "stats",
     "categories",
     "vip",
+    "products",
     "requests",
     "suppliers",
     "how",

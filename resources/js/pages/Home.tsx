@@ -310,6 +310,7 @@ export default function Home({
     categories,
     services,
     latest,
+    products,
     requests,
     suppliers,
     countries,
@@ -325,6 +326,8 @@ export default function Home({
     /** Две популярные услуги — плитки рядом с категориями */
     services: ServiceTile[];
     latest: ProductRow[];
+    /** Лента «Товары»: свежие предложения всех компаний, без карточек витрины VIP */
+    products: ProductRow[];
     requests: ProductRow[];
     suppliers: SupplierRow[];
     countries: CountryOption[];
@@ -520,6 +523,27 @@ export default function Home({
                         </div>
                         <CardRow>
                             {latest.map((row) => (
+                                <ProductCard key={row.id} row={row} />
+                            ))}
+                        </CardRow>
+                    </div>
+                </section>
+            )}
+
+            {/* ── Товары: свежие предложения всех компаний. Витрина VIP
+                 выше только для высшего тарифа и бывает пуста — без этой
+                 ленты между категориями и поставщиками товаров не было ── */}
+            {shown('products') && products.length > 0 && (
+                <section className="section--tight">
+                    <div className="container">
+                        <div className="section-bar">
+                            <h2>{block('products').heading}</h2>
+                            <Link href={routes.catalog} className="section-bar-link">
+                                {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                            </Link>
+                        </div>
+                        <CardRow>
+                            {products.map((row) => (
                                 <ProductCard key={row.id} row={row} />
                             ))}
                         </CardRow>
