@@ -297,6 +297,35 @@ def test_компания_меняется_в_форме(люди):
     assert журнал("updated")["changes"]["after"]["company_id"] == владелец
 
 
+def test_опубликовать_отмеченные(люди):
+    """«Одобрить» пачкой: на проверке — на витрину, опубликованное пропускается."""
+    первая = _объявление("Куплю цемент М400")
+    вторая = _объявление("Куплю арматуру А500")
+    уже = _объявление("Кирпич облицовочный", status="active")
+    отмечены = {
+        "action": "approve_selected",
+        "_selected_action": [str(первая), str(вторая), str(уже)],
+    }
+
+    # Без права одобрять — ничего не публикуется
+    django(люди["support"], ("post", LIST, отмечены))
+    assert sql("select count(*) from listings where status = 'active'") == [(1,)]
+
+    _, ответ = django(люди["moderator"], ("post", LIST, отмечены))
+
+    assert ответ["status"] == 302
+    assert sql("select id, status from listings order by id") == [
+        (первая, "active"),
+        (вторая, "active"),
+        (уже, "active"),
+    ]
+    assert sql(
+        "select count(*) from listings where id in (%s, %s) and published_at is not null "
+        "and expires_at is not null",
+        [первая, вторая],
+    ) == [(2,)]
+
+
 def test_передать_компании_пачкой(люди):
     служебная = _ещё_компания("ООО Anjir Group")
     первая = _объявление("Куплю цемент М400", company_id=служебная)

@@ -297,6 +297,7 @@ def import_workbooks(
     ip: str | None = None,
     default_company: int | None = None,
     default_type: str = "supply",
+    publish: bool = False,
 ) -> WorkbookResult:
     """
     Действие importWorkbook в ListingsTable: книги подряд, итоги
@@ -327,6 +328,7 @@ def import_workbooks(
             ip=ip,
             default_company=default_company,
             default_type=default_type,
+            publish=publish,
         )
 
         total["rows"] += result["rows"]
@@ -364,6 +366,7 @@ def import_workbook(
     ip: str | None = None,
     default_company: int | None = None,
     default_type: str = "supply",
+    publish: bool = False,
 ) -> WorkbookResult:
     """
     ListingWorkbookImport::run — одна книга. author_id — автор новых
@@ -377,6 +380,7 @@ def import_workbook(
         ip=ip,
         default_company=default_company,
         default_type="demand" if default_type == "demand" else "supply",
+        publish=publish,
     ).run(content)
 
 
@@ -1268,6 +1272,8 @@ class _Import:
     service_looked_up: bool = False
     #: Тип новых объявлений, когда в книге нет столбца «Тип» или ячейка пуста
     default_type: str = "supply"
+    #: «Сразу опубликовать»: новые строки — на витрину, без проверки
+    publish: bool = False
     #: Ячейки, которые пришлось пропустить в текущей строке: незнакомая
     #: категория, город не из справочника — пропускаются, а объявление
     #: загружается. Сбрасывается перед каждой строкой
@@ -1659,8 +1665,13 @@ class _Import:
         if not exists:
             listing["user_id"] = self.author_id
             listing["type"] = self.default_type
-            # Ждёт проверки: публикует администратор из списка
-            listing["status"] = "moderation"
+            # Ждёт проверки: публикует администратор из списка — или сразу,
+            # галочкой «Сразу опубликовать» в окне загрузки
+            listing["status"] = "active" if self.publish else "moderation"
+        elif self.publish and listing.get("status") == "moderation":
+            # Ждавшее проверки с прошлой загрузки публикуется той же галочкой;
+            # отклонённое и снятое — нет: это решение модератора
+            listing["status"] = "active"
 
         # Объявление, которое ведут книгой, живёт по правилам книги
         listing["source"] = "import"
