@@ -146,11 +146,14 @@ jobs:
           # Стили админки Django собраны при сборке и отдаются через Apache
           curl -fsS -o /dev/null http://127.0.0.1:18080/py/static/admin/css/base.css
           # Страницы сайта на Django (этап 3): «Помощь» отдаёт Django — без
-          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — Laravel
+          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — тоже
+          # Django (шаг 70): переход на адрес выбранного языка
           curl -fsS -D /tmp/help.h -o /tmp/help.html http://127.0.0.1:18080/help
           ! grep -qi '^x-powered-by: php' /tmp/help.h
           grep -q '"component":"DocPage"' /tmp/help.html
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/help?hl=ru' | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/help?hl=uz'
+          ! grep -qi '^x-powered-by: php' /tmp/hl.h
+          grep -qi '^location: http://127.0.0.1:18080/uz/help' /tmp/hl.h
           # Новости, «О компании», страны, партнёры, документы и тарифы — тоже Django
           for page in news about contact countries partners terms privacy pricing reviews; do
             curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"

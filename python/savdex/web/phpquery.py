@@ -18,7 +18,7 @@ import math
 import re
 from functools import cmp_to_key
 from typing import Union
-from urllib.parse import quote_from_bytes, unquote_to_bytes
+from urllib.parse import quote_from_bytes, quote_plus, unquote_to_bytes
 
 #: Значение после parse_str: строка или массив PHP (ключи — int или str);
 #: None — после ConvertEmptyStringsToNull (laravel_input)
@@ -206,20 +206,29 @@ def _encode(text: str) -> str:
     return quote_from_bytes(text.encode("latin-1"), safe="")
 
 
-def build_query(array: Array) -> str:
-    """http_build_query(…, PHP_QUERY_RFC3986)."""
+def _urlencode(text: str) -> str:
+    """urlencode: пробел — «+», «~» — %7E, как PHP_QUERY_RFC1738."""
+    return quote_plus(text.encode("latin-1"), safe="").replace("~", "%7E")
+
+
+def build_query(array: Array, rfc1738: bool = False) -> str:
+    """
+    http_build_query(…, PHP_QUERY_RFC3986); rfc1738 — по умолчанию PHP
+    (http_build_query без третьего аргумента).
+    """
+    encode = _urlencode if rfc1738 else _encode
     out: list[str] = []
 
     def walk(prefix: str, value: Value) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
-                walk(f"{prefix}%5B{_encode(str(key))}%5D", child)
+                walk(f"{prefix}%5B{encode(str(key))}%5D", child)
         elif value is not None:
             # null http_build_query пропускает
-            out.append(f"{prefix}={_encode(value)}")
+            out.append(f"{prefix}={encode(value)}")
 
     for key, value in array.items():
-        walk(_encode(str(key)), value)
+        walk(encode(str(key)), value)
 
     return "&".join(out)
 

@@ -1,10 +1,10 @@
 """
-Ежедневные задачи Django (savdex/schedule.py) — вместо расписания
-Laravel для таблиц, которыми владеет Django.
+Задачи по расписанию Django (savdex/schedule.py) — вместо расписания
+Laravel (routes/console.php).
 
   manage.py schedule              бесконечно: проверка раз в минуту
   manage.py schedule --once ИМЯ   одна задача сейчас (окна — от «сейчас»)
-  manage.py schedule --list       задачи, их час и пройденный день
+  manage.py schedule --list       задачи, их час и пройденный день (момент)
 """
 
 from __future__ import annotations
@@ -35,7 +35,8 @@ class Command(BaseCommand):
             state = schedule.load()
 
             for job in schedule.JOBS:
-                self.stdout.write(f"{job.name}\t{job.at:%H:%M}\t{state.get(job.name, '—')}")
+                when = f"{job.at:%H:%M}" if job.every is None else f"каждые {job.every} ч"
+                self.stdout.write(f"{job.name}\t{when}\t{state.get(job.name, '—')}")
 
             return
 
@@ -58,8 +59,9 @@ class Command(BaseCommand):
 
             for job in schedule.pending(now):
                 try:
-                    self.stdout.write(f"{job.name}: {job.run(now, job.due(now))}")
-                    schedule.remember(job.name, now.date())
+                    due = job.due(now)
+                    self.stdout.write(f"{job.name}: {job.run(now, due)}")
+                    schedule.remember(job.name, job.mark(due))
                 except Exception:
                     # Сбой задачи — не повод останавливать остальные:
                     # следующая проверка через минуту попробует снова

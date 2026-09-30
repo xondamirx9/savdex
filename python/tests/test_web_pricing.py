@@ -109,3 +109,106 @@ def test_курс_из_запасной_таблицы(сайт):
         assert plans["premium"]["price_uzs"] == 1_920_000
     finally:
         кэш("Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25], now()->addDay());")
+
+
+# ── Промокод на витрине (шаг 70) ────────────────────────────────────
+
+
+def _коды() -> None:
+    sql("delete from promo_codes")
+    план = {c: i for c, i in sql("select code, id from plans")}
+
+    # (код, тариф, дней, скидка, погашен, истёк, включён)
+    for код, тариф, дней, скидка, погашен, истёк, включён in (
+        ("SALE-30", "business", 0, 30, False, False, True),
+        ("FREE-14", "premium", 14, None, False, False, True),
+        ("FREE-0", "premium", 0, None, False, False, True),
+        ("ZERO", "business", 0, 0, False, False, True),
+        ("USED", "business", 0, 30, True, False, True),
+        ("OLD", "business", 0, 30, False, True, True),
+        ("OFF", "business", 0, 30, False, False, False),
+        ("GONE", "vip", 0, 30, False, False, True),
+        ("FLASH-15", "flash", 0, 15, False, False, True),
+    ):  # fmt: skip
+        sql(
+            "insert into promo_codes (code, plan_id, days, discount_percent, used_at, "
+            "expires_at, is_active, created_at, updated_at) values "
+            "(%s, %s, %s, %s, %s, %s, %s, now(), now())",
+            [
+                код, план[тариф], дней, скидка,
+                "2026-01-01 00:00:00" if погашен else None,
+                "2026-01-01 00:00:00" if истёк else None, включён,
+            ],
+        )  # fmt: skip
+
+
+def _сброс_счётчика() -> None:
+    кэш(
+        "RateLimiter::clear('pricing-promo:127.0.0.1');"
+        "Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25], now()->addDay());"
+    )
+
+
+@pytest.mark.parametrize(
+    "promo",
+    [
+        "SALE-30",
+        "%20sale%E2%80%9430%20",  # « sale—30 », как его кодирует браузер
+        "free_14",
+        "FREE-0",
+        "ZERO",
+        "USED",
+        "OLD",
+        "OFF",
+        "GONE",
+        "NOPE",
+        "FLASH-15",
+        "",
+        "%20",
+    ],
+)
+def test_промокод(сайт, promo):
+    _коды()
+    _сброс_счётчика()
+    д, _ = сверить(сайт, f"/pricing?promo={promo}", env=ФАЙЛОВЫЙ, перед=_сброс_счётчика)
+    props = страница(д["body"])["props"]
+
+    if promo == "SALE-30":
+        assert props["promo"] == {
+            "code": "SALE-30",
+            "plan_code": "business",
+            "discount_percent": 30,
+            "days": None,
+        }
+        business = next(p for p in props["plans"] if p["code"] == "business")
+        assert business["promo_price"]["price_usd"] == 13.99
+    elif promo in ("USED", "NOPE"):
+        assert props["promo"] is None and props["promoError"]
+
+
+def test_промокод_массивом(сайт):
+    """?promo[]=… — (string) массива у PHP: страница 500 у обеих сторон."""
+    from .web_site import из_laravel
+
+    ответы = [
+        сторона(сайт, "/pricing?promo[]=x", env=ФАЙЛОВЫЙ)
+        if сторона is из_django
+        else сторона(сайт, "/pricing?promo[]=x")
+        for сторона in (из_django, из_laravel)
+    ]
+
+    assert [о["status"] for о in ответы] == [500, 500]
+
+
+def test_промокод_десять_проверок_в_час(сайт):
+    _коды()
+    _сброс_счётчика()
+
+    # Счётчик общий: пять проверок Django и пять Laravel — одиннадцатая отклоняется
+    for _ in range(5):
+        сверить(сайт, "/pricing?promo=NOPE", env=ФАЙЛОВЫЙ)
+
+    д, _ = сверить(сайт, "/pricing?promo=SALE-30", env=ФАЙЛОВЫЙ)
+    props = страница(д["body"])["props"]
+
+    assert props["promo"] is None and props["promoError"]

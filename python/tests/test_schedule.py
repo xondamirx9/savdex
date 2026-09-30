@@ -81,6 +81,10 @@ def test_чистка_как_у_laravel(компании, tmp_path):
     assert "Удалено просмотров: 3." in вывод
 
 
+#: Суточные задачи, которые Laravel делал раньше Django
+ДНЕВНЫЕ = {"audience_views_prune", "expire_listings", "ratings_recalculate", "reviews_ask"}
+
+
 def test_первый_запуск_после_часа_день_пропускает(компании, tmp_path):
     now = datetime.now(UTC)
 
@@ -102,7 +106,7 @@ def test_первый_запуск_после_часа_день_пропуска
 
     try:
         for _ in range(120):
-            if state.exists() and len(json.loads(state.read_text() or "{}")) == 4:
+            if state.exists() and set(json.loads(state.read_text() or "{}")) >= ДНЕВНЫЕ:
                 break
 
             time.sleep(0.5)
@@ -113,8 +117,10 @@ def test_первый_запуск_после_часа_день_пропуска
         loop.terminate()
         loop.wait(timeout=10)
 
-    # Задачи дня отмечены пройденными, а не выполнены второй раз
-    assert json.loads(state.read_text()) == {
+    # Суточные задачи дня отмечены пройденными, а не выполнены второй раз
+    # (повторяющиеся — раз в час и т. п. — проходят сразу, их безвредно повторить)
+    отмечено = json.loads(state.read_text())
+    assert {k: v for k, v in отмечено.items() if k in ДНЕВНЫЕ} == {
         "audience_views_prune": now.date().isoformat(),
         "expire_listings": now.date().isoformat(),
         "ratings_recalculate": now.date().isoformat(),

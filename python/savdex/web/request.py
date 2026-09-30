@@ -10,8 +10,8 @@
 Сессию Laravel страница ведёт сама (savdex/web/session.py): начинает
 её здесь, как StartSession, — раньше SetLocale, но после отказа
 роботу; SetLocale запоминает язык из префикса в сессии и в профиле;
-сохраняет её SessionMiddleware после страницы. ?hl= (смена языка)
-Apache сюда не пускает — это делает Laravel.
+сохраняет её SessionMiddleware после страницы. ?hl=<язык> (смена языка,
+шаг 70) — выбор в сессию и профиль, переход на чистый адрес этого языка.
 
 Канонический хост и мини-сайты сюда тоже не доходят: Apache отдаёт
 Django только запросы к основному домену (docker/apache-python.conf).
@@ -102,6 +102,12 @@ def context(request: HttpRequest, redirect: bool = True) -> Context | HttpRespon
         # Request::fullUrl() после LocalizeUrl — путь без префикса
         store.full_url = root + phpquery.full_path(path, query)
 
+    if redirect and request.method == "GET":
+        switched = _switch(request, root, path, query, started, visitor)
+
+        if switched is not None:
+            return switched
+
     if url_locale is not None:
         locale = url_locale
 
@@ -132,6 +138,39 @@ def context(request: HttpRequest, redirect: bool = True) -> Context | HttpRespon
         session=visitor.session,
         url_locale=url_locale,
     )
+
+
+def _switch(
+    request: HttpRequest,
+    root: str,
+    path: str,
+    query: str,
+    started: tuple[session.Store, laravel_session.Visitor] | None,
+    visitor: laravel_session.Visitor,
+) -> HttpResponse | None:
+    """
+    SetLocale: явное переключение языка. Ссылка «Русский» несёт ?hl=ru —
+    адрес без префикса неотличим от «язык не указан». Выбор — в сессию и
+    в профиль, маркер снимается переходом на чистый адрес этого языка
+    (префикс страницы, с которой уходим, не возвращается: LocalizeUrl::KEEP).
+    """
+    params = phpquery.laravel_input(query)
+    hl = params.get("hl")
+
+    if not locales.supports(hl):
+        return None
+
+    assert isinstance(hl, str)
+
+    if started is not None:
+        session.remember_locale(request, started[0], hl)
+    elif visitor.user_id is not None:
+        session.save_user_locale(request, visitor.user_id, hl)
+
+    rest = {k: v for k, v in params.items() if k != "hl"}
+    clean = path + ("?" + phpquery.build_query(rest, rfc1738=True) if rest else "")
+
+    return HttpResponseRedirect(locales.url(root, clean, hl))
 
 
 def _stored(visitor: laravel_session.Visitor) -> str | None:

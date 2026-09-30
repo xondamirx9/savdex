@@ -25,6 +25,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -106,7 +107,30 @@ def is_file_store() -> bool:
 
 
 #: Что кладёт в кэш Django: счётчики, флаги, строки и массивы (код почты)
-Value = int | bool | str | None | dict[str | int, "Value"]
+Value = int | bool | float | str | None | dict[str | int, "Value"]
+
+
+def _php_float(value: float) -> str:
+    """
+    Число с дробью, как его пишет serialize() (serialize_precision = -1):
+    кратчайшая запись; целое — без «.0»; степень — «1.0E+25».
+    """
+    if math.isnan(value):
+        return "NAN"
+
+    if math.isinf(value):
+        return "INF" if value > 0 else "-INF"
+
+    text = repr(value)
+
+    if "e" in text:
+        mantissa, exponent = text.split("e")
+        mantissa = mantissa if "." in mantissa else mantissa + ".0"
+        sign = "-" if exponent.startswith("-") else "+"
+
+        return f"{mantissa}E{sign}{exponent.lstrip('+-').lstrip('0') or '0'}"
+
+    return text.removesuffix(".0")
 
 
 def _serialize(value: Value) -> bytes:
@@ -119,6 +143,9 @@ def _serialize(value: Value) -> bytes:
 
     if isinstance(value, int):
         return f"i:{value};".encode()
+
+    if isinstance(value, float):
+        return f"d:{_php_float(value)};".encode()
 
     if isinstance(value, str):
         data = value.encode()
