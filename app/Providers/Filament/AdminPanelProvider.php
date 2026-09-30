@@ -22,6 +22,7 @@ use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
 use App\Models\Banner;
 use App\Models\CompanyDocument;
+use App\Models\ContactUnlock;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Task;
 use App\Models\Listing;
@@ -228,6 +229,15 @@ class AdminPanelProvider extends PanelProvider
                         ->whereIn('type', CompanyDocument::VERIFICATION_TYPES)
                         ->count()) > 0 ? (string) $pending : null, color: 'warning')
                     ->visible(fn (): bool => AdminAccess::allows('documents.view')),
+                NavigationItem::make('Жалобы на контакты')
+                    ->url('/admin/python?next=/py/admin/finance/complaint/')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->group('Модерация')
+                    ->sort(2)
+                    // Счётчик: нерассмотренная жалоба — это долг перед покупателем
+                    ->badge(fn (): ?string => ($pending = ContactUnlock::query()->where('complaint_status', 'pending')
+                        ->count()) > 0 ? (string) $pending : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('complaints.view')),
                 NavigationItem::make('Резюме')
                     ->url('/admin/python?next=/py/admin/moderation/resume/')
                     ->icon('heroicon-o-identification')
