@@ -27,7 +27,9 @@ ListingWorkbookTemplate и частью ImportLanguage и CatalogLookup, кот�
 пропускается, строка, которую не загрузить (нет заголовка, нет
 компании), идёт в отчёт, а остальные загружаются дальше; второй лист
 на том же языке, лист перевода без шапки, «Номер», которого нет в базе,
-и книга без листа «Русский» — заметка, а не отказ.
+и книга без листа «Русский» — заметка, а не отказ. Строки с названиями
+столбцов нет или названия не узнаны — столбцы угадываются по содержимому
+(_guess_columns), что чем стало — в отчёте.
 
 Строка русского листа: «Номер» заполнен → правится это объявление;
 иначе ищется по заголовку и компании; не нашлось → заводится новое
@@ -871,6 +873,9 @@ class _Sheet:
     rows: dict[int, _Row] = field(default_factory=dict)
     #: Что лежит над таблицей без шапки: (номер строки, ячейки)
     sample: tuple[int, list[str]] | None = None
+    #: Строки листа, пока шапка не нашлась, — текстом (номер строки,
+    #: ячейки): без шапки по ним столбцы угадываются по содержимому
+    raw: list[tuple[int, list[str]]] = field(default_factory=list)
 
 
 def _columns(values: Iterable[Any], epoch: datetime) -> dict[int, str]:
@@ -911,9 +916,17 @@ def _read_sheet(sheet: _Sheet, rows: Iterable[list[Any]], epoch: datetime) -> No
 
         if columns is None:
             found = _columns(values, epoch)
+            texts = [_text(v, epoch) for v in values]
+            cells = [text for text in texts if text != ""]
+
+            # Шапка — строка, где узнаны хотя бы два столбца или все её
+            # ячейки. Одно совпадение в строке данных («Доставка, варианты»
+            # похоже на столбец «Доставка») шапкой её не делает
+            if found and len(found) < 2 and len(found) < len(cells):
+                found = {}
 
             if not found:
-                cells = [text for text in (_text(v, epoch) for v in values) if text != ""]
+                sheet.raw.append((number, texts))
 
                 if cells and (sample is None or (len(sample[1]) < 2 and len(cells) >= 2)):
                     sample = (number, cells)
@@ -939,6 +952,246 @@ def _read_sheet(sheet: _Sheet, rows: Iterable[list[Any]], epoch: datetime) -> No
             sheet.last = offset
 
     sheet.sample = sample if sheet.header is None else None
+
+
+#: Приметы столбцов без шапки: условия поставки и оплаты различаются по словам
+_DELIVERY_WORDS = (
+    "поставк",
+    "доставк",
+    "самовывоз",
+    "отгрузк",
+    "exw",
+    "fca",
+    "fob",
+    "cif",
+    "cfr",
+    "cpt",
+    "cip",
+    "dap",
+    "dpu",
+    "ddp",
+    "incoterms",
+    "склад",
+    "порт",
+    "delivery",
+    "shipping",
+)
+_PAYMENT_WORDS = (
+    "оплат",
+    "предоплат",
+    "постоплат",
+    "аккредитив",
+    "l/c",
+    "перечислен",
+    "наличн",
+    "рассрочк",
+    "безнал",
+    "payment",
+    "prepayment",
+    "letter of credit",
+    "tt ",
+    "t/t",
+)
+#: Организационная форма в названии — примета столбца компании
+_LEGAL_FORM = re.compile(
+    r"(?<![\w])(ООО|ОАО|ЗАО|ПАО|АО|ТОО|ИП|ЧП|МЧЖ|ХК|LLC|LLP|Ltd|GmbH|Inc|Corp|JSC|OOO)(?![\w])",
+    re.IGNORECASE,
+)
+_SUPPLY = frozenset({"предложение", "продаю", "продажа", "supply", "offer", "sell", "sotaman"})
+
+#: Как назвать столбец в отчёте
+_GUESSED = {
+    "title": "заголовок",
+    "description": "описание",
+    "category_id": "категория",
+    "company": "компания",
+    "city_id": "город",
+    "type": "тип",
+    "price": "цена",
+    "currency": "валюта",
+    "delivery_terms": "условия поставки",
+    "payment_terms": "условия оплаты",
+}
+
+
+def _letter(index: int) -> str:
+    """Буква столбца Excel: 0 → A, 26 → AA."""
+    letters = ""
+    index += 1
+
+    while index:
+        index, rest = divmod(index - 1, 26)
+        letters = chr(65 + rest) + letters
+
+    return letters
+
+
+def _share(values: list[str], test: Any) -> float:  # noqa: ANN401
+    return sum(1 for v in values if test(v)) / len(values) if values else 0.0
+
+
+def _guess_columns(sheet: _Sheet) -> str | None:
+    """
+    Лист без строки с названиями столбцов: столбцы угадываются по
+    содержимому, чтобы книга не отклонялась из-за потерянной шапки.
+
+    Данные — строки хотя бы с двумя заполненными ячейками, начиная с
+    первой такой (заголовок отчёта в одной ячейке над таблицей не в счёт).
+    Столбец узнаётся по приметам: «Раздел → Подраздел» или название из
+    каталога — категория; код валюты — валюта; число — цена; город или
+    компания из справочника; «куплю / продаю» — тип; самый длинный текст —
+    описание; первый слева текст — заголовок; слова «CIF, доставка,
+    самовывоз» и «оплата, аккредитив» — условия поставки и оплаты.
+    Без заголовка — не угадано (None). Иначе строки листа заполняются
+    и возвращается заметка для отчёта: что каким столбцом стало.
+    """
+    body = [(n, cells) for n, cells in sheet.raw if sum(1 for c in cells if c != "") >= 2]
+
+    if not body:
+        return None
+
+    # Первая строка — непризнанная шапка («Наименование позиции»,
+    # «Сколько стоит»), если под её коротким словом в каком-то столбце
+    # стоят числа или длинные тексты: тогда это не товар, а названия
+    skipped_header: int | None = None
+
+    if len(body) >= 2 and _looks_like_header(body[0][1], [cells for _, cells in body[1:]]):
+        skipped_header = body[0][0]
+        body = body[1:]
+
+    first = body[0][0]
+    width = max(len(cells) for _, cells in body)
+    rows = [(n, cells) for n, cells in sheet.raw if n >= first]
+    values = {
+        i: [cells[i] for _, cells in body if i < len(cells) and cells[i] != ""][:40]
+        for i in range(width)
+    }
+    filled = {i: v for i, v in values.items() if v}
+    columns: dict[int, str] = {}
+
+    def free() -> list[int]:
+        return [i for i in filled if i not in columns]
+
+    def number(v: str) -> bool:
+        return re.fullmatch(r"[0-9][0-9\s.,]*", v.strip()) is not None
+
+    def average(i: int) -> float:
+        return sum(len(v) for v in filled[i]) / len(filled[i])
+
+    checks: list[tuple[str, Any]] = [
+        ("category_id", lambda v: "→" in v or "->" in v or listing_category(v)[0] is not None),
+        ("currency", lambda v: len(v) <= 6 and importer.currency(v) in CURRENCIES),
+        (
+            "type",
+            lambda v: importer.normalize(v) in _DEMAND or importer.normalize(v) in _SUPPLY,
+        ),
+        (
+            "company",
+            lambda v: (
+                len(v) <= 190 and (_LEGAL_FORM.search(v) is not None or company_id(v) is not None)
+            ),
+        ),
+        ("city_id", lambda v: len(v) <= 80 and city_id(v) is not None),
+    ]
+
+    for name, test in checks:
+        best = max(free(), key=lambda i: _share(filled[i], test), default=None)
+
+        if best is not None and _share(filled[best], test) >= 0.6:
+            columns[best] = name
+
+    # Числа: первый слева столбец сплошь из целых — скорее «Номер», его
+    # не трогаем; цена — числовой столбец правее текста
+    numeric = [i for i in free() if _share(filled[i], number) >= 0.8]
+    texts = [i for i in free() if i not in numeric]
+
+    if texts and (price := next((i for i in numeric if i > min(texts)), None)) is not None:
+        columns[price] = "price"
+
+    long = max(texts, key=average, default=None)
+
+    if long is not None and average(long) >= 80:
+        columns[long] = "description"
+
+    title = next((i for i in texts if i not in columns and average(i) >= 5), None)
+
+    if title is None:
+        return None
+
+    columns[title] = "title"
+
+    def worded(words: tuple[str, ...]) -> Any:  # noqa: ANN401
+        return lambda v: any(w in v.lower() for w in words)
+
+    for name, words in (("delivery_terms", _DELIVERY_WORDS), ("payment_terms", _PAYMENT_WORDS)):
+        test = worded(words)
+        scores = {i: _share(filled[i], test) for i in texts if i not in columns}
+        best = max(scores, key=scores.__getitem__, default=None)
+
+        if best is not None and _share(filled[best], test) >= 0.3:
+            columns[best] = name
+        elif (
+            name == "payment_terms"
+            and (delivery := next((i for i, n in columns.items() if n == "delivery_terms"), None))
+            is not None
+        ):
+            # Оплату чаще пишут «По договорённости» — без примет; но она
+            # обычно стоит сразу за поставкой, и хоть одна примета в столбце есть
+            right = delivery + 1
+
+            if right in scores and scores[right] > 0 and average(right) < 200:
+                columns[right] = name
+
+    sheet.header = first - 1
+    sheet.sample = None
+
+    for n, cells in rows:
+        fields = {
+            name: cells[i] for i, name in columns.items() if i < len(cells) and cells[i] != ""
+        }
+        offset = n - sheet.header
+        sheet.rows[offset] = _Row(n, fields)
+
+        if fields:
+            sheet.last = offset
+
+    found = ", ".join(f"{_letter(i)} — {_GUESSED[name]}" for i, name in sorted(columns.items()))
+
+    if skipped_header is not None:
+        return (
+            f"Лист «{sheet.name}»: названия столбцов в строке {skipped_header} не узнаны — "
+            f"столбцы определены по содержимому: {found}. Проверьте загруженное; чтобы не "
+            "гадать, назовите столбцы, как в образце."
+        )
+
+    return (
+        f"Лист «{sheet.name}»: нет строки с названиями столбцов — столбцы определены по "
+        f"содержимому: {found}. Проверьте загруженное; чтобы не гадать, добавьте над "
+        "таблицей строку с названиями, как в образце."
+    )
+
+
+def _looks_like_header(row: list[str], below: list[list[str]]) -> bool:
+    """Строка названий: над столбцом чисел или длинных текстов — короткое слово."""
+    for index, cell in enumerate(row):
+        if cell == "" or len(cell) > 40:
+            continue
+
+        column = [cells[index] for cells in below if index < len(cells) and cells[index] != ""]
+
+        if not column:
+            continue
+
+        numbers = _share(column, lambda v: re.fullmatch(r"[0-9][0-9\s.,]*", v.strip()) is not None)
+        cell_is_number = re.fullmatch(r"[0-9][0-9\s.,]*", cell.strip()) is not None
+
+        if numbers >= 0.8 and not cell_is_number:
+            return True
+
+        if sum(len(v) for v in column) / len(column) >= 80:
+            return True
+
+    return False
 
 
 def _missing_header(sheet: _Sheet, expected: list[str]) -> str:
@@ -1160,6 +1413,11 @@ class _Import:
                     "цены, категории и фотографии берутся с него."
                 )
                 by_locale.pop(master.locale, None)
+
+        # Шапки нет — столбцы угадываются по содержимому (_guess_columns);
+        # не вышло и тогда — объяснение, что лежит на листе
+        if master.header is None and (note := _guess_columns(master)) is not None:
+            result["notes"].append(note)
 
         if master.header is None:
             result["errors"].append(
