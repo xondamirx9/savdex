@@ -422,6 +422,8 @@ return [
         'moq_label' => 'Min. order',
         'verified_seller' => 'Verified seller',
         'responds_in' => 'Replies within :hours h',
+        'platform_badge' => 'Platform request',
+        'platform_note' => 'SavdEx collected this request. Respond and we will connect you with the buyer.',
         'open_offer' => 'Open the offer',
         'trust' => 'Reputation :percent%',
         'trust_hint' => 'Supplier profile completeness: details, contacts, description, documents',

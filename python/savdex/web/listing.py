@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, specs
+from savdex.web import content, inertia, platform, specs
 from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
@@ -212,7 +212,7 @@ def _price_text(row: dict[str, Any]) -> str:
 def _seo(
     ctx: Context,
     row: dict[str, Any],
-    company: dict[str, Any] | None,
+    company_name: str | None,
     city: str | None,
     category: str | None,
     images: list[str],
@@ -220,7 +220,6 @@ def _seo(
     """SeoBuilders::listing: товар, крошки, превью картинкой /og/…"""
     title = _localized(row, "title", ctx.locale) or ""
     description = _localized(row, "description", ctx.locale)
-    company_name = company["name"] if company is not None else None
     url = ctx.url(f"listing/{row['slug']}")
 
     seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
@@ -361,8 +360,14 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
         [row["id"]],
     )
 
+    # Заявка площадки (PlatformListings): продавцом подписан SavdEx,
+    # контактов служебной компании нет — отклик приходит в её кабинет
+    own = platform.owns(row, platform.service_company_id())
+    shown_city = (cities.get(row["city_id"]) if row["city_id"] else None) if own else city
+
     unlocked = (
-        viewer is not None
+        not own
+        and viewer is not None
         and company is not None
         and (
             viewer == company["id"]
@@ -377,7 +382,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     )
     contacts = []
 
-    if company is not None:
+    if company is not None and not own:
         for c in _rows(
             "select type, value from company_contacts where company_id = %s and is_public "
             "order by is_primary desc, sort_order, id",
@@ -404,7 +409,14 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     )
     published = _utc(row["published_at"])
     expires = _utc(row["expires_at"])
-    seo = _seo(ctx, row, company, city, category, image_urls)
+    seo = _seo(
+        ctx,
+        row,
+        platform.NAME if own else (company["name"] if company is not None else None),
+        shown_city,
+        category,
+        image_urls,
+    )
 
     response = inertia.render(
         ctx,
@@ -432,7 +444,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 "min_order": row["min_order"],
                 "delivery_terms": _localized(row, "delivery_terms", locale),
                 "payment_terms": _localized(row, "payment_terms", locale),
-                "city": city,
+                "city": shown_city,
                 "published": published.strftime("%d.%m.%Y") if published else None,
                 "expires": expires.strftime("%d.%m.%Y") if expires else None,
                 "views": row["views_count"],
@@ -454,6 +466,20 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 ],
             },
             "company": {
+                "name": platform.NAME,
+                "slug": None,
+                "initials": "SX",
+                "logo": None,
+                "website": None,
+                "verification_level": 0,
+                "rating": 0.0,
+                "reviews_count": 0,
+                "city": shown_city,
+                "country": None,
+                "platform": True,
+            }
+            if own
+            else {
                 "name": company["name"] if company else None,
                 "slug": company["slug"] if company else None,
                 "initials": initials(company["name"]) if company else None,
@@ -466,6 +492,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 "country": countries.get(company["country_id"])
                 if company and company["country_id"]
                 else None,
+                "platform": False,
             },
             "contacts": contacts,
             "unlocked": unlocked,

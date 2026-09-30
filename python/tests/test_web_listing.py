@@ -92,6 +92,18 @@ def сайт() -> Iterator[str]:
         "'title_i18n' => ['uz' => 'Sement'], 'price' => null, 'description' => null]);"
         "App\\Models\\Listing::factory()->draft()->create(['slug' => 'draft',"
         "'company_id' => $c->id]);"
+        # Заявка площадки (PlatformListings): у служебной компании, из
+        # Excel — подписана SavdEx, без её контактов; город — самой заявки
+        "$anjir = App\\Models\\Company::factory()->create(['name' => 'ООО Anjir Group',"
+        "'slug' => 'anjir', 'city_id' => $city, 'country_id' => $uz]);"
+        "$anjir->contacts()->create(['type' => 'phone', 'value' => '+998 71 000-00-00',"
+        "'is_public' => true, 'is_primary' => true]);"
+        "App\\Models\\Listing::factory()->create(['slug' => 'zayavka', 'source' => 'import',"
+        "'company_id' => $anjir->id, 'category_id' => $child->id, 'type' => 'demand',"
+        "'city_id' => App\\Models\\City::where('id', '!=', $city)->value('id'),"
+        "'title' => 'Куплю сепаратор САД-5 с циклоном', 'expires_at' => now()->addDays(20)]);"
+        "App\\Models\\Listing::factory()->create(['slug' => 'poddony', 'company_id' => $anjir->id,"
+        "'title' => 'Поддоны деревянные', 'expires_at' => now()->addDays(20)]);"
         "echo 'ok';",
         {"MACHINE_TRANSLATION_ENABLED": "false"},
     )
@@ -145,10 +157,22 @@ def обнулить() -> None:
         "/listing/imported",
         "/uz/listing/imported",
         "/en/listing/imported",
+        "/listing/zayavka",
+        "/listing/poddony",
     ],
 )
 def test_страница(сайт, path):
     сверить(сайт, path, перед=обнулить, env=ФАЙЛОВЫЙ)
+
+
+def test_заявка_площадки_подписана_savdex(сайт):
+    """Служебная компания не показана продавцом, контактов её нет."""
+    д, _ = сверить(сайт, "/listing/zayavka", перед=обнулить, env=ФАЙЛОВЫЙ)
+    props = страница(д["body"])["props"]
+
+    assert props["company"]["name"] == "SavdEx" and props["company"]["platform"] is True
+    assert props["contacts"] == [] and props["company"]["slug"] is None
+    assert props["company"]["city"] == props["listing"]["city"]
 
 
 @pytest.mark.parametrize("slug", ["nothing", "draft"])

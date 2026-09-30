@@ -15,6 +15,7 @@ use App\Support\BannerCard;
 use App\Support\ContentTranslation;
 use App\Support\ListingCard;
 use App\Support\ListingTags;
+use App\Support\PlatformListings;
 use App\Support\PriceDisplay;
 use App\Support\ProductSpecs;
 use App\Support\Seo;
@@ -340,6 +341,7 @@ class CatalogController extends Controller
                 'company.city.translations',
                 'company.country.translations',
                 'company.publicContacts',
+                'city.translations',
                 'category.translations',
                 'category.parent.translations',
                 'category.fields',
@@ -375,7 +377,14 @@ class CatalogController extends Controller
         $company = $listing->company;
         $viewerCompanyId = $request->user()?->company_id;
 
-        $unlocked = $viewerCompanyId !== null && (
+        /*
+         * Заявка площадки (PlatformListings): продавцом подписан SavdEx,
+         * контактов служебной компании нет — покупатель откликается, и
+         * отклик приходит в её кабинет.
+         */
+        $platform = PlatformListings::owns($listing);
+
+        $unlocked = ! $platform && $viewerCompanyId !== null && (
             $viewerCompanyId === $company->id
             || $company->unlockedBy()->where('company_id', $viewerCompanyId)->exists()
         );
@@ -403,7 +412,7 @@ class CatalogController extends Controller
                 'min_order' => $listing->min_order,
                 'delivery_terms' => $listing->localizedDeliveryTerms(),
                 'payment_terms' => $listing->localizedPaymentTerms(),
-                'city' => $company?->city?->name(),
+                'city' => $platform ? $listing->city?->name() : $company?->city?->name(),
                 'published' => $listing->published_at?->translatedFormat('d.m.Y'),
                 'expires' => $listing->expires_at?->translatedFormat('d.m.Y'),
                 'views' => $listing->views_count,
@@ -441,7 +450,19 @@ class CatalogController extends Controller
                 ])->values(),
             ],
 
-            'company' => [
+            'company' => $platform ? [
+                'name' => PlatformListings::NAME,
+                'slug' => null,
+                'initials' => 'SX',
+                'logo' => null,
+                'website' => null,
+                'verification_level' => 0,
+                'rating' => 0.0,
+                'reviews_count' => 0,
+                'city' => $listing->city?->name(),
+                'country' => null,
+                'platform' => true,
+            ] : [
                 'name' => $company?->name,
                 'slug' => $company?->slug,
                 'initials' => $company?->initials(),
@@ -452,10 +473,11 @@ class CatalogController extends Controller
                 'reviews_count' => (int) ($company?->reviews_count ?? 0),
                 'city' => $company?->city?->name(),
                 'country' => $company?->country?->name(),
+                'platform' => false,
             ],
 
             // Контакты маскируются на сервере — как и на визитке
-            'contacts' => $company?->publicContacts->map(fn ($c): array => [
+            'contacts' => $platform ? [] : $company?->publicContacts->map(fn ($c): array => [
                 'type' => $c->type,
                 'value' => $unlocked || in_array($c->type, CompanyContact::PUBLIC_TYPES, true)
                     ? $c->value

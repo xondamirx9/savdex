@@ -22,7 +22,7 @@ from PIL import Image
 
 from savdex import laravel_storage
 from savdex.site.models import Banner, LandingBlock
-from savdex.web import content, inertia, locales, news, reviews, ui
+from savdex.web import content, inertia, locales, news, platform, reviews, ui
 from savdex.web.currency import CurrencyRate
 from savdex.web.directory import _named, listed_countries, logo_url, type_label, type_options
 from savdex.web.request import context
@@ -166,6 +166,8 @@ class Cards:
         self.codes = {r["id"]: r["code"] for r in _rows("select id, code from countries")}
         self.prices = PriceDisplay(ctx.locale, values, CurrencyRate())
         self.now = datetime.now(UTC)
+        # Служебная компания: её заявки из Excel подписаны площадкой
+        self.service = platform.service_company_id()
 
     def _localized(self, listing: dict[str, Any], field: str) -> str | None:
         """Listing::localized: перевод есть и не пустой — он, иначе оригинал."""
@@ -223,8 +225,11 @@ class Cards:
         published = _utc(listing["published_at"])
         cover = images[0] if images else None
         company = {k[2:]: v for k, v in listing.items() if k.startswith("c_")}
-        city = company["city_id"]
-        country = company["country_id"]
+        # Заявка площадки (PlatformListings): SavdEx вместо служебной
+        # компании, город — самой заявки, страны поставщика нет
+        own = platform.owns(listing, self.service)
+        city = listing["city_id"] if own else company["city_id"]
+        country = None if own else company["country_id"]
 
         return {
             "id": listing["id"],
@@ -254,12 +259,23 @@ class Cards:
             else None,
             "photos": len(images),
             "company": {
+                "name": platform.NAME,
+                "slug": None,
+                "verified": 0,
+                "rating": 0.0,
+                "trust": 0,
+                "response_hours": None,
+                "platform": True,
+            }
+            if own
+            else {
                 "name": company["name"],
                 "slug": company["slug"],
                 "verified": int(company["verification_level"] or 0),
                 "rating": float(company["rating"] or 0),
                 "trust": completeness(company, bool(company["has_documents"])),
                 "response_hours": company["response_time_hours"],
+                "platform": False,
             },
             "badges": [b for b in badges if b],
             "promoted": promoted,

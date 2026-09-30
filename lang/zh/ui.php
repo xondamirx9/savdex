@@ -421,6 +421,8 @@ return [
         'moq_label' => '最小批量',
         'verified_seller' => '已认证卖家',
         'responds_in' => ':hours 小时内回复',
+        'platform_badge' => '平台需求',
+        'platform_note' => '此需求由 SavdEx 平台收集。请回复，我们将为您联系买家。',
         'open_offer' => '查看报价',
         'trust' => '信誉 :percent%',
         'trust_hint' => '供应商资料完整度：资质、联系方式、简介、文件',

@@ -102,6 +102,8 @@ export default function ListingShow({
         reviews_count: number;
         city: string | null;
         country: string | null;
+        /** Заявка площадки: продавцом подписан SavdEx, контактов нет */
+        platform?: boolean;
     };
     contacts: Contact[];
     unlocked: boolean;
@@ -317,6 +319,12 @@ export default function ListingShow({
                                     </p>
                                 </div>
                             </div>
+
+                            {company.platform && (
+                                <p className="t-sm muted" style={{ marginBottom: 12 }}>
+                                    {t('catalog.platform_note')}
+                                </p>
+                            )}
 
                             {company.verification_level >= 2 && (
                                 <p className="t-sm" style={{ color: 'var(--success)', marginBottom: 12 }}>

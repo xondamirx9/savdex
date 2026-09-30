@@ -13,6 +13,7 @@ use App\Models\Listing;
 use App\Models\Review;
 use App\Support\ListingCard;
 use App\Support\Locales;
+use App\Support\PlatformListings;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -114,7 +115,8 @@ final class SitePage
                 'url' => null,
             ]);
 
-        $listings = $company->activeListings()
+        // Заявки площадки у служебной компании — не её товары (PlatformListings)
+        $listings = PlatformListings::exclude($company->activeListings()->getQuery())
             ->visibleIn()
             ->with(ListingCard::relations())
             ->latest('published_at')

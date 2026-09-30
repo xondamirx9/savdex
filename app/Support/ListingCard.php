@@ -22,6 +22,10 @@ final class ListingCard
     /** @return array<string, mixed> */
     public static function present(Listing $listing): array
     {
+        // Заявка площадки (PlatformListings): вместо служебной компании —
+        // SavdEx, город — самой заявки, страны поставщика нет
+        $platform = PlatformListings::owns($listing);
+
         return [
             'id' => $listing->id,
             'slug' => $listing->slug,
@@ -41,10 +45,10 @@ final class ListingCard
             'unit' => $listing->unit,
             'negotiable' => $listing->price_negotiable,
             'min_order' => $listing->min_order,
-            'city' => $listing->company?->city?->name(),
+            'city' => $platform ? $listing->city?->name() : $listing->company?->city?->name(),
             // Страна поставщика: на карточке она отображается флагом
-            'country' => $listing->company?->country?->code,
-            'country_name' => $listing->company?->country?->name(),
+            'country' => $platform ? null : $listing->company?->country?->code,
+            'country_name' => $platform ? null : $listing->company?->country?->name(),
             'published' => $listing->published_at?->diffForHumans(),
             'is_new' => $listing->published_at !== null
                 && $listing->published_at->gt(now()->subDays(self::NEW_DAYS)),
@@ -53,7 +57,15 @@ final class ListingCard
             // рисует плашкой, а не пустым местом
             'cover' => $listing->images->first()?->thumbUrl(),
             'photos' => $listing->images->count(),
-            'company' => [
+            'company' => $platform ? [
+                'name' => PlatformListings::NAME,
+                'slug' => null,
+                'verified' => 0,
+                'rating' => 0.0,
+                'trust' => 0,
+                'response_hours' => null,
+                'platform' => true,
+            ] : [
                 'name' => $listing->company?->name,
                 'slug' => $listing->company?->slug,
                 'verified' => (int) ($listing->company?->verification_level ?? 0),
@@ -65,6 +77,7 @@ final class ListingCard
                 // не измеряли: строку на карточке просто не рисуем,
                 // выдумывать «отвечает быстро» нечестно
                 'response_hours' => $listing->company?->response_time_hours,
+                'platform' => false,
             ],
             // Метки продвижения показываются как есть: скрывать факт
             // платного размещения площадка не будет
@@ -98,6 +111,8 @@ final class ListingCard
                 ->withExists(['documents as has_approved_documents' => fn ($d) => $d->where('moderation_status', 'approved')]),
             'company.city.translations',
             'company.country.translations',
+            // Город заявки площадки — её собственный (у служебной компании свой)
+            'city.translations',
             'category.translations',
             'activePromotions.type',
             'images',

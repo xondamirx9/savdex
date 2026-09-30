@@ -13,6 +13,7 @@ use App\Models\Review;
 use App\Services\ReviewService;
 use App\Support\ContentTranslation;
 use App\Support\DateHelper;
+use App\Support\PlatformListings;
 use App\Support\SearchText;
 use App\Support\SeoBuilders;
 use App\Support\StatsRecorder;
@@ -360,7 +361,8 @@ class CompanyController extends Controller
 
             // Счётчик из базы: на визитке стоял литеральный ноль,
             // и компания с десятком объявлений выглядела пустой
-            'listings_count' => $company->activeListings()->visibleIn()->count(),
+            // Заявки площадки у служебной компании — не её объявления
+            'listings_count' => PlatformListings::exclude($company->activeListings()->getQuery())->visibleIn()->count(),
 
             /*
              * Остаток на счету покупателя. Нужен, чтобы окно раскрытия
