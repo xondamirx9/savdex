@@ -188,10 +188,12 @@ jobs:
           # Этап 4, шаг 62: подмена метода (POST с _method) — у Django
           curl -s -D /tmp/form.h -o /dev/null -X POST -d '_method=DELETE' http://127.0.0.1:18080/cabinet/listings/1
           ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — Laravel
+          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — тоже (шаг 70)
           curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=de'
           ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz' | grep -qi '^x-powered-by: php'
+          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz'
+          ! grep -qi '^x-powered-by: php' /tmp/hl.h
+          grep -qi '^location: http://127.0.0.1:18080/uz/catalog' /tmp/hl.h
           # /index.php/<адрес> — на чистый адрес, мимо Laravel
           test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/index.php/about)" \
             = "301 http://127.0.0.1:18080/about"
@@ -254,8 +256,14 @@ jobs:
           curl -s -D /tmp/rnew.h -o /dev/null http://127.0.0.1:18080/reviews/new
           ! grep -qi '^x-powered-by: php' /tmp/rnew.h
           grep -qi '^location: http://127.0.0.1:18080/login' /tmp/rnew.h
-          # Тарифы с промокодом — Laravel (проверка кода пишет счётчик попыток)
-          curl -s -D - -o /dev/null 'http://127.0.0.1:18080/pricing?promo=TEST' | grep -qi '^x-powered-by: php'
+          # Тарифы с промокодом — тоже Django (шаг 70)
+          curl -fsS -D /tmp/promo.h -o /tmp/promo.html 'http://127.0.0.1:18080/pricing?promo=TEST'
+          ! grep -qi '^x-powered-by: php' /tmp/promo.h
+          grep -q '"promoError"' /tmp/promo.html
+          # Регистрация по коду — Django (шаг 69): без почты из первого шага — назад
+          curl -s -D /tmp/rcode.h -o /dev/null http://127.0.0.1:18080/register/code
+          ! grep -qi '^x-powered-by: php' /tmp/rcode.h
+          grep -qi '^location: http://127.0.0.1:18080/register' /tmp/rcode.h
 
       - name: Журнал контейнера
         if: always()
