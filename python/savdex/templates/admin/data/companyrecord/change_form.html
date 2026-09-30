@@ -8,8 +8,8 @@
   {% if original %}
     <div class="module aligned">
       <div class="form-row"><p>
-        <b>Статус:</b> {% if original.status == "active" %}активна{% else %}<b style="color:#b91c1c">заблокирована</b>{% if original.blocked_reason %} — {{ original.blocked_reason }}{% endif %}{% endif %}
-        {% if trashed %} · <b style="color:#b91c1c">в корзине</b>{% endif %}
+        <b>Статус:</b> {% if original.status == "active" %}активна{% else %}<b style="color:var(--sx-status-danger, #b91c1c)">заблокирована</b>{% if original.blocked_reason %} — {{ original.blocked_reason }}{% endif %}{% endif %}
+        {% if trashed %} · <b style="color:var(--sx-status-danger, #b91c1c)">в корзине</b>{% endif %}
         · <a href="/company/{{ original.slug }}" target="_blank" rel="noopener">визитка на сайте</a>
       </p></div>
     </div>

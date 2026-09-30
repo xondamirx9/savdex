@@ -7,7 +7,7 @@
 {% block extrastyle %}{{ block.super }}
 <style>
   .fin-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-  .fin-good { color: #15803d; }
+  .fin-good { color: var(--sx-status-success, #15803d); }
   .fin-kind { margin-top: 24px; }
   .fin-kind h2 .fin-count { display: inline-block; min-width: 1.6em; padding: 0 6px; border-radius: 9px; text-align: center; color: #fff; }
   .fin-danger { background: #b91c1c; } .fin-warning { background: #b45309; }
