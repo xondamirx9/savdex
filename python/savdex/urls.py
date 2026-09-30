@@ -49,6 +49,7 @@ from savdex.web import (
     payment_callbacks,
     pricing,
     promo_actions,
+    register_code,
     resume_actions,
     resumes,
     review_actions,
@@ -292,6 +293,27 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?register$",
         auth_actions.either(auth.register, auth_actions.register),
         name="register",
+    ),
+    # Шаги регистрации: почта, код из письма, анкета (шаг 69)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/email$",
+        register_code.send_code,
+        name="register.email",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/code$",
+        auth_actions.either(register_code.code_page, register_code.confirm_code),
+        name="register.code",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/code/resend$",
+        register_code.resend_code,
+        name="register.code.resend",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/details$",
+        register_code.details,
+        name="register.details",
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",

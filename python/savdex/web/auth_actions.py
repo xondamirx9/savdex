@@ -315,7 +315,7 @@ def register(request: HttpRequest) -> HttpResponse:
     RegisterRequest — третий шаг регистрации, анкета. Почта — не из формы,
     а подтверждённая кодом на втором шаге (сессия register.verified_email);
     без неё — к первому шагу. Шаги 1–2 (/register/email, /register/code) —
-    у Laravel.
+    savdex/web/register_code.py.
     """
     from savdex.web import password_rule
     from savdex.web.company_profile_actions import _tin, _unique_tin

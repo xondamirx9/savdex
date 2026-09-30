@@ -1,0 +1,316 @@
+"""
+Шаг 69: первые шаги регистрации на Django неотличимы от Laravel —
+почта (POST /register/email), код из письма (/register/code, POST
+/register/code/resend) и страница анкеты (/register/details).
+
+Сверяются ответ, сессия после него, запись кода в кэше Laravel (адрес
+хешем, попытки) и письмо с кодом (код скрыт — он случайный, но сходится
+с хешем в кэше).
+
+Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import shutil
+from collections.abc import Callable, Iterator
+from typing import Any
+
+import pytest
+
+from savdex.web import register_code
+
+from .pg_admin import php, sql, нужна_база, свежая_база
+from .test_web_forms import inertia, отправить
+from .test_web_register_actions import (
+    ЖУРНАЛ_DJANGO,
+    ЖУРНАЛ_LARAVEL,
+    КЭШ,
+    ОКРУЖЕНИЕ_ПОЧТЫ,
+    _без_изменчивого,
+    _письма,
+    _разбор,
+)
+from .web_site import laravel
+
+pytestmark = нужна_база
+
+АДРЕС = "aziz@reg.savdex.uz"
+КОД = "123456"
+ОКРУЖЕНИЕ_DJANGO = {**ОКРУЖЕНИЕ_ПОЧТЫ, "MAIL_LOG_PATH": str(ЖУРНАЛ_DJANGO)}
+
+
+@pytest.fixture(scope="module")
+def сайт() -> Iterator[str]:
+    свежая_база()
+    php(
+        "App\\Models\\Category::factory()->create(['slug' => 'cement', 'parent_id' => null]);"
+        "App\\Models\\Category::factory()->create(['slug' => 'off', 'parent_id' => null,"
+        " 'is_active' => false]);"
+        "echo 'ok';",
+        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    )
+
+    with laravel(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
+        yield root
+
+
+def _кэш(email: str) -> Any:
+    """Запись кода в файловом кэше Laravel — как есть."""
+    from savdex.web.currency import unserialize
+
+    ключ = register_code._key(email)
+    файл = hashlib.sha1(ключ.encode()).hexdigest()
+    путь = КЭШ / файл[:2] / файл[2:4] / файл
+
+    return unserialize(путь.read_bytes()[10:]) if путь.exists() else None
+
+
+def подготовка(код: str | None = None, попытки: int = 0) -> Callable[[], None]:
+    """Кэш с нуля (счётчики частоты тоже), журналы писем пустые, код — заданный."""
+
+    def подготовить() -> None:
+        import os
+
+        from savdex import laravel_cache
+        from savdex.web import guard
+
+        shutil.rmtree(КЭШ, ignore_errors=True)
+        ЖУРНАЛ_LARAVEL.write_text("")
+        ЖУРНАЛ_DJANGO.write_text("")
+
+        if код is not None:
+            os.environ["CACHE_STORE"] = "file"
+            laravel_cache.put(
+                register_code._key(АДРЕС), {"hash": guard.make(код), "attempts": попытки}, 900
+            )
+
+    return подготовить
+
+
+def снимок(сайт: str) -> Callable[[], Any]:
+    """Письма (код скрыт) и запись кода: попытки и сходится ли код письма с хешем."""
+
+    def снять() -> Any:
+        import re
+
+        import bcrypt
+
+        письма = [
+            _разбор(п)
+            for журнал in (ЖУРНАЛ_DJANGO, ЖУРНАЛ_LARAVEL)
+            for п in _письма(журнал.read_text())
+        ]
+        запись = _кэш(АДРЕС)
+        код = None
+
+        if письма:
+            код = re.search(r"# (\d{6})", письма[0]["text"]).group(1)  # type: ignore[union-attr]
+
+        return {
+            "mail": [{k: _без_изменчивого(v, сайт) for k, v in п.items()} for п in письма],
+            "entry": None
+            if not isinstance(запись, dict)
+            else {
+                "attempts": запись["attempts"],
+                "from_mail": код is not None
+                and bcrypt.checkpw(код.encode(), ("$2b$" + запись["hash"][4:]).encode()),
+            },
+        }
+
+    return снять
+
+
+def шаг(
+    сайт: str,
+    path: str,
+    *,
+    данные: dict[str, Any] | None = None,
+    body: dict[str, Any] | None = None,
+    method: str = "POST",
+    код: str | None = None,
+    попытки: int = 0,
+) -> dict[str, Any]:
+    return отправить(
+        сайт,
+        path,
+        подготовка(код, попытки),
+        снимок(сайт),
+        данные=данные,
+        body=body or {},
+        method=method,
+        env=ОКРУЖЕНИЕ_DJANGO,
+        # Страница — обычным запросом браузера: у Inertia на GET своя
+        # проверка версии сборки (409)
+        headers=inertia(Referer=сайт + "/register")
+        if method == "POST"
+        else {"Referer": сайт + "/register", "User-Agent": "savdex-parity"},
+    )
+
+
+def _ждёт(email: str = АДРЕС) -> dict[str, Any]:
+    return {"register": {"email": email}}
+
+
+# ── Шаг 1: почта ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("email", "уходит"),
+    [
+        (" Aziz@Reg.Savdex.UZ ", True),
+        ("aziz.reg.savdex.uz", False),
+        ("aziz@reg", False),
+        ("aziz(x)@reg.savdex.uz", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_почта(сайт, email, уходит):
+    итог = шаг(сайт, "/register/email", body={} if email is None else {"email": email})
+
+    if уходит:
+        assert итог["ответ"]["headers"]["location"].endswith("/register/code")
+        assert len(итог["база"]["mail"]) == 1 and итог["база"]["entry"] == {
+            "attempts": 0,
+            "from_mail": True,
+        }
+        assert '"register":{"email":"aziz@reg.savdex.uz"}' in итог["сессия"]["payload"]
+    else:
+        assert итог["база"] == {"mail": [], "entry": None}
+
+
+@pytest.mark.parametrize("отключена", [False, True])
+def test_почта_занята(сайт, отключена):
+    sql("delete from users where email = %s", [АДРЕС])
+    sql(
+        "insert into users (name, email, password, status, deleted_at, created_at, updated_at) "
+        "values ('Был', %s, 'x', 'active', %s, now(), now())",
+        [АДРЕС, "2026-01-01 00:00:00" if отключена else None],
+    )
+
+    try:
+        итог = шаг(сайт, "/uz/register/email", body={"email": АДРЕС})
+    finally:
+        sql("delete from users where email = %s", [АДРЕС])
+
+    # Отключённый аккаунт адрес не держит
+    assert (итог["база"]["entry"] is not None) is отключена
+
+
+def test_почта_снимает_прежнее_подтверждение(сайт):
+    итог = шаг(
+        сайт,
+        "/register/email",
+        данные={"register": {"email": "old@reg.savdex.uz", "verified_email": "old@reg.savdex.uz"}},
+        body={"email": АДРЕС},
+    )
+
+    assert "verified_email" not in итог["сессия"]["payload"]
+
+
+# ── Шаг 2: код ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("данные", "prefix"),
+    [
+        ({}, ""),
+        (_ждёт(), ""),
+        (_ждёт(), "/en"),
+        ({**_ждёт(), "status": "Письмо отправлено", "_flash": {"old": [], "new": ["status"]}}, ""),
+    ],
+)
+def test_страница_кода(сайт, данные, prefix):
+    итог = шаг(сайт, prefix + "/register/code", данные=данные, method="GET")
+
+    if not данные:
+        assert итог["ответ"]["headers"]["location"].endswith("/register")
+
+
+@pytest.mark.parametrize(
+    ("body", "попытки", "prefix"),
+    [
+        ({"code": КОД}, 0, ""),
+        ({"code": КОД}, 0, "/tr"),
+        ({"code": "111111"}, 0, ""),
+        ({"code": КОД}, 5, ""),
+        ({"code": "12ab"}, 0, ""),
+        ({}, 0, ""),
+    ],
+)
+def test_код(сайт, body, попытки, prefix):
+    итог = шаг(сайт, prefix + "/register/code", данные=_ждёт(), body=body, код=КОД, попытки=попытки)
+
+    if body.get("code") == КОД and попытки == 0:
+        assert итог["ответ"]["headers"]["location"].endswith(prefix + "/register/details")
+        assert '"verified_email":"aziz@reg.savdex.uz"' in итог["сессия"]["payload"]
+        assert итог["база"]["entry"] is None  # верный код одноразов
+    elif body.get("code") == "111111":
+        assert итог["база"]["entry"]["attempts"] == 1
+
+
+def test_код_без_почты(сайт):
+    итог = шаг(сайт, "/register/code", body={"code": КОД}, код=КОД)
+
+    assert итог["ответ"]["headers"]["location"].endswith("/register")
+
+
+@pytest.mark.parametrize("ждёт", [True, False])
+def test_код_ещё_раз(сайт, ждёт):
+    итог = шаг(
+        сайт, "/register/code/resend", данные=_ждёт() if ждёт else {}, код=КОД if ждёт else None
+    )
+
+    if ждёт:
+        assert len(итог["база"]["mail"]) == 1 and итог["база"]["entry"]["from_mail"]
+        assert '"status"' in итог["сессия"]["payload"]
+    else:
+        assert итог["база"]["mail"] == []
+
+
+# ── Шаг 3: анкета ───────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "данные",
+    [
+        {},
+        _ждёт(),
+        {"register": {"email": АДРЕС, "verified_email": "other@reg.savdex.uz"}},
+        {"register": {"email": АДРЕС, "verified_email": АДРЕС}},
+    ],
+)
+def test_анкета(сайт, данные):
+    итог = шаг(сайт, "/register/details", данные=данные, method="GET")
+    verified = данные.get("register", {}).get("verified_email")
+
+    if verified == АДРЕС:
+        assert итог["ответ"]["status"] == 200
+    elif данные:
+        assert итог["ответ"]["headers"]["location"].endswith("/register/code")
+    else:
+        assert итог["ответ"]["headers"]["location"].endswith("/register")
+
+
+def test_вошедшему_шаги_не_нужны(сайт):
+    from .test_web_forms import учётка
+
+    uid = учётка("in@reg.savdex.uz")
+
+    for path, method in (("/register/code", "GET"), ("/register/email", "POST")):
+        итог = отправить(
+            сайт,
+            path,
+            подготовка(),
+            uid=uid,
+            body={"email": АДРЕС},
+            method=method,
+            env=ОКРУЖЕНИЕ_DJANGO,
+            headers=inertia(Referer=сайт + "/register")
+            if method == "POST"
+            else {"Referer": сайт + "/register", "User-Agent": "savdex-parity"},
+        )
+
+        assert итог["ответ"]["status"] == 302
