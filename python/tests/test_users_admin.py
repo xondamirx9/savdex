@@ -9,6 +9,7 @@
   подтверждением; связанные строки база правит по внешним ключам;
 - права — как у Filament: смотреть — users.view, отключать и
   восстанавливать — users.delete, навсегда — суперадмин;
+- «Отключить» и «Восстановить» — и кнопками на странице пользователя;
 - журнал admin_actions: deleted, restored, force_deleted.
 
 Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
@@ -202,3 +203,63 @@ def test_без_права_правки_поля_не_меняются(люди)
     ]
 
     sql("delete from users where id = %s", [uid])
+
+
+def test_кнопки_на_странице_пользователя(люди):
+    """
+    «Отключить» и «Восстановить» — и на странице пользователя, не только над
+    отмеченными в списке; права и правила те же.
+    """
+    uid = _аккаунт("button@company.uz")
+    страница = f"{LIST}{uid}/change/"
+
+    _, суперадмин = django(люди["superadmin"], ("get", страница, None))
+    _, админ = django(люди["admin"], ("get", страница, None))
+    assert 'value="disable"' in суперадмин["body"]
+    assert 'value="disable"' not in админ["body"], "право users.delete — у суперадмина"
+
+    _, чужой = django(люди["admin"], ("post", f"{LIST}{uid}/act/", {"act": "disable"}))
+    assert чужой["status"] == 403
+    assert _отключён(uid) is False
+
+    _, отключили, отключённый = django(
+        люди["superadmin"],
+        ("post", f"{LIST}{uid}/act/", {"act": "disable"}),
+        ("get", страница, None),
+    )
+    assert отключили["status"] == 302
+    assert _отключён(uid) is True
+    assert журнал("deleted")["subject_label"] == "button"
+    assert "Отключён" in отключённый["body"] and 'value="restore"' in отключённый["body"]
+
+    _, вернули = django(люди["superadmin"], ("post", f"{LIST}{uid}/act/", {"act": "restore"}))
+    assert вернули["status"] == 302
+    assert _отключён(uid) is False
+    assert журнал("restored")["subject_label"] == "button"
+
+    sql("delete from users where id = %s", [uid])
+
+
+def test_кнопки_не_обходят_правила(люди):
+    """Себя не отключить, занятую почту не восстановить — и кнопкой тоже."""
+    сам = люди["superadmin"]
+    _, своя, себя = django(
+        сам,
+        ("get", f"{LIST}{сам}/change/", None),
+        ("post", f"{LIST}{сам}/act/", {"act": "disable"}),
+    )
+    assert 'value="disable"' not in своя["body"]
+    assert себя["status"] == 302 and _отключён(сам) is False
+
+    старый = _аккаунт("busy@company.uz", отключён=True)
+    новый = _аккаунт("busy@company.uz")
+    _, ответ, страница = django(
+        сам,
+        ("post", f"{LIST}{старый}/act/", {"act": "restore"}),
+        ("get", f"{LIST}{старый}/change/", None),
+    )
+    assert ответ["status"] == 302
+    assert _отключён(старый) is True
+    assert "уже занят другим аккаунтом" in страница["body"]
+
+    sql("delete from users where id in (%s, %s)", [старый, новый])

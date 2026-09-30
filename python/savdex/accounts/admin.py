@@ -420,6 +420,29 @@ class UserAdmin(SavdexModelAdmin):
     def act_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
         user = User.objects.filter(pk=int(object_id) if object_id.isdigit() else 0).first()
 
+        # «Отключить» и «Восстановить» на странице пользователя — те же
+        # действия, что над отмеченными в списке (себя не отключить, занятую
+        # почту не восстановить, журнал), и с теми же правами
+        if request.method == "POST" and user is not None:
+            todo = request.POST.get("act", "")
+            page = reverse("savdex_admin:accounts_user_change", args=[user.pk])
+
+            if todo == "disable" and user.deleted_at is None:
+                if not self.has_disable_permission(request):
+                    raise PermissionDenied
+
+                self.disable(request, User.objects.filter(pk=user.pk))
+
+                return HttpResponseRedirect(page)
+
+            if todo == "restore" and user.deleted_at is not None:
+                if not self.has_restore_permission(request):
+                    raise PermissionDenied
+
+                self.restore(request, User.objects.filter(pk=user.pk))
+
+                return HttpResponseRedirect(page)
+
         if (
             request.method != "POST"
             or user is None
@@ -533,6 +556,12 @@ class UserAdmin(SavdexModelAdmin):
             guarded = self._staff_guarded(request, user)
             extra["can_password"] = editable and not guarded
             extra["can_status"] = editable and not guarded and user.pk != _admin_of(request).id
+            extra["can_disable"] = (
+                self.has_disable_permission(request) and user.pk != _admin_of(request).id
+            )
+        elif user is not None:
+            extra["disabled_note"] = self.state(user)
+            extra["can_restore"] = self.has_restore_permission(request)
 
         return super().change_view(request, object_id, form_url, extra)
 
