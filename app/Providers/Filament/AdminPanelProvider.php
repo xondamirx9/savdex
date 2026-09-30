@@ -28,6 +28,7 @@ use App\Models\Listing;
 use App\Models\Payment;
 use App\Models\PlatformReview;
 use App\Models\Review;
+use App\Models\Subscription;
 use App\Models\Support\Ticket;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
@@ -322,6 +323,14 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Монетизация')
                     ->sort(1)
                     ->visible(fn (): bool => AdminAccess::allows('plans.view')),
+                NavigationItem::make('Подписки')
+                    ->url('/admin/python?next=/py/admin/finance/subscription/')
+                    ->icon('heroicon-o-credit-card')
+                    ->group('Монетизация')
+                    ->sort(2)
+                    // Счётчик — платящие: то число, ради которого всё делалось
+                    ->badge(fn (): string => (string) Subscription::query()->where('status', 'active')->count())
+                    ->visible(fn (): bool => AdminAccess::allows('subscriptions.view')),
                 NavigationItem::make('Счета и оплаты')
                     ->url('/admin/python?next=/py/admin/finance/payment/')
                     ->icon('heroicon-o-banknotes')
@@ -339,6 +348,12 @@ class AdminPanelProvider extends PanelProvider
                     // при равном порядке пункты меню идут раньше разделов
                     ->sort(5)
                     ->visible(fn (): bool => AdminAccess::allows('creditpacks.view')),
+                NavigationItem::make('Промокоды')
+                    ->url('/admin/python?next=/py/admin/finance/promocode/')
+                    ->icon('heroicon-o-gift')
+                    ->group('Монетизация')
+                    ->sort(5)
+                    ->visible(fn (): bool => AdminAccess::allows('promocodes.view')),
                 NavigationItem::make('Категории')
                     ->url('/admin/python?next=/py/admin/catalogs/category/')
                     ->icon('heroicon-o-rectangle-stack')
