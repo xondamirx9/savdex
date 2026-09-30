@@ -1,0 +1,863 @@
+/*
+ * Админка на Python в оформлении админки Laravel (Filament).
+ *
+ * Сотрудник переходит между двумя половинами по пунктам одного меню,
+ * и стандартная тема Django (тёмно-синяя шапка, мелкий шрифт) выглядела
+ * чужим сайтом. Здесь — то же, что у Filament: шрифт Inter, белые
+ * карточки со скруглением на сером фоне, светлое меню слева, синий
+ * основной цвет (Color::Blue в AdminPanelProvider).
+ *
+ * Две темы, как у Filament: светлая и тёмная. Выбирает переключатель
+ * Django в шапке (светлая, тёмная, как в системе); «как в системе» —
+ * по prefers-color-scheme. Цвета — только через переменные ниже,
+ * правила ниже одни на обе темы.
+ *
+ * Только переопределения поверх admin/css/base.css: разметку Django
+ * не трогаем, поэтому свои шаблоны разделов работают как прежде.
+ */
+
+/* ── Светлая тема ── */
+:root,
+html[data-theme="light"] {
+    --sx-canvas: #f9fafb;
+    --sx-surface: #fff;
+    --sx-surface-2: #f9fafb;
+    --sx-text-strong: #030712;
+    --sx-text: #111827;
+    --sx-text-2: #374151;
+    --sx-muted: #6b7280;
+    --sx-muted-2: #9ca3af;
+    --sx-border: #e5e7eb;
+    --sx-border-soft: #f3f4f6;
+    --sx-input-border: #d1d5db;
+    --sx-accent: #2563eb;
+    --sx-accent-strong: #1d4ed8;
+    --sx-accent-text: #2563eb;
+    --sx-accent-soft: #eff6ff;
+    --sx-focus: rgba(37, 99, 235, .2);
+    --sx-danger: #dc2626;
+    --sx-danger-strong: #b91c1c;
+    --sx-danger-ring: #fecaca;
+    --sx-success-text: #166534;
+    --sx-warning-text: #92400e;
+    --sx-ring: 0 0 0 1px rgba(3, 7, 18, .05);
+    --sx-card-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+
+    --message-success-bg: #f0fdf4;
+    --message-warning-bg: #fffbeb;
+    --message-error-bg: #fef2f2;
+
+    color-scheme: light;
+}
+
+/* ── Тёмная тема: палитра тёмного режима Filament (gray-950/900, белые рамки 10 %) ── */
+html[data-theme="dark"] {
+    --sx-canvas: #030712;
+    --sx-surface: #111827;
+    --sx-surface-2: #1f2937;
+    --sx-text-strong: #fff;
+    --sx-text: #f9fafb;
+    --sx-text-2: #d1d5db;
+    --sx-muted: #9ca3af;
+    --sx-muted-2: #6b7280;
+    --sx-border: rgba(255, 255, 255, .1);
+    --sx-border-soft: rgba(255, 255, 255, .05);
+    --sx-input-border: rgba(255, 255, 255, .15);
+    --sx-accent: #3b82f6;
+    --sx-accent-strong: #2563eb;
+    --sx-accent-text: #60a5fa;
+    --sx-accent-soft: rgba(59, 130, 246, .12);
+    --sx-focus: rgba(96, 165, 250, .3);
+    --sx-danger: #f87171;
+    --sx-danger-strong: #fca5a5;
+    --sx-danger-ring: rgba(248, 113, 113, .35);
+    --sx-success-text: #86efac;
+    --sx-warning-text: #fcd34d;
+    --sx-ring: 0 0 0 1px rgba(255, 255, 255, .1);
+    --sx-card-shadow: 0 0 #0000;
+
+    --message-success-bg: rgba(34, 197, 94, .12);
+    --message-warning-bg: rgba(245, 158, 11, .12);
+    --message-error-bg: rgba(239, 68, 68, .12);
+
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] {
+        --sx-canvas: #030712;
+        --sx-surface: #111827;
+        --sx-surface-2: #1f2937;
+        --sx-text-strong: #fff;
+        --sx-text: #f9fafb;
+        --sx-text-2: #d1d5db;
+        --sx-muted: #9ca3af;
+        --sx-muted-2: #6b7280;
+        --sx-border: rgba(255, 255, 255, .1);
+        --sx-border-soft: rgba(255, 255, 255, .05);
+        --sx-input-border: rgba(255, 255, 255, .15);
+        --sx-accent: #3b82f6;
+        --sx-accent-strong: #2563eb;
+        --sx-accent-text: #60a5fa;
+        --sx-accent-soft: rgba(59, 130, 246, .12);
+        --sx-focus: rgba(96, 165, 250, .3);
+        --sx-danger: #f87171;
+        --sx-danger-strong: #fca5a5;
+        --sx-danger-ring: rgba(248, 113, 113, .35);
+        --sx-success-text: #86efac;
+        --sx-warning-text: #fcd34d;
+        --sx-ring: 0 0 0 1px rgba(255, 255, 255, .1);
+        --sx-card-shadow: 0 0 #0000;
+
+        --message-success-bg: rgba(34, 197, 94, .12);
+        --message-warning-bg: rgba(245, 158, 11, .12);
+        --message-error-bg: rgba(239, 68, 68, .12);
+
+        color-scheme: dark;
+    }
+}
+
+/* ── Переменные Django — из токенов темы, одни на обе темы ── */
+:root,
+html[data-theme="light"],
+html[data-theme="dark"],
+html[data-theme="auto"] {
+    --primary: var(--sx-accent);
+    --secondary: var(--sx-accent-strong);
+    --accent: var(--sx-accent);
+    --primary-fg: #fff;
+
+    --body-fg: var(--sx-text);
+    --body-bg: var(--sx-surface);
+    --body-quiet-color: var(--sx-muted);
+    --body-medium-color: var(--sx-text-2);
+    --body-loud-color: var(--sx-text-strong);
+
+    --header-color: var(--sx-text);
+    --header-branding-color: var(--sx-text);
+    --header-bg: var(--sx-surface);
+    --header-link-color: var(--sx-text-2);
+
+    --breadcrumbs-fg: var(--sx-muted);
+    --breadcrumbs-link-fg: var(--sx-muted);
+    --breadcrumbs-bg: transparent;
+
+    --link-fg: var(--sx-accent-text);
+    --link-hover-color: var(--sx-accent-strong);
+    --link-selected-fg: var(--sx-accent-strong);
+
+    --hairline-color: var(--sx-border-soft);
+    --border-color: var(--sx-border);
+
+    --error-fg: var(--sx-danger);
+
+    --darkened-bg: var(--sx-surface-2);
+    --selected-bg: var(--sx-accent-soft);
+    --selected-row: var(--sx-accent-soft);
+
+    --button-fg: #fff;
+    --button-bg: #2563eb;
+    --button-hover-bg: #1d4ed8;
+    --default-button-bg: #2563eb;
+    --default-button-hover-bg: #1d4ed8;
+    --close-button-bg: var(--sx-surface);
+    --close-button-hover-bg: var(--sx-surface-2);
+    --delete-button-bg: #dc2626;
+    --delete-button-hover-bg: #b91c1c;
+
+    --object-tools-fg: #fff;
+    --object-tools-bg: #2563eb;
+    --object-tools-hover-bg: #1d4ed8;
+
+    --font-family-primary: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    --sx-card-radius: 12px;
+    --sx-control-radius: 8px;
+}
+
+/* ── Основа ── */
+
+html,
+body {
+    background: var(--sx-canvas);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+a:link,
+a:visited {
+    color: var(--link-fg);
+}
+
+a:focus,
+a:hover {
+    color: var(--link-hover-color);
+}
+
+/* ── Шапка ── */
+
+#header {
+    background: var(--sx-surface);
+    color: var(--header-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 24px;
+    min-height: 64px;
+    box-sizing: border-box;
+}
+
+#branding h1,
+#site-name {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+}
+
+#site-name a:link,
+#site-name a:visited {
+    color: var(--sx-text);
+}
+
+#site-name span {
+    color: var(--sx-muted);
+    font-weight: 500;
+}
+
+#user-tools {
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--sx-muted);
+}
+
+#user-tools a,
+#logout-form button {
+    color: var(--sx-text-2);
+    border-bottom: 0;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+#user-tools a:hover,
+#logout-form button:hover {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+/* ── Хлебные крошки ── */
+
+div.breadcrumbs {
+    background: transparent;
+    color: var(--sx-muted);
+    padding: 16px 32px 0;
+    font-size: 13px;
+    border: 0;
+}
+
+div.breadcrumbs a {
+    color: var(--sx-muted);
+}
+
+div.breadcrumbs a:hover {
+    color: var(--sx-text);
+}
+
+/* ── Меню слева ── */
+
+.main > #nav-sidebar {
+    background: var(--sx-surface);
+    border-right: 1px solid var(--border-color);
+    padding: 16px 12px 24px;
+}
+
+#nav-sidebar .module {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    margin-bottom: 20px;
+}
+
+#nav-sidebar .module caption,
+#nav-sidebar .module caption a {
+    background: transparent;
+    color: var(--sx-muted);
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 4px 12px 8px;
+}
+
+#nav-sidebar .module th,
+#nav-sidebar .module td {
+    border: 0;
+    background: transparent;
+    padding: 0;
+}
+
+#nav-sidebar .module tr {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border-radius: var(--sx-control-radius);
+}
+
+#nav-sidebar .module tr:hover {
+    background: var(--sx-surface-2);
+}
+
+#nav-sidebar .module th {
+    flex: 1;
+    min-width: 0;
+}
+
+#nav-sidebar .module th a {
+    display: block;
+    padding: 8px 12px;
+    color: var(--sx-text-2);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#nav-sidebar .module th a:hover {
+    color: var(--sx-text);
+}
+
+#nav-sidebar .module td a.addlink {
+    font-size: 0;
+    padding: 8px 12px 8px 20px;
+    background-position: 0 center;
+    opacity: .45;
+}
+
+#nav-sidebar .module tr:hover td a.addlink {
+    opacity: .9;
+}
+
+#nav-sidebar .current-app .section:link,
+#nav-sidebar .current-app .section:visited {
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+#nav-sidebar .module tr.current-model {
+    background: var(--sx-accent-soft);
+}
+
+#nav-sidebar .current-model th a {
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+#nav-filter {
+    background: var(--sx-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--sx-control-radius);
+    padding: 8px 12px;
+    margin: 0 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.toggle-nav-sidebar {
+    background: var(--sx-surface);
+    border: 0;
+    border-right: 1px solid var(--border-color);
+    color: var(--sx-muted-2);
+}
+
+.toggle-nav-sidebar:hover,
+.toggle-nav-sidebar:focus {
+    background: var(--sx-surface-2);
+    color: var(--sx-text-2);
+}
+
+/* ── Страница ── */
+
+#content {
+    padding: 16px 32px 40px;
+}
+
+#content h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    color: var(--sx-text-strong);
+    margin: 8px 0 24px;
+}
+
+#content h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--sx-text);
+}
+
+/* Карточки: модули, таблицы, наборы полей */
+.module,
+#changelist .changelist-form-container,
+fieldset.module {
+    background: var(--sx-surface);
+    border: 0;
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+    background: var(--sx-surface);
+    color: var(--sx-text);
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.module caption a,
+.module h2 a {
+    color: var(--sx-text);
+}
+
+/* ── Таблицы ── */
+
+table {
+    border-color: var(--border-color);
+}
+
+thead th,
+tfoot td {
+    background: var(--sx-surface-2);
+    color: var(--sx-text-2);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    border-bottom: 1px solid var(--border-color);
+    border-top: 0;
+    padding: 12px 16px;
+}
+
+thead th a:link,
+thead th a:visited {
+    color: var(--sx-text-2);
+}
+
+td,
+th {
+    border-bottom: 1px solid var(--sx-border-soft);
+    padding: 12px 16px;
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+tr:nth-child(odd),
+.row-form-errors {
+    background: var(--sx-surface);
+}
+
+#result_list tbody tr:hover {
+    background: var(--sx-surface-2);
+}
+
+#result_list tbody tr.selected {
+    background: var(--sx-accent-soft);
+}
+
+.results {
+    overflow-x: auto;
+}
+
+/* ── Список раздела ── */
+
+#changelist #toolbar {
+    background: var(--sx-surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: 16px 24px;
+    margin: 0;
+}
+
+#changelist #toolbar form input[type="text"],
+#changelist-search input[type="text"] {
+    border-radius: var(--sx-control-radius);
+    border: 1px solid var(--sx-input-border);
+    padding: 8px 12px;
+    min-width: 280px;
+    font-size: 14px;
+}
+
+#changelist .actions {
+    background: var(--sx-surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 24px;
+    color: var(--sx-text-2);
+}
+
+#changelist .paginator,
+.paginator {
+    background: var(--sx-surface);
+    border-top: 1px solid var(--border-color);
+    padding: 12px 24px;
+    color: var(--sx-muted);
+    font-size: 13px;
+}
+
+.paginator a:link,
+.paginator a:visited {
+    background: var(--sx-surface);
+    color: var(--sx-text-2);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 10px;
+}
+
+.paginator a.showall:link {
+    border: 0;
+    color: var(--link-fg);
+}
+
+.paginator .this-page {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-weight: 600;
+}
+
+/* Фильтр справа — отдельная карточка */
+#changelist-filter {
+    background: var(--sx-surface);
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    padding: 8px 0 16px;
+}
+
+#changelist-filter h2 {
+    background: transparent;
+    color: var(--sx-text);
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 20px;
+}
+
+#changelist-filter h3 {
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: none;
+    padding: 0 20px;
+    margin: 16px 0 6px;
+}
+
+#changelist-filter ul {
+    border: 0;
+    padding: 0 12px;
+    margin: 0;
+}
+
+#changelist-filter li {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#changelist-filter li a {
+    display: block;
+    padding: 6px 8px;
+    border-radius: 6px;
+    color: var(--sx-text-2);
+}
+
+#changelist-filter li a:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+#changelist-filter li.selected {
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+#changelist-filter li.selected a {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+#changelist-filter #changelist-filter-extra-actions,
+#changelist-filter-clear a {
+    padding: 0 20px;
+}
+
+/* ── Кнопки ── */
+
+.button,
+input[type="submit"],
+input[type="button"],
+.submit-row input,
+a.button,
+button.button {
+    background: var(--button-bg);
+    color: #fff;
+    border: 0;
+    border-radius: var(--sx-control-radius);
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    height: auto;
+    box-shadow: var(--sx-card-shadow);
+    cursor: pointer;
+}
+
+.button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover,
+.submit-row input:hover,
+a.button:hover {
+    background: var(--button-hover-bg);
+}
+
+.button.default,
+input[type="submit"].default,
+.submit-row input.default {
+    background: var(--default-button-bg);
+}
+
+/* Второстепенные кнопки — белые с рамкой, как в Filament */
+.submit-row input[name="_addanother"],
+.submit-row input[name="_continue"],
+.submit-row input[name="_saveasnew"],
+#changelist #toolbar form input[type="submit"] {
+    background: var(--sx-surface);
+    color: var(--sx-text);
+    box-shadow: var(--sx-card-shadow), inset 0 0 0 1px var(--sx-input-border);
+}
+
+#changelist #toolbar form input[type="submit"] {
+    border: 0;
+    border-radius: var(--sx-control-radius);
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-left: 4px;
+    cursor: pointer;
+}
+
+.submit-row input[name="_addanother"]:hover,
+.submit-row input[name="_continue"]:hover,
+.submit-row input[name="_saveasnew"]:hover,
+#changelist #toolbar form input[type="submit"]:hover {
+    background: var(--sx-surface-2);
+}
+
+.submit-row {
+    background: var(--sx-surface);
+    border: 0;
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    padding: 16px 24px;
+    margin: 24px 0 0;
+}
+
+.submit-row a.deletelink,
+a.deletelink:link,
+a.deletelink:visited {
+    background: var(--sx-surface);
+    color: var(--sx-danger);
+    border-radius: var(--sx-control-radius);
+    box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
+    padding: 9px 16px;
+    font-weight: 600;
+    height: auto;
+}
+
+.submit-row a.closelink {
+    background: var(--sx-surface);
+    color: var(--sx-text-2);
+    border-radius: var(--sx-control-radius);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    padding: 9px 16px;
+}
+
+.object-tools a:link,
+.object-tools a:visited {
+    background: var(--object-tools-bg);
+    color: #fff;
+    border-radius: var(--sx-control-radius);
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.object-tools a:hover {
+    background: var(--object-tools-hover-bg);
+}
+
+/* ── Поля формы ── */
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="url"],
+input[type="number"],
+input[type="tel"],
+input[type="search"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea,
+select,
+.vTextField {
+    border: 1px solid var(--sx-input-border);
+    border-radius: var(--sx-control-radius);
+    padding: 8px 12px;
+    font-size: 14px;
+    background: var(--sx-surface);
+    color: var(--sx-text);
+    box-shadow: var(--sx-card-shadow);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--sx-accent-text);
+    outline: 2px solid var(--sx-focus);
+    outline-offset: 0;
+}
+
+.form-row {
+    border-bottom: 1px solid var(--sx-border-soft);
+    padding: 14px 24px;
+}
+
+.aligned label,
+.form-row label {
+    color: var(--sx-text-2);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.help,
+p.help,
+form p.help,
+div.help,
+form div.help {
+    color: var(--sx-muted);
+    font-size: 13px;
+}
+
+.errornote {
+    background: var(--message-error-bg);
+    color: var(--sx-danger-strong);
+    border: 0;
+    border-radius: var(--sx-control-radius);
+    box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
+}
+
+ul.errorlist {
+    color: var(--sx-danger);
+}
+
+/* ── Сообщения ── */
+
+ul.messagelist li {
+    border-radius: var(--sx-control-radius);
+    margin: 0 32px 8px;
+    padding: 12px 16px 12px 44px;
+    font-size: 14px;
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    background-color: var(--message-success-bg);
+    color: var(--sx-success-text);
+}
+
+ul.messagelist li.warning {
+    background-color: var(--message-warning-bg);
+    color: var(--sx-warning-text);
+}
+
+ul.messagelist li.error {
+    background-color: var(--message-error-bg);
+    color: var(--sx-danger-strong);
+}
+
+/* ── Главная админки: разделы карточками ── */
+
+.dashboard #content {
+    max-width: 1200px;
+}
+
+.dashboard .module table th {
+    font-weight: 500;
+}
+
+.dashboard .module table td a {
+    font-weight: 500;
+}
+
+#recent-actions-module {
+    display: none;
+}
+
+/* ── Подвал и мелочи ── */
+
+#footer {
+    background: transparent;
+}
+
+.selector,
+.selector-available,
+.selector-chosen {
+    border-radius: var(--sx-control-radius);
+}
+
+.selector-available h2,
+.selector-chosen h2 {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+    border-radius: var(--sx-control-radius) var(--sx-control-radius) 0 0;
+}
+
+/* Телефон: меньше полей по краям */
+@media (max-width: 767px) {
+    #header {
+        padding: 12px 16px;
+    }
+
+    div.breadcrumbs {
+        padding: 12px 16px 0;
+    }
+
+    #content {
+        padding: 12px 16px 32px;
+    }
+
+    #changelist #toolbar form input[type="text"] {
+        min-width: 0;
+        width: 100%;
+    }
+}
+
+/* ── Переключатель темы в шапке ── */
+#user-tools .theme-toggle {
+    vertical-align: middle;
+    margin-left: 8px;
+}
+
+#user-tools .theme-toggle svg {
+    fill: var(--sx-muted);
+}
+
+#user-tools .theme-toggle:hover svg {
+    fill: var(--sx-text);
+}
