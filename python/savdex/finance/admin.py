@@ -283,3 +283,7 @@ class PaymentAdmin(SavdexModelAdmin):
         self.message_user(request, "Счёт отменён", messages.SUCCESS)
 
         return self._back(request)
+
+
+# Остальные разделы денег — в своих модулях; Django читает только admin.py
+from savdex.finance import promo_admin, subscriptions_admin  # noqa: E402, F401

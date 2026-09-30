@@ -12,6 +12,7 @@ from __future__ import annotations
 from django.db import models
 
 from savdex.accounts.models import User
+from savdex.billing.models import Plan
 from savdex.catalog import UTCDateTimeField
 from savdex.crm.models import Company
 
@@ -77,3 +78,86 @@ class Payment(models.Model):
         label = f"{int(self.amount):,}".replace(",", " ")
 
         return f"{label} {'сум' if self.currency == 'UZS' else self.currency}"
+
+
+# ── Подписки ────────────────────────────────────────────────────────
+
+#: Subscription::SOURCE_* — «Откуда» у Filament
+SOURCES = {"payment": "Оплачен", "manual": "Выдан вручную", "promo": "Промокод"}
+
+#: Статусы подписки у Filament
+SUBSCRIPTION_STATUSES = {"active": "Активна", "expired": "Истекла", "cancelled": "Отменена"}
+
+
+class Subscription(models.Model):
+    """App\\Models\\Subscription: тариф компании."""
+
+    company = models.ForeignKey(
+        Company, verbose_name="компания", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    plan = models.ForeignKey(
+        Plan, verbose_name="тариф", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    status = models.CharField("статус", max_length=255)
+    started_at = UTCDateTimeField("начало")
+    ends_at = UTCDateTimeField("до", null=True)
+    auto_renew = models.BooleanField("автопродление", default=True)
+    cancelled_at = UTCDateTimeField(null=True)
+    source = models.CharField("откуда", max_length=255)
+    granted_by = models.ForeignKey(
+        User, verbose_name="кто выдал", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, db_column="granted_by", related_name="+",
+    )  # fmt: skip
+    grant_reason = models.CharField("основание", max_length=255, null=True)
+    created_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "subscriptions"
+        verbose_name = "подписка"
+        verbose_name_plural = "Подписки"
+
+    def __str__(self) -> str:
+        return f"Подписка #{self.pk}"
+
+
+# ── Промокоды ───────────────────────────────────────────────────────
+
+
+class PromoCode(models.Model):
+    """App\\Models\\PromoCode: код на бесплатный период или скидку."""
+
+    code = models.CharField("код", max_length=32)
+    plan = models.ForeignKey(
+        Plan, verbose_name="тариф", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    days = models.IntegerField("дней")
+    discount_percent = models.IntegerField("скидка, %", null=True)
+    expires_at = UTCDateTimeField("активировать до", null=True)
+    is_active = models.BooleanField("действует", default=True)
+    note = models.CharField("для кого / повод", max_length=255, null=True)
+    used_at = UTCDateTimeField("активирован", null=True)
+    used_by_company = models.ForeignKey(
+        Company, verbose_name="кем", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, related_name="+",
+    )  # fmt: skip
+    subscription_id = models.BigIntegerField(null=True)
+    created_by = models.ForeignKey(
+        User, verbose_name="кто выпустил", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, db_column="created_by", related_name="+",
+    )  # fmt: skip
+    created_at = UTCDateTimeField("выпущен", null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "promo_codes"
+        verbose_name = "промокод"
+        verbose_name_plural = "Промокоды"
+
+    def __str__(self) -> str:
+        return self.code

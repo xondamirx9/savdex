@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Filament\Pages\Complaints;
-use App\Filament\Resources\PromoCodes\PromoCodeResource;
-use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Models\User;
 use App\Support\AdminAccess;
 use Filament\Facades\Filament;
@@ -33,8 +31,6 @@ class AdminAccessTest extends TestCase
     /** Все разделы панели, у которых есть экран. */
     private const ALL = [
         Complaints::class,
-        SubscriptionResource::class,
-        PromoCodeResource::class,
     ];
 
     private function admin(string $role): User
@@ -60,9 +56,7 @@ class AdminAccessTest extends TestCase
                 Complaints::class,
             ]],
 
-            'продажи' => [AdminAccess::SALES, [
-                PromoCodeResource::class,
-            ]],
+            'продажи' => [AdminAccess::SALES, []],
 
             'менеджер поставщиков' => [AdminAccess::SUPPLIER_MANAGER, []],
 
@@ -72,14 +66,10 @@ class AdminAccessTest extends TestCase
                 Complaints::class,
             ]],
 
-            'финансы' => [AdminAccess::FINANCE, [
-                SubscriptionResource::class,
-                PromoCodeResource::class,
-            ]],
+            'финансы' => [AdminAccess::FINANCE, []],
 
             'поддержка' => [AdminAccess::SUPPORT, [
                 Complaints::class,
-                SubscriptionResource::class,
             ]],
 
             'контент' => [AdminAccess::CONTENT_MANAGER, []],
