@@ -12,12 +12,13 @@
 <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap">
 <link rel="stylesheet" href="{% static 'savdex/admin-theme.css' %}">
+{% if savdex_logo %}<link rel="icon" href="{{ savdex_logo }}">{% endif %}
 {% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header }}</a> <span style="opacity:.7;font-size:.8em">· разделы на Python</span></div>
+<div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo">{% endif %}<span>{{ site_header }}</span></a> <span class="sx-brand-note">· разделы на Python</span></div>
 {% endblock %}
 
 {% block usertools %}

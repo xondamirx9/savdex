@@ -133,6 +133,48 @@ def _admin_of(request: HttpRequest) -> access.Admin:
 # ── Сайт ────────────────────────────────────────────────────────────
 
 
+#: Значки разделов в меню — Heroicons, как в Filament. Файлы лежат
+#: в templates/admin/icons/; раздела нет в списке — общий значок
+ICONS = {
+    "geo.Country": "globe-alt",
+    "geo.City": "building-office-2",
+    "catalogs.CompanyType": "tag",
+    "catalogs.Category": "squares-2x2",
+    "billing.CreditPack": "ticket",
+    "billing.Plan": "rectangle-stack",
+    "site.Setting": "cog-6-tooth",
+    "site.Banner": "megaphone",
+    "site.NewsPost": "newspaper",
+    "site.Page": "document-text",
+    "site.LandingBlock": "home",
+    "tenders.Tender": "clipboard-document-list",
+    "accounts.User": "users",
+    "accounts.StaffMember": "shield-check",
+    "crm.Contact": "identification",
+    "crm.Lead": "funnel",
+    "crm.Deal": "briefcase",
+    "crm.Task": "check-circle",
+    "crm.Communication": "chat-bubble-left-right",
+    "support.Ticket": "lifebuoy",
+    "journal.AdminAction": "clock",
+    "moderation.Review": "star",
+    "moderation.PlatformReview": "chat-bubble-bottom-center-text",
+    "moderation.CompanyDocument": "document-check",
+    "moderation.Resume": "user-circle",
+    "data.ItTask": "code-bracket",
+    "data.Listing": "shopping-bag",
+    "data.CompanyRecord": "building-office",
+    "system.Broadcast": "paper-airplane",
+    "finance.Payment": "credit-card",
+    "finance.Refund": "arrow-uturn-left",
+    "finance.Complaint": "exclamation-triangle",
+    "finance.WalletTransaction": "banknotes",
+    "finance.PromoCode": "receipt-percent",
+    "finance.Subscription": "arrow-path",
+}
+DEFAULT_ICON = "rectangle-stack"
+
+
 class SavdexAdminSite(admin.AdminSite):
     site_header = "SAVDEX · Управление"
     site_title = "SAVDEX · разделы на Python"
@@ -189,8 +231,26 @@ class SavdexAdminSite(admin.AdminSite):
         admin_ = getattr(request, "admin", None)
         context["savdex_admin"] = admin_
         context["savdex_role"] = admin_.role_label if isinstance(admin_, access.Admin) else None
+        # Знак из раздела «Оформление» — тот же, что в шапке Filament
+        from savdex.web import shared
+
+        context["savdex_logo"] = shared.appearance_logo(shared.settings_values())
 
         return context
+
+    def get_app_list(
+        self,
+        request: HttpRequest,
+        app_label: str | None = None,
+    ) -> list[Any]:
+        apps = super().get_app_list(request, app_label)
+
+        for app in apps:
+            for model in app["models"]:
+                key = f"{app['app_label']}.{model['object_name']}"
+                model["icon"] = f"admin/icons/{ICONS.get(key, DEFAULT_ICON)}.svg"
+
+        return apps
 
 
 site = SavdexAdminSite(name="savdex_admin")
