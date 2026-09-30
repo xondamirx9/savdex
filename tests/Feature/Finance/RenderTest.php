@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Finance;
 
 use App\Filament\Pages\FinanceOperations;
-use App\Filament\Resources\Refunds\Pages\ListRefunds;
 use App\Models\Company;
 use App\Models\Crm\Communication;
 use App\Models\Crm\Contact;
@@ -47,7 +46,6 @@ class RenderTest extends TestCase
     public static function страницы(): array
     {
         return [
-            'возвраты' => [ListRefunds::class],
             'финансовые операции' => [FinanceOperations::class],
         ];
     }

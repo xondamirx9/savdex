@@ -404,7 +404,8 @@ SHARED_WRITES: dict[str, str] = {
         "лежит в базе. На боевом кэш в файлах, и таблицу это не трогает"
     ),
     # Этап 7 (деньги). Хозяин таблиц — Laravel, пока месяц сверки не
-    # пройдёт без расхождений; Django пишет только формы кассы
+    # пройдёт без расхождений; Django пишет через те же службы: касса,
+    # колбэки Uzum и разделы денег в админке
     "subscriptions": (
         "автопродление в кассе кабинета (этап 7, шаг 53): отмена — auto_renew "
         "и cancelled_at, включение — только у оплаченной подписки; updated_at, "
@@ -412,6 +413,8 @@ SHARED_WRITES: dict[str, str] = {
         "бесплатный период — SubscriptionService::assign: прежние действующие "
         "истекают запросом (status, cancelled_at, updated_at), новая — вставкой "
         "со строкой журнала"
+        "; «Назначить тариф», «Сменить или продлить» и «Отменить» в админке "
+        "(шаг 57) — то же вручную, отмена — status, cancelled_at, auto_renew"
     ),
     "payment_methods": (
         "отвязка карты в кассе кабинета (этап 7, шаг 53): delete своей карты, "
@@ -425,6 +428,9 @@ SHARED_WRITES: dict[str, str] = {
         "(external_id) и провайдер. Оплата (шаг 54, колбэки Uzum, "
         "OrderService::markPaid) — status paid, paid_at, след провайдера "
         "(provider, external_id) и subscription_id выданной подписки"
+        "; «Деньги пришли» и «Отменить счёт» в админке (шаг 56) — то же через "
+        "OrderService::confirm и ::cancel, с confirmed_by и admin_note; полный "
+        "возврат (шаг 58) — status refunded"
     ),
     "promo_codes": (
         "возврат скидочного кода отменённого счёта (этап 7, шаг 53), как "
@@ -433,6 +439,14 @@ SHARED_WRITES: dict[str, str] = {
         "активация (PromoCodeService::capture) — условный захват свободного кода, "
         "одна компания — один код (уникальный индекс); бесплатный период — "
         "subscription_id выданной подписки"
+        "; выпуск пачкой и выключатель is_active в админке (шаг 57), как "
+        "PromoCodesTable — строка журнала на каждый код"
+    ),
+    "refunds": (
+        "«Возвраты» в админке Django (этап 7, шаг 58), как RefundService: "
+        "заявка — вставка «Заявлен» по оплаченному счёту не больше остатка; решение — "
+        "status, decided_by, decided_at, decision_note и updated_at. Журнал — строка "
+        "наблюдателя и строка службы с пометкой"
     ),
     "payment_transactions": (
         "транзакции провайдера (этап 7, шаг 54): Merchant API Uzum — create "

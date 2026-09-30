@@ -161,3 +161,51 @@ class PromoCode(models.Model):
 
     def __str__(self) -> str:
         return self.code
+
+
+# ── Возвраты ────────────────────────────────────────────────────────
+
+#: Refund::STATUSES
+REFUND_STATUSES = {"requested": "Заявлен", "done": "Проведён", "rejected": "Отклонён"}
+
+
+class Refund(models.Model):
+    """App\\Models\\Refund: возврат по оплаченному счёту."""
+
+    payment = models.ForeignKey(
+        Payment, verbose_name="счёт", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="+",
+    )  # fmt: skip
+    company = models.ForeignKey(
+        Company, verbose_name="компания", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, related_name="+",
+    )  # fmt: skip
+    amount = models.BigIntegerField("сумма")
+    currency = models.CharField(max_length=3)
+    reason = models.TextField("причина")
+    status = models.CharField("решение", max_length=20)
+    created_by = models.ForeignKey(
+        User, verbose_name="заявил", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, db_column="created_by", related_name="+",
+    )  # fmt: skip
+    decided_by = models.ForeignKey(
+        User, verbose_name="решил", null=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, db_column="decided_by", related_name="+",
+    )  # fmt: skip
+    decided_at = UTCDateTimeField(null=True)
+    decision_note = models.TextField(null=True)
+    created_at = UTCDateTimeField("заявлен", null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "refunds"
+        verbose_name = "возврат"
+        verbose_name_plural = "Возвраты"
+
+    def __str__(self) -> str:
+        return f"Возврат #{self.pk}"
+
+    def money(self) -> str:
+        """Refund::money: «429 500 сум» — с пробелами."""
+        return f"{int(self.amount):,}".replace(",", " ") + f" {self.currency}"
