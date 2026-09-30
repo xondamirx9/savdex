@@ -14,7 +14,8 @@ profile_changed_at и закрывает смену до конца срока. 
 from __future__ import annotations
 
 import calendar
-from datetime import datetime
+import math
+from datetime import UTC, datetime
 from typing import Any
 
 from django.db import connection, transaction
@@ -35,6 +36,7 @@ from savdex.web.company_profile_actions import (
 from savdex.web.forms import action, input_of
 from savdex.web.listing_actions import _stamp
 from savdex.web.resume_actions import _exists
+from savdex.web.review_actions import _php_round
 from savdex.web.seo import php_json
 from savdex.web.shared import Context
 from savdex.web.validation import Check, validate, validated
@@ -68,6 +70,30 @@ def locked_until(company: dict[str, Any]) -> datetime | None:
     until = _add_months(changed.replace(tzinfo=None), COOLDOWN_MONTHS)
 
     return until if until > eloquent.now().replace(tzinfo=None) else None
+
+
+def _cooldown(company: dict[str, Any]) -> dict[str, Any]:
+    """
+    Плашка над формой (#252): сколько дней ждать, какая часть срока прошла
+    и с какого дня откроется следующая смена, если сохранить сейчас.
+    now() у Laravel — с долями секунды, diffInSeconds — дробное.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    until = locked_until(company)
+    changed = company.get("profile_changed_at")
+    progress = None
+
+    if until is not None and changed is not None:
+        changed = changed.replace(tzinfo=None)
+        passed = (now - changed).total_seconds()
+        whole = max(1.0, (until - changed).total_seconds())
+        progress = _php_round(min(1.0, max(0.0, passed / whole)), 3)
+
+    return {
+        "days_left": math.ceil((until - now).total_seconds() / 86400) if until else None,
+        "cooldown_progress": progress,
+        "next_if_changed": _date(_add_months(now, COOLDOWN_MONTHS)),
+    }
 
 
 def _date(moment: datetime | None) -> str | None:
@@ -123,6 +149,7 @@ def _payload(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
         "locked_until": _date(locked_until(company)),
         "changed_at": _date(company.get("profile_changed_at")),
         "cooldown_months": COOLDOWN_MONTHS,
+        **_cooldown(company),
         "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
         "cities": [
             {"id": c["id"], "name": cities[c["id"]], "country_id": c["country_id"]}
