@@ -332,15 +332,6 @@ class AdminPanelProvider extends PanelProvider
                     // Счётчик — платящие: то число, ради которого всё делалось
                     ->badge(fn (): string => (string) Subscription::query()->where('status', 'active')->count())
                     ->visible(fn (): bool => AdminAccess::allows('subscriptions.view')),
-                NavigationItem::make('Возвраты')
-                    ->url('/admin/python?next=/py/admin/finance/refund/')
-                    ->icon('heroicon-o-arrow-uturn-left')
-                    ->group('Монетизация')
-                    ->sort(3)
-                    // Счётчик — заявленные: деньги, по которым решение ещё не принято
-                    ->badge(fn (): ?string => ($requested = Refund::query()->where('status', Refund::STATUS_REQUESTED)
-                        ->count()) > 0 ? (string) $requested : null, color: 'danger')
-                    ->visible(fn (): bool => AdminAccess::allows('refunds.view')),
                 NavigationItem::make('Счета и оплаты')
                     ->url('/admin/python?next=/py/admin/finance/payment/')
                     ->icon('heroicon-o-banknotes')
@@ -350,6 +341,15 @@ class AdminPanelProvider extends PanelProvider
                     ->badge(fn (): ?string => ($pending = Payment::query()->where('status', 'pending')
                         ->count()) > 0 ? (string) $pending : null, color: 'warning')
                     ->visible(fn (): bool => AdminAccess::allows('payments.view')),
+                NavigationItem::make('Возвраты')
+                    ->url('/admin/python?next=/py/admin/finance/refund/')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->group('Монетизация')
+                    ->sort(3)
+                    // Счётчик — заявленные: деньги, по которым решение ещё не принято
+                    ->badge(fn (): ?string => ($requested = Refund::query()->where('status', Refund::STATUS_REQUESTED)
+                        ->count()) > 0 ? (string) $requested : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('refunds.view')),
                 NavigationItem::make('Пакеты контактов')
                     ->url('/admin/python?next=/py/admin/billing/creditpack/')
                     ->icon('heroicon-o-ticket')
