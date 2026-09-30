@@ -26,6 +26,7 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import path, reverse
@@ -317,6 +318,15 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
     """
 
     category_id = forms.TypedChoiceField(label="Категория", coerce=int, choices=())
+    owner = forms.CharField(
+        label="Компания",
+        max_length=190,
+        help_text=(
+            "Название или ИНН компании из раздела «Компании». Смените, чтобы передать "
+            "объявление настоящему владельцу: оно появится в его кабинете, отклики "
+            "пойдут ему."
+        ),
+    )
     city_id = forms.TypedChoiceField(
         label="Город", coerce=int, choices=(), required=False, empty_value=None
     )
@@ -381,6 +391,10 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
         if "title" not in self.fields:
             return
 
+        if "owner" in self.fields:
+            owner = getattr(self.instance, "company", None) if self.instance.pk else None
+            self.fields["owner"].initial = owner.name if owner is not None else ""
+
         category = self.fields["category_id"]
         assert isinstance(category, forms.TypedChoiceField)
         category.choices = [("", "—"), *_category_choices()]
@@ -393,6 +407,26 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
 
             for code in OTHER_LOCALES:
                 self.fields[f"{name}_{code}"].initial = stored.get(code, "")
+
+    def clean_owner(self) -> int:
+        from savdex.data.workbook import company_id
+
+        name = str(self.cleaned_data.get("owner") or "").strip()
+        current = getattr(self.instance, "company", None)
+
+        # Название не трогали — компания та же (даже если у двух компаний
+        # одинаковые названия, объявление не перескочит к другой)
+        if current is not None and name == current.name:
+            return int(current.pk)
+
+        found = company_id(name)
+
+        if found is None:
+            raise forms.ValidationError(
+                f"Компании «{name}» нет в разделе «Компании» — проверьте название или ИНН."
+            )
+
+        return found
 
     def clean(self) -> dict[str, Any]:
         data: dict[str, Any] = super().clean() or {}
@@ -410,6 +444,9 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
         return data
 
     def save(self, commit: bool = True) -> Any:  # noqa: ANN401
+        if self.cleaned_data.get("owner"):
+            self.instance.company_id = self.cleaned_data["owner"]
+
         # Договорная цена: поле цены в Filament выключено и не пишется
         if self.cleaned_data.get("price_negotiable"):
             self.instance.price = self.initial.get("price", self.instance.price)
@@ -511,7 +548,8 @@ class WorkbooksForm(forms.Form):
         help_text=(
             "Название или ИНН компании из раздела «Компании». Ей достанутся строки, где "
             "столбец «Компания» пуст или компании нет в справочнике. Оставьте пустым — "
-            "такие строки не загрузятся."
+            "они достанутся служебной компании (Anjir Group); передать настоящему "
+            "владельцу — действием «Передать компании…» в списке объявлений."
         ),
     )
     default_type = forms.ChoiceField(
@@ -555,6 +593,29 @@ class WorkbooksForm(forms.Form):
                 raise forms.ValidationError(f"{book.name}: файл больше 50 МБ.")
 
         return books
+
+
+class TransferForm(forms.Form):
+    """Кому передать отмеченные объявления."""
+
+    company = forms.CharField(
+        label="Компания",
+        max_length=190,
+        help_text="Название или ИНН компании из раздела «Компании» — настоящего владельца.",
+    )
+
+    def clean_company(self) -> int:
+        from savdex.data.workbook import company_id
+
+        name = str(self.cleaned_data.get("company") or "").strip()
+        found = company_id(name)
+
+        if found is None:
+            raise forms.ValidationError(
+                f"Компании «{name}» нет в разделе «Компании» — проверьте название или ИНН."
+            )
+
+        return found
 
 
 class ListingState(admin.SimpleListFilter):
@@ -629,7 +690,7 @@ class ListingAdmin(SavdexModelAdmin):
     search_fields = ("title", "company__name")
     ordering = ("-created_at", "-id")
     list_per_page = 50
-    actions = ("delete_selected",)
+    actions = ("delete_selected", "transfer_to_company")
 
     def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
         languages = tuple(
@@ -647,7 +708,7 @@ class ListingAdmin(SavdexModelAdmin):
         )
 
         return (
-            ("Что предлагают", {"fields": ("type", "category_id")}),
+            ("Что предлагают", {"fields": ("owner", "type", "category_id")}),
             ("Тексты — Русский", {"fields": LISTING_TEXTS}),
             *languages,
             (
@@ -746,6 +807,68 @@ class ListingAdmin(SavdexModelAdmin):
     def delete_queryset(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         for obj in list(queryset):
             self.delete_model(request, obj)
+
+    # ── Передача настоящему владельцу ──
+
+    @admin.action(description="Передать компании…", permissions=["change"])
+    def transfer_to_company(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
+        """
+        Отмеченные объявления — другой компании: заявки, загруженные без
+        продавца (у служебной компании), переходят к настоящему владельцу.
+        Первый шаг — страница с выбором компании, второй (apply) — передача;
+        каждая — строка журнала «изменено» с компанией до и после.
+        """
+        from django.template.response import TemplateResponse
+
+        form = TransferForm(request.POST if "apply" in request.POST else None)
+
+        if "apply" in request.POST and form.is_valid():
+            target = int(form.cleaned_data["company"])
+            stamp = timezone.now().replace(microsecond=0)
+            moved = 0
+
+            for listing in queryset.select_related("company"):
+                if listing.company_id == target:
+                    continue
+
+                before = listing.company_id
+
+                with allowed_writes("listings"):
+                    Listing.objects.filter(pk=listing.pk).update(
+                        company_id=target, updated_at=stamp
+                    )
+
+                listing.company_id = target
+                self.journal(
+                    request,
+                    "updated",
+                    listing,
+                    {"before": {"company_id": before}, "after": {"company_id": target}},
+                )
+                moved += 1
+
+            from savdex.data.workbook import company_name
+
+            self.message_user(
+                request, f"Передано компании «{company_name(target)}»: {moved}.", messages.SUCCESS
+            )
+
+            return None
+
+        return TemplateResponse(
+            request,
+            "admin/data/listing/transfer.html",
+            {
+                **self.admin_site.each_context(request),
+                "title": "Передать объявления компании",
+                "opts": self.model._meta,
+                "form": form,
+                "listings": queryset.select_related("company")[:200],
+                "count": queryset.count(),
+                "ids": [str(pk) for pk in queryset.values_list("pk", flat=True)],
+                "action_checkbox_name": ACTION_CHECKBOX_NAME,
+            },
+        )
 
     # ── Решения модератора ──
 

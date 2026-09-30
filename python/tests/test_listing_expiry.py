@@ -86,9 +86,7 @@ def снимок() -> dict[str, Any]:
         "listings": sql(
             "select title, status, search_text, deleted_at is not null from listings order by id"
         ),
-        "events": sorted(
-            sql("select company_id, type, tone, message, url from activity_events")
-        ),
+        "events": sorted(sql("select company_id, type, tone, message, url from activity_events")),
         "notifications": sorted(
             sql(
                 "select user_id, company_id, type, title, body, tone, url, read_at "

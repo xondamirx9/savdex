@@ -204,6 +204,7 @@ def test_решает_модератор_и_загружающий_загруж�
 
 def _форма(category: int, **поля: str) -> dict[str, str]:
     строка = {
+        "owner": "Стройбаза",
         "type": "supply",
         "category_id": str(category),
         "title": "Цемент М500 в мешках",
@@ -263,6 +264,69 @@ def test_цена_или_договорная(люди):
     assert без_цены["status"] == 200 and "Укажите цену" in без_цены["body"]
     assert договорная["status"] == 302, договорная["body"][:2000]
     assert sql("select price_negotiable, price from listings") == [(True, 950000)]
+
+
+# ── Передача настоящему владельцу ───────────────────────────────────
+
+
+def _ещё_компания(name: str) -> int:
+    [(pk,)] = sql(
+        "insert into companies (name, slug, status, created_at, updated_at) "
+        "values (%s, 'c-' || nextval('companies_id_seq'), 'active', now(), now()) returning id",
+        [name],
+    )
+
+    return int(pk)
+
+
+def test_компания_меняется_в_форме(люди):
+    category = _категория()
+    pk = _объявление()
+    владелец = _ещё_компания("Завод синтанолов")
+
+    _, неизвестная, передано = django(
+        люди["admin"],
+        ("post", f"{LIST}{pk}/change/", _форма(category, owner="Нет такой")),
+        ("post", f"{LIST}{pk}/change/", _форма(category, owner="Завод синтанолов")),
+    )
+
+    assert неизвестная["status"] == 200
+    assert "Компании «Нет такой» нет в разделе «Компании»" in неизвестная["body"]
+    assert передано["status"] == 302, передано["body"][:2000]
+    assert sql("select company_id from listings") == [(владелец,)]
+    assert журнал("updated")["changes"]["after"]["company_id"] == владелец
+
+
+def test_передать_компании_пачкой(люди):
+    служебная = _ещё_компания("ООО Anjir Group")
+    первая = _объявление("Куплю цемент М400", company_id=служебная)
+    вторая = _объявление("Куплю арматуру А500", company_id=служебная)
+    чужая = _объявление("Кирпич облицовочный")
+    владелец = _ещё_компания("Завод синтанолов")
+    отмечены = {"action": "transfer_to_company", "_selected_action": [str(первая), str(вторая)]}
+
+    _, выбор, ошибка, передача = django(
+        люди["admin"],
+        ("post", LIST, отмечены),
+        ("post", LIST, {**отмечены, "apply": "1", "company": "Нет такой"}),
+        ("post", LIST, {**отмечены, "apply": "1", "company": "Завод синтанолов"}),
+    )
+    _, поддержка = django(люди["support"], ("post", LIST, отмечены))
+
+    assert выбор["status"] == 200 and "Отмечено объявлений: <b>2</b>" in выбор["body"]
+    assert "Куплю цемент М400 — сейчас у «ООО Anjir Group»" in выбор["body"]
+    assert ошибка["status"] == 200 and "Компании «Нет такой» нет" in ошибка["body"]
+    assert передача["status"] == 302
+    assert sql("select id, company_id from listings order by id") == [
+        (первая, владелец),
+        (вторая, владелец),
+        (чужая, sql("select company_id from listings where id = %s", [чужая])[0][0]),
+    ]
+    assert sql(
+        "select count(*) from admin_actions where section = 'listings' and action = 'updated'"
+    ) == [(2,)]
+    assert "Отмечено объявлений" not in поддержка["body"], "без права править — не передать"
+    assert sql("select count(*) from listings where company_id = %s", [владелец]) == [(2,)]
 
 
 # ── Фотографии ──────────────────────────────────────────────────────

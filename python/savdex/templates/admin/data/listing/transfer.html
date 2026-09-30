@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  «Передать компании…» (savdex/data/admin.py, ListingAdmin.transfer_to_company):
+  отмеченные объявления переходят к другой компании — обычно заявки,
+  загруженные без продавца, к настоящему владельцу.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:data_listing_changelist' %}">Объявления</a>
+    › Передать компании
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p>Отмечено объявлений: <b>{{ count }}</b>. Они перейдут к выбранной компании:
+    появятся в её кабинете, отклики на них пойдут ей. Каждая передача
+    записывается в журнал действий.</p>
+  <ul>
+    {% for listing in listings %}
+      <li>{{ listing.title }} — сейчас у «{{ listing.company.name|default:"—" }}»</li>
+    {% endfor %}
+  </ul>
+  {% if count > listings|length %}<p>Показаны первые {{ listings|length }} из {{ count }}.</p>{% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    {% for id in ids %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ id }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="transfer_to_company">
+    <input type="hidden" name="apply" value="1">
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div class="flex-container">{{ field.label_tag }} {{ field }}</div>
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Передать">
+      <a href="{% url 'savdex_admin:data_listing_changelist' %}" class="button">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
