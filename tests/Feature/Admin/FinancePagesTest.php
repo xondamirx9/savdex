@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Pages\FinanceReports;
-use App\Filament\Pages\GatewayReconciliation;
 use App\Models\Company;
 use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\Plan;
 use App\Models\User;
 use App\Support\AdminAccess;
+use Filament\Facades\Filament;
+use Filament\Navigation\NavigationItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Экраны финансовых отчётов и сверки.
+ * Пункты меню «Финансовые отчёты» и «Сверка со шлюзом».
  *
- * Рисуются с данными, а не пустыми: в этом проекте уже было, что
- * раздел открывался, пока в нём не появлялась первая строка — и падал
- * на ней. Пустой экран проверяет только маршрут.
+ * Сами экраны переехали в админку Django (этап 7, шаг 60): отрисовку с
+ * данными проверяют python/tests/test_finance_reports.py и
+ * test_gateway_reconciliation.py. Здесь — кому видны пункты и значок
+ * срочного у сверки.
  */
 class FinancePagesTest extends TestCase
 {
@@ -61,6 +61,37 @@ class FinancePagesTest extends TestCase
         ], $extra));
     }
 
+    /** @return array<string, NavigationItem> */
+    private function items(): array
+    {
+        $panel = Filament::getPanel('admin');
+        Filament::setCurrentPanel($panel);
+
+        return collect($panel->getNavigation())
+            ->flatMap(fn ($group) => $group->getItems())
+            ->mapWithKeys(fn (NavigationItem $item): array => [(string) $item->getLabel() => $item])
+            ->all();
+    }
+
+    private function badge(): ?string
+    {
+        return $this->items()['Сверка со шлюзом']->getBadge();
+    }
+
+    private function performed(Payment $payment, ?int $minor = null): void
+    {
+        PaymentTransaction::query()->create([
+            'payment_id' => $payment->id,
+            'provider' => 'uzum',
+            'provider_transaction_id' => fake()->uuid(),
+            'state' => PaymentTransaction::STATE_PERFORMED,
+            'amount_minor' => $minor ?? $payment->amountMinor(),
+            'currency' => 'UZS',
+            'payload' => [],
+            'performed_at' => now(),
+        ]);
+    }
+
     // ── Доступ ──────────────────────────────────────────────────────
 
     /** По ТЗ финансы видят только суперадмин и финансист. */
@@ -70,8 +101,12 @@ class FinancePagesTest extends TestCase
         foreach ([AdminAccess::SUPERADMIN, AdminAccess::FINANCE] as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->assertTrue(FinanceReports::canAccess(), "{$role} должен видеть отчёты");
-            $this->assertTrue(GatewayReconciliation::canAccess(), "{$role} должен видеть сверку");
+            $items = $this->items();
+
+            $this->assertSame('/admin/python?next=/py/admin/finance/payment/reports/',
+                $items['Финансовые отчёты']->getUrl(), "{$role} должен видеть отчёты");
+            $this->assertSame('/admin/python?next=/py/admin/finance/payment/reconciliation/',
+                $items['Сверка со шлюзом']->getUrl(), "{$role} должен видеть сверку");
         }
     }
 
@@ -92,84 +127,14 @@ class FinancePagesTest extends TestCase
         foreach ($closed as $role) {
             $this->actingAs($this->admin($role));
 
-            $this->assertFalse(FinanceReports::canAccess(), "{$role} не должен видеть отчёты");
-            $this->assertFalse(GatewayReconciliation::canAccess(), "{$role} не должен видеть сверку");
+            $items = $this->items();
+
+            $this->assertArrayNotHasKey('Финансовые отчёты', $items, "{$role} не должен видеть отчёты");
+            $this->assertArrayNotHasKey('Сверка со шлюзом', $items, "{$role} не должен видеть сверку");
         }
     }
 
-    // ── Отрисовка ───────────────────────────────────────────────────
-
-    #[Test]
-    public function отчёты_рисуются_на_пустой_базе(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        Livewire::test(FinanceReports::class)
-            ->assertOk()
-            ->assertSee('За выбранный период оплат не было');
-    }
-
-    #[Test]
-    public function отчёты_рисуются_с_данными(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        $this->payment('paid', 250000);
-        $this->payment('paid', 120000, ['purpose' => 'credits']);
-
-        Livewire::test(FinanceReports::class)
-            ->assertOk()
-            ->assertSee('370 000', escape: false)   // общая выручка
-            ->assertSee('Бизнес')                    // разбивка по тарифам
-            ->assertSee('Пакет контактов');          // разбивка по источникам
-    }
-
-    #[Test]
-    public function сверка_на_исправных_данных_говорит_что_всё_сошлось(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        $payment = $this->payment('paid');
-        PaymentTransaction::query()->create([
-            'payment_id' => $payment->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => $payment->amountMinor(),
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
-
-        Livewire::test(GatewayReconciliation::class)
-            ->assertOk()
-            ->assertSee('Расхождений нет');
-    }
-
-    /** Самое важное на этом экране — чтобы расхождение было видно и названо. */
-    #[Test]
-    public function сверка_показывает_расхождение(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        $payment = $this->payment('pending');
-        PaymentTransaction::query()->create([
-            'payment_id' => $payment->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => $payment->amountMinor(),
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
-
-        Livewire::test(GatewayReconciliation::class)
-            ->assertOk()
-            ->assertSee('Деньги взяты, счёт не закрыт')
-            ->assertSee($payment->number)
-            ->assertDontSee('Расхождений нет');
-    }
+    // ── Значок сверки ───────────────────────────────────────────────
 
     /** Значок в меню зовёт, когда сверку неделями не открывают. */
     #[Test]
@@ -180,66 +145,12 @@ class FinancePagesTest extends TestCase
         // «Закрыт без транзакции» — предупреждение, а не срочное
         $this->payment('paid');
         Cache::forget('recon.urgent');
-        $this->assertNull(GatewayReconciliation::getNavigationBadge());
+        $this->assertNull($this->badge());
 
-        $unpaid = $this->payment('pending');
-        PaymentTransaction::query()->create([
-            'payment_id' => $unpaid->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => $unpaid->amountMinor(),
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
+        $this->performed($this->payment('pending'));
 
         Cache::forget('recon.urgent');
-        $this->assertSame('1', GatewayReconciliation::getNavigationBadge());
-    }
-
-    /** Смена периода обязана менять то, что показано. */
-    #[Test]
-    public function период_переключается(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        $this->payment('paid', 250000, ['paid_at' => now()->subMonth()->startOfMonth()->addDay()]);
-
-        Livewire::test(FinanceReports::class)
-            ->assertDontSee('250 000', escape: false)
-            ->call('setPeriod', 'prev')
-            ->assertSee('250 000', escape: false);
-    }
-
-    /**
-     * Расхождение в тийинах обязано быть видно.
-     *
-     * Округляя копейки всегда, экран вывел бы две одинаковые суммы
-     * в строке, помеченной как расхождение, — и человек решил бы,
-     * что ошибается экран, а не платёж.
-     */
-    #[Test]
-    public function расхождение_в_копейках_показывается_целиком(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::FINANCE));
-
-        $payment = $this->payment('paid', 100000);
-        PaymentTransaction::query()->create([
-            'payment_id' => $payment->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => 10000050, // 100 000,50 сум
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
-
-        Livewire::test(GatewayReconciliation::class)
-            ->assertOk()
-            ->assertSee('Суммы расходятся')
-            ->assertSee('100 000,50', escape: false);
+        $this->assertSame('1', $this->badge());
     }
 
     /** Значок берётся из кэша: он считается на каждой странице админки. */
@@ -248,37 +159,29 @@ class FinancePagesTest extends TestCase
     {
         $this->actingAs($this->admin(AdminAccess::FINANCE));
 
-        $unpaid = $this->payment('pending');
-        PaymentTransaction::query()->create([
-            'payment_id' => $unpaid->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => $unpaid->amountMinor(),
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
+        $this->performed($this->payment('pending'));
 
         Cache::forget('recon.urgent');
-        $this->assertSame('1', GatewayReconciliation::getNavigationBadge());
+        $this->assertSame('1', $this->badge());
 
         // Новое расхождение сразу после — значок держится на кэше
-        $another = $this->payment('pending');
-        PaymentTransaction::query()->create([
-            'payment_id' => $another->id,
-            'provider' => 'uzum',
-            'provider_transaction_id' => fake()->uuid(),
-            'state' => PaymentTransaction::STATE_PERFORMED,
-            'amount_minor' => $another->amountMinor(),
-            'currency' => 'UZS',
-            'payload' => [],
-            'performed_at' => now(),
-        ]);
+        $this->performed($this->payment('pending'));
 
-        $this->assertSame('1', GatewayReconciliation::getNavigationBadge(), 'значение обязано браться из кэша');
+        $this->assertSame('1', $this->badge(), 'значение обязано браться из кэша');
 
         Cache::forget('recon.urgent');
-        $this->assertSame('2', GatewayReconciliation::getNavigationBadge());
+        $this->assertSame('2', $this->badge());
+    }
+
+    /** Расхождение сумм — срочное: в тийинах тоже. */
+    #[Test]
+    public function расхождение_в_копейках_зажигает_значок(): void
+    {
+        $this->actingAs($this->admin(AdminAccess::FINANCE));
+
+        $this->performed($this->payment('paid', 100000), 10000050);
+
+        Cache::forget('recon.urgent');
+        $this->assertSame('1', $this->badge());
     }
 }

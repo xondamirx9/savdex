@@ -35,6 +35,7 @@ use App\Models\Support\Ticket;
 use App\Support\AdminAccess;
 use App\Support\AdminScope;
 use App\Support\Appearance;
+use App\Support\GatewayReconciliation;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -49,6 +50,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
@@ -374,6 +376,24 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Монетизация')
                     ->sort(5)
                     ->visible(fn (): bool => AdminAccess::allows('promocodes.view')),
+                NavigationItem::make('Финансовые отчёты')
+                    ->url('/admin/python?next=/py/admin/finance/payment/reports/')
+                    ->icon('heroicon-o-chart-bar')
+                    ->group('Монетизация')
+                    ->sort(8)
+                    ->visible(fn (): bool => AdminAccess::allows('finreports.view')),
+                NavigationItem::make('Сверка со шлюзом')
+                    ->url('/admin/python?next=/py/admin/finance/payment/reconciliation/')
+                    ->icon('heroicon-o-scale')
+                    ->group('Монетизация')
+                    ->sort(9)
+                    // Счётчик — только срочное и за последний месяц; держится
+                    // в кэше пять минут: полная сверка поднимает все счета
+                    // месяца, а меню рисуется на каждой странице
+                    ->badge(fn (): ?string => AdminAccess::allows('finreports.view')
+                        && ($urgent = Cache::remember('recon.urgent', now()->addMinutes(5), fn (): int => GatewayReconciliation::urgent(now()->subMonth(), now()))) > 0
+                        ? (string) $urgent : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('finreports.view')),
                 NavigationItem::make('Категории')
                     ->url('/admin/python?next=/py/admin/catalogs/category/')
                     ->icon('heroicon-o-rectangle-stack')

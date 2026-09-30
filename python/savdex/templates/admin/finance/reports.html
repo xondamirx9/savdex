@@ -1,0 +1,87 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Финансовые отчёты (savdex/finance/reports_view.py) — вместо страницы
+  Filament. Числа — моноширинным: колонку сумм сравнивают взглядом.
+{% endcomment %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .fin-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .fin-tiles { display: flex; flex-wrap: wrap; gap: 24px; margin: 8px 0 16px; }
+  .fin-tiles div b { display: block; font-size: 1.4em; font-variant-numeric: tabular-nums; }
+  .fin-good { color: #15803d; } .fin-bad { color: #b91c1c; } .fin-warn { color: #b45309; }
+  .fin-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+</style>
+{% endblock %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a> › Финансовые отчёты
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p>{{ lead }}</p>
+
+  <form method="get">
+    <label>С <input type="date" name="from" value="{{ from }}"></label>
+    <label>По <input type="date" name="to" value="{{ to }}"></label>
+    <input type="submit" value="Показать">
+    {% for p in periods %}
+      <a class="button" href="?from={{ p.from }}&amp;to={{ p.to }}">{{ p.label }}</a>
+    {% endfor %}
+  </form>
+
+  <h2>Выручка</h2>
+  <p><small>Возвраты вычитаются по дате возврата: деньги ушли из кассы тогда, когда их вернули.</small></p>
+  {% for row in revenue %}
+    <div class="fin-tiles">
+      <div>Поступило<b>{{ row.gross }}</b></div>
+      <div>Возвращено<b class="fin-warn">{{ row.refunded }}</b></div>
+      <div>Осталось<b class="fin-good">{{ row.net }}</b></div>
+      <div>Оплат<b>{{ row.count }}</b></div>
+    </div>
+  {% empty %}
+    <p>За выбранный период оплат не было.</p>
+  {% endfor %}
+
+  <h2>Продления и отток</h2>
+  <p><small>«Истекли без продления» — молчаливый отток: срок вышел, новой подписки нет. Он опаснее явного отказа, о нём никто не сообщает.</small></p>
+  <div class="fin-tiles">
+    <div>Новые<b class="fin-good">{{ subscriptions.new }}</b></div>
+    <div>Продлили<b class="fin-good">{{ subscriptions.renewed }}</b></div>
+    <div>Отказались<b class="fin-bad">{{ subscriptions.cancelled }}</b></div>
+    <div>Истекли без продления<b class="fin-bad">{{ subscriptions.expired }}</b></div>
+    <div>Действуют на конец<b>{{ subscriptions.active }}</b></div>
+  </div>
+
+  <h2>По месяцам</h2>
+  <table>
+    <thead><tr><th>Месяц</th><th class="fin-num">Поступило</th><th class="fin-num">Возвращено</th><th class="fin-num">Осталось</th><th class="fin-num">Оплат</th></tr></thead>
+    <tbody>
+      {% for m in months %}
+        <tr><td>{{ m.label }}</td><td class="fin-num">{{ m.gross }}</td><td class="fin-num">{{ m.refunded }}</td><td class="fin-num"><b>{{ m.net }}</b></td><td class="fin-num">{{ m.count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="fin-grid">
+    <div>
+      <h2>По тарифам</h2>
+      {% if plans %}
+        <table>
+          <thead><tr><th>Тариф</th><th class="fin-num">Оплат</th><th class="fin-num">Сумма</th></tr></thead>
+          <tbody>{% for p in plans %}<tr><td>{{ p.name }}</td><td class="fin-num">{{ p.count }}</td><td class="fin-num">{{ p.gross }}</td></tr>{% endfor %}</tbody>
+        </table>
+      {% else %}<p>Оплат за период не было.</p>{% endif %}
+    </div>
+    <div>
+      <h2>По источникам</h2>
+      {% if sources %}
+        <table>
+          <thead><tr><th>За что</th><th>Шлюз</th><th class="fin-num">Оплат</th><th class="fin-num">Сумма</th></tr></thead>
+          <tbody>{% for s in sources %}<tr><td>{{ s.purpose }}</td><td>{{ s.provider }}</td><td class="fin-num">{{ s.count }}</td><td class="fin-num">{{ s.gross }}</td></tr>{% endfor %}</tbody>
+        </table>
+      {% else %}<p>Оплат за период не было.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

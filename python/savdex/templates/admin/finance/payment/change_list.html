@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Отчёты и сверка со шлюзом — страницы, а не разделы: в меню Django их
+  нет, поэтому ссылки — в шапке «Счетов и оплат» (savdex/finance/reports_view.py).
+{% endcomment %}
+{% block object-tools-items %}
+  {% if can_reports %}
+    <li><a href="{% url 'savdex_admin:finance_reports' %}">Финансовые отчёты</a></li>
+    <li><a href="{% url 'savdex_admin:finance_reconciliation' %}">Сверка со шлюзом</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
