@@ -165,6 +165,10 @@ class TestСтраницы:
         # Базы здесь нет, а виджеты главной её читают; они проверены
         # на PostgreSQL в tests/test_dashboard.py
         monkeypatch.setattr(widgets, "for_request", lambda request: [])
+        # Логотип в шапке — из настроек площадки в базе; здесь его нет
+        from savdex.web import shared
+
+        monkeypatch.setattr(shared, "settings_values", lambda: {})
 
         return люди
 
@@ -186,11 +190,12 @@ class TestСтраницы:
         # Контент-менеджеру справочники выданы — раздел стран виден
         assert "Страны" in page.content.decode()
 
-    def test_без_входа_за_пропуском_в_laravel(self, база):
+    def test_без_входа_на_страницу_входа(self, база):
+        # С шага 67 вход — своя страница Django, а не пропуск из Laravel
         response = Client().get("/py/admin/geo/?page=2")
 
         assert response.status_code == 302
-        assert response["Location"] == "/admin/python?next=/py/admin/geo/%3Fpage%3D2"
+        assert response["Location"] == "/py/admin/login/?next=/py/admin/geo/%3Fpage%3D2"
 
     def test_снятые_права_действуют_сразу(self, база):
         client = Client()
@@ -236,4 +241,4 @@ class TestСтраницы:
 
     def test_промежуточный_слой_не_трогает_прочие_адреса(self):
         assert Client().get("/py/up").status_code == 200
-        assert adminpanel.LARAVEL_BRIDGE == "/admin/python"
+        assert adminpanel.LOGIN == "/py/admin/login/"

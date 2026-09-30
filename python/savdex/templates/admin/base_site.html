@@ -3,8 +3,8 @@
 {% comment %}
   Шапка админки на Python.
 
-  Ссылки «сменить пароль» нет: паролей у Django нет, они в админке
-  Laravel. «Открыть сайт» ведёт обратно в админку Laravel.
+  «Сменить пароль» — страница сайта (пароль у сотрудника тот же, что на
+  сайте). «Выгрузка в Excel» — пока страница Filament (шаг 67).
 {% endcomment %}
 {% block extrahead %}
 {{ block.super }}
@@ -25,7 +25,9 @@
 {% if has_permission and savdex_admin %}
 <div id="user-tools">
   {{ savdex_admin.name }} · {{ savdex_role }} /
-  <a href="{{ site_url }}">Вернуться в админку</a> /
+  {% if savdex_exports %}<a href="/admin/excel-exports">Выгрузка в Excel</a> /{% endif %}
+  <a href="/password/change">Сменить пароль</a> /
+  <a href="{{ site_url }}">На сайт</a> /
   <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
     {% csrf_token %}
     <button type="submit">Выйти</button>

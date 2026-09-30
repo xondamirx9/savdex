@@ -15,7 +15,7 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
-from savdex import adminpanel, adminsite, visitor
+from savdex import adminlogin, adminpanel, adminsite, visitor
 from savdex.web import (
     account_actions,
     actions,
@@ -73,9 +73,12 @@ def up(request: HttpRequest) -> HttpResponse:
 urlpatterns = [
     path("up", up),
     path("py/up", up),
-    # Вход в админку на Django — по пропуску из Laravel (savdex/bridge.py)
+    # Пропуск из Laravel (savdex/bridge.py) — пункты меню оставшегося Filament
     path("py/login", adminpanel.login),
     path("py/logout", adminpanel.logout),
+    # Вход и выход админки (шаг 67): раньше разделов Django — свои виды,
+    # а не django.contrib.auth; без посредника входа (AdminMiddleware)
+    path("py/admin/login/", adminlogin.login_page, name="savdex_admin_login"),
     path("py/admin/", adminsite.site.urls),
     # Кто вошёл на сайт — по сессии Laravel (этап 3, savdex/visitor.py)
     path("py/whoami", visitor.whoami),

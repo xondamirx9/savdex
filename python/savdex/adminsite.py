@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from django.contrib import admin, messages
 from django.contrib.admin import options
 from django.db import connections, models
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, URLResolver
 
-from savdex import access, audit, bridge
+from savdex import access, audit
 
 if TYPE_CHECKING:
     from django.forms import Form
@@ -198,27 +198,28 @@ class SavdexAdminSite(admin.AdminSite):
     site_header = "SAVDEX · Управление"
     site_title = "SAVDEX · разделы на Python"
     index_title = "Разделы на Python"
-    # «Открыть сайт» — обратно в админку Laravel
-    site_url = "/admin"
+    # «Открыть сайт» — на сайт площадки
+    site_url = "/"
     enable_nav_sidebar = True
 
     def has_permission(self, request: HttpRequest) -> bool:
         return isinstance(getattr(request, "admin", None), access.Admin)
 
     def login(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
-        """Входа у Django нет — за пропуском в Laravel."""
-        return HttpResponseRedirect(f"/admin/python?next={bridge.HOME}")
+        """Вход — своя страница (savdex/adminlogin.py), не django.contrib.auth."""
+        from savdex import adminlogin
+
+        return adminlogin.login_page(request)
 
     def logout(  # type: ignore[override]
         self,
         request: HttpRequest,
         extra_context: Any = None,  # noqa: ANN401
     ) -> HttpResponse:
-        """Выйти из разделов на Python; кука входа удаляется."""
-        response = HttpResponseRedirect("/admin")
-        response.delete_cookie(bridge.COOKIE, path=bridge.COOKIE_PATH)
+        """Выход из админки и с сайта (одна сессия Laravel)."""
+        from savdex import adminlogin
 
-        return response
+        return adminlogin.logout(request)
 
     def get_urls(self) -> list[URLPattern | URLResolver]:
         # Смена пароля — в админке Laravel: у Django своих паролей нет
@@ -250,6 +251,8 @@ class SavdexAdminSite(admin.AdminSite):
         admin_ = getattr(request, "admin", None)
         context["savdex_admin"] = admin_
         context["savdex_role"] = admin_.role_label if isinstance(admin_, access.Admin) else None
+        # «Выгрузка в Excel» пока на Filament — ссылка в шапке тем, кому она видна
+        context["savdex_exports"] = isinstance(admin_, access.Admin) and admin_.can("backups.view")
         # Знак из раздела «Оформление» — тот же, что в шапке Filament
         from savdex.web import shared
 
