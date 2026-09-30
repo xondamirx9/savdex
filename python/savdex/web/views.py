@@ -250,13 +250,10 @@ def _count(query: str, params: list[Any] | None = None) -> int:
 
 def stats(locale: str) -> dict[str, int]:
     """PageController::stats — счётчики витрины, все из базы."""
+    # Listing::scopeVisibleIn: на всех языках одно и то же — и загруженное
+    # из книги тоже
     listings = "select count(*) from listings where status = 'active' and deleted_at is null"
     params: list[Any] = []
-
-    if locale != locales.DEFAULT:
-        # Listing::scopeVisibleIn: импортированное — только с заголовком на языке
-        listings += " and (source != 'import' or coalesce((title_i18n)::jsonb ? %s, false))"
-        params.append(locale)
 
     return {
         "companies": _count(

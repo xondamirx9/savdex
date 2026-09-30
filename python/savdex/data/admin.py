@@ -707,9 +707,8 @@ class ListingAdmin(SavdexModelAdmin):
                 {
                     "fields": tuple(f"{name}_{code}" for name in LISTING_TEXTS),
                     "classes": ("collapse",),
-                    "description": "Необязательно: без перевода загруженное из Excel "
-                    "объявление на этом языке не показывается, написанное в кабинете — "
-                    "показывается по-русски.",
+                    "description": "Необязательно: без перевода объявление на этом языке "
+                    "показывается по-русски, пока его не переведёт машинный переводчик.",
                 },
             )
             for code in OTHER_LOCALES
