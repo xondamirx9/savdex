@@ -31,12 +31,10 @@ use Illuminate\Support\Facades\Schedule;
 | Это не оптимизация, а условие работы продукта.
 */
 
-// Раньше рабочего дня: человек утром видит, что объявление истекает,
-// и успевает продлить до того, как оно пропадёт из выдачи
-Schedule::command('listings:expire')
-    ->dailyAt('06:00')
-    ->withoutOverlapping()
-    ->onOneServer();
+// Снятие истёкших объявлений (listings:expire) ведёт Django — хозяин
+// таблицы listings с этапа 4 (python/manage.py expire_listings, цикл в
+// docker/render-entrypoint.sh, те же 06:00). Сама команда осталась:
+// ею сверяется Python-версия (python/tests/test_listing_expiry.py)
 
 /*
  * Каждый час, а не раз в сутки: слоты «ТОП категории» и «ТОП главной»

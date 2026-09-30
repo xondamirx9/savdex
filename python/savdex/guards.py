@@ -115,6 +115,22 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # обращения» и счётчик у пункта меню только читают
         "support_tickets",
         "support_messages",
+        # Этап 4 (шаг 62): каталог. Все формы и страницы — на Django (группы
+        # catalog, tenders, services, cabinet, forms); снятие истёкших
+        # объявлений — manage.py expire_listings вместо listings:expire.
+        # У Laravel остались писатели только на аварийный откат
+        # (SAVDEX_PY_PAGES без forms, SAVDEX_PY_TRANSLATE=0) и демо-стенд
+        # (SEED_DEMO, SEED_SHOWCASE) — docs/migration-to-python.md, шаг 62
+        "listings",
+        "listing_attributes",
+        "listing_images",
+        "listing_stats",
+        "favorites",
+        "search_hits",
+        "tenders",
+        "it_tasks",
+        "it_task_files",
+        "resumes",
     }
 )
 
@@ -199,86 +215,10 @@ SHARED_WRITES: dict[str, str] = {
         "одноразовые сообщения, заводит сессию гостю, запоминает адрес и "
         "язык; вход по «запомнить меня» переносит сессию на новый номер"
     ),
-    "tenders": (
-        "счётчик просмотров закупки (этап 4): страница /tenders/<адрес> на "
-        "Django, как $tender->increment('views_count') у Laravel, — только "
-        "update views_count = views_count + 1 и updated_at; событий сохранения "
-        "(перевод, search_text) increment не вызывает, строку журнала для "
-        "администратора пишет savdex/audit.py"
-        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
-        "описания, search_text и updated_at, как TranslateTender (save с событием "
-        "saving)"
-        "; раздел «Закупки» админки Django (этап 5, savdex/tenders): закупка "
-        "целиком — правка и загрузка файлом, с событиями модели Tender "
-        "(search_text, адрес), столбцы перевода и просмотров не трогает"
-    ),
-    "resumes": (
-        "счётчик просмотров резюме (этап 4): /resume/<адрес>, как "
-        "$resume->increment('views_count'), не владельцу; событий сохранения "
-        "(сброс переводов) increment не вызывает, в журнал резюме не пишутся"
-        "; машинный перевод (этап 5, manage.py translate) — переводы должности, "
-        "«о себе» и мест работы и updated_at, как TranslateResume (saveQuietly)"
-        "; своё резюме (этап 5, форма) — правка и новое резюме (поля формы, "
-        "опыт, адрес, сброс переводов правленого), статус, дата публикации и "
-        "мягкое удаление, как ResumeController"
-        "; модерация в админке (этап 6): снять с причиной и вернуть — статус, "
-        "заметка, дата публикации; удаление — в корзину (SoftDeletes)"
-    ),
-    "it_tasks": (
-        "счётчик просмотров IT-задачи (этап 4): /it-services/<адрес>, как "
-        "$task->increment('views_count'), не заказчику; просмотр "
-        "администратора — строка журнала (раздел ittasks), как AuditObserver; "
-        "отклик исполнителя (этап 5, чат) — responses_count + 1 и updated_at, "
-        "как $task->increment('responses_count'), с той же строкой журнала; "
-        "своя задача в кабинете (этап 5, форма) — статус, сроки, результат, "
-        "search_text и удаление, как ItTaskController, с журналом администратора"
-        "; новая задача и правка (этап 5, шаг 43) — insert и поля формы, адрес "
-        "из заголовка (событие created), как ItTaskController::store и ::update"
-        "; раздел «IT-задачи» админки (этап 6): правка формой, «Снять» (в архив "
-        "и дата закрытия), удаление — у задачи в журнале строки AuditObserver"
-    ),
-    "it_task_files": (
-        "файл своей IT-задачи (этап 5, форма): удаление строки после файла "
-        "с диска, как ItTaskController::destroyFile; событий у модели нет"
-        "; загрузка с задачей (этап 5, шаг 43) — insert, как storeFiles"
-    ),
     "audience_views": (
         "«Кто мной интересуется» (этап 4): визитка /company/<адрес> на Django, "
         "как StatsRecorder::companyView, — только insert строки просмотра, не "
         "чаще раза в 30 минут на пару компаний; у модели AudienceView событий нет"
-    ),
-    "listings": (
-        "показы и просмотры объявлений (этап 4): каталог и страница объявления "
-        "на Django, как StatsRecorder::impressions и ::view, — только +1 к "
-        "impressions_count или views_count и updated_at, без событий сохранения; "
-        "просмотр администратора — строка журнала, как AuditObserver; "
-        "избранное (этап 5) — ±1 к favorites_count, как StatsRecorder::favorite "
-        "и decrement в FavoriteController"
-        "; машинный перевод (этап 5, manage.py translate) — переводы заголовка и "
-        "описания, search_text и updated_at, как TranslateListing (save с "
-        "событием saving)"
-        "; «Мои объявления» (этап 5, шаг 23) — статус, сроки, пометка модератора, "
-        "мягкое удаление и search_text, как ListingController (save с событием "
-        "saving, у администратора — строка журнала)"
-        " Мастер (этап 5, шаг 38): новый черновик и публикация — поля "
-        "формы, статус, сроки, адрес, как ListingWizardController"
-        "; раскрытие контактов (этап 5, шаг 40) — +1 к unlocks_count и "
-        "updated_at, как StatsRecorder::unlock (у администратора — строка журнала)"
-        "; удаление учётки владельцем (этап 5, шаг 47) — активные объявления "
-        "компании в архив одним update, без событий, как activeListings()->update"
-        "; раздел «Объявления» админки (этап 6, savdex/data) — правка формой, "
-        "решения модератора, корзина, как ListingResource и ModerationService; "
-        "загрузка книгами Excel (savdex/data/workbook.py) — новые и найденные по "
-        "номеру, как ListingWorkbookImport"
-    ),
-    "listing_stats": (
-        "дневная статистика объявлений (этап 4): insert … on conflict do nothing "
-        "строки дня и +1 к счётчику, как StatsRecorder::bumpDaily (показы, "
-        "просмотры, с этапа 5 — избранное и раскрытия контактов)"
-    ),
-    "search_hits": (
-        "«по каким запросам вас находили» (этап 4): insert … on conflict do "
-        "nothing строки дня и +1 к показам, как StatsRecorder::search"
     ),
     "content_translations": (
         "очередь машинного перевода (этап 3): страница на Django, как и "
@@ -301,10 +241,6 @@ SHARED_WRITES: dict[str, str] = {
         "лента кабинета (этап 5, форма): insert события, как Notifier::company "
         "при повторной публикации объявления; событий у модели нет"
         "; решения по отзывам в админке (этап 6) — то же событие компании"
-    ),
-    "favorites": (
-        "избранное (этап 5, форма): insert … on conflict do nothing и delete "
-        "своей строки, как FavoriteController::toggle; событий у модели нет"
     ),
     "notification_preferences": (
         "настройки уведомлений (этап 5, форма): как updateOrCreate — новая "
@@ -381,17 +317,6 @@ SHARED_WRITES: dict[str, str] = {
     "company_site_products": (
         "товары мини-сайта (этап 5, форма): добавить, изменить, удалить, как "
         "SiteProductController; событий и журнала у модели нет"
-    ),
-    "listing_attributes": (
-        "характеристики и детали товара в мастере объявления (этап 5, "
-        "автосохранение): updateOrCreate по ключу и удаление, как "
-        "ListingWizardController::autosave; событий у модели нет"
-    ),
-    "listing_images": (
-        "фото своего объявления (этап 5, форма): загрузить, удалить, сделать "
-        "обложкой и пронумеровать заново, как ListingImageController"
-        "; фото в админке (этап 6) и из книги Excel — добавить, заменить, "
-        "удалить, как ImagesRelationManager и WorkbookImages"
     ),
     "company_sites": (
         "мини-сайт своей компании (этап 5, форма): адрес и оформление "
@@ -475,7 +400,9 @@ def allowed_writes(*tables: str) -> Iterator[None]:
     «вот этот блок кода может». Всё остальное в том же процессе
     по-прежнему упирается в предохранитель.
     """
-    unknown = [t for t in tables if t not in SHARED_WRITES]
+    # Своя таблица разрешения не требует: блок, заявивший её, пока она
+    # была чужой, после перехода хозяина просто работает дальше
+    unknown = [t for t in tables if t not in SHARED_WRITES and t not in OWNED_TABLES]
 
     if unknown:
         raise ValueError(

@@ -1076,6 +1076,56 @@ Laravel: цены в валюте языка Django считает по курс
 `2026_09_30_120000_grant_django_catalog_stats`): уже влитую миграцию
 не правим — на боевом она могла выполниться.
 
+**Шаг 62. Хозяин таблиц каталога — Django** ✅ (30.09.2026, после
+включения групп `forms` и `payments` по умолчанию). В `OWNED_TABLES`
+перешли `listings`, `listing_attributes`, `listing_images`,
+`listing_stats`, `favorites`, `search_hits`, `tenders`, `it_tasks`,
+`it_task_files`, `resumes`; из `SHARED_WRITES` они убраны,
+`allowed_writes` со своей таблицей больше ничего не проверяет. Права
+хозяина целиком — `2026_10_11_100000_grant_django_catalog_owner`.
+
+Перед переходом собрана опись всех мест, где Laravel ещё пишет в эти
+таблицы. Что нашлось и что сделано:
+
+- **`listings:expire`** (каждый день в 06:00) — единственный живой
+  писатель. Перенесён: `savdex/web/listing_expiry.py` и команда
+  `manage.py expire_listings`, цикл в `docker/render-entrypoint.sh`;
+  из расписания Laravel убран (сама команда осталась — ею сверяется
+  Python-версия). Пройденный день помнит
+  `storage/app/listings-expire.json`: перезапуск не повторяет проход,
+  поднявшийся после 06:00 контейнер свой день догоняет, самый первый
+  запуск после 06:00 день пропускает (его уже сделал Laravel). Отличие:
+  окно предупреждения «за три дня» считается от 06:00, а не от момента
+  запуска — поздний проход не сдвигает окно. Сверка —
+  `tests/test_listing_expiry.py` (та же база и уведомления, что у
+  Laravel; день не повторяется).
+- **Обходные пути, которыми запрос мог дойти до контроллера Laravel**
+  (обычный интерфейс так не ходит, но руками составить можно) — закрыты
+  в `docker/apache-python.conf`:
+  - POST с `_method` (или заголовком `X-HTTP-Method-Override`) на адреса
+    с PATCH и DELETE — теперь Django; метод подменяет
+    `MethodOverrideMiddleware` (`savdex/web/forms.py`), как Laravel.
+    Сверка — `test_удалить_подменой_метода`,
+    `test_удалить_заголовком_подмены`;
+  - `?hl=` с неизвестным языком (`?hl=`, `?hl=de`) — Laravel не
+    переключал язык и отдавал страницу своим контроллером со
+    счётчиками просмотров; теперь такую страницу отдаёт Django. Смена
+    языка (`?hl=ru` и прочие из пяти) пока у Laravel — шаг 66;
+  - `/index.php/<адрес>` — редирект 301 на чистый адрес.
+- **Остались у Laravel, осознанно:**
+  - аварийный откат: `SAVDEX_PY_PAGES` без `forms` возвращает формы
+    Laravel, `SAVDEX_PY_TRANSLATE=0` — его перевод (`TranslateListing`,
+    `TranslateTender`, `TranslateResume`). Правила моделей у обеих
+    сторон одинаковые, но после перехода хозяина это только на случай
+    аварии; контроллеры Laravel уходят на этапе 8;
+  - демо-стенд: `CabinetDemoSeeder`, `ItTasksDemoSeeder`,
+    `ShowcaseSeeder` при `SEED_DEMO=true` или `SEED_SHOWCASE=true` (на
+    боевой площадке оба выключены, `render.yaml`);
+  - `savdex:copy-database` — ручной разовый инструмент;
+  - `?hl=<язык>&hl=<чужое>` — у PHP побеждает последний `hl`, у Apache
+    первый: такой адрес уйдёт в Laravel и отдаст страницу его
+    контроллером. Закрывается вместе со сменой языка на шаге 66.
+
 ### Этап 5. Кабинет (10–12 недель)
 
 Вход, регистрация, профиль компании, чаты, отзывы. Здесь Django
@@ -2634,7 +2684,7 @@ PHP-команда остаётся рядом, пока Python-версией �
 
 | Команда | Пишет | Почему позже |
 |---|---|---|
-| `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 |
+| `listings:expire` | `listings` | События `Listing`: запрет возврата отклонённого, `search_text`, перевод. Этап 4 — перенесено (шаг 62, `manage.py expire_listings`) |
 | `promotions:finish` | `promotions`, `listings` | `active_key` у `Promotion`. Деньги. Этап 7 |
 | `ratings:recalculate` | `companies` | Байесовская формула должна совпасть с `ReviewService` до сотой доли. Этап 5 |
 | `reviews:ask` | `user_notifications` | Просьбы оставить отзыв о площадке и о компании — колокольчик переезжает с кабинетом. Этап 5 |

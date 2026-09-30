@@ -32,7 +32,7 @@ print("обёрток:", len(connection.execute_wrappers))
 
 try:
     with connection.cursor() as cursor:
-        cursor.execute("insert into listings (id) values (1)")
+        cursor.execute("insert into payments (id) values (1)")
 except Exception as error:
     print("отказ:", type(error).__name__)
 else:

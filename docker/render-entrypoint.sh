@@ -344,6 +344,19 @@ if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
         ) &
     fi
 
+    # Снятие истёкших объявлений и предупреждение за три дня (этап 4,
+    # шаг 62, python/savdex/web/listing_expiry.py) — вместо расписания
+    # Laravel listings:expire: раз в сутки в 06:00 UTC, пройденный день
+    # помнит storage/app/listings-expire.json
+    (
+        set +e
+        while true; do
+            runuser -u www-data -- python/.venv/bin/python python/manage.py expire_listings
+            echo "ВНИМАНИЕ: снятие истёкших объявлений остановилось, перезапуск через 60 секунд." >&2
+            sleep 60
+        done
+    ) &
+
     # Машинный перевод на Python: проход раз в минуту (см. выше про флаг)
     if [ -n "${PY_MACHINE_TRANSLATION_ENABLED:-}" ]; then
         (
