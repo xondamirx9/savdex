@@ -147,6 +147,7 @@ INSTALLED_APPS = [
     "savdex.moderation.apps.ModerationConfig",
     "savdex.data.apps.DataConfig",
     "savdex.system.apps.SystemConfig",
+    "savdex.finance.apps.FinanceConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

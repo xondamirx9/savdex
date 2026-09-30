@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Pages\Invoices;
 use App\Filament\Resources\Refunds\RefundResource;
 use App\Models\Payment;
 use App\Models\Refund;
@@ -48,7 +47,7 @@ class FinanceToday extends StatsOverviewWidget
                 ->icon('heroicon-o-banknotes')
                 ->description($this->plural($paidToday->count(), 'счёт', 'счёта', 'счетов'))
                 ->color('success')
-                ->url(Invoices::getUrl()),
+                ->url('/admin/python?next=/py/admin/finance/payment/'),
 
             Stat::make('Ждут оплаты', (string) $pending->count())
                 ->icon('heroicon-o-clock')
@@ -56,7 +55,7 @@ class FinanceToday extends StatsOverviewWidget
                 // и путать их с ней нельзя
                 ->description('на '.$this->money((int) $pending->sum('amount')))
                 ->color($pending->count() > 0 ? 'warning' : 'gray')
-                ->url(Invoices::getUrl()),
+                ->url('/admin/python?next=/py/admin/finance/payment/'),
 
             Stat::make('Возвраты на решении', (string) $refunds->count())
                 ->icon('heroicon-o-arrow-uturn-left')

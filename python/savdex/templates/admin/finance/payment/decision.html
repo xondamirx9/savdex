@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  «Деньги пришли» и «Отменить счёт» (savdex/finance/admin.py) — вместо
+  модального окна Filament: что будет, поле для отметки, кнопка.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:finance_payment_changelist' %}">Счета и оплаты</a>
+    › {{ payment.number }}
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p><b>{{ payment.number }}</b> · {{ company }} · {{ payment.description }} · {{ amount }}</p>
+  {% if kind == "confirm" %}
+    <p>
+      «{{ payment.description }}» будет начислено компании немедленно: подписка
+      активируется, кредиты лягут на кошелёк. Убедитесь, что {{ amount }}
+      действительно поступили.
+    </p>
+  {% else %}
+    <p>Счёт останется в списке со статусом «Отменён» — исчезнувший счёт выглядит как потерянный платёж.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="back" value="{{ back }}">
+    <p>
+      <label for="note">{% if kind == "confirm" %}Отметка для себя{% else %}Причина{% endif %}</label><br>
+      <textarea id="note" name="note" rows="2" cols="60"></textarea>
+      {% if kind == "confirm" %}
+        <br><small>Номер платёжного поручения или дата выписки. Компания этого не увидит.</small>
+      {% endif %}
+    </p>
+    <div class="submit-row">
+      {% if kind == "confirm" %}
+        <input type="submit" class="default" value="Деньги пришли">
+      {% else %}
+        <input type="submit" class="deletelink" value="Отменить счёт">
+      {% endif %}
+      <a href="{% url 'savdex_admin:finance_payment_changelist' %}" class="button cancel-link">Назад</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
