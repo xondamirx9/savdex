@@ -33,6 +33,18 @@ class CabinetAccessTest extends TestCase
     }
 
     #[Test]
+    public function физлицу_и_фрилансеру_меню_говорит_мой_профиль(): void
+    {
+        foreach (['individual' => true, 'freelancer' => true, 'legal' => false] as $form => $person) {
+            $user = User::factory()->for(Company::factory()->state(['legal_form' => $form]))
+                ->create(['email_verified_at' => now()]);
+
+            $this->actingAs($user)->get('/cabinet')
+                ->assertInertia(fn ($page) => $page->where('auth.company.person', $person));
+        }
+    }
+
+    #[Test]
     public function события_уведомлений_переведены_на_язык_интерфейса(): void
     {
         $user = User::factory()->for(Company::factory())->create(['email_verified_at' => now()]);

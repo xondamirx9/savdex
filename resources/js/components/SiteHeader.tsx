@@ -5,6 +5,7 @@ import {
     AlertTriangle,
     Building2,
     ChevronDown,
+    CircleUserRound,
     Globe,
     Heart,
     LayoutDashboard,
@@ -589,7 +590,7 @@ function UserMenu({
     email: string;
     verified: boolean;
     isAdmin: boolean;
-    company: { name: string; logo: string | null; initials: string } | null;
+    company: { name: string; logo: string | null; initials: string; person?: boolean } | null;
 }) {
     const [open, setOpen] = useState(false);
     const ref = useDismiss(() => setOpen(false));
@@ -673,7 +674,16 @@ function UserMenu({
                     role="menuitem"
                     onClick={() => setOpen(false)}
                 >
-                    <Building2 aria-hidden className="size-4" /> {t('header.company')}
+                    {/* Физлицо и фрилансер — профиль человека, а не организации */}
+                    {company?.person ? (
+                        <>
+                            <CircleUserRound aria-hidden className="size-4" /> {t('header.profile')}
+                        </>
+                    ) : (
+                        <>
+                            <Building2 aria-hidden className="size-4" /> {t('header.company')}
+                        </>
+                    )}
                 </Link>
                 <Link
                     href={routes.favorites}
@@ -844,7 +854,12 @@ export function SiteHeader() {
                                 isAdmin={auth.user!.is_admin}
                                 company={
                                     auth.company
-                                        ? { name: auth.company.name, logo: auth.company.logo, initials: auth.company.initials }
+                                        ? {
+                                              name: auth.company.name,
+                                              logo: auth.company.logo,
+                                              initials: auth.company.initials,
+                                              person: auth.company.person,
+                                          }
                                         : null
                                 }
                             />
