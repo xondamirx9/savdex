@@ -237,9 +237,24 @@ a:hover {
     color: var(--sx-text);
 }
 
-#site-name span {
+#site-name .sx-brand-note {
     color: var(--sx-muted);
+    font-size: 14px;
     font-weight: 500;
+}
+
+/* Знак площадки слева от названия — как в шапке Filament */
+#site-name .sx-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    vertical-align: middle;
+}
+
+#site-name .sx-brand-logo {
+    height: 34px;
+    width: auto;
+    display: block;
 }
 
 #user-tools {
@@ -332,11 +347,35 @@ div.breadcrumbs a:hover {
 }
 
 #nav-sidebar .module th a {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 8px 12px;
     color: var(--sx-text-2);
     font-size: 14px;
     font-weight: 500;
+}
+
+/* Значок раздела: серый, у открытого — синий, как в Filament */
+.sx-nav-icon {
+    display: inline-flex;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    color: var(--sx-muted-2);
+}
+
+.sx-nav-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+#nav-sidebar .module th a:hover .sx-nav-icon {
+    color: var(--sx-muted);
+}
+
+#nav-sidebar .current-model .sx-nav-icon {
+    color: var(--sx-accent-text);
 }
 
 #nav-sidebar .module th a:hover {
