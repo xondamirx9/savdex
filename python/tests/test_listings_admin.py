@@ -414,3 +414,37 @@ def test_загрузка_книгами(люди):
     ]
     assert образец["status"] == 200 and образец["body"].startswith("PK")
     assert "нужна книга Excel" in не_книга["body"]
+
+
+def test_загрузка_с_компанией_и_типом_из_окна(люди):
+    """Книга заявок без компаний: строки достаются компании из окна, тип — «Запрос»."""
+    компания = _компания()
+    заявка = ["", "Куплю песок речной", "", "", "", "", ""]
+
+    _, загрузка, чужая = django(
+        люди["admin"],
+        (
+            "post",
+            LIST + "import/",
+            {
+                "workbooks": [файл("zayavki.xlsx", _книга(заявка))],
+                "default_company": "Стройбаза",
+                "default_type": "demand",
+            },
+        ),
+        (
+            "post",
+            LIST + "import/",
+            {
+                "workbooks": [файл("zayavki.xlsx", _книга(заявка))],
+                "default_company": "Нет такой компании",
+            },
+        ),
+    )
+
+    assert загрузка["status"] == 200, загрузка["body"][:2000]
+    assert "Создано: <b>1</b>" in загрузка["body"]
+    assert sql("select title, type, company_id from listings") == [
+        ("Куплю песок речной", "demand", компания)
+    ]
+    assert "Компании «Нет такой компании» нет в разделе «Компании»" in чужая["body"]

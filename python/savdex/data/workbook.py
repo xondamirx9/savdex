@@ -19,8 +19,15 @@ ListingWorkbookTemplate и частью ImportLanguage и CatalogLookup, кот�
  — русский лист главный: с него берутся цена, валюта, категория,
    компания, город и фотографии — всё, что у товара одно на все языки;
  — остальные листы отдают только тексты: заголовок, описание, условия
-   поставки и оплаты — строка к строке с русским листом. Число строк
-   на листах обязано совпадать: иначе переводы съедут на соседний товар.
+   поставки и оплаты — строка к строке с русским листом. Лист, чьи
+   строки не сходятся с русским, пропускается с заметкой (иначе переводы
+   съедут на соседний товар), а товары загружаются без этого языка.
+
+Пустое и неполное загрузку не останавливает: пустая ячейка
+пропускается, строка, которую не загрузить (нет заголовка, нет
+компании), идёт в отчёт, а остальные загружаются дальше; второй лист
+на том же языке, лист перевода без шапки, «Номер», которого нет в базе,
+и книга без листа «Русский» — заметка, а не отказ.
 
 Строка русского листа: «Номер» заполнен → правится это объявление;
 иначе ищется по заголовку и компании; не нашлось → заводится новое
@@ -40,11 +47,22 @@ ListingWorkbookTemplate и частью ImportLanguage и CatalogLookup, кот�
 - книга, которую не открыть, — UnreadableWorkbookError (у Laravel —
   исключение openspout и ошибка в окне Filament).
 
-Ошибка Laravel повторена намеренно (правило владельца от 28.09, раздел
+Исправлено после отключения загрузки у Laravel (раздел Filament убран;
 «Отложено до отключения Laravel» в docs/migration-to-python.md):
-пропущенные ячейки (_Import.skipped) не сбрасываются между строками
-одной книги — заметка строки повторяется у всех следующих строк, а
-пропуск из строки, которая не загрузилась, достаётся следующей.
+пропущенные ячейки (_Import.skipped) сбрасываются перед каждой строкой —
+раньше заметка строки повторялась у всех следующих.
+
+Добавлено сверх Laravel — для книг заявок, собранных с других площадок,
+где нет продавца из справочника и столбца «Тип»:
+
+- компания из окна загрузки (default_company) достаётся строкам, где
+  компания не указана или не нашлась; существующему объявлению продавца
+  не меняет;
+- тип новых объявлений из окна (default_type), когда ячейки «Тип» нет;
+- «Раздел → Подраздел»: «Прочее» — это «Другое» каталога, неизвестный
+  подраздел — сам раздел с заметкой (listing_category);
+- длинный заголовок ищется обрезанным, как сохранён: повторная
+  загрузка не заводит дубль.
 
 Запись — в чужие таблицы listings и listing_images (SHARED_WRITES),
 журнал — как AuditObserver у администратора и строка «imported», как
@@ -273,6 +291,8 @@ def import_workbooks(
     admin_id: int,
     replace: bool,
     ip: str | None = None,
+    default_company: int | None = None,
+    default_type: str = "supply",
 ) -> WorkbookResult:
     """
     Действие importWorkbook в ListingsTable: книги подряд, итоги
@@ -282,6 +302,9 @@ def import_workbooks(
     ошибок и заметок начинается с имени файла. Пустой список — ничего не
     делается (у Filament — «Файл не получен»). Книга, которую не открыть, —
     UnreadableWorkbookError; загруженное из книг до неё остаётся.
+    default_company и default_type — из окна загрузки: компания строк
+    без компании (или с компанией не из справочника) и тип новых
+    объявлений, когда в книге нет столбца «Тип».
     """
     total = _empty()
 
@@ -292,7 +315,15 @@ def import_workbooks(
     many = len(files) > 1
 
     for name, content in files:
-        result = import_workbook(content, author_id=admin_id, replace=replace, actor=actor, ip=ip)
+        result = import_workbook(
+            content,
+            author_id=admin_id,
+            replace=replace,
+            actor=actor,
+            ip=ip,
+            default_company=default_company,
+            default_type=default_type,
+        )
 
         total["rows"] += result["rows"]
         total["created"] += result["created"]
@@ -327,6 +358,8 @@ def import_workbook(
     replace: bool = False,
     actor: access.Admin | None = None,
     ip: str | None = None,
+    default_company: int | None = None,
+    default_type: str = "supply",
 ) -> WorkbookResult:
     """
     ListingWorkbookImport::run — одна книга. author_id — автор новых
@@ -338,6 +371,8 @@ def import_workbook(
         replace=replace,
         observer=actor if actor is not None and actor.is_admin else None,
         ip=ip,
+        default_company=default_company,
+        default_type="demand" if default_type == "demand" else "supply",
     ).run(content)
 
 
@@ -491,6 +526,90 @@ def company_id(value: str | None) -> int | None:
             return int(row["id"])
 
     return None
+
+
+#: Подраздел «всё остальное» называют по-разному: в каталоге «Другое»,
+#: в книгах — «Прочее», «Разное»
+_OTHER = ("другое", "прочее", "разное", "иное", "остальное", "other", "boshqa", "diğer", "其他")
+
+
+def _category_names(category: int) -> set[str]:
+    rows = _rows(
+        "select c.slug, t.name from categories c "
+        "left join category_translations t on t.category_id = c.id where c.id = %s",
+        [category],
+    )
+
+    return {importer.normalize(r["slug"]) for r in rows} | {
+        importer.normalize(r["name"]) for r in rows if r["name"]
+    }
+
+
+def _cut(value: str, limit: int) -> str:
+    """Обрезка по границе слова: хвост теряется, а не смысл."""
+    if len(value) <= limit:
+        return value
+
+    cut = value[:limit]
+    space = cut.rfind(" ")
+
+    return (cut[:space] if space > limit / 2 else cut).rstrip(" ,.;-")
+
+
+def listing_category(value: str | None) -> tuple[int | None, str | None]:
+    """
+    Категория строки и заметка, если она подобрана не буквально.
+
+    «Раздел → Подраздел» ищется внутри найденного раздела: подраздел
+    «Прочее» — это «Другое» каталога, а подраздела, которого нет, —
+    сам раздел (объявление не теряет категорию из-за одного слова).
+    Без раздела — как раньше: по названию на любом языке.
+    """
+    raw = _trim(str(value or ""))
+    path = [p for p in re.split(r"\s*(?:→|->|>|/|\\|\|)\s*", raw) if _trim(p) != ""]
+
+    if len(path) < 2:
+        return importer.category_id(raw), None
+
+    parent = None
+
+    # Раздел — сперва среди верхних: «Другое» есть и разделом, и
+    # подразделом почти в каждом разделе
+    if len(path) == 2:
+        needle = importer.normalize(path[0])
+        parent = next(
+            (
+                int(top["id"])
+                for top in _rows(
+                    "select id from categories where parent_id is null order by sort, id"
+                )
+                if needle in _category_names(int(top["id"]))
+            ),
+            None,
+        )
+
+    parent = parent or importer.category_id(" → ".join(path[:-1]))
+
+    if parent is None:
+        return importer.category_id(raw), None
+
+    leaf = importer.normalize(path[-1])
+    wanted = {leaf} | (set(_OTHER) if leaf in _OTHER else set())
+
+    for child in _rows(
+        "select id from categories where parent_id = %s order by sort, id", [parent]
+    ):
+        if _category_names(int(child["id"])) & wanted:
+            return int(child["id"]), None
+
+    names = _rows(
+        "select name from category_translations where category_id = %s and locale = 'ru'", [parent]
+    )
+    section = str(names[0]["name"]) if names else _trim(path[-2])
+
+    return parent, (
+        f"подраздел «{_trim(path[-1])}» не найден в каталоге — объявление в разделе «{section}»"
+    )
 
 
 def sheet_locale(name: str) -> str | None:
@@ -873,9 +992,14 @@ class _Import:
     replace: bool
     observer: access.Admin | None
     ip: str | None
-    #: Ячейки, которые пришлось пропустить: незнакомая категория, город
-    #: не из справочника — пропускаются, а объявление загружается.
-    #: Не сбрасывается между строками — как у Laravel (см. docstring модуля)
+    #: Компания для строк, где она не указана или не нашлась в справочнике
+    #: (выбирается в окне загрузки); None — такие строки не создаются
+    default_company: int | None = None
+    #: Тип новых объявлений, когда в книге нет столбца «Тип» или ячейка пуста
+    default_type: str = "supply"
+    #: Ячейки, которые пришлось пропустить в текущей строке: незнакомая
+    #: категория, город не из справочника — пропускаются, а объявление
+    #: загружается. Сбрасывается перед каждой строкой
     skipped: list[str] = field(default_factory=list)
     #: Компания из строки, которую не нашли в справочнике
     unknown_company: str | None = None
@@ -916,6 +1040,9 @@ class _Import:
                 )
                 stored: list[str] = []
                 obsolete: list[str | None] = []
+                # Пропуски — свои у каждой строки: иначе заметка второй
+                # строки повторялась бы у всех следующих
+                self.skipped = []
 
                 try:
                     with transaction.atomic():
@@ -1008,31 +1135,31 @@ class _Import:
             if sheet.locale is None:
                 continue
 
+            # Второй лист на том же языке не отменяет книгу: берётся первый
             if sheet.locale in by_locale:
-                result["errors"].append(
+                result["notes"].append(
                     f"Два листа на одном языке: «{by_locale[sheet.locale].name}» и "
-                    f"«{sheet.name}». Оставьте один — книга не загружена."
+                    f"«{sheet.name}». Взят первый, «{sheet.name}» пропущен."
                 )
 
-                return None
+                continue
 
             by_locale[sheet.locale] = sheet
 
         master = by_locale.get("ru")
 
-        # Русского по имени нет: главный — первый лист, если он не
-        # подписан другим языком
+        # Русского по имени нет: главный — первый лист. Подписан другим
+        # языком — всё равно он: цены и фотографии берутся с него, а книга
+        # не отклоняется из-за имени вкладки
         if master is None:
-            if sheets[0].locale is not None:
-                result["errors"].append(
-                    "В книге нет русского листа. Назовите вкладку с ценами и фотографиями "
-                    "«Русский» — она главная, остальные листы дают только переводы. "
-                    "Книга не загружена."
-                )
-
-                return None
-
             master = sheets[0]
+
+            if master.locale is not None:
+                result["notes"].append(
+                    f"В книге нет листа «Русский» — главным взят первый лист «{master.name}»: "
+                    "цены, категории и фотографии берутся с него."
+                )
+                by_locale.pop(master.locale, None)
 
         if master.header is None:
             result["errors"].append(
@@ -1052,18 +1179,21 @@ class _Import:
         """
         Строки листов совпадают — иначе переводы съедут: и число строк,
         и напротив каждой заполненной строки перевода — заполненная русская.
-        Лист без шапки — ошибка; лист с одной шапкой — переводов нет.
+        Лист перевода, который не сходится с русским или без шапки, не
+        отменяет книгу: пропускается с заметкой, товары загружаются без
+        этого языка.
         """
         for locale, sheet in list(translations.items()):
             if sheet.header is None:
-                result["errors"].append(
+                result["notes"].append(
                     _missing_header(
                         sheet, ["Заголовок", "Описание", "Условия поставки", "Условия оплаты"]
                     )
-                    + " Книга не загружена."
+                    + " Лист перевода пропущен."
                 )
+                del translations[locale]
 
-                return False
+                continue
 
             if sheet.last == 0:
                 result["notes"].append(f"Лист «{sheet.name}» пуст — переводов на этот язык нет.")
@@ -1072,26 +1202,29 @@ class _Import:
                 continue
 
             if sheet.last != master.last:
-                result["errors"].append(
+                result["notes"].append(
                     f"Лист «{sheet.name}»: строк с данными {sheet.last}, на русском листе "
                     f"{master.last}. Переводы связаны по порядку строк, при разном числе строк "
-                    "они разъедутся по чужим товарам. Если перевода нет, оставьте строку "
-                    "пустой, но не удаляйте её. Книга не загружена."
+                    "они разъехались бы по чужим товарам, поэтому лист пропущен — товары "
+                    "загружены без этого языка. Если перевода нет, оставьте строку пустой, "
+                    "но не удаляйте её."
                 )
+                del translations[locale]
 
-                return False
+                continue
 
             for offset, row in sheet.rows.items():
                 opposite = master.rows.get(offset)
 
                 if row.fields and (opposite is None or not opposite.fields):
-                    result["errors"].append(
+                    result["notes"].append(
                         f"Лист «{sheet.name}», строка {row.number}: заполнена, а на русском "
                         f"листе строка {opposite.number if opposite else row.number} пуста — "
-                        "строки разъехались. Книга не загружена."
+                        "строки разъехались. Лист пропущен, товары загружены без этого языка."
                     )
+                    del translations[locale]
 
-                    return False
+                    break
 
         return True
 
@@ -1121,8 +1254,9 @@ class _Import:
 
     def _resolve(self, fields: dict[str, str]) -> dict[str, Any]:
         """
-        Объявление строки: по «Номеру»; иначе по заголовку и компании;
-        иначе новое (только с компанией). Новое — без id.
+        Объявление строки: по «Номеру»; номера нет в базе или он пуст —
+        по заголовку и компании; иначе новое (только с компанией). Новое —
+        без id.
         """
         # (int) у PHP не выходит за PHP_INT_MAX
         number = min(int(re.sub(r"[^0-9]", "", fields.get("id", "")) or 0), 2**63 - 1)
@@ -1130,17 +1264,25 @@ class _Import:
         if number > 0:
             found = _rows("select * from listings where id = %s and deleted_at is null", [number])
 
-            if not found:
-                raise _RowError(f"объявление № {number} не найдено")
+            if found:
+                return found[0]
 
-            return found[0]
+            # Номер устарел (объявление удалено) или опечатка — строка не
+            # пропадает: ищется по заголовку и компании, как без номера
+            self.skipped.append(
+                f"объявление № {number} не найдено — строка загружена по заголовку и компании"
+            )
 
         title = _trim(fields.get("title", ""))
 
         if title == "":
             raise _RowError("не заполнен заголовок")
 
-        company = self._company_id(fields)
+        # Длинный заголовок сохранён обрезанным (_fits) — и искать его
+        # надо таким же, иначе повторная загрузка заводит дубль
+        title = _cut(title, MAX_LENGTH.get("title") or len(title))
+
+        company = self._company_id(fields, fallback=True)
         query = "select * from listings where title = %s and deleted_at is null"
         params: list[Any] = [title]
 
@@ -1163,29 +1305,48 @@ class _Import:
         if company is None:
             raise _RowError(
                 f"компания «{self.unknown_company}» не найдена в справочнике, а без компании "
-                "новое объявление не создать"
+                "новое объявление не создать. Добавьте её в «Компании» или выберите "
+                "«Компанию для строк без компании» в окне загрузки"
                 if self.unknown_company is not None
-                else "не указана компания, а без неё новое объявление не создать"
+                else "не указана компания, а без неё новое объявление не создать. Заполните "
+                "столбец «Компания» или выберите «Компанию для строк без компании» в окне загрузки"
             )
 
         return {"company_id": company}
 
-    def _company_id(self, fields: dict[str, str]) -> int | None:
+    def _company_id(self, fields: dict[str, str], *, fallback: bool = False) -> int | None:
+        """
+        Компания строки из справочника. fallback — для поиска и нового
+        объявления: пустая или ненайденная компания заменяется компанией
+        из окна загрузки. У существующего объявления продавец без явной
+        компании в строке не меняется.
+        """
         name = _trim(fields.get("company", ""))
         self.unknown_company = None
 
         if name == "":
-            return None
+            return self.default_company if fallback else None
 
         found = company_id(name)
 
         if found is None:
+            if fallback and self.default_company is not None:
+                if f"компания «{name}»" not in " ".join(self.skipped):
+                    self.skipped.append(
+                        f"компания «{name}» не найдена в справочнике — объявление отнесено "
+                        "к компании из окна загрузки"
+                    )
+
+                return self.default_company
+
             # У нового объявления без компании нет продавца — строку это
             # остановит (_resolve); у существующего продавец уже есть
             self.unknown_company = name
-            self.skipped.append(
-                f"компания «{name}» не найдена в справочнике — продавец остался прежним"
-            )
+
+            if f"компания «{name}»" not in " ".join(self.skipped):
+                self.skipped.append(
+                    f"компания «{name}» не найдена в справочнике — продавец остался прежним"
+                )
 
         return found
 
@@ -1193,7 +1354,7 @@ class _Import:
         """ListingWorkbookImport::fill: поля строки — в объявление; пустая ячейка не стирает."""
         if not exists:
             listing["user_id"] = self.author_id
-            listing["type"] = "supply"
+            listing["type"] = self.default_type
             # Ждёт проверки: публикует администратор из списка
             listing["status"] = "moderation"
 
@@ -1208,7 +1369,7 @@ class _Import:
                 listing[plain] = self._fits(plain, _trim(fields[plain]))
 
         if _trim(fields.get("category_id", "")) != "":
-            category = importer.category_id(fields["category_id"])
+            category, note = listing_category(fields["category_id"])
 
             if category is None:
                 self.skipped.append(
@@ -1217,6 +1378,9 @@ class _Import:
                 )
             else:
                 listing["category_id"] = category
+
+                if note is not None:
+                    self.skipped.append(note)
 
         if _trim(fields.get("city_id", "")) != "":
             city = city_id(fields["city_id"])
@@ -1296,10 +1460,7 @@ class _Import:
             + (f" на языке «{locale}»" if locale is not None else "")
             + f" длиннее {limit} символов — обрезано"
         )
-        cut = value[:limit]
-        space = cut.rfind(" ")
-
-        return (cut[:space] if space > limit / 2 else cut).rstrip(" ,.;-")
+        return _cut(value, limit)
 
     # ── Запись ───────────────────────────────────────────────────────
 
