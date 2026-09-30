@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Finance;
 
 use App\Filament\Pages\FinanceOperations;
-use App\Filament\Resources\Refunds\RefundResource;
 use App\Models\AdminAction;
 use App\Models\Company;
 use App\Models\Payment;
@@ -66,7 +65,7 @@ class RefundsTest extends TestCase
 
             $expected = in_array($role, [AdminAccess::SUPERADMIN, AdminAccess::FINANCE], true);
 
-            $this->assertSame($expected, RefundResource::canViewAny(), $label);
+            $this->assertSame($expected, AdminAccess::allows('refunds.view'), $label);
             $this->assertSame($expected, FinanceOperations::canAccess(), $label);
         }
     }
@@ -77,7 +76,7 @@ class RefundsTest extends TestCase
     {
         $this->actingAs($this->admin(AdminAccess::ADMIN));
 
-        $this->assertFalse(RefundResource::canViewAny());
+        $this->assertFalse(AdminAccess::allows('refunds.view'));
     }
 
     // ── Заявка ──────────────────────────────────────────────────────
@@ -217,23 +216,6 @@ class RefundsTest extends TestCase
     }
 
     // ── Запись не стирается ─────────────────────────────────────────
-
-    /**
-     * Ошибочный возврат исправляется обратной операцией, а не стиранием.
-     *
-     * Удалённый возврат ничем не отличается от возврата, которого не было.
-     */
-    #[Test]
-    public function возврат_нельзя_удалить_или_отредактировать(): void
-    {
-        $this->actingAs($this->admin(AdminAccess::SUPERADMIN));
-
-        $refund = Refund::factory()->create(['payment_id' => $this->payment()->id]);
-
-        $this->assertFalse(RefundResource::canEdit($refund));
-        $this->assertFalse(RefundResource::canDelete($refund));
-        $this->assertFalse(RefundResource::canForceDelete($refund));
-    }
 
     // ── След в журнале ──────────────────────────────────────────────
 

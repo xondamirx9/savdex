@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Resources\Refunds\RefundResource;
 use App\Models\Payment;
 use App\Models\Refund;
 use App\Support\AdminAccess;
@@ -63,7 +62,7 @@ class FinanceToday extends StatsOverviewWidget
                     ? 'на '.$this->money((int) $refunds->sum('amount'))
                     : 'ничего не ждёт')
                 ->color($refunds->count() > 0 ? 'danger' : 'gray')
-                ->url(RefundResource::getUrl()),
+                ->url('/admin/python?next=/py/admin/finance/refund/'),
         ];
     }
 

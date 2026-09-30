@@ -27,6 +27,7 @@ use App\Models\Crm\Task;
 use App\Models\Listing;
 use App\Models\Payment;
 use App\Models\PlatformReview;
+use App\Models\Refund;
 use App\Models\Review;
 use App\Models\Subscription;
 use App\Models\Support\Ticket;
@@ -340,6 +341,15 @@ class AdminPanelProvider extends PanelProvider
                     ->badge(fn (): ?string => ($pending = Payment::query()->where('status', 'pending')
                         ->count()) > 0 ? (string) $pending : null, color: 'warning')
                     ->visible(fn (): bool => AdminAccess::allows('payments.view')),
+                NavigationItem::make('Возвраты')
+                    ->url('/admin/python?next=/py/admin/finance/refund/')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->group('Монетизация')
+                    ->sort(3)
+                    // Счётчик — заявленные: деньги, по которым решение ещё не принято
+                    ->badge(fn (): ?string => ($requested = Refund::query()->where('status', Refund::STATUS_REQUESTED)
+                        ->count()) > 0 ? (string) $requested : null, color: 'danger')
+                    ->visible(fn (): bool => AdminAccess::allows('refunds.view')),
                 NavigationItem::make('Пакеты контактов')
                     ->url('/admin/python?next=/py/admin/billing/creditpack/')
                     ->icon('heroicon-o-ticket')
