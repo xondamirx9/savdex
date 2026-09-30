@@ -206,8 +206,12 @@ def props(ctx: Context) -> dict[str, Any]:
     methods = {
         m["id"]: m for m in _rows("select * from payment_methods where company_id = %s", [cid])
     }
+    # Payment::HISTORY_STATUSES: в истории только оплаченное и возвраты —
+    # брошенная форма Uzum не платёж
     payments = _rows(
-        "select * from payments where company_id = %s order by created_at desc limit 20", [cid]
+        "select * from payments where company_id = %s and status in ('paid', 'refunded') "
+        "order by created_at desc limit 20",
+        [cid],
     )
     pending = _rows(
         "select * from payments where company_id = %s and status = 'pending' "

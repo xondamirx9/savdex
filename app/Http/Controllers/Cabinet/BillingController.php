@@ -103,7 +103,13 @@ class BillingController extends Controller
                 'is_default' => $m->is_default,
             ]),
 
-            'payments' => $company->payments()->with('method')->latest()->limit(20)->get()
+            /*
+             * История — только то, что действительно оплачено (и возвраты
+             * по оплаченному). Брошенная форма Uzum — не платёж: запись
+             * «не прошёл» со счётом выглядела как списание, которого не было.
+             */
+            'payments' => $company->payments()->whereIn('status', Payment::HISTORY_STATUSES)
+                ->with('method')->latest()->limit(20)->get()
                 ->map(fn (Payment $p): array => [
                     'id' => $p->id,
                     'date' => ($p->paid_at ?? $p->created_at)->translatedFormat('d.m.Y'),

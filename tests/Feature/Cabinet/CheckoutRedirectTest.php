@@ -106,6 +106,37 @@ class CheckoutRedirectTest extends TestCase
 
     // ── Касса включена ───────────────────────────────────────
 
+    /**
+     * Брошенная форма оплаты — не платёж: в «Истории платежей» только
+     * то, где деньги действительно пришли (и возвраты). Неоплаченный
+     * счёт остаётся в «Счетах к оплате», отменённый не виден нигде.
+     */
+    #[Test]
+    public function в_истории_только_оплаченное(): void
+    {
+        foreach (['paid' => 'SVD-1', 'pending' => 'SVD-2', 'failed' => 'SVD-3', 'refunded' => 'SVD-4'] as $status => $number) {
+            Payment::create([
+                'company_id' => $this->company->id,
+                'number' => $number,
+                'purpose' => 'subscription',
+                'description' => 'Тариф',
+                'amount' => 100000,
+                'currency' => 'UZS',
+                'provider' => 'uzum',
+                'status' => $status,
+                'paid_at' => in_array($status, ['paid', 'refunded'], true) ? now() : null,
+            ]);
+        }
+
+        $this->actingAs($this->user)->get('/cabinet/billing')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('payments', 2)
+                ->where('payments', fn ($rows) => collect($rows)->pluck('status')->sort()->values()->all() === ['paid', 'refunded'])
+                ->has('invoices', 1)
+                ->where('invoices.0.number', 'SVD-2'));
+    }
+
     #[Test]
     public function покупка_уводит_на_платёжную_страницу(): void
     {

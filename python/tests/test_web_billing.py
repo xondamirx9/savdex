@@ -175,7 +175,10 @@ def test_касса(сайт, path):
     assert props["subscription"]["auto_renew"] is True
     assert props["wallet"]["credits"] == 12
     assert sorted(c["masked"] for c in props["cards"]) == ["Humo •••• 1234", "Карта •••• 9876"]
-    assert [p["method"] for p in props["payments"][:3]] == ["", "Bank", " · Visa •••• 5555"]
+    # В истории только оплаченное и возвраты: отменённый SVX-3
+    # и неоплаченные SVX-4/5 туда не попадают
+    assert [p["status"] for p in props["payments"]] == ["paid", "paid", "refunded"]
+    assert [p["method"] for p in props["payments"]] == ["Bank", "Uzum · Humo •••• 1234", "Uzum"]
     assert [p["number"] for p in props["invoices"]] == ["SVX-5", "SVX-4"]
     assert props["invoices"][0]["amount"] == "1 234 567 USD"
     packs = {p["name"]: p for p in props["packs"]}
