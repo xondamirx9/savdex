@@ -1,10 +1,19 @@
 {% extends "admin/base.html" %}
+{% load static %}
 {% comment %}
   Шапка админки на Python.
 
   Ссылки «сменить пароль» нет: паролей у Django нет, они в админке
   Laravel. «Открыть сайт» ведёт обратно в админку Laravel.
 {% endcomment %}
+{% block extrahead %}
+{{ block.super }}
+{# Оформление как у админки Laravel (Filament): шрифт Inter и светлая/тёмная тема #}
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap">
+<link rel="stylesheet" href="{% static 'savdex/admin-theme.css' %}">
+{% endblock %}
+
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
 
 {% block branding %}
@@ -20,6 +29,8 @@
     {% csrf_token %}
     <button type="submit">Выйти</button>
   </form>
+  {# Светлая, тёмная или как в системе — выбор хранится в браузере #}
+  {% include "admin/color_theme_toggle.html" %}
 </div>
 {% endif %}
 {% endblock %}
