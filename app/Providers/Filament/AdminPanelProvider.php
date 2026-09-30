@@ -16,7 +16,6 @@ use App\Filament\Widgets\MyTasks;
 use App\Filament\Widgets\PlatformStats;
 use App\Filament\Widgets\RegistrationsChart;
 use App\Filament\Widgets\SupportQueue;
-use App\Http\Controllers\Admin\DownloadExportController;
 use App\Http\Controllers\Admin\PythonBridgeController;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetAdminLocale;
@@ -330,6 +329,14 @@ class AdminPanelProvider extends PanelProvider
                     ->group('Система')
                     ->sort(5)
                     ->visible(fn (): bool => AdminAccess::allows('roles.view')),
+                // «Выгрузка в Excel» на Django (шаг 68): запуск, история
+                // и скачивание книг — savdex/system/exports_view.py
+                NavigationItem::make('Выгрузка в Excel')
+                    ->url('/admin/python?next=/py/admin/exports/')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->group('Система')
+                    ->sort(90)
+                    ->visible(fn (): bool => AdminAccess::allows('backups.view')),
                 NavigationItem::make('Тарифы')
                     ->url('/admin/python?next=/py/admin/billing/plan/')
                     ->icon('heroicon-o-currency-dollar')
@@ -441,12 +448,7 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
                 RequirePasswordChange::class,
             ])
-            // Скачивание книг выгрузки — за тем же входом в админку,
-            // права проверяет сам контроллер
             ->authenticatedRoutes(function (): void {
-                Route::get('exports/{run}/{file}', DownloadExportController::class)
-                    ->name('exports.download');
-
                 // Переход в разделы, которые уже работают на Django
                 // (этап 2 переноса): пропуск вместо общей сессии
                 Route::get('python', PythonBridgeController::class)

@@ -222,8 +222,23 @@ class SavdexAdminSite(admin.AdminSite):
         return adminlogin.logout(request)
 
     def get_urls(self) -> list[URLPattern | URLResolver]:
-        # Смена пароля — в админке Laravel: у Django своих паролей нет
-        return [
+        from django.urls import path
+
+        from savdex.system import exports_view
+
+        # «Выгрузка в Excel» (шаг 68) — страница админки, а не раздел
+        # модели: книги лежат на диске, а не в таблице
+        own: list[URLPattern | URLResolver] = [
+            path("exports/", self.admin_view(exports_view.view), name="system_exports"),
+            path(
+                "exports/<str:run_id>/<str:file>",
+                self.admin_view(exports_view.download),
+                name="system_exports_download",
+            ),
+        ]
+
+        # Смена пароля — на сайте: у Django своих паролей нет
+        return own + [
             u
             for u in super().get_urls()
             if getattr(u, "name", None) not in {"password_change", "password_change_done"}
@@ -251,7 +266,7 @@ class SavdexAdminSite(admin.AdminSite):
         admin_ = getattr(request, "admin", None)
         context["savdex_admin"] = admin_
         context["savdex_role"] = admin_.role_label if isinstance(admin_, access.Admin) else None
-        # «Выгрузка в Excel» пока на Filament — ссылка в шапке тем, кому она видна
+        # «Выгрузка в Excel» (шаг 68) — ссылка в шапке тем, кому она видна
         context["savdex_exports"] = isinstance(admin_, access.Admin) and admin_.can("backups.view")
         # Знак из раздела «Оформление» — тот же, что в шапке Filament
         from savdex.web import shared

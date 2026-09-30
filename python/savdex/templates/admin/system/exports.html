@@ -1,0 +1,97 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Выгрузка в Excel (savdex/system/exports_view.py): кнопка сверху, ниже —
+  список выгрузок. Пока выгрузка идёт, страница обновляется сама раз
+  в пять секунд: человек нажал кнопку и ждёт, перезагружать руками он
+  не должен.
+{% endcomment %}
+{% block extrahead %}{{ block.super }}
+{% if active %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .ex-badge { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .ex-gray { background: #f3f4f6; color: #374151; }
+  .ex-warning { background: #fef3c7; color: #92400e; }
+  .ex-success { background: #dcfce7; color: #166534; }
+  .ex-danger { background: #fee2e2; color: #991b1b; }
+  .ex-muted { color: var(--sx-muted, #6b7280); font-size: 12px; }
+  .ex-files a { display: block; }
+  .ex-run { margin: 8px 0 20px; }
+  .ex-run p { margin: 6px 0; }
+  .ex-table pre { white-space: pre-wrap; margin: 4px 0 0; }
+</style>
+{% endblock %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Разделы</a> › Выгрузка в Excel
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p>{{ lead }}</p>
+
+  {% if can_export %}
+    <form method="post" class="ex-run"
+          onsubmit="return confirm('Выгрузить базу в Excel?\n\nВ файлах будут почта, телефоны и IP-адреса всех пользователей площадки. Храните их так же бережно, как саму базу.')">
+      {% csrf_token %}
+      <input type="submit" class="default" value="Выгрузить сейчас" {% if active %}disabled{% endif %}>
+      <p class="ex-muted">
+        {% if active %}Выгрузка идёт — вторая поверх неё удвоила бы нагрузку на базу ради того же файла.{% else %}Займёт до пары минут; запуск и каждое скачивание записываются в журнал действий.{% endif %}
+      </p>
+    </form>
+  {% endif %}
+
+  {% if not runs %}
+    <h2>Выгрузок пока нет</h2>
+    <p>Нажмите «Выгрузить сейчас» — через минуту-другую здесь появятся два файла Excel.</p>
+  {% else %}
+    <h2>Последние выгрузки</h2>
+    <p class="ex-muted">Хранятся последние {{ keep }}; более старые удаляются, чтобы не забить диск.</p>
+    <table class="ex-table">
+      <thead><tr><th>Когда</th><th>Кто</th><th>Состояние</th><th>Файлы</th><th>Сверка</th></tr></thead>
+      <tbody>
+        {% for run in runs %}
+          <tr data-run="{{ run.id }}">
+            <td style="white-space:nowrap">{{ run.when }}</td>
+            <td>{{ run.who }}</td>
+            <td>
+              <span class="ex-badge ex-{{ run.tone }}">{{ run.state }}</span>
+              {% if run.note %}<div class="ex-muted">{{ run.note }}</div>{% endif %}
+              {% if run.output %}
+                <details class="ex-muted"><summary>подробности</summary><pre>{{ run.output }}</pre></details>
+              {% endif %}
+            </td>
+            <td class="ex-files">
+              {% if run.status == "done" and can_export %}
+                {% for file in run.files %}
+                  <a href="{% url 'admin:system_exports_download' run.id file.name %}">⬇ {{ file.label }}</a>
+                {% endfor %}
+                <span class="ex-muted">{{ run.engine }}</span>
+              {% elif run.status == "done" %}
+                <span class="ex-muted">нет права скачивать</span>
+              {% else %}
+                <span class="ex-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if run.check %}<span class="ex-badge ex-{{ run.check.tone }}">{{ run.check.label }}</span>{% else %}<span class="ex-muted">—</span>{% endif %}
+              {% if run.check_note or run.problems %}
+                <details class="ex-muted"><summary>подробности</summary>
+                  {% if run.check_note %}<pre>{{ run.check_note }}</pre>{% endif %}
+                  {% for problem in run.problems %}<p>{{ problem }}</p>{% endfor %}
+                </details>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="ex-muted">
+      Каждая книга перед тем, как её отдать, сверена с базой ячейка в ячейку: число строк,
+      шапки, наборы идентификаторов и каждое значение. Несошедшаяся книга не отдаётся.
+      У выгрузок до переезда в столбце сверки — итог сравнения PHP- и Python-версий.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}
