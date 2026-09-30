@@ -1,7 +1,9 @@
 {% extends "admin/change_form.html" %}
 {% comment %}
   Пользователь (savdex/accounts/admin.py): «Подтвердить почту», «Выдать
-  пароль» (новый показывается один раз), «Заблокировать» — не себя.
+  пароль» (новый показывается один раз), «Заблокировать» — не себя;
+  «Отключить» и «Восстановить» — право users.delete, как над отмеченными
+  в списке.
 {% endcomment %}
 {% block object-tools-items %}
   {% if original %}
@@ -21,6 +23,22 @@
         <button type="submit" name="act" value="status" class="button" onclick="return confirm('Изменить статус пользователя?')">{% if original.status == "active" %}Заблокировать{% else %}Разблокировать{% endif %}</button>
       </form></li>
     {% endif %}
+    {% if can_disable %}
+      <li><form method="post" action="{{ act_url }}" style="display:inline">{% csrf_token %}
+        <button type="submit" name="act" value="disable" class="button" onclick="return confirm('Отключить аккаунт {{ original.email }}? Войти будет нельзя, адрес почты освободится для новой регистрации. Вернуть можно кнопкой «Восстановить».')">Отключить</button>
+      </form></li>
+    {% endif %}
+    {% if can_restore %}
+      <li><form method="post" action="{{ act_url }}" style="display:inline">{% csrf_token %}
+        <button type="submit" name="act" value="restore" class="button">Восстановить</button>
+      </form></li>
+    {% endif %}
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+{% block form_top %}
+  {% if disabled_note %}
+    <p class="errornote">{{ disabled_note }}: войти нельзя, адрес почты свободен для новой регистрации.{% if can_restore %} Вернуть — кнопкой «Восстановить» вверху.{% endif %}</p>
   {% endif %}
   {{ block.super }}
 {% endblock %}

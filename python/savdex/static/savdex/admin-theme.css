@@ -762,6 +762,25 @@ a.deletelink:visited {
     background: var(--object-tools-hover-bg);
 }
 
+/*
+ * На странице записи кнопок бывает несколько («Подтвердить почту»,
+ * «Выдать пароль», «Отключить»…): у Django они подняты на строку заголовка
+ * и перекрывали имя записи. Здесь — своей строкой под заголовком
+ */
+.change-form .object-tools {
+    float: none;
+    margin: 0 0 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.change-form .object-tools li {
+    margin: 0;
+    /* У Django высота пункта — 1rem, и кнопки вылезали на карточку ниже */
+    height: auto;
+}
+
 /* ── Поля формы ── */
 
 input[type="text"],
@@ -786,6 +805,27 @@ select,
     box-shadow: var(--sx-card-shadow);
 }
 
+/*
+ * Выпадающие списки: у Django высота списка — 1.875rem, и с отступами темы
+ * на текст оставалось ~12px — выбранное значение обрезалось сверху и снизу.
+ * Высота — по содержимому, как у полей ввода; ширина не больше строки
+ * формы (список компаний иначе растягивался по самому длинному названию)
+ */
+select {
+    height: auto;
+    min-height: 38px;
+    line-height: 20px;
+    max-width: 100%;
+}
+
+select[multiple] {
+    min-height: 150px;
+}
+
+form .aligned select:not([multiple]) {
+    max-width: min(100%, 32rem);
+}
+
 input:focus,
 textarea:focus,
 select:focus {
@@ -804,6 +844,16 @@ select:focus {
     color: var(--sx-text-2);
     font-size: 14px;
     font-weight: 500;
+}
+
+/*
+ * Подпись у галочки: у Django она той же ширины, что подписи полей
+ * (160px), и «Доступ в панель управления» ломалась на две строки
+ */
+.aligned .vCheckboxLabel {
+    width: auto;
+    min-width: 0;
+    display: inline;
 }
 
 .help,
