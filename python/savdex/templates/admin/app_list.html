@@ -1,7 +1,8 @@
 {% load i18n %}
 {% comment %}
   Как у Django (admin/app_list.html), плюс значок раздела слева —
-  как в меню Filament. Значок выбирает SavdexAdminSite.get_app_list
+  как в меню Filament. Значок выбирает SavdexAdminSite.get_app_list.
+  Ссылки «Добавить» (зелёный плюс) нет: добавляют кнопкой в разделе
 {% endcomment %}
 
 {% if app_list %}
@@ -14,7 +15,6 @@
         <thead class="visually-hidden">
           <tr>
             <th scope="col">{% translate 'Model name' %}</th>
-            <th scope="col">{% translate 'Add link' %}</th>
             <th scope="col">{% translate 'Change or view list link' %}</th>
           </tr>
         </thead>
@@ -28,12 +28,6 @@
                   {% if model.icon %}<span class="sx-nav-icon">{% include model.icon %}</span>{% endif %}<span>{{ model.name }}</span>
                 {% endif %}
               </th>
-
-              {% if model.add_url %}
-                <td><a href="{{ model.add_url }}" class="addlink" aria-describedby="{{ app.app_label }}-{{ model_name }}">{% translate 'Add' %}</a></td>
-              {% else %}
-                <td></td>
-              {% endif %}
 
               {% if model.admin_url and show_changelinks %}
                 {% if model.view_only %}
