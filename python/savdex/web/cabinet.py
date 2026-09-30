@@ -972,7 +972,7 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
 
 # ── Настройки /cabinet/settings (SettingsController::index) ─────────
 
-#: NotificationPreference::EVENTS — подписи в коде, по-русски на всех языках
+#: NotificationPreference::EVENTS — на странице подписи из словаря (ui.notification_events)
 NOTIFICATION_EVENTS = {
     "contact_unlocked": "Открыли мой контакт",
     "new_review": "Новый отзыв",
@@ -1027,11 +1027,11 @@ def settings_props(ctx: Context) -> dict[str, Any]:
         "notifications": [
             {
                 "event": event,
-                "label": label,
+                "label": ctx.t(f"notification_events.{event}"),
                 "email": _pref(saved.get(event), "email", True),
                 "telegram": _pref(saved.get(event), "telegram", False),
             }
-            for event, label in NOTIFICATION_EVENTS.items()
+            for event in NOTIFICATION_EVENTS
         ],
         "telegram": {
             "available": _telegram_configured(),

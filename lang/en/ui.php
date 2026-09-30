@@ -11,6 +11,15 @@ declare(strict_types=1);
  */
 
 return [
+    // ── События уведомлений (раздел «Настройки» кабинета) ──
+
+    'notification_events' => [
+        'contact_unlocked' => 'Someone opened my contact',
+        'new_review' => 'New review',
+        'moderation' => 'Listing moderation',
+        'listing_expiring' => 'Listing is expiring',
+        'digest' => 'Subscription digest',
+    ],
 
     // ── Navigation and header ────────────────────────────────
 

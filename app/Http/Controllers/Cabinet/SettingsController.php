@@ -43,7 +43,8 @@ class SettingsController extends Controller
             'notifications' => collect(NotificationPreference::EVENTS)
                 ->map(fn (string $label, string $event): array => [
                     'event' => $event,
-                    'label' => $label,
+                    // Подпись — из словаря языка интерфейса
+                    'label' => __('ui.notification_events.'.$event),
                     'email' => $saved->get($event)?->email ?? true,
                     'telegram' => $saved->get($event)?->telegram ?? false,
                 ])

@@ -12,7 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_id', 'event', 'email', 'telegram'])]
 class NotificationPreference extends Model
 {
-    /** Порядок и подписи — как в разделе «Настройки» кабинета. */
+    /**
+     * Порядок событий — как в разделе «Настройки» кабинета. Подписи
+     * здесь русские, для админки и логов; на странице настроек —
+     * из словаря языка (ui.notification_events).
+     */
     public const EVENTS = [
         'contact_unlocked' => 'Открыли мой контакт',
         'new_review' => 'Новый отзыв',

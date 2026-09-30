@@ -32,6 +32,18 @@ class CabinetAccessTest extends TestCase
         $this->get('/cabinet')->assertRedirect('/login');
     }
 
+    #[Test]
+    public function события_уведомлений_переведены_на_язык_интерфейса(): void
+    {
+        $user = User::factory()->for(Company::factory())->create(['email_verified_at' => now()]);
+
+        $this->actingAs($user)->get('/en/cabinet/settings')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('notifications.0.event', 'contact_unlocked')
+                ->where('notifications.0.label', 'Someone opened my contact'));
+    }
+
     /**
      * Кабинет говорит о блокировке компании прямо: объявления при ней
      * значатся активными, но витрина их прячет — без предупреждения

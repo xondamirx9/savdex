@@ -10,6 +10,15 @@ declare(strict_types=1);
  */
 
 return [
+    // ── События уведомлений (раздел «Настройки» кабинета) ──
+
+    'notification_events' => [
+        'contact_unlocked' => '有人查看了我的联系方式',
+        'new_review' => '新评价',
+        'moderation' => '广告审核',
+        'listing_expiring' => '广告即将到期',
+        'digest' => '订阅摘要',
+    ],
 
     // ── 导航与页头 ────────────────────────────────────────────
 
