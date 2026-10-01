@@ -247,6 +247,13 @@ Django перейдёт в хозяева схемы на последнем э�
 машинного перевода: ставят в неё страницы, переводит задача Laravel
 `translations:fill` (2).
 
+**С этапа 8** общих таблиц нет: `sessions`, `content_translations`,
+`cache`, а с ними `admin_actions` и `activity_events` (этап 6) — у Django.
+За Laravel числятся только его служебные таблицы, в которые больше никто
+не пишет: `cache_locks`, `jobs`, `job_batches`, `failed_jobs` и таблицы
+Filament `imports`, `exports`, `failed_import_rows`. `migrations` ведёт
+`manage.py schema`.
+
 Карта в коде — `python/savdex/progress.py`: по ней главная админки на
 Python показывает ход переноса, а `tests/test_progress_schema.py`
 сверяет её с настоящей схемой базы — новая таблица без места в карте
@@ -343,6 +350,7 @@ Python показывает ход переноса, а `tests/test_progress_sch
 | Этап 3, шаг 2: первые страницы сайта на Django | сделано: «Помощь», «Инструкция», «Правила»; сверка с Laravel; включение — `SAVDEX_PY_PAGES` |
 | Этап 3, шаг 3: новости, «О компании», «Контакты» | сделано: группы `news`, `about` |
 | Шаги 67–73: админка, регистрация по коду, `?hl=`, деньги, деплой без Laravel | сделано: у Laravel не осталось ни живых писателей, ни шагов деплоя, кроме `php artisan migrate`; впереди этап 8 — выключение |
+| **Этап 8: выключение Laravel** | сделано: Django отвечает на все адреса, в образе нет PHP, общих таблиц нет; схема — `manage.py schema` с миграциями SQL. Код PHP в репозитории пока остаётся — сверочные тесты Python сравнивают с ним |
 
 Что выяснилось по дороге:
 
@@ -2674,11 +2682,102 @@ Filament к этому времени — на Django (шаги 56–60 ниже
 `tests/test_finance_operations.py` и `tests/test_dashboard.py`
 (граница суток по Ташкенту, пустое состояние, кто видит).
 
-### Этап 8. Выключение Laravel (2–3 недели)
+### Этап 8. Выключение Laravel (2–3 недели) ✅
 
 Прокси больше никуда не смотрит. Django становится хозяином схемы:
 `managed = True`, история миграций Laravel переносится в Django одним
 начальным снимком.
+
+Как сделано на деле — одним выпуском, без отката переменной (откатом
+служит прежний образ на Render: «Rollback» к предыдущему деплою).
+
+**Django отвечает на все адреса** (`savdex/web/fallback.py`):
+
+- несовпавший адрес — страница 404 сайта, как обработчик исключений
+  `bootstrap/app.php`: без сессии (посредники группы `web` на несовпавшем
+  маршруте у Laravel не работали), язык из префикса адреса; ошибка
+  сервера — страница 500, а если не собирается и она (база недоступна) —
+  простой текст. У разделов Django `/py/…` — свои страницы Django;
+- `CanonicalHost` — со служебного адреса Render (`*.onrender.com`)
+  на домен из `APP_URL`, 301, кроме `/up` и не GET/HEAD;
+- бывшая панель Filament: `/admin/login` — на вход админки Django,
+  `/admin/python?next=…` — туда, куда вёл пропуск, остальные `/admin…` —
+  на её главную; служебные адреса Livewire и Filament — 404.
+
+Сверка с Laravel — `tests/test_web_fallback.py` (404 на адресах с языком
+и без, без куки сессии; переход с `onrender.com`).
+
+**Apache без PHP** (`docker/apache-python.conf`, `docker/apache-site.conf`):
+готовый файл из `public/` (собранный фронтенд, загрузки `/storage/…`,
+картинки, фавикон) — сам, всё остальное — Django, адресом как пришёл
+(`THE_REQUEST`, без раскодирования). Из `public/.htaccess` Laravel
+перенесены хвостовой «/» (301 на адрес без него, кроме `/py/…`) и
+`/index.php/<адрес>` (301 на чистый). `public/index.php`, `.htaccess` и
+файлы Filament в образ не попадают: без PHP Apache отдал бы `index.php`
+как текст. Модель Apache — `event` (потоки): процесс на запрос был нужен
+только `mod_php`.
+
+**Образ** (`Dockerfile`): `debian:trixie-slim` (та же система и тот же
+Python 3.13, что под `php:8.3-apache`) с Apache, Python и libmagic;
+сборка фронтенда — без пакетов PHP: тема Filament убрана из
+`vite.config.ts`, из `app.css` — источники классов в `vendor` и
+скомпилированных шаблонах Blade (проверено: из собранных стилей пропали
+только классы панели Filament и PHP-кода, в Django и React их нет).
+
+**Запуск** (`docker/render-entrypoint.sh`) — без единого `php`:
+
+- база — только PostgreSQL (`DB_CONNECTION=pgsql`; владелец — `DB_URL`);
+  без неё контейнер не стартует, и Render оставляет работать прежний деплой;
+- `APP_KEY` при отсутствии генерирует Python и, как раньше, кладёт
+  на постоянный диск;
+- схема — `manage.py schema` (снимок на пустой базе и новые миграции SQL,
+  см. ниже), справочники — `manage.py seed`, администратор —
+  `manage.py admin --if-missing`; демо-наполнение (`SEED_DEMO`,
+  `SEED_SHOWCASE`) было сидерами Laravel — теперь только предупреждение
+  в журнале;
+- загрузки — на постоянный диск, `public/storage` — ссылка, как
+  `storage:link`;
+- gunicorn с потоками (`gthread`): процессов — сколько помещается
+  в память, но не больше `2 × ядра + 1`; по `PYTHON_THREADS` (4) потоков
+  в каждом. Переопределяются `PYTHON_WORKERS`, `PYTHON_THREADS`,
+  `PYTHON_WORKER_MB`, `PYTHON_RESERVED_MB`;
+- рядом, как раньше, — расписание (`manage.py schedule`), перевод
+  (`translate`, всегда; выключается `MACHINE_TRANSLATION_ENABLED=false`)
+  и сверка денег (`reconcile_billing`). `schedule:work` и `queue:work`
+  Laravel больше нет: всё, что они делали, перенесено на шагах 62–72.
+
+**Схема после Laravel** (`savdex/schema.py`): изменения — файлы
+`python/savdex/bootstrap/migrations/<дата>_<что>.sql`; `manage.py schema`
+на каждом запуске применяет новые по порядку имён, каждый целиком в одной
+транзакции, и записывает в ту же таблицу `migrations` (сломанный
+откатывается и не записывается). Права роли `savdex_django` на новые
+таблицы файл выдаёт сам — пример в `savdex/schema.py`. Модели Django
+по-прежнему `managed = False`, а `manage.py migrate` запрещён
+маршрутизатором: два способа менять схему — это два хозяина у одной
+схемы. Проверка — `tests/test_schema.py`.
+
+**Общие таблицы** — у Django (`guards.OWNED_TABLES`): `sessions`,
+`admin_actions`, `activity_events`, `content_translations`, `cache`.
+`SHARED_WRITES` и `APPEND_ONLY_SHARED` пусты; механизм оставлен на случай
+нового второго писателя.
+
+**Проверка контейнера** (`.github/workflows/docker.yml`) переписана:
+в образе нет `php`, `index.php` и файлов Filament; схема, справочники,
+выгрузка в Excel и администратор — Python; запущенный контейнер отдаёт
+файлы сам и всё остальное через Django — страницы, 404 сайта, переходы
+со старых адресов, `onrender.com` на домен, 419 без токена; запущены
+расписание, перевод и сверка денег.
+
+Что остаётся за пределами этапа:
+
+- **код PHP в репозитории** (`app/`, `routes/`, `database/`, тесты PHP) —
+  на нём держатся сверочные тесты Python: каждый сравнивает ответ Django
+  с ответом Laravel. Удалять его стоит, когда боевой сайт поработает без
+  Laravel и сверки станут не нужны; вместе с ним — `composer.*`,
+  `php.yml` и `pint`;
+- в `render.yaml` описан переезд с SQLite на PostgreSQL: боевая база
+  давно в PostgreSQL (`DB_CONNECTION=pgsql` и `DB_URL` заданы в панели),
+  а SQLite образ больше не поддерживает.
 
 **Итого: 58–76 недель.** Это полтора года для команды, которая занята
 только переносом. Если параллельно развивается сайт — считайте вдвое.

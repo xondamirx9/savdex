@@ -88,8 +88,8 @@ urlpatterns = [
     path("py/admin/", adminsite.site.urls),
     # Кто вошёл на сайт — по сессии Laravel (этап 3, savdex/visitor.py)
     path("py/whoami", visitor.whoami),
-    # Страницы сайта (этап 3, savdex/web/): адрес доходит сюда, только если
-    # его группа включена в SAVDEX_PY_PAGES (docker/apache-python.conf)
+    # Страницы сайта (этап 3, savdex/web/); с этапа 8 Apache передаёт сюда
+    # всё, кроме готовых файлов (docker/apache-python.conf)
     re_path(r"^(?:(?:uz|en|zh|tr)/?)?$", home.home, name="home"),
     *[
         re_path(rf"^(?:(?:uz|en|zh|tr)/)?(?P<key>{key})$", web.doc, name=f"docs.{key}")

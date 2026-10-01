@@ -86,7 +86,7 @@ DATABASE_URL=postgres://... uv run python manage.py runserver
 | `savdex/progress.py` | Ход переноса по этапам — на главной админки на Python |
 | `savdex/catalog.py`, `savdex/catalog_admin.py` | Общее у справочников: названия на языках, запрет удаления при ссылках, раздел админки |
 | `savdex/text.py` | Склонения: «1 таблица», «2 таблицы», «5 таблиц» |
-| `savdex/urls.py` | Адреса, которые Apache отдаёт Django: `/py/up`, вход и разделы админки, `/py/whoami`, страницы сайта из `SAVDEX_PY_PAGES` |
+| `savdex/urls.py` | Все адреса сайта (этап 8 — Apache передаёт Django всё, кроме файлов из `public/`): `/py/up`, админка, страницы и формы сайта, 404 на остальном (`savdex/web/fallback.py`) |
 | `conftest.py` | Подмена базы на SQLite для проверок |
 
 ## Проверка базы

@@ -68,7 +68,8 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->viteTheme('resources/css/filament/admin/theme.css')
+            // Своей темы нет с этапа 8 переноса: боевой образ панель не
+            // отдаёт, а сборка фронтенда идёт без пакетов PHP
             // Своя форма: почта без учёта регистра, как при входе на сайт
             ->login(Login::class)
             // Тот же синий, что на витрине: админка — часть продукта,

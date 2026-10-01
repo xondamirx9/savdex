@@ -2,9 +2,8 @@
 Страницы сайта, которые отдаёт Django (этап 3).
 
 Каждая — копия своего метода контроллера Laravel; сверка —
-tests/test_web_parity.py. Какие адреса вообще доходят до Django, решает
-Apache (docker/apache-python.conf) по переменной SAVDEX_PY_PAGES: убрать
-группу из переменной — и адреса снова отдаёт Laravel, без выкладки.
+tests/test_web_parity.py. С этапа 8 Apache (docker/apache-python.conf)
+передаёт Django все адреса, кроме готовых файлов из public/.
 """
 
 from __future__ import annotations

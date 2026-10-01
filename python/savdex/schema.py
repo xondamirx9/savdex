@@ -6,16 +6,30 @@
 
   manage.py schema            пустая база — создать схему из снимка
                               (и выдать права роли, если она есть);
-                              непустую не трогает
+                              затем — новые миграции из
+                              savdex/bootstrap/migrations
   manage.py schema --status   «empty» или «ready»
   manage.py schema --export   снять снимок с базы после migrate:fresh
 
 Таблица migrations в снимке полная, поэтому php artisan migrate после
-неё ничего не делает, а новые миграции Laravel (пока он жив) дописываются
-как раньше. Что снимок не отстал от миграций, проверяет
-tests/test_schema.py. Правило 4.2 (DDL — только Laravel) предохранитель
-держит по-прежнему: снимок применяется в обход обёртки соединения, только
-на пустой базе.
+неё ничего не делает. Что снимок не отстал от миграций Laravel, проверяет
+tests/test_schema.py.
+
+С этапа 8 Laravel в образе нет, и изменения схемы — файлы SQL в
+savdex/bootstrap/migrations/<дата>_<что>.sql (имя — как у миграций
+Laravel, по нему же порядок). Каждый применяется один раз, целиком
+в одной транзакции, и записывается в ту же таблицу migrations — так
+php artisan migrate на копии с Laravel их не повторит. Права роли
+savdex_django на новые таблицы файл выдаёт сам, если роль есть:
+
+  do $$ begin
+      if exists (select from pg_roles where rolname = 'savdex_django') then
+          grant select, insert, update, delete on новая_таблица to savdex_django;
+      end if;
+  end $$;
+
+Правило 4.2 (DDL — не из кода сайта) предохранитель держит по-прежнему:
+снимок и миграции применяются в обход обёртки соединения, только отсюда.
 """
 
 from __future__ import annotations
@@ -29,6 +43,7 @@ from django.db import connection, transaction
 
 DIRECTORY = Path(__file__).resolve().parent / "bootstrap"
 BASELINE = DIRECTORY / "baseline.sql"
+MIGRATIONS = DIRECTORY / "migrations"
 GRANTS = DIRECTORY / "grants.sql"
 ROLE = "savdex_django"
 
@@ -71,6 +86,48 @@ def create() -> bool:
             raw.execute(grants)
 
     return True
+
+
+def _migrations_directory() -> Path:
+    configured = os.environ.get("SAVDEX_MIGRATIONS_DIR")
+
+    return Path(configured) if configured else MIGRATIONS
+
+
+def pending() -> list[Path]:
+    """Файлы миграций, которых ещё нет в таблице migrations, по порядку имён."""
+    files = sorted(_migrations_directory().glob("*.sql"))
+
+    if not files:
+        return []
+
+    with connection.cursor() as cursor:
+        cursor.execute("select migration from migrations")
+        done = {row[0] for row in cursor.fetchall()}
+
+    return [path for path in files if path.stem not in done]
+
+
+def migrate() -> list[str]:
+    """Применить новые миграции: каждую — в своей транзакции, с записью в migrations."""
+    applied: list[str] = []
+
+    for path in pending():
+        sql = path.read_text(encoding="utf-8")
+
+        with transaction.atomic(), connection.cursor() as cursor:
+            raw = cursor.cursor  # в обход предохранителя, как create()
+            raw.execute("select coalesce(max(batch), 0) + 1 from migrations")
+            row = raw.fetchone()
+            batch = row[0] if row else 1
+            raw.execute(sql)
+            raw.execute(
+                "insert into migrations (migration, batch) values (%s, %s)", [path.stem, batch]
+            )
+
+        applied.append(path.stem)
+
+    return applied
 
 
 def _pg_dump(url: str, *args: str) -> str:

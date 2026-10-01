@@ -1,13 +1,11 @@
-# Сборка боевого образа и сквозные проверки внутри него: выгрузка,
-# выдача прав и запуск контейнера целиком (сайт и Django за Apache).
+# Сборка боевого образа и сквозные проверки внутри него: схема,
+# справочники, выгрузка, администратор и запуск контейнера целиком
+# (Apache и Django за ним).
 #
 # Docker на машине разработчика есть не всегда, а ошибка в Dockerfile
 # на Render означает несостоявшийся деплой. Поэтому образ собирается
-# здесь, до слияния, и в нём прогоняется тот же путь, что у кнопки
-# «Выгрузить сейчас»: миграции, PHP-выгрузка, теневая Python-выгрузка,
-# сверка книг. Проверяется не «собралось», а «работает в том, что
-# уедет на сервер»: Python на месте, пакеты по uv.lock стоят, PHP видит
-# Python, обе версии достают до базы.
+# здесь, до слияния, и проверяется не «собралось», а «работает в том,
+# что уедет на сервер». С этапа 8 PHP в образе нет: всё — Django.
 name: docker
 
 on:
@@ -16,30 +14,26 @@ on:
       - 'Dockerfile'
       - '.dockerignore'
       - 'docker/**'
-      - 'composer.lock'
       - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'resources/**'
+      - 'public/**'
       - 'python/pyproject.toml'
       - 'python/uv.lock'
       - 'python/savdex/**'
-      - 'app/Support/DatabaseExports.php'
-      - 'app/Console/Commands/ExportWorkbooks.php'
-      - 'app/Console/Commands/ExportRun.php'
-      - 'config/exports.php'
       - '.github/workflows/docker.yml'
   pull_request:
     paths:
       - 'Dockerfile'
       - '.dockerignore'
       - 'docker/**'
-      - 'composer.lock'
       - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'resources/**'
+      - 'public/**'
       - 'python/pyproject.toml'
       - 'python/uv.lock'
       - 'python/savdex/**'
-      - 'app/Support/DatabaseExports.php'
-      - 'app/Console/Commands/ExportWorkbooks.php'
-      - 'app/Console/Commands/ExportRun.php'
-      - 'config/exports.php'
       - '.github/workflows/docker.yml'
 
 jobs:
@@ -77,45 +71,53 @@ jobs:
       - name: Python в образе
         run: |
           docker run --rm --entrypoint /var/www/html/python/.venv/bin/python savdex:ci \
-            -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography; print('Django', django.get_version())"
+            -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography, gunicorn; print('Django', django.get_version())"
+          # PHP в образе нет (этап 8), и его файлов в public/ тоже: Apache
+          # без PHP отдал бы index.php как текст
+          docker run --rm --entrypoint bash savdex:ci -c '
+            set -e
+            ! command -v php
+            test ! -e /var/www/html/public/index.php
+            test ! -e /var/www/html/public/.htaccess
+            test ! -e /var/www/html/public/js/filament
+            test ! -e /var/www/html/vendor
+            test -s /var/www/html/public/build/manifest.json
+            test -s /var/www/html/resources/legal/documents.json
+            apache2ctl -M 2>/dev/null | grep -q proxy_http_module
+            apache2ctl -M 2>/dev/null | grep -q mpm_event_module
+          ' 
           # Тип загруженного файла — libmagic, как finfo у PHP: без него docx и xlsx не пройдут
           docker run --rm --entrypoint /var/www/html/python/.venv/bin/python \
             -w /var/www/html/python savdex:ci \
             -c "from savdex.web.filetype import _magic, mime_type; assert _magic() is not None; print(mime_type(b'%PDF-1.4'))"
 
       # Ключ одноразовый, живёт только в этом прогоне
-      - name: Схема, справочники, выгрузка и выдача прав — внутри образа
+      - name: Схема, справочники, выгрузка и администратор — внутри образа
         run: |
           docker run --rm --network host \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
-            -e DB_CONNECTION=pgsql \
-            -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
             -e DJANGO_DATABASE_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
-            -e CACHE_STORE=array -e SESSION_DRIVER=database -e QUEUE_CONNECTION=sync \
+            -w /var/www/html/python \
             --entrypoint bash savdex:ci -c '
               set -eo pipefail
-              # Схема и справочники — Python, без Laravel (шаг 73): после
-              # снимка миграциям Laravel применять нечего
-              (cd python && .venv/bin/python manage.py schema | tee /tmp/schema.txt)
+              .venv/bin/python manage.py schema | tee /tmp/schema.txt
               grep -q "Схема создана" /tmp/schema.txt
-              php artisan migrate --force | tee /tmp/migrate.txt
-              grep -q "Nothing to migrate" /tmp/migrate.txt
-              (cd python && .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt)
+              .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt
               grep -q "countries 33" /tmp/seed.txt
-              php artisan savdex:export-run | tee /tmp/run.txt
-              grep -q "Итог: done" /tmp/run.txt
-              grep -q "Сверка с Python: match" /tmp/run.txt
-              grep -q "Книги отдала версия: python" /tmp/run.txt
-              cd python
+              # Повторный запуск (каждый деплой) ничего не ломает
+              .venv/bin/python manage.py schema | tee /tmp/schema.txt
+              grep -q "снимок не нужен" /tmp/schema.txt
+              # Выгрузка в Excel — как кнопка «Выгрузить сейчас» (шаг 68)
+              .venv/bin/python manage.py run_export | tee /tmp/run.txt
+              grep -q "\.xlsx" /tmp/run.txt
               BCRYPT_ROUNDS=4 .venv/bin/python manage.py admin ci@savdex.uz --role=support | tee /tmp/admin.txt
               grep -q "Администратор создан" /tmp/admin.txt
             '
 
       # Контейнер целиком, как его запускает Render: скрипт запуска,
-      # Apache, очередь, планировщик и Django за Apache. Laravel должен
-      # отвечать на своих адресах, Django — на своих (распределитель,
-      # docker/apache-python.conf). База уже подготовлена шагом выше.
-      - name: Контейнер как на Render — сайт и Django за Apache
+      # Apache, Django за ним и фоновые задачи. База уже подготовлена
+      # шагом выше — скрипт запуска её только досеивает.
+      - name: Контейнер как на Render — Apache и Django
         run: |
           docker run -d --name savdex --network host \
             -e PORT=18080 \
@@ -124,7 +126,6 @@ jobs:
             -e DB_CONNECTION=pgsql \
             -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
             -e DJANGO_DATABASE_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
-            -e CACHE_STORE=array -e SESSION_DRIVER=database -e QUEUE_CONNECTION=sync \
             savdex:ci
 
           for i in $(seq 1 90); do
@@ -132,138 +133,92 @@ jobs:
             sleep 2
           done
 
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          to() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$@"; }
+
           set -x
           curl -fsS -o /dev/null http://127.0.0.1:18080/up
           test "$(curl -fsS http://127.0.0.1:18080/py/up)" = ok
           # Админка Django без входа уводит на свою страницу входа (шаг 67) —
           # значит, ключи из APP_KEY выведены и вход включён
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/py/admin/)" \
+          test "$(to http://127.0.0.1:18080/py/admin/)" \
             = "302 http://127.0.0.1:18080/py/admin/login/?next=/py/admin/"
           curl -fsS -o /tmp/login.html http://127.0.0.1:18080/py/admin/login/
           grep -q 'name="_token"' /tmp/login.html
-          # «Выгрузка в Excel» — страница админки Django (шаг 68)
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/py/admin/exports/)" \
+          test "$(to http://127.0.0.1:18080/py/admin/exports/)" \
             = "302 http://127.0.0.1:18080/py/admin/login/?next=/py/admin/exports/"
-          # Вход и главная Filament — на Django (группа admin)
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/admin/login)" \
-            = "302 http://127.0.0.1:18080/py/admin/login/"
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/admin)" \
-            = "302 http://127.0.0.1:18080/py/admin/"
-          # Стили админки Django собраны при сборке и отдаются через Apache
+          # Бывшая панель Filament — в админку Django (этап 8)
+          test "$(to http://127.0.0.1:18080/admin/login)" = "302 http://127.0.0.1:18080/py/admin/login/"
+          test "$(to http://127.0.0.1:18080/admin)" = "302 http://127.0.0.1:18080/py/admin/"
+          test "$(to http://127.0.0.1:18080/admin/excel-exports)" = "302 http://127.0.0.1:18080/py/admin/"
+          test "$(code http://127.0.0.1:18080/livewire/livewire.js)" = 404
+          # Стили админки Django собраны при сборке
           curl -fsS -o /dev/null http://127.0.0.1:18080/py/static/admin/css/base.css
-          # Страницы сайта на Django (этап 3): «Помощь» отдаёт Django — без
-          # заголовка PHP, со страницей Inertia; смену языка (?hl=) — тоже
-          # Django (шаг 70): переход на адрес выбранного языка
-          curl -fsS -D /tmp/help.h -o /tmp/help.html http://127.0.0.1:18080/help
-          ! grep -qi '^x-powered-by: php' /tmp/help.h
+          # Готовые файлы отдаёт сам Apache: собранный фронтенд, фавикон
+          asset="$(docker exec savdex sh -c 'ls /var/www/html/public/build/assets | grep -m1 "\.css$"')"
+          curl -fsS -D /tmp/asset.h -o /dev/null "http://127.0.0.1:18080/build/assets/$asset"
+          grep -qi '^content-type: text/css' /tmp/asset.h
+          curl -fsS -o /dev/null http://127.0.0.1:18080/favicon.ico
+          # index.php больше нет — адрес как любой другой, 404 Django
+          test "$(code http://127.0.0.1:18080/index.php)" = 404
+          # Загрузки по /storage/… — ссылка на storage/app/public
+          docker exec savdex sh -c 'mkdir -p /var/www/html/storage/app/public/ci && echo ok > /var/www/html/storage/app/public/ci/probe.txt'
+          test "$(curl -fsS http://127.0.0.1:18080/storage/ci/probe.txt)" = ok
+          # Неизвестный адрес — страница 404 сайта (Inertia «Error»), не Django по умолчанию
+          curl -s -D /tmp/404.h -o /tmp/404.html http://127.0.0.1:18080/no/such/page
+          grep -q '^HTTP/1.1 404' /tmp/404.h
+          grep -q '"component":"Error"' /tmp/404.html
+          # Хвостовой «/» — на адрес без него
+          test "$(to http://127.0.0.1:18080/about/)" = "301 http://127.0.0.1:18080/about"
+          # /index.php/<адрес> — на чистый адрес
+          test "$(to http://127.0.0.1:18080/index.php/about)" = "301 http://127.0.0.1:18080/about"
+          # Служебный адрес Render — на свой домен (CanonicalHost)
+          test "$(to -H 'Host: savdex-ci.onrender.com' http://127.0.0.1:18080/about)" \
+            = "301 http://127.0.0.1:18080/about"
+          # Страницы сайта: «Помощь», смена языка (?hl=)
+          curl -fsS -o /tmp/help.html http://127.0.0.1:18080/help
           grep -q '"component":"DocPage"' /tmp/help.html
-          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/help?hl=uz'
-          ! grep -qi '^x-powered-by: php' /tmp/hl.h
-          grep -qi '^location: http://127.0.0.1:18080/uz/help' /tmp/hl.h
-          # Новости, «О компании», страны, партнёры, документы и тарифы — тоже Django
-          for page in news about contact countries partners terms privacy pricing reviews; do
-            curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/page.h
+          test "$(to 'http://127.0.0.1:18080/help?hl=uz')" = "302 http://127.0.0.1:18080/uz/help"
+          for page in news about contact countries partners terms privacy pricing reviews \
+              resumes it-services companies catalog 'catalog?type=tender' 'catalog?type=supply' \
+              robots.txt sitemap.xml sitemap-static.xml services/it 'catalog?hl=de'; do
+            curl -fsS -o /dev/null "http://127.0.0.1:18080/$page"
           done
-          # Этап 5: страница Django ведёт сессию Laravel — гостю кука
-          # сессии и XSRF-TOKEN, строка в sessions
+          # Сессия в формате Laravel — гостю кука сессии и XSRF-TOKEN
           curl -fsS -D /tmp/about.h -o /dev/null http://127.0.0.1:18080/about
           grep -qi '^set-cookie: laravel-session=' /tmp/about.h
           grep -qi '^set-cookie: XSRF-TOKEN=' /tmp/about.h
-          ! grep -qi '^x-powered-by: php' /tmp/about.h
-          # Кабинет (группа cabinet): гостя Django уводит на вход сам
-          curl -s -D /tmp/cabinet.h -o /dev/null http://127.0.0.1:18080/cabinet
-          grep -qi '^location: http://127.0.0.1:18080/login' /tmp/cabinet.h
-          ! grep -qi '^x-powered-by: php' /tmp/cabinet.h
-          # Машинный перевод ведёт Python: обработчик запущен
-          docker exec savdex sh -c 'grep -al "manage.py" /proc/[0-9]*/cmdline | xargs -r cat | tr "\0" " " | grep -q "manage.py translate"'
-          # Формы (группа forms) включены по умолчанию: POST — у Django
-          curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/locale/uz
-          ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Форма на общем со страницей адресе (вход): токен сверяет сама
-          # форма — без него 419, как у Laravel, а не 403 CSRF Django
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/login)" = 419
-          curl -s -D /tmp/form.h -o /dev/null http://127.0.0.1:18080/cabinet/contacts/export
-          ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Этап 4, шаг 62: подмена метода (POST с _method) — у Django
-          curl -s -D /tmp/form.h -o /dev/null -X POST -d '_method=DELETE' http://127.0.0.1:18080/cabinet/listings/1
-          ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Неизвестный язык (?hl=de) — страница Django, смена языка (?hl=uz) — тоже (шаг 70)
-          curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=de'
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D /tmp/hl.h -o /dev/null 'http://127.0.0.1:18080/catalog?hl=uz'
-          ! grep -qi '^x-powered-by: php' /tmp/hl.h
-          grep -qi '^location: http://127.0.0.1:18080/uz/catalog' /tmp/hl.h
-          # /index.php/<адрес> — на чистый адрес, мимо Laravel
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1:18080/index.php/about)" \
-            = "301 http://127.0.0.1:18080/about"
-          # Приём денег от шлюза (группа payments) — тоже Django
-          curl -s -D /tmp/form.h -o /dev/null -X POST http://127.0.0.1:18080/payments/uzum/callback/check
-          ! grep -qi '^x-powered-by: php' /tmp/form.h
-          # Вход и регистрация (группа auth) — Django, и страницы, и отправка
+          # Кабинет и форма отзыва: гостя — на вход
+          test "$(to http://127.0.0.1:18080/cabinet)" = "302 http://127.0.0.1:18080/login"
+          test "$(to http://127.0.0.1:18080/reviews/new)" = "302 http://127.0.0.1:18080/login"
+          # Форма без токена — 419, как у Laravel, а не 403 CSRF Django
+          test "$(code -X POST http://127.0.0.1:18080/login)" = 419
+          test "$(code -X POST -d '_method=DELETE' http://127.0.0.1:18080/cabinet/listings/1)" = 419
+          # Вход и регистрация
           for page in login register forgot-password reset-password/abc; do
-            curl -fsS -D /tmp/auth.h -o /tmp/auth.html "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/auth.h
+            curl -fsS -o /tmp/auth.html "http://127.0.0.1:18080/$page"
             grep -q '"component":"auth' /tmp/auth.html
           done
-          # Главная — тоже Django, со страницей Home
-          curl -fsS -D /tmp/home.h -o /tmp/home.html http://127.0.0.1:18080/
-          ! grep -qi '^x-powered-by: php' /tmp/home.h
+          test "$(to http://127.0.0.1:18080/register/code)" = "302 http://127.0.0.1:18080/register"
+          # Главная
+          curl -fsS -o /tmp/home.html http://127.0.0.1:18080/
           grep -q '"component":"Home"' /tmp/home.html
-          # Этап 4: «Показать ещё» у стран и старый адрес /tenders — Django
-          curl -s -D /tmp/more.h -o /dev/null http://127.0.0.1:18080/countries/uz/companies
-          ! grep -qi '^x-powered-by: php' /tmp/more.h
-          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:18080/tenders?closed=1')" \
+          # Старый адрес /tenders, тарифы с промокодом
+          test "$(to 'http://127.0.0.1:18080/tenders?closed=1')" \
             = "301 http://127.0.0.1:18080/catalog?type=tender&closed=1"
-          curl -s -D /tmp/tenders.h -o /dev/null http://127.0.0.1:18080/tenders
-          ! grep -qi '^x-powered-by: php' /tmp/tenders.h
-          # Вкладка «Тендеры» каталога и страница закупки — Django
-          curl -fsS -D /tmp/page.h -o /dev/null 'http://127.0.0.1:18080/catalog?type=tender'
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/tenders/nothing
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          # Каталог объявлений и страница объявления — тоже Django
-          # (группа catalog), и картинка превью объявления
-          for page in 'catalog' 'catalog?type=supply' 'catalog?type=tender&type=supply'; do
-            curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/page.h
-          done
-          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/listing/nothing
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/og/listing/1.jpg
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          # robots.txt и карта сайта (группа home), направления «Доп. услуг»
-          # (services) и мини-сайт /s/<адрес> (companies) — Django
-          for page in robots.txt sitemap.xml sitemap-static.xml services/it; do
-            curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/page.h
-          done
-          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/s/nothing
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          # «Резюме», «IT-услуги» (со страницами) и каталог компаний — Django
-          for page in resumes it-services companies; do
-            curl -fsS -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/page.h
-          done
-          for page in it-services/nothing resume/nothing company/nothing; do
-            curl -s -D /tmp/page.h -o /dev/null "http://127.0.0.1:18080/$page"
-            ! grep -qi '^x-powered-by: php' /tmp/page.h
-          done
-          # Файл задачи — Django (группа forms, проверка доступа)
-          curl -s -D /tmp/page.h -o /dev/null http://127.0.0.1:18080/it-services/files/1
-          ! grep -qi '^x-powered-by: php' /tmp/page.h
-          # Форма «Оцените SavdEx» — страница Django (гостя уводит на вход)
-          curl -s -D /tmp/rnew.h -o /dev/null http://127.0.0.1:18080/reviews/new
-          ! grep -qi '^x-powered-by: php' /tmp/rnew.h
-          grep -qi '^location: http://127.0.0.1:18080/login' /tmp/rnew.h
-          # Тарифы с промокодом — тоже Django (шаг 70)
-          curl -fsS -D /tmp/promo.h -o /tmp/promo.html 'http://127.0.0.1:18080/pricing?promo=TEST'
-          ! grep -qi '^x-powered-by: php' /tmp/promo.h
+          curl -fsS -o /tmp/promo.html 'http://127.0.0.1:18080/pricing?promo=TEST'
           grep -q '"promoError"' /tmp/promo.html
-          # Регистрация по коду — Django (шаг 69): без почты из первого шага — назад
-          curl -s -D /tmp/rcode.h -o /dev/null http://127.0.0.1:18080/register/code
-          ! grep -qi '^x-powered-by: php' /tmp/rcode.h
-          grep -qi '^location: http://127.0.0.1:18080/register' /tmp/rcode.h
+          # Ничего из этого не ответило 500
+          for page in listing/nothing tenders/nothing og/listing/1.jpg s/nothing \
+              it-services/nothing resume/nothing company/nothing it-services/files/1 \
+              countries/uz/companies cabinet/contacts/export; do
+            test "$(code "http://127.0.0.1:18080/$page")" -lt 500
+          done
+          test "$(code -X POST http://127.0.0.1:18080/payments/uzum/callback/check)" -lt 500
+          # Фоновые задачи Django запущены: расписание, перевод, сверка денег
+          for task in schedule translate reconcile_billing; do
+            docker exec savdex sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat | tr '\\0' ' ' | grep -q 'manage.py $task'"
+          done
 
       - name: Журнал контейнера
         if: always()

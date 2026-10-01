@@ -3,7 +3,8 @@
 
 Здесь в коде закреплены правила 4.1 и 4.2 из
 `docs/migration-to-python.md`: у каждой таблицы один хозяин на запись,
-и миграции запускает только Laravel.
+и схему меняют только миграции (с этапа 8 — manage.py schema,
+savdex/schema.py), а не код сайта.
 
 Договорённость, которую держит только совесть, не держится. За полтора
 года переноса кто-нибудь напишет `Company.objects.filter(...).update(...)`
@@ -118,9 +119,8 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Этап 4 (шаг 62): каталог. Все формы и страницы — на Django (группы
         # catalog, tenders, services, cabinet, forms); снятие истёкших
         # объявлений — manage.py expire_listings вместо listings:expire.
-        # У Laravel остались писатели только на аварийный откат
-        # (SAVDEX_PY_PAGES без forms, SAVDEX_PY_TRANSLATE=0) и демо-стенд
-        # (SEED_DEMO, SEED_SHOWCASE) — docs/migration-to-python.md, шаг 62
+        # Писатели Laravel на аварийный откат и демо-стенд ушли вместе
+        # с ним на этапе 8 — docs/migration-to-python.md, шаг 62
         "listings",
         "listing_attributes",
         "listing_images",
@@ -184,54 +184,35 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Laravel). Поля категорий и типы продвижения писали только сидеры
         "category_fields",
         "promotion_types",
+        # Этап 8: Laravel выключен, общих таблиц больше нет. Сессии сайта,
+        # журнал действий, лента компании, очередь машинного перевода и
+        # кэш в формате Laravel (savdex/laravel_cache.py) ведёт только Django
+        "sessions",
+        "admin_actions",
+        "activity_events",
+        "content_translations",
+        "cache",
     }
 )
 
-#: Журнал действий — единственное исключение (раздел 5.1 документа).
-#:
-#: В него пишут обе стороны с этапа 2, и это безопасно: таблица
-#: добавляемая, а изменение и удаление запрещены самой моделью.
-#: Делить двум писателям нечего.
-APPEND_ONLY_SHARED: frozenset[str] = frozenset({"admin_actions"})
+#: Добавляемые таблицы, в которые писали обе стороны (раздел 5.1
+#: документа). Был журнал действий admin_actions — с этапа 8 он у Django
+#: (OWNED_TABLES), Laravel выключен.
+APPEND_ONLY_SHARED: frozenset[str] = frozenset()
 
 
 #: Чужие таблицы, в которые Django может писать — но только внутри
 #: `allowed_writes(...)`, то есть в том месте кода, которое это заявило.
 #:
-#: Это не переход хозяина: Laravel продолжает писать в таблицу, и
-#: правила её модели по-прежнему его. Годится только для таблиц без
-#: событий модели (раздел 5 документа) и для записи, которую Laravel
-#: делает тем же простым путём. Против каждой — кто пишет и почему
-#: это безопасно.
-SHARED_WRITES: dict[str, str] = {
-    "sessions": (
-        "сессия Laravel на страницах сайта (этап 5): Django ведёт её, как "
-        "StartSession и DatabaseSessionHandler, — продлевает, стирает "
-        "одноразовые сообщения, заводит сессию гостю, запоминает адрес и "
-        "язык; вход по «запомнить меня» переносит сессию на новый номер"
-    ),
-    "content_translations": (
-        "очередь машинного перевода (этап 3): страница на Django, как и "
-        "ContentTranslation у Laravel, ставит непереведённый текст в очередь "
-        "— только insert … on conflict do nothing; переводит задача Laravel "
-        "translations:fill"
-        "; машинный перевод (этап 5, manage.py translate) — перевод и число "
-        "попыток, как translations:fill"
-    ),
-    "activity_events": (
-        "лента кабинета (этап 5, форма): insert события, как Notifier::company "
-        "при повторной публикации объявления; событий у модели нет"
-        "; решения по отзывам в админке (этап 6) — то же событие компании"
-    ),
-    "cache": (
-        "сброс кэша Laravel после правки из Django (savdex/laravel_cache.py): "
-        "только delete по ключу — то же, что Cache::forget(), когда кэш "
-        "лежит в базе. На боевом кэш в файлах, и таблицу это не трогает"
-    ),
-    # Этап 7 (деньги). Хозяин таблиц — Laravel, пока месяц сверки не
-    # пройдёт без расхождений; Django пишет через те же службы: касса,
-    # колбэки Uzum и разделы денег в админке
-}
+#: Это не переход хозяина: другой писатель продолжает писать в таблицу,
+#: и правила её модели по-прежнему его. Против каждой — кто пишет и
+#: почему это безопасно.
+#:
+#: С этапа 8 пусто: Laravel выключен, его таблицы (sessions,
+#: content_translations, activity_events, cache) — у Django. Блоки
+#: allowed_writes(...) с ними работают дальше: своя таблица разрешения
+#: не требует.
+SHARED_WRITES: dict[str, str] = {}
 
 #: Какие из SHARED_WRITES разрешены прямо сейчас. ContextVar, а не
 #: глобальная переменная: разрешение не должно утечь в соседний поток
@@ -308,8 +289,8 @@ def check(sql: str) -> None:
     """Пропустить запрос или объяснить, почему нельзя."""
     if _DDL.match(sql):
         raise MigrationFromDjangoError(
-            "Схему базы меняет только Laravel — database/migrations "
-            "(правило 4.2 в docs/migration-to-python.md). "
+            "Схему базы меняют только миграции — python/savdex/bootstrap/migrations, "
+            "manage.py schema (правило 4.2 в docs/migration-to-python.md). "
             f"Запрос: {sql[:120]}"
         )
 

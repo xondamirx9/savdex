@@ -19,19 +19,15 @@ from dataclasses import dataclass, field
 from savdex.guards import OWNED_TABLES
 
 #: Таблицы, у которых хозяин не меняется никогда: инфраструктура
-#: Laravel. sessions — особый случай этапа 3 (Django её только читает)
+#: Laravel (очередь, блокировки кэша) и таблица миграций — её ведёт
+#: manage.py schema
 SHARED: frozenset[str] = frozenset(
     {
-        "cache",
         "cache_locks",
         "jobs",
         "job_batches",
         "failed_jobs",
-        "sessions",
         "migrations",
-        # Очередь машинного перевода: ставят в неё страницы, переводит
-        # задача Laravel translations:fill
-        "content_translations",
     }
 )
 
@@ -167,8 +163,6 @@ STAGES: tuple[Stage, ...] = (
             "failed_import_rows",
         ),
         kept={
-            "admin_actions": "журнал пишут обе админки, пока Laravel не выключен",
-            "activity_events": "ленту компании пишет и кабинет Laravel — общая до его выключения",
             "imports": "служебная таблица Filament: Django загружает файлы без неё",
             "exports": "служебная таблица Filament: Django выгружает сразу файлом",
             "failed_import_rows": "служебная таблица Filament: отчёт Django — на странице загрузки",
@@ -186,9 +180,15 @@ STAGES: tuple[Stage, ...] = (
             "wallet_transactions",
             "promotions",
         ),
-        note="Касса, обратные вызовы шлюза и все денежные разделы админки уже на Django. "
-        "Хозяин таблиц — Laravel, пока ежедневная сверка «Django против Laravel» не "
-        "проработает месяц без расхождений.",
+        note="Касса, обратные вызовы шлюза, все денежные разделы админки и задачи "
+        "по расписанию — на Django с шага 72.",
+    ),
+    Stage(
+        8,
+        "Выключение Laravel",
+        tables=("sessions", "content_translations", "cache"),
+        note="Django отвечает на все адреса сайта, в образе нет PHP. Последние общие "
+        "таблицы — сессии, очередь перевода, кэш — у Django.",
     ),
 )
 

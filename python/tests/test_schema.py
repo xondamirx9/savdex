@@ -14,9 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from savdex import schema
 
-from .pg_admin import PYTHON, АДРЕС, КОРЕНЬ, ОКРУЖЕНИЕ, нужна_база, свежая_база
+from .pg_admin import PYTHON, АДРЕС, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
 
@@ -92,3 +94,54 @@ def test_пустая_база_как_после_миграций():
     assert "Nothing to migrate" in artisan("migrate")
     # Повторный запуск базу не трогает
     assert "не пустая" in manage("schema")
+
+
+def test_миграции_sql_один_раз(tmp_path: Path):
+    """Этап 8: новые изменения схемы — файлы SQL, каждый один раз."""
+    свежая_база()
+    (tmp_path / "2099_01_02_000000_second.sql").write_text(
+        "alter table stage8_probe add column note text;"
+    )
+    (tmp_path / "2099_01_01_000000_first.sql").write_text(
+        "create table stage8_probe (id bigserial primary key);\n"
+        "do $$ begin\n"
+        "    if exists (select from pg_roles where rolname = 'savdex_django') then\n"
+        "        grant select, insert on stage8_probe to savdex_django;\n"
+        "    end if;\n"
+        "end $$;\n"
+    )
+    (tmp_path / "README.md").write_text("не миграция")
+    env = {**ВЛАДЕЛЕЦ, "SAVDEX_MIGRATIONS_DIR": str(tmp_path)}
+
+    def schema_с_миграциями() -> str:
+        return subprocess.run(
+            [sys.executable, "manage.py", "schema"],
+            cwd=PYTHON, env=env, capture_output=True, text=True, check=True,
+        ).stdout  # fmt: skip
+
+    вывод = schema_с_миграциями()
+    assert вывод.index("first") < вывод.index("second")
+
+    строки = sql(
+        "select migration, batch from migrations where migration like %s order by id", ["2099_%"]
+    )
+    assert [r[0] for r in строки] == ["2099_01_01_000000_first", "2099_01_02_000000_second"]
+    assert строки[0][1] < строки[1][1]
+    колонки = sql(
+        "select column_name from information_schema.columns "
+        "where table_name = 'stage8_probe' order by ordinal_position"
+    )
+    assert колонки == [("id",), ("note",)]
+    assert sql("select has_table_privilege('savdex_django', 'stage8_probe', 'insert')") == [(True,)]
+
+    # Второй запуск — ничего нового
+    assert "Миграция" not in schema_с_миграциями()
+
+    # Сломанная миграция откатывается целиком и не записывается
+    (tmp_path / "2099_01_03_000000_broken.sql").write_text(
+        "create table stage8_half (id int); select * from нет_такой;"
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        schema_с_миграциями()
+    assert sql("select to_regclass('stage8_half') is null") == [(True,)]
+    assert sql("select count(*) from migrations where migration like %s", ["%broken"]) == [(0,)]

@@ -1,0 +1,13 @@
+#!/bin/bash
+# Apache на переднем плане — как одноимённый скрипт образа php:*-apache:
+# exec, чтобы сигнал остановки от хостинга доходил до Apache, а не до
+# оболочки, и переменные Debian (/etc/apache2/envvars), без которых
+# apache2 напрямую не стартует.
+set -e
+
+. /etc/apache2/envvars
+mkdir -p "$APACHE_RUN_DIR" "$APACHE_LOCK_DIR" "$APACHE_LOG_DIR"
+# Остался от прошлого запуска — Apache решил бы, что он уже работает
+rm -f "$APACHE_PID_FILE"
+
+exec apache2 -DFOREGROUND "$@"
