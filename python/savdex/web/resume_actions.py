@@ -438,7 +438,8 @@ def photo(request: HttpRequest) -> HttpResponse:
     """
     from savdex.web import image_store
 
-    ctx = action(request)
+    # throttle:30,60,resume-photo — как у остальных загрузок картинок
+    ctx = action(request, throttle=30, throttle_minutes=60, throttle_prefix="resume-photo")
     data: dict[str, Any] = {**input_of(request), **request.FILES.dict()}
     # Правило image: файл-картинка по содержимому, текст ошибки — validation.image
     image = Check("image", lambda value: _passes("mimes", IMAGE_MIMES, value))

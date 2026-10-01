@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import re
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -228,7 +229,9 @@ def test_правка_на_языке(сайт, prefix):
 # проверяется сам Django.
 
 
-def _фото(сайт: str, файл: tuple[str, bytes] | None) -> tuple[dict[str, Any], Any]:
+def _фото(
+    сайт: str, файл: tuple[str, bytes] | None, env: dict[str, str] | None = None
+) -> tuple[dict[str, Any], Any]:
     import json
 
     from savdex import laravel_session
@@ -245,6 +248,7 @@ def _фото(сайт: str, файл: tuple[str, bytes] | None) -> tuple[dict[s
         "/cabinet/resume/photo",
         {СЕССИЯ: кука(СЕССИЯ, SID)},
         {**inertia(), "Referer": сайт + "/cabinet/resume"},
+        env,
         method="POST",
         body=тело,
         content_type=тип,
@@ -295,3 +299,31 @@ def test_фото_без_резюме(сайт):
 
 def json_errors(сессия: dict[str, Any]) -> dict[str, Any]:
     return (сессия.get("errors") or {}).get("default", {}).get("messages", {})
+
+
+def test_фото_частота(сайт, monkeypatch):
+    """
+    throttle:30,60,resume-photo, как у Laravel: на файловом кэше
+    тридцать первая загрузка за час — отказ, фото не меняется.
+    """
+    import hashlib
+
+    from savdex import laravel_cache
+
+    from .test_web_company_profile_actions import картинка
+
+    резюме("draft")()
+    monkeypatch.setenv("CACHE_STORE", "file")
+    ключ = "resume-photo" + hashlib.sha1(str(соискатель()).encode()).hexdigest()
+    laravel_cache.put(ключ, 30, 3600)
+    laravel_cache.put(f"{ключ}:timer", int(time.time()) + 3600, 3600)
+
+    try:
+        ответ, сессия = _фото(сайт, ("face.png", картинка(900, 600)), {"CACHE_STORE": "file"})
+    finally:
+        laravel_cache.forget(ключ)
+        laravel_cache.forget(f"{ключ}:timer")
+
+    assert ответ["status"] == 302
+    assert sql("select photo_path from resumes")[0][0] == ФОТО
+    assert сессия["error"].startswith("Слишком много действий подряд")

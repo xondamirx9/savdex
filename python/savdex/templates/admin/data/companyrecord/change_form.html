@@ -44,7 +44,7 @@
         <label for="sort">порядок</label>
         <input type="number" min="0" name="sort" id="sort" value="{{ original.partner_sort }}" style="width:6em">
         <button type="submit" class="button">Сохранить</button>
-        <div class="help">Меньше порядок — выше во вкладке «Партнёры». При равном — по рейтингу.</div>
+        <div class="help">У каждого вида — своя страница: «Генеральные партнёры», «Партнёры», «Мультипартнёры» (раздел «Партнёры» на сайте). Меньше порядок — выше на своей странице; при равном — по рейтингу.</div>
       </form>
 
       <form method="post" enctype="multipart/form-data" action="{{ act_url }}" class="form-row">

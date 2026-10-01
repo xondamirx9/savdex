@@ -54,6 +54,87 @@ def telegram(chat_id: str, text: str) -> bool:
     return False
 
 
+# ── Адрес бота у Telegram (команда telegram_webhook) ──────────────────
+
+
+def webhook_secret() -> str:
+    return _env("TELEGRAM_WEBHOOK_SECRET")
+
+
+def webhook_url() -> str | None:
+    """TelegramGateway::webhookUrl — адрес, на который Telegram присылает сообщения боту."""
+    secret = webhook_secret()
+
+    if secret == "":
+        return None
+
+    return _env("APP_URL", "http://localhost").rstrip("/") + "/telegram/webhook/" + secret
+
+
+def _api(method: str) -> str:
+    return f"https://api.telegram.org/bot{_env('TELEGRAM_BOT_TOKEN')}/{method}"
+
+
+def _call(method: str, payload: dict[str, object]) -> tuple[bool, str]:
+    """TelegramGateway::call — вызов Bot API с понятным ответом."""
+    try:
+        response = httpx.post(_api(method), json=payload, timeout=TIMEOUT)
+    except httpx.HTTPError as e:
+        return False, str(e)
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+
+    if response.is_success and isinstance(body, dict) and body.get("ok") is True:
+        return True, str(body.get("description") or "Готово")
+
+    # 404 от Telegram означает ровно одно: такого бота нет — в адрес
+    # уехал не тот токен. Само «Not Found» человек читает как «сайт
+    # недоступен»
+    if response.status_code == 404:
+        return False, "Telegram не знает такого бота — проверьте TELEGRAM_BOT_TOKEN."
+
+    description = body.get("description") if isinstance(body, dict) else None
+
+    return False, str(description or response.text)
+
+
+def register_webhook() -> tuple[bool, str]:
+    """TelegramGateway::registerWebhook."""
+    url = webhook_url()
+
+    if not telegram_configured() or url is None:
+        return False, (
+            "Не заданы TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME или TELEGRAM_WEBHOOK_SECRET."
+        )
+
+    return _call("setWebhook", {"url": url, "drop_pending_updates": True})
+
+
+def delete_webhook() -> tuple[bool, str]:
+    """TelegramGateway::deleteWebhook."""
+    if not telegram_configured():
+        return False, "Не задан TELEGRAM_BOT_TOKEN."
+
+    return _call("deleteWebhook", {})
+
+
+def webhook_info() -> dict[str, object] | None:
+    """TelegramGateway::webhookInfo — адрес, очередь недоставленного, последняя ошибка."""
+    if not telegram_configured():
+        return None
+
+    try:
+        response = httpx.get(_api("getWebhookInfo"), timeout=TIMEOUT)
+        result = response.json().get("result") if response.is_success else None
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+
+    return result if isinstance(result, dict) else None
+
+
 def whatsapp(phone: str, value: str, locale: str = "ru") -> bool:
     """Шаблон WhatsApp Cloud API с одним параметром — ссылкой."""
     to = re.sub(r"\D+", "", phone)
