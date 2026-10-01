@@ -251,7 +251,9 @@ def test_включение_автопродления(сайт, подгото�
     assert итог["база"]["subscriptions"] == [(True, False, None, правка)]
 
     if admin and правка:
-        журнал.append(("subscriptions", '{"before":{"auto_renew":false},"after":{"auto_renew":true}}'))
+        журнал.append(
+            ("subscriptions", '{"before":{"auto_renew":false},"after":{"auto_renew":true}}')
+        )
 
     assert _журнал(итог) == журнал
 
@@ -402,7 +404,7 @@ def test_без_компании(сайт):
         assert len(база["cards"]) == 3 and база["payments"] == НЕ_ТРОНУТЫ
 
 
-def test_гость(сайт):
+def test_гость_уходит_на_вход(сайт):
     итог = отправить(сайт, "/cabinet/billing/cancel", сброс(), снимок)
 
     assert итог["ответ"]["status"] == 302

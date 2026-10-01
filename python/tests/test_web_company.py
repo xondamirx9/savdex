@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from .factories import объявление, отзыв
 from .factories import компания as новая
+from .factories import объявление, отзыв
 from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_catalog import ГЕО, справочники
 from .web_site import адрес, вход, открыть, пользователь, страница
@@ -156,7 +156,11 @@ def визитка(сайт: str, path: str, cookies: dict[str, str] | None = No
 
 @pytest.mark.parametrize(
     ("path", "locale"),
-    [("/company/stroybaza", "ru"), ("/en/company/stroybaza", "en"), ("/uz/company/stroybaza", "uz")],
+    [
+        ("/company/stroybaza", "ru"),
+        ("/en/company/stroybaza", "en"),
+        ("/uz/company/stroybaza", "uz"),
+    ],
 )
 def test_визитка_гостю(сайт, path, locale):
     props = визитка(сайт, path)

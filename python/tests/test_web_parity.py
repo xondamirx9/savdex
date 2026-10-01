@@ -195,7 +195,9 @@ def test_гость_с_запомненным_языком(сайт):
 
     # Переход Inertia без версии сборки — полная загрузка того же адреса,
     # а она уже уводит на запомненный язык
-    д = открыть(сайт, "/rules?x=1", куки, {"X-Inertia": "true", "X-Requested-With": "XMLHttpRequest"})
+    д = открыть(
+        сайт, "/rules?x=1", куки, {"X-Inertia": "true", "X-Requested-With": "XMLHttpRequest"}
+    )
     assert д["status"] == 409
     assert д["headers"]["x-inertia-location"] == f"{сайт}/rules?x=1"
     assert открыть(сайт, "/rules?x=1", куки)["headers"]["location"] == f"{сайт}/tr/rules?x=1"

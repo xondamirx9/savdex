@@ -26,8 +26,8 @@ import pytest
 
 from .factories import компания
 from .pg_admin import sql, нужна_база, свежая_база
-from .test_web_catalog import справочники
 from .test_web_billing_orders import Касса
+from .test_web_catalog import справочники
 from .test_web_forms import отправить, учётка
 from .web_site import адрес
 
@@ -479,14 +479,12 @@ def test_подтверждение_выдаёт_купленное(сайт, к
                 "Оплата счёта SVD-000001",
             )
         ]
-        assert [n[1] for n in база["notifications"]][0] == "Тариф «Business» активирован"
+        assert база["notifications"][0][1] == "Тариф «Business» активирован"
     else:
         # Пакет — 50 кредитов в кошелёк, с записью в журнале кошелька
         assert база["subscriptions"] == []
         assert база["wallets"] == [(50, 0, 0)]
-        assert база["wallet_log"] == [
-            ("credits", 50, 50, "purchase", "App\\Models\\Payment", 1)
-        ]
+        assert база["wallet_log"] == [("credits", 50, 50, "purchase", "App\\Models\\Payment", 1)]
 
     assert "Оплата счёта SVD-000001 зачислена" in [n[1] for n in база["notifications"]]
     assert len(база["events"]) == len(база["notifications"])
@@ -589,7 +587,14 @@ def test_merchant_выключен(сайт, касса):
             "created",
         ),
         # Неизвестный заказ и пустые поля
-        ({"orderId": "ORD-NOPE", "operationState": "FAIL"}, "completed", {}, ОТКАЗ, "pending", None),
+        (
+            {"orderId": "ORD-NOPE", "operationState": "FAIL"},
+            "completed",
+            {},
+            ОТКАЗ,
+            "pending",
+            None,
+        ),
         ({"orderId": "", "operationState": "SUCCESS"}, "completed", {}, ОТКАЗ, "pending", None),
         ({"operationState": "SUCCESS"}, "completed", {}, ОТКАЗ, "pending", None),
         # Счёт уже оплачен — второй раз не выдаётся
@@ -617,8 +622,11 @@ def test_вебхук(сайт, касса, body, режим, подготовк
         assert база["transactions"][0][2] == body["orderId"]
         assert json.loads(база["transactions"][0][6]) == body
 
-    выдано = счёт_ == "paid" and not подготовка.get("счета", ((0, 0, "pending"),))[0][2] == "paid"
-    assert bool(база["subscriptions"] or база["wallet_log"]) is выдано
+    # Тариф или кредиты — только если счёт оплачен этим вебхуком
+    уже_оплачен = any(статус == "paid" for _, _, статус in подготовка.get("счета", ()))
+    assert bool(база["subscriptions"] or база["wallet_log"]) is (
+        счёт_ == "paid" and not уже_оплачен
+    )
 
 
 def test_вебхук_повтор(сайт, касса):

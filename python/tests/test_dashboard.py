@@ -10,11 +10,11 @@
 - обращения — свои, ничьи, чужие; внутри — по важности и давности;
 - очередь на проверку — число и возраст самого старого, красное с двух
   часов; контент в работе — черновики, запланированные, скрытые страницы;
-- показатели площадки (PlatformMetrics) — одни и те же данные считают PHP
-  и Python, числа совпадают до знака; выручка — только с финансовыми
-  отчётами.
+- показатели площадки (PlatformMetrics) — на заданных данных, числа до
+  знака; выручка — только с финансовыми отчётами;
+- «Ждёт 3 дня» — как diffForHumans у Carbon.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, php, sql, нужна_база, свежая_база, сотрудник
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
@@ -612,7 +612,7 @@ def test_контент_в_работе(люди):
     assert 'href="/py/admin/site/page/?is_published__exact=0"' in контент
 
 
-# ── Показатели площадки: PHP и Python ───────────────────────────────
+# ── Показатели площадки ─────────────────────────────────────────────
 
 
 def _площадка() -> None:
@@ -692,14 +692,6 @@ def _площадка() -> None:
         )
 
 
-ПОКАЗАТЕЛИ_PHP = (
-    "$m = new App\\Support\\PlatformMetrics; echo json_encode(["
-    "'summary' => $m->summary(), 'funnel' => $m->activationFunnel(), "
-    "'health' => $m->health(), 'categories' => $m->topCategories(), "
-    "'registrations' => $m->registrationsByDay(), "
-    "'conversion' => $m->unlockConversion(), 'average' => $m->averagePayment()]);"
-)
-
 ПОКАЗАТЕЛИ_PYTHON = """
 import json
 import django
@@ -733,29 +725,54 @@ def _python() -> dict[str, Any]:
     return dict(json.loads(вывод.stdout))
 
 
-def _php() -> dict[str, Any]:
-    return dict(json.loads(php(ПОКАЗАТЕЛИ_PHP).splitlines()[-1]))
-
-
-def test_показатели_как_в_php(люди):
+def test_показатели_площадки(люди):
+    """
+    PlatformMetrics на данных _площадка(): последние 30 дней против
+    предыдущих 30, удалённые не считаются.
+    """
     _площадка()
 
-    питон, пхп = _python(), _php()
+    питон = _python()
 
-    for key in пхп:
-        assert питон[key] == пхп[key], key
-    assert питон.keys() == пхп.keys()
-
-    # И что данные действительно что-то проверяют, а не сравнивают нули
-    assert питон["summary"]["companies"] == {"value": 3, "delta": 50.0, "suffix": " компаний"}
-    assert питон["summary"]["unlocks"]["delta"] == 200.0
-    assert питон["summary"]["revenue"]["value"] == 800001
+    # Компании: Альфа, Бета, Дельта против Веги и Гаммы — +50 %; объявления
+    # 5 против 2; раскрытия 3 против 1; выручка — оплаченные и возвращённые
+    # с датой оплаты (500 000 + 300 001) против 700 000
+    assert питон["summary"] == {
+        "companies": {"value": 3, "delta": 50.0, "suffix": " компаний"},
+        "listings": {"value": 5, "delta": 150.0, "suffix": " объявлений"},
+        "unlocks": {"value": 3, "delta": 200.0, "suffix": " раскрытий"},
+        "revenue": {"value": 800001, "delta": 14.3, "suffix": " сум"},
+    }
     assert питон["average"] == 400000
-    assert [c["label"] for c in питон["categories"]] == ["Цемент", "armatura"]
-    assert питон["categories"][0] == {"label": "Цемент", "listings": 3, "companies": 2}
-    assert питон["health"][0]["value"] == "2 из 4 (50 %)"
-    assert [s["value"] for s in питон["funnel"]][1:] == [1, 3, 2, 2]
-    assert sum(питон["registrations"]["companies"]) == 3
+    assert питон["categories"] == [
+        {"label": "Цемент", "listings": 3, "companies": 2},
+        # Без русского перевода — адрес раздела
+        {"label": "armatura", "listings": 1, "companies": 1},
+    ]
+    # Активные компании с живыми объявлениями — Альфа и Бета из четырёх
+    # активных; в очереди одно; истекает за неделю одно; плохой отзыв без
+    # ответа — один (на тройку ответили)
+    assert [(h["value"], h["tone"]) for h in питон["health"]] == [
+        ("2 из 4 (50 %)", "success"),
+        ("1", "success"),
+        ("1", "success"),
+        ("1", "warning"),
+    ]
+    # 13 сотрудников и 4 пользователя (удалённый — нет); почту подтвердил
+    # один, с компанией — трое
+    assert [(s["value"], s["share"]) for s in питон["funnel"]] == [
+        (17, 100.0),
+        (1, 5.9),
+        (3, 17.6),
+        (2, 11.8),
+        (2, 11.8),
+    ]
+    регистрации = питон["registrations"]
+    assert len(регистрации["labels"]) == len(регистрации["companies"]) == 30
+    assert sum(регистрации["companies"]) == 3
+    # Сегодня — 13 сотрудников; за месяц ещё три пользователя (45 дней — нет)
+    assert регистрации["users"][-1] == 13 and sum(регистрации["users"]) == 16
+    # 4 раскрытия на 192 просмотра живых объявлений
     assert питон["conversion"] == round(4 / 192 * 100, 2)
 
 
@@ -792,7 +809,7 @@ def test_показатели_на_главной(люди):
 
 
 def test_возраст_как_у_carbon():
-    """age() против diffForHumans(syntax: true) на тех же парах моментов."""
+    """age() — как diffForHumans(syntax: true) у Carbon на тех же парах моментов."""
     from savdex.dashboard.widgets import age
 
     сейчас = datetime(2026, 9, 29, 12, 0, 0)
@@ -829,12 +846,40 @@ def test_возраст_как_у_carbon():
         (datetime(2025, 12, 31, 12), datetime(2026, 1, 30, 12)),
         (datetime(2024, 2, 29, 12), datetime(2025, 2, 28, 12)),
     ]
-    строки = json.dumps([[a.isoformat(" "), b.isoformat(" ")] for a, b in пары])
-
-    carbon = php(
-        f"foreach (json_decode('{строки}', true) as [$a, $b]) echo "
-        "Carbon\\Carbon::parse($a, 'UTC')->diffForHumans(Carbon\\Carbon::parse($b, 'UTC'), "
-        "syntax: true), PHP_EOL;"
-    ).splitlines()[-len(пары) :]
+    # Что выводил Carbon: одна старшая единица, вниз; неделя — от 7 дней;
+    # месяц — календарный (DateTime::diff), дни занимаются у месяца перед
+    # более поздней датой
+    carbon = [
+        "0 секунд",
+        "1 секунда",
+        "59 секунд",
+        "1 минута",
+        "1 минута",
+        "2 минуты",
+        "59 минут",
+        "1 час",
+        "1 час",
+        "2 часа",
+        "23 часа",
+        "1 день",
+        "3 дня",
+        "6 дней",
+        "1 неделя",
+        "1 неделя",
+        "2 недели",
+        # 30 августа — 29 сентября: 30 дней, месяца ещё нет
+        "4 недели",
+        "1 месяц",
+        "1 месяц",
+        "1 год",
+        "2 года",
+        # 31.01 10:00 — 01.03 09:00: 28 дней 23 часа
+        "4 недели",
+        "1 месяц",
+        # 31.12 — 30.01: 30 дней
+        "4 недели",
+        # 29.02.2024 — 28.02.2025: 11 месяцев 30 дней
+        "11 месяцев",
+    ]
 
     assert [age(a.replace(tzinfo=UTC), b.replace(tzinfo=UTC)) for a, b in пары] == carbon

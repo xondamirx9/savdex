@@ -12,7 +12,7 @@
 - права: смотреть может sales, загружать — buyer_manager;
 - на сайте у госзакупки government = true.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -242,7 +242,7 @@ def test_правка_признака_в_разделе(люди):
 
 def test_значок_на_сайте(люди):
     """Страница закупки на Django: у госзакупки government = true."""
-    from .web_site import laravel, из_django, страница
+    from .web_site import адрес, открыть, страница
 
     # На минуту раньше: Django сравнивает с текущим временем без долей секунды
     [(slug,)] = sql(
@@ -250,9 +250,11 @@ def test_значок_на_сайте(люди):
         "published_at = now() - interval '1 minute' where title = 'Road repair' returning slug"
     )
 
-    # laravel() выгружает словари и манифест сборки, без них страница не рисуется
-    with laravel() as root:
-        ответ = из_django(root, f"/tenders/{slug}")
+    # адрес() подставляет манифест сборки, без него страница не рисуется
+    with адрес() as root:
+        ответ = открыть(root, f"/tenders/{slug}")
 
     assert ответ["status"] == 200, ответ["body"][:1000]
-    assert страница(ответ["body"])["props"]["tender"]["government"] is True
+    стр = страница(ответ["body"])
+    assert стр["component"] == "tenders/Show"
+    assert стр["props"]["tender"]["government"] is True

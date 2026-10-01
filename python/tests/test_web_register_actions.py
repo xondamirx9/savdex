@@ -416,7 +416,11 @@ def test_регистрация_юрлица(сайт, правка, итог_):
             },
         ),
         (
-            {"account_type": "freelancer", "pinfl": "11111111111111", "service_section": "hr_services"},
+            {
+                "account_type": "freelancer",
+                "pinfl": "11111111111111",
+                "service_section": "hr_services",
+            },
             {"pinfl": ["Указан недействительный ПИНФЛ"]},
         ),
         ({"account_type": "individual", "pinfl": "123"}, {"pinfl": ["ПИНФЛ — ровно 14 цифр"]}),

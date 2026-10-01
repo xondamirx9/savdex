@@ -16,8 +16,8 @@ import hashlib
 import subprocess
 import sys
 from collections.abc import Iterator
-from typing import Any
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -51,7 +51,8 @@ def справочники(*таблицы: str) -> None:
     код = (
         "import json, django; django.setup(); from savdex import seeds; "
         "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
-        f"seeds.seed(fresh=True, data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+        f"only = {list(таблицы)!r}; "
+        "seeds.seed(fresh=True, data={k: v if k in only else [] for k, v in data.items()})"
     )
     subprocess.run(
         [sys.executable, "-c", код],
@@ -248,9 +249,7 @@ def test_подходящие_продвинутые_выше(сайт):
 
 def test_цена_в_валюте_языка(сайт):
     """Курс ЦБ — из файлового кэша: 200 000 сум по 12 650,5 — 15,8 доллара."""
-    карточки = {
-        x["title"]: x for x in каталог(сайт, "/en/catalog")["props"]["listings"]["data"]
-    }
+    карточки = {x["title"]: x for x in каталог(сайт, "/en/catalog")["props"]["listings"]["data"]}
 
     assert карточки["Цемент М400 23"]["converted"] == {"price": 15.8, "currency": "USD"}
     assert карточки["Цемент М400 8"]["converted"] == {"price": 7.9, "currency": "USD"}
@@ -282,9 +281,7 @@ def test_раздел_и_город(сайт):
     props = каталог(сайт, f"/catalog?category={раздел}&city={город}")["props"]
 
     # Раздел — с подразделом (i % 3 = 0 и 1), город — свой у чётных и нечётных
-    ожидаемо = [
-        i for i in range(1, 27) if i % 3 != 2 and ДАННЫЕ["города"][i % 2] == город
-    ]
+    ожидаемо = [i for i in range(1, 27) if i % 3 != 2 and ДАННЫЕ["города"][i % 2] == город]
     assert props["filters"]["category"] == раздел
     assert props["filters"]["city"] == город
     assert props["total"] == len(ожидаемо)
@@ -315,9 +312,9 @@ def test_статистика_страницы(сайт):
 def test_статистика_поиска(сайт):
     """Запрос — как его увидит компания: пробелы схлопнуты, строчными; по разу на компанию."""
     # «М400» — кириллицей, как в заголовках
-    props = каталог(
-        сайт, "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20%D0%9C400"
-    )["props"]
+    props = каталог(сайт, "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20%D0%9C400")[
+        "props"
+    ]
     объявления_, _, запросы = статистика()
 
     assert props["total"] == 21

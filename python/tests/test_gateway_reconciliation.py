@@ -1,14 +1,14 @@
 """
 Этап 7, шаг 60: «Сверка со шлюзом» на Django вместо страницы Filament.
 
-Расхождения те же, что у GatewayReconciliation на Laravel, на одних
-данных: деньги взяты без закрытого счёта, двойное списание, суммы
-расходятся (и в тийинах), закрыт без транзакции (вручную и нет),
+Расхождения те же, что находил GatewayReconciliation на Laravel: деньги
+взяты без закрытого счёта, двойное списание, суммы расходятся (и в
+тийинах), закрыт без транзакции (вручную и нет),
 возвращённый счёт, отменённая транзакция, счёт прошлого месяца,
 оплаченный в этом, компания удалена. Страницу видят финансы, не
 администратор.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 PAGE = "/py/admin/finance/payment/reconciliation/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 KINDS = [
     "performed_without_paid",
     "double_performed",
@@ -33,23 +33,11 @@ KINDS = [
     "paid_without_transaction",
 ]
 
-PERIODS = [
-    ("2026-08-01", "2026-08-31"),
-    ("2026-09-01", "2026-09-30"),
-    ("2026-01-01", "2026-12-31"),
-    ("2025-01-01", "2025-01-31"),
-]
-
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    php(
-        "foreach (['a', 'b', 'gone'] as $s) { App\\Models\\Company::factory()->create(["
-        "'slug' => $s, 'name' => 'ООО '.strtoupper($s)]); } echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
-    ids = {r[0]: r[1] for r in sql("select slug, id from companies")}
+    ids = {s: компания(slug=s, name=f"ООО {s.upper()}") for s in ("a", "b", "gone")}
     admin = сотрудник("finance")
 
     # (номер, компания, статус, сумма, создан, оплачен, подтвердил, транзакции)
@@ -103,19 +91,6 @@ def _key(row: dict[str, Any]) -> tuple[int, int]:
     return KINDS.index(row["kind"]), row["payment_id"]
 
 
-def _php(start: str, end: str) -> list[dict[str, Any]]:
-    out = php(
-        f"$f = App\\Support\\Business::startOfDay('{start}'); "
-        f"$t = App\\Support\\Business::endOfDay('{end}');"
-        "echo json_encode(array_map(fn ($r) => array_merge($r, ['at' => $r['at']?->format("
-        "'Y-m-d H:i:s')]), App\\Support\\GatewayReconciliation::findings($f, $t)),"
-        " JSON_UNESCAPED_UNICODE);",
-        БЕЗ_ПЕРЕВОДА,
-    )
-
-    return sorted(json.loads(out.splitlines()[-1]), key=_key)
-
-
 def _python(start: str, end: str) -> list[dict[str, Any]]:
     code = (
         "import json; from datetime import date; from savdex.finance import recon, reports as r;"
@@ -134,18 +109,44 @@ def _python(start: str, end: str) -> list[dict[str, Any]]:
     )
     rows = json.loads(out.stdout.splitlines()[-1])
 
-    # Внутри вида — порядок счетов; у Laravel он из кучи, у Django — по номеру
+    # Вид за видом, внутри вида — по номеру счёта
     assert rows == sorted(rows, key=_key)
 
     return rows
 
 
-@pytest.mark.parametrize(("start", "end"), PERIODS)
-def test_расхождения_как_у_laravel(люди, start, end):
-    л = _php(start, end)
+#: Расхождения сентября: (номер, вид, наша сумма в сумах, шлюза — в тийинах)
+СЕНТЯБРЬ = [
+    ("SD-2", "performed_without_paid", 250000, 25000000),
+    # Выставлен в августе, оплачен в сентябре — виден в обоих месяцах
+    ("SD-9", "performed_without_paid", 150000, 15000000),
+    # Две проведённые транзакции — у шлюза их сумма
+    ("SD-3", "double_performed", 300000, 60000000),
+    # Расходятся на 50 тийинов
+    ("SD-4", "amount_mismatch", 100000, 10000050),
+    ("SD-5", "paid_without_transaction", 499000, None),
+    ("SD-6", "paid_without_transaction", 499000, None),
+    ("SD-10", "paid_without_transaction", 350000, None),
+    # Транзакция только создана — не в счёт
+    ("SD-11", "paid_without_transaction", 100000, None),
+]
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "ожидание"),
+    [
+        ("2026-08-01", "2026-08-31", [СЕНТЯБРЬ[1]]),
+        ("2026-09-01", "2026-09-30", СЕНТЯБРЬ),
+        ("2026-01-01", "2026-12-31", СЕНТЯБРЬ),
+        # Возвращённый SD-7 и отменённый SD-8 расхождением не считаются
+        ("2025-01-01", "2025-01-31", []),
+    ],
+)
+def test_расхождения_за_период(люди, start, end, ожидание):
     д = _python(start, end)
 
-    assert д == л, (д, л)
+    assert [(r["number"], r["kind"], r["ours"], r["theirs"]) for r in д] == ожидание
+    assert all(r["currency"] == "UZS" for r in д)
 
 
 def test_что_найдено(люди):

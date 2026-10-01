@@ -99,7 +99,10 @@ def снимок() -> Any:
     ("", "blocked"): "Резюме снято модерацией. Напишите в поддержку, если это ошибка.",
     ("/en", "publish"): "Resume published — companies can see it now.",
     ("/en", "hide"): "Resume unpublished.",
-    ("/en", "blocked"): "The resume was removed by moderation. Contact support if this is a mistake.",
+    (
+        "/en",
+        "blocked",
+    ): "The resume was removed by moderation. Contact support if this is a mistake.",
 }
 
 
@@ -270,7 +273,12 @@ def _строка(row: tuple[Any, ...]) -> dict[str, Any]:
             # Пустые навыки, работы, учёба и языки отброшены, лишние ключи — тоже
             "skills": ["AutoCAD", "Сметы"],
             "jobs": [
-                {"company": "ООО Цемент", "position": "Прораб", "start": "2018-03", "end": "2021-06"},
+                {
+                    "company": "ООО Цемент",
+                    "position": "Прораб",
+                    "start": "2018-03",
+                    "end": "2021-06",
+                },
                 # Пустой конец — null: работает до сих пор
                 {"company": "Бетон", "position": "Мастер", "start": "2020-01", "end": None},
             ],
@@ -388,7 +396,10 @@ def _адрес_нового(title: str) -> str:
             },
         ),
         # У узбекского словаря своих текстов проверки нет — ключи, как у Laravel
-        ("/uz", {"title": ["validation.min.string"], "jobs.0.position": ["validation.required_with"]}),
+        (
+            "/uz",
+            {"title": ["validation.min.string"], "jobs.0.position": ["validation.required_with"]},
+        ),
     ],
 )
 def test_правка_на_языке(сайт, prefix, ждём):

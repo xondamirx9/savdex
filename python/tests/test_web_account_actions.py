@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import json
+import os
 import re
 import shutil
 import time
@@ -175,22 +175,42 @@ def куда(сайт: str, итог: dict[str, Any]) -> tuple[int, str | None]:
     return ответ["status"], None if location is None else location.removeprefix(сайт)
 
 
+#: Пользователь в снимке: почта, хеш нового пароля (12 раундов), прежний
+#: хеш фабрики (4 раунда), токен «запомнить» прежний, «сменить пароль»,
+#: почта подтверждена
+БЫЛ = (ПОЧТА, False, True, True)
+СМЕНИЛ = (ПОЧТА, True, False, True)
+СБРОСИЛ = (ПОЧТА, True, False, False)
+
 # ── Смена выданного пароля ──────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ошибка"),
     [
-        {},
-        {"password": НОВЫЙ, "password_confirmation": "другой"},
-        {"password": "short1", "password_confirmation": "short1"},
-        {"password": "onlyletterslong", "password_confirmation": "onlyletterslong"},
-        {"password": ["x"], "password_confirmation": ["x"]},
-        {"password": ПАРОЛЬ, "password_confirmation": ПАРОЛЬ},
-        {"password": НОВЫЙ, "password_confirmation": НОВЫЙ},
+        ({}, ["Придумайте пароль"]),
+        ({"password": НОВЫЙ, "password_confirmation": "другой"}, ["Пароли не совпадают"]),
+        (
+            {"password": "short1", "password_confirmation": "short1"},
+            ["Пароль должен быть не короче 8 символов"],
+        ),
+        (
+            {"password": "onlyletterslong", "password_confirmation": "onlyletterslong"},
+            ["Добавьте в пароль хотя бы одну цифру"],
+        ),
+        (
+            {"password": ["x"], "password_confirmation": ["x"]},
+            ["validation.string", "Пароль должен быть не короче 8 символов"],
+        ),
+        # Не тот же, что выдан
+        (
+            {"password": ПАРОЛЬ, "password_confirmation": ПАРОЛЬ},
+            ["Новый пароль совпадает с прежним. Придумайте другой"],
+        ),
+        ({"password": НОВЫЙ, "password_confirmation": НОВЫЙ}, None),
     ],
 )
-def test_смена_пароля(сайт, body):
+def test_смена_пароля(сайт, body, ошибка):
     uid = пользователь(must_change_password=True)
     итог = форма(
         сайт,
@@ -200,14 +220,23 @@ def test_смена_пароля(сайт, body):
         body=body,
     )
 
-    if body.get("password") == НОВЫЙ and body.get("password_confirmation") == НОВЫЙ:
-        assert итог["ответ"]["headers"]["location"].endswith("/cabinet")
-        assert итог["база"]["users"][0][4] is False
-        assert '"password_hash_web":"<хеш>"' in _без_хеша(итог["сессия"]["payload"])
+    if ошибка is None:
+        # Флаг снят, хеш в сессии — новый
+        assert куда(сайт, итог) == (302, "/cabinet")
+        assert итог["база"]["users"] == [(*СМЕНИЛ, False, True)]
+        assert сессия(итог)["success"] == "Пароль изменён"
+        assert сессия(итог)["password_hash_web"] == "<хеш>"
+    else:
+        assert куда(сайт, итог) == (302, "/cabinet/settings")
+        assert ошибки(итог) == {"password": ошибка}
+        assert итог["база"]["users"] == [(*БЫЛ, True, True)]
+
+    assert итог["база"]["journal"] == []
 
 
-@pytest.mark.parametrize("заголовки", ["inertia", "form"])
-def test_смена_пароля_администратора(сайт, заголовки):
+@pytest.mark.parametrize(("заголовки", "status"), [("inertia", 409), ("form", 302)])
+def test_смена_пароля_администратора(сайт, заголовки, status):
+    """Администратору — в панель: Inertia уходит туда по 409."""
     uid = пользователь(must_change_password=True, is_admin=True)
     headers = (
         inertia()
@@ -227,19 +256,34 @@ def test_смена_пароля_администратора(сайт, заго
         else "application/json",
         headers=headers,
     )
-    assert итог["ответ"]["status"] in (302, 409)
+
+    assert куда(сайт, итог) == (status, "/admin")
+    assert итог["база"]["users"] == [(*СМЕНИЛ, False, True)]
+    # Правка администратора — в журнал, пароль скрыт
+    [(action, section, label, changes)] = итог["база"]["journal"]
+    assert (action, section, label) == ("updated", "users", f"Покупатель {ПОЧТА}")
+    assert json.loads(changes) == {
+        "before": {"password": "···", "must_change_password": True},
+        "after": {"password": "···", "must_change_password": False},
+    }
 
 
 def test_смена_пароля_гостю_нельзя(сайт):
-    форма(
+    пользователь(must_change_password=True, password=_хеш(ПАРОЛЬ))
+    итог = форма(
         сайт,
         "/password/change",
         lambda: None,
         body={"password": НОВЫЙ, "password_confirmation": НОВЫЙ},
     )
 
+    assert куда(сайт, итог) == (302, "/login")
+    assert итог["база"]["users"] == [(*БЫЛ, True, True)]
+
 
 # ── Забыли пароль ───────────────────────────────────────────────────
+
+ОТВЕТ_СБРОСА = "Если такой адрес зарегистрирован, письмо со ссылкой уже отправлено."
 
 
 def _свежий_токен() -> None:
@@ -250,20 +294,22 @@ def _свежий_токен() -> None:
 
 
 @pytest.mark.parametrize(
-    ("body", "шаг"),
+    ("body", "шаг", "ошибки_", "письмо"),
     [
-        ({}, None),
-        ({"email": "нет"}, None),
-        ({"email": "nobody@savdex.uz"}, None),
-        ({"email": ПОЧТА}, None),
-        ({"email": ПОЧТА.upper()}, None),
-        ({"email": ПОЧТА, "channel": "telegram"}, None),
-        ({"email": ПОЧТА, "channel": "pigeon"}, None),
-        ({"email": ПОЧТА}, _свежий_токен),
-        ({"email": ПОЧТА, "channel": ["mail"]}, None),
+        ({}, None, {"email": ["Введите почту"]}, False),
+        ({"email": "нет"}, None, {"email": ["Проверьте адрес почты"]}, False),
+        # Ответ один при любом исходе
+        ({"email": "nobody@savdex.uz"}, None, None, False),
+        ({"email": ПОЧТА}, None, None, True),
+        ({"email": ПОЧТА.upper()}, None, None, True),
+        ({"email": ПОЧТА, "channel": "telegram"}, None, None, True),
+        ({"email": ПОЧТА, "channel": "pigeon"}, None, None, True),
+        # Не чаще раза в минуту: свежий токен — письма нет
+        ({"email": ПОЧТА}, _свежий_токен, None, False),
+        ({"email": ПОЧТА, "channel": ["mail"]}, None, {"channel": ["validation.string"]}, False),
     ],
 )
-def test_забыли_пароль(сайт, body, шаг):
+def test_забыли_пароль(сайт, body, шаг, ошибки_, письмо):
     пользователь()
 
     def готово() -> None:
@@ -273,14 +319,35 @@ def test_забыли_пароль(сайт, body, шаг):
             шаг()
 
     итог = форма(сайт, "/forgot-password", готово, body=body)
+    база = итог["база"]
 
-    if body == {"email": ПОЧТА}:
-        assert len(итог["база"]["mail"]) == (0 if шаг else 1)
+    assert куда(сайт, итог) == (302, "/cabinet/settings")
+    assert ошибки(итог) == ошибки_
+
+    if ошибки_ is None:
+        assert сессия(итог)["status"] == ОТВЕТ_СБРОСА
+
+    # Токен брокера — хешем; со ссылкой из письма его сверяет снимок()
+    assert база["tokens"] == ([(ПОЧТА, True, True)] if письмо or шаг else [])
+    assert len(база["mail"]) == int(письмо)
+
+    if письмо:
+        [m] = база["mail"]
+        assert (m["subject"], m["to"]) == ("Reset your password", ПОЧТА)
+        assert m["from"] == "SAVDEX <hello@example.com>"
+        assert (
+            "Reset Password: <сайт>/reset-password/<токен>?email=account%40savdex.uz" in m["text"]
+        )
+        assert "This password reset link will expire in 60 minutes." in m["text"]
 
 
 def test_забыли_пароль_вошедшему_нельзя(сайт):
     uid = пользователь()
-    форма(сайт, "/forgot-password", lambda: None, uid=uid, body={"email": ПОЧТА})
+    итог = форма(сайт, "/forgot-password", lambda: None, uid=uid, body={"email": ПОЧТА})
+
+    # Гостевой маршрут: вошедшего — на главную, письма нет
+    assert куда(сайт, итог) == (302, "")
+    assert итог["база"]["mail"] == [] and итог["база"]["tokens"] == []
 
 
 # ── Сброс по токену ─────────────────────────────────────────────────
@@ -304,29 +371,63 @@ def _токен(минут_назад: int = 0, token: str = ТОКЕН_СБРО
     "password": НОВЫЙ,
     "password_confirmation": НОВЫЙ,
 }
+НЕДЕЙСТВИТЕЛЬНА = {
+    "email": ["Ссылка недействительна или устарела. Запросите новую — они живут 60 минут."]
+}
 
 
 @pytest.mark.parametrize(
-    ("body", "шаг"),
+    ("body", "шаг", "ошибки_"),
     [
-        ({}, _токен()),
-        ({**ВЕРНЫЙ_СБРОС, "password_confirmation": "другой"}, _токен()),
-        ({**ВЕРНЫЙ_СБРОС, "password": "short", "password_confirmation": "short"}, _токен()),
-        ({**ВЕРНЫЙ_СБРОС, "email": "плохо"}, _токен()),
-        ({**ВЕРНЫЙ_СБРОС, "token": "b" * 64}, _токен()),
-        ({**ВЕРНЫЙ_СБРОС, "email": "nobody@savdex.uz"}, _токен()),
-        (ВЕРНЫЙ_СБРОС, _токен(минут_назад=61)),
-        (ВЕРНЫЙ_СБРОС, lambda: пользователь(must_change_password=True)),
-        (ВЕРНЫЙ_СБРОС, _токен()),
+        (
+            {},
+            _токен(),
+            {
+                "token": ["validation.required"],
+                "email": ["Введите почту"],
+                "password": ["Придумайте пароль"],
+            },
+        ),
+        (
+            {**ВЕРНЫЙ_СБРОС, "password_confirmation": "другой"},
+            _токен(),
+            {"password": ["Пароли не совпадают"]},
+        ),
+        (
+            {**ВЕРНЫЙ_СБРОС, "password": "short", "password_confirmation": "short"},
+            _токен(),
+            {
+                "password": [
+                    "Пароль должен быть не короче 8 символов",
+                    "Добавьте в пароль хотя бы одну цифру",
+                ]
+            },
+        ),
+        ({**ВЕРНЫЙ_СБРОС, "email": "плохо"}, _токен(), {"email": ["Проверьте адрес почты"]}),
+        # Чужой токен, чужая почта, просроченный, без токена
+        ({**ВЕРНЫЙ_СБРОС, "token": "b" * 64}, _токен(), НЕДЕЙСТВИТЕЛЬНА),
+        ({**ВЕРНЫЙ_СБРОС, "email": "nobody@savdex.uz"}, _токен(), НЕДЕЙСТВИТЕЛЬНА),
+        (ВЕРНЫЙ_СБРОС, _токен(минут_назад=61), НЕДЕЙСТВИТЕЛЬНА),
+        (ВЕРНЫЙ_СБРОС, lambda: пользователь(must_change_password=True), НЕДЕЙСТВИТЕЛЬНА),
+        (ВЕРНЫЙ_СБРОС, _токен(), None),
     ],
 )
-def test_сброс_пароля(сайт, body, шаг):
+def test_сброс_пароля(сайт, body, шаг, ошибки_):
     пользователь()
     итог = форма(сайт, "/reset-password", шаг, body=body)
+    база = итог["база"]
 
-    # Пароль сменён: токен «запомнить» новый — дальше на вход
-    if итог["база"]["users"][0][3] is False:
-        assert итог["ответ"]["headers"]["location"].endswith("/login")
+    if ошибки_ is None:
+        # Пароль сменён, токен «запомнить» новый, токен сброса израсходован — на вход
+        assert куда(сайт, итог) == (302, "/login")
+        assert сессия(итог)["status"] == "Пароль изменён. Войдите с новым паролем."
+        assert база["users"] == [(*СБРОСИЛ, False, True)]
+        assert база["tokens"] == []
+    else:
+        assert куда(сайт, итог) == (302, "/cabinet/settings")
+        assert ошибки(итог) == ошибки_
+        assert база["users"] == [(*БЫЛ, True, True)]
+        assert база["tokens"] == ([] if шаг.__name__ == "<lambda>" else [(ПОЧТА, True, True)])
 
 
 # ── Подтверждение почты ─────────────────────────────────────────────
@@ -342,25 +443,56 @@ def _код(код: str = "123456", попытки: int = 0) -> Callable[[], Non
     return run
 
 
+ПОДТВЕРЖДЕНА = "Почта подтверждена — теперь доступна публикация объявлений"
+НЕ_ПОДОШЁЛ = {
+    "code": ["Код не подошёл или устарел. Отправьте письмо повторно и введите код из него."]
+}
+
+
 @pytest.mark.parametrize(
-    ("body", "шаг", "данные"),
+    ("body", "шаг", "данные", "итог_"),
     [
-        ({}, _код(), None),
-        ({"code": "12345"}, _код(), None),
-        ({"code": "12345a"}, _код(), None),
-        ({"code": 123456.0}, _код(), None),
-        ({"code": "000000"}, _код(), None),
-        ({"code": "123456"}, _код(), None),
-        ({"code": 123456}, _код(), None),
-        ({"code": "123456"}, _код(попытки=5), None),
-        ({"code": "123456"}, lambda: пользователь(email_verified_at=None), None),
-        ({"code": "123456"}, _код(), {"url": {"intended": "http://127.0.0.1/pricing"}}),
-        ({"code": "000000"}, lambda: пользователь(), None),
+        ({}, _код(), None, ({"code": ["Введите код из письма"]}, {"attempts": 0})),
+        ({"code": "12345"}, _код(), None, ({"code": ["Код — шесть цифр"]}, {"attempts": 0})),
+        ({"code": "12345a"}, _код(), None, ({"code": ["Код — шесть цифр"]}, {"attempts": 0})),
+        ({"code": 123456.0}, _код(), None, "/cabinet"),
+        # Неверный — попытка засчитана
+        ({"code": "000000"}, _код(), None, (НЕ_ПОДОШЁЛ, {"attempts": 1})),
+        ({"code": "123456"}, _код(), None, "/cabinet"),
+        ({"code": 123456}, _код(), None, "/cabinet"),
+        # Попытки кончились — код больше не действует
+        ({"code": "123456"}, _код(попытки=5), None, (НЕ_ПОДОШЁЛ, None)),
+        (
+            {"code": "123456"},
+            lambda: пользователь(email_verified_at=None),
+            None,
+            (НЕ_ПОДОШЁЛ, None),
+        ),
+        (
+            {"code": "123456"},
+            _код(),
+            {"url": {"intended": "http://127.0.0.1/pricing"}},
+            "http://127.0.0.1/pricing",
+        ),
+        # Уже подтверждена — в кабинет без сообщения
+        ({"code": "000000"}, lambda: пользователь(), None, None),
     ],
 )
-def test_код_подтверждения(сайт, body, шаг, данные):
+def test_код_подтверждения(сайт, body, шаг, данные, итог_):
     uid = пользователь()
-    форма(сайт, "/verify-email/code", шаг, uid=uid, body=body, данные=данные)
+    итог = форма(сайт, "/verify-email/code", шаг, uid=uid, body=body, данные=данные)
+    база = итог["база"]
+
+    if isinstance(итог_, tuple):
+        ошибки_, код = итог_
+        assert куда(сайт, итог) == (302, "/cabinet/settings")
+        assert ошибки(итог) == ошибки_ and база["code"] == код
+        assert база["users"][0][5] is False
+    else:
+        # Подтверждена, код одноразовый — убран
+        assert куда(сайт, итог) == (302, итог_ or "/cabinet")
+        assert сессия(итог).get("success") == (None if итог_ is None else ПОДТВЕРЖДЕНА)
+        assert база["users"][0][5] is True and база["code"] is None
 
 
 @pytest.mark.parametrize("проверена", [False, True])
@@ -373,9 +505,23 @@ def test_письмо_ещё_раз(сайт, проверена):
         uid=uid,
         body={},
     )
+    база = итог["база"]
 
-    if not проверена:
-        assert len(итог["база"]["mail"]) == 1 and итог["база"]["code"] == {"attempts": 0}
+    if проверена:
+        assert куда(сайт, итог) == (302, "/cabinet") and база["mail"] == []
+        return
+
+    assert куда(сайт, итог) == (302, "/cabinet/settings")
+    assert (
+        сессия(итог)["status"] == "Письмо отправлено повторно. Не пришло — проверьте папку «Спам»."
+    )
+    # Новый код в кэше и письмо с кодом и подписанной ссылкой
+    assert база["code"] == {"attempts": 0}
+    [m] = база["mail"]
+    assert (m["subject"], m["to"]) == ("Код подтверждения <код> — SAVDEX", ПОЧТА)
+    assert "Ваш код подтверждения почты на площадке SAVDEX:\n\n# <код>" in m["text"]
+    отпечаток = hashlib.sha1(ПОЧТА.encode()).hexdigest()
+    assert f"<сайт>/verify-email/{uid}/{отпечаток}?expires=<срок>&signature=<подпись>" in m["text"]
 
 
 def _ссылка(сайт: str, uid: int, *, почта: str = ПОЧТА, срок: int = 3600) -> str:
@@ -387,10 +533,20 @@ def _ссылка(сайт: str, uid: int, *, почта: str = ПОЧТА, ср
 
 
 @pytest.mark.parametrize(
-    "вариант",
-    ["верно", "уже", "подпись", "срок", "чужой", "почта", "без_подписи", "intended"],
+    ("вариант", "итог_"),
+    [
+        ("верно", (302, "/cabinet", ПОДТВЕРЖДЕНА)),
+        ("уже", (302, "/cabinet", "Почта уже подтверждена")),
+        # Подпись, срок, чужой номер, отпечаток другой почты — 403
+        ("подпись", (403, None, None)),
+        ("срок", (403, None, None)),
+        ("чужой", (403, None, None)),
+        ("почта", (403, None, None)),
+        ("без_подписи", (403, None, None)),
+        ("intended", (302, "/pricing", ПОДТВЕРЖДЕНА)),
+    ],
 )
-def test_ссылка_подтверждения(сайт, вариант):
+def test_ссылка_подтверждения(сайт, вариант, итог_):
     uid = пользователь()
     путь = {
         "верно": _ссылка(сайт, uid),
@@ -402,7 +558,7 @@ def test_ссылка_подтверждения(сайт, вариант):
         "без_подписи": _ссылка(сайт, uid).split("&signature=")[0],
         "intended": _ссылка(сайт, uid),
     }[вариант]
-    форма(
+    итог = форма(
         сайт,
         путь,
         lambda: пользователь(email_verified_at="2026-01-01 00:00:00" if вариант == "уже" else None),
@@ -412,3 +568,8 @@ def test_ссылка_подтверждения(сайт, вариант):
         headers={},
         данные={"url": {"intended": сайт + "/pricing"}} if вариант == "intended" else None,
     )
+    status, location, success = итог_
+
+    assert куда(сайт, итог) == (status, location)
+    assert сессия(итог).get("success") == success
+    assert итог["база"]["users"][0][5] is (status == 302)

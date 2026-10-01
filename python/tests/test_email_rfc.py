@@ -1,55 +1,24 @@
 """
-Правило email на Python совпадает с validateEmail у Laravel (RFCValidation
-из egulias/email-validator): те же строки прогоняются через PHP (один
-процесс) и через savdex.web.email_rfc.
+Правило email на Python — как validateEmail у Laravel (RFCValidation из
+egulias/email-validator; email:rfc,strict — ещё NoRFCWarningsValidation).
 
-Обработчик ошибок в PHP — как у Laravel (HandleExceptions): предупреждение
-становится ErrorException, устаревания молчат. Без него иначе вёл бы себя
-idn_to_ascii с переполненным ответом.
+Для каждой строки большого набора (АДРЕСА, сочетания ЛЕВЫЕ и ПРАВЫЕ,
+случайные, похожие на адрес, длинные метки IDN, каждый знак Юникода)
+ответ egulias записан один раз (ВЕРНЫЕ, ВЕРНЫЕ_СТРОГО — по биту на
+строку, по порядку набора) и сверяется с savdex.web.email_rfc. Ответ
+снят при обработчике ошибок, как у Laravel (HandleExceptions):
+предупреждение становится ErrorException, устаревания молчат — без него
+иначе вёл бы себя idn_to_ascii с переполненным ответом.
 """
 
 from __future__ import annotations
 
-import json
+import base64
 import random
-import shutil
-import subprocess
 import unicodedata
-
-import pytest
+import zlib
 
 from savdex.web.email_rfc import is_valid
-
-from .pg_admin import КОРЕНЬ
-
-PHP = r"""
-require 'vendor/autoload.php';
-
-use Egulias\EmailValidator\EmailValidator;
-use Egulias\EmailValidator\Validation\MultipleValidationWithAnd;
-use Egulias\EmailValidator\Validation\RFCValidation;
-
-error_reporting(-1);
-set_error_handler(function ($level, $message, $file = '', $line = 0) {
-    if (in_array($level, [E_DEPRECATED, E_USER_DEPRECATED], true)) {
-        return true;
-    }
-    if (error_reporting() & $level) {
-        throw new ErrorException($message, 0, $level, $file, $line);
-    }
-    return true;
-});
-
-$in = json_decode(stream_get_contents(STDIN), true);
-
-echo json_encode(array_map(function ($s) {
-    if (preg_match('/[\r\n]/', $s) > 0) {
-        return false;
-    }
-
-    return (new EmailValidator)->isValid($s, new MultipleValidationWithAnd([new RFCValidation]));
-}, $in));
-"""
 
 АДРЕСА = [
     # Обычные
@@ -562,151 +531,185 @@ def _точки() -> list[str]:
     return строки
 
 
-def _php(values: list[str], strict: bool = False) -> list[bool]:
-    код = PHP
-
-    if strict:
-        # email:rfc,strict у Laravel — RFCValidation и NoRFCWarningsValidation
-        код = PHP.replace(
-            "new MultipleValidationWithAnd([new RFCValidation])",
-            "new MultipleValidationWithAnd([new RFCValidation,"
-            " new \\Egulias\\EmailValidator\\Validation\\NoRFCWarningsValidation])",
-        )
-
-    вывод = subprocess.run(
-        ["php", "-r", код],
-        cwd=КОРЕНЬ,
-        input=json.dumps(values),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    return json.loads(вывод.stdout)
-
-
-#: Общие категории Unicode — PHP сообщает свою для каждого знака
-КАТЕГОРИИ = (
-    "Lu",
-    "Ll",
-    "Lt",
-    "Lm",
-    "Lo",
-    "Mn",
-    "Mc",
-    "Me",
-    "Nd",
-    "Nl",
-    "No",
-    "Pc",
-    "Pd",
-    "Ps",
-    "Pe",
-    "Pi",
-    "Pf",
-    "Po",
-    "Sm",
-    "Sc",
-    "Sk",
-    "So",
-    "Zs",
-    "Zl",
-    "Zp",
-    "Cc",
-    "Cf",
-    "Cs",
-    "Co",
-    "Cn",
+ВЕРНЫЕ = (
+    "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"
+    "+uI="
+)
+ВЕРНЫЕ_СТРОГО = (
+    "eNrtWM2KHDcQrmntjjumsWbNBgwJZAg+OIdAm7740KB2SMBHJyTnLCbk7FuOGee05JRH8DlPIejrQF98TyAvoKCr"
+    "QKmSWjPq6Z7ZGby7mWy67J3+kaq69NWPqvTTOytgAfMHEGjB6Fc+f42/p5+AtU/f/fX3y88gfQT34DRbsAUcQBP2"
+    "J8zpppLwDJ5cwMdwnsMDuE/SJp1pbxeT1zDrsg98dDEwbaRbpApNmbAKjXY6QbOcnE8ukiQBuIS0gkkCT/PHkOYA"
+    "swUZ+AQu5zCbzVJIUnjxC/InX6bINiMTph8Bypmn9INud/Jw8nDuPzJLKmR19MJfnifJnN7QhB9gkcD9jKTD4y/e"
+    "IP/8DEjqFIclwG/p53CCqiy+qc6qGSTwcv4dVKij95snOCuFt5Op+9gj9+5TmOeQnpHWMJ28wokpLKoP5hU+X6DX"
+    "vUE9Xv24g1DGruEpijmMfbqB+8V1fn3aM+tV7NPdXvG7p18vicLLe1KBMuZnSySs7VxvkbjCP9THMihIr52TtbKg"
+    "hKbbZmi8ufp7zQG6mXAjTPRWgOnMCjoLaV1+LnnMuifVuLj2anl3SGyVxTfxakQWD0cWzUnvdlViCOVmf1Dq2hvD"
+    "Fgo/UdcC47qxZEfLhTFChnFdco1PPANTgHLQgTG2acK4Qf6m4QQb8TNE1kTy3XhdczBevkGslRFK81JLJuiLip4Y"
+    "5hWSLzweWrf8DgKtOZSIC46DdHisx00Yh5LGyw5/8DntgVOex5A1hAqYZVbk0hYoG18pXEjXWAFzuwrGUrcmWbY2"
+    "KkhJvprAiItxz7c0sSsx0/dMBjnFTrmSv2/YrQ0P2c1GuOZWaN553hwRPQ67JQZYAHPLqrg9Xordig1PYdAGtmzd"
+    "B4L3OE/cal9BPgT+j9ySw075Xd/sJJRoJ4AouXl0Wef7EJh85HX8T20quM5zKz35SpGIhpT2mkvSptyJcI+dYORm"
+    "BwamyyTgKDwl9mN3v1z24jakYI34KGcL5u5Xa+AypIqmjRnusOClA2EAc3qZSzRdZjgUunF5yfC8v+vcJIVUWF6v"
+    "1E1P6ZHaNnAktEX7cq3+bWghV54yZDPgR4TSYcQov0SporcvgmQQ5WWx8W8HqZsPmmj9OtptGGrNFQhgkm3a8P9B"
+    "Ia5HGmmkTmvSyZVtlRSKhxpbJU2Fgzaur2xzIjUv3NSN9v1iM8J4VCY15ojrl+ujXkbnMnctMVO9Hhe3dd3uzu3G"
+    "yGmWdlu9q61jsbVoZ5VtKaBd7+LbBBUftKAQ1m6kDUgMEObHC7vUdBRUGNRIF5k7EaCDB3wWWbRPk6lIN4khJxtf"
+    "JnBTUFBp35lwN96gmJyHZWN4Nn4nR3lU4esMx0EKm4X931cpArUmBQUzTn0VFW3K92dunla2iCqDtheT/OpCKhQS"
+    "xg6WhNdvcrVvXjsuMlvAG+l9w97FJnXGBuNHaruDUfgLxgq70xXhQSf47tx0pGsJ7V5XdTP+rzX7z2AzlImbLI8W"
+    "RGsx646Ui15RacJ/fM0HDyN4bvbFj6+AXPF34LTysN1DGbs+amuuBEMF6XjDSzO8Y97GQQE70LdHGmmkkUa6+4dC"
+    "x6iVvpNY16O7/Us9uzqWhly+J2ZVEPT1h+d/YD931paj3/rr919N/wFf3qjz"
+)
+НЕНАЗНАЧЕННЫЕ = (
+    "eNrtWM9r1EAU/vIDUyTY7PYSpbAREVrwEDwtIiYn8WYv3iPevNjjgtLMobQePIgHr93+B8W/ICxSehRPxYuhCnoM"
+    "Pa2YZnwzSbpJqK1bWrvofmEyeTNvZt588+bN7ALnCm12AdDHbqZQYor8tPMMnFIv5ic29YvcrhamvFYagdF7C0Mx"
+    "THpsd1ZwCVDvmMFa+NAl7VZPyG9u9bYPNj0w3vJpdmrb9N9n3EWqtKR+2wy2O0Kfz3UHi9+6uNsdrHAPNKKjUj1M"
+    "Z7Cx6yJELltC3nDxg0sZongW1B4tMI0Y/MCe9+HhCy/Y6FFKOGFxBliiGfUjmEKuURgr5ZdDz7BW36Tt85hLNGCD"
+    "PC8FVlagwnUsyB81iqJz8LG48p3RGEQq44IeOPvV+UZkSVq3R+gD0g9yFaHPkCC5IsXC3xLZqlsouUUuJhzIPsWs"
+    "GOc1fuNDnQqS2eLDwHzNAhu8bsnpkXNM70dyzrk30eNawI2aPQ5MYaG0NOOjd93ks18wQZXwRvzzcCsB6U+QKLW9"
+    "GGbSl1mB5kIX/lYJr8kxnAr1fDXJIp1hiilQCWWE+SKoGQs+2vDpaPFVzN9X9bGceJJR3iYuhORn10XgL68krOT9"
+    "LZwOIh9xZ0hXhDUHeN0RwZkxJfGk7uq9mAKBH67GJF++yYxrlvOJK4lhW7vy1LGS0FkeLutw2SZ0FXYUOr7yLqX+"
+    "EnzlvGO9wEdlf13GAAoqL1lmfFdsaLForblIQtzuy67WKRkzTdt5KO8RMR8L3uFZWevrjKBUwt6kwhut/hIsPVCr"
+    "lRqjemWPaxew1ZtY4ZONTu46xpgL7sHZOw9riMVM+J9LO4VpZM4T2FxY96o8jy00z377KPtS4QeUQieTBcvs6BHn"
+    "xAlu+I0dMPSEurZzNd+YNH5brG/2uP+zuj9GCLCjPHDT3C2jIH4qyDw4xm2nmOK/QnJ2NwT971ltTgR3p4ymxujn"
+    "+O+VDhp/XjTrT7LsF3DnAyA="
 )
 
 
-def _категории_php(знаки: list[str]) -> list[str]:
-    """Категория каждого знака по таблицам PCRE2, с которыми собран PHP."""
-    код = (
-        "$in = json_decode(stream_get_contents(STDIN), true);"
-        "$cats = " + json.dumps(list(КАТЕГОРИИ)) + ";"
-        "echo json_encode(array_map(function ($ch) use ($cats) {"
-        " foreach ($cats as $c) { if (preg_match('/^\\p{' . $c . '}$/u', $ch)) return $c; }"
-        " return '?'; }, $in));"
-    )
-    вывод = subprocess.run(
-        ["php", "-r", код],
-        input=json.dumps(знаки),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-    return json.loads(вывод.stdout)
+ДЛИННЫЕ = [
+    # Локальная часть больше 64 байт, весь адрес больше 254
+    "a" * 64 + "@savdex.uz",
+    "a" * 65 + "@savdex.uz",
+    "я" * 33 + "@savdex.uz",
+    "a" * 60 + "@" + ".".join(["b" * 60] * 3) + ".uz",
+    "a" * 64 + "@" + ".".join(["b" * 60] * 3) + ".uzb",
+    "user@localhost",
+    "user@[127.0.0.1]",
+    '"quoted"@savdex.uz',
+    "user(comment)@savdex.uz",
+    "user @savdex.uz",
+]
 
 
-def _та_же_версия_unicode(строки: list[str]) -> list[str]:
+def _биты(packed: str, count: int) -> list[bool]:
+    data = zlib.decompress(base64.b64decode(packed))
+    assert len(data) == (count + 7) // 8
+
+    return [bool(data[i // 8] >> (i % 8) & 1) for i in range(count)]
+
+
+def _набор() -> list[str]:
+    return [
+        *АДРЕСА,
+        *(f"{левая}@{правая}" for левая in ЛЕВЫЕ for правая in ПРАВЫЕ),
+        *_случайные(),
+        *_похожие(),
+        *_домены(),
+        *_точки(),
+    ]
+
+
+def _та_же_версия_unicode(строки: list[str]) -> set[str]:
     """
-    Только строки из знаков, которые Python и PHP относят к одной
-    категории. Версии Unicode у unicodedata и у PCRE2 бывают разные
-    (в CI Python новее): знак, назначенный в новой версии, для одной
-    стороны буква, для другой — неназначенный. Это разница окружения, а
-    не переноса, и такие строки не сверяются.
+    Знаки, которые при записи ответа были неназначенными (Cn), а в этом
+    Python назначены, — или наоборот. Ответ записан при Unicode 14
+    (у unicodedata и PCRE2 тогда совпадали все категории); в новом Python
+    знак новой версии для правила уже буква, и такие строки не сверяются:
+    это разница окружения, а не правила.
     """
     знаки = sorted({ch for s in строки for ch in s if ord(ch) > 127})
-    чужие = {
-        ch
-        for ch, php in zip(знаки, _категории_php(знаки), strict=True)
-        if unicodedata.category(ch) != php
+    были = _биты(НЕНАЗНАЧЕННЫЕ, len(знаки))
+
+    return {
+        ch for ch, cn in zip(знаки, были, strict=True) if (unicodedata.category(ch) == "Cn") != cn
     }
 
-    return [s for s in строки if not чужие.intersection(s)]
 
+def _не_совпали(строки: list[str], ответ: list[bool], strict: bool) -> list[tuple[str, bool]]:
+    чужие = _та_же_версия_unicode([*_набор(), *ДЛИННЫЕ])
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
-def test_как_у_laravel():
-    строки = [
-        *АДРЕСА,
-        *(f"{левая}@{правая}" for левая in ЛЕВЫЕ for правая in ПРАВЫЕ),
-        *_случайные(),
-        *_похожие(),
-        *_домены(),
-        *_точки(),
+    return [
+        (s, e)
+        for s, e in zip(строки, ответ, strict=True)
+        if not чужие.intersection(s) and is_valid(s, strict=strict) is not e
     ]
-    строки = _та_же_версия_unicode(строки)
-    ожидание = _php(строки)
-    расхождения = [(s, e) for s, e in zip(строки, ожидание, strict=True) if is_valid(s) is not e]
+
+
+def test_как_у_egulias():
+    строки = _набор()
+    ответ = _биты(ВЕРНЫЕ, len(строки))
+    расхождения = _не_совпали(строки, ответ, strict=False)
 
     assert not расхождения, расхождения[:20]
-    assert sum(ожидание) > 1000
-    assert len(строки) - sum(ожидание) > 1000
+    assert sum(ответ) > 1000
+    assert len(строки) - sum(ответ) > 1000
 
 
-@pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
-def test_строго_как_у_laravel():
+def test_строго_как_у_egulias():
     """email:rfc,strict: верен и без предупреждений разбора."""
-    строки = [
-        *АДРЕСА,
-        *(f"{левая}@{правая}" for левая in ЛЕВЫЕ for правая in ПРАВЫЕ),
-        *_случайные(),
-        *_похожие(),
-        *_домены(),
-        *_точки(),
-        # Длинные: локальная часть больше 64 байт, весь адрес больше 254
-        "a" * 64 + "@savdex.uz",
-        "a" * 65 + "@savdex.uz",
-        "я" * 33 + "@savdex.uz",
-        "a" * 60 + "@" + ".".join(["b" * 60] * 3) + ".uz",
-        "a" * 64 + "@" + ".".join(["b" * 60] * 3) + ".uzb",
-        "user@localhost",
-        "user@[127.0.0.1]",
-        '"quoted"@savdex.uz',
-        "user(comment)@savdex.uz",
-        "user @savdex.uz",
-    ]
-    строки = _та_же_версия_unicode(строки)
-    ожидание = _php(строки, strict=True)
-    расхождения = [
-        (s, e) for s, e in zip(строки, ожидание, strict=True) if is_valid(s, strict=True) is not e
-    ]
+    строки = [*_набор(), *ДЛИННЫЕ]
+    ответ = _биты(ВЕРНЫЕ_СТРОГО, len(строки))
+    расхождения = _не_совпали(строки, ответ, strict=True)
 
     assert not расхождения, расхождения[:20]
-    assert sum(ожидание) > 500
+    assert sum(ответ) > 500
+
+
+#: Адрес → верен ли (без strict, со strict) — по смыслу RFC 5321/5322
+ПОНЯТНЫЕ = {
+    "user@savdex.uz": (True, True),
+    "user.name+tag@savdex.uz": (True, True),
+    "пользователь@пример.рф": (True, True),
+    # Домен без точки и адрес в скобках RFC допускает, но со strict это
+    # предупреждения
+    "user@localhost": (True, False),
+    "user@[127.0.0.1]": (True, False),
+    # Кавычки и комментарии — верно, но со strict это предупреждения
+    '"a b"@savdex.uz': (True, False),
+    "user(comment)@savdex.uz": (True, False),
+    # Локальная часть длиннее 64 байт — только предупреждение
+    "a" * 64 + "@savdex.uz": (True, True),
+    "a" * 65 + "@savdex.uz": (True, False),
+    # Метка домена — не длиннее 63 знаков
+    "a@" + "b" * 63 + ".uz": (True, True),
+    "a@" + "b" * 64 + ".uz": (False, False),
+    "": (False, False),
+    "user": (False, False),
+    "user@": (False, False),
+    "@savdex.uz": (False, False),
+    "a@@b": (False, False),
+    ".a@b.c": (False, False),
+    "a.@b.c": (False, False),
+    "a..b@c.d": (False, False),
+    "a@b..c": (False, False),
+    "a@-b.c": (False, False),
+    "a b@c.d": (False, False),
+    "a<b@c.d": (False, False),
+    "a@b_c.d": (False, False),
+    "😀@b.c": (False, False),
+}
+
+
+def test_понятные_случаи():
+    for адрес, (верен, строго) in ПОНЯТНЫЕ.items():
+        assert is_valid(адрес) is верен, адрес
+        assert is_valid(адрес, strict=True) is строго, адрес
 
 
 def test_не_строка():

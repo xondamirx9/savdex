@@ -333,9 +333,7 @@ def test_шаг_компании_после_регистрации(сайт, leg
     указан, второй шаг открыт и дозаполняет недостающее (completing).
     """
     city = sql("select id from cities order by id limit 1")[0][0] if город else None
-    uid = учётка(
-        "registered@savdex.uz", company_id=компания(legal_form=legal_form, city_id=city)
-    )
+    uid = учётка("registered@savdex.uz", company_id=компания(legal_form=legal_form, city_id=city))
     ответ, _ = зайти(сайт, "/onboarding/company", сессия(uid))
 
     if открыт:

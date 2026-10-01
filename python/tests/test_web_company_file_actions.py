@@ -290,7 +290,10 @@ def test_загрузка(сайт, поля, файл, ждём, admin):
     assert документ[:4] == (1, поля["type"], поля["title"], f"companies/1/documents/<random>.{ext}")
     assert документ[4] == len(ФАЙЛЫ[файл][1])
     assert документ[5:] == (mime, срок, показ, модерация, True)
-    assert база["disk"] == {"mine": sorted([f"<random>.{ext}", "old-file.pdf"]), "other": ["old-file.pdf"]}
+    assert база["disk"] == {
+        "mine": sorted([f"<random>.{ext}", "old-file.pdf"]),
+        "other": ["old-file.pdf"],
+    }
     assert _сессия(итог)["success"] == (ДОКУМЕНТ if модерация == "pending" else МАТЕРИАЛ)
     # Журнал — только у сотрудника
     assert [j[:4] for j in база["journal"]] == (

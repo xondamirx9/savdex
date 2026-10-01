@@ -180,7 +180,10 @@ def test_закрыть_и_открыть(сайт, verb, status, admin):
             {"result_url": "https://shop.uz", "result_summary": "Сдали в срок", "contractor": True},
             ("https://shop.uz", "Сдали в срок", "dev"),
         ),
-        ({"result_url": "shop.uz"}, {"result_url": ["Ссылка должна начинаться с http:// или https://"]}),
+        (
+            {"result_url": "shop.uz"},
+            {"result_url": ["Ссылка должна начинаться с http:// или https://"]},
+        ),
         ({"result_url": "https://" + "a" * 250 + ".uz"}, {"result_url": ["validation.max.string"]}),
         ({"result_summary": "x" * 601}, {"result_summary": ["validation.max.string"]}),
         (
@@ -267,7 +270,9 @@ def test_удалить(сайт, admin, prefix):
 
     assert итог["ответ"]["status"] == 303
     assert итог["ответ"]["headers"]["location"] == f"{сайт}{prefix}/cabinet/it-tasks"
-    assert _сессия(итог)["success"] == ("Задача удалена" if not prefix else "The project has been deleted")
+    assert _сессия(итог)["success"] == (
+        "Задача удалена" if not prefix else "The project has been deleted"
+    )
     assert not итог["база"]["tasks"] and not итог["база"]["files"] and not итог["база"]["disk"]
     # Разговор с откликнувшимся остаётся, но уже без задачи
     assert итог["база"]["threads"] == [(None, _компания("dev"))]

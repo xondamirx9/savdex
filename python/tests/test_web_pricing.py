@@ -91,7 +91,13 @@ def сайт() -> Iterator[str]:
         очистить_кэш()
 
 
-def тарифы(сайт: str, path: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def тарифы(
+    сайт: str, path: str, headers: dict[str, str] | None = None, *, курс: bool = True
+) -> dict[str, Any]:
+    if курс:
+        # Курс — заново перед каждым заходом: кэш на диске общий с другими проверками
+        курсы()
+
     д = открыть(сайт, path, headers=headers, env=ФАЙЛОВЫЙ)
 
     assert д["status"] == 200
@@ -156,12 +162,12 @@ def test_курс_из_запасной_таблицы(сайт):
     laravel_cache.put(ЗАПАСНЫЕ, {"USD": 12000.0}, 30 * 86400)
 
     try:
-        plans = {p["code"]: p for p in тарифы(сайт, "/pricing")["props"]["plans"]}
+        plans = {p["code"]: p for p in тарифы(сайт, "/pricing", курс=False)["props"]["plans"]}
         assert plans["premium"]["price_uzs"] == 1_800_000
 
         # Ни основной, ни запасной — запасной курс CurrencyRate::DEFAULT_USD
         забыть(ЗАПАСНЫЕ)
-        plans = {p["code"]: p for p in тарифы(сайт, "/pricing")["props"]["plans"]}
+        plans = {p["code"]: p for p in тарифы(сайт, "/pricing", курс=False)["props"]["plans"]}
         assert plans["premium"]["price_uzs"] == 1_920_000
     finally:
         курсы()

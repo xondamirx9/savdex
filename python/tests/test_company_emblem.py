@@ -12,15 +12,15 @@
 - цвет_стабилен_между_генерациями — test_цвет_стабилен_между_генерациями
   (и без базы — test_цвет_без_региона_стабилен).
 
-Сверх них — файл байт в байт как CompanyEmblem::svg у PHP и журнал.
-Проверки с базой требуют PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая
-часть — в pg_admin.py. Компании — с большими номерами: файлы эмблем
-пишутся в storage/app/public настоящего Laravel и после проверки удаляются.
+Сверх них — файл эмблемы (город — русское название или адрес города,
+адрес, название) и журнал. Проверки с базой требуют PostgreSQL
+(SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py. Компании — с
+большими номерами: файлы эмблем пишутся в storage/app/public и после
+проверки удаляются.
 """
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import json
 import subprocess
@@ -33,11 +33,11 @@ import pytest
 
 from savdex.data import emblem
 
+from .factories import компания
 from .pg_admin import (
     PYTHON,
     КОРЕНЬ,
     ОКРУЖЕНИЕ,
-    php,
     sql,
     нужна_база,
     свежая_база,
@@ -174,11 +174,6 @@ def test_эмблема_становится_логотипом_и_несёт_и
     assert ">SF</text>" in svg
     assert "#1d5f9e" in svg
 
-    # Логотип отдаётся витрине обычным путём: Laravel видит файл
-    assert php(f"echo App\\Models\\Company::find({номер})->logoUrl() ?? 'нет';").endswith(
-        "/storage/" + путь
-    )
-
     # Правка администратора — строка журнала, как AuditObserver
     [строка] = _журнал(номер)
     assert строка[:4] == ("updated", "companies", "App\\Models\\Company", "Samarqand Fruit Export")
@@ -212,8 +207,11 @@ def test_заменяет_логотип_и_не_пишет_журнал_без_
 
 
 @нужна_база
-def test_svg_как_у_php(база, компании):
-    """Файл от Django — байт в байт CompanyEmblem::svg у PHP."""
+def test_svg_файла(база, компании):
+    """
+    Файл эмблемы: город — русское название (без перевода — адрес города),
+    адрес («0» — пусто, как у PHP), регион по приметам, иначе цвет по crc32.
+    """
     [(город,)] = sql(
         "insert into cities (country_id, slug, created_at, updated_at) values "
         "(%s, 'fergana-emblem', now(), now()) returning id",
@@ -229,48 +227,72 @@ def test_svg_как_у_php(база, компании):
         "(%s, 'termez-city', now(), now()) returning id",
         [база["страна"]],
     )
-    номера = [
-        _компания(компании, 990111, "ООО «Стройбаза»", city_id=город),
-        _компания(компании, 990112, "Ромашка", address="г. Бухара, ул. Навои 5"),
-        _компания(компании, 990113, "A & B <Trade>", city_id=без_перевода),
-        _компания(компании, 990114, "МЧЖ"),
-        _компания(компании, 990115, "Z", address="0"),
-        _компания(компании, 990116, "Zeta Global Logistics O'zbekiston"),
+    цвета = list(emblem.PALETTES.values())
+
+    def по_crc(name: str) -> str:
+        return цвета[zlib.crc32(name.lower().encode()) % len(цвета)][0]
+
+    # (номер, название, поля, город и адрес для рисунка, цвет, кегль, инициалы)
+    случаи = [
+        (990111, "ООО «Стройбаза»", {"city_id": город}, ("Фергана", None), "#b02a4c", 96, "СТ"),
+        (
+            990112,
+            "Ромашка",
+            {"address": "г. Бухара, ул. Навои 5"},
+            (None, "г. Бухара, ул. Навои 5"),
+            emblem.PALETTES["bukhara"][0],
+            96,
+            "РО",
+        ),
+        # Латинское «termez» — не примета региона; «&» и «<» экранированы
+        (
+            990113,
+            "A & B <Trade>",
+            {"city_id": без_перевода},
+            ("termez-city", None),
+            по_crc("A & B <Trade>"),
+            96,
+            "A&amp;",
+        ),
+        # Одна правовая форма — знак вопроса
+        (990114, "МЧЖ", {}, (None, None), по_crc("МЧЖ"), 120, "?"),
+        (990115, "Z", {"address": "0"}, (None, "0"), по_crc("Z"), 120, "Z"),
+        (
+            990116,
+            "Zeta Global Logistics O'zbekiston",
+            {},
+            (None, None),
+            по_crc("Zeta Global Logistics O'zbekiston"),
+            96,
+            "ZG",
+        ),
     ]
+    номера = [_компания(компании, n, name, **поля) for n, name, поля, *_ in случаи]
 
     пути = _django(*((n, None) for n in номера))
-    php_svg = json.loads(
-        php(
-            "echo json_encode(array_map(fn ($id) => base64_encode("
-            "App\\Support\\CompanyEmblem::svg(App\\Models\\Company::find($id))), "
-            f"{json.dumps(номера)}));"
-        )
-    )
 
-    for путь, закодированный in zip(пути, php_svg, strict=True):
-        assert (ДИСК / путь).read_bytes() == base64.b64decode(закодированный), путь
+    for путь, (_, name, _, (город_, адрес), цвет, кегль, буквы) in zip(пути, случаи, strict=True):
+        файл = (ДИСК / путь).read_text()
+
+        assert файл == emblem.svg(name, город_, адрес), путь
+        assert f'<stop offset="0" stop-color="{цвет}"/>' in файл, путь
+        assert f'font-size="{кегль}"' in файл and f">{буквы}</text>" in файл, путь
 
 
 @нужна_база
 def test_публичная_страница_компании_отдаёт_эмблему(админ, компании):
-    """Витрина отдаёт эмблему фронту — у Django и у Laravel один и тот же адрес."""
-    from .web_site import laravel, из_django, из_laravel, страница
+    """Витрина отдаёт эмблему фронту — адресом на публичном диске."""
+    from .web_site import адрес, открыть, страница
 
     номер = 990121
-    slug = php(
-        "echo App\\Models\\Company::factory()"
-        f"->create(['id' => {номер}, 'logo_path' => null])->slug;"
-    )
+    компания(id=номер, logo_path=None)
+    [(slug,)] = sql("select slug from companies where id = %s", [номер])
     компании.append(номер)
 
     [путь] = _django((номер, админ))
 
-    with laravel() as сайт:
-        д = из_django(сайт, f"/company/{slug}")
-        л = из_laravel(сайт, f"/company/{slug}")
+    with адрес() as сайт:
+        д = открыть(сайт, f"/company/{slug}")
 
-    assert д["status"] == л["status"] == 200
-    лого_д = страница(д["body"])["props"]["company"]["logo"]
-    лого_л = страница(л["body"])["props"]["company"]["logo"]
-
-    assert лого_д == лого_л == f"{сайт}/storage/{путь}"
+    assert д["status"] == 200
+    assert страница(д["body"])["props"]["company"]["logo"] == f"{сайт}/storage/{путь}"

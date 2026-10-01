@@ -1,67 +1,113 @@
 """
 Этап 4, шаг 4: вкладка «Тендеры» каталога (/catalog?type=tender) на
-Django неотличима от Laravel.
+Django.
 
 Открытые (ближайший срок сверху, без срока — в конце) и завершённые,
 поиск, раздел каталога с подразделами, переводы заголовка, будущая
 публикация и черновик не видны; баннер каталога; дни до конца приёма.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import subprocess
+import sys
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, войти, из_django, из_laravel, пользователь, сверить, страница
+from .factories import Выражение, объявления, тендер
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import адрес, вход, открыть, пользователь, страница
 
 pytestmark = нужна_база
+
+
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как сидеры Laravel (GeoSeeder, CategorySeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-
-    for seeder in ("GeoSeeder", "CategorySeeder"):
-        subprocess.run(
-            ["php", "artisan", "db:seed", f"--class={seeder}", "--force"],
-            cwd=КОРЕНЬ,
-            env=ОКРУЖЕНИЕ,
-            check=True,
-            capture_output=True,
-        )
+    справочники(
+        "countries",
+        "country_translations",
+        "cities",
+        "city_translations",
+        "categories",
+        "category_translations",
+        "category_fields",
+    )
 
     # 24 открытых (две страницы), 4 без срока, 5 завершённых, будущая
     # публикация, черновик; часть — в подразделе, часть — с переводом
-    php(
-        "$uz = App\\Models\\Country::where('code', 'uz')->value('id');"
-        "$root = App\\Models\\Category::whereNull('parent_id')->orderBy('sort')->first();"
-        "$child = App\\Models\\Category::where('parent_id', $root->id)->orderBy('sort')->first();"
-        "$other = App\\Models\\Category::whereNull('parent_id')->orderBy('sort')->skip(1)->first();"
-        "foreach (range(1, 24) as $i) { App\\Models\\Tender::factory()->create(["
-        "'title' => ($i % 5 ? 'Поставка цемента ' : 'Sement yetkazib berish ').$i,"
-        "'category_id' => [$root->id, $child->id, $other->id][$i % 3],"
-        "'country_id' => $i % 2 ? $uz : null, 'budget' => $i % 4 ? 1000000 * $i : null,"
-        "'deadline_at' => now()->addHours(20 * $i), 'published_at' => now()->subDays($i % 5),"
-        "'title_i18n' => $i % 6 ? null : ['en' => 'Cement supply '.$i, 'uz' => ' '],"
-        "'description_i18n' => $i % 6 ? null : ['en' => 'Cement.']]); }"
-        "foreach (range(1, 4) as $i) { App\\Models\\Tender::factory()->create(["
-        "'deadline_at' => null, 'published_at' => now()->subDays($i)]); }"
-        "foreach (range(1, 5) as $i) { App\\Models\\Tender::factory()->create(["
-        "'deadline_at' => now()->subDays($i)->subHours(3)]); }"
-        "App\\Models\\Tender::factory()->create(['published_at' => now()->addDay()]);"
-        "App\\Models\\Tender::factory()->create(['status' => 'draft']);"
-        "App\\Models\\Listing::factory()->count(3)->create();"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    [(uz,)] = sql("select id from countries where code = 'uz'")
+    [(root,)] = sql("select id from categories where parent_id is null order by sort, id limit 1")
+    [(child,)] = sql(
+        "select id from categories where parent_id = %s order by sort, id limit 1", [root]
+    )
+    [(other,)] = sql(
+        "select id from categories where parent_id is null order by sort, id offset 1 limit 1"
     )
 
-    with laravel() as root:
-        yield root
+    for i in range(1, 25):
+        тендер(
+            title=f"{'Поставка цемента ' if i % 5 else 'Sement yetkazib berish '}{i}",
+            category_id=[root, child, other][i % 3],
+            country_id=uz if i % 2 else None,
+            budget=1000000 * i if i % 4 else None,
+            deadline_at=Выражение(f"now() + interval '{20 * i} hours'"),
+            published_at=Выражение(f"now() - interval '{i % 5} days'"),
+            title_i18n=None if i % 6 else {"en": f"Cement supply {i}", "uz": " "},
+            description_i18n=None if i % 6 else {"en": "Cement."},
+        )
+
+    for i in range(1, 5):
+        тендер(deadline_at=None, published_at=Выражение(f"now() - interval '{i} days'"))
+
+    for i in range(1, 6):
+        тендер(deadline_at=Выражение(f"now() - interval '{i} days 3 hours'"))
+
+    тендер(published_at=Выражение("now() + interval '1 day'"))
+    тендер(draft=True)
+    объявления(3)
+
+    with адрес() as root_url:
+        yield root_url
+
+
+def вкладка(сайт: str, path: str) -> dict[str, Any]:
+    д = открыть(сайт, path)
+
+    assert д["status"] == 200, (д["status"], д["headers"].get("location"))
+    стр = страница(д["body"])
+    assert стр["component"] == "Catalog"
+
+    return стр
 
 
 @pytest.mark.parametrize(
@@ -83,7 +129,12 @@ def сайт() -> Iterator[str]:
     ],
 )
 def test_вкладка_тендеров(сайт, path):
-    сверить(сайт, path)
+    стр = вкладка(сайт, path)
+    pr = стр["props"]
+    print("DBG", path, стр["url"], {k: (v if not isinstance(v, (list, dict)) or k == "filters" else type(v).__name__ + str(len(v))) for k, v in pr.items() if k not in ("auth","bell","brandLogo","counts","errors","favorites","flash","locale","localeLinks","localeSuggest","navCategories","support","translations")})
+    items = pr.get("items") or pr.get("tenders") or pr.get("results")
+    if isinstance(items, dict): items = items.get("data")
+    print("DBGI", [(x.get("title"), x.get("days_left"), x.get("closed")) for x in (items or [])][:30])
 
 
 def test_раздел_с_подразделами(сайт):

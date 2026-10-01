@@ -1,23 +1,23 @@
 """
 Раздел «Категории» админки на Django — сквозь настоящую базу.
 
-Дерево заводит настоящий CategorySeeder, на нём и проверяется: права
-по ролям, дерево на два уровня, адрес, значки, русское название, запрет
-удаления при ссылках и строки журнала admin_actions.
+Дерево заводит настоящий сидер (savdex/seeds.py — снимок CategorySeeder),
+на нём и проверяется: права по ролям, дерево на два уровня, адрес,
+значки, русское название, запрет удаления при ссылках и строки журнала
+admin_actions.
 
-Нужны PHP (миграции, сидер) и PostgreSQL (SAVDEX_PARITY_PG_URL); общая
-часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
 import re
-import subprocess
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, django, sql, журнал, нужна_база, свежая_база, сотрудник
+from .pg_admin import django, sql, журнал, нужна_база, свежая_база, сотрудник
+from .test_web_catalog import РАЗДЕЛЫ, справочники
 
 pytestmark = нужна_база
 
@@ -28,13 +28,7 @@ ADD = "/py/admin/catalogs/category/add/"
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=CategorySeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        check=True,
-    )
+    справочники(*РАЗДЕЛЫ)
 
     return {
         role: сотрудник(role) for role in ("superadmin", "content_manager", "moderator", "sales")
