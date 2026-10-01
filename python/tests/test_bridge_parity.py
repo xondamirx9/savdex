@@ -1,35 +1,41 @@
 """
-Вход в админку Django: пропуск от настоящего Laravel, база PostgreSQL.
+Вход в админку Django по пропуску (/py/login), база PostgreSQL.
 
-Пропуск выдаёт PHP (tests/fixtures/bridge_token.php → PythonBridge),
-принимает Django — в отдельном процессе, с тем же APP_KEY и той же
+Пропуск собирается здесь по той же схеме, что у PythonBridge::token
+(номер, адрес, срок в минуту, HMAC-SHA256 ключом из APP_KEY);
+принимает его Django — в отдельном процессе, с тем же APP_KEY и той же
 базой, как на сервере. Пользователи заводятся прямо в базе: сотрудник,
 заблокированный, с невыданным ещё паролем, удалённый, не сотрудник.
 
-Нужны PHP с зависимостями и PostgreSQL (SAVDEX_PARITY_PG_URL).
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL).
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import pytest
 
-КОРЕНЬ = Path(__file__).resolve().parents[2]
+from .pg_admin import свежая_база
+
 PYTHON = Path(__file__).resolve().parents[1]
 АДРЕС = os.environ.get("SAVDEX_PARITY_PG_URL", "")
-APP_KEY = "base64:" + base64.b64encode(b"bridge-parity-key-0123456789abcd").decode()
+KEY = b"bridge-parity-key-0123456789abcd"
+APP_KEY = "base64:" + base64.b64encode(KEY).decode()
 
 pytestmark = pytest.mark.skipif(
     not АДРЕС,
-    reason="нет SAVDEX_PARITY_PG_URL — сравнение требует PHP и PostgreSQL",
+    reason="нет SAVDEX_PARITY_PG_URL — проверка требует PostgreSQL",
 )
 
 ОКРУЖЕНИЕ = {
@@ -60,8 +66,8 @@ for step in steps:
     if step[0] == "login":
         r = client.post("/py/login", {"token": step[1]})
     elif step[0] == "sql":
-        # Отдельным соединением, как это сделал бы Laravel: из самого
-        # Django запись в users не пропустит предохранитель
+        # Отдельным соединением, как правка из другого процесса: из
+        # самого Django запись в users не пропустит предохранитель
         with psycopg.connect(os.environ["DJANGO_DATABASE_URL"], autocommit=True) as c:
             c.execute(step[1])
         out.append(None)
@@ -78,16 +84,7 @@ print(json.dumps(out, ensure_ascii=False))
 
 @pytest.fixture(scope="module", autouse=True)
 def база():
-    if "test" not in urlparse(АДРЕС).path:
-        pytest.fail("SAVDEX_PARITY_PG_URL ведёт в базу без «test» в имени — отказываюсь стирать")
-
-    subprocess.run(
-        ["php", "artisan", "migrate:fresh", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        check=True,
-    )
+    свежая_база()
 
 
 def _sql(query: str) -> list[tuple[Any, ...]]:
@@ -127,15 +124,31 @@ def _сотрудник(email: str, **поля: Any) -> int:
     return int(row[0])
 
 
+def _b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
 def _пропуск(uid: int, next_: str = "/py/admin/", сдвиг: int = 0) -> str:
-    return subprocess.run(
-        ["php", "python/tests/fixtures/bridge_token.php", str(uid), next_, str(сдвиг)],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    """
+    Пропуск, как его выдавал PythonBridge::token: JSON без экранирования
+    «/», срок — минута от выдачи (сдвиг — выдан в прошлом), подпись —
+    HMAC-SHA256 ключом, выведенным из APP_KEY. Адрес не проверяется:
+    чужой адрес должен отсечь сам Django.
+    """
+    payload = _b64(
+        json.dumps(
+            {
+                "uid": uid,
+                "next": next_,
+                "exp": int(time.time()) + сдвиг + 60,
+                "nonce": secrets.token_hex(8),
+            },
+            separators=(",", ":"),
+        ).encode()
+    )
+    key = hmac.new(KEY, b"savdex-django-bridge-v1", hashlib.sha256).digest()
+
+    return payload + "." + _b64(hmac.new(key, payload.encode(), hashlib.sha256).digest())
 
 
 def _django(*steps: list[str]) -> list[dict[str, Any]]:
@@ -151,7 +164,7 @@ def _django(*steps: list[str]) -> list[dict[str, Any]]:
     return json.loads(вывод)
 
 
-def test_сотрудник_входит_по_пропуску_laravel():
+def test_сотрудник_входит_по_пропуску():
     uid = _сотрудник("anna@savdex.uz", admin_permissions=json.dumps({"grant": ["plans.view"]}))
 
     вход, раздел = _django(["login", _пропуск(uid, "/py/admin/")], ["get", "/py/admin/"])
@@ -180,7 +193,7 @@ def test_кому_нельзя_пропуск_не_помогает(поля):
     assert вход["status"] == 403, вход
 
 
-def test_просроченный_пропуск_laravel():
+def test_просроченный_пропуск():
     uid = _сотрудник("late@savdex.uz")
 
     [вход] = _django(["login", _пропуск(uid, сдвиг=-120)])
@@ -225,7 +238,7 @@ def test_блокировка_действует_сразу():
     assert после["status"] == 302 and после["location"].startswith("/py/admin/login/?next=")
 
 
-def test_чужой_адрес_в_пропуске_laravel_не_уводит_с_сайта():
+def test_чужой_адрес_в_пропуске_не_уводит_с_сайта():
     uid = _сотрудник("next@savdex.uz")
 
     [вход] = _django(["login", _пропуск(uid, "https://evil.example/py/admin/")])

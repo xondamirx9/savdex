@@ -1,11 +1,11 @@
 """
-robots.txt и карта сайта на Django неотличимы от Laravel: robots.txt
+robots.txt, карта сайта и превью объявления на Django: robots.txt
 площадки (закрытые разделы, жадные роботы, адрес карты) и домена
 мини-сайтов; список частей карты (объявления по 5000, новости, закупки и
 IT-задачи — только если есть), части со всеми языковыми версиями адреса;
 импортированное объявление — только на языках своего заголовка.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -15,85 +15,131 @@ from collections.abc import Iterator
 
 import pytest
 
-from .pg_admin import php, sql, нужна_база, свежая_база
-from .web_site import laravel, из_django, из_laravel
+from .factories import it_задача, категория, компания, объявление
+from .pg_admin import sql, нужна_база, свежая_база
+from .web_site import адрес, открыть
 
 pytestmark = нужна_база
-
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "$cat = App\\Models\\Category::factory()->create(['slug' => 'cement']);"
-        "App\\Models\\Category::factory()->create(['slug' => 'empty']);"
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'mine']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'blocked', 'status' => 'blocked']);"
-        "foreach (range(1, 4) as $i) { App\\Models\\Listing::factory()->create(["
-        " 'company_id' => $c->id, 'category_id' => $cat->id, 'slug' => 'l-'.$i,"
-        " 'status' => $i === 4 ? 'archived' : 'active',"
-        " 'source' => $i === 2 ? 'import' : 'manual',"
-        " 'title_i18n' => $i === 2 ? ['en' => 'Cement', 'uz' => ' '] : null]); }"
-        "App\\Models\\ItTask::factory()->create(['company_id' => $c->id, 'slug' => 'task-1']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    cat = категория(slug="cement")
+    категория(slug="empty")
+    c = компания(slug="mine")
+    компания(slug="blocked", status="blocked")
+
+    for i in range(1, 5):
+        объявление(
+            company_id=c,
+            category_id=cat,
+            slug=f"l-{i}",
+            status="archived" if i == 4 else "active",
+            source="import" if i == 2 else "manual",
+            title_i18n={"en": "Cement", "uz": " "} if i == 2 else None,
+        )
+
+    it_задача(company_id=c, slug="task-1")
     sql("update companies set updated_at = '2026-09-01 10:00:00'")
     sql("update listings set updated_at = '2026-09-02 11:30:00'")
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес() as root:
         yield root
 
 
-def сверить_текст(сайт: str, path: str, *, без_времени: bool = False) -> str:
-    д = из_django(сайт, path)
-    л = из_laravel(сайт, path)
+ЯЗЫКИ = ("", "/uz", "/en", "/zh", "/tr")
 
-    for ответ in (д, л):
-        if без_времени:
-            ответ["body"] = re.sub(r"<lastmod>[^<]+</lastmod>", "<lastmod/>", ответ["body"])
 
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
+def текст(сайт: str, path: str, тип: str = "application/xml; charset=utf-8") -> str:
+    """Ответ 200 с текстом; у карты — кэш на час."""
+    д = открыть(сайт, path)
 
-    if д["status"] == 200:
-        assert д["body"] == л["body"], (д["body"][:3000], л["body"][:3000])
+    assert д["status"] == 200, (д["status"], д["body"][:500])
+    assert д["headers"].get("content-type") == тип
 
-        for header in ("content-type", "cache-control"):
-            assert д["headers"].get(header) == л["headers"].get(header), header
+    if тип.startswith("application/xml"):
+        assert д["headers"].get("cache-control") == "max-age=3600, public"
 
     return str(д["body"])
 
 
+def адреса(сайт: str, текст_: str) -> list[str]:
+    """<loc> части карты — без адреса сайта."""
+    return [loc.removeprefix(сайт) for loc in re.findall(r"<loc>([^<]*)</loc>", текст_)]
+
+
+def на_всех_языках(*paths: str) -> list[str]:
+    return [f"{язык}{path}" for path in paths for язык in ЯЗЫКИ]
+
+
 @pytest.mark.parametrize("path", ["/robots.txt", "/uz/robots.txt"])
 def test_robots(сайт, path):
-    текст = сверить_текст(сайт, path)
+    текст_ = текст(сайт, path, "text/plain; charset=utf-8")
 
-    assert "AhrefsBot" in текст and "Sitemap: " in текст
+    assert "AhrefsBot" in текст_ and "Disallow: /cabinet" in текст_
+    assert f"Sitemap: {сайт}/sitemap.xml" in текст_
 
 
 def test_карта_список(сайт):
-    текст = сверить_текст(сайт, "/sitemap.xml", без_времени=True)
+    текст_ = текст(сайт, "/sitemap.xml")
 
-    assert "sitemap-it-tasks.xml" in текст and "sitemap-news.xml" not in текст
+    # Новостей и закупок нет — их частей нет; объявлений меньше 5000 — одна часть
+    assert адреса(сайт, текст_) == [
+        "/sitemap-static.xml",
+        "/sitemap-categories.xml",
+        "/sitemap-companies.xml",
+        "/sitemap-listings-1.xml",
+        "/sitemap-it-tasks.xml",
+    ]
 
 
 @pytest.mark.parametrize(
-    "part",
-    ["static", "categories", "companies", "listings-1", "listings-2", "it-tasks", "news", "nope"],
+    ("part", "ожидание"),
+    [
+        # Категория без объявлений, заблокированная компания и архивное
+        # объявление в карту не попадают
+        ("categories", на_всех_языках("/catalog?category=1")),
+        ("companies", на_всех_языках("/company/mine")),
+        ("listings-1", на_всех_языках("/listing/l-1", "/listing/l-2", "/listing/l-3")),
+        ("listings-2", []),
+        ("it-tasks", на_всех_языках("/it-services/task-1")),
+        ("news", []),
+    ],
 )
-def test_карта_часть(сайт, part):
-    сверить_текст(сайт, f"/sitemap-{part}.xml")
+def test_карта_часть(сайт, part, ожидание):
+    текст_ = текст(сайт, f"/sitemap-{part}.xml")
+
+    assert адреса(сайт, текст_) == ожидание
+    # У каждого адреса — все языковые версии и x-default
+    assert текст_.count("<xhtml:link") == len(ожидание) * 6
+
+
+def test_карта_статичные_страницы(сайт):
+    found = адреса(сайт, текст(сайт, "/sitemap-static.xml"))
+
+    assert found[:5] == ["", "/uz", "/en", "/zh", "/tr"]
+    for path in ("/catalog", "/companies", "/about", "/it-services"):
+        assert set(на_всех_языках(path)) <= set(found), path
+
+
+def test_карта_время_изменения(сайт):
+    """lastmod — время правки записи (updated_at), в UTC."""
+    assert "<lastmod>2026-09-01T10:00:00+00:00</lastmod>" in текст(сайт, "/sitemap-companies.xml")
+    assert "<lastmod>2026-09-02T11:30:00+00:00</lastmod>" in текст(сайт, "/sitemap-listings-1.xml")
+
+
+def test_нет_такой_части(сайт):
+    assert открыть(сайт, "/sitemap-nope.xml")["status"] == 404
 
 
 def test_импортированное_объявление_на_всех_языках(сайт):
     """Загруженное из книги — на всех языках, и без перевода тоже."""
-    текст = сверить_текст(сайт, "/sitemap-listings-1.xml")
+    текст_ = текст(сайт, "/sitemap-listings-1.xml")
 
-    assert f"<loc>{сайт}/listing/l-2</loc>" in текст
-    assert f"<loc>{сайт}/en/listing/l-2</loc>" in текст
-    assert f"<loc>{сайт}/uz/listing/l-2</loc>" in текст
+    assert f"<loc>{сайт}/listing/l-2</loc>" in текст_
+    assert f"<loc>{сайт}/en/listing/l-2</loc>" in текст_
+    assert f"<loc>{сайт}/uz/listing/l-2</loc>" in текст_
 
 
 # ── Превью объявления для og:image ──────────────────────────────────
@@ -136,43 +182,54 @@ def _номер(slug: str) -> int:
     return int(sql("select id from listings where slug = %s", [slug])[0][0])
 
 
-@pytest.mark.parametrize("slug", ["l-1", "l-2", "l-3", "l-4", None])
-def test_превью_объявления(картинки, сайт, slug):
+@pytest.mark.parametrize(
+    ("slug", "итог"),
+    [
+        # SVG пропускается — превью из PNG, файл назван по номеру картинки
+        ("l-1", "og"),
+        # Битый файл, только SVG и пропавший файл, без картинок — общая обложка
+        ("l-2", "cover"),
+        ("l-3", "cover"),
+        ("l-4", "cover"),
+        (None, 404),
+    ],
+)
+def test_превью_объявления(картинки, сайт, slug, итог):
     import shutil
 
     номер = _номер(slug) if slug else 999999
     кэш = картинки / f"listings/{номер}"
+    shutil.rmtree(кэш, ignore_errors=True)
+    ответ = открыть(сайт, f"/og/listing/{номер}.jpg")
+    файлы = sorted(p.name for p in кэш.glob("*")) if кэш.exists() else []
 
-    for сторона in (из_django, из_laravel):
-        shutil.rmtree(кэш, ignore_errors=True)
-        ответ = сторона(сайт, f"/og/listing/{номер}.jpg")
-        сторона_итог = (ответ["status"], ответ["headers"].get("location"))
+    if итог == 404:
+        assert ответ["status"] == 404 and файлы == []
+    elif итог == "cover":
+        assert (ответ["status"], ответ["headers"].get("location")) == (302, f"{сайт}/og-cover.png")
+        assert файлы == []
+    else:
+        [(png,)] = sql(
+            "select id from listing_images where listing_id = %s and path like '%%.png'", [номер]
+        )
+        assert ответ["status"] == 302
+        assert ответ["headers"]["location"] == f"{сайт}/storage/listings/{номер}/og-{png}.jpg"
+        assert файлы == [f"og-{png}.jpg"]
 
-        if сторона is из_django:
-            д = сторона_итог
-            файлы_д = sorted(p.name for p in кэш.glob("*")) if кэш.exists() else []
-        else:
-            л = сторона_итог
-            файлы_л = sorted(p.name for p in кэш.glob("*")) if кэш.exists() else []
-
-    assert д == л and файлы_д == файлы_л
-
-    if slug == "l-1":
         from PIL import Image
 
-        assert f"/storage/listings/{номер}/og-" in д[1]
-        with Image.open(next(кэш.glob("og-*.jpg"))) as картинка:
+        with Image.open(кэш / файлы[0]) as картинка:
             assert картинка.size == (1200, 630) and картинка.format == "JPEG"
 
 
 def test_превью_из_кэша(картинки, сайт):
-    """Готовый файл не пересобирается: обе стороны просто ведут на него."""
+    """Готовый файл не пересобирается: сайт просто ведёт на него."""
     номер = _номер("l-1")
-    из_laravel(сайт, f"/og/listing/{номер}.jpg")
+    открыть(сайт, f"/og/listing/{номер}.jpg")
     файл = next((картинки / f"listings/{номер}").glob("og-*.jpg"))
     файл.write_bytes(b"cached")
 
-    assert из_django(сайт, f"/og/listing/{номер}.jpg")["headers"]["location"].endswith(
+    assert открыть(сайт, f"/og/listing/{номер}.jpg")["headers"]["location"].endswith(
         f"/storage/listings/{номер}/{файл.name}"
     )
     assert файл.read_bytes() == b"cached"

@@ -1,12 +1,13 @@
 """
-Журнал действий: строка от Python против строки от PHP.
+Журнал действий: строка, которую пишет savdex.audit.record.
 
-Одни и те же записи делаются через AdminLog::record (PHP,
-tests/fixtures/audit_record.php) и через savdex.audit.record (Python),
-и строки в admin_actions обязаны совпасть: автор, роль, действие,
-раздел, предмет, изменения без секретов и шума, примечание, адрес.
+Запись делается в отдельном процессе Django, как на сервере, и строка
+в admin_actions проверяется целиком — та же, что писал AdminLog::record
+у Laravel: автор (имя — снимок не длиннее 120 знаков, без автора —
+«консоль»), роль, действие, раздел, предмет, изменения без секретов и
+шума с обрезанным длинным текстом, примечание, адрес.
 
-Нужны PHP с зависимостями и PostgreSQL (SAVDEX_PARITY_PG_URL).
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL).
 """
 
 from __future__ import annotations
@@ -15,20 +16,13 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import pytest
 
-КОРЕНЬ = Path(__file__).resolve().parents[2]
-PYTHON = Path(__file__).resolve().parents[1]
-АДРЕС = os.environ.get("SAVDEX_PARITY_PG_URL", "")
+from .pg_admin import PYTHON, АДРЕС, sql, нужна_база, свежая_база
 
-pytestmark = pytest.mark.skipif(
-    not АДРЕС,
-    reason="нет SAVDEX_PARITY_PG_URL — сравнение требует PHP и PostgreSQL",
-)
+pytestmark = нужна_база
 
 ОКРУЖЕНИЕ = {
     **os.environ,
@@ -45,7 +39,7 @@ pytestmark = pytest.mark.skipif(
     "subject_label, changes, note, ip"
 )
 
-#: Python-запись в отдельном процессе Django, как на сервере
+#: Запись в отдельном процессе Django, как на сервере
 ПРОБА = """
 import json, sys
 import django
@@ -64,52 +58,25 @@ audit.record(connection, action=a["action"], section=a["section"], actor=actor,
              ip="127.0.0.1")
 """
 
-
-def _sql(query: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
-    import psycopg
-
-    with psycopg.connect(АДРЕС, autocommit=True) as соединение:
-        курсор = соединение.execute(query, params or [])
-
-        return курсор.fetchall() if курсор.description else []
+ИМЯ = "Журнальный " + "Ж" * 130
+COUNTRY = "App\\Models\\Country"
 
 
 @pytest.fixture(scope="module")
 def данные() -> dict[str, Any]:
-    if "test" not in urlparse(АДРЕС).path:
-        pytest.fail("SAVDEX_PARITY_PG_URL ведёт в базу без «test» в имени — отказываюсь стирать")
+    свежая_база()
 
-    subprocess.run(
-        ["php", "artisan", "migrate:fresh", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        check=True,
-    )
-
-    [(uid,)] = _sql(
+    [(uid,)] = sql(
         "insert into users (name, email, password, is_admin, admin_role, created_at, updated_at) "
         "values (%s, 'j@savdex.uz', 'x', true, 'content_manager', now(), now()) returning id",
-        ["Журнальный " + "Ж" * 130],
+        [ИМЯ],
     )
-    [(cid,)] = _sql(
+    [(cid,)] = sql(
         "insert into countries (code, phone_code, currency_code, created_at, updated_at) "
         "values ('zz', '+0', 'ZZZ', now(), now()) returning id"
     )
 
     return {"uid": uid, "cid": cid}
-
-
-def _php(запись: dict[str, Any]) -> None:
-    subprocess.run(
-        ["php", "python/tests/fixtures/audit_record.php"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        input=json.dumps(запись),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
 
 
 def _python(запись: dict[str, Any], данные: dict[str, Any]) -> None:
@@ -119,13 +86,11 @@ def _python(запись: dict[str, Any], данные: dict[str, Any]) -> None:
         "action": запись["action"],
         "section": запись["section"],
         "actor": (
-            {"id": данные["uid"], "name": "Журнальный " + "Ж" * 130, "role": "content_manager"}
+            {"id": данные["uid"], "name": ИМЯ, "role": "content_manager"}
             if запись["actor_id"]
             else None
         ),
-        "subject_type": "App\\\\Models\\\\Country".replace("\\\\", "\\")
-        if запись["subject_id"]
-        else None,
+        "subject_type": COUNTRY if запись["subject_id"] else None,
         "subject_id": запись["subject_id"],
         "subject_label": audit.label({"code": "zz"}, "Country", запись["subject_id"])
         if запись["subject_id"]
@@ -145,7 +110,7 @@ def _python(запись: dict[str, Any], данные: dict[str, Any]) -> None:
 
 
 def _последняя() -> tuple[Any, ...]:
-    [row] = _sql(f"select {СТОЛБЦЫ} from admin_actions order by id desc limit 1")
+    [row] = sql(f"select {СТОЛБЦЫ} from admin_actions order by id desc limit 1")
 
     return row
 
@@ -171,6 +136,22 @@ def _последняя() -> tuple[Any, ...]:
             },
         },
         "note": "Переименовал «страну» — проверка",
+        # Секреты — «···», шум (updated_at, search_text) убран, длинное
+        # обрезано до 300 знаков с «…»; пустое и null — как есть
+        "ожидаемые": {
+            "before": {"phone_code": "+1", "password": "···"},
+            "after": {
+                "phone_code": "+998",
+                "password": "···",
+                "remember_token": "···",
+                "note": "Д" * 300 + "…",
+                "is_active": False,
+                "sort": 3,
+                "empty": "",
+                "nothing": None,
+                "nested": {"ru": "Узбекистан"},
+            },
+        },
     },
     "создание без изменений": {"action": "created", "section": "catalogs"},
     "из консоли, без автора": {"action": "deleted", "section": "catalogs", "no_actor": True},
@@ -179,7 +160,7 @@ def _последняя() -> tuple[Any, ...]:
 
 
 @pytest.mark.parametrize("случай", list(СЛУЧАИ))
-def test_строки_журнала_совпадают(данные, случай):
+def test_строка_журнала(данные, случай):
     описание = СЛУЧАИ[случай]
     запись = {
         "action": описание["action"],
@@ -190,10 +171,21 @@ def test_строки_журнала_совпадают(данные, случа
         "subject_id": None if описание.get("no_subject") else данные["cid"],
     }
 
-    _php(запись)
-    php = _последняя()
-
     _python(запись, данные)
-    python = _последняя()
+    строка = _последняя()
 
-    assert python == php
+    автор = (
+        (None, "консоль", None)
+        if описание.get("no_actor")
+        else (данные["uid"], ИМЯ[:120], "content_manager")
+    )
+    предмет = (None, None, None) if описание.get("no_subject") else (COUNTRY, данные["cid"], "zz")
+    assert строка == (
+        *автор,
+        описание["action"],
+        описание["section"],
+        *предмет,
+        описание.get("ожидаемые"),
+        описание.get("note"),
+        "127.0.0.1",
+    )

@@ -1,14 +1,13 @@
 """
-Регистрация на Django неотличима от Laravel: третий шаг, анкета, с почтой,
+Регистрация на Django: третий шаг, анкета, с почтой,
 подтверждённой кодом на первых двух (register.verified_email в сессии; без
 неё — назад к первому шагу). Подготовка ввода (имя без пробелов), проверка
 (строгая почта, занятая — своя ошибка, телефон, правило пароля площадки,
 согласие с условиями) и подсказки после неё, новая учётка сразу с
 подтверждённой почтой — без второго письма, вход и переход к данным
-компании или в кабинет. Письма обеих сторон — в журнале (MAIL_MAILER=log): Laravel —
-storage/logs/laravel.log, Django — MAIL_LOG_PATH.
+компании или в кабинет. Письма — в журнале (MAIL_MAILER=log, MAIL_LOG_PATH).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -17,7 +16,6 @@ import email
 import hashlib
 import json
 import re
-import shutil
 from collections.abc import Iterator
 from email.message import Message
 from pathlib import Path
@@ -28,10 +26,11 @@ import pytest
 
 from savdex import laravel_session
 
-from .pg_admin import APP_KEY, KEY, КОРЕНЬ, php, sql, нужна_база, свежая_база
+from .factories import категория, компания
+from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_forms import SID, ТОКЕН, inertia
 from .test_web_session import СЕССИЯ, завести, кука, строка
-from .web_site import laravel, из_django, из_laravel
+from .web_site import адрес, открыть
 
 pytestmark = нужна_база
 
@@ -40,22 +39,39 @@ pytestmark = нужна_база
 КЭШ = Path(КОРЕНЬ) / "storage/framework/cache/data"
 ОКРУЖЕНИЕ_ПОЧТЫ = {"MAIL_MAILER": "log", "CACHE_STORE": "file", "LOG_CHANNEL": "single"}
 
+#: Свой журнал писем и свой адрес посетителя: storage/ и файловый кэш
+#: (счётчик регистраций с адреса) — общие с другими проверками
+_ЖУРНАЛ = Path(КОРЕНЬ) / "storage/logs/python-mail-test-register.log"
+IP = "198.51.100.48"
+
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "foreach (['cement', 'metal'] as $slug) {"
-        " App\\Models\\Category::factory()->create(['slug' => $slug, 'parent_id' => null]); }"
-        "$c = App\\Models\\Category::where('slug', 'cement')->value('id');"
-        "App\\Models\\Category::factory()->create(['slug' => 'child', 'parent_id' => $c]);"
-        "App\\Models\\Company::factory()->create(['slug' => 'taken', 'tin' => '305123456']);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    cement = категория(slug="cement", parent_id=None)
+    категория(slug="metal", parent_id=None)
+    категория(slug="child", parent_id=cement)
+    компания(slug="taken", tin="305123456")
 
-    with laravel(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
-        yield root
+    try:
+        with адрес() as root:
+            yield root
+    finally:
+        _ЖУРНАЛ.unlink(missing_ok=True)
+
+
+def _счётчик_с_нуля() -> None:
+    """
+    Счётчики с адреса IP — с нуля: созданные аккаунты (register:<IP>) и
+    частота формы (throttle:20,10,register — «register» + sha1(«|IP»)).
+    """
+    from savdex import laravel_cache
+
+    частота = "register" + hashlib.sha1(f"|{IP}".encode()).hexdigest()
+
+    for ключ in (f"register:{IP}", частота):
+        for имя in (ключ, ключ + ":timer"):
+            laravel_cache.file_path(имя).unlink(missing_ok=True)
 
 
 def _письма(текст: str) -> list[Message]:
@@ -125,111 +141,108 @@ def регистрация(
     отключена: bool = True,
     подтверждена: bool = True,
 ) -> dict[str, Any]:
-    стороны = {}
+    sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
+    sql("delete from companies where slug <> 'taken'")
+    sql("select setval('companies_id_seq', (select max(id) from companies) + 1, false)")
+    _счётчик_с_нуля()
+    _ЖУРНАЛ.parent.mkdir(parents=True, exist_ok=True)
+    _ЖУРНАЛ.write_text("")
 
-    for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
-        sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
-        sql("delete from companies where slug <> 'taken'")
-        sql("select setval('companies_id_seq', (select max(id) from companies) + 1, false)")
-        shutil.rmtree(КЭШ, ignore_errors=True)
-        ЖУРНАЛ_LARAVEL.write_text("")
-        ЖУРНАЛ_DJANGO.write_text("")
+    if лимит:
+        # Пять созданных аккаунтов с этого адреса — полчаса назад
+        import os
+        import time
 
-        if лимит:
-            # Пять созданных аккаунтов с этого адреса — полчаса назад
-            import os
-            import time
+        from savdex import laravel_cache
 
-            from savdex import laravel_cache
+        os.environ["CACHE_STORE"] = "file"
+        laravel_cache.put(f"register:{IP}", 5, 3600)
+        laravel_cache.put(f"register:{IP}:timer", int(time.time()) + 1800, 3600)
 
-            os.environ["CACHE_STORE"] = "file"
-            laravel_cache.put("register:127.0.0.1", 5, 3600)
-            laravel_cache.put("register:127.0.0.1:timer", int(time.time()) + 1800, 3600)
+    if занята:
+        sql(
+            "insert into users (name, email, password, status, deleted_at, created_at, "
+            "updated_at) values ('Был', 'taken@savdex.uz', 'x', 'active', %s, now(), now())",
+            ["2026-01-01 00:00:00" if отключена else None],
+        )
 
-        if занята:
-            sql(
-                "insert into users (name, email, password, status, deleted_at, created_at, "
-                "updated_at) values ('Был', 'taken@savdex.uz', 'x', 'active', %s, now(), now())",
-                ["2026-01-01 00:00:00" if отключена else None],
-            )
+    # Шаги 1–2 пройдены: почта из формы — та, что подтверждена кодом
+    данные: dict[str, Any] = {"_token": ТОКЕН}
 
-        # Шаги 1–2 пройдены: почта из формы — та, что подтверждена кодом
-        данные: dict[str, Any] = {"_token": ТОКЕН}
+    if подтверждена and isinstance(body.get("email"), str):
+        адрес_ = body["email"].strip().lower()
+        данные["register"] = {"email": адрес_, "verified_email": адрес_}
 
-        if подтверждена and isinstance(body.get("email"), str):
-            адрес = body["email"].strip().lower()
-            данные["register"] = {"email": адрес, "verified_email": адрес}
+    завести(SID, данные)
 
-        завести(SID, данные)
-        kwargs: dict[str, Any] = {
-            "method": "POST",
-            "body": json.dumps(body),
-            "content_type": "application/json",
-        }
-
-        if сторона is из_django:
-            kwargs["env"] = {**ОКРУЖЕНИЕ_ПОЧТЫ, "MAIL_LOG_PATH": str(ЖУРНАЛ_DJANGO)}
-
-        ответ = сторона(
+    try:
+        ответ = открыть(
             сайт,
             "/register",
             {СЕССИЯ: кука(СЕССИЯ, SID)},
-            {**inertia(), "Referer": сайт + "/register", "User-Agent": "savdex-parity"},
-            **kwargs,
-        )
-        кука_сессии = ответ["cookies"].get(СЕССИЯ)
-        sid = (
-            laravel_session.cookie_value(СЕССИЯ, unquote(кука_сессии["value"]), [KEY])
-            if кука_сессии
-            else None
-        )
-        сессия = строка(sid) if sid else None
-        журнал = (ЖУРНАЛ_DJANGO if сторона is из_django else ЖУРНАЛ_LARAVEL).read_text()
-        письма = [_разбор(п) for п in _письма(журнал)]
-        учётки = sql(
-            "select id, name, email, phone, password like '$2y$12$%%', locale, account_type, "
-            "company_role, email_verified_at is not null, status from users "
-            "where (email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz') "
-            "and deleted_at is null order by id"
-        )
-
-        for письмо in письма:
-            _проверить_письмо(письмо, учётки[0][0], учётки[0][2])
-
-        стороны[имя] = {
-            "status": ответ["status"],
-            "location": ответ["headers"].get("location"),
-            "session": None
-            if сессия is None
-            else {
-                "payload": re.sub(r'("login_web_\w+":)\d+', r"\1<номер>", сессия["payload"]),
-                "user_id": сессия["user_id"] is not None,
+            {
+                **inertia(),
+                "Referer": сайт + "/register",
+                "User-Agent": "savdex-parity",
+                "X-Forwarded-For": IP,
             },
-            "users": [r[1:] for r in учётки],
-            "companies": sql(
-                "select name, slug, legal_form, tin, primary_role, status, is_it_provider, "
-                "it_specializations::text, search_text, (select array_agg(c.slug order by c.slug) "
-                "from company_category cc join categories c on c.id = cc.category_id "
-                "where cc.company_id = companies.id)::text from companies "
-                "where slug <> 'taken' order by id"
-            ),
-            "mail": [{k: _без_изменчивого(v, сайт) for k, v in п.items()} for п in письма],
-        }
+            {**ОКРУЖЕНИЕ_ПОЧТЫ, "MAIL_LOG_PATH": str(_ЖУРНАЛ)},
+            method="POST",
+            body=json.dumps(body),
+            content_type="application/json",
+        )
+    finally:
+        _счётчик_с_нуля()
 
-    import os
+    кука_сессии = ответ["cookies"].get(СЕССИЯ)
+    sid = (
+        laravel_session.cookie_value(СЕССИЯ, unquote(кука_сессии["value"]), [KEY])
+        if кука_сессии
+        else None
+    )
+    сессия = строка(sid) if sid else None
+    письма = [_разбор(п) for п in _письма(_ЖУРНАЛ.read_text())]
+    учётки = sql(
+        "select id, name, email, phone, password like '$2y$12$%%', locale, account_type, "
+        "company_role, email_verified_at is not null, status from users "
+        "where (email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz') "
+        "and deleted_at is null order by id"
+    )
 
-    if os.environ.get("SAVDEX_DUMP"):
-        for имя, данные in стороны.items():
-            Path(os.environ["SAVDEX_DUMP"] + f"-{имя}.json").write_text(
-                json.dumps(данные, ensure_ascii=False, indent=1, default=str)
-            )
+    for письмо in письма:
+        _проверить_письмо(письмо, учётки[0][0], учётки[0][2])
 
-    assert стороны["django"] == стороны["laravel"], json.dumps(
-        стороны, ensure_ascii=False, default=str
-    )[:6000]
+    return {
+        "status": ответ["status"],
+        "location": ответ["headers"].get("location"),
+        "session": None
+        if сессия is None
+        else {
+            "payload": re.sub(r'("login_web_\w+":)\d+', r"\1<номер>", сессия["payload"]),
+            "user_id": сессия["user_id"] is not None,
+        },
+        "users": [r[1:] for r in учётки],
+        "companies": sql(
+            "select name, slug, legal_form, tin, primary_role, status, is_it_provider, "
+            "it_specializations::text, search_text, (select array_agg(c.slug order by c.slug) "
+            "from company_category cc join categories c on c.id = cc.category_id "
+            "where cc.company_id = companies.id)::text from companies "
+            "where slug <> 'taken' order by id"
+        ),
+        "mail": [{k: _без_изменчивого(v, сайт) for k, v in п.items()} for п in письма],
+    }
 
-    return стороны["django"]
 
+def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Строка сессии после ответа (номер вошедшего — 0)."""
+    return dict(json.loads(итог["session"]["payload"].replace("<номер>", "0")))
+
+
+def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
+    return dict(_сессия(итог)["errors"]["default"]["messages"])
+
+
+СОЗДАНА = "Компания создана. Осталось подтвердить почту — и можно публиковать объявления."
 
 ВЕРНО = {
     "name": "  Азиз Каримов ",
@@ -244,32 +257,90 @@ def регистрация(
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ошибки"),
     [
-        ВЕРНО,
-        {**ВЕРНО, "account_type": None, "locale": None},
-        {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
-        {**ВЕРНО, "password": "onlyletterslong", "password_confirmation": "onlyletterslong"},
-        {**ВЕРНО, "password": "1234567890123", "password_confirmation": "1234567890123"},
-        {**ВЕРНО, "email": "aziz.reg.savdex.uz"},
-        {**ВЕРНО, "email": "aziz@reg"},
-        {**ВЕРНО, "email": "aziz(x)@reg.savdex.uz"},
-        {**ВЕРНО, "phone": "12", "terms": False, "account_type": "robot"},
-        {**ВЕРНО, "name": " ", "locale": "fr"},
-        {},
+        (ВЕРНО, None),
+        # Без вида — юрлицо: нужны название и разделы
+        ({**ВЕРНО, "account_type": None, "locale": None}, {"company_name", "categories"}),
+        (
+            {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
+            {"password", "password_confirmation"},
+        ),
+        # Правило пароля площадки: и буквы, и цифры
+        (
+            {**ВЕРНО, "password": "onlyletterslong", "password_confirmation": "onlyletterslong"},
+            {"password": ["Добавьте в пароль хотя бы одну цифру"]},
+        ),
+        (
+            {**ВЕРНО, "password": "1234567890123", "password_confirmation": "1234567890123"},
+            {"password": ["Добавьте в пароль хотя бы одну букву"]},
+        ),
+        # Строгая почта — свои подсказки
+        (
+            {**ВЕРНО, "email": "aziz.reg.savdex.uz"},
+            {"email": ["В адресе не хватает знака @. Например: rustam@company.uz"]},
+        ),
+        (
+            {**ВЕРНО, "email": "aziz@reg"},
+            {"email": ["Похоже, адрес неполный. Нужен формат name@company.uz"]},
+        ),
+        (
+            {**ВЕРНО, "email": "aziz(x)@reg.savdex.uz"},
+            {"email": ["Проверьте адрес: нужен формат name@company.uz"]},
+        ),
+        (
+            {**ВЕРНО, "phone": "12", "terms": False, "account_type": "robot"},
+            {"phone", "terms", "account_type", "company_name", "categories"},
+        ),
+        # Имя из одних пробелов — пустое
+        ({**ВЕРНО, "name": " ", "locale": "fr"}, {"name", "locale"}),
+        ({}, "к первому шагу"),
     ],
 )
-def test_регистрация(сайт, body):
+def test_регистрация(сайт, body, ошибки):
     итог = регистрация(сайт, body)
 
-    if body is ВЕРНО:
+    assert итог["status"] == 302
+
+    if ошибки is None:
         # Почта подтверждена до анкеты: сразу в кабинет, второго письма нет
         assert итог["location"].endswith("/cabinet") and итог["mail"] == []
-        assert итог["users"][0][-2] is True
+        assert итог["users"] == [
+            (
+                "Азиз Каримов",
+                "aziz@reg.savdex.uz",
+                "+998 90 123-45-67",
+                True,
+                "uz",
+                "individual",
+                "owner",
+                True,
+                "active",
+            )
+        ]
         assert итог["companies"][0][:3] == ("Азиз Каримов", "aziz-karimov", "individual")
-    elif not body:
+        # Вошёл; шаги регистрации из сессии убраны
+        assert итог["session"]["user_id"] is True
+        assert _сессия(итог)["success"] == СОЗДАНА
+        assert _сессия(итог)["register"] == []
+    elif ошибки == "к первому шагу":
         # Без почты нет и подтверждения — к первому шагу
         assert итог["location"].endswith("/register") and итог["users"] == []
+        assert "errors" not in _сессия(итог)
+    else:
+        assert итог["location"].endswith("/register")
+        assert итог["users"] == [] and итог["companies"] == []
+        найдено = _ошибки(итог)
+
+        if isinstance(ошибки, dict):
+            assert найдено == ошибки
+        else:
+            assert set(найдено) == ошибки
+
+        # Ввод — обратно в форму, но без паролей; имя — без пробелов по краям
+        ввод = _сессия(итог)["_old_input"]
+        assert "password" not in ввод and "password_confirmation" not in ввод
+        assert ввод["name"] == body["name"].strip()
 
 
 def _раздел(slug: str) -> int:
@@ -286,20 +357,25 @@ def _раздел(slug: str) -> int:
 
 
 @pytest.mark.parametrize(
-    "правка",
+    ("правка", "итог_"),
     [
-        {},
-        {"tin": None, "company_name": ""},
-        {"tin": "305123456"},
-        {"tin": "30234567"},
-        {"categories": []},
-        {"categories": "cement,cement"},
-        {"categories": "child"},
-        {"categories": ["x", 99999]},
-        {"account_type": "robot"},
+        ({}, "{cement,metal}"),
+        ({"tin": None, "company_name": ""}, {"company_name": ["Укажите название компании"]}),
+        (
+            {"tin": "305123456"},
+            {"tin": ["Компания с таким ИНН уже зарегистрирована на площадке"]},
+        ),
+        ({"tin": "30234567"}, {"tin": ["ИНН (СТИР) в Узбекистане — ровно 9 цифр."]}),
+        ({"categories": []}, {"categories": ["Выберите хотя бы одну категорию"]}),
+        # Повтор раздела — один раз
+        ({"categories": "cement,cement"}, "{cement}"),
+        # Подраздел не годится — только разделы верхнего уровня
+        ({"categories": "child"}, {"categories.0"}),
+        ({"categories": ["x", 99999]}, {"categories.0", "categories.1"}),
+        ({"account_type": "robot"}, {"account_type"}),
     ],
 )
-def test_регистрация_юрлица(сайт, правка):
+def test_регистрация_юрлица(сайт, правка, итог_):
     body = {**ЮРЛИЦО, **правка}
 
     if isinstance(body["categories"], str):
@@ -307,29 +383,74 @@ def test_регистрация_юрлица(сайт, правка):
 
     итог = регистрация(сайт, body)
 
-    if not правка:
+    assert итог["status"] == 302
+
+    if isinstance(итог_, str):
+        # Юрлицо — дальше к данным компании; ИНН без пробелов и дефисов
         assert итог["location"].endswith("/onboarding/company")
-        assert итог["companies"][0][3] == "302345678"
+        [компания_] = итог["companies"]
+        assert компания_[:4] == ("ООО «Цемент Плюс»", "ooo-tsement-plius", "legal", "302345678")
+        assert компания_[8] == "ооо «цемент плюс» ooo «sement plyus»"
+        assert компания_[9] == итог_
+        assert итог["users"][0][5:7] == ("legal", "owner")
+    else:
+        assert итог["location"].endswith("/register")
+        assert итог["users"] == [] and итог["companies"] == []
+        найдено = _ошибки(итог)
+        assert (найдено if isinstance(итог_, dict) else set(найдено)) == итог_
 
 
 @pytest.mark.parametrize(
-    "правка",
+    ("правка", "итог_"),
     [
-        {"account_type": "freelancer", "pinfl": "3120 5967 8901 23", "service_section": "it"},
-        {"account_type": "freelancer", "pinfl": None, "service_section": "cooking"},
-        {"account_type": "freelancer", "pinfl": "11111111111111", "service_section": "hr_services"},
-        {"account_type": "individual", "pinfl": "123"},
-        {"account_type": "individual", "pinfl": "31205967890123", "company_name": "лишнее"},
+        # Фрилансер из IT — сразу с IT-направлениями; ПИНФЛ — без пробелов
+        (
+            {"account_type": "freelancer", "pinfl": "3120 5967 8901 23", "service_section": "it"},
+            ("freelancer", "31205967890123", True),
+        ),
+        (
+            {"account_type": "freelancer", "pinfl": None, "service_section": "cooking"},
+            {
+                "pinfl": ["Укажите ПИНФЛ — 14 цифр"],
+                "service_section": ["Выберите направление услуг"],
+            },
+        ),
+        (
+            {"account_type": "freelancer", "pinfl": "11111111111111", "service_section": "hr_services"},
+            {"pinfl": ["Указан недействительный ПИНФЛ"]},
+        ),
+        ({"account_type": "individual", "pinfl": "123"}, {"pinfl": ["ПИНФЛ — ровно 14 цифр"]}),
+        # Название компании у физлица не нужно — название из имени
+        (
+            {"account_type": "individual", "pinfl": "31205967890123", "company_name": "лишнее"},
+            ("individual", "31205967890123", False),
+        ),
     ],
 )
-def test_регистрация_человека(сайт, правка):
-    регистрация(сайт, {**ВЕРНО, **правка})
+def test_регистрация_человека(сайт, правка, итог_):
+    итог = регистрация(сайт, {**ВЕРНО, **правка})
+
+    assert итог["status"] == 302
+
+    if isinstance(итог_, tuple):
+        assert итог["location"].endswith("/cabinet")
+        [компания_] = итог["companies"]
+        assert компания_[:2] == ("Азиз Каримов", "aziz-karimov")
+        assert (компания_[2], компания_[3], компания_[6]) == итог_
+        assert (компания_[7] is not None) is итог_[2]
+        assert итог["users"][0][5] == итог_[0]
+    else:
+        assert итог["location"].endswith("/register") and итог["users"] == []
+        assert _ошибки(итог) == итог_
 
 
 def test_лимит_регистраций(сайт):
     итог = регистрация(сайт, ВЕРНО, лимит=True)
 
-    assert итог["users"] == [] and '"error"' in итог["session"]["payload"]
+    assert итог["users"] == [] and итог["location"].endswith("/register")
+    assert _сессия(итог)["error"].startswith(
+        "С этого адреса сети за последний час уже зарегистрировали несколько аккаунтов"
+    )
 
 
 def test_почта_отключённого_свободна(сайт):
@@ -337,12 +458,18 @@ def test_почта_отключённого_свободна(сайт):
     итог = регистрация(сайт, {**ВЕРНО, "email": "taken@savdex.uz"}, занята=True)
 
     assert len(итог["users"]) == 1
+    assert итог["users"][0][:2] == ("Азиз Каримов", "taken@savdex.uz")
+    assert итог["location"].endswith("/cabinet")
 
 
 def test_почта_занята(сайт):
     итог = регистрация(сайт, {**ВЕРНО, "email": "taken@savdex.uz"}, занята=True, отключена=False)
 
     assert len(итог["users"]) == 1 and итог["location"].endswith("/register")
+    assert итог["users"][0][0] == "Был"
+    assert _ошибки(итог) == {
+        "email": ["На этот адрес уже зарегистрирована компания. Войдите или восстановите пароль"]
+    }
 
 
 def test_без_подтверждённой_почты_анкета_не_принимается(сайт):
@@ -350,3 +477,4 @@ def test_без_подтверждённой_почты_анкета_не_при
     итог = регистрация(сайт, ВЕРНО, подтверждена=False)
 
     assert итог["location"].endswith("/register") and итог["users"] == []
+    assert "errors" not in _сессия(итог)

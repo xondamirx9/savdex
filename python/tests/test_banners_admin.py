@@ -1,17 +1,17 @@
 """
-Раздел «Баннеры» админки на Django — сквозь настоящую базу и настоящий
-Laravel.
+Раздел «Баннеры» админки на Django — сквозь настоящую базу и страницы
+сайта.
 
 Проверяется то, ради чего раздел устроен именно так:
 
 - картинка пересобирается в WebP по рамке макета и ложится на
-  публичный диск Laravel, а витрина (Banner::forPlacement) её видит;
+  публичный диск, а витрина сайта (главная, каталог) её видит;
 - прежние файлы удаляются при замене, снятии и удалении — и у
   языковых картинок тоже;
 - время в форме — ташкентское, в базу ложится UTC;
 - предпросмотр получает всё, что ему нужно.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import json
 import re
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -27,7 +28,6 @@ from PIL import Image
 from .pg_admin import (
     КОРЕНЬ,
     django,
-    php,
     sql,
     журнал,
     нужна_база,
@@ -35,6 +35,7 @@ from .pg_admin import (
     сотрудник,
     файл,
 )
+from .web_site import адрес, открыть, страница
 
 pytestmark = нужна_база
 
@@ -55,6 +56,20 @@ def люди() -> dict[str, int]:
     свежая_база()
 
     return {role: сотрудник(role) for role in ("superadmin", "content_manager", "sales")}
+
+
+@pytest.fixture(scope="module")
+def сайт(люди) -> Iterator[str]:
+    with адрес() as root:
+        yield root
+
+
+def баннер_на_сайте(сайт: str, path: str) -> dict[str, Any] | None:
+    """Баннер, который показывает страница сайта (главная или каталог)."""
+    д = открыть(сайт, path)
+    assert д["status"] == 200, д["status"]
+
+    return страница(д["body"])["props"]["banner"]
 
 
 @pytest.fixture(autouse=True)
@@ -134,14 +149,14 @@ def test_заведение_картинка_и_время(люди):
     assert запись["subject_label"] == "Осенняя акция"
 
 
-def test_витрина_видит_баннер(люди):
+def test_витрина_видит_баннер(люди, сайт):
     banner = _создать(люди, "Идёт сейчас", placement="catalog")
+    витрина = баннер_на_сайте(сайт, "/catalog")
 
-    code = (
-        "$b = App\\Models\\Banner::forPlacement('catalog'); "
-        "echo $b?->name, '|', $b?->imageFor('ru');"
-    )
-    assert php(code) == f"Идёт сейчас|{banner['image']}"
+    assert витрина is not None
+    assert витрина["key"] == f"banner-{banner['id']}"
+    assert витрина["image"] == f"{сайт}/storage/{banner['image']}"
+    assert витрина["alt"] == "Скидка 30% на годовой тариф"
 
 
 @pytest.mark.parametrize(
@@ -209,7 +224,7 @@ def test_замена_и_снятие_убирают_прежние_файлы(�
     assert not (PUBLIC / old_narrow).exists(), "снятая узкая картинка осталась на диске"
 
 
-def test_картинки_под_языки_и_удаление(люди):
+def test_картинки_под_языки_и_удаление(люди, сайт):
     banner = _создать(люди, "Многоязычный")
     pk = banner["id"]
 
@@ -234,7 +249,11 @@ def test_картинки_под_языки_и_удаление(люди):
         "select id, image_path from banner_images where banner_id = %s and locale = 'zh'", [pk]
     )
     assert (PUBLIC / zh_path).exists()
-    assert php(f"echo App\\Models\\Banner::find({pk})->imageFor('zh');") == zh_path
+    # Главная по-китайски — своя картинка языка, на прочих языках — основная
+    витрина = баннер_на_сайте(сайт, "/zh")
+    assert витрина is not None and витрина["key"] == f"banner-{pk}"
+    assert витрина["image"] == f"{сайт}/storage/{zh_path}"
+    assert баннер_на_сайте(сайт, "/")["image"] == f"{сайт}/storage/{banner['image']}"
 
     # Предпросмотр знает про язык и про основную картинку
     _, форма = django(люди["content_manager"], ("get", f"{LIST}{pk}/change/", None))

@@ -1,6 +1,5 @@
 """
-Этап 7, шаг 53: заказ, промокод и оплата счёта онлайн на Django
-неотличимы от Laravel.
+Этап 7, шаг 53: заказ, промокод и оплата счёта онлайн на Django.
 
 Заказ: без компании — ошибка; проверка ввода; незакрытый счёт на то же
 самое — предупреждение или сразу оплата; счёт с номером из id и
@@ -10,16 +9,17 @@
 тот же тариф отменяется); все отказы — на поле или во флеш. Оплата
 счёта: только свой неоплаченный, касса выключена — предупреждение.
 
-Касса — поддельный сервер Uzum: обе стороны регистрируют в нём платёж,
-и запросы к нему тоже сверяются. У администратора — строки журнала.
+Касса — поддельный сервер Uzum: сайт регистрирует в нём платёж, и
+запросы к нему тоже проверяются. У администратора — строки журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 from collections.abc import Callable, Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,9 +27,10 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -123,32 +124,44 @@ def онлайн(касса: Касса, **extra: str) -> dict[str, str]:
     }
 
 
+def тарифы() -> None:
+    """Тарифы из снимка savdex/bootstrap/seeds.json — как PlanSeeder."""
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        "seeds.seed(data={k: v if k == 'plans' else [] for k, v in data.items()})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
+
+
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    тарифы()
     sql("update plans set price_uzs = 499000 where code = 'flash'")
     sql("update plans set price_uzs = 1000 where code = 'business'")
     sql(
         "insert into credit_packs (code, name, credits, price_usd, price_uzs, sort, is_active, "
         "created_at, updated_at) values ('m', 'Средний', 50, 30, 350000, 1, true, now(), now())"
     )
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'mine']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="mine")
+    компания(slug="other")
     # Второй сотрудник компании: уведомление о тарифе — каждому
     учётка("colleague@savdex.uz", company_id=_id("companies", "slug = 'mine'"))
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА) as root:
         yield root
 
 
@@ -303,15 +316,9 @@ def снимок() -> Any:
     }
 
 
-def _сверить_кассу(касса: Касса, до: int) -> list[dict[str, Any]]:
-    """Запросы к кассе: первая половина — Django, вторая — Laravel."""
-    новые = касса.запросы[до:]
-    assert len(новые) % 2 == 0, новые
-    half = len(новые) // 2
-
-    assert новые[:half] == новые[half:], json.dumps(новые, ensure_ascii=False)
-
-    return новые[:half]
+def запросы_кассы(касса: Касса, до: int) -> list[dict[str, Any]]:
+    """Запросы к кассе после отметки до."""
+    return касса.запросы[до:]
 
 
 def заказать(сайт: str, body: Any, подготовка: Callable[[], None], **kw: Any) -> dict[str, Any]:
@@ -393,7 +400,7 @@ def test_заказ_онлайн(сайт, касса, режим, admin):
     касса.режим = режим
     env = онлайн(касса)
 
-    with laravel(**БЕЗ_ПЕРЕВОДА, **env) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА, **env) as root:
         до = len(касса.запросы)
         итог = заказать(
             root,
@@ -403,7 +410,7 @@ def test_заказ_онлайн(сайт, касса, режим, admin):
             env=env,
         )
 
-    запросы = _сверить_кассу(касса, до)
+    запросы = запросы_кассы(касса, до)
     assert запросы and запросы[0]["path"] == "/api/v1/payment/register"
 
     if режим == "ok":
@@ -420,7 +427,7 @@ def test_заказ_онлайн_с_корзиной_и_языком(сайт, �
         PAYMENTS_UZUM_TIN="301234567",
     )
 
-    with laravel(**БЕЗ_ПЕРЕВОДА, **env) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА, **env) as root:
         до = len(касса.запросы)
         отправить(
             root,
@@ -433,7 +440,7 @@ def test_заказ_онлайн_с_корзиной_и_языком(сайт, �
             env=env,
         )
 
-    [запрос] = _сверить_кассу(касса, до)
+    [запрос] = запросы_кассы(касса, до)
     assert запрос["headers"]["Content-Language"] == "uz-UZ"
     assert запрос["body"]["merchantParams"]["cart"]["items"][0]["receiptParams"]["TIN"]
 
@@ -442,13 +449,13 @@ def test_повторный_заказ_уводит_на_оплату(сайт, 
     касса.режим = "ok"
     env = онлайн(касса)
 
-    with laravel(**БЕЗ_ПЕРЕВОДА, **env) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА, **env) as root:
         до = len(касса.запросы)
         итог = заказать(
             root, {"kind": "plan", "id": _plan("business")}, сброс(счёт="business"), env=env
         )
 
-    assert _сверить_кассу(касса, до)
+    assert запросы_кассы(касса, до)
     assert итог["база"]["payments"][0][10] == "ORD-SVD-000900"
 
 
@@ -461,7 +468,7 @@ def test_оплата_счёта(сайт, касса, онлайн_, какой
     касса.режим = "ok"
     env = онлайн(касса) if онлайн_ else {}
 
-    with laravel(**БЕЗ_ПЕРЕВОДА, **env) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА, **env) as root:
         сброс(счёт="business")()
         номер = _id("payments", "number = 'SVD-000900'")
 
@@ -490,7 +497,7 @@ def test_оплата_счёта(сайт, касса, онлайн_, какой
             env=env,
         )
 
-    _сверить_кассу(касса, до)
+    запросы_кассы(касса, до)
 
 
 # ── Промокод ────────────────────────────────────────────────────────
@@ -575,7 +582,7 @@ def test_промокод_онлайн(сайт, касса):
     касса.режим = "ok"
     env = онлайн(касса)
 
-    with laravel(**БЕЗ_ПЕРЕВОДА, **env) as root:
+    with адрес(**БЕЗ_ПЕРЕВОДА, **env) as root:
         до = len(касса.запросы)
         итог = промокод(
             root,
@@ -585,7 +592,7 @@ def test_промокод_онлайн(сайт, касса):
             path="/en/cabinet/billing/promo",
         )
 
-    [запрос] = _сверить_кассу(касса, до)
+    [запрос] = запросы_кассы(касса, до)
     assert запрос["body"]["amount"] == 399200 * 100
     assert итог["база"]["payments"][0][10] == "ORD-SVD-000001"
 

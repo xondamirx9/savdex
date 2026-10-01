@@ -1,10 +1,9 @@
 """
 Склонения.
 
-Значения взяты не из головы, а получены прогоном PHP-функции
-App\\Console\\Commands\\CheckPostgres::plural на тех же числах.
-Смысл переноса в том, чтобы вывод совпадал; проверка, написанная
-по собственному представлению о русском языке, этого не покажет.
+Значения взяты не из головы: так склоняла прежняя функция сайта
+(CheckPostgres::plural) на тех же числах, и вывод должен остаться
+прежним — в том числе на 11–14 и 111–114, где проще всего ошибиться.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ import pytest
 
 from savdex.text import plural
 
-# Число → что ответила PHP-версия
+# Число → ожидаемая строка
 ЭТАЛОН = [
     (0, "0 таблиц"),
     (1, "1 таблица"),
@@ -51,7 +50,7 @@ from savdex.text import plural
 
 
 @pytest.mark.parametrize(("count", "expected"), ЭТАЛОН)
-def test_совпадает_с_php(count, expected):
+def test_склонение(count, expected):
     assert plural(count, "таблица", "таблицы", "таблиц") == expected
 
 

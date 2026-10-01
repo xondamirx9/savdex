@@ -2,12 +2,12 @@
 Этап 7, шаг 60: «Финансовые отчёты» на Django вместо страницы Filament.
 
 Выручка, по месяцам, по тарифам, по источникам, продления и отток — те
-же числа, что у FinanceReport на Laravel, на одних данных: оплаты у
+же числа, что давал FinanceReport на Laravel, на одних данных: оплаты у
 границы месяца по Ташкенту, полный и частичный возврат, возврат другого
 месяца, подписки новые, продлённые, отменённые и истёкшие молча.
 Страницу видят финансы и суперадмин, администратор — нет.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -19,36 +19,99 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 PAGE = "/py/admin/finance/payment/reports/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
-PERIODS = [
-    ("2026-08-01", "2026-08-31"),
-    ("2026-09-01", "2026-09-30"),
-    ("2026-07-15", "2026-10-15"),
-    ("2026-01-01", "2026-12-31"),
+
+def _месяц(
+    month: str, gross: int = 0, refunded: int = 0, net: int = 0, count: int = 0
+) -> dict[str, Any]:
+    return {"month": month, "gross": gross, "refunded": refunded, "net": net, "count": count}
+
+
+def _пустые(*months: str) -> list[dict[str, Any]]:
+    return [_месяц(m) for m in months]
+
+
+АВГУСТ = _месяц("2026-08", 350000, 0, 350000, 1)
+# Возврат 300 000 решён 1 октября по Ташкенту — он октябрьский
+СЕНТЯБРЬ = _месяц("2026-09", 4500000, 2500000, 2000000, 3)
+ОКТЯБРЬ = _месяц("2026-10", 350000, 300000, 50000, 1)
+ТАРИФЫ_ВСЕ = [
+    {"name": "Premium", "count": 1, "gross": 2500000},
+    {"name": "Business", "count": 2, "gross": 2000000},
+    {"name": "Без тарифа", "count": 2, "gross": 700000},
 ]
+ИСТОЧНИКИ_ВСЕ = [
+    {"purpose": "Подписка", "provider": "invoice", "count": 1, "gross": 2500000},
+    {"purpose": "Подписка", "provider": "uzum", "count": 2, "gross": 2000000},
+    {"purpose": "Пакет контактов", "provider": "не указан", "count": 1, "gross": 350000},
+    {"purpose": "Пакет контактов", "provider": "invoice", "count": 1, "gross": 350000},
+]
+
+#: Период → отчёт (без подписи месяца); такие же числа давал FinanceReport
+PERIODS = {
+    ("2026-08-01", "2026-08-31"): {
+        "revenue": {"UZS": {"gross": 350000, "refunded": 0, "net": 350000, "count": 1}},
+        "months": [АВГУСТ],
+        "plans": [{"name": "Без тарифа", "count": 1, "gross": 350000}],
+        "sources": [
+            {"purpose": "Пакет контактов", "provider": "не указан", "count": 1, "gross": 350000}
+        ],
+        # В августе начата только c/business — первая подписка c
+        "subscriptions": {"new": 1, "renewed": 0, "cancelled": 0, "expired": 0, "active": 0},
+    },
+    ("2026-09-01", "2026-09-30"): {
+        "revenue": {"UZS": {"gross": 4500000, "refunded": 2500000, "net": 2000000, "count": 3}},
+        "months": [СЕНТЯБРЬ],
+        "plans": ТАРИФЫ_ВСЕ[:2],
+        "sources": ИСТОЧНИКИ_ВСЕ[:2],
+        # Начаты a/business (продление), b, d; b отменена; c истекла молча
+        "subscriptions": {"new": 2, "renewed": 1, "cancelled": 1, "expired": 1, "active": 2},
+    },
+    ("2026-07-15", "2026-10-15"): {
+        "revenue": {"UZS": {"gross": 5200000, "refunded": 2800000, "net": 2400000, "count": 5}},
+        "months": [*_пустые("2026-07"), АВГУСТ, СЕНТЯБРЬ, ОКТЯБРЬ],
+        "plans": ТАРИФЫ_ВСЕ,
+        "sources": ИСТОЧНИКИ_ВСЕ,
+        # a/flash истекла, но a продлилась — это не отток
+        "subscriptions": {"new": 3, "renewed": 1, "cancelled": 1, "expired": 1, "active": 1},
+    },
+    ("2026-01-01", "2026-12-31"): {
+        "revenue": {"UZS": {"gross": 5200000, "refunded": 2800000, "net": 2400000, "count": 5}},
+        "months": [
+            *_пустые(*(f"2026-{m:02d}" for m in range(1, 8))),
+            АВГУСТ,
+            СЕНТЯБРЬ,
+            ОКТЯБРЬ,
+            *_пустые("2026-11", "2026-12"),
+        ],
+        "plans": ТАРИФЫ_ВСЕ,
+        "sources": ИСТОЧНИКИ_ВСЕ,
+        "subscriptions": {"new": 4, "renewed": 1, "cancelled": 1, "expired": 1, "active": 1},
+    },
+}
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
+    # Тарифы, как при деплое (вместо PlanSeeder) — под владельцем базы
     subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=str(PYTHON.parent),
-        env=ОКРУЖЕНИЕ,
+        [sys.executable, "manage.py", "seed"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"], "PYTHONPATH": str(PYTHON)},
         check=True,
         capture_output=True,
     )
-    php(
-        "foreach (['a', 'b', 'c', 'd'] as $s) { App\\Models\\Company::factory()->create(["
-        "'slug' => $s]); } echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+
+    for slug in ("a", "b", "c", "d"):
+        компания(slug=slug)
+
     ids = {r[0]: r[1] for r in sql("select slug, id from companies")}
     plan = {r[0]: r[1] for r in sql("select code, id from plans")}
 
@@ -99,22 +162,6 @@ def люди() -> dict[str, int]:
     return {role: сотрудник(role) for role in ("superadmin", "finance", "admin")}
 
 
-def _php(start: str, end: str) -> dict[str, Any]:
-    out = php(
-        f"$f = App\\Support\\Business::startOfDay('{start}'); "
-        f"$t = App\\Support\\Business::endOfDay('{end}');"
-        "echo json_encode(['revenue' => App\\Support\\FinanceReport::revenue($f, $t),"
-        " 'months' => App\\Support\\FinanceReport::byMonth($f, $t),"
-        " 'plans' => App\\Support\\FinanceReport::byPlan($f, $t),"
-        " 'sources' => App\\Support\\FinanceReport::bySource($f, $t),"
-        " 'subscriptions' => App\\Support\\FinanceReport::subscriptions($f, $t)],"
-        " JSON_UNESCAPED_UNICODE);",
-        БЕЗ_ПЕРЕВОДА,
-    )
-
-    return json.loads(out.splitlines()[-1])
-
-
 def _python(start: str, end: str) -> dict[str, Any]:
     code = (
         "import json; from datetime import date; from savdex.finance import reports as r;"
@@ -137,16 +184,14 @@ def _python(start: str, end: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(("start", "end"), PERIODS)
-def test_числа_как_у_laravel(люди, start, end):
-    л = _php(start, end)
+def test_числа_отчёта(люди, start, end):
     д = _python(start, end)
 
-    # Подпись месяца — своя (у Carbon — «F Y» по-русски), числа — те же
-    for side in (л, д):
-        for month in side["months"]:
-            month.pop("label")
+    # Подпись месяца проверяет test_граница_месяца_по_ташкенту
+    for month in д["months"]:
+        month.pop("label")
 
-    assert д == л, (д, л)
+    assert д == PERIODS[(start, end)]
 
 
 def test_граница_месяца_по_ташкенту(люди):

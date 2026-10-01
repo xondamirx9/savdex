@@ -1,39 +1,35 @@
 """
 Этап 7, шаг 58: «Возвраты» на Django вместо ресурса Filament.
 
-Заявка, проведение и отказ — база и журнал после кнопки на Django такие
-же, как после RefundService у Laravel: строка наблюдателя и строка
+Заявка, проведение и отказ — база и журнал после кнопки (как было у
+RefundService Laravel): строка наблюдателя и строка
 службы с пометкой; полный возврат переводит счёт в «Возвращён»,
 частичный — нет, частичные складываются. Отказы службы (не оплачен,
 больше остатка, решение уже принято) — сообщением, база не меняется.
 Раздел видят финансы и суперадмин.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
 from typing import Any
 
 import pytest
 
-from .pg_admin import django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания
+from .pg_admin import django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 LIST = "/py/admin/finance/refund/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'buyer', 'name' => 'ООО Покупатель']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="buyer", name="ООО Покупатель")
 
     return {role: сотрудник(role) for role in ("superadmin", "finance", "admin", "support")}
 
@@ -72,28 +68,6 @@ def снимок() -> dict[str, Any]:
     }
 
 
-def по_сторонам(подготовка: Callable[[], None], laravel: str, django_шаг: Callable[[], Any]) -> Any:
-    подготовка()
-    php(laravel, БЕЗ_ПЕРЕВОДА)
-    л = снимок()
-
-    подготовка()
-    ответ = django_шаг()
-    д = снимок()
-
-    assert д == л, (д, л)
-
-    return ответ, д
-
-
-def _служба(uid: int, код: str) -> str:
-    return (
-        f"Illuminate\\Support\\Facades\\Auth::login($u = App\\Models\\User::find({uid}));"
-        "$s = app(App\\Services\\Payments\\RefundService::class);"
-        f" try {{ {код} }} catch (RuntimeException $e) {{}} echo 'ok';"
-    )
-
-
 def test_кто_видит(люди):
     сброс(заявки=((1000, "requested"), (2000, "done")))
 
@@ -106,69 +80,235 @@ def test_кто_видит(люди):
         assert django(люди[role], ("get", LIST, None))[1]["status"] == 403, role
 
 
+REFUND = "App\\Models\\Refund"
+ПРИЧИНА = "Клиент отказался от пакета"
+
+
+def журнал_() -> list[tuple[Any, ...]]:
+    """Журнал из снимка: изменения — разобранным JSON."""
+    return [
+        (*row[:6], json.loads(row[6]) if row[6] else None, row[7]) for row in снимок()["journal"]
+    ]
+
+
 @pytest.mark.parametrize(
-    ("сумма", "заявки", "status"),
+    ("сумма", "заявки", "status", "заведена"),
     [
-        ("250000", (), "paid"),
-        ("1000000", (), "paid"),
-        ("700000", ((400000, "done"),), "paid"),
-        ("600000", ((400000, "done"),), "paid"),
-        ("1000", (), "pending"),
+        ("250000", (), "paid", True),
+        ("1000000", (), "paid", True),
+        # Больше остатка (1 000 000 − 400 000) — отказ службы
+        ("700000", ((400000, "done"),), "paid", False),
+        ("600000", ((400000, "done"),), "paid", True),
+        # Счёт не оплачен — отказ
+        ("1000", (), "pending", False),
     ],
 )
-def test_заявить(люди, сумма, заявки, status):
+def test_заявить(люди, сумма, заявки, status, заведена):
     uid = люди["finance"]
-    по_сторонам(
-        lambda: сброс(status, заявки),
-        _служба(
-            uid,
-            f"$s->request(App\\Models\\Payment::firstOrFail(), $u, {сумма}, "
-            "'Клиент отказался от пакета');",
-        ),
-        lambda: django(
-            uid,
-            (
-                "post",
-                LIST + "request/",
-                {"payment": "1", "amount": сумма, "reason": "Клиент отказался от пакета"},
-            ),
-        ),
+    сброс(status, заявки)
+    до = снимок()
+
+    _, ответ = django(
+        uid, ("post", LIST + "request/", {"payment": "1", "amount": сумма, "reason": ПРИЧИНА})
     )
+    после = снимок()
+
+    if not заведена:
+        assert ответ["status"] in (200, 302) and после == до
+        return
+
+    pk = len(заявки) + 1
+    assert ответ["status"] == 302 and ответ["location"] == LIST
+    assert после["payments"] == [("SVD-000001", "paid")]
+    assert после["refunds"][:-1] == до["refunds"]
+    assert после["refunds"][-1] == (
+        1,
+        1,
+        int(сумма),
+        "UZS",
+        ПРИЧИНА,
+        "requested",
+        uid,
+        None,
+        False,
+        None,
+    )
+    видно = f"{int(сумма):,}".replace(",", " ") + " UZS"
+    assert журнал_() == [
+        # Строка наблюдателя — все поля новой заявки
+        (
+            uid,
+            "created",
+            "refunds",
+            REFUND,
+            pk,
+            f"Refund #{pk}",
+            {
+                "after": {
+                    "payment_id": 1,
+                    "company_id": 1,
+                    "amount": int(сумма),
+                    "currency": "UZS",
+                    "reason": ПРИЧИНА,
+                    "status": "requested",
+                    "created_by": uid,
+                    "id": pk,
+                }
+            },
+            None,
+        ),
+        # Строка службы — с пометкой
+        (
+            uid,
+            "created",
+            "refunds",
+            REFUND,
+            pk,
+            f"Refund #{pk}",
+            {"after": {"сумма": видно, "счёт": "SVD-000001"}},
+            ПРИЧИНА,
+        ),
+    ]
 
 
 @pytest.mark.parametrize(
-    ("заявки", "примечание"),
+    ("заявки", "примечание", "счёт"),
     [
-        (((1000000, "requested"),), ""),
-        (((400000, "requested"),), "частично, по договорённости"),
-        (((400000, "done"), (600000, "requested")), ""),
-        (((1000000, "rejected"),), ""),
+        # Полный возврат — счёт «Возвращён»
+        (((1000000, "requested"),), "", "refunded"),
+        # Частичный — нет
+        (((400000, "requested"),), "частично, по договорённости", "paid"),
+        # Частичные складываются: 400 000 + 600 000 — полный
+        (((400000, "done"), (600000, "requested")), "", "refunded"),
+        # Решение уже принято — база не меняется
+        (((1000000, "rejected"),), "", None),
     ],
 )
-def test_провести(люди, заявки, примечание):
+def test_провести(люди, заявки, примечание, счёт):
     uid = люди["superadmin"]
     last = len(заявки)
-    note = "null" if примечание == "" else f"'{примечание}'"
-    _, база = по_сторонам(
-        lambda: сброс(заявки=заявки),
-        _служба(uid, f"$s->approve(App\\Models\\Refund::find({last}), $u, {note});"),
-        lambda: django(uid, ("post", f"{LIST}{last}/approve/", {"note": примечание})),
+    сброс(заявки=заявки)
+    до = снимок()
+
+    _, ответ = django(uid, ("post", f"{LIST}{last}/approve/", {"note": примечание}))
+    после = снимок()
+
+    assert ответ["status"] == 302 and ответ["location"] == LIST
+
+    if счёт is None:
+        assert после == до
+        return
+
+    amount = заявки[-1][0]
+    note = примечание or None
+    assert после["payments"] == [("SVD-000001", счёт)]
+    assert после["refunds"][:-1] == до["refunds"][:-1]
+    assert после["refunds"][-1] == (
+        1,
+        1,
+        amount,
+        "UZS",
+        "Клиент недоволен",
+        "done",
+        None,
+        uid,
+        True,
+        note,
     )
 
-    if заявки[-1][1] == "requested":
-        full = sum(a for a, _ in заявки) >= 1000000
-        assert база["payments"][0][1] == ("refunded" if full else "paid")
+    было = {"status": "requested", "decided_by": None, "decided_at": None}
+    стало = {"status": "done", "decided_by": uid, "decided_at": "T"}
+    if note:
+        было, стало = было | {"decision_note": None}, стало | {"decision_note": note}
+    строки = [
+        (
+            uid,
+            "updated",
+            "refunds",
+            REFUND,
+            last,
+            f"Refund #{last}",
+            {"before": было, "after": стало},
+            None,
+        )
+    ]
+    if счёт == "refunded":
+        строки.append(
+            (
+                uid,
+                "updated",
+                "payments",
+                "App\\Models\\Payment",
+                1,
+                "Payment #1",
+                {"before": {"status": "paid"}, "after": {"status": "refunded"}},
+                None,
+            )
+        )
+    видно = f"{amount:,}".replace(",", " ") + " UZS"
+    строки.append(
+        (
+            uid,
+            "refunded",
+            "refunds",
+            REFUND,
+            last,
+            f"Refund #{last}",
+            {"before": {"статус": "Заявлен"}, "after": {"статус": "Проведён", "сумма": видно}},
+            note or "Клиент недоволен",
+        )
+    )
+    assert журнал_() == строки
 
 
 def test_отклонить(люди):
     uid = люди["finance"]
-    по_сторонам(
-        lambda: сброс(заявки=((1000, "requested"),)),
-        _служба(
-            uid, "$s->reject(App\\Models\\Refund::find(1), $u, 'Услуга уже оказана полностью');"
+    note = "Услуга уже оказана полностью"
+    сброс(заявки=((1000, "requested"),))
+
+    _, ответ = django(uid, ("post", f"{LIST}1/reject/", {"note": note}))
+    база = снимок()
+
+    assert ответ["status"] == 302 and ответ["location"] == LIST
+    assert база["payments"] == [("SVD-000001", "paid")]
+    assert база["refunds"] == [
+        (1, 1, 1000, "UZS", "Клиент недоволен", "rejected", None, uid, True, note)
+    ]
+    assert журнал_() == [
+        (
+            uid,
+            "updated",
+            "refunds",
+            REFUND,
+            1,
+            "Refund #1",
+            {
+                "before": {
+                    "status": "requested",
+                    "decided_by": None,
+                    "decided_at": None,
+                    "decision_note": None,
+                },
+                "after": {
+                    "status": "rejected",
+                    "decided_by": uid,
+                    "decided_at": "T",
+                    "decision_note": note,
+                },
+            },
+            None,
         ),
-        lambda: django(uid, ("post", f"{LIST}1/reject/", {"note": "Услуга уже оказана полностью"})),
-    )
+        (
+            uid,
+            "rejected",
+            "refunds",
+            REFUND,
+            1,
+            "Refund #1",
+            {"before": {"статус": "Заявлен"}, "after": {"статус": "Отклонён"}},
+            note,
+        ),
+    ]
 
 
 def test_отказ_без_причины(люди):

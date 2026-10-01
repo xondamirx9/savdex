@@ -57,7 +57,7 @@ def test_своя_кука_читается():
         ).decode(),
     ],
 )
-def test_порча_гость(raw):
+def test_порча_значит_не_вошёл(raw):
     assert laravel_session.cookie_value("savdex-session", raw, [KEY]) is None
 
 

@@ -1,4 +1,4 @@
-"""Журнал действий: правила записи по отдельности (сверка с PHP — test_audit_parity.py)."""
+"""Журнал действий: правила записи по отдельности."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_название_записи(attributes, expected):
         ("2001:db8::1", "127.0.0.1", "2001:db8::1"),
     ],
 )
-def test_адрес_как_у_laravel(forwarded, remote, expected):
+def test_адрес_клиента(forwarded, remote, expected):
     extra = {"HTTP_X_FORWARDED_FOR": forwarded} if forwarded else {}
     request = RequestFactory().get("/", REMOTE_ADDR=remote, **extra)
 

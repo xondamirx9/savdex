@@ -1,27 +1,28 @@
 """
-Мини-сайт на Django неотличим от Laravel: сохранение адреса и
+Мини-сайт — проверки Django: сохранение адреса и
 оформления (адрес: строчные, шаблон, занятые и зарезервированные;
 оформление — SiteTheme::normalize, фон из формы не принимается),
 публикация (черновик — на сайт, прежний фон удаляется, если не нужен),
 снятие, фон первого экрана. Без тарифа с мини-сайтом — отказ.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
-import subprocess
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_company_profile_actions import multipart, картинка
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -29,26 +30,32 @@ pytestmark = нужна_база
 ДИСК = Path(КОРЕНЬ) / "storage/app/public"
 
 
+def тарифы() -> None:
+    """PlanSeeder: тарифы из снимка справочников (savdex/bootstrap/seeds.json)."""
+    from savdex.seeds import DATA
+
+    for plan in json.loads(DATA.read_text(encoding="utf-8"))["plans"]:
+        sql(
+            f"insert into plans ({', '.join(plan)}, created_at, updated_at) "
+            f"values ({', '.join(['%s'] * len(plan))}, now(), now())",
+            list(plan.values()),
+        )
+
+
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'mine']);"
-        "$o = App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "App\\Models\\CompanySite::create(['company_id' => $o->id, 'subdomain' => 'taken',"
-        " 'theme' => []]);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    тарифы()
+    компания(slug="mine")
+    other = компания(slug="other")
+    # Адрес «taken» занят сайтом другой компании
+    sql(
+        "insert into company_sites (company_id, subdomain, theme, created_at, updated_at) "
+        "values (%s, 'taken', '[]', now(), now())",
+        [other],
     )
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -121,29 +128,95 @@ def снимок() -> Any:
 }
 
 
+ПРАВИЛО = "Адрес: латиница, цифры и дефис, от 3 до 40 знаков, без дефиса в начале и в конце"
+БЕЗ_ТАРИФА = "Мини-сайт доступен на тарифах Business, Premium и VIP"
+ТЕМА_ОБЯЗАТЕЛЬНА = {
+    f"theme{k}": ["validation.required"]
+    for k in (
+        "",
+        ".template",
+        ".primary",
+        ".accent",
+        ".mode",
+        ".heading_font",
+        ".body_font",
+        ".radius",
+    )
+}
+#: Тема черновика из сброс(): «bold», тёмная
+ЖИРНАЯ = {
+    "template": "bold",
+    "primary": "#112233",
+    "accent": "#445566",
+    "mode": "dark",
+    "heading_font": "manrope",
+    "body_font": "manrope",
+    "radius": "round",
+}
+
+
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Строка сессии после ответа — разобранным JSON."""
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
+def ошибки(итог: dict[str, Any]) -> dict[str, list[str]] | None:
+    """Ошибки проверки, которые форма увидит после перехода назад."""
+    errors = сессия(итог).get("errors")
+
+    return None if errors is None else dict(errors["default"]["messages"])
+
+
+def сайты(итог: dict[str, Any]) -> list[tuple[Any, ...]]:
+    """Сайт компании: адрес, статус, черновик и опубликованная тема (JSON), отметки."""
+    return [
+        (
+            sub,
+            status,
+            json.loads(theme),
+            None if published == "None" else json.loads(published),
+            at == "True",
+            fresh == "True",
+        )
+        for sub, status, theme, published, at, fresh in итог["база"]["sites"]
+    ]
+
+
+def назад(сайт: str, итог: dict[str, Any], status: int = 302) -> None:
+    assert итог["ответ"]["status"] == status
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+
+
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ошибки_"),
     [
-        {"subdomain": "cement-trade", "theme": ТЕМА},
-        {"subdomain": "mine", "theme": ТЕМА},
-        {"subdomain": "Cement", "theme": ТЕМА},
-        {"subdomain": "ab", "theme": ТЕМА},
-        {"subdomain": "-bad-", "theme": ТЕМА},
-        {"subdomain": "admin", "theme": ТЕМА},
-        {"subdomain": "taken", "theme": ТЕМА},
-        {"subdomain": "cement-trade", "theme": {**ТЕМА, "primary": "red", "mode": "neon"}},
-        {"subdomain": "cement-trade"},
-        {},
+        ({"subdomain": "cement-trade", "theme": ТЕМА}, None),
+        ({"subdomain": "mine", "theme": ТЕМА}, None),
+        # Адрес: строчные, шаблон, зарезервированные и занятые
+        ({"subdomain": "Cement", "theme": ТЕМА}, {"subdomain": ["validation.lowercase", ПРАВИЛО]}),
+        ({"subdomain": "ab", "theme": ТЕМА}, {"subdomain": [ПРАВИЛО]}),
+        ({"subdomain": "-bad-", "theme": ТЕМА}, {"subdomain": [ПРАВИЛО]}),
+        (
+            {"subdomain": "admin", "theme": ТЕМА},
+            {"subdomain": ["Этот адрес зарезервирован площадкой — выберите другой"]},
+        ),
+        ({"subdomain": "taken", "theme": ТЕМА}, {"subdomain": ["Этот адрес уже занят"]}),
+        (
+            {"subdomain": "cement-trade", "theme": {**ТЕМА, "primary": "red", "mode": "neon"}},
+            {"theme.primary": ["validation.regex"], "theme.mode": ["validation.in"]},
+        ),
+        ({"subdomain": "cement-trade"}, ТЕМА_ОБЯЗАТЕЛЬНА),
+        ({}, {"subdomain": ["validation.required"], **ТЕМА_ОБЯЗАТЕЛЬНА}),
     ],
 )
 @pytest.mark.parametrize("было", ["есть", "нет", "без тарифа"])
-def test_сохранить(сайт, body, было):
+def test_сохранить(сайт, body, ошибки_, было):
     подготовка = {
         "есть": сброс(фон=ФОН),
         "нет": сброс(сайт=None),
         "без тарифа": сброс(тариф=False),
     }[было]
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/site",
         подготовка,
@@ -153,6 +226,48 @@ def test_сохранить(сайт, body, было):
         method="PATCH",
         headers=inertia(),
     )
+
+    # PATCH от Inertia — 303 назад
+    назад(сайт, итог, 303)
+    фон = ФОН if было == "есть" else None
+    прежний = {
+        "есть": [
+            (
+                "mine",
+                "draft",
+                {**ЖИРНАЯ, "hero_image": ФОН},
+                {**ЖИРНАЯ, "hero_image": ФОН},
+                False,
+                False,
+            )
+        ],
+        "нет": [],
+        "без тарифа": [
+            (
+                "mine",
+                "draft",
+                {**ЖИРНАЯ, "hero_image": None},
+                {**ЖИРНАЯ, "hero_image": None},
+                False,
+                False,
+            )
+        ],
+    }[было]
+
+    if было == "без тарифа":
+        assert сессия(итог)["error"] == БЕЗ_ТАРИФА and сайты(итог) == прежний
+    elif ошибки_ is not None:
+        assert ошибки(итог) == ошибки_ and сайты(итог) == прежний
+    else:
+        # Оформление нормализовано (цвет — строчными, лишнее отброшено),
+        # фон из формы не принимается — остаётся фон черновика
+        assert сессия(итог)["success"] == "Черновик сохранён"
+        тема = {**ТЕМА, "primary": "#aabbcc", "hero_image": фон}
+        del тема["extra"]
+        опубликована = прежний[0][3] if прежний else None
+        assert сайты(итог) == [(body["subdomain"], "draft", тема, опубликована, False, True)]
+
+    assert итог["база"]["old_hero"] is True
 
 
 @pytest.mark.parametrize("verb", ["publish", "unpublish"])
@@ -187,25 +302,52 @@ def test_публикация(сайт, verb, подготовка):
         uid=владелец(),
         headers=inertia(),
     )
+    назад(сайт, итог)
+    черновик = {**ЖИРНАЯ, "hero_image": подготовка.get("фон")}
+    было = {"hero_image": ФОН} if подготовка.get("фон") is None else черновик
 
-    if verb == "publish" and not подготовка:
-        assert итог["база"]["old_hero"] is False
-        assert итог["база"]["sites"][0][1] == "published"
+    if подготовка.get("сайт", "draft") is None:
+        # Сайта нет: опубликовать нечего, снимать — тоже
+        if verb == "publish":
+            assert сессия(итог)["error"] == "Сначала сохраните черновик"
+        else:
+            assert сессия(итог)["success"] == "Сайт снят с публикации"
+        assert сайты(итог) == []
+    elif verb == "publish" and подготовка.get("тариф") is False:
+        assert сессия(итог)["error"] == БЕЗ_ТАРИФА
+        assert сайты(итог) == [("mine", "draft", черновик, было, False, False)]
+    elif verb == "publish":
+        # Черновик — на сайт; прежний фон удаляется, если больше не нужен
+        assert сессия(итог)["success"] == "Сайт опубликован"
+        assert сайты(итог) == [("mine", "published", черновик, черновик, True, True)]
+    else:
+        assert сессия(итог)["success"] == "Сайт снят с публикации"
+        assert сайты(итог) == [
+            ("mine", "draft", черновик, было, False, подготовка.get("сайт") == "published")
+        ]
+
+    assert итог["база"]["old_hero"] is not (
+        verb == "publish" and подготовка in ({}, {"сайт": "published"})
+    )
 
 
 @pytest.mark.parametrize(
-    "файл",
-    [("hero.png", картинка(2400, 1200)), ("fake.png", b"nope"), None],
+    ("файл", "ошибка"),
+    [
+        (("hero.png", картинка(2400, 1200)), None),
+        (("fake.png", b"nope"), "Допустимы JPG, PNG и WebP"),
+        (None, "Выберите файл"),
+    ],
 )
 @pytest.mark.parametrize("было", ["есть", "нет"])
-def test_фон(сайт, файл, было):
+def test_фон(сайт, файл, ошибка, было):
     поля: dict[str, tuple[str, bytes] | str] = {"note": "x"}
 
     if файл is not None:
         поля["hero"] = файл
 
     тело, тип = multipart(поля)
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/site/hero",
         сброс(фон=ФОН) if было == "есть" else сброс(сайт=None),
@@ -215,6 +357,24 @@ def test_фон(сайт, файл, было):
         content_type=тип,
         headers=inertia(),
     )
+    назад(сайт, итог)
+    тема = {**ЖИРНАЯ, "hero_image": ФОН}
+
+    if было == "нет":
+        assert сессия(итог)["error"] == "Сначала сохраните черновик" and сайты(итог) == []
+    elif ошибка is not None:
+        assert ошибки(итог) == {"hero": [ошибка]}
+        assert сайты(итог) == [("mine", "draft", тема, тема, False, False)]
+    else:
+        # Новый фон — в черновик под случайным именем; опубликованный не тронут
+        assert сессия(итог)["success"] == (
+            "Фон загружен — опубликуйте сайт, чтобы его увидели посетители"
+        )
+        assert сайты(итог) == [
+            ("mine", "draft", {**ЖИРНАЯ, "hero_image": "<random>"}, тема, False, True)
+        ]
+
+    assert итог["база"]["old_hero"] is True
 
 
 @pytest.mark.parametrize("опубликован", [False, True])
@@ -229,6 +389,19 @@ def test_убрать_фон(сайт, опубликован):
         headers=inertia(),
     )
 
+    назад(сайт, итог, 303)
+    assert сессия(итог)["success"] == "Фон убран"
+    тема = {**ЖИРНАЯ, "hero_image": ФОН}
+    assert сайты(итог) == [
+        (
+            "mine",
+            "published" if опубликован else "draft",
+            {**ЖИРНАЯ, "hero_image": None},
+            тема,
+            False,
+            True,
+        )
+    ]
     # Опубликованный фон остаётся на сайте — файл не трогаем
     assert итог["база"]["old_hero"] is True
 
@@ -279,25 +452,45 @@ def снимок_товаров() -> Any:
 
 
 ТОВАР = {"title": "Цемент М400", "price": "52000.5", "currency": "UZS", "unit": "мешок"}
+ПРЕЖНИЙ = (
+    "1",
+    "Цемент 0",
+    "None",
+    "100.00",
+    "UZS",
+    "None",
+    ФОН,
+    "sites/1/products/thumb/old.webp",
+    "0",
+    "False",
+)
+НОВЫЙ = ("Цемент М400", "None", "52000.50", "UZS", "мешок")
+НОВОЕ_ФОТО = ("sites/1/products/<random>", "sites/1/products/thumb/<random>")
 
 
 @pytest.mark.parametrize(
-    "поля",
+    ("поля", "ошибки_"),
     [
-        ТОВАР,
-        {**ТОВАР, "image": ("photo.jpg", картинка(2400, 1800, "JPEG"))},
-        {**ТОВАР, "image": ("fake.png", b"nope")},
-        {**ТОВАР, "price": "abc", "currency": "BTC"},
-        {**ТОВАР, "title": ""},
-        {**ТОВАР, "price": "-1"},
-        {"title": "Ц"},
+        (ТОВАР, None),
+        ({**ТОВАР, "image": ("photo.jpg", картинка(2400, 1800, "JPEG"))}, None),
+        ({**ТОВАР, "image": ("fake.png", b"nope")}, {"image": ["Допустимы JPG, PNG и WebP"]}),
+        (
+            {**ТОВАР, "price": "abc", "currency": "BTC"},
+            {"price": ["validation.numeric"], "currency": ["validation.in"]},
+        ),
+        ({**ТОВАР, "title": ""}, {"title": ["Укажите название товара"]}),
+        ({**ТОВАР, "price": "-1"}, {"price": ["validation.min.numeric"]}),
+        (
+            {"title": "Ц"},
+            {"title": ["validation.min.string"], "currency": ["validation.required"]},
+        ),
     ],
 )
 @pytest.mark.parametrize("было", [1, 60, "без тарифа"])
-def test_добавить_товар(сайт, поля, было):
+def test_добавить_товар(сайт, поля, ошибки_, было):
     подготовка = товары(1, тариф=False) if было == "без тарифа" else товары(int(было))
     тело, тип = multipart(dict(поля))
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/site/products",
         подготовка,
@@ -307,22 +500,57 @@ def test_добавить_товар(сайт, поля, было):
         content_type=тип,
         headers=inertia(),
     )
+    назад(сайт, итог)
+    products = итог["база"]["products"]
+    сколько = 1 if было == "без тарифа" else int(было)
+
+    if было == "без тарифа":
+        assert сессия(итог)["error"] == БЕЗ_ТАРИФА
+    elif было == 60:
+        assert сессия(итог)["error"] == "На сайте не больше 60 своих товаров"
+    elif ошибки_ is not None:
+        assert ошибки(итог) == ошибки_
+    else:
+        assert сессия(итог)["success"] == "Товар сохранён"
+        фото = НОВОЕ_ФОТО if "image" in поля else ("None", "None")
+        assert products[-1] == ("2", *НОВЫЙ, *фото, "0", "True")
+        сколько += 1
+
+    assert len(products) == сколько and products[0] == ПРЕЖНИЙ
+    assert итог["база"]["old_image"] is True
 
 
 @pytest.mark.parametrize(
-    "поля",
+    ("поля", "стало"),
     [
-        {"title": "Цемент 0", "price": "100", "currency": "UZS"},
-        {"title": "Цемент 0", "price": "100.00", "currency": "UZS"},
-        {**ТОВАР, "description": "Мешки по 50 кг"},
-        {**ТОВАР, "image": ("photo.png", картинка(300, 200))},
-        {**ТОВАР, "title": ""},
+        # Ничего не изменилось — запись не трогается (100 и 100.00 — одно)
+        ({"title": "Цемент 0", "price": "100", "currency": "UZS"}, ПРЕЖНИЙ),
+        ({"title": "Цемент 0", "price": "100.00", "currency": "UZS"}, ПРЕЖНИЙ),
+        (
+            {**ТОВАР, "description": "Мешки по 50 кг"},
+            (
+                "1",
+                "Цемент М400",
+                "Мешки по 50 кг",
+                "52000.50",
+                "UZS",
+                "мешок",
+                *ПРЕЖНИЙ[6:9],
+                "True",
+            ),
+        ),
+        # Новое фото — прежнее уходит с диска
+        (
+            {**ТОВАР, "image": ("photo.png", картинка(300, 200))},
+            ("1", *НОВЫЙ, *НОВОЕ_ФОТО, "0", "True"),
+        ),
+        ({**ТОВАР, "title": ""}, None),
     ],
 )
 @pytest.mark.parametrize("номер", [1, 999])
-def test_изменить_товар(сайт, поля, номер):
+def test_изменить_товар(сайт, поля, стало, номер):
     тело, тип = multipart(dict(поля))
-    отправить(
+    итог = отправить(
         сайт,
         f"/cabinet/site/products/{номер}",
         товары(1),
@@ -332,6 +560,22 @@ def test_изменить_товар(сайт, поля, номер):
         content_type=тип,
         headers=inertia(),
     )
+    products = итог["база"]["products"]
+
+    if номер == 999:
+        assert итог["ответ"]["status"] == 404 and products == [ПРЕЖНИЙ]
+        return
+
+    назад(сайт, итог)
+
+    if стало is None:
+        assert ошибки(итог) == {"title": ["Укажите название товара"]}
+        assert products == [ПРЕЖНИЙ]
+    else:
+        assert сессия(итог)["success"] == "Товар сохранён"
+        assert products == [стало]
+
+    assert итог["база"]["old_image"] is ("image" not in поля)
 
 
 @pytest.mark.parametrize(("номер", "тариф"), [(1, True), (1, False), (999, True)])
@@ -347,4 +591,10 @@ def test_удалить_товар(сайт, номер, тариф):
     )
 
     if номер == 1:
+        # Свой товар удаляется и без тарифа — вместе с фото
+        назад(сайт, итог, 303)
+        assert сессия(итог)["success"] == "Товар удалён"
         assert not итог["база"]["products"] and not итог["база"]["old_image"]
+    else:
+        assert итог["ответ"]["status"] == 404
+        assert итог["база"]["products"] == [ПРЕЖНИЙ] and итог["база"]["old_image"]

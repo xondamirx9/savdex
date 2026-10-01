@@ -3,55 +3,54 @@
 
 - раздел видят финансы и суперадмин; администратор, продажи и поддержка — нет;
   по умолчанию — ждущие оплаты, отбор «Все», «Просрочены», «За что»;
-- «Деньги пришли» — та же выдача, что у Laravel (OrderService::confirm):
+- «Деньги пришли» — та же выдача, что была у Laravel (OrderService::confirm):
   тариф — подпиской, которую выдал этот сотрудник, пакет — кредитами от
   его имени, скидочный промокод — к подписке; отметка — в admin_note;
-  уведомление компании; строки журнала — как у AuditObserver. База после
-  кнопки на Django и после службы Laravel — одна и та же;
+  уведомление компании; строки журнала — как у AuditObserver;
 - «Отменить счёт» — OrderService::cancel с причиной и тем, кто отменил;
 - оплаченный и отменённый счёт кнопками не меняются, без права — 403.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Callable
+import json
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания, пользователь
+from .pg_admin import django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 LIST = "/py/admin/finance/payment/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
+
+
+def тарифы() -> None:
+    """PlanSeeder: тарифы из снимка справочников (savdex/bootstrap/seeds.json)."""
+    from savdex.seeds import DATA
+
+    for plan in json.loads(DATA.read_text(encoding="utf-8"))["plans"]:
+        sql(
+            f"insert into plans ({', '.join(plan)}, created_at, updated_at) "
+            f"values ({', '.join(['%s'] * len(plan))}, now(), now())",
+            list(plan.values()),
+        )
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    тарифы()
     sql(
         "insert into credit_packs (code, name, credits, price_usd, price_uzs, sort, is_active, "
         "created_at, updated_at) values ('m', 'Средний', 50, 30, 350000, 1, true, now(), now())"
     )
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'buyer',"
-        " 'name' => 'ООО Покупатель', 'tin' => '301234567']);"
-        "foreach (range(1, 2) as $i) {"
-        " App\\Models\\User::factory()->create(['company_id' => $c->id]); }"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    c = компания(slug="buyer", name="ООО Покупатель", tin="301234567")
+    пользователь(company_id=c)
+    пользователь(company_id=c)
 
     return {
         role: сотрудник(role) for role in ("superadmin", "finance", "admin", "sales", "support")
@@ -129,31 +128,6 @@ def снимок() -> dict[str, Any]:
     }
 
 
-def по_сторонам(
-    подготовка: Callable[[], None], laravel: str, django_шаг: Callable[[], Any]
-) -> dict[str, Any]:
-    """Одно и то же действие: служба Laravel и кнопка на Django — база одинакова."""
-    подготовка()
-    php(laravel, БЕЗ_ПЕРЕВОДА)
-    л = снимок()
-
-    подготовка()
-    ответ = django_шаг()
-    д = снимок()
-
-    assert д == л, (д, л)
-
-    return {"ответ": ответ, "база": д}
-
-
-def _служба(uid: int, код: str) -> str:
-    return (
-        f"Illuminate\\Support\\Facades\\Auth::login(App\\Models\\User::find({uid}));"
-        "$orders = app(App\\Services\\OrderService::class);"
-        f"$p = App\\Models\\Payment::firstOrFail(); {код} echo 'ok';"
-    )
-
-
 # ── Кто видит ───────────────────────────────────────────────────────
 
 
@@ -185,6 +159,70 @@ def test_кто_видит_и_ждущие(люди):
 
 # ── Деньги пришли ───────────────────────────────────────────────────
 
+PAYMENT = "App\\Models\\Payment"
+ОПЛАЧЕН = ("billing", "Оплата счёта SVD-000001 зачислена", "Тариф «Business»")
+ТАРИФ = ("billing", "Тариф «Business» активирован")
+
+
+def журнал_() -> list[tuple[Any, ...]]:
+    """Журнал из снимка: изменения — разобранным JSON."""
+    return [(*r[:6], json.loads(r[6]) if r[6] else None, r[7]) for r in снимок()["journal"]]
+
+
+def уведомления(*строки: tuple[str, ...]) -> list[tuple[Any, ...]]:
+    """Уведомление — каждому из двух сотрудников компании."""
+    сотрудники = [uid for (uid,) in sql("select id from users where company_id is not null")]
+
+    return [
+        (uid, type_, title, body, "success", "/cabinet/billing")
+        for type_, title, body in строки
+        for uid in сотрудники
+    ]
+
+
+def _оплата(uid: int, note: str | None) -> tuple[Any, ...]:
+    """Строка журнала AuditObserver о том, что счёт оплачен."""
+    before = {"status": "pending", "paid_at": None, "confirmed_by": None}
+    after = {"status": "paid", "paid_at": "T", "confirmed_by": uid}
+
+    if note is not None:
+        before, after = before | {"admin_note": None}, after | {"admin_note": note}
+
+    return (
+        uid,
+        "updated",
+        "payments",
+        PAYMENT,
+        1,
+        "Payment #1",
+        {"before": before, "after": after},
+        None,
+    )
+
+
+def _подписка(uid: int) -> list[tuple[Any, ...]]:
+    """Строки журнала о подписке, которую выдал сотрудник, и её привязке к счёту."""
+    company = _компания()
+
+    return [
+        (
+            uid, "created", "subscriptions", "App\\Models\\Subscription", 1, "Subscription #1",
+            {"after": {"company_id": company, "plan_id": _тариф(), "status": "active",
+                       "started_at": "T", "ends_at": "T", "auto_renew": True, "source": "payment",
+                       "granted_by": uid, "grant_reason": "Оплата счёта SVD-000001", "id": 1}},
+            None,
+        ),
+        (
+            uid, "updated", "payments", PAYMENT, 1, "Payment #1",
+            {"before": {"subscription_id": None}, "after": {"subscription_id": 1}},
+            None,
+        ),
+    ]  # fmt: skip
+
+
+def _тариф() -> int:
+    return int(sql("select id from plans where code = 'business'")[0][0])
+
 
 @pytest.mark.parametrize(
     ("что", "настройка"),
@@ -192,37 +230,75 @@ def test_кто_видит_и_ждущие(люди):
 )
 def test_деньги_пришли(люди, что, настройка):
     uid = люди["finance"]
-    итог = по_сторонам(
-        lambda: сброс(что, **настройка),
-        _служба(uid, "$orders->confirm($p, App\\Models\\User::find(" + str(uid) + "), 'п/п 214');"),
-        lambda: django(
-            uid,
-            ("get", f"{LIST}1/confirm/", None),
-            ("post", f"{LIST}1/confirm/", {"note": "п/п 214", "back": LIST}),
-        ),
+    сброс(что, **настройка)
+
+    _, страница, ответ = django(
+        uid,
+        ("get", f"{LIST}1/confirm/", None),
+        ("post", f"{LIST}1/confirm/", {"note": "п/п 214", "back": LIST}),
     )
-    _, страница, ответ = итог["ответ"]
-    база = итог["база"]
+    база = снимок()
+    company = _компания()
 
     assert "Подтвердить поступление?" in страница["body"]
-    assert ответ["status"] == 302
-    assert база["payments"][0][:5] == ("SVD-000001", "paid", True, uid, "п/п 214")
+    assert ответ["status"] == 302 and ответ["location"] == LIST
 
     if что == "plan":
-        assert база["subscriptions"][0][6] == uid
+        # Тариф — подпиской на 30 дней, которую выдал этот сотрудник;
+        # кошелёк — с баллами продвижения тарифа и сбросом через 30 дней
+        assert база["payments"] == [("SVD-000001", "paid", True, uid, "п/п 214", 1)]
+        assert база["subscriptions"] == [
+            (
+                company,
+                _тариф(),
+                "active",
+                "payment",
+                True,
+                "30 days",
+                uid,
+                "Оплата счёта SVD-000001",
+            )
+        ]
+        assert база["wallets"] == [(0, 50, 0, 720)]
+        assert база["wallet_log"] == []
+        # Скидочный промокод — к подписке
+        assert база["promo"] == ([("SALE", 1, company)] if настройка else [])
+        assert база["notifications"] == уведомления(
+            (*ТАРИФ, "Действует до " + _через_30_дней() + "."), ОПЛАЧЕН
+        )
+        assert база["events"] == [
+            ("billing", "success", ТАРИФ[1], "/cabinet/billing"),
+            ("billing", "success", ОПЛАЧЕН[1], "/cabinet/billing"),
+        ]
+        assert журнал_() == [_оплата(uid, "п/п 214"), *_подписка(uid)]
     else:
-        assert база["wallet_log"][0][6] == uid
+        # Пакет — кредитами от имени сотрудника; баллы кошелька не трогаются
+        было = 3 if настройка else 0
+        assert база["payments"] == [("SVD-000001", "paid", True, uid, "п/п 214", None)]
+        assert база["subscriptions"] == []
+        assert база["wallets"] == [(было + 50, 1 if настройка else 0, 0, None)]
+        assert база["wallet_log"] == [("credits", 50, было + 50, "purchase", PAYMENT, 1, uid)]
+        assert база["notifications"] == уведомления(ОПЛАЧЕН)
+        assert база["events"] == [("billing", "success", ОПЛАЧЕН[1], "/cabinet/billing")]
+        assert журнал_() == [_оплата(uid, "п/п 214")]
 
-    assert база["journal"], "строки журнала — как у AuditObserver"
+
+def _через_30_дней() -> str:
+    [(дата,)] = sql("select to_char(ends_at, 'DD.MM.YYYY') from subscriptions")
+
+    return str(дата)
 
 
 def test_без_отметки(люди):
     uid = люди["superadmin"]
-    по_сторонам(
-        сброс,
-        _служба(uid, "$orders->confirm($p, App\\Models\\User::find(" + str(uid) + "), null);"),
-        lambda: django(uid, ("post", f"{LIST}1/confirm/", {"note": "  "})),
-    )
+    сброс()
+
+    _, ответ = django(uid, ("post", f"{LIST}1/confirm/", {"note": "  "}))
+
+    assert ответ["status"] == 302
+    # Пустая отметка — не отметка: admin_note остаётся пустым и в журнале его нет
+    assert снимок()["payments"] == [("SVD-000001", "paid", True, uid, None, 1)]
+    assert журнал_() == [_оплата(uid, None), *_подписка(uid)]
 
 
 # ── Отменить ────────────────────────────────────────────────────────
@@ -231,22 +307,25 @@ def test_без_отметки(люди):
 @pytest.mark.parametrize("промокод", [False, True])
 def test_отменить(люди, промокод):
     uid = люди["finance"]
-    итог = по_сторонам(
-        lambda: сброс(промокод=промокод),
-        _служба(
-            uid,
-            "$orders->cancel($p, App\\Models\\User::find(" + str(uid) + "), 'Клиент передумал');",
-        ),
-        lambda: django(uid, ("post", f"{LIST}1/cancel/", {"note": "Клиент передумал"})),
-    )
+    сброс(промокод=промокод)
 
-    assert итог["база"]["payments"][0][:5] == (
-        "SVD-000001",
-        "failed",
-        False,
-        uid,
-        "Клиент передумал",
-    )
+    _, ответ = django(uid, ("post", f"{LIST}1/cancel/", {"note": "Клиент передумал"}))
+    база = снимок()
+
+    assert ответ["status"] == 302
+    assert база["payments"] == [("SVD-000001", "failed", False, uid, "Клиент передумал", None)]
+    # Промокод отменённого счёта освобождается
+    assert база["promo"] == ([("SALE", None, None)] if промокод else [])
+    assert база["subscriptions"] == база["wallets"] == база["wallet_log"] == []
+    assert база["notifications"] == база["events"] == []
+    assert журнал_() == [
+        (
+            uid, "updated", "payments", PAYMENT, 1, "Payment #1",
+            {"before": {"status": "pending", "confirmed_by": None, "admin_note": None},
+             "after": {"status": "failed", "confirmed_by": uid, "admin_note": "Клиент передумал"}},
+            None,
+        )
+    ]  # fmt: skip
 
 
 # ── Границы ─────────────────────────────────────────────────────────

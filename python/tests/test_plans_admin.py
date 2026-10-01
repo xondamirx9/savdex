@@ -1,32 +1,33 @@
 """
-Раздел «Тарифы» админки на Django — сквозь настоящую базу и Laravel.
+Раздел «Тарифы» админки на Django — сквозь настоящую базу и сайт.
 
-Тарифы заводит настоящий PlanSeeder. Проверяется: права (правит суперадмин,
+Тарифы заводит настоящий manage.py seed (как при деплое). Проверяется: права (правит суперадмин,
 финансы только смотрят, прочие не видят), лимиты «пусто — без ограничений»,
 цены и сроки, код, что витрина /pricing видит правку сразу, запрет
 удаления (free/vip, подписки, счета, промокоды) и журнал.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
 import subprocess
+import sys
 from typing import Any
 
 import pytest
 
 from .pg_admin import (
-    КОРЕНЬ,
+    PYTHON,
     ОКРУЖЕНИЕ,
     django,
-    php,
     sql,
     журнал,
     нужна_база,
     свежая_база,
     сотрудник,
 )
+from .web_site import адрес, открыть, страница
 
 pytestmark = нужна_база
 
@@ -37,10 +38,11 @@ ADD = "/py/admin/billing/plan/add/"
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
+    # Справочники, как при деплое (вместо PlanSeeder) — под владельцем базы
     subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
+        [sys.executable, "manage.py", "seed"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"], "PYTHONPATH": str(PYTHON)},
         capture_output=True,
         check=True,
     )
@@ -114,8 +116,13 @@ def test_правка_видна_на_витрине_и_в_журнале(люд
         ("55.00", None)
     ]
     # Витрина /pricing читает тариф сразу — кэша у тарифов нет
-    shown = php("echo App\\Models\\Plan::where('code', 'business')->value('price_usd');")
-    assert shown == "55.00"
+    with адрес() as сайт:
+        витрина = открыть(сайт, "/pricing")
+    page = страница(витрина["body"])
+    [business] = [plan for plan in page["props"]["plans"] if plan["code"] == "business"]
+    assert page["component"] == "Pricing"
+    assert business["price_usd"] == 55.0
+    assert business["listings_limit"] is None
 
     запись = журнал("updated")
     assert запись["section"] == "plans"

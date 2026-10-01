@@ -7,30 +7,26 @@
 основания, вида, направления, периода; «Итого» по отфильтрованному.
 Видят финансы и суперадмин, администратор — нет; править нечего.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from .pg_admin import django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания
+from .pg_admin import django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 LIST = "/py/admin/finance/wallettransaction/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'a', 'name' => 'ООО Альфа']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'gone', 'name' => 'ООО Ушедшая']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="a", name="ООО Альфа")
+    компания(slug="gone", name="ООО Ушедшая")
     люди = {role: сотрудник(role) for role in ("finance", "superadmin", "admin")}
     sql("update users set name = 'Бухгалтер Анна' where id = %s", [люди["finance"]])
 

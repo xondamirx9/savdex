@@ -3,9 +3,8 @@
 вместо cbu-rates:refresh у Laravel.
 
 Разбор ответа ЦБ как у CurrencyRate::fetch (номинал, пустые и нулевые
-строки), запись — в файловый кэш Laravel тем же форматом: таблица на
-сутки и последняя удачная на месяц. Сбой ЦБ кэш не трогает. Что записал
-Django, читает сам Laravel (Cache::get) — нужен PHP.
+строки), запись — в файловый кэш тем же форматом, что был у Laravel:
+таблица на сутки и последняя удачная на месяц. Сбой ЦБ кэш не трогает.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ def кэш(monkeypatch, settings, tmp_path):
     return tmp_path
 
 
-def test_разбор_как_у_laravel():
+def test_разбор_ответа_цб():
     assert currency.fetch(клиент()) == {"USD": 12650.5, "EUR": 13790.25, "JPY": 85.0}
 
 
@@ -59,14 +58,3 @@ def test_обновление_в_кэш(кэш):
 def test_сбой_цб_кэш_не_трогает(кэш, status, body):
     assert not currency.refresh(клиент(status, body))
     assert currency.cached(currency.CACHE_KEY) is None
-
-
-def test_laravel_читает_записанное():
-    """Запись Django в настоящем кэше Laravel — Cache::get видит ту же таблицу."""
-    from .pg_admin import php
-
-    assert currency.refresh(клиент())
-
-    прочитано = php("echo json_encode(Cache::get('cbu.rates'));", {"CACHE_STORE": "file"})
-
-    assert json.loads(прочитано.splitlines()[-1]) == {"USD": 12650.5, "EUR": 13790.25, "JPY": 85}

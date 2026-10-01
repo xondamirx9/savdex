@@ -1,6 +1,5 @@
 """
-Этап 5, шаг 23: «Мои объявления» на Django неотличимы от Laravel —
-ответ, сессия (сообщение, ошибки) и что записано: статус, сроки, мягкое
+Этап 5, шаг 23: «Мои объявления» на Django — ответ, сессия (сообщение, ошибки) и что записано: статус, сроки, мягкое
 удаление, search_text, лента кабинета и уведомления, журнал
 администратора.
 
@@ -10,21 +9,24 @@
 отклонённые не продлеваются, свободные слоты, trans_choice на языках).
 Чужое объявление — 404.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
-import subprocess
 from collections.abc import Callable, Iterator
+from datetime import date
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import Выражение, компания, объявление
+from .pg_admin import sql, нужна_база, свежая_база
+from .test_web_catalog import справочники
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -32,24 +34,11 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'seller']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    справочники("plans")
+    компания(slug="seller")
+    компания(slug="other")
 
-    # Как в контейнере: перевод у Laravel выключен, его ведёт Python
-    # (docker/render-entrypoint.sh) — иначе синхронная очередь теста сразу
-    # запускала бы TranslateListing после продления
-    with laravel(MACHINE_TRANSLATION_ENABLED="false") as root:
+    with адрес() as root:
         yield root
 
 
@@ -78,17 +67,16 @@ def объявления(*статусы: str, компания: str = "seller")
 
         for i, status in enumerate(статусы):
             ids.append(
-                int(
-                    php(
-                        "echo App\\Models\\Listing::factory()->create(["
-                        f"'company_id' => {cid}, 'status' => '{status}',"
-                        f"'title' => 'Цемент {i}', 'description' => 'Мешки по 50 кг',"
-                        "'moderation_note' => 'Уточните цену',"
-                        "'expires_at' => now()->addDay(), 'published_at' => "
-                        f"{'null' if status == 'draft' else 'now()->subDays(10)'}"
-                        "])->id;",
-                        {"MACHINE_TRANSLATION_ENABLED": "false"},
-                    ).splitlines()[-1]
+                объявление(
+                    company_id=cid,
+                    status=status,
+                    title=f"Цемент {i}",
+                    description="Мешки по 50 кг",
+                    moderation_note="Уточните цену",
+                    expires_at=Выражение("now() + interval '1 day'"),
+                    published_at=None
+                    if status == "draft"
+                    else Выражение("now() - interval '10 days'"),
                 )
             )
 
@@ -119,15 +107,14 @@ def снимок(cid: int | None = None) -> Callable[[], Any]:
                 "select user_id, company_id, type, title, tone, url from user_notifications "
                 "order by id"
             ),
-            # Laravel берёт выбранные без сортировки (физический порядок
-            # строк PostgreSQL), Django — по id: порядок строк журнала не сверяем
+            # Порядок строк журнала у пачки не задан — сортируем
             "journal": sorted(журнал),
         }
 
     return run
 
 
-def сверить(
+def послать(
     сайт: str,
     path: str,
     статусы: tuple[str, ...],
@@ -137,31 +124,34 @@ def сверить(
     method: str = "POST",
     id_index: int | None = 0,
 ) -> dict[str, Any]:
-    """Отправить на обе стороны; номер объявления подставляется после подготовки."""
-    подготовка = объявления(*статусы)
-    ids = подготовка()
-    адрес = path.format(id=ids[id_index] if id_index is not None and ids else 0, ids=ids)
-
-    def body_of() -> Any:
-        return body(ids) if callable(body) else body
+    """Отправить форму; номер объявления подставляется после подготовки."""
+    ids = объявления(*статусы)()
+    путь = path.format(id=ids[id_index] if id_index is not None and ids else 0, ids=ids)
 
     return отправить(
         сайт,
-        адрес,
-        lambda: _повторить(подготовка, ids),
+        путь,
+        lambda: None,
         снимок(),
         uid=uid,
-        body=body_of(),
+        body=body(ids) if callable(body) else body,
         method=method,
         headers=inertia(),
     )
 
 
-def _повторить(подготовка: Callable[[], list[int]], ids: list[int]) -> None:
-    """Каждая сторона — с теми же номерами объявлений: сбросить последовательность."""
-    sql("select setval('listings_id_seq', %s, false)", [min(ids) if ids else 1])
-    новые = подготовка()
-    assert новые == ids, (новые, ids)
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
+def через(дней: int) -> date:
+    """Дата через столько-то дней от сегодня (по часам базы)."""
+    return sql("select (now() + %s * interval '1 day')::date", [дней])[0][0]
+
+
+# Строка снимка listings: title, status, moderation_note, expires_at,
+# published_at, удалено, search_text, обновлено
+СТАТУС, ЗАМЕТКА, СРОК, ОПУБЛИКОВАНО, УДАЛЕНО = 1, 2, 3, 4, 5
 
 
 # ── Одно объявление ─────────────────────────────────────────────────
@@ -170,79 +160,125 @@ def _повторить(подготовка: Callable[[], list[int]], ids: list
 @pytest.mark.parametrize("admin", [False, True])
 @pytest.mark.parametrize("status", ["active", "archived", "draft", "rejected"])
 def test_продлить(сайт, status, admin):
-    итог = сверить(сайт, "/cabinet/listings/{id}/renew", (status,), uid=продавец(admin))
+    итог = послать(сайт, "/cabinet/listings/{id}/renew", (status,), uid=продавец(admin))
+    [строка] = итог["база"]["listings"]
 
     assert итог["ответ"]["status"] == 302
-    assert ('"error":' in итог["сессия"]["payload"]) is (status == "rejected")
+
+    if status == "rejected":
+        # Отклонённое не продлевается: срок прежний, журнала нет
+        assert "отклонено" in сессия(итог)["error"]
+        assert строка[СТАТУС] == "rejected" and строка[СРОК] == через(1)
+        assert итог["база"]["journal"] == []
+    else:
+        # Free — 30 дней от сегодня; черновик заодно публикуется
+        assert сессия(итог)["success"].startswith("Объявление продлено до ")
+        assert строка[СТАТУС] == "active" and строка[СРОК] == через(30)
+        assert строка[ОПУБЛИКОВАНО] == (через(0) if status == "draft" else через(-10))
+        # Журнал администратора — только когда правит сотрудник
+        assert [j[1] for j in итог["база"]["journal"]] == (["updated"] if admin else [])
 
 
 def test_продлить_сверх_лимита(сайт):
     """Free — 4 активных: пятое не продлевается, сообщение с подсказкой."""
-    итог = сверить(
+    итог = послать(
         сайт,
         "/cabinet/listings/{id}/renew",
         ("archived", "active", "active", "active", "active"),
         uid=продавец(),
     )
 
-    assert '"error":' in итог["сессия"]["payload"]
+    assert сессия(итог)["error"].startswith("Достигнут лимит тарифа Free: 4 активных")
+    assert "Снимите ненужное" in сессия(итог)["error"]
+    assert итог["база"]["listings"][0][СТАТУС] == "archived"
 
 
 @pytest.mark.parametrize("admin", [False, True])
 def test_снять_и_удалить(сайт, admin):
     uid = продавец(admin)
-    сверить(сайт, "/cabinet/listings/{id}/archive", ("active",), uid=uid)
-    итог = сверить(сайт, "/cabinet/listings/{id}", ("active",), uid=uid, method="DELETE")
+    снято = послать(сайт, "/cabinet/listings/{id}/archive", ("active",), uid=uid)
+
+    assert снято["ответ"]["status"] == 302
+    assert сессия(снято)["success"] == "Объявление снято с публикации"
+    assert снято["база"]["listings"][0][СТАТУС] == "archived"
+
+    итог = послать(сайт, "/cabinet/listings/{id}", ("active",), uid=uid, method="DELETE")
 
     assert итог["ответ"]["status"] == 303
-    assert итог["база"]["listings"][0][5] is True
+    assert сессия(итог)["success"] == "Объявление удалено"
+    # Мягкое удаление: строка на месте, отмечена удалённой
+    assert итог["база"]["listings"][0][УДАЛЕНО] is True
+    assert [j[1] for j in итог["база"]["journal"]] == (["deleted"] if admin else [])
 
 
 def test_удалить_подменой_метода(сайт):
     """
-    POST с _method=DELETE Laravel понимает как DELETE (шаг 62: Apache
-    отдаёт такой POST Django, и Django подменяет метод так же).
+    POST с _method=DELETE понимается как DELETE (шаг 62: Apache отдаёт
+    такой POST Django, и Django подменяет метод, как это делал Laravel).
     """
     uid = продавец()
-    итог = сверить(сайт, "/cabinet/listings/{id}", ("active",), uid=uid, body={"_method": "DELETE"})
+    итог = послать(сайт, "/cabinet/listings/{id}", ("active",), uid=uid, body={"_method": "DELETE"})
 
     assert итог["ответ"]["status"] == 303
-    assert итог["база"]["listings"][0][5] is True
+    assert итог["база"]["listings"][0][УДАЛЕНО] is True
 
 
 def test_удалить_заголовком_подмены(сайт):
     uid = продавец()
-    подготовка = объявления("active")
-    ids = подготовка()
+    ids = объявления("active")()
     итог = отправить(
         сайт,
         f"/cabinet/listings/{ids[0]}",
-        lambda: _повторить(подготовка, ids),
+        lambda: None,
         снимок(),
         uid=uid,
         headers={**inertia(), "X-HTTP-Method-Override": "delete"},
     )
 
     assert итог["ответ"]["status"] == 303
-    assert итог["база"]["listings"][0][5] is True
+    assert итог["база"]["listings"][0][УДАЛЕНО] is True
 
 
 @pytest.mark.parametrize("status", ["needs_changes", "active", "rejected"])
 @pytest.mark.parametrize("prefix", ["", "/en"])
 def test_опубликовать_заново(сайт, status, prefix):
-    итог = сверить(сайт, prefix + "/cabinet/listings/{id}/resubmit", (status,), uid=продавец())
+    итог = послать(сайт, prefix + "/cabinet/listings/{id}/resubmit", (status,), uid=продавец())
+    [строка] = итог["база"]["listings"]
 
-    assert bool(итог["база"]["notifications"]) is (status == "needs_changes")
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"].endswith(prefix + "/cabinet/settings")
+
+    if status == "needs_changes":
+        # На витрине снова: заметка модератора снята, срок — заново
+        assert строка[СТАТУС] == "active" and строка[ЗАМЕТКА] is None
+        assert строка[ОПУБЛИКОВАНО] == через(0)
+        assert "success" in сессия(итог)
+        # Уведомление — обоим сотрудникам компании, в ленту — одно событие
+        assert {n[0] for n in итог["база"]["notifications"]} == {
+            учётка("seller@savdex.uz"),
+            учётка("colleague@savdex.uz"),
+        }
+        заголовок = (
+            "The listing “Цемент 0” has been published again" if prefix else "Цемент 0"
+        )
+        assert all(заголовок in n[3] for n in итог["база"]["notifications"])
+        assert [e[0] for e in итог["база"]["events"]] == ["moderation"]
+    else:
+        assert "error" in сессия(итог)
+        assert строка[СТАТУС] == status and строка[ЗАМЕТКА] == "Уточните цену"
+        assert итог["база"]["notifications"] == [] and итог["база"]["events"] == []
 
 
 def test_опубликовать_заново_сверх_лимита(сайт):
-    итог = сверить(
+    итог = послать(
         сайт,
         "/cabinet/listings/{id}/resubmit",
         ("needs_changes", "active", "active", "active", "active"),
         uid=продавец(),
     )
 
+    assert сессия(итог)["error"].startswith("Достигнут лимит тарифа Free")
+    assert итог["база"]["listings"][0][СТАТУС] == "needs_changes"
     assert not итог["база"]["notifications"]
 
 
@@ -258,6 +294,7 @@ def test_чужое_объявление_404(сайт):
     )
 
     assert итог["ответ"]["status"] == 404
+    assert итог["база"]["listings"][0][СРОК] == через(1)
 
 
 # ── Пачкой ──────────────────────────────────────────────────────────
@@ -266,7 +303,7 @@ def test_чужое_объявление_404(сайт):
 @pytest.mark.parametrize("what", ["renew", "archive", "delete"])
 @pytest.mark.parametrize("prefix", ["", "/en", "/uz"])
 def test_пачкой(сайт, what, prefix):
-    итог = сверить(
+    итог = послать(
         сайт,
         prefix + "/cabinet/listings/bulk",
         ("active", "archived", "rejected"),
@@ -274,12 +311,36 @@ def test_пачкой(сайт, what, prefix):
         body=lambda ids: {"action": what, "ids": [str(i) for i in ids]},
         id_index=None,
     )
+    строки = итог["база"]["listings"]
+    журнал = итог["база"]["journal"]
 
-    assert '"success":' in итог["сессия"]["payload"]
+    assert итог["ответ"]["status"] == 302
+
+    if what == "renew":
+        # Отклонённое не продлевается
+        assert [r[СТАТУС] for r in строки] == ["active", "active", "rejected"]
+        assert [r[СРОК] for r in строки] == [через(30), через(30), через(1)]
+        assert [j[1] for j in журнал] == ["updated", "updated"]
+        число = "2"
+    elif what == "archive":
+        assert [r[СТАТУС] for r in строки] == ["archived"] * 3
+        # Уже снятое не меняется — в журнале его нет
+        assert [j[1] for j in журнал] == ["updated", "updated"]
+        число = "3"
+    else:
+        assert [r[УДАЛЕНО] for r in строки] == [True] * 3
+        assert [j[1] for j in журнал] == ["deleted"] * 3
+        число = "3"
+
+    # trans_choice на языке адреса: «2 объявления», «2 ta e’lon»
+    успех = сессия(итог)["success"]
+    assert число in успех
+    assert ("e’lon" in успех) is (prefix == "/uz")
+    assert ("объявлени" in успех) is (prefix == "")
 
 
 def test_пачкой_свободные_слоты(сайт):
-    итог = сверить(
+    итог = послать(
         сайт,
         "/cabinet/listings/bulk",
         ("archived", "archived", "active", "active", "active"),
@@ -288,23 +349,26 @@ def test_пачкой_свободные_слоты(сайт):
         id_index=None,
     )
 
-    assert '"error":' in итог["сессия"]["payload"]
+    # Свободен один слот из четырёх, а выбрано два — не продлевается ни одно
+    assert сессия(итог)["error"].startswith("Достигнут лимит тарифа Free")
+    assert [r[СТАТУС] for r in итог["база"]["listings"][:2]] == ["archived", "archived"]
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ошибки"),
     [
-        {},
-        {"action": "boom", "ids": []},
-        {"action": "archive", "ids": ["x", 1.5, None]},
-        {"action": "renew", "ids": "7"},
-        {"action": "renew", "ids": [999999]},
-        {"action": "renew", "ids": [" 7 "]},
+        ({}, ["action", "ids"]),
+        ({"action": "boom", "ids": []}, ["action", "ids"]),
+        ({"action": "archive", "ids": ["x", 1.5, None]}, ["ids.0", "ids.1", "ids.2"]),
+        ({"action": "renew", "ids": "7"}, ["ids"]),
+        # Проверку прошло, но своих объявлений среди выбранных нет
+        ({"action": "renew", "ids": [999999]}, None),
+        ({"action": "renew", "ids": [" 7 "]}, None),
     ],
 )
 @pytest.mark.parametrize("prefix", ["", "/en"])
-def test_пачкой_ошибки(сайт, body, prefix):
-    сверить(
+def test_пачкой_ошибки(сайт, body, ошибки, prefix):
+    итог = послать(
         сайт,
         prefix + "/cabinet/listings/bulk",
         ("rejected",),
@@ -312,10 +376,22 @@ def test_пачкой_ошибки(сайт, body, prefix):
         body=body,
         id_index=None,
     )
+    данные = сессия(итог)
+
+    assert итог["ответ"]["status"] == 302
+
+    if ошибки is None:
+        assert данные["error"] == ("Nothing is selected" if prefix else "Ничего не выбрано")
+    else:
+        assert list(данные["errors"]["default"]["messages"]) == ошибки
+        assert данные["_old_input"] == (body or [])
+
+    assert итог["база"]["listings"][0][СТАТУС] == "rejected"
+    assert итог["база"]["journal"] == []
 
 
 def test_пачкой_только_отклонённые(сайт):
-    итог = сверить(
+    итог = послать(
         сайт,
         "/cabinet/listings/bulk",
         ("rejected",),
@@ -324,4 +400,5 @@ def test_пачкой_только_отклонённые(сайт):
         id_index=None,
     )
 
-    assert '"error":' in итог["сессия"]["payload"]
+    assert "отклонено" in сессия(итог)["error"]
+    assert итог["база"]["listings"][0][СРОК] == через(1)

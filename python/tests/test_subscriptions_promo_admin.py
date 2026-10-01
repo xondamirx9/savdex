@@ -2,52 +2,67 @@
 Этап 7, шаг 57: «Подписки» и «Промокоды» на Django вместо ресурсов Filament.
 
 Подписки: «Назначить тариф», «Сменить или продлить» (пусто — период
-тарифа, ноль — бессрочно) и «Отменить» — база и журнал после кнопки на
-Django такие же, как после SubscriptionService::assign и forceFill у
-Laravel. Действия — только с правом правки: поддержка раздел видит, но
-тариф не выдаёт.
+тарифа, ноль — бессрочно) и «Отменить» — база и журнал после кнопки:
+прежняя подписка истекла, новая — с периодом, основанием и тем, кто
+выдал; кошелёк — на новый период; уведомление компании. Действия —
+только с правом правки: поддержка раздел видит, но тариф не выдаёт.
 
 Промокоды: выпуск пачкой (вид, тариф, срок или скидка, до какого дня,
-префикс, повод; строка журнала на код, как AuditObserver), выключатель —
-как у Laravel, погашенный не трогается; массовое отключение.
+префикс, повод; строка журнала на код, как AuditObserver), выключатель,
+погашенный не трогается; массовое отключение.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 from collections.abc import Callable
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания, пользователь
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 SUBS = "/py/admin/finance/subscription/"
 PROMO = "/py/admin/finance/promocode/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
+
+
+def тарифы() -> None:
+    """Тарифы из снимка savdex/bootstrap/seeds.json — как PlanSeeder."""
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        "seeds.seed(data={k: v if k == 'plans' else [] for k, v in data.items()})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'buyer',"
-        " 'name' => 'ООО Покупатель', 'tin' => '301234567']);"
-        "App\\Models\\User::factory()->create(['company_id' => $c->id]);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    тарифы()
+    c = компания(slug="buyer", name="ООО Покупатель", tin="301234567")
+    пользователь(company_id=c)
 
     return {
         role: сотрудник(role) for role in ("superadmin", "finance", "support", "sales", "admin")
@@ -108,25 +123,26 @@ def снимок() -> dict[str, Any]:
     }
 
 
-def по_сторонам(подготовка: Callable[[], None], laravel: str, django_шаг: Callable[[], Any]) -> Any:
-    подготовка()
-    php(laravel, БЕЗ_ПЕРЕВОДА)
-    л = снимок()
-
+def шаг(подготовка: Callable[[], None], django_шаг: Callable[[], Any]) -> tuple[Any, Any]:
+    """Подготовка, шаг Django, снимок базы после него."""
     подготовка()
     ответ = django_шаг()
-    д = снимок()
 
-    assert д == л, (д, л)
-
-    return ответ, д
+    return ответ, снимок()
 
 
-def _от_имени(uid: int, код: str) -> str:
-    return (
-        f"Illuminate\\Support\\Facades\\Auth::login(App\\Models\\User::find({uid}));"
-        f" {код} echo 'ok';"
-    )
+def журнал(база: dict[str, Any]) -> list[tuple[Any, ...]]:
+    """Журнал из снимка: правки — разобранным JSON (метки времени — «T»)."""
+    return [(*row[:6], json.loads(row[6])) for row in база["journal"]]
+
+
+def до(дней: int) -> str:
+    """«Действует до …»: дата через столько дней по Ташкенту."""
+    return (datetime.now(ZoneInfo("Asia/Tashkent")) + timedelta(days=дней)).strftime("%d.%m.%Y")
+
+
+#: Прежняя подписка (flash, 30 дней по оплате) — после новой истекла
+ПРЕЖНЯЯ = ("expired", "payment", True, True, "30 days", None, None)
 
 
 # ── Подписки ────────────────────────────────────────────────────────
@@ -154,16 +170,8 @@ def test_назначить(люди, дни, кошелёк):
     uid = люди["finance"]
     company = _id("companies", "slug = 'buyer'")
     plan = _id("plans", "code = 'business'")
-    php_days = "null" if дни == "" else дни
-    по_сторонам(
+    _, база = шаг(
         lambda: сброс(кошелёк=кошелёк),
-        _от_имени(
-            uid,
-            "app(App\\Services\\SubscriptionService::class)->assign("
-            f"App\\Models\\Company::find({company}), App\\Models\\Plan::find({plan}), "
-            f"days: {php_days}, source: 'manual', grantedBy: App\\Models\\User::find({uid}), "
-            "reason: 'дебиторка');",
-        ),
         lambda: django(
             uid,
             (
@@ -173,20 +181,44 @@ def test_назначить(люди, дни, кошелёк):
             ),
         ),
     )
+    company_, flash, business = company, _id("plans", "code = 'flash'"), plan
+    срок = {"": "30 days", "0": None, "14": "14 days"}[дни]
+
+    # Пусто — период тарифа (30 дней), ноль — бессрочно
+    assert база["subscriptions"] == [
+        (company_, flash, *ПРЕЖНЯЯ),
+        (company_, business, "active", "manual", False, False, срок, uid, "дебиторка"),
+    ]
+    # Кошелёк на новый период: кредиты остаются, единицы продвижения
+    # тарифа (50) добавляются, счётчик раскрытий — с нуля; срок — дни
+    # тарифа, у бессрочного — месяц
+    assert база["wallets"] == (
+        [(2, 3 + 50, 0, 14 * 24)] if кошелёк else [(0, 50, 0, 30 * 24)]
+    )
+    текст = "Действует бессрочно." if дни == "0" else f"Действует до {до(int(дни or 30))}."
+    assert база["notifications"] == [
+        ("billing", "Вам назначен тариф «Business»", текст, "success", "/cabinet/billing")
+    ]
+    assert база["events"] == [
+        ("billing", "success", "Вам назначен тариф «Business»", "/cabinet/billing")
+    ]
+    assert журнал(база) == [
+        (
+            uid, "created", "subscriptions", "App\\Models\\Subscription", 2, "Subscription #2",
+            {"after": {
+                "company_id": company_, "plan_id": business, "status": "active",
+                "started_at": "T", "ends_at": None if дни == "0" else "T", "auto_renew": False,
+                "source": "manual", "granted_by": uid, "grant_reason": "дебиторка", "id": 2,
+            }},
+        )
+    ]  # fmt: skip
 
 
 def test_сменить_или_продлить(люди):
     uid = люди["superadmin"]
     plan = _id("plans", "code = 'premium'")
-    _, база = по_сторонам(
+    _, база = шаг(
         сброс,
-        _от_имени(
-            uid,
-            "$s = App\\Models\\Subscription::firstOrFail();"
-            "app(App\\Services\\SubscriptionService::class)->assign($s->company, "
-            f"App\\Models\\Plan::find({plan}), days: 60, source: 'manual', "
-            f"grantedBy: App\\Models\\User::find({uid}), reason: 'компенсация');",
-        ),
         lambda: django(
             uid,
             (
@@ -196,23 +228,43 @@ def test_сменить_или_продлить(люди):
             ),
         ),
     )
+    company, flash = _id("companies", "slug = 'buyer'"), _id("plans", "code = 'flash'")
 
-    assert [row[2] for row in база["subscriptions"]] == ["expired", "active"]
+    assert база["subscriptions"] == [
+        (company, flash, *ПРЕЖНЯЯ),
+        (company, plan, "active", "manual", False, False, "60 days", uid, "компенсация"),
+    ]
+    # Premium: 150 единиц продвижения, период кошелька — 60 дней
+    assert база["wallets"] == [(0, 150, 0, 60 * 24)]
+    assert база["notifications"] == [
+        (
+            "billing",
+            "Вам назначен тариф «Premium»",
+            f"Действует до {до(60)}.",
+            "success",
+            "/cabinet/billing",
+        )
+    ]
+    assert [row[:6] for row in журнал(база)] == [
+        (uid, "created", "subscriptions", "App\\Models\\Subscription", 2, "Subscription #2")
+    ]
 
 
 def test_отменить(люди):
     uid = люди["finance"]
-    _, база = по_сторонам(
-        сброс,
-        _от_имени(
-            uid,
-            "App\\Models\\Subscription::firstOrFail()->forceFill(['status' => 'cancelled',"
-            " 'cancelled_at' => now(), 'auto_renew' => false])->save();",
-        ),
-        lambda: django(uid, ("post", SUBS + "1/cancel/", {})),
-    )
-
+    _, база = шаг(сброс, lambda: django(uid, ("post", SUBS + "1/cancel/", {})))
     assert база["subscriptions"][0][2:6] == ("cancelled", "payment", False, True)
+    # Без уведомлений и без кошелька — только отметка и журнал
+    assert база["wallets"] == база["notifications"] == база["events"] == []
+    assert журнал(база) == [
+        (
+            uid, "updated", "subscriptions", "App\\Models\\Subscription", 1, "Subscription #1",
+            {
+                "before": {"status": "active", "auto_renew": True, "cancelled_at": None},
+                "after": {"status": "cancelled", "auto_renew": False, "cancelled_at": "T"},
+            },
+        )
+    ]  # fmt: skip
 
 
 def test_без_основания_не_выдаётся(люди):
@@ -305,15 +357,16 @@ def test_выключатель(люди, включён):
         сброс(подписка=False)
         _код(is_active=включён)
 
-    по_сторонам(
-        подготовка,
-        _от_имени(
-            uid,
-            "$r = App\\Models\\PromoCode::firstOrFail();"
-            " $r->forceFill(['is_active' => ! $r->is_active])->save();",
-        ),
-        lambda: django(uid, ("post", PROMO + "1/toggle/", {})),
-    )
+    _, база = шаг(подготовка, lambda: django(uid, ("post", PROMO + "1/toggle/", {})))
+    premium = _id("plans", "code = 'premium'")
+
+    assert база["promo"] == [("SVDX-TEST0001", premium, 30, None, None, not включён, None, None)]
+    assert журнал(база) == [
+        (
+            uid, "updated", "promocodes", "App\\Models\\PromoCode", 1, "SVDX-TEST0001",
+            {"before": {"is_active": включён}, "after": {"is_active": not включён}},
+        )
+    ]  # fmt: skip
 
 
 def test_погашенный_и_массовое_отключение(люди):

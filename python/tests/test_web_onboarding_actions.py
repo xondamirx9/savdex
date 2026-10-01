@@ -1,6 +1,6 @@
 """
 Второй шаг регистрации, пропуск, «Оцените SavdEx» и удаление учётки на
-Django неотличимы от Laravel.
+Django: ответ, сессия после него и что записано в базу.
 
 - Компания со второго шага: проверка (ИНН по правилу Tin — у физлица
   и ПИНФЛ, одна компания на ИНН, до пяти направлений), форма
@@ -12,7 +12,7 @@ Django неотличимы от Laravel.
 - Удаление учётки: пароль ещё раз, объявления владельца — в архив,
   выход, мягкое удаление, новая сессия.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -24,14 +24,14 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import php, sql, нужна_база, свежая_база, страна
+from .factories import категория, компания, объявление
+from .pg_admin import sql, нужна_база, свежая_база, страна
 from .test_web_forms import отправить, учётка
-from .web_site import ПАРОЛЬ, laravel
+from .web_site import ПАРОЛЬ, адрес
 
 pytestmark = нужна_база
 
 ПОЧТА = "onboard@savdex.uz"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
@@ -44,17 +44,13 @@ def сайт() -> Iterator[str]:
         "values (%s, 'tashkent', 0, true, now(), now())",
         [uz],
     )
-    php(
-        f"App\\Models\\Company::factory()->create(['slug' => 'mine', 'country_id' => {uz},"
-        " 'tin' => '301234567']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'blocked', 'status' => 'blocked']);"
-        "foreach (['cement', 'metal', 'wood', 'glass', 'paint', 'tiles'] as $slug) {"
-        " App\\Models\\Category::factory()->create(['slug' => $slug]); }"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="mine", country_id=uz, tin="301234567")
+    компания(slug="blocked", status="blocked")
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    for slug in ("cement", "metal", "wood", "glass", "paint", "tiles"):
+        категория(slug=slug)
+
+    with адрес() as root:
         yield root
 
 
@@ -92,6 +88,28 @@ def _журнал() -> list[Any]:
             "select action, section, subject_label, changes::text from admin_actions order by id"
         )
     ]
+
+
+def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
+def ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
+    """Ошибки проверки в сессии: поле → тексты."""
+    errors = _сессия(итог).get("errors") or {"default": {"messages": {}}}
+
+    return dict(errors["default"]["messages"])
+
+
+def назад(итог: dict[str, Any], сайт: str) -> bool:
+    """Ответ — переход назад, на страницу формы (Referer)."""
+    return итог["ответ"]["status"] == 302 and (
+        итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+    )
+
+
+#: Компания со второго шага
+СОЗДАНА = "Компания создана. Осталось подтвердить почту — и можно публиковать объявления."
 
 
 # ── Второй шаг регистрации ──────────────────────────────────────────
@@ -140,36 +158,87 @@ def верно() -> dict[str, Any]:
     }
 
 
+#: Ошибка поля ИНН
+def _инн(текст: str) -> dict[str, list[str]]:
+    return {"tin": [текст]}
+
+
 @pytest.mark.parametrize(
-    ("правка", "поля"),
+    ("правка", "поля", "ждём"),
     [
-        ({}, {}),
-        ({}, {"account_type": "individual"}),
-        ({"type": None}, {"account_type": "freelancer"}),
-        ({"type": None}, {}),
-        ({"type": None, "name": ""}, {"account_type": "individual"}),
-        ({"tin": "12345678901234"}, {"account_type": "individual"}),
-        ({"tin": "12345678901234"}, {}),
-        ({"tin": "3023456"}, {"account_type": "individual"}),
-        ({"tin": "30234567a"}, {}),
-        ({"tin": "111111111"}, {}),
-        ({"tin": "301234567"}, {}),
-        ({"tin": "12345", "country_id": "kz"}, {}),
-        ({"tin": "1234567", "country_id": "kz"}, {}),
-        ({"tin": None}, {"account_type": "robot"}),
-        # Нечисловой город у Laravel — ошибка 500 (exists сравнивает строку
+        # ждём: (форма собственности, ИНН) созданной компании — или ошибки
+        ({}, {}, ("legal", "302345678")),
+        ({}, {"account_type": "individual"}, ("individual", "302345678")),
+        # Фрилансеру тип компании не нужен
+        ({"type": None}, {"account_type": "freelancer"}, ("freelancer", "302345678")),
+        ({"type": None}, {}, {"type": ["Выберите тип компании"]}),
+        (
+            {"type": None, "name": ""},
+            {"account_type": "individual"},
+            {"name": ["Укажите имя, которое увидят партнёры"]},
+        ),
+        # ПИНФЛ — только у физлица
+        ({"tin": "12345678901234"}, {"account_type": "individual"}, ("individual", "12345678901234")),
+        ({"tin": "12345678901234"}, {}, _инн("ИНН (СТИР) в Узбекистане — ровно 9 цифр.")),
+        (
+            {"tin": "3023456"},
+            {"account_type": "individual"},
+            _инн("У физического лица в Узбекистане ИНН — 9 цифр, ПИНФЛ — 14 цифр."),
+        ),
+        ({"tin": "30234567a"}, {}, _инн("ИНН состоит только из цифр.")),
+        ({"tin": "111111111"}, {}, _инн("Указан недействительный ИНН.")),
+        # Одна компания на ИНН: 301234567 — у «mine»
+        ({"tin": "301234567"}, {}, _инн("Компания с таким ИНН уже зарегистрирована на площадке")),
+        ({"tin": "12345", "country_id": "kz"}, {}, _инн("ИНН должен содержать от 6 до 15 цифр.")),
+        ({"tin": "1234567", "country_id": "kz"}, {}, ("legal", "1234567")),
+        # Неизвестный вид учётки — юрлицо; ИНН необязателен
+        ({"tin": None}, {"account_type": "robot"}, ("legal", None)),
+        # Нечисловой город у Laravel был ошибкой 500 (exists сравнивал строку
         # с числовым столбцом), у Django — ошибка проверки: здесь число
-        ({"country_id": 99999, "city_id": 99998}, {}),
-        ({"primary_role": "seller"}, {}),
-        ({"categories": "cement"}, {}),
-        ({"categories": ["all6"]}, {}),
-        ({"categories": [99999, "abc"]}, {}),
-        ({"categories": ["dup"]}, {}),
-        ({"custom_category": "x" * 81, "name": "Ц"}, {}),
-        ({"categories": None}, {}),
+        (
+            {"country_id": 99999, "city_id": 99998},
+            {},
+            {"country_id": ["validation.exists"], "city_id": ["validation.exists"]},
+        ),
+        ({"primary_role": "seller"}, {}, {"primary_role": ["validation.in"]}),
+        # Строка вместо списка: не массив, а max:5 у строки — длина «cement»
+        (
+            {"categories": "cement"},
+            {},
+            {
+                "categories": [
+                    "validation.array",
+                    "Не больше пяти категорий — иначе профиль перестаёт что-либо говорить "
+                    "о компании",
+                ]
+            },
+        ),
+        (
+            {"categories": ["all6"]},
+            {},
+            {
+                "categories": [
+                    "Не больше пяти категорий — иначе профиль перестаёт что-либо говорить "
+                    "о компании"
+                ]
+            },
+        ),
+        (
+            {"categories": [99999, "abc"]},
+            {},
+            {"categories.0": ["validation.exists"], "categories.1": ["validation.integer"]},
+        ),
+        # Повтор направления — одна строка
+        ({"categories": ["dup"]}, {}, ("legal", "302345678")),
+        (
+            {"custom_category": "x" * 81, "name": "Ц"},
+            {},
+            {"name": ["validation.min.string"], "custom_category": ["validation.max.string"]},
+        ),
+        ({"categories": None}, {}, {"categories": ["validation.array"]}),
     ],
 )
-def test_второй_шаг(сайт, правка, поля):
+def test_второй_шаг(сайт, правка, поля, ждём):
     body = {**верно(), **правка}
 
     if body.get("country_id") == "kz":
@@ -187,16 +256,33 @@ def test_второй_шаг(сайт, правка, поля):
     итог = отправить(
         сайт, "/onboarding/company", сброс_компаний(**поля), снимок_компаний, uid=uid, body=body
     )
+    база = итог["база"]
 
-    if not правка and not поля:
-        assert итог["ответ"]["headers"]["location"].endswith("/verify-email")
-        assert len(итог["база"]["companies"]) == 1
+    if isinstance(ждём, dict):
+        assert назад(итог, сайт)
+        assert ошибки(итог) == ждём
+        assert база["companies"] == [] and база["categories"] == []
+        assert база["user"] == [(False, "owner")]
+
+        return
+
+    форма, инн = ждём
+    assert итог["ответ"]["headers"]["location"] == сайт + "/verify-email"
+    assert _сессия(итог)["success"] == СОЗДАНА
+    [company] = база["companies"]
+    # Адрес — из названия; название без пробелов по краям
+    assert company[1:5] == ("tsement-plius", "Цемент Плюс", body["type"], форма)
+    assert (company[7], company[8], company[9], company[10]) == (инн, "supplier", "Бетон", "active")
+    assert len(база["categories"]) == (1 if правка.get("categories") == ["dup"] else 2)
+    assert база["user"] == [(True, "owner")]
+    # Не сотрудник — журнал администратора пуст
+    assert база["journal"] == []
 
 
 @pytest.mark.parametrize("admin", [False, True])
 def test_второй_шаг_журнал_администратора(сайт, admin):
     uid = пользователь(is_admin=admin)
-    отправить(
+    итог = отправить(
         сайт,
         "/onboarding/company",
         сброс_компаний(is_admin=admin),
@@ -204,12 +290,28 @@ def test_второй_шаг_журнал_администратора(сайт,
         uid=uid,
         body=верно(),
     )
+    журнал = итог["база"]["journal"]
+
+    assert итог["ответ"]["headers"]["location"] == сайт + "/verify-email"
+
+    if not admin:
+        assert журнал == []
+
+        return
+
+    # Сотрудник, заводящий компанию, пишет журнал: компания и его учётка
+    assert [(a, s, label) for a, s, label, _ in журнал] == [
+        ("created", "companies", "Цемент Плюс"),
+        ("updated", "users", f"Покупатель {ПОЧТА}"),
+    ]
+    assert json.loads(журнал[0][3])["after"]["tin"] == "302345678"
+    assert json.loads(журнал[1][3])["before"] == {"company_id": None}
 
 
 def test_второй_шаг_компания_уже_есть(сайт):
     uid = пользователь()
     mine = _номер("companies", "mine")
-    отправить(
+    итог = отправить(
         сайт,
         "/onboarding/company",
         сброс_компаний(company_id=mine, company_role="owner"),
@@ -218,11 +320,17 @@ def test_второй_шаг_компания_уже_есть(сайт):
         body=верно(),
     )
 
+    # Вторую компанию не завести — в кабинет
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet"
+    assert итог["база"]["companies"] == []
+    assert sql("select company_id from users where id = %s", [uid]) == [(mine,)]
+
 
 @pytest.mark.parametrize("uid", [True, None])
 def test_пропустить(сайт, uid):
     номер = пользователь()
-    отправить(
+    итог = отправить(
         сайт,
         "/onboarding/skip",
         сброс_компаний(),
@@ -230,6 +338,17 @@ def test_пропустить(сайт, uid):
         uid=номер if uid else None,
         body={},
     )
+
+    assert итог["база"]["companies"] == []
+
+    if uid is None:
+        assert итог["ответ"]["headers"]["location"] == сайт + "/login"
+    else:
+        assert итог["ответ"]["headers"]["location"] == сайт + "/verify-email"
+        assert _сессия(итог)["warning"] == (
+            "Данные компании можно заполнить позже в кабинете. "
+            "Без них публикация объявлений недоступна."
+        )
 
 
 # ── «Оцените SavdEx» ────────────────────────────────────────────────
@@ -282,35 +401,67 @@ def снимок_отзыва() -> Any:
 }
 
 
+НА_ПРОВЕРКУ = (
+    "Отзыв отправлен на проверку. Обычно она занимает несколько часов — после этого отзыв "
+    "появится на странице компании."
+)
+ОПУБЛИКОВАН = "Спасибо! Отзыв опубликован."
+КОРОТКО = (
+    "Отзыв в пару слов ничего не говорит следующему покупателю — опишите, что было хорошо "
+    "и что нет"
+)
+ТЕКСТ = "Удобно искать поставщиков цемента, быстро отвечают."
+
+
 @pytest.mark.parametrize(
-    ("body", "настройка"),
+    ("body", "настройка", "ждём"),
     [
-        ({}, {}),
-        ({"rating": 6, "body": "коротко", "rating_support": 9}, {}),
-        ({"rating": "4.5", "body": ["x"]}, {}),
-        ({"rating": 4.0, "body": ОТЗЫВ["body"]}, {}),
-        (ОТЗЫВ, {}),
-        (ОТЗЫВ, {"премодерация": False}),
-        (ОТЗЫВ, {"премодерация": False, "был": True}),
-        (ОТЗЫВ, {"был": True}),
+        # ждём: ошибки проверки, {"error": …} — отказ, иначе (сообщение, статус отзыва)
+        ({}, {}, {"rating": ["Поставьте общую оценку"], "body": ["Напишите, как прошла работа"]}),
+        (
+            {"rating": 6, "body": "коротко", "rating_support": 9},
+            {},
+            {
+                "rating": ["validation.between.numeric"],
+                "rating_support": ["validation.between.numeric"],
+                "body": [КОРОТКО],
+            },
+        ),
+        (
+            {"rating": "4.5", "body": ["x"]},
+            {},
+            {"rating": ["validation.integer"], "body": ["validation.string", КОРОТКО]},
+        ),
+        ({"rating": 4.0, "body": ОТЗЫВ["body"]}, {}, (НА_ПРОВЕРКУ, "moderation")),
+        (ОТЗЫВ, {}, (НА_ПРОВЕРКУ, "moderation")),
+        (ОТЗЫВ, {"премодерация": False}, (ОПУБЛИКОВАН, "published")),
+        # Правка своего скрытого отзыва — та же строка, пометки модератора сняты
+        (ОТЗЫВ, {"премодерация": False, "был": True}, (ОПУБЛИКОВАН, "published")),
+        (ОТЗЫВ, {"был": True}, (НА_ПРОВЕРКУ, "moderation")),
+        # Контакты в тексте — на проверку и без премодерации
         (
             {**ОТЗЫВ, "body": "Пишите мне на почту test@mail.ru, всё расскажу подробно"},
             {"премодерация": False},
+            (
+                "Отзыв отправлен на проверку: в тексте есть контакты: телефон, почта или "
+                "ссылка. Модератор посмотрит его вручную.",
+                "moderation",
+            ),
         ),
-        (ОТЗЫВ, {"email_verified_at": None}),
-        (ОТЗЫВ, {"status": "blocked"}),
-        (ОТЗЫВ, {"company": "blocked"}),
-        (ОТЗЫВ, {"company": "mine"}),
+        (ОТЗЫВ, {"email_verified_at": None}, {"error": "Подтвердите почту, чтобы оставлять отзывы."}),
+        (ОТЗЫВ, {"status": "blocked"}, {"error": "Ваша учётная запись заблокирована."}),
+        (ОТЗЫВ, {"company": "blocked"}, {"error": "Ваша учётная запись заблокирована."}),
+        (ОТЗЫВ, {"company": "mine"}, (НА_ПРОВЕРКУ, "moderation")),
     ],
 )
-def test_отзыв_о_площадке(сайт, body, настройка):
+def test_отзыв_о_площадке(сайт, body, настройка, ждём):
     настройка = dict(настройка)
 
     if "company" in настройка:
         настройка["company_id"] = _номер("companies", настройка.pop("company"))
 
     uid = пользователь()
-    отправить(
+    итог = отправить(
         сайт,
         "/reviews/new",
         сброс_отзыва(**настройка),
@@ -318,6 +469,39 @@ def test_отзыв_о_площадке(сайт, body, настройка):
         uid=uid,
         body=body,
     )
+    отзывы = итог["база"]
+
+    assert назад(итог, сайт)
+
+    if isinstance(ждём, dict) and "error" in ждём:
+        assert _сессия(итог)["error"] == ждём["error"]
+        assert ошибки(итог) == {}
+        assert len(отзывы) == (1 if настройка.get("был") else 0)
+
+        return
+
+    if isinstance(ждём, dict):
+        assert ошибки(итог) == ждём
+        assert отзывы == []
+
+        return
+
+    сообщение, статус = ждём
+    assert _сессия(итог)["success"] == сообщение
+    [отзыв] = отзывы
+    # Одна строка на пользователя: правка — та же строка
+    assert отзыв[0] == 1
+    assert отзыв[2] == настройка.get("company_id")
+    assert отзыв[3] == int(float(body["rating"]))
+    assert отзыв[8] == статус
+    assert отзыв[9] == (
+        "В тексте есть контакты: телефон, почта или ссылка" if "@" in body["body"] else None
+    )
+    # Модерация прошлой версии снята, правка — сейчас
+    assert отзыв[10:14] == (None, None, None, True)
+
+    if "@" not in body["body"]:
+        assert отзыв[7] == ТЕКСТ
 
 
 # ── Удалить учётную запись ──────────────────────────────────────────
@@ -328,14 +512,10 @@ def сброс_удаления(**поля: Any) -> Callable[[], None]:
         sql("delete from admin_actions")
         sql("delete from listings")
         mine = _номер("companies", "mine")
-        php(
-            "foreach (['active', 'active', 'draft', 'archived'] as $status) {"
-            f" App\\Models\\Listing::factory()->create(['company_id' => {mine},"
-            " 'status' => $status]); }"
-            "App\\Models\\Listing::factory()->create(['status' => 'active']);"
-            "echo 'ok';",
-            БЕЗ_ПЕРЕВОДА,
-        )
+        for status in ("active", "active", "draft", "archived"):
+            объявление(company_id=mine, status=status)
+
+        объявление(status="active")
         sql("update listings set updated_at = now() - interval '1 day'")
         пользователь(**поля)
         sql(
@@ -382,9 +562,39 @@ def test_удалить_учётку(сайт, body, поля):
 
     uid = пользователь(**поля)
     итог = удаление(сайт, сброс_удаления(**поля), uid, body)
+    db = итог["db"]
 
-    if body.get("password") == ПАРОЛЬ:
-        assert итог["db"]["user"][0][0] is True and итог["location"] == сайт
+    assert итог["status"] == 302
+    assert итог["cookies"] == ["XSRF-TOKEN", "savdex-session"]
+
+    if body.get("password") != ПАРОЛЬ:
+        # Ошибка проверки — назад, ничего не удалено, вход на месте
+        assert итог["location"] == сайт + "/cabinet/settings"
+        assert итог["old_session"] is True
+        assert итог["session"]["user_id"] == uid
+        assert '"password":[' in итог["session"]["payload"]
+        assert db["user"] == [(False, False, True)]
+        assert all(not свежее for _, _, свежее in db["listings"])
+
+        return
+
+    # Мягкое удаление, выход, новая сессия; remember_token сменён
+    assert итог["location"] == сайт
+    assert итог["old_session"] is False
+    assert итог["session"]["user_id"] is None
+    assert '"success":' in итог["session"]["payload"]
+    assert db["user"] == [(True, True, False)]
+    # Владелец уносит в архив живые объявления компании; чужие и черновики — на месте
+    архив = поля.get("company_role") == "owner"
+    assert [статус for _, статус, _ in db["listings"]] == (
+        ["archived", "archived", "draft", "archived", "active"]
+        if архив
+        else ["active", "active", "draft", "archived", "active"]
+    )
+    # Журнал — только у сотрудника, и токен в нём скрыт
+    assert [(a, s, label) for a, s, label, _ in db["journal"]] == (
+        [("updated", "users", f"Покупатель {ПОЧТА}")] if поля.get("is_admin") else []
+    )
 
 
 def удаление(
@@ -393,42 +603,34 @@ def удаление(
     """Сессия после удаления — новая: номер берётся из куки ответа."""
     from savdex import laravel_session
 
-    from .test_web_auth_actions import _сессия_из_ответа
     from .test_web_forms import SID, ТОКЕН, inertia
-    from .test_web_session import СЕССИЯ, завести, кука, строка
-    from .web_site import из_django, из_laravel
+    from .web_site import СЕССИЯ, завести, из_django, кука, куки_ответа, строка
 
-    стороны = {}
-
-    for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
-        подготовка()
-        завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: uid})
-        ответ = сторона(
-            сайт,
-            "/cabinet/settings/delete",
-            {СЕССИЯ: кука(СЕССИЯ, SID)},
-            {**inertia(), "Referer": сайт + "/cabinet/settings", "User-Agent": "savdex-parity"},
-            method="POST",
-            body=json.dumps(body),
-            content_type="application/json",
-        )
-        сессия = _сессия_из_ответа(ответ)
-        стороны[имя] = {
-            "status": ответ["status"],
-            "location": ответ["headers"].get("location"),
-            "cookies": sorted(ответ["cookies"]),
-            "session": None
-            if сессия is None
-            else {"payload": сессия["payload"], "user_id": сессия["user_id"]},
-            "old_session": строка(SID) is not None,
-            "db": снимок_удаления(),
-        }
-
-    assert стороны["django"] == стороны["laravel"], json.dumps(
-        стороны, ensure_ascii=False, default=str
+    подготовка()
+    завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: uid})
+    ответ = из_django(
+        сайт,
+        "/cabinet/settings/delete",
+        {СЕССИЯ: кука(СЕССИЯ, SID)},
+        {**inertia(), "Referer": сайт + "/cabinet/settings", "User-Agent": "savdex-parity"},
+        method="POST",
+        body=json.dumps(body),
+        content_type="application/json",
     )
+    assert ответ["status"] < 500, ответ["body"][:3000]
+    sid = (куки_ответа(ответ).get(СЕССИЯ) or {}).get("value")
+    сессия = строка(sid) if sid else None
 
-    return стороны["django"]
+    return {
+        "status": ответ["status"],
+        "location": ответ["headers"].get("location"),
+        "cookies": sorted(ответ["cookies"]),
+        "session": None
+        if сессия is None
+        else {"payload": сессия["payload"], "user_id": сессия["user_id"]},
+        "old_session": строка(SID) is not None,
+        "db": снимок_удаления(),
+    }
 
 
 # ── Второй шаг у юрлица с компанией из регистрации ─────────────────
@@ -471,17 +673,28 @@ def снимок_дополнения() -> Any:
 
 
 @pytest.mark.parametrize(
-    ("правка", "настройка"),
+    ("правка", "настройка", "ждём"),
     [
-        ({}, {}),
-        ({"categories": ["wood", "glass", "paint", "tiles"]}, {}),
-        ({"categories": ["cement"], "custom_category": None}, {}),
-        ({"type": None, "city_id": None}, {}),
-        ({}, {"город": True}),
-        ({}, {"форма": "individual"}),
+        # ждём: направления после шага — или ошибки; None — шаг уже пройден
+        ({}, {}, ["cement", "metal"]),
+        # К двум прежним — новые, но всего не больше пяти
+        (
+            {"categories": ["wood", "glass", "paint", "tiles"]},
+            {},
+            ["cement", "glass", "metal", "paint", "wood"],
+        ),
+        ({"categories": ["cement"], "custom_category": None}, {}, ["cement", "metal"]),
+        (
+            {"type": None, "city_id": None},
+            {},
+            {"type": ["Выберите тип компании"], "city_id": ["Выберите город"]},
+        ),
+        # Город уже указан или компания не юрлица — второй шаг пройден
+        ({}, {"город": True}, None),
+        ({}, {"форма": "individual"}, None),
     ],
 )
-def test_дополнение_компании(сайт, правка, настройка):
+def test_дополнение_компании(сайт, правка, настройка, ждём):
     body = {**верно(), "custom_category": "Сухие смеси", **правка}
 
     if body.get("categories"):
@@ -491,7 +704,7 @@ def test_дополнение_компании(сайт, правка, наст�
         ]
 
     uid = пользователь()
-    отправить(
+    итог = отправить(
         сайт,
         "/onboarding/company",
         сброс_дополнения(**настройка),
@@ -499,3 +712,29 @@ def test_дополнение_компании(сайт, правка, наст�
         uid=uid,
         body=body,
     )
+    база = итог["база"]
+    [company] = база["companies"]
+
+    if ждём is None:
+        assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet"
+        # Ничего не тронуто
+        assert company[2] is None and company[7] is False
+        assert база["categories"] == [("cement",), ("metal",)]
+
+        return
+
+    if isinstance(ждём, dict):
+        assert назад(итог, сайт)
+        assert ошибки(итог) == ждём
+        assert company[7] is False
+
+        return
+
+    # Дозаполнено недостающее: тип, страна, город, роль; адрес и название — прежние
+    assert итог["ответ"]["headers"]["location"] == сайт + "/verify-email"
+    assert company[:3] == ("cement-plus", "Цемент Плюс", "manufacturer")
+    assert company[3:6] == (_страна("uz"), _город(), "supplier")
+    # Пустое своё направление не стирает прежнее
+    assert company[6] == ("Бетон" if "custom_category" in правка else "Сухие смеси")
+    assert company[7] is True
+    assert [c for (c,) in база["categories"]] == ждём

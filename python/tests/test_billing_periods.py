@@ -1,10 +1,10 @@
 """
 Шаг 72: денежные задачи расписания Django (savdex/payments/periods.py)
-делают то же, что команды Laravel promotions:finish и billing:reset-periods.
+вместо команд Laravel promotions:finish и billing:reset-periods.
 
-На одних данных сверяются продвижения (статус, показы, active_key),
-подписки, кошельки, выставленные счета на продление, уведомления и лента
-событий компании:
+Проверяются продвижения (статус, показы, active_key), подписки,
+кошельки, выставленные счета на продление, уведомления и лента событий
+компании:
 - продвижение с истёкшим сроком завершается, показы — объявления на момент
   завершения (удалённого объявления нет — прежние);
 - счёт на продление — за неделю до конца подписки с автопродлением, не
@@ -12,7 +12,7 @@
   компании — без); кошелёк с наступившим периодом — счётчики в ноль,
   единицы продвижения по тарифу, новый период по сроку тарифа.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -23,36 +23,53 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания, объявление, пользователь
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
+
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (PlanSeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
 
 
 @pytest.fixture(scope="module")
 def мир() -> dict[str, Any]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=PYTHON.parent,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    # Сумовая цена своя: курс ЦБ не нужен ни одной стороне
+    справочники("plans")
+    # Сумовая цена своя: курс ЦБ не нужен
     sql("update plans set price_uzs = 100000 + id * 1000")
-    php(
-        "foreach (['c1','c2','c3','c4','c5'] as $s) {"
-        " $c = App\\Models\\Company::factory()->create(['slug' => $s, 'name' => 'ООО '.$s]);"
-        " App\\Models\\User::factory()->create(['email' => $s.'@savdex.uz',"
-        " 'company_id' => $c->id, 'company_role' => 'owner']); }"
-        "$c1 = App\\Models\\Company::where('slug', 'c1')->first();"
-        "foreach (['one', 'two', 'gone'] as $t) {"
-        " App\\Models\\Listing::factory()->create(['company_id' => $c1->id, 'title' => $t]); }"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+
+    for s in ("c1", "c2", "c3", "c4", "c5"):
+        cid = компания(slug=s, name=f"ООО {s}")
+        пользователь(email=f"{s}@savdex.uz", company_id=cid, company_role="owner")
+
+    c1 = sql("select id from companies where slug = 'c1'")[0][0]
+
+    for t in ("one", "two", "gone"):
+        объявление(company_id=c1, title=t)
+
     [(тип,)] = sql(
         "insert into promotion_types (code, name, description, cost_units, duration_days, sort, "
         "is_active, created_at, updated_at) values ('top', 'ТОП', 'x', 1, 7, 1, true, now(), "
@@ -142,8 +159,9 @@ def снимок() -> dict[str, Any]:
         "wallets": sql(
             "select company_id, credits, promo_units, contacts_used_this_period, "
             "responses_used_this_period, "
-            # Новый период — от «сейчас» каждой стороны: до минуты
-            "date_trunc('hour', period_resets_at), updated_at > '2026-01-02' "
+            # Новый период — сколько дней от «сейчас» до него
+            "round(extract(epoch from period_resets_at - now()) / 86400)::int, "
+            "updated_at > '2026-01-02' "
             "from wallets order by id"
         ),
         "payments": sql(
@@ -160,17 +178,7 @@ def снимок() -> dict[str, Any]:
     }
 
 
-def test_как_у_laravel(мир, tmp_path):
-    подготовка(мир)
-    php(
-        "Illuminate\\Support\\Facades\\Artisan::call('promotions:finish');"
-        "Illuminate\\Support\\Facades\\Artisan::call('billing:reset-periods'); echo 'ok';",
-        # Как на боевом: вне production Laravel запрещает ленивую загрузку,
-        # и его же команда падает на $wallet->company->plan()
-        {**БЕЗ_ПЕРЕВОДА, "APP_ENV": "production"},
-    )
-    л = снимок()
-
+def test_задачи_расписания(мир, tmp_path):
     подготовка(мир)
     выводы = [
         subprocess.run(
@@ -188,10 +196,63 @@ def test_как_у_laravel(мир, tmp_path):
         for name in ("promotions_finish", "billing_reset_periods")
     ]
     д = снимок()
+    к, о, т = мир["companies"], мир["listings"], мир["plans"]
 
-    assert д == л, (д, л)
     assert "Завершено продвижений: 2." in выводы[0]
     assert "счетов на продление: 1. Закрыто подписок: 2. Сброшено кошельков: 3." in выводы[1]
-    # Счёт на продление у c1, уведомление об истёкшем тарифе — у c3
-    assert [p[0] for p in д["payments"]] == [мир["companies"]["c2"], мир["companies"]["c1"]]
-    assert [e[0] for e in д["events"]] == [мир["companies"]["c3"]]
+
+    # Истёкшие завершены: показы — объявления сейчас, у удалённого — прежние
+    assert д["promotions"] == [
+        (о["one"], "finished", 50, None, True),
+        (о["two"], "active", None, f"{о['two']}:{мир['type']}", False),
+        (о["gone"], "finished", 10, None, True),
+    ]
+    # Истёкшие подписки закрыты (и у удалённой компании), прочие не тронуты
+    assert д["subscriptions"] == [
+        (к["c1"], "active", False),
+        (к["c2"], "active", False),
+        (к["c3"], "expired", True),
+        (к["c4"], "active", False),
+        (к["c5"], "expired", True),
+    ]
+    # Наступивший период: счётчики в ноль, единицы — по тарифу (Business — 50,
+    # Free после конца подписки и у удалённой — 0), кредиты не сгорают,
+    # новый период — 30 дней; у c2 период не наступил
+    assert д["wallets"] == [
+        (к["c1"], 7, 50, 0, 0, 30, True),
+        (к["c2"], 7, 99, 5, 4, 5, False),
+        (к["c3"], 7, 0, 0, 0, 30, True),
+        (к["c5"], 7, 0, 0, 0, 30, True),
+    ]
+    # Счёт на продление — только у c1: у c2 уже есть, у c5 подписка истекла
+    [прежний, счёт] = д["payments"]
+    assert прежний[0] == к["c2"] and прежний[7] == "SVD-X"
+    [(цена,)] = sql("select price_uzs from plans where code = 'business'")
+    assert счёт == (
+        к["c1"], "subscription", "Тариф «Business» на 30 дн.", цена, "UZS", "invoice",
+        "pending", "SVD-000002", т["business"],
+    )  # fmt: skip
+    # Уведомления: о счёте — c1, об истёкшем тарифе — c3 (у удалённой c5 — нет)
+    [о_счёте, об_истечении] = д["notifications"]
+    assert (о_счёте[1], о_счёте[2], о_счёте[3]) == (
+        к["c1"],
+        "billing",
+        "Счёт SVD-000002 сформирован",
+    )
+    assert об_истечении[1:] == (
+        к["c3"],
+        "payment",
+        "Срок тарифа истёк — вы перешли на Free",
+        "Объявления и контакты сохранены. Лимиты теперь действуют по бесплатному тарифу.",
+        "warning",
+        "/cabinet/billing",
+    )
+    assert д["events"] == [
+        (
+            к["c3"],
+            "payment",
+            "warning",
+            "Срок тарифа истёк — вы перешли на Free",
+            "/cabinet/billing",
+        )
+    ]

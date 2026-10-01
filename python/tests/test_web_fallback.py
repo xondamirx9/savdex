@@ -1,14 +1,14 @@
 """
 Этап 8: Django отвечает на все адреса (savdex/web/fallback.py).
 
-С Laravel сверяется: страница 404 на адресах без маршрута (с языковым
-префиксом и без, любым методом) — без сессии, как обработчик исключений
-bootstrap/app.php; переход со служебного адреса Render на домен
-(CanonicalHost). Без Laravel: бывшая панель Filament ведёт в админку
-Django, служебные адреса Livewire и Filament — 404, страница 500 не
-роняет ответ, даже если не собирается сама.
+Проверки Django: страница 404 на адресах без маршрута (с языковым
+префиксом и без) — без сессии, как было у обработчика исключений
+Laravel; переход со служебного адреса Render на домен (CanonicalHost);
+бывшая панель Filament ведёт в админку Django, служебные адреса
+Livewire и Filament — 404, страница 500 не роняет ответ, даже если не
+собирается сама.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from collections.abc import Iterator
 import pytest
 
 from .pg_admin import нужна_база, свежая_база
-from .web_site import laravel, из_django, сверить, страница
+from .web_site import адрес, из_django, открыть, страница
 
 pytestmark = нужна_база
 
@@ -27,7 +27,7 @@ pytestmark = нужна_база
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -40,19 +40,20 @@ def сайт() -> Iterator[str]:
         "/company/x/y/z",
     ],
 )
-def test_404_как_у_laravel(сайт, path):
-    д, л = сверить(сайт, path)
+def test_404_без_маршрута(сайт, path):
+    д = открыть(сайт, path)
 
     assert д["status"] == 404
-    assert страница(д["body"])["component"] == "Error"
+    стр = страница(д["body"])
+    assert стр["component"] == "Error" and стр["props"]["status"] == 404
     # Без сессии: посредники группы web на несовпавшем маршруте не работают
-    assert not д["cookies"] and not л["cookies"]
+    assert not д["cookies"]
 
 
 @pytest.mark.parametrize("path", ["/help", "/uz/catalog?q=a", "/"])
 def test_служебный_адрес_render_на_домен(сайт, path):
     host = {"Host": "savdex-abc.onrender.com"}
-    д, _ = сверить(сайт, path, headers=host)
+    д = открыть(сайт, path, headers=host)
 
     assert д["status"] == 301
     assert д["headers"]["location"] == сайт + path

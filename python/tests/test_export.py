@@ -1,8 +1,8 @@
 """
 Выгрузка в Excel: приведение значений, описание листов, запись и сверка.
 
-Части без PostgreSQL. Сравнение с PHP-версией на настоящей базе —
-в test_export_parity.py.
+Части без PostgreSQL. Значения приводятся так же, как их видела
+PHP-версия (книги, которыми пользуются, не меняются после переноса).
 """
 
 from __future__ import annotations
@@ -26,8 +26,6 @@ from savdex.export.workbooks import (
     width,
     write,
 )
-
-from .php_sheets import ИСХОДНИК, read_php_sheets
 
 
 class Заглушка:
@@ -171,29 +169,32 @@ class TestШирина:
 
 class TestОписаниеЛистов:
     """
-    Описание листов совпадает с PHP-версией столбец в столбец.
-
-    Пока обе половины живут рядом, правка в одной из них тихо развела
-    бы две выгрузки.
+    Описание листов: те же шестнадцать листов в двух книгах, что были у
+    PHP-версии (ExportWorkbooks), и заголовки внутри листа различимы.
     """
 
-    @pytest.mark.skipif(not ИСХОДНИК.exists(), reason="PHP-версии выгрузки больше нет")
-    def test_совпадает_с_php(self):
-        php = read_php_sheets()
-        python = [("companies", s) for s in COMPANY_SHEETS] + [
-            ("listings", s) for s in LISTING_SHEETS
+    def test_листы_книг(self):
+        assert [(s.name, s.table) for s in COMPANY_SHEETS] == [
+            ("Компании", "companies"),
+            ("Сотрудники", "users"),
+            ("Контакты", "company_contacts"),
+            ("Категории компаний", "company_category"),
+            ("Документы", "company_documents"),
+            ("Кошельки", "wallets"),
+            ("Подписки", "subscriptions"),
+            ("Доп. поля компаний", "company_attributes"),
+            ("Раскрытые контакты", "contact_unlocks"),
+            ("Отзывы", "reviews"),
         ]
-
-        assert len(php) == len(python) == 16
-
-        for ours, (book, theirs) in zip(php, python, strict=True):
-            assert (ours.book, ours.name, ours.table, ours.about, ours.columns) == (
-                book,
-                theirs.name,
-                theirs.table,
-                theirs.about,
-                theirs.columns,
-            )
+        assert [(s.name, s.table) for s in LISTING_SHEETS] == [
+            ("Объявления", "listings"),
+            ("Фотографии", "listing_images"),
+            ("Характеристики", "listing_attributes"),
+            ("Статистика по дням", "listing_stats"),
+            ("Избранное", "favorites"),
+            ("Тендеры", "tenders"),
+        ]
+        assert all(s.columns and s.about for s in (*COMPANY_SHEETS, *LISTING_SHEETS))
 
     def test_заголовки_внутри_листа_не_повторяются(self):
         """Повторяющийся заголовок затёр бы соседний столбец."""

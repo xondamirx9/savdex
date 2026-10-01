@@ -1,7 +1,7 @@
 """
-Главная на Django неотличима от Laravel (этап 3).
+Главная на Django (этап 3).
 
-Данные — справочники (DatabaseSeeder), задачи услуг (ItTasksDemoSeeder)
+Данные — справочники (снимок сидеров, savdex/seeds.py), задачи услуг
 и компании с объявлениями из фабрик: витрина VIP с платным продвижением
 и истёкшей подпиской, импортированное объявление без перевода, цены в
 долларах, евро и «договорная», фотографии с уменьшенной копией и без,
@@ -9,26 +9,27 @@
 экрана, скрытая секция и отзывы. Курс — из файлового кэша,
 как на боевом.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import base64
 import subprocess
+import sys
 from collections.abc import Iterator
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, войти, пользователь, сверить, страница
+from savdex import laravel_cache
+
+from .factories import Выражение, it_задача, компания, объявление, отзыв
+from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import адрес, вход, открыть, пользователь, страница
 
 pytestmark = нужна_база
 
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
-
-#: Без машинного перевода при создании объявлений: он ходит в сеть
-БЕЗ_ПЕРЕВОДА = {**ФАЙЛОВЫЙ, "MACHINE_TRANSLATION_ENABLED": "false"}
 
 #: PNG 3 × 2 — пропорция фона 1.5
 КАДР = base64.b64decode(
@@ -36,93 +37,147 @@ pytestmark = нужна_база
     "B8PoKAAAAAElFTkSuQmCC"
 )
 
+КУРСЫ = {"USD": 12650.0, "EUR": 13790.25, "CNY": 1755.4, "TRY": 380.12}
 
-def artisan(*args: str) -> None:
+
+def справочники() -> None:
+    """Свежая база, как db:seed: manage.py seed --fresh (savdex/seeds.py)."""
     subprocess.run(
-        ["php", "artisan", *args, "--force"],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **БЕЗ_ПЕРЕВОДА},
-        check=True,
+        [sys.executable, "manage.py", "seed", "--fresh"],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
         capture_output=True,
+        check=True,
     )
 
 
-def очистить_кэш() -> None:
-    subprocess.run(
-        ["php", "artisan", "cache:clear"],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **ФАЙЛОВЫЙ},
-        check=True,
-        capture_output=True,
+def данные() -> None:
+    [(uz,)] = sql("select id from countries where code = 'uz'")
+    [(kz,)] = sql("select id from countries where code = 'kz'")
+    cities = [
+        r[0] for r in sql("select id from cities where country_id = %s order by id limit 3", [uz])
+    ]
+
+    # Задачи услуг: IT (веб и приложения) впереди логистики
+    for service in ("web", "web", "web", "mobile", "logistics", "logistics"):
+        it_задача(service_type=service)
+
+    companies = [
+        компания(
+            country_id=kz if i == 5 else uz,
+            city_id=None if i == 5 else cities[i % 3],
+            verification_level=i % 3,
+            rating=3 + i * 0.3,
+            legal_form="individual" if i == 4 else "legal",
+            type=None if i == 4 else "importer",
+            phone=f"+998 90 000 00 0{i}",
+            email=f"c{i}@example.com" if i % 2 else None,
+        )
+        for i in range(6)
+    ]
+
+    for c in companies:
+        for _ in range(3):
+            объявление(company_id=c)
+
+        объявление(company_id=c, type="demand")
+
+    for n, (lid,) in enumerate(sql("select id from listings order by id limit 5")):
+        sql(
+            "insert into listing_images (listing_id, path, thumb_path, sort, created_at, "
+            "updated_at) values (%s, %s, %s, 1, now(), now()), (%s, %s, null, 0, now(), now())",
+            [
+                lid,
+                f"listings/{n}.jpg",
+                None if n % 2 else f"listings/thumb-{n}.jpg",
+                lid,
+                f"listings/b{n}.jpg",
+            ],
+        )
+
+    [(vip,)] = sql("select id from plans where code = 'vip'")
+
+    for c, started, ends in (
+        (companies[0], "now() - interval '1 day'", "now() + interval '1 month'"),
+        (companies[1], "now() - interval '1 day'", "now() + interval '1 month'"),
+        # Истёкшая подписка — не витрина
+        (companies[2], "now() - interval '2 months'", "now() - interval '1 day'"),
+    ):
+        sql(
+            "insert into subscriptions (company_id, plan_id, status, started_at, ends_at, "
+            f"created_at, updated_at) values (%s, %s, 'active', {started}, {ends}, now(), now())",
+            [c, vip],
+        )
+
+    [(type_id,)] = sql(
+        "select id from promotion_types where badge is not null order by id limit 1"
     )
+    [(promoted,)] = sql(
+        "select id from listings where company_id = %s and type = 'supply' order by id limit 1",
+        [companies[1]],
+    )
+    sql(
+        "insert into promotions (listing_id, company_id, promotion_type_id, units_spent, status, "
+        "starts_at, ends_at, created_at, updated_at) values (%s, %s, %s, 1, 'active', "
+        "now() - interval '1 day', now() + interval '1 week', now(), now())",
+        [promoted, companies[1], type_id],
+    )
+    объявление(
+        company_id=companies[0],
+        price=1234.5,
+        currency="USD",
+        published_at=Выражение("now() - interval '3 hours'"),
+        description="供应优质水泥，" * 40,
+    )
+    объявление(
+        company_id=companies[0],
+        price_negotiable=True,
+        published_at=Выражение("now() - interval '20 minutes'"),
+    )
+    объявление(
+        company_id=companies[0],
+        source="import",
+        title_i18n={"en": "Imported cement"},
+        published_at=Выражение("now() - interval '5 minutes'"),
+    )
+    объявление(
+        company_id=companies[1],
+        type="demand",
+        price=99,
+        currency="EUR",
+        published_at=Выражение("now() - interval '2 days'"),
+    )
+
+    # Одинаковая дата у нескольких объявлений: порядок решает номер
+    for i in range(1, 7):
+        объявление(
+            company_id=companies[i % 2],
+            published_at=Выражение("date_trunc('minute', now() - interval '2 days')"),
+            type="supply" if i % 3 else "demand",
+        )
+
+    for i in range(4):
+        отзыв(
+            company_id=companies[i],
+            author_company_id=companies[i + 1],
+            created_at=Выражение(f"now() - interval '{i} days'"),
+        )
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    artisan("db:seed")
-    artisan("db:seed", "--class=ItTasksDemoSeeder")
+    справочники()
     фон = КОРЕНЬ / "storage/app/public/appearance/test-hero.png"
     фон.parent.mkdir(parents=True, exist_ok=True)
     фон.write_bytes(КАДР)
-    php(
-        "$uz = App\\Models\\Country::where('code', 'uz')->value('id');"
-        "$kz = App\\Models\\Country::where('code', 'kz')->value('id');"
-        "$cities = App\\Models\\City::where('country_id', $uz)->orderBy('id')"
-        "->take(3)->pluck('id');"
-        "$companies = collect(range(0, 5))->map(fn ($i) => "
-        "App\\Models\\Company::factory()->create(["
-        "'country_id' => $i === 5 ? $kz : $uz, 'city_id' => $i === 5 ? null : $cities[$i % 3], "
-        "'verification_level' => $i % 3, 'rating' => 3 + $i * 0.3, "
-        "'legal_form' => $i === 4 ? 'individual' : 'legal', "
-        "'type' => $i === 4 ? null : 'importer', "
-        "'phone' => '+998 90 000 00 0'.$i, 'email' => $i % 2 ? 'c'.$i.'@example.com' : null]));"
-        "foreach ($companies as $i => $c) {"
-        " App\\Models\\Listing::factory()->count(3)->create(['company_id' => $c->id]);"
-        " App\\Models\\Listing::factory()->create(['company_id' => $c->id, 'type' => 'demand']); }"
-        "foreach (App\\Models\\Listing::orderBy('id')->take(5)->get() as $n => $l) {"
-        " App\\Models\\ListingImage::create(['listing_id' => $l->id, "
-        "'path' => 'listings/'.$n.'.jpg', "
-        "'thumb_path' => $n % 2 ? null : 'listings/thumb-'.$n.'.jpg', 'sort' => 1]);"
-        " App\\Models\\ListingImage::create(['listing_id' => $l->id, "
-        "'path' => 'listings/b'.$n.'.jpg', "
-        "'sort' => 0]); }"
-        "$vip = App\\Models\\Plan::where('code', 'vip')->first();"
-        "foreach ($companies->take(2) as $c) { App\\Models\\Subscription::create(["
-        "'company_id' => $c->id, 'plan_id' => $vip->id, 'status' => 'active', "
-        "'started_at' => now()->subDay(), 'ends_at' => now()->addMonth()]); }"
-        "App\\Models\\Subscription::create(['company_id' => $companies[2]->id, "
-        "'plan_id' => $vip->id, 'status' => 'active', 'started_at' => now()->subMonths(2), "
-        "'ends_at' => now()->subDay()]);"
-        "$type = App\\Models\\PromotionType::query()->whereNotNull('badge')->first();"
-        "$listing = App\\Models\\Listing::where('company_id', $companies[1]->id)"
-        "->where('type', 'supply')->orderBy('id')->first();"
-        "App\\Models\\Promotion::create(['listing_id' => $listing->id, "
-        "'company_id' => $listing->company_id, 'promotion_type_id' => $type->id, "
-        "'units_spent' => 1, 'status' => 'active', 'starts_at' => now()->subDay(), "
-        "'ends_at' => now()->addWeek()]);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $companies[0]->id, "
-        "'price' => 1234.5, 'currency' => 'USD', 'published_at' => now()->subHours(3), "
-        "'description' => str_repeat('供应优质水泥，', 40)]);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $companies[0]->id, "
-        "'price_negotiable' => true, 'published_at' => now()->subMinutes(20)]);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $companies[0]->id, "
-        "'source' => 'import', 'title_i18n' => ['en' => 'Imported cement'], "
-        "'published_at' => now()->subMinutes(5)]);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $companies[1]->id, "
-        "'type' => 'demand', 'price' => 99, 'currency' => 'EUR', "
-        "'published_at' => now()->subDays(2)]);"
-        # Одинаковая дата у нескольких объявлений: порядок решает номер
-        "$same = now()->subDays(2)->startOfMinute();"
-        "foreach (range(1, 6) as $i) { App\\Models\\Listing::factory()->create(["
-        "'company_id' => $companies[$i % 2]->id, 'published_at' => $same, "
-        "'type' => $i % 3 ? 'supply' : 'demand']); }"
-        "foreach (range(0, 3) as $i) { App\\Models\\Review::factory()->create(["
-        "'company_id' => $companies[$i]->id, 'author_company_id' => $companies[$i + 1]->id, "
-        "'created_at' => now()->subDays($i)]); }"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    данные()
     sql(
         "insert into banners (name, placement, url, alt, image_path, focal_x, focal_y, is_active, "
         "is_dismissible, sort, created_at, updated_at) values ('Акция', 'home', '/pricing', "
@@ -138,32 +193,37 @@ def сайт() -> Iterator[str]:
         "update settings set value = %s where key = 'hero_image'",
         ['"appearance/test-hero.png"'],
     )
-    очистить_кэш()
-    php(
-        "Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25, 'CNY' => 1755.4, "
-        "'TRY' => 380.12], now()->addDay());",
-        ФАЙЛОВЫЙ,
-    )
+    laravel_cache.put("cbu.rates", КУРСЫ, 86400)
 
     try:
-        with laravel(**ФАЙЛОВЫЙ) as root:
+        with адрес(**ФАЙЛОВЫЙ) as root:
             yield root
     finally:
-        очистить_кэш()
+        laravel_cache.file_path("cbu.rates").unlink(missing_ok=True)
         фон.unlink(missing_ok=True)
 
 
-@pytest.mark.parametrize("path", ["/", "/uz", "/en", "/zh/", "/tr"])
-def test_главная(сайт, path):
-    д, _ = сверить(сайт, path, env=ФАЙЛОВЫЙ)
-    props = страница(д["body"])["props"]
+@pytest.mark.parametrize(
+    ("path", "язык"), [("/", "ru"), ("/uz", "uz"), ("/en", "en"), ("/zh/", "zh"), ("/tr", "tr")]
+)
+def test_главная(сайт, path, язык):
+    д = открыть(сайт, path, env=ФАЙЛОВЫЙ)
+    стр = страница(д["body"])
+    props = стр["props"]
 
+    assert д["status"] == 200
+    assert стр["component"] == "Home"
     assert props["latest"] and props["requests"] and props["suppliers"]
     assert props["heroRatio"] == 1.5
+    assert props["heroImage"].endswith("/storage/appearance/test-hero.png")
+    # Скрытая секция отзывов — не видна, первый экран виден всегда
+    assert props["blocks"]["reviews"]["visible"] is False
+    assert props["blocks"]["hero"]["visible"] is True
+    assert props["locale"] == язык
 
 
 def test_витрина_vip_и_цены(сайт):
-    д, _ = сверить(сайт, "/en", env=ФАЙЛОВЫЙ)
+    д = открыть(сайт, "/en", env=ФАЙЛОВЫЙ)
     props = страница(д["body"])["props"]
 
     assert props["latest"][0]["promoted"]
@@ -172,7 +232,7 @@ def test_витрина_vip_и_цены(сайт):
 
 
 def test_лента_товаров_без_карточек_витрины_vip(сайт):
-    д, _ = сверить(сайт, "/", env=ФАЙЛОВЫЙ)
+    д = открыть(сайт, "/", env=ФАЙЛОВЫЙ)
     props = страница(д["body"])["props"]
     vip = {card["id"] for card in props["latest"]}
 
@@ -182,11 +242,22 @@ def test_лента_товаров_без_карточек_витрины_vip(с
 
 
 def test_вошедший(сайт):
-    пользователь("home@savdex.uz")
-    куки = войти(сайт, "home@savdex.uz")
+    uid = пользователь("home@savdex.uz")
+    куки = вход(uid)
 
-    сверить(сайт, "/", куки, env=ФАЙЛОВЫЙ)
-    # Без версии сборки — 409: адрес перезагрузки у корня без «/»,
-    # а с параметрами — «/?…», как Request::fullUrl у Laravel
-    сверить(сайт, "/uz", куки, {"X-Inertia": "true"}, env=ФАЙЛОВЫЙ)
-    сверить(сайт, "/?utm_source=tg", куки, {"X-Inertia": "true"}, env=ФАЙЛОВЫЙ)
+    д = открыть(сайт, "/", куки, env=ФАЙЛОВЫЙ)
+    стр = страница(д["body"])
+
+    assert д["status"] == 200
+    assert стр["component"] == "Home"
+    assert стр["props"]["auth"]["user"]["email"] == "home@savdex.uz"
+
+    # Без версии сборки — 409: адрес перезагрузки — без языкового префикса
+    # (его снимает выбор языка), у корня без «/», а с параметрами —
+    # «/?…», как Request::fullUrl у Laravel
+    # «/uz» — последним: заход на него запоминает язык вошедшему
+    for path, куда in (("/?utm_source=tg", "/?utm_source=tg"), ("/uz", "")):
+        д = открыть(сайт, path, куки, {"X-Inertia": "true"}, env=ФАЙЛОВЫЙ)
+
+        assert д["status"] == 409
+        assert д["headers"]["x-inertia-location"] == сайт + куда

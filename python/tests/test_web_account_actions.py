@@ -1,5 +1,5 @@
 """
-Пароль и почта на Django неотличимы от Laravel.
+Пароль и почта — проверки Django.
 
 - Смена выданного пароля: проверка, «не тот же, что выдан», флаг снят,
   хеш в сессии — новый, администратору — в панель (409 для Inertia).
@@ -10,8 +10,8 @@
 - Подтверждение почты: код из кэша (попытки, одноразовость), письмо
   ещё раз, подписанная ссылка (подпись, отпечаток почты, срок).
 
-Письма обеих сторон — в журнале (MAIL_MAILER=log), кэш — файловый.
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Письма — в своём журнале (MAIL_MAILER=log), кэш — файловый.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -19,10 +19,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import json
 import re
 import shutil
 import time
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import bcrypt
@@ -30,24 +32,20 @@ import pytest
 
 from savdex import laravel_cache
 
-from .pg_admin import APP_KEY, sql, нужна_база, свежая_база
+from .pg_admin import APP_KEY, КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .test_web_register_actions import (
-    ЖУРНАЛ_DJANGO,
-    ЖУРНАЛ_LARAVEL,
-    КЭШ,
-    ОКРУЖЕНИЕ_ПОЧТЫ,
-    _письма,
-    _разбор,
-)
-from .web_site import ПАРОЛЬ, laravel
+from .test_web_register_actions import _письма, _разбор
+from .web_site import ПАРОЛЬ, адрес
 
 pytestmark = нужна_база
 
 ПОЧТА = "account@savdex.uz"
 НОВЫЙ = "Cement2027x"
 ТОКЕН_СБРОСА = "a" * 64
-ОКРУЖЕНИЕ_DJANGO = {**ОКРУЖЕНИЕ_ПОЧТЫ, "MAIL_LOG_PATH": str(ЖУРНАЛ_DJANGO)}
+#: Свой журнал писем: storage/logs — общий с другими проверками
+ЖУРНАЛ = Path(КОРЕНЬ) / "storage/logs/python-mail-test-account.log"
+КЭШ = Path(КОРЕНЬ) / "storage/framework/cache/data"
+ОКРУЖЕНИЕ_DJANGO = {"MAIL_MAILER": "log", "CACHE_STORE": "file", "MAIL_LOG_PATH": str(ЖУРНАЛ)}
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +54,7 @@ def сайт() -> Iterator[str]:
     было = os.environ.get("CACHE_STORE")
     os.environ["CACHE_STORE"] = "file"
 
-    with laravel(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
+    with адрес() as root:
         yield root
 
     if было is None:
@@ -88,8 +86,8 @@ def подготовка(*шаги: Callable[[], None]) -> Callable[[], None]:
 
     def run() -> None:
         shutil.rmtree(КЭШ, ignore_errors=True)
-        ЖУРНАЛ_LARAVEL.write_text("")
-        ЖУРНАЛ_DJANGO.write_text("")
+        ЖУРНАЛ.parent.mkdir(parents=True, exist_ok=True)
+        ЖУРНАЛ.write_text("")
         sql("delete from password_reset_tokens")
         sql("delete from admin_actions")
 
@@ -108,16 +106,14 @@ def _без_изменчивого(текст: str) -> str:
     return re.sub(r"https?://127\.0\.0\.1:\d+", "<сайт>", текст)
 
 
-def _письма_сторон() -> list[dict[str, Any]]:
-    текст = ЖУРНАЛ_LARAVEL.read_text() + "\n" + ЖУРНАЛ_DJANGO.read_text()
-
-    return [_разбор(п) for п in _письма(текст)]
+def _письма_сайта() -> list[dict[str, Any]]:
+    return [_разбор(п) for п in _письма(ЖУРНАЛ.read_text())]
 
 
 def снимок() -> dict[str, Any]:
     uid_rows = sql("select id from users where email = %s", [ПОЧТА])
     uid = uid_rows[0][0] if uid_rows else 0
-    письма = _письма_сторон()
+    письма = _письма_сайта()
     токены = sql("select email, token, created_at is not null from password_reset_tokens")
 
     # Токен из письма сходится с хешем брокера
@@ -150,14 +146,33 @@ def снимок() -> dict[str, Any]:
 
 
 def _без_хеша(payload: str) -> str:
-    """Хеш нового пароля в сессии у сторон разный (соль): только «есть»."""
+    """Хеш нового пароля в сессии (соль случайная): только «есть»."""
     return re.sub(r'("password_hash_web":)"[^"]*"', r'\1"<хеш>"', payload)
 
 
 def форма(сайт: str, path: str, шаг: Callable[[], None], **kwargs: Any) -> dict[str, Any]:
-    return отправить(
-        сайт, path, подготовка(шаг), снимок, env=ОКРУЖЕНИЕ_DJANGO, чистка=_без_хеша, **kwargs
-    )
+    return отправить(сайт, path, подготовка(шаг), снимок, env=ОКРУЖЕНИЕ_DJANGO, **kwargs)
+
+
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Строка сессии после ответа — разобранным JSON, без токена и отметки входа."""
+    payload = json.loads(_без_хеша(итог["сессия"]["payload"])) if итог["сессия"] else {}
+
+    return {k: v for k, v in payload.items() if k != "_token" and not k.startswith("login_web")}
+
+
+def ошибки(итог: dict[str, Any]) -> dict[str, list[str]] | None:
+    errors = сессия(итог).get("errors")
+
+    return None if errors is None else dict(errors["default"]["messages"])
+
+
+def куда(сайт: str, итог: dict[str, Any]) -> tuple[int, str | None]:
+    """Статус и адрес перехода (без адреса сайта)."""
+    ответ = итог["ответ"]
+    location = ответ["headers"].get("location") or ответ["headers"].get("x-inertia-location")
+
+    return ответ["status"], None if location is None else location.removeprefix(сайт)
 
 
 # ── Смена выданного пароля ──────────────────────────────────────────

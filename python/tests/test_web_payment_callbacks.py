@@ -1,5 +1,5 @@
 """
-Этап 7, шаг 54: колбэки Uzum на Django неотличимы от Laravel.
+Этап 7, шаг 54: колбэки Uzum на Django.
 
 Merchant API (/payments/uzum/callback/<операция>): выключенный провайдер
 — 404; Basic-авторизация и serviceId; check, create (повтор, сумма,
@@ -9,25 +9,27 @@ Merchant API (/payments/uzum/callback/<операция>): выключенны�
 список адресов, пустые поля, успех перепроверяется у Uzum
 (getOrderStatus — поддельный сервер), повтор не начисляет второй раз.
 
-Время в ответах (transTime и прочие) — от мгновения ответа: сверяется,
-что оно есть. База и ответы в остальном — байт в байт.
+Время в ответах (transTime и прочие) — от мгновения ответа: проверяется,
+что оно есть.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import base64
-import subprocess
+import json
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import sql, нужна_база, свежая_база
+from .test_web_catalog import справочники
 from .test_web_billing_orders import Касса
 from .test_web_forms import отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -72,21 +74,15 @@ def касса() -> Iterator[Касса]:
 @pytest.fixture(scope="module")
 def сайт(касса) -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    справочники("plans")
     sql(
         "insert into credit_packs (code, name, credits, price_usd, price_uzs, sort, is_active, "
         "created_at, updated_at) values ('m', 'Средний', 50, 30, 350000, 1, true, now(), now())"
     )
-    php("App\\Models\\Company::factory()->create(['slug' => 'mine']);echo 'ok';", БЕЗ_ПЕРЕВОДА)
+    компания(slug="mine")
     учётка("owner@savdex.uz", company_id=_id("companies", "slug = 'mine'"))
 
-    with laravel(**настройки(касса)) as root:
+    with адрес() as root:
         yield root
 
 
@@ -223,60 +219,197 @@ def тело(операция: str, **extra: Any) -> dict[str, Any]:
     return {"serviceId": 777, "timestamp": 1790000000000, **extra}
 
 
+def ответ(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["ответ"]["body"]))
+
+
 # ── Merchant API ────────────────────────────────────────────────────
+
+#: Время операции в ответе — по её итогу
+ВРЕМЯ_ИТОГА = {"CREATED": "transTime", "CONFIRMED": "confirmTime", "REVERSED": "reverseTime"}
 
 
 @pytest.mark.parametrize(
-    ("операция", "body", "подготовка", "вход"),
+    ("операция", "body", "подготовка", "вход", "итог_", "счёт_", "транзакция_"),
     [
-        ("check", {"params": СЧЁТ}, {}, ВХОД),
-        ("check", {"params": СЧЁТ}, {}, None),
-        ("check", {"params": СЧЁТ}, {}, ЧУЖОЙ_ВХОД),
-        ("check", {"serviceId": 1, "params": СЧЁТ}, {}, ВХОД),
-        ("check", {"params": {"invoice": "NOPE"}}, {}, ВХОД),
-        ("check", {"params": {}}, {}, ВХОД),
-        ("check", {"params": СЧЁТ}, {"счета": счёт("paid")}, ВХОД),
-        ("check", {"params": СЧЁТ}, {"счета": счёт("failed")}, ВХОД),
-        ("create", {"transId": "T-1", "amount": 150000, "params": СЧЁТ}, {}, ВХОД),
-        ("create", {"transId": "T-1", "amount": "150000", "params": СЧЁТ}, {}, ВХОД),
-        ("create", {"transId": "T-1", "amount": 100, "params": СЧЁТ}, {}, ВХОД),
-        ("create", {"transId": "T-1", "amount": "x", "params": СЧЁТ}, {}, ВХОД),
-        ("create", {"amount": 150000, "params": СЧЁТ}, {}, ВХОД),
+        ("check", {"params": СЧЁТ}, {}, ВХОД, (200, "OK"), "pending", None),
+        # Без входа и с чужим — 401
+        ("check", {"params": СЧЁТ}, {}, None, (401, 10001), "pending", None),
+        ("check", {"params": СЧЁТ}, {}, ЧУЖОЙ_ВХОД, (401, 10001), "pending", None),
+        # Чужой serviceId, нет счёта, нет номера счёта
+        ("check", {"serviceId": 1, "params": СЧЁТ}, {}, ВХОД, (400, 10006), "pending", None),
+        ("check", {"params": {"invoice": "NOPE"}}, {}, ВХОД, (400, 10007), "pending", None),
+        ("check", {"params": {}}, {}, ВХОД, (400, 10005), "pending", None),
+        # Счёт уже оплачен или отменён
+        ("check", {"params": СЧЁТ}, {"счета": счёт("paid")}, ВХОД, (400, 10008), "paid", None),
+        ("check", {"params": СЧЁТ}, {"счета": счёт("failed")}, ВХОД, (400, 10009), "failed", None),
+        (
+            "create",
+            {"transId": "T-1", "amount": 150000, "params": СЧЁТ},
+            {},
+            ВХОД,
+            (200, "CREATED"),
+            "pending",
+            "created",
+        ),
+        # Сумма строкой — та же
+        (
+            "create",
+            {"transId": "T-1", "amount": "150000", "params": СЧЁТ},
+            {},
+            ВХОД,
+            (200, "CREATED"),
+            "pending",
+            "created",
+        ),
+        # Сумма не та (в тийинах — 1500 сум = 150 000)
+        (
+            "create",
+            {"transId": "T-1", "amount": 100, "params": СЧЁТ},
+            {},
+            ВХОД,
+            (400, 10011),
+            "pending",
+            None,
+        ),
+        (
+            "create",
+            {"transId": "T-1", "amount": "x", "params": СЧЁТ},
+            {},
+            ВХОД,
+            (400, 10005),
+            "pending",
+            None,
+        ),
+        ("create", {"amount": 150000, "params": СЧЁТ}, {}, ВХОД, (400, 10005), "pending", None),
+        # Повтор create — транзакция уже есть
         (
             "create",
             {"transId": "T-1", "amount": 150000, "params": СЧЁТ},
             {"транзакция": СВЕЖАЯ},
             ВХОД,
+            (400, 10010),
+            "pending",
+            "created",
         ),
-        ("confirm", {"transId": "T-1"}, {"транзакция": СВЕЖАЯ}, ВХОД),
-        ("confirm", {"transId": "T-1"}, {"транзакция": СВЕЖАЯ, "промокод": True}, ВХОД),
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"транзакция": СВЕЖАЯ},
+            ВХОД,
+            (200, "CONFIRMED"),
+            "paid",
+            "performed",
+        ),
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"транзакция": СВЕЖАЯ, "промокод": True},
+            ВХОД,
+            (200, "CONFIRMED"),
+            "paid",
+            "performed",
+        ),
         (
             "confirm",
             {"transId": "T-1"},
             {"счета": счёт("pending", "pack"), "транзакция": СВЕЖАЯ, "кошелёк": True},
             ВХОД,
+            (200, "CONFIRMED"),
+            "paid",
+            "performed",
         ),
         (
             "confirm",
             {"transId": "T-1"},
             {"счета": счёт("pending", "pack"), "транзакция": СВЕЖАЯ},
             ВХОД,
+            (200, "CONFIRMED"),
+            "paid",
+            "performed",
         ),
-        ("confirm", {"transId": "T-1"}, {"транзакция": СТАРАЯ}, ВХОД),
-        ("confirm", {"transId": "T-1"}, {"транзакция": ПРОВЕДЕНА}, ВХОД),
-        ("confirm", {"transId": "T-1"}, {"транзакция": ОТМЕНЕНА}, ВХОД),
-        ("confirm", {"transId": "T-1"}, {"счета": счёт("paid"), "транзакция": СВЕЖАЯ}, ВХОД),
-        ("confirm", {"transId": "T-9"}, {}, ВХОД),
-        ("reverse", {"transId": "T-1"}, {"транзакция": СВЕЖАЯ}, ВХОД),
-        ("reverse", {"transId": "T-1"}, {"транзакция": ПРОВЕДЕНА}, ВХОД),
-        ("reverse", {"transId": "T-1"}, {"транзакция": ОТМЕНЕНА}, ВХОД),
-        ("status", {"transId": "T-1"}, {"транзакция": ПРОВЕДЕНА}, ВХОД),
-        ("status", {"transId": "T-9"}, {}, ВХОД),
-        ("nope", {"transId": "T-1"}, {}, ВХОД),
+        # Просроченная транзакция гасится
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"транзакция": СТАРАЯ},
+            ВХОД,
+            (400, 10015),
+            "pending",
+            "cancelled",
+        ),
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"транзакция": ПРОВЕДЕНА},
+            ВХОД,
+            (400, 10016),
+            "pending",
+            "performed",
+        ),
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"транзакция": ОТМЕНЕНА},
+            ВХОД,
+            (400, 10015),
+            "pending",
+            "cancelled",
+        ),
+        # Счёт уже оплачен — повторно не выдаётся
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"счета": счёт("paid"), "транзакция": СВЕЖАЯ},
+            ВХОД,
+            (400, 10008),
+            "paid",
+            "created",
+        ),
+        ("confirm", {"transId": "T-9"}, {}, ВХОД, (400, 10014), "pending", None),
+        (
+            "reverse",
+            {"transId": "T-1"},
+            {"транзакция": СВЕЖАЯ},
+            ВХОД,
+            (200, "REVERSED"),
+            "pending",
+            "cancelled",
+        ),
+        (
+            "reverse",
+            {"transId": "T-1"},
+            {"транзакция": ПРОВЕДЕНА},
+            ВХОД,
+            (400, 10017),
+            "pending",
+            "performed",
+        ),
+        (
+            "reverse",
+            {"transId": "T-1"},
+            {"транзакция": ОТМЕНЕНА},
+            ВХОД,
+            (400, 10018),
+            "pending",
+            "cancelled",
+        ),
+        (
+            "status",
+            {"transId": "T-1"},
+            {"транзакция": ПРОВЕДЕНА},
+            ВХОД,
+            (200, "CONFIRMED"),
+            "pending",
+            "performed",
+        ),
+        ("status", {"transId": "T-9"}, {}, ВХОД, (400, 10014), "pending", None),
+        # Неизвестная операция
+        ("nope", {"transId": "T-1"}, {}, ВХОД, (400, 10003), "pending", None),
     ],
 )
-def test_merchant(сайт, касса, операция, body, подготовка, вход):
-    вызов(
+def test_merchant(сайт, касса, операция, body, подготовка, вход, итог_, счёт_, транзакция_):
+    итог = вызов(
         сайт,
         касса,
         f"/payments/uzum/callback/{операция}",
@@ -284,6 +417,37 @@ def test_merchant(сайт, касса, операция, body, подготов
         сброс(**подготовка),
         вход=вход,
     )
+    данные = ответ(итог)
+    база = итог["база"]
+    код, статус = итог_
+
+    assert итог["ответ"]["status"] == код
+    assert данные["serviceId"] == body.get("serviceId", 777)
+
+    if isinstance(статус, str):
+        assert данные["status"] == статус
+        assert данные["transId" if операция != "check" else "serviceId"]
+
+        if статус in ВРЕМЯ_ИТОГА:
+            assert isinstance(данные[ВРЕМЯ_ИТОГА[статус]], int)
+
+        if операция != "check" or статус == "OK":
+            assert данные["data"] == {
+                "invoice": "SVD-000001",
+                "description": "Счёт «SVD-000001» / тест",
+                "amount": 150000,
+            }
+    else:
+        assert (данные["status"], данные["errorCode"]) == ("FAILED", статус)
+
+    assert [p[1] for p in база["payments"]] == [счёт_]
+    assert [t[3] for t in база["transactions"]] == ([транзакция_] if транзакция_ else [])
+
+    if счёт_ == "paid" and транзакция_ == "performed":
+        # Оплачено через Uzum: у счёта провайдер и номер транзакции
+        assert база["payments"][0][2:5] == (True, "uzum", "T-1")
+    elif not (счёт_ == "paid" and операция == "check"):
+        assert база["subscriptions"] == [] and база["wallet_log"] == []
 
 
 @pytest.mark.parametrize("что", ["business", "pack"])
@@ -302,64 +466,159 @@ def test_подтверждение_выдаёт_купленное(сайт, к
 
     assert база["payments"][0][1:3] == ("paid", True)
     assert база["transactions"][0][3] == "performed"
-    assert база["subscriptions"] if что == "business" else база["wallet_log"]
-    assert база["notifications"] and база["events"]
+
+    if что == "business":
+        # Тариф на 30 дней с автопродлением
+        assert база["subscriptions"] == [
+            (
+                _id("plans", "code = 'business'"),
+                "active",
+                "payment",
+                True,
+                "30 days",
+                "Оплата счёта SVD-000001",
+            )
+        ]
+        assert [n[1] for n in база["notifications"]][0] == "Тариф «Business» активирован"
+    else:
+        # Пакет — 50 кредитов в кошелёк, с записью в журнале кошелька
+        assert база["subscriptions"] == []
+        assert база["wallets"] == [(50, 0, 0)]
+        assert база["wallet_log"] == [
+            ("credits", 50, 50, "purchase", "App\\Models\\Payment", 1)
+        ]
+
+    assert "Оплата счёта SVD-000001 зачислена" in [n[1] for n in база["notifications"]]
+    assert len(база["events"]) == len(база["notifications"])
+
+
+def test_подтверждение_с_промокодом_и_кошельком(сайт, касса):
+    """Промокод счёта привязывается к подписке; кредиты прибавляются к прежним."""
+    тариф = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback/confirm",
+        тело("confirm", transId="T-1"),
+        сброс(транзакция=СВЕЖАЯ, промокод=True),
+    )
+    assert тариф["база"]["promo"] == [("SALE", 1)]
+
+    пакет = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback/confirm",
+        тело("confirm", transId="T-1"),
+        сброс(счета=счёт("pending", "pack"), транзакция=СВЕЖАЯ, кошелёк=True),
+    )
+    assert пакет["база"]["wallets"] == [(54, 1, 0)]
+    assert пакет["база"]["wallet_log"][0][1:3] == (50, 54)
 
 
 def test_merchant_выключен(сайт, касса):
     выключен = {"PAYMENTS_UZUM_ENABLED": "false"}
-
-    with laravel(**настройки(касса, **выключен)) as root:
-        итог = вызов(
-            root,
-            касса,
-            "/payments/uzum/callback/check",
-            тело("check", params=СЧЁТ),
-            сброс(),
-            env=выключен,
-        )
+    итог = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback/check",
+        тело("check", params=СЧЁТ),
+        сброс(),
+        env=выключен,
+    )
 
     assert итог["ответ"]["status"] == 404
 
 
 # ── Вебхук кассы ────────────────────────────────────────────────────
 
+ПРИНЯТ = (200, {"status": "OK", "errorCode": None})
+ОТКАЗ = (400, {"status": "FAILED", "errorCode": 99999})
+
 
 @pytest.mark.parametrize(
-    ("body", "режим", "подготовка"),
+    ("body", "режим", "подготовка", "итог_", "счёт_", "транзакция_"),
     [
-        ({"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"}, "completed", {}),
+        # Успех перепроверен у Uzum — счёт оплачен
+        (
+            {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+            "completed",
+            {},
+            ПРИНЯТ,
+            "paid",
+            "performed",
+        ),
         (
             {"orderId": "ORD-SVD-000001", "operationState": "success"},
             "completed",
             {"счета": (("SVD-000001", "pack", "pending"),)},
+            ПРИНЯТ,
+            "paid",
+            "performed",
         ),
-        ({"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"}, "processing", {}),
-        ({"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"}, "отказ", {}),
-        ({"orderId": "ORD-SVD-000001", "operationState": "FAIL"}, "completed", {}),
-        ({"orderId": "SVD-000001", "operationState": "PROCESSING"}, "completed", {}),
-        ({"orderId": "ORD-NOPE", "operationState": "FAIL"}, "completed", {}),
-        ({"orderId": "", "operationState": "SUCCESS"}, "completed", {}),
-        ({"operationState": "SUCCESS"}, "completed", {}),
+        # Uzum не подтвердил успех — отказ, ничего не записано
+        (
+            {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+            "processing",
+            {},
+            ОТКАЗ,
+            "pending",
+            None,
+        ),
+        (
+            {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+            "отказ",
+            {},
+            ОТКАЗ,
+            "pending",
+            None,
+        ),
+        # Не успех — транзакция записана, счёт ждёт
+        (
+            {"orderId": "ORD-SVD-000001", "operationState": "FAIL"},
+            "completed",
+            {},
+            ПРИНЯТ,
+            "pending",
+            "created",
+        ),
+        (
+            {"orderId": "SVD-000001", "operationState": "PROCESSING"},
+            "completed",
+            {},
+            ПРИНЯТ,
+            "pending",
+            "created",
+        ),
+        # Неизвестный заказ и пустые поля
+        ({"orderId": "ORD-NOPE", "operationState": "FAIL"}, "completed", {}, ОТКАЗ, "pending", None),
+        ({"orderId": "", "operationState": "SUCCESS"}, "completed", {}, ОТКАЗ, "pending", None),
+        ({"operationState": "SUCCESS"}, "completed", {}, ОТКАЗ, "pending", None),
+        # Счёт уже оплачен — второй раз не выдаётся
         (
             {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
             "completed",
             {"счета": (("SVD-000001", "business", "paid"),)},
+            ПРИНЯТ,
+            "paid",
+            "performed",
         ),
     ],
 )
-def test_вебхук(сайт, касса, body, режим, подготовка):
+def test_вебхук(сайт, касса, body, режим, подготовка, итог_, счёт_, транзакция_):
     касса.режим = режим
     итог = вызов(сайт, касса, "/payments/uzum/callback", body, сброс(**подготовка), вход=None)
+    база = итог["база"]
 
-    if (
-        режим == "completed"
-        and body.get("orderId") == "ORD-SVD-000001"
-        and body["operationState"] == "SUCCESS"
-        and not подготовка
-    ):
-        assert итог["база"]["payments"][0][1] == "paid"
-        assert итог["база"]["transactions"][0][3] == "performed"
+    assert (итог["ответ"]["status"], ответ(итог)) == итог_
+    assert [p[1] for p in база["payments"]] == [счёт_]
+    assert [t[3] for t in база["transactions"]] == ([транзакция_] if транзакция_ else [])
+
+    if транзакция_:
+        # Номер транзакции — номер заказа Uzum, тело вебхука — в payload
+        assert база["transactions"][0][2] == body["orderId"]
+        assert json.loads(база["transactions"][0][6]) == body
+
+    выдано = счёт_ == "paid" and not подготовка.get("счета", ((0, 0, "pending"),))[0][2] == "paid"
+    assert bool(база["subscriptions"] or база["wallet_log"]) is выдано
 
 
 def test_вебхук_повтор(сайт, касса):
@@ -374,7 +633,7 @@ def test_вебхук_повтор(сайт, касса):
             "'ORD-SVD-000001', 'performed', 'UZS', now(), now(), now())"
         )
 
-    вызов(
+    итог = вызов(
         сайт,
         касса,
         "/payments/uzum/callback",
@@ -382,24 +641,33 @@ def test_вебхук_повтор(сайт, касса):
         подготовка,
         вход=None,
     )
+    база = итог["база"]
+
+    assert (итог["ответ"]["status"], ответ(итог)) == ПРИНЯТ
+    assert [t[3] for t in база["transactions"]] == ["performed"]
+    assert база["subscriptions"] == [] and база["notifications"] == []
 
 
 def test_вебхук_чужой_адрес(сайт, касса):
-    with laravel(**настройки(касса, PAYMENTS_UZUM_CALLBACK_IPS="10.0.0.1,10.0.0.2")) as root:
-        вызов(
-            root,
-            касса,
-            "/payments/uzum/callback",
-            {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
-            сброс(),
-            вход=None,
-            env={"PAYMENTS_UZUM_CALLBACK_IPS": "10.0.0.1,10.0.0.2"},
-        )
+    итог = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback",
+        {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+        сброс(),
+        вход=None,
+        env={"PAYMENTS_UZUM_CALLBACK_IPS": "10.0.0.1,10.0.0.2"},
+    )
+
+    # Адрес не из белого списка — отказ, ничего не записано
+    assert (итог["ответ"]["status"], ответ(итог)) == ОТКАЗ
+    assert итог["база"]["transactions"] == []
+    assert итог["база"]["payments"][0][1] == "pending"
 
 
 @pytest.mark.parametrize("provider", ["payme", "click"])
 def test_вебхук_другой_провайдер(сайт, касса, provider):
-    вызов(
+    итог = вызов(
         сайт,
         касса,
         f"/payments/{provider}/callback",
@@ -407,3 +675,6 @@ def test_вебхук_другой_провайдер(сайт, касса, prov
         сброс(),
         вход=None,
     )
+
+    assert итог["ответ"]["status"] == 404
+    assert итог["база"]["transactions"] == []

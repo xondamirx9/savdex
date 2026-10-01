@@ -1,24 +1,24 @@
 """
-Выгрузка Python против выгрузки PHP — на одной и той же базе.
+Выгрузка в Excel (manage.py export_xlsx) на настоящей базе с крайними
+случаями.
 
-Самая важная проверка переноса, и вот почему. Собственная сверка
-выгрузки перечитывает базу тем же путём, каким писала, и ошибку этого
-пути не видит: с неверным чтением полей JSON Python-версия честно
-отвечала «все листы сошлись», а ячейки при этом расходились с PHP.
-Поймать такое может только сравнение двух реализаций.
+Собственная сверка выгрузки перечитывает базу и сравнивает с книгой
+лист за листом, ячейку за ячейкой. Слепой она была бы без крайних
+случаев: с неверным чтением полей JSON сверка честно отвечала «все листы
+сошлись». Поэтому база наполняется так, чтобы они были (наполнение() —
+бывший tests/fixtures/export_parity_fill.php), а отдельная проверка
+следит, что они действительно попали в книгу.
 
-Порядок: схема строится миграциями Laravel (правило 4.2 — схема его),
-база наполняется tests/fixtures/export_parity_fill.php с крайними
-случаями, затем обе команды выгружают, и книги сравниваются ячейка
-в ячейку.
+Порядок: схема — снимок миграций (свежая_база), справочники —
+manage.py seed --fresh, затем наполнение и выгрузка.
 
-Нужны PHP с установленными зависимостями и PostgreSQL. Адрес базы —
-SAVDEX_PARITY_PG_URL; без неё проверка пропускается. В CI обе вещи
-есть.
+Нужен PostgreSQL. Адрес базы — SAVDEX_PARITY_PG_URL; без неё проверка
+пропускается.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -27,15 +27,22 @@ from urllib.parse import urlparse
 
 import pytest
 
-from savdex.export.compare import diff
+from .factories import (
+    компании,
+    объявления,
+    отзыв,
+    открытие_контакта,
+    пользователь,
+    тендер,
+)
+from .pg_admin import ОКРУЖЕНИЕ, sql, свежая_база
 
-КОРЕНЬ = Path(__file__).resolve().parents[2]
 PYTHON = Path(__file__).resolve().parents[1]
 АДРЕС = os.environ.get("SAVDEX_PARITY_PG_URL", "")
 
 pytestmark = pytest.mark.skipif(
     not АДРЕС,
-    reason="нет SAVDEX_PARITY_PG_URL — сравнение требует PHP и PostgreSQL",
+    reason="нет SAVDEX_PARITY_PG_URL — выгрузка требует PostgreSQL",
 )
 
 
@@ -43,28 +50,158 @@ def _проверочная_ли(url: str) -> bool:
     """
     База пересоздаётся с нуля — только та, что названа проверочной.
 
-    migrate:fresh стирает всё. Переменную окружения легко перепутать,
-    и цена ошибки здесь — боевая база. Поэтому имя базы обязано
-    содержать «test».
+    Схема строится заново и стирает всё. Переменную окружения легко
+    перепутать, и цена ошибки здесь — боевая база. Поэтому имя базы
+    обязано содержать «test».
     """
     return "test" in urlparse(url).path.lstrip("/")
 
 
-def _laravel(*command: str) -> subprocess.CompletedProcess[str]:
-    окружение = {
-        **os.environ,
-        "DB_CONNECTION": "pgsql",
-        "DB_URL": АДРЕС,
-        "CACHE_STORE": "array",
-        "SESSION_DRIVER": "array",
-        "QUEUE_CONNECTION": "sync",
-        "MACHINE_TRANSLATION_ENABLED": "false",
-    }
+def _как_json_encode(value: object) -> str:
+    """json_encode() по умолчанию: \\u-экранирование и «\\/» вместо «/»."""
+    return json.dumps(value, separators=(",", ":")).replace("/", "\\/")
 
+
+def наполнение() -> None:
+    """
+    Крайние случаи, на которых выгрузка могла бы ошибиться:
+
+    - JSON с экранированной кириллицей (так пишет json_encode у PHP) и
+      JSON с «неровными» пробелами — в книгу он идёт сырым текстом;
+    - текст длиннее предела ячейки Excel — обрезка с пометкой;
+    - ИНН и телефоны с ведущими нулями — остаются строками;
+    - удалённые записи — выгружаются намеренно;
+    - пустые значения, логические поля, дробные координаты.
+    """
+    [(plan,)] = sql("select id from plans order by id limit 1")
+    cats = [c for (c,) in sql("select id from categories order by id")]
+    companies = компании(12)
+
+    for i, c in enumerate(companies):
+        for _ in range(1 + i % 3):
+            пользователь(company_id=c)
+
+        объявления(i % 4, company_id=c)
+        sql(
+            "insert into wallets (company_id, credits, created_at, updated_at) "
+            "values (%s, %s, now(), now())",
+            [c, i * 3],
+        )
+        sql(
+            "insert into subscriptions (company_id, plan_id, started_at, created_at, updated_at) "
+            "values (%s, %s, now() - make_interval(days => %s), now(), now())",
+            [c, plan, i],
+        )
+        sql(
+            "insert into company_contacts (company_id, type, value, created_at, updated_at) "
+            "values (%s, 'phone', %s, now(), now())",
+            [c, f"00998{i:07d}"],
+        )
+        sql(
+            "insert into company_attributes (company_id, key, value, created_at, updated_at) "
+            "values (%s, 'сертификат', %s, now(), now())",
+            [c, f"ISO 900{i}"],
+        )
+
+        if cats:
+            sql(
+                "insert into company_category (company_id, category_id) values (%s, %s)",
+                [c, cats[i % len(cats)]],
+            )
+
+        sql(
+            "insert into company_documents (company_id, type, title, file_path, created_at, "
+            "updated_at) values (%s, 'license', %s, %s, now(), now())",
+            [c, f"Лицензия №{i}", f"documents/{c}/l.pdf"],
+        )
+
+    for _ in range(4):
+        тендер()
+
+    listings = [pk for (pk,) in sql("select id from listings order by id")]
+
+    for n, listing in enumerate(listings):
+        sql(
+            "insert into listing_images (listing_id, path, created_at, updated_at) "
+            "values (%s, %s, now(), now())",
+            [listing, f"listings/{listing}/a.webp"],
+        )
+        sql(
+            "insert into listing_attributes (listing_id, key, value, created_at, updated_at) "
+            "values (%s, 'Марка', %s, now(), now())",
+            [listing, f"М{400 + n}"],
+        )
+
+        for d in range(3):
+            sql(
+                "insert into listing_stats (listing_id, date, views, created_at, updated_at) "
+                "values (%s, current_date - %s, %s, now(), now())",
+                [listing, d, n + d],
+            )
+
+    [(u,)] = sql("select id from users order by id limit 1")
+
+    for listing in listings[:3]:
+        sql(
+            "insert into favorites (user_id, listing_id, created_at, updated_at) "
+            "values (%s, %s, now(), now())",
+            [u, listing],
+        )
+
+    # Раскрытия и отзывы — между разными компаниями
+    for i in range(1, 5):
+        открытие_контакта(company_id=companies[i], target_company_id=companies[0])
+        отзыв(company_id=companies[0], author_company_id=companies[i], listing_id=None)
+
+    # ── Крайние случаи ──
+    sql(
+        "update companies set description = %s, lat = 41.3110810, lng = 69.2405620, "
+        "tin = '000123456', it_specializations = %s where id = %s",
+        [
+            "Длинное описание. " * 2500,  # > 32000 знаков — обрезка
+            _как_json_encode(["веб", "мобильные/приложения"]),  # экранированный \\u и \\/
+            companies[1],
+        ],
+    )
+    sql("update companies set deleted_at = now() - interval '1 day' where id = %s", [companies[2]])
+    sql(
+        # json, записанный не через json_encode
+        'update companies set it_specializations = \'["сырой текст",  "с пробелами"]\', '
+        "website = null, phone = null where id = %s",
+        [companies[3]],
+    )
+    sql(
+        "update users set is_admin = true, admin_role = 'superadmin', admin_permissions = %s "
+        "where id = (select id from users where company_id = %s order by id limit 1)",
+        [_как_json_encode({"reports": ["view", "export"]}), companies[4]],
+    )
+    sql(
+        "update listings set tags = %s, title_i18n = %s, deleted_at = now() where id = %s",
+        [
+            json.dumps(["цемент", "М400"], ensure_ascii=False, separators=(",", ":")),
+            _как_json_encode({"en": "Cement", "uz": "Sement"}),
+            listings[0],
+        ],
+    )
+
+    # JSON в том виде, в каком его писал Laravel (\\u-экранирование), и в
+    # произвольном: оба должны попасть в выгрузку как есть
+    alive = [pk for (pk,) in sql("select id from listings where deleted_at is null order by id")]
+    sql(
+        "update listings set tags = %s where id = %s",
+        [_как_json_encode(["цемент", "М400"]), alive[0]],
+    )
+    sql(
+        "update listings set title_i18n = %s where id = %s",
+        ['{"en":  "Cement \\/ bags",   "uz": "Sement"}', alive[1]],
+    )
+
+
+def выгрузить(каталог: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["php", *command],
-        cwd=КОРЕНЬ,
-        env=окружение,
+        [sys.executable, "manage.py", "export_xlsx", f"--dir={каталог}", *args],
+        cwd=PYTHON,
+        env={**os.environ, "DATABASE_URL": АДРЕС},
         capture_output=True,
         text=True,
         check=True,
@@ -76,28 +213,24 @@ def выгрузки(tmp_path_factory):
     if not _проверочная_ли(АДРЕС):
         pytest.fail(
             "SAVDEX_PARITY_PG_URL ведёт в базу без «test» в имени. "
-            "Сравнение стирает базу целиком — отказываюсь."
+            "Проверка стирает базу целиком — отказываюсь."
         )
 
-    _laravel("artisan", "migrate:fresh", "--force")
-    _laravel("artisan", "db:seed", "--force")
-    _laravel("python/tests/fixtures/export_parity_fill.php")
-
-    php_dir = tmp_path_factory.mktemp("php")
-    py_dir = tmp_path_factory.mktemp("python")
-
-    php = _laravel("artisan", "savdex:export-xlsx", f"--dir={php_dir}")
-
-    python = subprocess.run(
-        [sys.executable, "manage.py", "export_xlsx", f"--dir={py_dir}"],
+    свежая_база()
+    # Справочники — владельцем базы, как при деплое
+    subprocess.run(
+        [sys.executable, "manage.py", "seed", "--fresh"],
         cwd=PYTHON,
-        env={**os.environ, "DATABASE_URL": АДРЕС},
+        env={**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": АДРЕС, "PYTHONPATH": str(PYTHON)},
         capture_output=True,
-        text=True,
         check=True,
     )
+    наполнение()
 
-    return php_dir, py_dir, php.stdout, python.stdout
+    py_dir = tmp_path_factory.mktemp("python")
+    python = выгрузить(py_dir)
+
+    return py_dir, python.stdout
 
 
 def test_адрес_проверочной_базы_распознаётся():
@@ -105,72 +238,48 @@ def test_адрес_проверочной_базы_распознаётся():
     assert not _проверочная_ли("postgres://u:p@h:5432/savdex")
 
 
-def test_обе_выгрузки_сошлись_сами_с_собой(выгрузки):
-    _, _, php, python = выгрузки
+def test_выгрузка_сошлась_сама_с_собой(выгрузки):
+    py_dir, python = выгрузки
 
-    assert "Все листы сошлись" in php
     assert "Все листы сошлись" in python
-
-
-@pytest.mark.parametrize("книга", ["companies", "listings"])
-def test_книги_совпадают_ячейка_в_ячейку(выгрузки, книга):
-    php_dir, py_dir, _, _ = выгрузки
-
-    php = next(php_dir.glob(f"savdex-{книга}-*.xlsx"))
-    python = next(py_dir.glob(f"savdex-{книга}-*.xlsx"))
-
-    assert diff(php, python) == []
+    # Обе книги на месте
+    assert next(py_dir.glob("savdex-companies-*.xlsx"))
+    assert next(py_dir.glob("savdex-listings-*.xlsx"))
 
 
 def test_крайние_случаи_действительно_в_выгрузке(выгрузки):
     """
     Проверка самой проверки.
 
-    Без крайних случаев сравнение проходило и с ошибкой в чтении JSON.
-    Если наполнение однажды перестанет их создавать, сравнение снова
-    станет слепым — этот тест заметит это первым.
+    Без крайних случаев сверка проходила и с ошибкой в чтении JSON.
+    Если наполнение однажды перестанет их создавать, сверка снова
+    станет слепой — этот тест заметит это первым. JSON в книге — сырым
+    текстом из базы, как его записали.
     """
     from openpyxl import load_workbook
 
-    php_dir, _, _, _ = выгрузки
-    listings = load_workbook(next(php_dir.glob("savdex-listings-*.xlsx")))["Объявления"]
+    py_dir, _ = выгрузки
+    listings = load_workbook(next(py_dir.glob("savdex-listings-*.xlsx")))["Объявления"]
     values = [str(cell.value) for row in listings.iter_rows() for cell in row if cell.value]
 
     assert any("\\u0446" in v for v in values), "нет JSON с экранированной кириллицей"
     assert any('"en":  "Cement' in v for v in values), "нет JSON с неровными пробелами"
 
-    companies = load_workbook(next(php_dir.glob("savdex-companies-*.xlsx")))["Компании"]
+    companies = load_workbook(next(py_dir.glob("savdex-companies-*.xlsx")))["Компании"]
     cells = [str(cell.value) for row in companies.iter_rows() for cell in row if cell.value]
 
     assert any(v.endswith("[…обрезано]") for v in cells), "нет обрезанного длинного текста"
     assert "000123456" in cells, "нет ИНН с ведущими нулями"
 
 
-def test_режим_сверки_для_php_отдаёт_итог(выгрузки, tmp_path):
+def test_режим_сверки_отдаёт_итог(выгрузки, tmp_path):
     """
-    Так Python-выгрузку вызывает админка на боевом сервере: рядом
-    с PHP-книгами, с --compare-with и --json. Итог — строка с меткой,
-    по которой PHP его находит.
+    Режим сверки с готовыми книгами (--compare-with) и итогом для
+    вызывающего (--json): строка с меткой SAVDEX-RESULT. Повторная
+    выгрузка той же базы сходится с первой ячейка в ячейку.
     """
-    import json
-
-    php_dir, _, _, _ = выгрузки
-
-    python = subprocess.run(
-        [
-            sys.executable,
-            "manage.py",
-            "export_xlsx",
-            f"--dir={tmp_path}",
-            f"--compare-with={php_dir}",
-            "--json",
-        ],
-        cwd=PYTHON,
-        env={**os.environ, "DATABASE_URL": АДРЕС},
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    py_dir, _ = выгрузки
+    python = выгрузить(tmp_path, f"--compare-with={py_dir}", "--json")
 
     line = next(x for x in python.stdout.splitlines() if x.startswith("SAVDEX-RESULT "))
     result = json.loads(line.removeprefix("SAVDEX-RESULT "))
@@ -198,20 +307,7 @@ def test_снимок_показывает_базу_на_момент_снимк
 
         сайт.execute("update tenders set views_count = views_count + 1000")
 
-        subprocess.run(
-            [
-                sys.executable,
-                "manage.py",
-                "export_xlsx",
-                f"--dir={tmp_path}",
-                f"--snapshot={идентификатор}",
-            ],
-            cwd=PYTHON,
-            env={**os.environ, "DATABASE_URL": АДРЕС},
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        выгрузить(tmp_path, f"--snapshot={идентификатор}")
 
     assert было, "в базе нет тендеров — проверка слепа"
     assert _просмотры_тендеров(tmp_path) == было
@@ -264,7 +360,7 @@ def _просмотры_тендеров(каталог: Path) -> dict[int, int]
     raise AssertionError("в книгах нет листа «Тендеры»")
 
 
-def test_выгрузка_на_живой_базе_сходится(выгрузки):
+def test_выгрузка_на_живой_базе_сходится(выгрузки, tmp_path):
     """
     Выгрузка с кнопки, пока посетители смотрят тендеры и объявления.
 
@@ -297,50 +393,13 @@ def test_выгрузка_на_живой_базе_сходится(выгруз
     поток.start()
 
     try:
-        итог = _laravel_run("artisan", "savdex:export-run")
+        python = выгрузить(tmp_path, "--json")
     finally:
         стоп.set()
         поток.join(timeout=10)
 
+    line = next(x for x in python.stdout.splitlines() if x.startswith("SAVDEX-RESULT "))
+    result = json.loads(line.removeprefix("SAVDEX-RESULT "))
+
     assert обновлений > 10, "поток посетителей не успел ничего поменять — проверка слепа"
-    assert "Итог: done" in итог, итог
-    assert "Сверка с Python: match" in итог, итог
-    assert "Книги отдала версия: python" in итог, итог
-
-
-def test_упавший_python_не_оставляет_без_файла():
-    """
-    Python — основная версия, но если он упал, администратор всё равно
-    получает файл: книги PHP-версии встают на место скачиваемых.
-    """
-    итог = _laravel_run("artisan", "savdex:export-run", python="/bin/false")
-
-    assert "Итог: done" in итог, итог
-    assert "Книги отдала версия: php" in итог, итог
-    assert "Сверка с Python: failed" in итог, итог
-    assert "savdex-companies-" in итог and "savdex-listings-" in итог, итог
-
-
-def _laravel_run(*command: str, python: str = sys.executable) -> str:
-    """Как _laravel, но без check=True: нужен вывод и при неудаче."""
-    окружение = {
-        **os.environ,
-        "DB_CONNECTION": "pgsql",
-        "DB_URL": АДРЕС,
-        "CACHE_STORE": "array",
-        "SESSION_DRIVER": "array",
-        "QUEUE_CONNECTION": "sync",
-        "MACHINE_TRANSLATION_ENABLED": "false",
-        # Та же Python-версия, что гоняет этот тест
-        "SAVDEX_PYTHON": python,
-    }
-
-    result = subprocess.run(
-        ["php", *command],
-        cwd=КОРЕНЬ,
-        env=окружение,
-        capture_output=True,
-        text=True,
-    )
-
-    return result.stdout + result.stderr
+    assert result["self_check"] is True, result["problems"]

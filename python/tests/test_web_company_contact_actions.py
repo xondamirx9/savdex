@@ -1,23 +1,25 @@
 """
-Контакты своей компании на Django неотличимы от Laravel: добавить
+Контакты своей компании на Django: добавить
 (проверка по типу — почта как email:rfc, телефон шаблоном, одно значение
 в компании один раз; основной — первый своего типа; порядок — по числу
 контактов), изменить, удалить (последний телефон или почту — нельзя).
 Без компании — сообщение, чужой контакт — 404.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -25,14 +27,10 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'mine']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    компания(slug="mine")
+    компания(slug="other")
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -78,32 +76,72 @@ def снимок() -> Any:
 
 ЕСТЬ = (("phone", "+998 90 111-22-33", True), ("email", "sale@cement.uz", True))
 
+#: Строки до запроса: свои два контакта и чужой телефон
+ДО = [
+    (1, 1, "phone", "+998 90 111-22-33", None, None, True, True, 0, False),
+    (2, 1, "email", "sale@cement.uz", None, None, True, True, 0, False),
+    (3, 2, "phone", "+998 90 000-00-00", None, None, False, True, 0, True),
+]
+
+
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Содержимое сессии после запроса."""
+    return json.loads(итог["сессия"]["payload"].replace('"<token>"', '""'))
+
+
+def ошибки(итог: dict[str, Any]) -> set[str]:
+    """Поля с ошибками проверки (errors в сессии)."""
+    return set(сессия(итог).get("errors", {}).get("default", {}).get("messages", {}))
+
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "новый"),
     [
-        {"type": "phone", "value": "+998 (91) 222 33 44"},
-        {"type": "phone", "value": "+998 91 222 33 44", "label": "Склад", "is_public": False},
-        {"type": "email", "value": "info@cement.uz", "contact_person": "Азиз", "sort_order": 3},
-        {"type": "email", "value": "почта@цемент.уз"},
-        {"type": "email", "value": "not-an-email"},
-        {"type": "email", "value": "a..b@cement.uz"},
-        {"type": "phone", "value": "12345"},
-        {"type": "telegram", "value": "@cement_trade"},
-        {"type": "website", "value": "https://cement.uz"},
-        {"type": "fax", "value": "123"},
-        {"type": "phone", "value": "+998 90 111-22-33"},
-        {"type": "email", "value": "+998 90 000-00-00"},
-        {"type": "phone", "value": ["массив"]},
-        {"type": "phone", "value": "+998 91 222 33 44", "sort_order": 100},
-        {"type": "phone", "value": "+998 91 222 33 44", "is_public": "on"},
-        {"type": "phone", "value": "+998 91 222 33 44", "label": "x" * 61},
-        {},
+        # Новый контакт: (тип, значение, подпись, контактное лицо, основной, на визитке,
+        # порядок); не первый своего типа — не основной; порядок — по числу контактов
+        (
+            {"type": "phone", "value": "+998 (91) 222 33 44"},
+            ("phone", "+998 (91) 222 33 44", None, None, False, True, 2),
+        ),
+        (
+            {"type": "phone", "value": "+998 91 222 33 44", "label": "Склад", "is_public": False},
+            ("phone", "+998 91 222 33 44", "Склад", None, False, False, 2),
+        ),
+        (
+            {"type": "email", "value": "info@cement.uz", "contact_person": "Азиз", "sort_order": 3},
+            ("email", "info@cement.uz", None, "Азиз", False, True, 3),
+        ),
+        # email:rfc принимает адрес на кириллице
+        (
+            {"type": "email", "value": "почта@цемент.уз"},
+            ("email", "почта@цемент.уз", None, None, False, True, 2),
+        ),
+        ({"type": "email", "value": "not-an-email"}, {"value"}),
+        ({"type": "email", "value": "a..b@cement.uz"}, {"value"}),
+        ({"type": "phone", "value": "12345"}, {"value"}),
+        # Первый своего типа — основной
+        (
+            {"type": "telegram", "value": "@cement_trade"},
+            ("telegram", "@cement_trade", None, None, True, True, 2),
+        ),
+        (
+            {"type": "website", "value": "https://cement.uz"},
+            ("website", "https://cement.uz", None, None, True, True, 2),
+        ),
+        ({"type": "fax", "value": "123"}, {"type"}),
+        # Одно значение в компании — один раз (чужой такой же телефон не мешает)
+        ({"type": "phone", "value": "+998 90 111-22-33"}, {"value"}),
+        ({"type": "email", "value": "+998 90 000-00-00"}, {"value"}),
+        ({"type": "phone", "value": ["массив"]}, {"value"}),
+        ({"type": "phone", "value": "+998 91 222 33 44", "sort_order": 100}, {"sort_order"}),
+        ({"type": "phone", "value": "+998 91 222 33 44", "is_public": "on"}, {"is_public"}),
+        ({"type": "phone", "value": "+998 91 222 33 44", "label": "x" * 61}, {"label"}),
+        ({}, {"type", "value"}),
     ],
 )
 @pytest.mark.parametrize("prefix", ["", "/en"])
-def test_добавить(сайт, body, prefix):
-    отправить(
+def test_добавить(сайт, body, новый, prefix):
+    итог = отправить(
         сайт,
         f"{prefix}/cabinet/company/contacts",
         контакты(*ЕСТЬ),
@@ -112,6 +150,18 @@ def test_добавить(сайт, body, prefix):
         body=body,
         headers=inertia(),
     )
+    ответ = итог["ответ"]
+
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == сайт + prefix + "/cabinet/settings"
+
+    if isinstance(новый, set):
+        assert ошибки(итог) == новый
+        assert итог["база"] == ДО
+    else:
+        assert ошибки(итог) == set()
+        assert сессия(итог)["success"] == ("Contact added" if prefix else "Контакт добавлен")
+        assert итог["база"] == [*ДО, (4, 1, *новый, True)]
 
 
 def test_добавить_первый_своего_типа(сайт):
@@ -125,12 +175,12 @@ def test_добавить_первый_своего_типа(сайт):
         headers=inertia(),
     )
 
-    assert итог["база"][-1][6] is True
+    assert итог["база"][-1] == (3, 1, "email", "sale@cement.uz", None, None, True, True, 1, True)
 
 
 def test_добавить_без_компании(сайт):
     uid = учётка("nobody@savdex.uz", company_id=None)
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/company/contacts",
         контакты(*ЕСТЬ),
@@ -140,20 +190,35 @@ def test_добавить_без_компании(сайт):
         headers=inertia(),
     )
 
+    assert итог["ответ"]["status"] == 302
+    assert сессия(итог)["error"] == "Сначала заполните данные компании"
+    assert итог["база"] == ДО
+
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "строка"),
     [
-        {"type": "phone", "value": "+998 90 111-22-33", "label": "Офис", "sort_order": "2"},
-        {"type": "phone", "value": "+998 90 999-88-77", "is_public": "0"},
-        {"type": "phone", "value": "sale@cement.uz"},
-        {"type": "email", "value": "sale@cement.uz"},
-        {"type": "phone", "value": "+998 90 000-00-00"},
-        {"type": "phone"},
+        (
+            {"type": "phone", "value": "+998 90 111-22-33", "label": "Офис", "sort_order": "2"},
+            (1, 1, "phone", "+998 90 111-22-33", "Офис", None, True, True, 2, True),
+        ),
+        (
+            {"type": "phone", "value": "+998 90 999-88-77", "is_public": "0"},
+            (1, 1, "phone", "+998 90 999-88-77", None, None, True, False, 0, True),
+        ),
+        ({"type": "phone", "value": "sale@cement.uz"}, {"value"}),
+        # Уже есть у своей компании
+        ({"type": "email", "value": "sale@cement.uz"}, {"value"}),
+        # Такой же у чужой компании — можно
+        (
+            {"type": "phone", "value": "+998 90 000-00-00"},
+            (1, 1, "phone", "+998 90 000-00-00", None, None, True, True, 0, True),
+        ),
+        ({"type": "phone"}, {"value"}),
     ],
 )
-def test_изменить(сайт, body):
-    отправить(
+def test_изменить(сайт, body, строка):
+    итог = отправить(
         сайт,
         "/cabinet/company/contacts/1",
         контакты(*ЕСТЬ),
@@ -164,18 +229,33 @@ def test_изменить(сайт, body):
         headers=inertia(),
     )
 
+    assert итог["ответ"]["status"] == 303
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+
+    if isinstance(строка, set):
+        assert ошибки(итог) == строка
+        assert итог["база"] == ДО
+    else:
+        assert сессия(итог)["success"] == "Контакт обновлён"
+        assert итог["база"] == [строка, *ДО[1:]]
+
+
+ПОСЛЕДНИЙ = "Это последний способ связи. Добавьте другой телефон или почту, прежде чем удалять этот."
+
 
 @pytest.mark.parametrize(
-    ("строки", "номер"),
+    ("строки", "номер", "остались", "сообщение"),
     [
-        (ЕСТЬ, 1),
-        ((ЕСТЬ[0],), 1),
-        ((ЕСТЬ[0], ("telegram", "@cement", False)), 2),
-        ((ЕСТЬ[0], ("telegram", "@cement", False)), 1),
+        (ЕСТЬ, 1, [2, 3], ("success", "Контакт удалён")),
+        # Последний телефон или почту — нельзя
+        ((ЕСТЬ[0],), 1, [1, 2], ("error", ПОСЛЕДНИЙ)),
+        ((ЕСТЬ[0], ("telegram", "@cement", False)), 2, [1, 3], ("success", "Контакт удалён")),
+        # Телеграм не считается способом связи
+        ((ЕСТЬ[0], ("telegram", "@cement", False)), 1, [1, 2, 3], ("error", ПОСЛЕДНИЙ)),
     ],
 )
-def test_удалить(сайт, строки, номер):
-    отправить(
+def test_удалить(сайт, строки, номер, остались, сообщение):
+    итог = отправить(
         сайт,
         f"/cabinet/company/contacts/{номер}",
         контакты(*строки),
@@ -184,6 +264,11 @@ def test_удалить(сайт, строки, номер):
         method="DELETE",
         headers=inertia(),
     )
+    ключ, текст = сообщение
+
+    assert итог["ответ"]["status"] == 303
+    assert сессия(итог)[ключ] == текст
+    assert [row[0] for row in итог["база"]] == остались
 
 
 @pytest.mark.parametrize("method", ["PATCH", "DELETE"])
@@ -199,3 +284,4 @@ def test_чужой_контакт_404(сайт, method):
     )
 
     assert итог["ответ"]["status"] == 404
+    assert итог["база"] == ДО

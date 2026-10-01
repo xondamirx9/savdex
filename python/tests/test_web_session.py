@@ -1,10 +1,11 @@
 """
-Этап 5, шаг 1: страница сайта на Django ведёт сессию Laravel, как он сам.
+Этап 5, шаг 1: страница сайта на Django ведёт сессию так же, как её
+вёл Laravel (строка sessions, кука, формат payload).
 
-Одна и та же исходная сессия (строка sessions и куки) — перед каждой
-стороной; после ответа сравниваются строка sessions байт в байт (кроме
-случайного _token и времени) и куки ответа (расшифрованные значения и
-атрибуты):
+Исходная сессия (строка sessions и кука) заводится перед запросом;
+после ответа проверяются строка sessions (payload — без случайного
+_token, как его пишет json_encode PHP) и куки ответа (расшифрованные
+значения и атрибуты):
 
 - гостю без куки заводится сессия, кука сессии и XSRF-TOKEN;
 - одноразовое сообщение показывается и стирается (ageFlashData);
@@ -14,13 +15,13 @@
 - просроченная сессия — пустая, но с тем же номером;
 - XHR-запрос не запоминает адрес (_previous.url).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -30,13 +31,13 @@ from savdex import laravel_session
 from .pg_admin import sql, нужна_база, свежая_база
 from .web_site import (  # noqa: F401 — общие помощники сессии берут отсюда и другие проверки
     СЕССИЯ,
-    laravel,
+    адрес,
     завести,
     кука,
     куки_ответа,
+    открыть,
     пользователь,
     расшифровать,
-    сверить,
     сессия_из,
     страница,
     строка,
@@ -47,90 +48,80 @@ pytestmark = нужна_база
 
 АГЕНТ = {"User-Agent": "savdex-parity/1.0"}
 
+#: Срок куки — SESSION_LIFETIME=120 минут (web_site.САЙТ)
+СРОК = 7200
+
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
-def по_сторонам(
+def зайти(
     сайт: str,
     path: str,
-    подготовить: Any,
+    подготовить: Callable[[], object],
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
-) -> dict[str, tuple[dict[str, Any], dict[str, Any] | None]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """
-    Django, затем Laravel — каждый после подготовить(); страница сверяется
-    (web_site.сверить), а после каждой стороны снимается строка сессии.
+    Запрос к странице после подготовить(); ответ и строка sessions, на
+    которую указывает кука ответа. Куки ответа — как у Laravel: сессия
+    (HttpOnly) и XSRF-TOKEN с тем же _token, оба на SESSION_LIFETIME.
     """
-    снимки: list[dict[str, Any] | None] = []
+    подготовить()
+    ответ = открыть(сайт, path, cookies, {**АГЕНТ, **(headers or {})})
+    куки = куки_ответа(ответ)
 
-    def после(ответ: dict[str, Any]) -> None:
-        sid = куки_ответа(ответ).get(СЕССИЯ, {}).get("value")
-        снимки.append(строка(sid) if sid else None)
+    assert set(куки) == {СЕССИЯ, "XSRF-TOKEN"}, куки
 
-    д, л = сверить(
-        сайт,
-        path,
-        cookies,
-        {**АГЕНТ, **(headers or {})},
-        перед=подготовить,
-        после=после,
-    )
-
-    return {"django": (д, снимки[0]), "laravel": (л, снимки[1])}
-
-
-def одинаково(стороны: dict[str, tuple[dict[str, Any], dict[str, Any] | None]]) -> dict[str, Any]:
-    (д, строка_д), (л, строка_л) = стороны["django"], стороны["laravel"]
-    куки_д, куки_л = куки_ответа(д), куки_ответа(л)
-
-    assert set(куки_д) == set(куки_л) == {СЕССИЯ, "XSRF-TOKEN"}, (куки_д, куки_л)
-
-    for имя in (СЕССИЯ, "XSRF-TOKEN"):
+    for имя, httponly in ((СЕССИЯ, True), ("XSRF-TOKEN", False)):
+        атрибуты = {k: v for k, v in куки[имя].items() if k not in ("value", "max-age")}
+        ожидание = {"path": "/", "samesite": "lax", **({"httponly": True} if httponly else {})}
+        assert атрибуты == ожидание, (имя, атрибуты)
         # Max-Age у Symfony — «срок минус сейчас»: на стыке секунд 7199
-        без_значения = [
-            {k: v for k, v in к[имя].items() if k not in ("value", "max-age")}
-            for к in (куки_д, куки_л)
-        ]
-        assert без_значения[0] == без_значения[1], имя
-        сроки = [int(к[имя].get("max-age", 0)) for к in (куки_д, куки_л)]
-        assert abs(сроки[0] - сроки[1]) <= 1, (имя, сроки)
+        assert abs(int(куки[имя]["max-age"]) - СРОК) <= 1, куки[имя]
 
-    assert строка_д is not None and строка_л is not None
+    итог = строка(сессия_из(ответ))
 
-    for сторона, строка_, куки in (("django", строка_д, куки_д), ("laravel", строка_л, куки_л)):
-        # XSRF-TOKEN — тот же _token, что в сессии
-        assert куки["XSRF-TOKEN"]["value"] == строка_["token"], сторона
+    assert итог is not None
+    # XSRF-TOKEN — тот же _token, что в сессии
+    assert куки["XSRF-TOKEN"]["value"] == итог["token"]
+    assert итог["ip"] == "127.0.0.1" and итог["agent"] == АГЕНТ["User-Agent"]
 
-    for ключ in ("payload", "user_id", "ip", "agent"):
-        assert строка_д[ключ] == строка_л[ключ], (ключ, строка_д[ключ], строка_л[ключ])
+    return ответ, итог
 
-    return строка_д
+
+def прежний(сайт: str, path: str, route: str) -> str:
+    """_previous в payload: адрес — как его экранирует json_encode PHP."""
+    url = (сайт + path).replace("/", "\\/")
+
+    return f'"_previous":{{"url":"{url}","route":"{route}"}}'
+
+
+ПУСТОЙ_FLASH = '"_flash":{"old":[],"new":[]}'
 
 
 def test_гостю_заводится_сессия(сайт):
-    стороны = по_сторонам(сайт, "/about", lambda: None)
-    итог = одинаково(стороны)
+    ответ, итог = зайти(сайт, "/about", lambda: None)
 
-    assert '"_previous":{"url":' in итог["payload"] and '"route":"about"' in итог["payload"]
+    assert ответ["status"] == 200
+    assert итог["payload"] == (
+        '{"_token":"<token>",' + прежний(сайт, "/about", "about") + "," + ПУСТОЙ_FLASH + "}"
+    )
     assert итог["user_id"] is None
 
     # Токен формы на странице — тот же, что в сессии
-    д, строка_д = стороны["django"]
-    assert f'<meta name="csrf-token" content="{строка_д["token"]}">' in д["body"]
+    assert f'<meta name="csrf-token" content="{итог["token"]}">' in ответ["body"]
 
 
 def test_переход_xhr_не_запоминает_адрес(сайт):
-    итог = одинаково(
-        по_сторонам(сайт, "/contact", lambda: None, headers={"X-Requested-With": "XMLHttpRequest"})
-    )
+    _, итог = зайти(сайт, "/contact", lambda: None, headers={"X-Requested-With": "XMLHttpRequest"})
 
-    assert "_previous" not in итог["payload"]
+    assert итог["payload"] == '{"_token":"<token>",' + ПУСТОЙ_FLASH + "}"
 
 
 # ── Сессия вошедшего ────────────────────────────────────────────────
@@ -147,14 +138,20 @@ def test_сообщение_показывается_и_стирается(са�
         "_flash": {"old": ["success"], "new": []},
     }
 
-    стороны = по_сторонам(
+    ответ, итог = зайти(
         сайт, "/about", lambda: завести(sid, исходная), cookies={СЕССИЯ: кука(СЕССИЯ, sid)}
     )
-    итог = одинаково(стороны)
 
-    assert сессия_из(стороны["django"][0]) == sid
-    assert страница(стороны["django"][0]["body"])["props"]["flash"]["success"] == "Сохранено"
-    assert "Сохранено" not in итог["payload"] and '"old":[]' in итог["payload"]
+    assert сессия_из(ответ) == sid
+    assert итог["token"] == "t" * 40
+    assert страница(ответ["body"])["props"]["flash"]["success"] == "Сохранено"
+    assert итог["payload"] == (
+        f'{{"_token":"<token>","{laravel_session.LOGIN_KEY}":{uid},'
+        + прежний(сайт, "/about", "about")
+        + ","
+        + ПУСТОЙ_FLASH
+        + "}"
+    )
     assert итог["user_id"] == uid
 
 
@@ -166,10 +163,9 @@ def test_язык_из_адреса_в_сессию_и_профиль(сайт):
         sql("update users set locale = 'ru' where id = %s", [uid])
         завести(sid, {"_token": "t" * 40, laravel_session.LOGIN_KEY: uid})
 
-    итог = одинаково(
-        по_сторонам(сайт, "/uz/about", подготовить, cookies={СЕССИЯ: кука(СЕССИЯ, sid)})
-    )
+    ответ, итог = зайти(сайт, "/uz/about", подготовить, cookies={СЕССИЯ: кука(СЕССИЯ, sid)})
 
+    assert ответ["status"] == 200
     assert '"locale":"uz"' in итог["payload"]
     assert sql("select locale from users where id = %s", [uid]) == [("uz",)]
 
@@ -185,15 +181,14 @@ def test_запомнить_меня_переносит_сессию(сайт):
         ),
     }
 
-    стороны = по_сторонам(сайт, "/about", lambda: завести(sid, {"_token": "t" * 40}), cookies=куки)
-    итог = одинаково(стороны)
+    ответ, итог = зайти(сайт, "/about", lambda: завести(sid, {"_token": "t" * 40}), cookies=куки)
 
-    for ответ, _ in стороны.values():
-        assert сессия_из(ответ) != sid
-
+    assert сессия_из(ответ) != sid
     assert sql("select count(*) from sessions where id = %s", [sid]) == [(0,)]
     assert итог["user_id"] == uid
     assert f'"{laravel_session.LOGIN_KEY}":{uid}' in итог["payload"]
+    # Токен сессии тот же: migrate переносит её содержимое
+    assert итог["token"] == "t" * 40
 
 
 def test_просроченная_сессия_пустая_с_тем_же_номером(сайт):
@@ -201,50 +196,67 @@ def test_просроченная_сессия_пустая_с_тем_же_но�
     sid = "D" * 40
     старая = {"_token": "t" * 40, laravel_session.LOGIN_KEY: uid, "locale": "en"}
 
-    стороны = по_сторонам(
+    ответ, итог = зайти(
         сайт,
         "/about",
         lambda: завести(sid, старая, last=int(time.time()) - 3 * 3600),
         cookies={СЕССИЯ: кука(СЕССИЯ, sid)},
     )
-    итог = одинаково(стороны)
 
-    for ответ, строка_ in стороны.values():
-        assert сессия_из(ответ) == sid
-        assert строка_ is not None and строка_["token"] != "t" * 40
-
+    assert сессия_из(ответ) == sid
+    assert итог["token"] != "t" * 40
     assert итог["user_id"] is None and "locale" not in итог["payload"]
+    assert итог["payload"] == (
+        '{"_token":"<token>",' + прежний(сайт, "/about", "about") + "," + ПУСТОЙ_FLASH + "}"
+    )
 
 
 def test_битая_кука_новая_сессия(сайт):
-    стороны = по_сторонам(сайт, "/contact", lambda: None, cookies={СЕССИЯ: "garbage"})
-    одинаково(стороны)
+    ответ, итог = зайти(сайт, "/contact", lambda: None, cookies={СЕССИЯ: "garbage"})
+
+    assert ответ["status"] == 200
+    assert итог["user_id"] is None
+    assert итог["payload"] == (
+        '{"_token":"<token>",' + прежний(сайт, "/contact", "contacts") + "," + ПУСТОЙ_FLASH + "}"
+    )
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("path", "статус", "начало", "прежний_адрес", "маршрут"),
     [
         # Адрес без префикса, параметры — в порядке getQueryString
-        "/uz/about?b=2&a=1",
+        ("/uz/about?b=2&a=1", 200, '"locale":"uz",', "/about?a=1&b=2", "about"),
         # 404 изнутри маршрута — сессия всё равно пишется
-        "/news/nothing-here",
-        "/catalog?q=%20x%20&page=2",
+        ("/news/nothing-here", 404, "", "/news/nothing-here", "news.show"),
+        ("/catalog?q=%20x%20&page=2", 200, "", "/catalog?page=2&q=%20x%20", "catalog"),
     ],
 )
-def test_адрес_и_ошибка(сайт, path):
-    одинаково(по_сторонам(сайт, path, lambda: None))
+def test_адрес_и_ошибка(сайт, path, статус, начало, прежний_адрес, маршрут):
+    ответ, итог = зайти(сайт, path, lambda: None)
+
+    assert ответ["status"] == статус
+    assert итог["payload"] == (
+        '{"_token":"<token>",'
+        + начало
+        + прежний(сайт, прежний_адрес, маршрут)
+        + ","
+        + ПУСТОЙ_FLASH
+        + "}"
+    )
 
 
 def test_переход_на_запомненный_язык(сайт):
     """SetLocale уводит на /uz/…: ответ — переход, сессия пишется и тут."""
     sid = "E" * 40
-    стороны = по_сторонам(
+    ответ, итог = зайти(
         сайт,
         "/contact?x=1",
         lambda: завести(sid, {"_token": "t" * 40, "locale": "uz"}),
         cookies={СЕССИЯ: кука(СЕССИЯ, sid)},
     )
-    итог = одинаково(стороны)
 
-    assert стороны["django"][0]["status"] == 302
-    assert '"url":"http:\\/\\/' in итог["payload"] and 'contact?x=1"' in итог["payload"]
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == сайт + "/uz/contact?x=1"
+    assert сессия_из(ответ) == sid
+    assert '"locale":"uz"' in итог["payload"]
+    assert прежний(сайт, "/contact?x=1", "contacts") in итог["payload"]

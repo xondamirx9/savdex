@@ -1,33 +1,21 @@
 """
-Права админки: Python против PHP.
+Права админки: матрица ролей, выдачи и отзывы.
 
-Python-разделы админки (этап 2) решают, что человеку можно, по копии
-AdminAccess в savdex/access.py. Право, которого нет в PHP, открыло бы
-лишнее; недостающее — закрыло бы нужное. Поэтому ответы сверяются
-с самим PHP (tests/fixtures/access_dump.php): наборы прав всех ролей,
-«только свои записи» и итоговое «можно ли» по каждому из прав для
-сотрудников с разными ролями, статусами, выдачами и отзывами.
+Python-разделы админки решают, что человеку можно, по savdex/access.py.
+Право сверх задуманного открыло бы лишнее; недостающее — закрыло бы
+нужное. Поэтому ожидания записаны явно: сколько прав у каждой роли,
+что именно может узкая роль, где видны только свои записи и чем
+кончаются выдачи, отзывы и блокировка для сотрудников с разными
+ролями и статусами.
 
-Нужен только php с vendor/ — база не нужна.
+База не нужна.
 """
 
 from __future__ import annotations
 
-import json
-import shutil
-import subprocess
-from pathlib import Path
-
 import pytest
 
 from savdex import access
-
-КОРЕНЬ = Path(__file__).resolve().parents[2]
-
-pytestmark = pytest.mark.skipif(
-    shutil.which("php") is None or not (КОРЕНЬ / "vendor" / "autoload.php").exists(),
-    reason="нет php с зависимостями — сверка с PHP невозможна",
-)
 
 #: Сотрудники, на которых правила легко разойтись
 СОТРУДНИКИ = [
@@ -80,38 +68,91 @@ pytestmark = pytest.mark.skipif(
     },
 ]
 
+#: 30 разделов × 7 действий
+ВСЕГО = 210
 
-@pytest.fixture(scope="module")
-def php() -> dict:
-    return json.loads(
-        subprocess.run(
-            ["php", "python/tests/fixtures/access_dump.php"],
-            cwd=КОРЕНЬ,
-            input=json.dumps(СОТРУДНИКИ),
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    )
+#: Сколько прав даёт роль: уровни матрицы (r — 1, w — 3, m — 4, f — 5)
+#: плюс выгрузки и загрузки поимённо
+ЧИСЛО_ПРАВ = {
+    "superadmin": ВСЕГО,
+    # 15 разделов w, 4 — r, резюме — m, 8 выгрузок/загрузок
+    "admin": 15 * 3 + 4 + 4 + 8,
+    # 3 r, 6 w (4 из них только свои)
+    "sales": 3 + 6 * 3,
+    # 3 r (объявления, тендеры, документы), 6 w
+    "supplier_manager": 3 + 6 * 3,
+    # тендеры у него w, а не r
+    "buyer_manager": 2 + 7 * 3,
+    # 8 разделов m, справочники — r
+    "moderator": 8 * 4 + 1,
+    # 4 r, 5 w, 3 выгрузки
+    "finance": 4 + 5 * 3 + 3,
+    # 9 r, 3 w
+    "support": 9 + 3 * 3,
+    "content_manager": 3 + 3 + 1,
+    "нет-такой": 0,
+    None: 0,
+}
+
+#: Где роль видит только свои записи (суффикс «o» в матрице)
+ТОЛЬКО_СВОИ = {
+    "sales": ["leads", "deals", "tasks", "communications"],
+    "supplier_manager": ["tasks", "communications"],
+    "buyer_manager": ["tasks", "communications"],
+    "support": ["tasks", "communications"],
+}
 
 
-def test_все_права(php):
-    assert access.all_abilities() == php["all"]
+def test_все_права():
+    права = access.all_abilities()
+
+    assert len(права) == len(set(права)) == ВСЕГО
+    assert права[:7] == [
+        "users.view",
+        "users.create",
+        "users.edit",
+        "users.delete",
+        "users.moderate",
+        "users.export",
+        "users.import",
+    ]
+    assert права[-1] == "backups.import"
 
 
-def test_права_каждой_роли(php):
-    for роль, права in php["roles"].items():
-        role = None if роль == "(null)" else роль
+def test_права_каждой_роли():
+    for роль, число in ЧИСЛО_ПРАВ.items():
+        права = access.abilities_for(роль)
 
-        assert access.abilities_for(role) == права, роль
+        assert len(права) == len(set(права)) == число, роль
+        assert set(права) <= set(access.all_abilities()), роль
+
+    assert access.abilities_for("superadmin") == access.all_abilities()
+    assert set(access.ROLES) | {"нет-такой", None} == set(ЧИСЛО_ПРАВ)
 
 
-def test_только_свои_записи(php):
-    for роль in php["roles"]:
-        role = None if роль == "(null)" else роль
-        свои = [s for s in access.SECTIONS if access.scope_is_own(role, s)]
+def test_узкие_роли_поимённо():
+    assert access.abilities_for("content_manager") == [
+        "content.view",
+        "content.create",
+        "content.edit",
+        "catalogs.view",
+        "catalogs.create",
+        "catalogs.edit",
+        "broadcasts.view",
+    ]
+    assert "payments.export" in access.abilities_for("finance")
+    assert "payments.delete" not in access.abilities_for("finance")
+    assert "companies.delete" not in access.abilities_for("admin")
+    assert "companies.moderate" in access.abilities_for("moderator")
+    assert "companies.export" not in access.abilities_for("moderator")
+    assert "settings.view" not in access.abilities_for("admin")
 
-        assert свои == php["own"].get(роль, []), роль
+
+def test_только_свои_записи():
+    for роль in [*access.ROLES, "нет-такой", None]:
+        свои = [s for s in access.SECTIONS if access.scope_is_own(роль, s)]
+
+        assert свои == ТОЛЬКО_СВОИ.get(роль, []), роль
 
 
 def _admin(case: dict) -> access.Admin:
@@ -126,20 +167,66 @@ def _admin(case: dict) -> access.Admin:
     )
 
 
+#: (можно — сколько, права — сколько, суперадмин, подпись роли, только свои)
+ИТОГИ = [
+    (ВСЕГО, ВСЕГО, True, "Суперадмин", []),
+    # Заблокированный суперадмин не может ничего
+    (0, ВСЕГО, True, "Суперадмин", []),
+    # Не сотрудник: роль в записи ничего не значит
+    (0, ВСЕГО, False, None, []),
+    (ЧИСЛО_ПРАВ["admin"], ЧИСЛО_ПРАВ["admin"], False, "Администратор", []),
+    (ЧИСЛО_ПРАВ["sales"], ЧИСЛО_ПРАВ["sales"], False, "Отдел продаж", ТОЛЬКО_СВОИ["sales"]),
+    (ЧИСЛО_ПРАВ["finance"], ЧИСЛО_ПРАВ["finance"], False, "Финансы", []),
+    (7, 7, False, "Контент-менеджер", []),
+    (0, 0, False, "Роль не назначена", []),
+    (0, 0, False, "Роль не назначена", []),
+    # Модератор и два выданных права
+    (ЧИСЛО_ПРАВ["moderator"] + 2, ЧИСЛО_ПРАВ["moderator"] + 2, False, "Модератор", []),
+    # Администратор без двух отозванных; выданное и отозванное — нет
+    (ЧИСЛО_ПРАВ["admin"] - 2, ЧИСЛО_ПРАВ["admin"] - 2, False, "Администратор", []),
+    # Поддержка: +plans.view (строка вместо списка), −support.edit
+    (ЧИСЛО_ПРАВ["support"], ЧИСЛО_ПРАВ["support"], False, "Поддержка", ТОЛЬКО_СВОИ["support"]),
+    (ЧИСЛО_ПРАВ["sales"] + 1, ЧИСЛО_ПРАВ["sales"] + 1, False, "Отдел продаж", ТОЛЬКО_СВОИ["sales"]),
+    # Заблокирован: права на бумаге есть, можно — ничего
+    (0, ЧИСЛО_ПРАВ["admin"] + 1, False, "Администратор", []),
+]
+
+
 @pytest.mark.parametrize("номер", range(len(СОТРУДНИКИ)))
-def test_итог_можно_ли(php, номер):
+def test_итог_можно_ли(номер):
     admin = _admin(СОТРУДНИКИ[номер])
-    ответ = php["cases"][номер]
+    можно, права, суперадмин, подпись, свои = ИТОГИ[номер]
+    разрешено = [a for a in access.all_abilities() if admin.can(a)]
 
-    assert [a for a in access.all_abilities() if admin.can(a)] == ответ["allowed"]
-    assert sorted(admin.abilities()) == sorted(ответ["abilities"])
-    assert admin.is_superadmin == ответ["superadmin"]
-    assert admin.role_label == ответ["label"]
-    assert [s for s in access.SECTIONS if admin.scope_is_own(s)] == ответ["own"]
+    assert len(разрешено) == можно
+    assert len(admin.abilities()) == len(set(admin.abilities())) == права
+    assert admin.is_superadmin is суперадмин
+    assert admin.role_label == подпись
+    assert [s for s in access.SECTIONS if admin.scope_is_own(s)] == свои
 
 
-def test_сверка_различает(php):
+def test_выдачи_и_отзывы():
+    модератор, админ, поддержка, продавец, заблокированный = (
+        _admin(СОТРУДНИКИ[i]) for i in (9, 10, 11, 12, 13)
+    )
+
+    assert модератор.can("catalogs.edit") and модератор.can("backups.export")
+    assert not модератор.can("backups.view")
+    # Отзыв сильнее выдачи
+    assert not админ.can("settings.view")
+    assert not админ.can("catalogs.edit") and not админ.can("companies.export")
+    assert админ.can("catalogs.view") and админ.can("companies.import")
+    # Строка вместо списка — тоже выдача; не строки в отзыве пропущены
+    assert поддержка.can("plans.view") and not поддержка.can("support.edit")
+    assert поддержка.can("support.view")
+    # Выданное поштучно не делает раздел «чужим»
+    assert продавец.can("deals.delete") and продавец.scope_is_own("deals")
+    assert "settings.view" in заблокированный.abilities()
+    assert not заблокированный.can("settings.view") and not заблокированный.can("users.view")
+
+
+def test_сверка_различает():
     """Проверка слепа, если все сотрудники получают одно и то же."""
-    итоги = {len(c["allowed"]) for c in php["cases"]}
+    итоги = {можно for можно, *_ in ИТОГИ}
 
-    assert 0 in итоги and len(access.all_abilities()) in итоги and len(итоги) >= 6
+    assert 0 in итоги and ВСЕГО in итоги and len(итоги) >= 6

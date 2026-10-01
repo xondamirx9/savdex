@@ -1,17 +1,17 @@
 """
-Раздел «Новости» админки на Django — сквозь настоящую базу и Laravel.
+Раздел «Новости» админки на Django — сквозь настоящую базу.
 
 Главное здесь — два писателя одной таблицы по столбцам: текст пишет
-Django, машинный перевод (*_i18n) — задача Laravel. Проверяется, что:
+форма, машинный перевод (*_i18n) — задача перевода. Проверяется, что:
 
-- правка текста сбрасывает перевод именно этого поля, и Laravel видит
-  новость как недопереведённую (её подберёт добор перевода);
+- правка текста сбрасывает перевод именно этого поля, и добор перевода
+  (savdex.translation_jobs) видит новость как недопереведённую;
 - сохранение формы не затирает перевод, который задача записала,
   пока форма была открыта;
 - обложка пересобирается и не копится на диске;
 - «Опубликовать» / «Снять» одной кнопкой, дата публикации — ташкентская.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from PIL import Image
 from .pg_admin import (
     КОРЕНЬ,
     django,
-    php,
     sql,
     журнал,
     нужна_база,
@@ -108,6 +107,15 @@ def _перевести(pk: int) -> None:
     )
 
 
+def _недопереведённые() -> list[int]:
+    """Порция добора перевода новостей — тот же запрос, что у translate."""
+    from savdex.translation_jobs import CATCHUP
+
+    _, query, limit = CATCHUP["news"]
+
+    return [int(pk) for (pk,) in sql(query, [limit])]
+
+
 def test_заведение_обложка_автор_время(люди):
     post = _создать(
         люди,
@@ -153,11 +161,7 @@ def test_правка_текста_сбрасывает_перевод_этог�
     """
     post = _создать(люди, "perevod", is_published="on")
     _перевести(post["id"])
-    lacking = (
-        "echo App\\Models\\NewsPost::query()->where('slug', 'perevod')"
-        "->lackingTranslations()->count();"
-    )
-    assert php(lacking) == "0"
+    assert post["id"] not in _недопереведённые()
 
     _, ответ = django(
         люди["content_manager"],
@@ -172,8 +176,8 @@ def test_правка_текста_сбрасывает_перевод_этог�
     after = _row("perevod")
     assert after["body_i18n"] is None, "перевод исправленного текста должен сброситься"
     assert after["title_i18n"] == PEREVOD and after["excerpt_i18n"] == PEREVOD
-    # Добор перевода Laravel подберёт новость
-    assert php(lacking) == "1"
+    # Добор перевода подберёт новость
+    assert post["id"] in _недопереведённые()
     # В журнале — правка текста, а не перевода
     assert журнал("updated")["changes"]["after"] == {"body": "Исправленный текст."}
 
@@ -205,7 +209,11 @@ def test_опубликовать_и_снять(люди):
     assert опубликована["status"] == 302
     after = _row("knopka")
     assert after["published"] is True and after["at"] is not None
-    assert php("echo App\\Models\\NewsPost::published()->where('slug', 'knopka')->count();") == "1"
+    # Видна на сайте: опубликована и дата не в будущем (NewsPost::published)
+    assert sql(
+        "select count(*) from news_posts where slug = 'knopka' and is_published "
+        "and (published_at is null or published_at <= now())"
+    ) == [(1,)]
     assert журнал("updated")["changes"]["after"]["is_published"] is True
 
     _, снята = django(люди["content_manager"], ("post", url, {}))

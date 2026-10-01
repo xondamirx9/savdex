@@ -1,5 +1,5 @@
 """
-Чат на Django неотличим от Laravel: сообщение в разговор (маскировка
+Чат на Django: сообщение в разговор (маскировка
 контактов, уведомление собеседнику только о первом непрочитанном,
 проверка ввода, чужой разговор — 404, неподтверждённая почта — на
 подтверждение), отклик на объявление (новый разговор тратит отклик
@@ -7,62 +7,84 @@
 удалённое объявление; без компании) и на IT-задачу (роль исполнителя,
 закрытая задача, счётчик откликов и журнал администратора).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import Выражение, it_задача, компания, объявление
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .test_web_forms import xsrf, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
+
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (PlanSeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    php(
-        "$s = App\\Models\\Company::factory()->create(['slug' => 'seller',"
-        " 'name' => 'Цемент Трейд']);"
-        "$b = App\\Models\\Company::factory()->create(['slug' => 'buyer', 'name' => 'Стройка Плюс',"
-        " 'is_it_provider' => true]);"
-        "$gone = App\\Models\\Company::factory()->create(['slug' => 'gone']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'third']);"
-        "foreach (['active' => 'cement', 'archived' => 'old'] as $st => $slug) {"
-        " App\\Models\\Listing::factory()->create(['company_id' => $s->id, 'status' => $st,"
-        " 'slug' => $slug, 'title' => 'Цемент', 'description' => 'Мешки по 50 кг']); }"
-        "App\\Models\\Listing::factory()->create(['company_id' => $b->id, 'status' => 'active',"
-        " 'slug' => 'own', 'title' => 'Свой', 'description' => 'Своё']);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $gone->id, 'status' => 'active',"
-        " 'slug' => 'orphan', 'title' => 'Ничей', 'description' => 'Ничей']);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $s->id, 'status' => 'active',"
-        " 'slug' => 'deleted', 'title' => 'Удалён', 'description' => 'Удалён'])->delete();"
-        "$gone->delete();"
-        "foreach (['active' => 'site', 'closed' => 'closed-site'] as $st => $slug) {"
-        " App\\Models\\ItTask::factory()->create(['company_id' => $s->id, 'status' => $st,"
-        " 'slug' => $slug, 'title' => 'Сайт магазина']); }"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    справочники("plans")
+    s = компания(slug="seller", name="Цемент Трейд")
+    b = компания(slug="buyer", name="Стройка Плюс", is_it_provider=True)
+    gone = компания(slug="gone")
+    компания(slug="third")
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    for status, slug in (("active", "cement"), ("archived", "old")):
+        объявление(
+            company_id=s, status=status, slug=slug, title="Цемент", description="Мешки по 50 кг"
+        )
+
+    объявление(company_id=b, status="active", slug="own", title="Свой", description="Своё")
+    объявление(company_id=gone, status="active", slug="orphan", title="Ничей", description="Ничей")
+    # Удалённые (SoftDeletes): объявление и компания, чьё объявление осталось
+    объявление(
+        company_id=s,
+        status="active",
+        slug="deleted",
+        title="Удалён",
+        description="Удалён",
+        deleted_at=Выражение("now()"),
+    )
+    sql("update companies set deleted_at = now() where id = %s", [gone])
+
+    for status, slug in (("active", "site"), ("closed", "closed-site")):
+        it_задача(company_id=s, status=status, slug=slug, title="Сайт магазина")
+
+    with адрес() as root:
         yield root
 
 
@@ -194,6 +216,13 @@ def снимок() -> Any:
     }
 
 
+def ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
+    """Ошибки проверки из сессии после ответа (пусто — ошибок нет)."""
+    payload = json.loads(итог["сессия"]["payload"])
+
+    return dict(payload.get("errors", {}).get("default", {}).get("messages", {}))
+
+
 ТЕКСТ = "Пишите на sale@cement.uz или @cement_trade, звоните +998 (90) 111-22-33, цена 1 200 000"
 
 
@@ -201,29 +230,40 @@ def снимок() -> Any:
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "записано", "ошибка"),
     [
-        {"body": ТЕКСТ},
-        {"body": "  Есть ли доставка?  "},
-        {"body": "价格" * 70},
-        {"body": "https://savdex.uz/catalog www.site.uz t.me/savdex"},
-        {},
-        {"body": "   "},
-        {"body": "x" * 2001},
-        {"body": ["массив"]},
+        # Контакты в тексте скрыты, цифры цены — нет
+        ({"body": ТЕКСТ}, "Пишите на [•••] или [•••], звоните [•••], цена 1 200 000", None),
+        ({"body": "  Есть ли доставка?  "}, "Есть ли доставка?", None),
+        ({"body": "价格" * 70}, "价格" * 70, None),
+        ({"body": "https://savdex.uz/catalog www.site.uz t.me/savdex"}, "[•••] [•••] [•••]", None),
+        ({}, None, ("Введите сообщение", "Enter a message")),
+        ({"body": "   "}, None, ("Введите сообщение", "Enter a message")),
+        ({"body": "x" * 2001}, None, ("Сообщение слишком длинное", "The message is too long")),
+        ({"body": ["массив"]}, None, ("validation.string", "The body field must be a string.")),
     ],
 )
 @pytest.mark.parametrize("prefix", ["", "/en"])
-def test_сообщение(сайт, body, prefix):
+def test_сообщение(сайт, body, записано, ошибка, prefix):
     итог = отправить(
         сайт, f"{prefix}/cabinet/chats/1", сброс(), снимок, uid=покупатель(), body=body
     )
+    база = итог["база"]
 
-    if body.get("body") == ТЕКСТ:
-        assert итог["база"]["messages"][-1][3] == (
-            "Пишите на [•••] или [•••], звоните [•••], цена 1 200 000"
-        )
-        assert итог["база"]["notifications"]
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"].endswith(f"{prefix}/cabinet/settings")
+
+    if ошибка is None:
+        assert ошибки(итог) == {}
+        assert база["messages"][-1] == (1, _компания("buyer"), покупатель(), записано)
+        # Разговор: последнее сообщение, прочитан покупателем, тронут
+        assert база["threads"][0][5:] == (True, True, False, True)
+        # Продавцу — уведомление и событие ленты о первом непрочитанном
+        assert len(база["notifications"]) == 1 and len(база["events"]) == 1
+    else:
+        assert ошибки(итог) == {"body": [ошибка[1 if prefix else 0]]}
+        assert [m[3] for m in база["messages"]] == ["Здравствуйте"]
+        assert not база["notifications"] and not база["events"]
 
 
 def test_сообщение_при_непрочитанном(сайт):
@@ -236,7 +276,9 @@ def test_сообщение_при_непрочитанном(сайт):
         body={"body": "Ещё вопрос"},
     )
 
-    assert not итог["база"]["notifications"]
+    assert [m[3] for m in итог["база"]["messages"]] == ["Здравствуйте", "Ещё вопрос"]
+    # Продавец ещё не прочёл прошлое — второй раз не уведомляют
+    assert not итог["база"]["notifications"] and not итог["база"]["events"]
 
 
 def test_сообщение_продавца(сайт):
@@ -244,7 +286,11 @@ def test_сообщение_продавца(сайт):
         сайт, "/cabinet/chats/1", сброс(), снимок, uid=продавец(), body={"body": "Доставляем"}
     )
 
-    assert итог["база"]["notifications"]
+    assert итог["база"]["messages"][-1] == (1, _компания("seller"), продавец(), "Доставляем")
+    # Прочёл продавец, уведомлён покупатель
+    assert итог["база"]["threads"][0][5:] == (True, None, True, True)
+    [уведомление] = итог["база"]["notifications"]
+    assert уведомление[0] == покупатель() and уведомление[1] == _компания("buyer")
 
 
 @pytest.mark.parametrize("path", ["/cabinet/chats/1", "/cabinet/chats/999"])
@@ -257,6 +303,7 @@ def test_чужой_разговор_404(сайт, path):
     итог = отправить(сайт, path, сброс(), снимок, uid=чужой, body={"body": "Привет"})
 
     assert итог["ответ"]["status"] == 404
+    assert [m[3] for m in итог["база"]["messages"]] == ["Здравствуйте"]
 
 
 @pytest.mark.parametrize(
@@ -274,28 +321,37 @@ def test_почта_не_подтверждена(сайт, path, headers):
         headers=headers,
     )
 
-    assert итог["ответ"]["status"] in (302, 403)
+    if headers is None:
+        assert итог["ответ"]["status"] == 302
+        assert итог["ответ"]["headers"]["location"].endswith("/verify-email")
+    else:
+        # Запрос JSON — отказ, а не переход
+        assert итог["ответ"]["status"] == 403
+
+    assert [m[3] for m in итог["база"]["messages"]] == ["Здравствуйте"]
+    assert not итог["база"]["wallets"]
 
 
 # ── Отклик на объявление ────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
-    ("slug", "подготовка"),
+    ("slug", "подготовка", "ошибка"),
     [
-        ("cement", {"разговор": False}),
-        ("cement", {"разговор": False, "потрачено": 2}),
-        ("cement", {"разговор": False, "потрачено": 5}),
-        ("cement", {"разговор": False, "лимит": 0}),
-        ("cement", {"разговор": False, "лимит": None}),
-        ("cement", {"разговор": True, "потрачено": 5}),
-        ("old", {"разговор": False}),
-        ("own", {"разговор": False}),
-        ("orphan", {"разговор": False}),
+        ("cement", {"разговор": False}, None),
+        ("cement", {"разговор": False, "потрачено": 2}, None),
+        ("cement", {"разговор": False, "потрачено": 5}, "Лимит откликов на этот месяц исчерпан"),
+        ("cement", {"разговор": False, "лимит": 0}, "Ваш тариф не включает отклики"),
+        ("cement", {"разговор": False, "лимит": None}, None),
+        # Разговор уже есть — отклик не тратится и при исчерпанном лимите
+        ("cement", {"разговор": True, "потрачено": 5}, None),
+        ("old", {"разговор": False}, "Объявление снято с публикации"),
+        ("own", {"разговор": False}, "Это ваше объявление"),
+        ("orphan", {"разговор": False}, "Объявление больше не доступно"),
     ],
 )
 @pytest.mark.parametrize("prefix", ["", "/uz"])
-def test_отклик(сайт, slug, подготовка, prefix):
+def test_отклик(сайт, slug, подготовка, ошибка, prefix):
     итог = отправить(
         сайт,
         f"{prefix}/listing/{_объявление(slug)}/respond",
@@ -304,16 +360,44 @@ def test_отклик(сайт, slug, подготовка, prefix):
         uid=покупатель(),
         body={"body": ТЕКСТ},
     )
-    новый = slug == "cement" and not подготовка["разговор"] and подготовка.get("лимит", 5)
+    база = итог["база"]
+    потрачено = подготовка.get("потрачено")
 
-    if новый and подготовка.get("потрачено", 0) < 5:
-        assert итог["база"]["wallets"][0][1] == подготовка.get("потрачено", 0) + 1
-        assert итог["ответ"]["headers"]["location"].endswith("/cabinet/chats/1")
+    assert итог["ответ"]["status"] == 302
+
+    if ошибка is None:
+        assert итог["ответ"]["headers"]["location"].endswith(f"{prefix}/cabinet/chats/1")
+        assert ошибки(итог) == {}
+        assert база["messages"][-1][3] == (
+            "Пишите на [•••] или [•••], звоните [•••], цена 1 200 000"
+        )
+        assert [t[1:5] for t in база["threads"]] == [
+            (_объявление("cement"), None, _компания("buyer"), _компания("seller"))
+        ]
+        assert len(база["notifications"]) == 1
+
+        if подготовка["разговор"] or подготовка.get("лимит", 5) is None:
+            # Повторный отклик и безлимит отклик не тратят
+            assert [w[1] for w in база["wallets"]] == ([потрачено] if потрачено else [])
+        else:
+            assert [w[1] for w in база["wallets"]] == [(потрачено or 0) + 1]
+    else:
+        assert итог["ответ"]["headers"]["location"].endswith(f"{prefix}/cabinet/settings")
+        [текст] = ошибки(итог)["body"]
+
+        if not prefix:
+            assert текст.startswith(ошибка), текст
+
+        assert not база["messages"] and not база["threads"]
+        assert [w[1] for w in база["wallets"]] == ([потрачено] if потрачено else [])
 
 
-@pytest.mark.parametrize("body", [{}, {"body": "x" * 2001}])
-def test_отклик_ошибки(сайт, body):
-    отправить(
+@pytest.mark.parametrize(
+    ("body", "ошибка"),
+    [({}, "Напишите, что вас интересует"), ({"body": "x" * 2001}, "Сообщение слишком длинное")],
+)
+def test_отклик_ошибки(сайт, body, ошибка):
+    итог = отправить(
         сайт,
         f"/listing/{_объявление('cement')}/respond",
         сброс(разговор=False),
@@ -321,6 +405,10 @@ def test_отклик_ошибки(сайт, body):
         uid=покупатель(),
         body=body,
     )
+
+    assert итог["ответ"]["status"] == 302
+    assert ошибки(итог) == {"body": [ошибка]}
+    assert not итог["база"]["threads"] and not итог["база"]["wallets"]
 
 
 def test_отклик_на_удалённое_404(сайт):
@@ -334,11 +422,12 @@ def test_отклик_на_удалённое_404(сайт):
     )
 
     assert итог["ответ"]["status"] == 404
+    assert not итог["база"]["threads"]
 
 
 def test_отклик_без_компании(сайт):
     uid = учётка("nocompany@savdex.uz", company_id=None, email_verified_at="2026-09-01 10:00:00")
-    отправить(
+    итог = отправить(
         сайт,
         f"/listing/{_объявление('cement')}/respond",
         сброс(разговор=False),
@@ -346,6 +435,12 @@ def test_отклик_без_компании(сайт):
         uid=uid,
         body={"body": ТЕКСТ},
     )
+
+    assert итог["ответ"]["status"] == 302
+    assert ошибки(итог) == {
+        "body": ["Сначала заполните данные компании — отклик отправляется от её имени"]
+    }
+    assert not итог["база"]["threads"] and not итог["база"]["messages"]
 
 
 # ── Отклик на IT-задачу ─────────────────────────────────────────────
@@ -379,4 +474,19 @@ def test_отклик_на_задачу(сайт, slug, подготовка, и
         and not подготовка.get("потрачено")
     )
 
-    assert bool(итог["база"]["journal"]) is (новый and admin)
+    база = итог["база"]
+    принят = исполнитель and slug == "site" and not подготовка.get("потрачено")
+
+    assert bool(база["journal"]) is (новый and admin)
+    assert итог["ответ"]["status"] == 302
+
+    if принят:
+        assert итог["ответ"]["headers"]["location"].endswith("/cabinet/chats/1")
+        assert база["messages"][-1][3] == "Сделаю за неделю"
+        assert [t[1:3] for t in база["threads"]] == [(None, _задача("site"))]
+        # Новый отклик: счётчик задачи и потраченный отклик тарифа
+        assert база["tasks"][0] == ((1, True) if новый else (0, False))
+        assert [w[1] for w in база["wallets"]] == ([1] if новый else [])
+    else:
+        assert ошибки(итог)["body"], ошибки(итог)
+        assert not база["messages"] and база["tasks"][0] == (0, False)

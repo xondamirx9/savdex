@@ -1,26 +1,23 @@
 """
-Раздел «Настройки площадки» админки на Django — сквозь настоящую базу
-и настоящий Laravel.
+Раздел «Настройки площадки» админки на Django — сквозь настоящую базу.
 
-Настройки заводит настоящий SettingSeeder. Проверяется то, ради чего
-раздел устроен именно так:
+Настройки заводит manage.py seed (как SettingSeeder). Проверяется то,
+ради чего раздел устроен именно так:
 
 - поле значения под тип: координаты, валюта из списка, число, флаг
   (в том числе «boolean», который Filament не показывал);
-- картинка ложится на публичный диск Laravel, и витрина её видит;
-- **кэш Laravel сбрасывается**: после правки из Django сайт сразу
-  показывает новое значение — и с файловым кэшем (как на боевом),
-  и с кэшем в базе;
+- картинка ложится на публичный диск, и витрина её видит;
+- после правки сайт сразу показывает новое значение;
 - настройки, которые читает код, не удаляются.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
 import base64
 import subprocess
-from pathlib import Path
+import sys
 from typing import Any
 
 import pytest
@@ -28,10 +25,10 @@ import pytest
 from savdex.site.models import SYSTEM_KEYS
 
 from .pg_admin import (
+    PYTHON,
     КОРЕНЬ,
     ОКРУЖЕНИЕ,
     django,
-    php,
     sql,
     журнал,
     нужна_база,
@@ -39,6 +36,7 @@ from .pg_admin import (
     сотрудник,
     файл,
 )
+from .web_site import адрес, открыть, страница
 
 pytestmark = нужна_база
 
@@ -58,10 +56,11 @@ SVG = (
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
+    # Справочники, как при деплое (вместо SettingSeeder) — под владельцем базы
     subprocess.run(
-        ["php", "artisan", "db:seed", "--class=SettingSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
+        [sys.executable, "manage.py", "seed"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"], "PYTHONPATH": str(PYTHON)},
         capture_output=True,
         check=True,
     )
@@ -78,6 +77,14 @@ def картинки():
 
     for path in set(PUBLIC.glob("appearance/*")) - before:
         path.unlink()
+
+
+def _витрина() -> dict[str, Any]:
+    """Пропсы главной страницы сайта (Django) — что видит посетитель."""
+    with адрес() as root:
+        ответ = открыть(root, "/")
+
+    return dict(страница(ответ["body"])["props"])
 
 
 def _id(key: str) -> int:
@@ -103,7 +110,7 @@ def _правка(key: str, value: Any, **extra: Any) -> tuple[str, str, dict[st
 
 
 def test_системные_настройки_совпадают_с_сидером(люди):
-    """SYSTEM_KEYS — ровно то, что заводит SettingSeeder: их читает код."""
+    """SYSTEM_KEYS — ровно то, что заводит manage.py seed: их читает код."""
     assert {key for (key,) in sql("select key from settings")} == set(SYSTEM_KEYS)
 
 
@@ -158,7 +165,12 @@ def test_валюта_из_списка(люди):
     assert ок["status"] == 302
     assert _value("display_currency_en") == "EUR"
     # Витрина видит новую валюту
-    assert php("echo App\\Support\\PriceDisplay::currency('en');") == "EUR"
+    from savdex.web.home import PriceDisplay
+
+    assert (
+        PriceDisplay("en", {"display_currency_en": _value("display_currency_en")}, None).currency
+        == "EUR"
+    )
 
 
 def test_валюта_при_создании_тоже_из_списка(люди):
@@ -211,8 +223,8 @@ def test_картинка_на_публичный_диск(люди, карти�
     path = _value("hero_image")
     assert path.startswith("appearance/") and path.endswith(".png")
     assert (PUBLIC / path).read_bytes() == PNG
-    # Витрина строит адрес через свой публичный диск
-    assert f"/storage/{path}" in php("echo App\\Support\\Appearance::heroImage();")
+    # Витрина строит адрес через публичный диск
+    assert _витрина()["heroImage"].endswith(f"/storage/{path}")
 
 
 @pytest.mark.parametrize(
@@ -243,28 +255,17 @@ def test_картинку_можно_убрать(люди, картинки):
 
     assert ответ["status"] == 302, ответ["body"][:3000]
     assert _value("hero_image") == ""
-    assert "/images/hero-port.svg" in php("echo App\\Support\\Appearance::heroImage();")
+    assert _витрина()["heroImage"] == "/images/hero-port.svg"
 
 
-@pytest.mark.parametrize("store", ["file", "database"])
-def test_кэш_laravel_сбрасывается(люди, store):
-    """
-    Laravel держит настройки в кэше сутки. Правка из Django обязана
-    его сбросить — иначе сайт сутки показывал бы старый телефон.
-    """
-    env = {"CACHE_STORE": store}
-    read = "echo App\\Models\\Setting::get('support_hours');"
-    php("Illuminate\\Support\\Facades\\Cache::flush();", env)
+def test_сайт_сразу_видит_правку(люди):
+    """Сайт читает настройки из базы на каждый запрос — правка видна сразу."""
+    assert _витрина()["support"]["hours"] == _value("support_hours")
 
-    # Сайт прочитал настройки — они легли в кэш
-    assert php(read, env) == _value("support_hours")
-    sql("update settings set value = '\"прямо в базе\"' where key = 'support_hours'")
-    assert php(read, env) != "прямо в базе", "кэш должен был отдать старое"
-
-    _, ответ = django(люди["superadmin"], _правка("support_hours", "Пн–Сб, 9:00–19:00"), env=env)
+    _, ответ = django(люди["superadmin"], _правка("support_hours", "Пн–Сб, 9:00–19:00"))
 
     assert ответ["status"] == 302, ответ["body"][:3000]
-    assert php(read, env) == "Пн–Сб, 9:00–19:00"
+    assert _витрина()["support"]["hours"] == "Пн–Сб, 9:00–19:00"
 
 
 def test_системные_не_удаляются_свои_удаляются(люди):
@@ -321,5 +322,7 @@ def test_ключ_новой_настройки(люди, key):
 
 
 def test_публичный_диск_тот_же(люди):
-    """Django пишет туда же, откуда Laravel отдаёт /storage."""
-    assert Path(php("echo storage_path('app/public');")).resolve() == PUBLIC.resolve()
+    """Django пишет туда же, откуда сайт отдаёт /storage, — storage/app/public."""
+    from savdex import laravel_storage
+
+    assert laravel_storage.public_root().resolve() == PUBLIC.resolve()
