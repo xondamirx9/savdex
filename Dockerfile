@@ -1,19 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# --- Зависимости PHP -------------------------------------------------------
-# Стадия идёт первой: vendor нужен не только серверу, но и сборке фронтенда —
-# app.css и тема Filament ссылаются на файлы пакетов через @source/@import.
-# Расширения (intl и прочие) стоят в финальном образе, а не здесь,
-# поэтому платформенные требования на этой стадии не проверяются.
-FROM composer:2 AS vendor
-WORKDIR /app
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --prefer-dist --no-interaction --no-progress \
-        --no-scripts --ignore-platform-reqs
-COPY . .
-RUN composer dump-autoload --optimize --no-scripts
+# Этап 8 переноса (docs/migration-to-python.md): в образе нет PHP.
+# Сайт и админку обслуживает Django (python/), Apache только отдаёт
+# готовые файлы из public/ и передаёт остальное Django
+# (docker/apache-python.conf).
 
 # --- Фронтенд: собираем Vite-бандл ----------------------------------------
+# Пакеты PHP (vendor) сборке больше не нужны: тема Filament ушла вместе
+# с панелью, а классы Tailwind берутся из resources/.
 FROM node:22-alpine AS assets
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -21,48 +15,42 @@ RUN npm ci
 COPY vite.config.ts tsconfig.json ./
 COPY resources ./resources
 COPY public ./public
-COPY app ./app
-COPY --from=vendor /app/vendor ./vendor
-RUN mkdir -p storage/framework/views && npm run build
+RUN npm run build
 
-# --- Рабочий образ: Apache + mod_php ---------------------------------------
-FROM php:8.3-apache
+# --- Рабочий образ: Apache + Django ----------------------------------------
+# Debian trixie — та же система (и тот же python3 3.13), что была под
+# образом php:8.3-apache. proxy и proxy_http — передача Django;
+# libmagic1 — тип загруженного файла по содержимому (savdex/web/filetype.py).
+# Модель Apache — event (умолчание Debian): без PHP процесс на запрос
+# не нужен, хватает потоков. Журналы — в вывод контейнера, как было
+# у образа php.
+FROM debian:trixie-slim
 
-# python3 — для Python-половины площадки (python/, перенос на Django):
-# команды, выгрузка в Excel и страницы, которые Apache отдаёт Django
-# (docker/apache-python.conf); proxy и proxy_http — для этой передачи; libmagic1 — тип
-# загруженного файла по содержимому, как finfo у PHP (savdex/web/filetype.py)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libwebp-dev libpq-dev \
-        python3 libmagic1 \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" intl zip gd bcmath exif opcache pdo_pgsql \
+        apache2 python3 libmagic1 ca-certificates tzdata \
     && a2enmod rewrite headers proxy proxy_http \
-    && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && rm -rf /var/lib/apt/lists/*
-
-# Лимиты загрузки. Стандартный php.ini-production разрешает файлы
-# до 2 МБ — любое фото с телефона больше, и загрузка логотипа или
-# фотографий объявления умирала в PHP раньше, чем её видел Laravel.
-# Приложение принимает изображения до 8 МБ и документы до 20 МБ
-# (валидация в контроллерах), объявление шлёт до 10 фото за раз —
-# отсюда цифры. Память — под GD: декодирование снимка в 48 Мп
-# не помещается в стандартные 128 МБ.
-RUN { \
-        echo 'upload_max_filesize = 21M'; \
-        echo 'post_max_size = 90M'; \
-        echo 'memory_limit = 512M'; \
-        echo 'max_execution_time = 120'; \
-    } > "$PHP_INI_DIR/conf.d/zz-uploads.ini"
-
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
-    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+    && a2dissite 000-default \
+    && ln -sfT /dev/stderr /var/log/apache2/error.log \
+    && ln -sfT /dev/stdout /var/log/apache2/access.log \
+    && ln -sfT /dev/stdout /var/log/apache2/other_vhosts_access.log \
+    && rm -rf /var/lib/apt/lists/* /var/www/html/index.html
 
 WORKDIR /var/www/html
-COPY --from=vendor --chown=www-data:www-data /app ./
+
+# Нужное Django из корня репозитория (settings.LARAVEL_ROOT): юридические
+# документы, картинки и фавикон из public/, собранный фронтенд, storage/.
+# public/index.php, .htaccess и файлы Filament не копируются: без PHP
+# Apache отдал бы index.php как текст.
+COPY --chown=www-data:www-data resources/legal ./resources/legal
+COPY --chown=www-data:www-data public ./public
+RUN rm -rf public/index.php public/.htaccess public/css/filament public/js/filament \
+        public/fonts/filament public/storage public/build \
+    && find public -type d -empty -delete
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
-# --- Python-половина -------------------------------------------------------
+RUN mkdir -p storage/app/public storage/app/private storage/framework/cache/data storage/logs \
+    && chown -R www-data:www-data storage
+
+# --- Python ----------------------------------------------------------------
 # Зависимости ставятся ровно по python/uv.lock: та же версия uv, что
 # у разработчиков, --frozen запрещает тихо пересобрать список пакетов.
 # Без пакетов разработки (pytest, mypy): на сервере они не нужны.
@@ -70,29 +58,26 @@ COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
 # и запускает. Байт-код собран заранее: писать его в read-only venv
 # при каждом запуске некому. Стили и скрипты админки Django собираются
 # в python/staticfiles — их отдаёт сам Django (whitenoise) по /py/static/.
+COPY python ./python
 COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 RUN cd python \
     && UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-dev --no-cache --compile-bytecode \
         --python /usr/bin/python3 \
-    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography" \
+    && .venv/bin/python -c "import django, openpyxl, psycopg, httpx, bcrypt, whitenoise, PIL, cryptography, gunicorn" \
     && .venv/bin/python manage.py collectstatic --noinput --verbosity 0
 
-COPY docker/opcache.ini $PHP_INI_DIR/conf.d/zz-opcache.ini
-# Распределитель адресов между Laravel и Django (этап 2 переноса)
 COPY docker/apache-python.conf /etc/apache2/conf-available/savdex-python.conf
-# Правила перезаписи из общего конфига (страницы сайта на Django, этап 3)
-# сайт наследует, только если перезапись включена в нём самом
-RUN a2enconf savdex-python \
-    && sed -i 's#</VirtualHost>#\tRewriteEngine On\n</VirtualHost>#' /etc/apache2/sites-available/000-default.conf \
-    && grep -q 'RewriteEngine On' /etc/apache2/sites-available/000-default.conf
+COPY docker/apache-site.conf /etc/apache2/sites-available/savdex.conf
+RUN a2enconf savdex-python && a2ensite savdex
 COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
-RUN chmod +x /usr/local/bin/render-entrypoint
+COPY docker/apache2-foreground /usr/local/bin/apache2-foreground
+RUN chmod +x /usr/local/bin/render-entrypoint /usr/local/bin/apache2-foreground
 
 ENV APP_ENV=production \
     APP_DEBUG=false \
     LOG_CHANNEL=stderr \
-    SAVDEX_PYTHON=/var/www/html/python/.venv/bin/python \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 ENTRYPOINT ["render-entrypoint"]
 CMD ["apache2-foreground"]

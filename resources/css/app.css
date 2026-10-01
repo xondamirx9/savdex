@@ -18,9 +18,6 @@
 /* Мини-сайты компаний: свои токены --ms-*, классы с префиксом ms- */
 @import './microsite.css' layer(components);
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-
 /* ============================================================
    SAVDEX — дизайн-токены
    Перенос из прототипа (prototype/assets/savdex.css) и docs/DESIGN.md.

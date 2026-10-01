@@ -1,7 +1,8 @@
 """
 Схема базы без PHP (savdex/schema.py).
 
-  manage.py schema            пустая база — создать схему из снимка
+  manage.py schema            пустая база — создать схему из снимка;
+                              затем новые миграции SQL (этап 8)
   manage.py schema --status   «empty» или «ready»
   manage.py schema --export   снять снимок с базы после migrate:fresh (DB_URL)
 """
@@ -16,7 +17,7 @@ from savdex import schema
 
 
 class Command(BaseCommand):
-    help = "Схема базы из снимка миграций Laravel — на пустой базе"
+    help = "Схема базы: снимок миграций Laravel на пустой базе, затем новые миграции SQL"
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("--status", action="store_true", help="empty или ready")
@@ -35,5 +36,8 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(
-            "Схема создана из снимка." if schema.create() else "База не пустая — схему не трогаю."
+            "Схема создана из снимка." if schema.create() else "База не пустая — снимок не нужен."
         )
+
+        for name in schema.migrate():
+            self.stdout.write(f"Миграция: {name}")

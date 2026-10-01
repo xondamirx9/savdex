@@ -2,42 +2,58 @@
 #
 # Запуск контейнера на Render (и любом хостинге, который передаёт PORT).
 #
-# База может быть двух видов:
-#  - SQLite (по умолчанию) — живёт на эфемерном диске и пересоздаётся
-#    при каждом деплое; годится только для демо-стенда;
-#  - внешний Postgres (DB_CONNECTION=pgsql + DB_URL) — данные постоянные.
-# Пустая база в обоих случаях распознаётся одинаково: до миграций
-# в ней нет таблицы users.
+# Этап 8 переноса (docs/migration-to-python.md): PHP в образе нет.
+# Apache отдаёт файлы из public/ и передаёт остальное Django (gunicorn
+# на 127.0.0.1:8001, docker/apache-python.conf); рядом живут фоновые
+# задачи Django — расписание, перевод, сверка денег.
+#
+# База — только PostgreSQL (DB_CONNECTION=pgsql). SQLite осталась
+# в прошлом вместе с Laravel: Django с ней не работает.
 set -euo pipefail
 
-# Render говорит, на каком порту слушать, через $PORT (по умолчанию 10000).
-PORT="${PORT:-10000}"
-sed -ri "s/^Listen 80$/Listen ${PORT}/" /etc/apache2/ports.conf
-sed -ri "s/<VirtualHost \*:80>/<VirtualHost *:${PORT}>/" /etc/apache2/sites-available/000-default.conf
+cd /var/www/html
 
-# ── Потолок одновременных процессов ─────────────────────────────────
+# ── База ────────────────────────────────────────────────────────────
 #
-# Apache здесь работает в режиме prefork: один процесс на один запрос,
-# и внутри каждого — весь PHP с приложением. Замер: 45–50 МБ на запрос.
+# Без PostgreSQL сайт не поднимется. Лучше упасть здесь, до Apache:
+# Render тогда считает деплой неудавшимся и оставляет работать прежний
+# контейнер, а не выкладывает сайт, который на каждый запрос отвечает 500.
+if [ "${DB_CONNECTION:-sqlite}" != "pgsql" ]; then
+    echo "ОШИБКА: нужна база PostgreSQL — DB_CONNECTION=pgsql в Environment. SQLite с этапа 8 не поддерживается." >&2
+    exit 1
+fi
+
+# ── Порт и имя сервера ──────────────────────────────────────────────
 #
-# По умолчанию Debian разрешает 150 таких процессов. Это 7,5 ГБ
-# оперативной памяти — больше, чем есть на любом разумном тарифе.
-# Пока посетителей мало, потолок не достигается и всё выглядит
-# исправным; на трёхстах пользователях процессы плодятся, память
-# кончается, ядро убивает Apache, Render поднимает контейнер заново —
-# и все триста человек, обновляя страницу, роняют его повторно.
+# Render говорит, на каком порту слушать, через $PORT (по умолчанию
+# 10000); виртуальный хост (docker/apache-site.conf) принимает любой.
+PORT="${PORT:-10000}"
+echo "Listen ${PORT}" > /etc/apache2/ports.conf
+
+# Без имени сервера Apache при каждом запуске жалуется в журнал
+# «Could not reliably determine the server's fully qualified domain
+# name». Берём настоящий адрес, который Render кладёт в RENDER_EXTERNAL_URL.
+server_name="${RENDER_EXTERNAL_URL:-}"
+server_name="${server_name#*://}"   # снять «https://»
+server_name="${server_name%%/*}"    # снять путь, если он есть
+[ -z "$server_name" ] && server_name=localhost
+
+# ── Сколько процессов Django ────────────────────────────────────────
 #
-# Поэтому потолок считается от реально доступной памяти, а не берётся
-# из умолчания. Упереться в него — это очередь и медленный ответ;
-# не упереться — это 502 и перезапуск. Очередь лучше.
+# Все запросы сайта теперь обслуживает gunicorn. Процесс Django с
+# приложением весит 60–70 МБ и растёт до перезапуска (--max-requests);
+# внутри — несколько потоков (gthread): запрос почти всё время ждёт
+# базу, и поток на это время отдаёт процессор соседу.
+#
+# Процессов — сколько помещается в память с запасом, но не больше,
+# чем есть смысла на имеющихся ядрах (2 × ядра + 1, совет gunicorn):
+# лишние процессы не ускоряют, а отнимают память и соединения с базой.
+# Упереться в потолок — это очередь и медленный ответ; не упереться —
+# убитый по памяти контейнер и 502. Очередь лучше.
 #
 # Числа при желании переопределяются переменными окружения.
-worker_mb="${APACHE_WORKER_MB:-55}"      # замеренный вес одного процесса
-reserved_mb="${APACHE_RESERVED_MB:-640}" # opcache, queue:work, schedule:work, ОС
-# Django за Apache (docker/apache-python.conf): gunicorn с двумя
-# процессами — замер около 110 МБ, с запасом на рост
-python_mb="${PYTHON_RESERVED_MB:-200}"
-reserved_mb=$(( reserved_mb + python_mb ))
+worker_mb="${PYTHON_WORKER_MB:-120}"      # процесс Django с запасом на рост
+reserved_mb="${PYTHON_RESERVED_MB:-450}"  # Apache, расписание, перевод, сверка, ОС
 
 # Сколько памяти у контейнера: cgroup v2, затем v1, затем вся машина.
 if [ -r /sys/fs/cgroup/memory.max ] && [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
@@ -54,65 +70,48 @@ else
     total_mb=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 ))
 fi
 
-workers=$(( (total_mb - reserved_mb) / worker_mb ))
-# Меньше восьми — сайт перестаёт отвечать на ровном месте; больше
-# шестидесяти четырёх на одном ядре бессмысленно: процессы начинают
-# отнимать время друг у друга, а не обслуживать людей.
-if [ "$workers" -lt 8 ]; then
-    workers=8
-    echo "ВНИМАНИЕ: на ${total_mb} МБ памяти восемь процессов Apache не помещаются с запасом. Тариф мал для этого приложения — при заметной посещаемости контейнер будут убивать по нехватке памяти." >&2
+# Сколько ядер: квота cgroup v2 (cpu.max — «квота период»), иначе nproc
+cpus=$(nproc)
+if [ -r /sys/fs/cgroup/cpu.max ]; then
+    read -r quota period < /sys/fs/cgroup/cpu.max || true
+    if [ "${quota:-max}" != "max" ] && [ "${period:-0}" -gt 0 ]; then
+        cpus=$(( (quota + period - 1) / period ))
+    fi
 fi
-[ "$workers" -gt 64 ] && workers=64
+[ "$cpus" -lt 1 ] && cpus=1
 
-# ── Имя сервера ─────────────────────────────────────────────────────
-#
-# Без него Apache при каждом запуске дважды жалуется в журнал:
-# «Could not reliably determine the server's fully qualified domain
-# name». На работу это не влияет — виртуальный хост слушает <*:порт>
-# и принимает всё, — но две лишние строки при каждом перезапуске
-# сорят ровно там, где мы ищем настоящие.
-#
-# Берём настоящий адрес, который Render кладёт в RENDER_EXTERNAL_URL:
-# в журнале полезнее видеть savdex.uz, чем localhost.
-server_name="${RENDER_EXTERNAL_URL:-}"
-server_name="${server_name#*://}"   # снять «https://»
-server_name="${server_name%%/*}"    # снять путь, если он есть
-[ -z "$server_name" ] && server_name=localhost
+if [ -n "${PYTHON_WORKERS:-}" ]; then
+    workers="$PYTHON_WORKERS"
+else
+    workers=$(( (total_mb - reserved_mb) / worker_mb ))
+    [ "$workers" -gt $(( 2 * cpus + 1 )) ] && workers=$(( 2 * cpus + 1 ))
+    if [ "$workers" -lt 2 ]; then
+        workers=2
+        echo "ВНИМАНИЕ: на ${total_mb} МБ памяти два процесса Django не помещаются с запасом. Тариф мал для этого приложения — при заметной посещаемости контейнер будут убивать по нехватке памяти." >&2
+    fi
+fi
+threads="${PYTHON_THREADS:-4}"
 
-cat > /etc/apache2/conf-enabled/zz-savdex-mpm.conf <<CONF
+cat > /etc/apache2/conf-enabled/zz-savdex-server.conf <<CONF
 ServerName ${server_name}
 
-<IfModule mpm_prefork_module>
-    ServerLimit           ${workers}
-    MaxRequestWorkers     ${workers}
-    StartServers          4
-    MinSpareServers       4
-    MaxSpareServers       12
-    # Ноль (умолчание) — процесс живёт вечно и копит утечки. Перезапуск
-    # раз в 500 запросов возвращает память системе и стоит доли секунды.
-    MaxConnectionsPerChild 500
-</IfModule>
-
-# Умолчание — 300 секунд: зависший запрос держит процесс пять минут,
-# и под нагрузкой они кончаются раньше, чем память. PHP всё равно
-# обрывает выполнение на 120 секундах (zz-uploads.ini).
+# Умолчание — 300 секунд: зависший запрос держит поток пять минут.
+# Django обрывает запрос на тех же 130 секундах (gunicorn --timeout).
 Timeout 130
 CONF
 
-echo "Apache: ${workers} процессов при ${total_mb} МБ памяти." >&2
+echo "Django: ${workers} процессов × ${threads} потоков при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
 
-cd /var/www/html
-
-# Без APP_KEY Laravel не стартует. Постоянный ключ задаётся в панели
+# ── Ключ ────────────────────────────────────────────────────────────
+#
+# APP_KEY шифрует куку сессии (тот же формат, что у Laravel) и
+# подписывает пропуск в админку. Постоянный ключ задаётся в панели
 # Render (Environment → APP_KEY).
 #
-# Раньше недостающий ключ генерировался заново при каждом запуске, и
-# издержка оказалась куда больше обещанной. Ключом шифруются куки, а в
-# куках лежит номер сессии; новый ключ — старая кука не расшифровывается,
+# Новый ключ при каждом запуске — старая кука не расшифровывается,
 # сессия начинается с нуля, и токен CSRF на уже открытой у человека
-# странице перестаёт сходиться с серверным. Браузер продолжает
-# показывать рабочий сайт, но каждое нажатие возвращает 419 и не делает
-# ничего. Со стороны это «после обновления перестали работать кнопки».
+# странице перестаёт сходиться с серверным: каждое нажатие возвращает
+# 419. Со стороны это «после обновления перестали работать кнопки».
 #
 # Поэтому сгенерированный ключ ложится на постоянный диск и переживает
 # перезапуск. Это подпорка, а не решение: ключ из панели надёжнее —
@@ -123,7 +122,7 @@ if [ -z "${APP_KEY:-}" ]; then
         export APP_KEY="$(cat "$KEY_FILE")"
         echo "ВНИМАНИЕ: APP_KEY не задан в панели Render, взят с диска. Задайте его в Environment." >&2
     else
-        export APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+        export APP_KEY="base64:$(python3 -c 'import base64, os; print(base64.b64encode(os.urandom(32)).decode())')"
         if [ -d /var/data ]; then
             printf '%s' "$APP_KEY" > "$KEY_FILE"
             chmod 600 "$KEY_FILE"
@@ -139,19 +138,13 @@ if [ -z "${APP_URL:-}" ] && [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
     export APP_URL="${RENDER_EXTERNAL_URL}"
 fi
 
-if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
-    DB_FILE="${DB_DATABASE:-/var/www/html/database/database.sqlite}"
-    mkdir -p "$(dirname "$DB_FILE")"
-    touch "$DB_FILE"
-fi
-
-php artisan package:discover --ansi
-
-# Схема, справочники и администратор (шаг 73 переноса) — Python, без
-# Laravel: схема из снимка миграций (python/savdex/schema.py), справочники
-# вместо сидеров (python/savdex/seeds.py), администратор — manage.py admin.
-# Владельцем базы, как миграции (DB_URL), а не ролью Django: ей схему
-# менять нельзя. Для SQLite (разработка без Postgres) — прежний путь Laravel.
+# ── Схема, справочники, администратор ───────────────────────────────
+#
+# Владельцем базы (DB_URL), а не ролью Django: ей схему менять нельзя.
+# Без DB_URL — адрес из остальных переменных (DATABASE_URL, DB_HOST…,
+# savdex/settings.py), но не роль Django. Схема — из снимка миграций на
+# пустой базе и новые миграции SQL (python/savdex/schema.py),
+# справочники — python/savdex/seeds.py, администратор — manage.py admin.
 py_owner() {
     if [ -n "${DB_URL:-}" ]; then
         DJANGO_DATABASE_URL="$DB_URL" python/.venv/bin/python python/manage.py "$@"
@@ -161,61 +154,24 @@ py_owner() {
 }
 
 FRESH_DB=0
-if [ "${DB_CONNECTION:-sqlite}" = "pgsql" ] && [ -x python/.venv/bin/python ]; then
-    if [ "$(py_owner schema --status | tail -1)" = "empty" ]; then
-        FRESH_DB=1
-    fi
-    py_owner schema
+if [ "$(py_owner schema --status | tail -1)" = "empty" ]; then
+    FRESH_DB=1
+fi
+py_owner schema
 
-    # Миграции Laravel, пока он в образе: на снимке — «нечего применять»,
-    # на живой базе — новые, если они есть
-    php artisan migrate --force
-
-    # Справочники: на свежей базе — как db:seed, на каждом деплое —
-    # недостающие тарифы, категории, страны, города и настройки (правки
-    # из админки не трогаются)
-    if [ "$FRESH_DB" = "1" ]; then
-        py_owner seed --fresh
-    else
-        py_owner seed
-    fi
+# Справочники: на свежей базе — все, на каждом деплое — недостающие
+# тарифы, категории, страны, города и настройки (правки из админки
+# не трогаются)
+if [ "$FRESH_DB" = "1" ]; then
+    py_owner seed --fresh
 else
-    HAS_USERS=$(php artisan tinker --execute='echo Schema::hasTable("users") ? "yes" : "no";' 2>/dev/null | tail -1 || true)
-    if [ "$HAS_USERS" != "yes" ]; then
-        FRESH_DB=1
-    fi
-
-    php artisan migrate --force
-
-    if [ "$FRESH_DB" = "1" ]; then
-        php artisan db:seed --force
-    fi
-    for seeder in PlanSeeder CategorySeeder GeoSeeder SettingSeeder; do
-        php artisan db:seed --class="$seeder" --force
-    done
+    py_owner seed
 fi
 
-# Демо-стенд (SEED_DEMO, SEED_SHOWCASE; на боевом выключены) — сидеры
-# Laravel: выдуманные компании и объявления для показа, на Python их нет.
-if [ "$FRESH_DB" = "1" ] && [ "${SEED_DEMO:-false}" = "true" ]; then
-    php artisan db:seed --class=DemoDataSeeder --force
-fi
-
-# Демо-витрина обновляется и на уже засеянной базе: правки демо-объявлений
-# (например, переводы заголовков) иначе не доезжали бы до стенда — Shell
-# на хостинге есть не всегда. Сидер идемпотентен (firstOrNew по заголовку,
-# updateOrCreate по языку), дублей не плодит; без SEED_DEMO=true не запускается.
-if [ "$FRESH_DB" = "0" ] && [ "${SEED_DEMO:-false}" = "true" ]; then
-    php artisan db:seed --class=CabinetDemoSeeder --force
-fi
-
-# Наполнение витрины: описания пустым карточкам компаний и картинки
-# объявлениям без фото. По умолчанию выключено: на живом сайте это
-# тексты и картинки, которых компании не писали и не загружали
-# (сделанное раньше убрала миграция remove_showcase_fill). Только для
-# демо-стенда — SEED_SHOWCASE=true.
-if [ "${SEED_SHOWCASE:-false}" = "true" ]; then
-    php artisan db:seed --class=ShowcaseSeeder --force
+# Демо-наполнение (выдуманные компании и объявления) было сидерами
+# Laravel и ушло вместе с ним
+if [ "${SEED_DEMO:-false}" = "true" ] || [ "${SEED_SHOWCASE:-false}" = "true" ]; then
+    echo "ВНИМАНИЕ: SEED_DEMO и SEED_SHOWCASE больше не работают — демо-наполнение было частью Laravel." >&2
 fi
 
 # Администратор заводится из переменных окружения: на хостинге нет
@@ -227,23 +183,15 @@ if [ -n "${ADMIN_EMAIL:-}" ]; then
     if [ -n "${ADMIN_PASSWORD:-}" ]; then
         ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
     fi
-    if [ "${DB_CONNECTION:-sqlite}" = "pgsql" ] && [ -x python/.venv/bin/python ]; then
-        py_owner admin "${ADMIN_ARGS[@]}"
-    else
-        IS_ADMIN=$(php artisan tinker \
-            --execute='echo \App\Models\User::where("email", mb_strtolower(trim((string) getenv("ADMIN_EMAIL"))))->where("is_admin", true)->exists() ? "yes" : "no";' \
-            2>/dev/null | tail -1 || true)
-        if [ "$IS_ADMIN" != "yes" ]; then
-            php artisan savdex:admin "${ADMIN_ARGS[@]:0:1}" "${ADMIN_ARGS[@]:2}"
-        fi
-    fi
+    py_owner admin "${ADMIN_ARGS[@]}"
 fi
 
+# ── Загрузки ────────────────────────────────────────────────────────
+#
 # Загрузки — на постоянный диск. Контейнер пересоздаётся при каждом
-# деплое, и всё, что лежало в storage/app (логотипы компаний, фото
+# деплое, и всё, что лежало бы в storage/app (логотипы компаний, фото
 # объявлений, документы), пропадало: «загрузили лого — назавтра его
-# нет». Симлинки уводят оба хранилища на смонтированный диск, где
-# уже живёт база.
+# нет». Симлинки уводят оба хранилища на смонтированный диск.
 if [ -d /var/data ]; then
     for dir in public private; do
         mkdir -p "/var/data/storage/$dir"
@@ -257,139 +205,64 @@ if [ -d /var/data ]; then
     #
     # Но перебирать каждый загруженный файл на каждом старте нельзя:
     # это время растёт вместе с числом фотографий, а идёт оно до
-    # запуска Apache — то есть прямо в те секунды, когда сайт лежит
-    # и триста человек обновляют страницу. Правим только то, что
-    # действительно не принадлежит www-data.
+    # запуска Apache. Правим только то, что не принадлежит www-data.
     find /var/data/storage \( ! -user www-data -o ! -group www-data \) \
         -exec chown www-data:www-data {} + 2>/dev/null || true
 fi
 
-php artisan storage:link || true
+# Публичные загрузки по адресу /storage/… — как storage:link у Laravel
+ln -sfn /var/www/html/storage/app/public public/storage
 
-# Машинный перевод ведёт Python (python/savdex/management/commands/
-# translate.py): у Laravel он выключается до config:cache — очередь и
-# часовой добор не переводят то же самое второй раз. Сам флаг для Python
-# сохраняется в PY_MACHINE_TRANSLATION_ENABLED. Откат без выкладки —
-# SAVDEX_PY_TRANSLATE=0 в настройках Render и перезапуск.
-if [ "${SAVDEX_PY_TRANSLATE:-1}" != "0" ] && [ -x python/.venv/bin/python ]; then
-    export PY_MACHINE_TRANSLATION_ENABLED="${MACHINE_TRANSLATION_ENABLED:-true}"
-    export MACHINE_TRANSLATION_ENABLED=false
-fi
-
-php artisan config:cache
-php artisan view:cache
-# route:cache не используется: /robots.txt объявлен замыканием,
-# а замыкания не сериализуются в кэш маршрутов.
-
-# artisan выше работал от root; веб-серверу нужны права www-data.
-chown -R www-data:www-data storage bootstrap/cache database
-
-# База может лежать вне проекта — на постоянном диске (DB_DATABASE).
-# Смонтированный диск принадлежит root, и без прав www-data сайт
-# падает на первой же записи: «attempt to write a readonly database».
-if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
-    chown -R www-data:www-data "$(dirname "$DB_FILE")"
-fi
-
-# Планировщик. Системного cron на Render нет, а без schedule:run
-# объявления не истекают, продвижения не освобождают слоты и месячные
-# лимиты не сбрасываются (см. routes/console.php). Фоновый schedule:work
-# живёт рядом с веб-сервером; для одного инстанса этого достаточно.
-# От www-data, а не root — иначе журнал SQLite получит владельца root,
-# и сайт упадёт на первой же записи.
-if command -v runuser >/dev/null 2>&1; then
-    runuser -u www-data -- php artisan schedule:work >/dev/null 2>&1 &
-
-    # Очередь задач: импорт и экспорт из админки уходят в неё,
-    # и без воркера «Загрузить компании» висело бы «в обработке»
-    # вечно. Живёт, пока жив контейнер; после деплоя стартует заново.
-    runuser -u www-data -- php artisan queue:work --sleep=3 --tries=3 >/dev/null 2>&1 &
-fi
+# Команды выше работали от root; Django пишет в storage от www-data
+chown -R www-data:www-data storage
 
 # ── Django ──────────────────────────────────────────────────────────
 #
-# Вторая половина площадки (python/, перенос на Django). Apache отдаёт
-# ей только адреса из docker/apache-python.conf; остальное — Laravel.
-#
-# Живёт рядом с Apache, как очередь и планировщик. Упал — поднимается
-# снова через пять секунд: на время перезапуска адреса Django отвечают
-# 503, а весь остальной сайт этого не замечает. set +e внутри цикла —
-# иначе первый же ненулевой выход gunicorn унёс бы и цикл (set -e сверху).
-#
+# Упал — поднимается снова через несколько секунд: на время перезапуска
+# сайт отвечает 503. set +e внутри цикла — иначе первый же ненулевой
+# выход унёс бы и цикл (set -e сверху). Всё — от www-data, а не root.
+run_forever() {
+    local pause="$1" name="$2"
+    shift 2
+    (
+        set +e
+        while true; do
+            runuser -u www-data -- "$@"
+            echo "ВНИМАНИЕ: ${name} остановился, перезапуск через ${pause} секунд." >&2
+            sleep "$pause"
+        done
+    ) &
+}
+
 # Слушает только 127.0.0.1: снаружи до Django не достучаться, только
-# через Apache. Два процесса: сейчас через Django идут считанные
-# адреса; больше — PYTHON_WORKERS.
-# Словарь интерфейса для страниц Django лежит в самом коде Python
-# (python/savdex/locale/ui, шаг 73) — выгружать его при старте не нужно.
+# через Apache
+run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
+    --chdir python \
+    --bind 127.0.0.1:8001 \
+    --workers "$workers" \
+    --worker-class gthread \
+    --threads "$threads" \
+    --timeout 130 \
+    --graceful-timeout 30 \
+    --max-requests 1000 --max-requests-jitter 100 \
+    --error-logfile -
 
-# Какие страницы сайта отдаёт Django (docker/apache-python.conf). Пусто —
-# все снова отдаёт Laravel: это откат без выкладки, через переменную в
-# настройках Render и перезапуск. Формы сайта и кабинета (forms, с кассой)
-# и приём денег от шлюза (payments) включены по решению владельца; вход
-# в админку и её главная (admin) — Django с шага 67;
-# выключить одну группу — перечислить в переменной остальные. Если
-# SAVDEX_PY_PAGES задана в настройках Render, действует она, а не этот список.
-export SAVDEX_PY_PAGES="${SAVDEX_PY_PAGES-docs,news,about,directory,legal,pricing,home,reviews,tenders,services,companies,catalog,cabinet,auth,forms,payments,admin}"
-# Основной домен (хост из APP_URL): только его страницы отдаёт Django
-export SAVDEX_HOST="$(printf '%s' "${APP_URL:-}" | sed -E 's#^[a-z]+://##; s#/.*$##')"
+# Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
+# объявления, просьбы об отзыве, чистка «Кто смотрел», продвижения,
+# месячные периоды тарифов, курсы ЦБ, прозвон Uzum. Пройденное помнит
+# storage/app/schedule.json
+run_forever 60 "Расписание Django" python/.venv/bin/python python/manage.py schedule
 
-if [ -x python/.venv/bin/gunicorn ] && command -v runuser >/dev/null 2>&1; then
-    (
-        set +e
-        while true; do
-            runuser -u www-data -- python/.venv/bin/gunicorn savdex.wsgi \
-                --chdir python \
-                --bind 127.0.0.1:8001 \
-                --workers "${PYTHON_WORKERS:-2}" \
-                --timeout 130 \
-                --max-requests 1000 --max-requests-jitter 100 \
-                --error-logfile -
-            echo "ВНИМАНИЕ: Django (gunicorn) остановился, перезапуск через 5 секунд." >&2
-            sleep 5
-        done
-    ) &
+# Машинный перевод: проход раз в минуту. Выключается переменной
+# MACHINE_TRANSLATION_ENABLED=false (savdex/translator.py)
+run_forever 30 "Перевод" python/.venv/bin/python python/manage.py translate
 
-    # Сверка денег (этап 7, шаг 55, python/savdex/payments/reconcile.py):
-    # раз в час — что должна была выдать каждая свежая оплата и что
-    # лежит в базе; расхождение — в журнал и письмом (BILLING_RECONCILE_EMAIL,
-    # иначе суперадминам). Только чтение. Выключить — SAVDEX_PY_RECONCILE=0
-    if [ "${SAVDEX_PY_RECONCILE:-1}" != "0" ]; then
-        (
-            set +e
-            while true; do
-                runuser -u www-data -- python/.venv/bin/python python/manage.py reconcile_billing
-                echo "ВНИМАНИЕ: сверка денег остановилась, перезапуск через 60 секунд." >&2
-                sleep 60
-            done
-        ) &
-    fi
-
-    # Ежедневные задачи для таблиц Django (python/savdex/schedule.py) —
-    # вместо расписания Laravel: пересчёт рейтингов в 03:00 UTC (было
-    # ratings:recalculate), чистка «Кто смотрел» в 04:00 (было
-    # audience-views:prune), снятие истёкших объявлений и просьбы об отзыве
-    # в 06:00 (было listings:expire и reviews:ask). Пройденные дни помнит
-    # storage/app/schedule.json
-    (
-        set +e
-        while true; do
-            runuser -u www-data -- python/.venv/bin/python python/manage.py schedule
-            echo "ВНИМАНИЕ: ежедневные задачи Django остановились, перезапуск через 60 секунд." >&2
-            sleep 60
-        done
-    ) &
-
-    # Машинный перевод на Python: проход раз в минуту (см. выше про флаг)
-    if [ -n "${PY_MACHINE_TRANSLATION_ENABLED:-}" ]; then
-        (
-            set +e
-            while true; do
-                runuser -u www-data -- python/.venv/bin/python python/manage.py translate
-                echo "ВНИМАНИЕ: перевод на Python остановился, перезапуск через 30 секунд." >&2
-                sleep 30
-            done
-        ) &
-    fi
+# Сверка денег (python/savdex/payments/reconcile.py): раз в час — что
+# должна была выдать каждая свежая оплата и что лежит в базе;
+# расхождение — в журнал и письмом. Только чтение. Выключить —
+# SAVDEX_PY_RECONCILE=0
+if [ "${SAVDEX_PY_RECONCILE:-1}" != "0" ]; then
+    run_forever 60 "Сверка денег" python/.venv/bin/python python/manage.py reconcile_billing
 fi
 
 exec "$@"

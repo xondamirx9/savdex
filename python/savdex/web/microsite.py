@@ -601,7 +601,7 @@ def _not_found(request: HttpRequest) -> HttpResponse:
     from savdex.web.request import context
     from savdex.web.views import error
 
-    first = context(request, redirect=False)
+    first = context(request, redirect=False, start_session=False)
 
     if isinstance(first, HttpResponse):
         return first

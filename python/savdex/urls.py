@@ -35,6 +35,7 @@ from savdex.web import (
     contact_actions,
     directory,
     downloads,
+    fallback,
     home,
     it_task_actions,
     it_tasks,
@@ -80,11 +81,15 @@ urlpatterns = [
     # Вход и выход админки (шаг 67): раньше разделов Django — свои виды,
     # а не django.contrib.auth; без посредника входа (AdminMiddleware)
     path("py/admin/login/", adminlogin.login_page, name="savdex_admin_login"),
+    # Бывшая панель Filament (этап 8): /admin… — в админку Django,
+    # служебные адреса Livewire и Filament — 404
+    re_path(r"^admin(?:/(?P<rest>.*))?$", fallback.admin, name="filament.redirect"),
+    re_path(r"^(?:livewire-[0-9a-f]+|livewire|filament)(?:/(?P<rest>.*))?$", fallback.gone),
     path("py/admin/", adminsite.site.urls),
     # Кто вошёл на сайт — по сессии Laravel (этап 3, savdex/visitor.py)
     path("py/whoami", visitor.whoami),
-    # Страницы сайта (этап 3, savdex/web/): адрес доходит сюда, только если
-    # его группа включена в SAVDEX_PY_PAGES (docker/apache-python.conf)
+    # Страницы сайта (этап 3, savdex/web/); с этапа 8 Apache передаёт сюда
+    # всё, кроме готовых файлов (docker/apache-python.conf)
     re_path(r"^(?:(?:uz|en|zh|tr)/?)?$", home.home, name="home"),
     *[
         re_path(rf"^(?:(?:uz|en|zh|tr)/)?(?P<key>{key})$", web.doc, name=f"docs.{key}")
@@ -596,4 +601,11 @@ urlpatterns = [
         legal.show,
         name="legal",
     ),
+    # Последним: всё, у чего нет маршрута, — страница 404 сайта, а не
+    # отладочная Django (этап 8: Laravel за спиной больше нет)
+    re_path(r"^.*$", fallback.page_not_found, name="fallback.404"),
 ]
+
+# Несовпавший адрес и ошибка сервера — страница в оформлении сайта (этап 8)
+handler404 = "savdex.web.fallback.page_not_found"
+handler500 = "savdex.web.fallback.server_error"

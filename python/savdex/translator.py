@@ -34,10 +34,10 @@ _TRIM = " \t\n\r\0\x0b"
 
 def enabled() -> bool:
     """
-    config('services.machine_translation.enabled'): env() Laravel, по
-    умолчанию да. В контейнере перевод ведёт Python, а у Laravel флаг
-    выключен — тогда значение для Python в PY_MACHINE_TRANSLATION_ENABLED
-    (docker/render-entrypoint.sh).
+    MACHINE_TRANSLATION_ENABLED, по умолчанию да — как
+    config('services.machine_translation.enabled') у Laravel.
+    PY_MACHINE_TRANSLATION_ENABLED, если задана, важнее: так до этапа 8
+    перевод включали Python, выключив его у Laravel.
     """
     raw = os.environ.get("PY_MACHINE_TRANSLATION_ENABLED")
 

@@ -37,6 +37,9 @@ def test_счёт_этапов():
     assert (by_number[3].done, by_number[3].total, by_number[3].state) == (3, 3, "done")
     # Деньги — у Django с шага 72
     assert by_number[7].state == "done"
+    # Этап 8: журнал, лента, сессии, очередь перевода и кэш — у Django
+    assert by_number[6].kept.keys() == {"imports", "exports", "failed_import_rows"}
+    assert by_number[8].state == "done"
 
     # Ничего не перенесено — этап 2 «впереди»
     assert progress.stage_progress(frozenset())[1].state == "ahead"
@@ -46,5 +49,6 @@ def test_общий_счёт():
     total = progress.summary()
 
     assert total["tables_done"] == len(OWNED_TABLES)
-    # Оставленные за Laravel до его выключения: 5 таблиц этапа 6
-    assert total["tables_total"] == len(progress.MOVING) - 5
+    # Служебные таблицы Filament (3 таблицы этапа 6) не переезжают
+    assert total["tables_total"] == len(progress.MOVING) - 3
+    assert total["percent"] == 100

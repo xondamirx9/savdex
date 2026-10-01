@@ -46,38 +46,43 @@ class TestРазборЗапроса:
 
 class TestУзкоеРазрешение:
     """
-    Сессии Laravel: Django пишет в sessions, которой не владеет (Laravel
-    ведёт свою сессию на оставшихся у него адресах).
+    Чужая таблица, заявленная в SHARED_WRITES (до этапа 8 так писались
+    сессии Laravel; с выключением Laravel список пуст — здесь условная
+    таблица sessions_shared).
 
     Разрешение действует только внутри блока, который его заявил, и
     только на заявленную таблицу.
     """
 
+    @pytest.fixture(autouse=True)
+    def заявлена(self, monkeypatch):
+        monkeypatch.setattr(guards, "SHARED_WRITES", {"sessions_shared": "пример"})
+
     def test_внутри_блока_запись_проходит(self):
-        with guards.allowed_writes("sessions"):
-            guards.check("update sessions set payload = '' where id = 'x'")
+        with guards.allowed_writes("sessions_shared"):
+            guards.check("update sessions_shared set payload = '' where id = 'x'")
 
     def test_вне_блока_снова_запрет(self):
-        with guards.allowed_writes("sessions"):
+        with guards.allowed_writes("sessions_shared"):
             pass
 
-        with pytest.raises(WriteToForeignTableError, match="«sessions»"):
-            guards.check("update sessions set payload = '' where id = 'x'")
+        with pytest.raises(WriteToForeignTableError, match="«sessions_shared»"):
+            guards.check("update sessions_shared set payload = '' where id = 'x'")
 
     def test_разрешение_не_распространяется_на_другие_таблицы(self):
-        with guards.allowed_writes("sessions"), pytest.raises(WriteToForeignTableError):
-            guards.check("update activity_events set read_at = null")
+        with guards.allowed_writes("sessions_shared"), pytest.raises(WriteToForeignTableError):
+            guards.check("update failed_jobs set payload = null")
 
     def test_незаявленную_таблицу_разрешить_нельзя(self):
         with pytest.raises(ValueError, match="SHARED_WRITES"), guards.allowed_writes("failed_jobs"):
             pass
 
     def test_исключение_внутри_блока_снимает_разрешение(self):
-        with pytest.raises(RuntimeError), guards.allowed_writes("sessions"):
+        with pytest.raises(RuntimeError), guards.allowed_writes("sessions_shared"):
             raise RuntimeError("сбой посреди записи")
 
         with pytest.raises(WriteToForeignTableError):
-            guards.check("delete from sessions where id = 'x'")
+            guards.check("delete from sessions_shared where id = 'x'")
 
     def test_разрешение_не_утекает_в_другой_поток(self):
         import threading
@@ -86,13 +91,13 @@ class TestУзкоеРазрешение:
 
         def сосед() -> None:
             try:
-                guards.check("update sessions set user_id = null")
+                guards.check("update sessions_shared set user_id = null")
             except WriteToForeignTableError:
                 итог.append("запрет")
             else:
                 итог.append("прошло")
 
-        with guards.allowed_writes("sessions"):
+        with guards.allowed_writes("sessions_shared"):
             поток = threading.Thread(target=сосед)
             поток.start()
             поток.join()
@@ -130,14 +135,19 @@ class TestЗапретЗаписи:
 
         guards.check("update countries set code = 'uz'")
 
-    def test_журнал_действий_общий(self):
+    def test_журнал_действий_у_django(self):
         """
-        Исключение из правила 4.1 (раздел 5.1 документа).
-
-        В журнал пишут обе стороны: таблица добавляемая, изменение
-        и удаление запрещены самой моделью.
+        Был исключением из правила 4.1 (раздел 5.1 документа): писали обе
+        стороны. С этапа 8 — таблица Django.
         """
         guards.check("insert into admin_actions (action) values ('created')")
+
+    def test_этап_8_общих_таблиц_нет(self):
+        бывшие = {"sessions", "admin_actions", "activity_events", "content_translations", "cache"}
+
+        assert бывшие <= guards.OWNED_TABLES
+        assert not guards.SHARED_WRITES
+        assert not guards.APPEND_ONLY_SHARED
 
 
 class TestЗапретМиграций:
@@ -153,7 +163,7 @@ class TestЗапретМиграций:
         ],
     )
     def test_ddl_отказывает(self, sql):
-        with pytest.raises(MigrationFromDjangoError, match="только Laravel"):
+        with pytest.raises(MigrationFromDjangoError, match="только миграции"):
             guards.check(sql)
 
     def test_миграции_django_не_применяются(self):
