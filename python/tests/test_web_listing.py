@@ -76,7 +76,7 @@ def данные() -> None:
     )
     контакт(c, "phone", "+998 90 123-45-67", primary=True)
     контакт(c, "website", "stroy.uz")
-    l = объявление(
+    cement = объявление(
         slug="cement",
         company_id=c,
         category_id=child,
@@ -102,14 +102,14 @@ def данные() -> None:
         sql(
             "insert into listing_attributes (listing_id, key, value, created_at, updated_at) "
             "values (%s, %s, %s, now(), now())",
-            [l, key, value],
+            [cement, key, value],
         )
 
     for i, sort in enumerate([1, 1, 0]):
         sql(
             "insert into listing_images (listing_id, path, thumb_path, sort, created_at, "
             "updated_at) values (%s, %s, %s, %s, now(), now())",
-            [l, f"l/{i}.webp", None if i == 2 else f"l/t{i}.webp", sort],
+            [cement, f"l/{i}.webp", None if i == 2 else f"l/t{i}.webp", sort],
         )
 
     [(urgent,)] = sql("select id from promotion_types where code = 'urgent'")
@@ -117,7 +117,7 @@ def данные() -> None:
         "insert into promotions (listing_id, company_id, promotion_type_id, units_spent, status, "
         "starts_at, ends_at, created_at, updated_at) values (%s, %s, %s, 1, 'active', now(), "
         "now() + interval '3 days', now(), now())",
-        [l, c, urgent],
+        [cement, c, urgent],
     )
     объявления(5, category_id=child)
     объявление(

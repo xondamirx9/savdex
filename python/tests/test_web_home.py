@@ -115,9 +115,7 @@ def данные() -> None:
             [c, vip],
         )
 
-    [(type_id,)] = sql(
-        "select id from promotion_types where badge is not null order by id limit 1"
-    )
+    [(type_id,)] = sql("select id from promotion_types where badge is not null order by id limit 1")
     [(promoted,)] = sql(
         "select id from listings where company_id = %s and type = 'supply' order by id limit 1",
         [companies[1]],

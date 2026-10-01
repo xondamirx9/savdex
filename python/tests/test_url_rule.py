@@ -100,7 +100,11 @@ def test_случайные_строки_не_ломают_правило():
 
     assert all(isinstance(a, bool) for a in ответы)
     assert 0 < sum(ответы) < len(строки)
-    assert all(s.lower().startswith(("http://", "https://")) for s, a in zip(строки, ответы, strict=True) if a)
+    assert all(
+        s.lower().startswith(("http://", "https://"))
+        for s, a in zip(строки, ответы, strict=True)
+        if a
+    )
 
 
 def test_не_строка():

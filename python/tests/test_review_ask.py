@@ -153,7 +153,9 @@ def test_просьбы_об_отзывах(компании, tmp_path):
 
     assert "Просьб о площадке: 2, о компаниях: 2." in out.stdout
     buyer, other = компании["buyer"], компании["other"]
-    новые = {(row[0], row[1], row[2], row[3], row[5], row[6], row[7]) for row in д if row[3] != "Было"}
+    новые = {
+        (row[0], row[1], row[2], row[3], row[5], row[6], row[7]) for row in д if row[3] != "Было"
+    }
 
     # Язык — профиля; компания уведомления — того, кто раскрывал
     assert новые == {

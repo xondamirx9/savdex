@@ -32,6 +32,7 @@ pytestmark = нужна_база
 
 ВКЛЮЧЁН = {"MACHINE_TRANSLATION_ENABLED": "true"}
 
+
 class _Заглушка(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         query = parse_qs(urlparse(self.path).query)
@@ -248,7 +249,10 @@ def места(код: str, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 @pytest.mark.parametrize(
     ("about", "jobs", "jobs_i18n", "ждём"),
     [
-        ("Опыт 10 лет", ДЕСЯТЬ, None, (переводы("Опыт 10 лет"), переводы(lambda к: места(к, ДЕСЯТЬ)))),
+        (
+            "Опыт 10 лет", ДЕСЯТЬ, None,
+            (переводы("Опыт 10 лет"), переводы(lambda к: места(к, ДЕСЯТЬ))),
+        ),
         (
             None, [{"position": "Бухгалтер", "duties": None}], '{"en":[{"position":"x"}]}',
             (

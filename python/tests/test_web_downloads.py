@@ -10,11 +10,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-
-import hashlib
 
 import pytest
 
@@ -127,20 +126,20 @@ def _документ(title: str, company: str = "other") -> int:
 
 #: Заголовок Content-Disposition с ASCII-запасом (Str::ascii) и filename*
 КАТАЛОГ = (
-    'attachment; filename="Katalog <<Cement>> 2027.pdf"; filename*=utf-8\'\''
+    "attachment; filename=\"Katalog <<Cement>> 2027.pdf\"; filename*=utf-8''"
     "%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%C2%AB%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82"
     "%C2%BB%202027.pdf"
 )
 СВОЯ = (
-    'attachment; filename="Svoia licenziia.docx"; filename*=utf-8\'\''
+    "attachment; filename=\"Svoia licenziia.docx\"; filename*=utf-8''"
     "%D0%A1%D0%B2%D0%BE%D1%8F%20%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F.docx"
 )
 ТЗ = (
-    'attachment; filename="TZ proekta.pdf"; filename*=utf-8\'\''
+    "attachment; filename=\"TZ proekta.pdf\"; filename*=utf-8''"
     "%D0%A2%D0%97%20%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0.pdf"
 )
 СМЕТА = (
-    'attachment; filename="Moia smeta.txt"; filename*=utf-8\'\''
+    "attachment; filename=\"Moia smeta.txt\"; filename*=utf-8''"
     "%D0%9C%D0%BE%D1%8F%20%D1%81%D0%BC%D0%B5%D1%82%D0%B0.txt"
 )
 DOCX_ТИП = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

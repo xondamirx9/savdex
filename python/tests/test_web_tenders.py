@@ -14,6 +14,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -105,59 +106,87 @@ def вкладка(сайт: str, path: str) -> dict[str, Any]:
 
     assert д["status"] == 200, (д["status"], д["headers"].get("location"))
     стр = страница(д["body"])
-    assert стр["component"] == "Catalog"
+    assert стр["component"] == "catalog/Index"
 
     return стр
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("path", "всего", "на_странице", "завершённые", "первая"),
     [
-        "/catalog?type=tender",
-        "/catalog?type=tender&page=2",
-        "/catalog?page=3&type=tender",
-        "/en/catalog?type=tender",
-        "/uz/catalog?type=tender&page=2",
-        "/zh/catalog?type=tender&closed=1",
-        "/tr/catalog?type=%20tender%20&closed=yes",
-        "/catalog?type=tender&closed=0",
-        "/catalog?type=tender&q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82",
-        "/catalog?type=tender&q=sement",
-        "/catalog?type=tender&q=%20",
-        "/catalog?type=tender&category=abc",
-        "/catalog?type=tender&sort=cheap&city=5&verified=1",
+        # Открытые: ближайший срок сверху, без срока — в конце
+        ("/catalog?type=tender", 28, 20, False, "Поставка цемента 1"),
+        ("/catalog?type=tender&page=2", 28, 8, False, "Поставка цемента 21"),
+        ("/catalog?page=3&type=tender", 28, 0, False, None),
+        # Перевод заголовка — на языке страницы
+        ("/en/catalog?type=tender", 28, 20, False, "Поставка цемента 1"),
+        ("/uz/catalog?type=tender&page=2", 28, 8, False, "Поставка цемента 21"),
+        # Завершённые: последний закрытый сверху
+        ("/zh/catalog?type=tender&closed=1", 5, 5, True, None),
+        ("/tr/catalog?type=%20tender%20&closed=yes", 5, 5, True, None),
+        ("/catalog?type=tender&closed=0", 28, 20, False, "Поставка цемента 1"),
+        # «цемент» — двадцать «Поставка цемента …» и одна закупка фабрики
+        ("/catalog?type=tender&q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82", 21, 20, False, None),
+        # Латиница находит и кириллицу (транслит в search_text)
+        ("/catalog?type=tender&q=sement", 25, 20, False, None),
+        ("/catalog?type=tender&q=%20", 28, 20, False, None),
+        ("/catalog?type=tender&category=abc", 28, 20, False, None),
+        # Сортировка, город и «проверенные» у закупок не действуют
+        ("/catalog?type=tender&sort=cheap&city=5&verified=1", 28, 20, False, None),
     ],
 )
-def test_вкладка_тендеров(сайт, path):
+def test_вкладка_тендеров(сайт, path, всего, на_странице, завершённые, первая):
     стр = вкладка(сайт, path)
-    pr = стр["props"]
-    print("DBG", path, стр["url"], {k: (v if not isinstance(v, (list, dict)) or k == "filters" else type(v).__name__ + str(len(v))) for k, v in pr.items() if k not in ("auth","bell","brandLogo","counts","errors","favorites","flash","locale","localeLinks","localeSuggest","navCategories","support","translations")})
-    items = pr.get("items") or pr.get("tenders") or pr.get("results")
-    if isinstance(items, dict): items = items.get("data")
-    print("DBGI", [(x.get("title"), x.get("days_left"), x.get("closed")) for x in (items or [])][:30])
+    props = стр["props"]
+    закупки = props["tenders"]["data"]
+
+    assert props["filters"]["type"] == "tender"
+    assert props["filters"]["closed"] is завершённые
+    assert (props["total"], props["tenders"]["total"], len(закупки)) == (всего, всего, на_странице)
+    assert all(t["closed"] is завершённые for t in закупки)
+    assert первая is None or закупки[0]["title"] == первая
+
+    сроки = [t["days_left"] for t in закупки]
+    сроки_есть = [d for d in сроки if d is not None]
+
+    if завершённые:
+        # Приём закончился: дней — меньше нуля, последний закрытый сверху
+        assert all(d < 0 for d in сроки) and сроки == sorted(сроки, reverse=True)
+    else:
+        # Ближайший срок сверху; без срока — только в конце
+        assert сроки_есть == sorted(сроки_есть)
+        assert сроки[: len(сроки_есть)] == сроки_есть
+
+
+def test_перевод_заголовка(сайт):
+    """Свой перевод — на своём языке; пустой перевод — исходный заголовок."""
+    en = {t["title"] for t in вкладка(сайт, "/en/catalog?type=tender")["props"]["tenders"]["data"]}
+    uz = {t["title"] for t in вкладка(сайт, "/uz/catalog?type=tender")["props"]["tenders"]["data"]}
+
+    assert {"Cement supply 6", "Cement supply 12", "Cement supply 18"} <= en
+    assert "Поставка цемента 6" not in en
+    assert "Поставка цемента 6" in uz
 
 
 def test_раздел_с_подразделами(сайт):
-    д, _ = сверить(сайт, "/catalog?type=tender")
-    раздел = страница(д["body"])["props"]["categories"][0]["id"]
-    д, _ = сверить(сайт, f"/catalog?type=tender&category={раздел}")
+    раздел = вкладка(сайт, "/catalog?type=tender")["props"]["categories"][0]["id"]
+    стр = вкладка(сайт, f"/catalog?type=tender&category={раздел}")
 
     # Раздел включает свой подраздел: 16 из 24 — корень и подраздел, и
     # ещё 4 открытых без срока — фабрика кладёт их в первый раздел
-    assert страница(д["body"])["props"]["total"] == 20
+    assert стр["props"]["filters"]["category"] == раздел
+    assert стр["props"]["total"] == 20
 
 
 def test_баннер_каталога(сайт):
-    php(
-        "App\\Models\\Banner::create(['name' => 'Тарифы', 'placement' => 'catalog',"
-        "'is_active' => true,"
-        "'image_path' => 'banners/c.jpg', 'url' => 'https://savdex.uz/pricing',"
-        "'alt' => 'Тарифы', 'sort' => 1]);"
-        "echo 'ok';"
+    sql(
+        "insert into banners (name, placement, is_active, image_path, url, alt, sort, "
+        "created_at, updated_at) values ('Тарифы', 'catalog', true, 'banners/c.jpg', "
+        "'https://savdex.uz/pricing', 'Тарифы', 1, now(), now())"
     )
-    д, _ = сверить(сайт, "/catalog?type=tender")
+    баннер = вкладка(сайт, "/catalog?type=tender")["props"]["banner"]
 
-    assert страница(д["body"])["props"]["banner"]["alt"] == "Тарифы"
+    assert баннер["alt"] == "Тарифы" and баннер["url"] == "https://savdex.uz/pricing"
 
 
 def адреса() -> list[str]:
@@ -167,9 +196,58 @@ def адреса() -> list[str]:
 def test_страница_закупки(сайт):
     slugs = адреса()
 
-    # открытая с переводом, без срока, завершённая
-    for slug, prefix in ((slugs[5], ""), (slugs[5], "/en"), (slugs[25], "/uz"), (slugs[30], "/zh")):
-        сверить(сайт, f"{prefix}/tenders/{slug}")
+    # открытая с переводом, без срока, завершённая:
+    # (адрес, язык, заголовок, описание, месяц срока, завершена)
+    for slug, prefix, заголовок, описание, месяц, завершена in (
+        (slugs[5], "", "Поставка цемента 6", None, "{d.day} {ru}", False),
+        (slugs[5], "/en", "Cement supply 6", ["Cement."], "{d.day} {en}", False),
+        (slugs[25], "/uz", None, None, None, False),
+        (slugs[30], "/zh", None, None, "{d.day}", True),
+    ):
+        д = открыть(сайт, f"{prefix}/tenders/{slug}")
+        стр = страница(д["body"])
+        закупка = стр["props"]["tender"]
+        [(срок,)] = sql("select deadline_at from tenders where slug = %s", [slug])
+
+        assert д["status"] == 200 and стр["component"] == "tenders/Show"
+        assert закупка["slug"] == slug and закупка["closed"] is завершена
+        assert заголовок is None or закупка["title"] == заголовок
+        assert описание is None or закупка["description"] == описание
+
+        if месяц is None:
+            # Без срока — ни даты, ни дней
+            assert (закупка["deadline"], закупка["days_left"]) == (None, None)
+        else:
+            # Дата — по-человечески на языке страницы: «6 октября 2026»
+            # (срок в базе — UTC; день берём и по UTC, и по Ташкенту)
+            подписи = {
+                месяц.format(d=d, ru=МЕСЯЦЫ[d.month - 1], en=d.strftime("%B")) + " "
+                for d in (срок, срок + timedelta(hours=5))
+            }
+            assert any(закупка["deadline"].startswith(p) for p in подписи), закупка["deadline"]
+            assert закупка["deadline"].endswith(str(срок.year))
+            # Ровно пять суток до срока у открытой; у завершённой — меньше нуля
+            assert закупка["days_left"] < 0 if завершена else закупка["days_left"] == 5
+
+        # Похожие — открытые закупки того же раздела, без самой этой
+        assert стр["props"]["similar"]
+        assert all(not t["closed"] and t["slug"] != slug for t in стр["props"]["similar"])
+
+
+МЕСЯЦЫ = (
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
 
 
 def test_нет_закупки(сайт):
@@ -177,36 +255,38 @@ def test_нет_закупки(сайт):
     будущая = sql("select slug from tenders where published_at > now()")[0][0]
 
     for slug in ("nothing-here", черновик, будущая):
-        д, _ = сверить(сайт, f"/tenders/{slug}")
-        assert д["status"] == 404
+        assert открыть(сайт, f"/tenders/{slug}")["status"] == 404
 
 
-def test_просмотры_считают_обе_стороны(сайт):
+def test_просмотры_считаются(сайт):
     slug = адреса()[2]
     было = sql("select views_count from tenders where slug = %s", [slug])[0][0]
 
-    из_django(сайт, f"/tenders/{slug}")
-    из_laravel(сайт, f"/tenders/{slug}")
+    assert открыть(сайт, f"/tenders/{slug}")["status"] == 200
+    assert открыть(сайт, f"/tenders/{slug}")["status"] == 200
 
     assert sql("select views_count from tenders where slug = %s", [slug])[0][0] == было + 2
 
 
 def test_просмотр_администратора_в_журнале(сайт):
-    пользователь("boss@savdex.uz", is_admin=True, admin_role="superadmin")
-    куки = войти(сайт, "boss@savdex.uz")
+    uid = пользователь("boss@savdex.uz", is_admin=True, admin_role="superadmin")
+    куки = вход(uid)
     slug = адреса()[3]
+    [(tid, title, было)] = sql("select id, title, views_count from tenders where slug = %s", [slug])
     sql("delete from admin_actions")
 
-    из_laravel(сайт, f"/tenders/{slug}", куки)
-    из_django(сайт, f"/tenders/{slug}", куки)
+    assert открыть(сайт, f"/tenders/{slug}", куки)["status"] == 200
+    assert открыть(сайт, f"/tenders/{slug}", куки)["status"] == 200
 
     строки = sql(
         "select user_name, action, section, subject_type, subject_id, subject_label, "
         "changes::jsonb, ip from admin_actions order by id"
     )
     assert len(строки) == 2
-    л, д = строки
-    # До и после — на единицу больше у второй строки; остальное одинаково
-    assert л[:6] == д[:6] and л[7] == д[7]
-    assert д[6]["after"]["views_count"] == л[6]["after"]["views_count"] + 1
-    assert д[6]["before"]["views_count"] == л[6]["after"]["views_count"]
+    первая, вторая = строки
+    # Строка на каждый просмотр: до и после — на единицу больше у второй
+    assert первая[:6] == вторая[:6]
+    assert первая[1:6] == ("updated", "tenders", "App\\Models\\Tender", tid, title)
+    assert первая[6]["after"]["views_count"] == было + 1
+    assert вторая[6]["before"]["views_count"] == было + 1
+    assert вторая[6]["after"]["views_count"] == было + 2

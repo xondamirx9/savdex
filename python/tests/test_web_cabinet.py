@@ -31,21 +31,21 @@ from .factories import (
     it_задача,
     компания,
     объявление,
-    открытие_контакта,
     отзыв,
+    открытие_контакта,
 )
 from .factories import пользователь as сотрудник_компании
 from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .web_site import (
     СЕССИЯ,
+    адрес,
+    вход,
     куки_ответа,
     открыть,
     пользователь,
     сессия_из,
     страница,
     строка,
-    адрес,
-    вход,
 )
 
 pytestmark = нужна_база
@@ -302,7 +302,8 @@ def _раскрытия() -> None:
             удалить("companies", t)
 
     sql(
-        "update contact_unlocks set created_at = now() - make_interval(hours => id::int, mins => 30)"
+        "update contact_unlocks set "
+        "created_at = now() - make_interval(hours => id::int, mins => 30)"
     )
 
 
@@ -621,12 +622,12 @@ def _просмотры() -> None:
     ]
 
     for i, зритель in enumerate(зрители[:3]):
-        for j, объявление in enumerate([None, *объявления][: 2 + 2 * i]):
+        for j, номер in enumerate([None, *объявления][: 2 + 2 * i]):
             sql(
                 "insert into audience_views (target_company_id, viewer_company_id, listing_id, "
                 "created_at, updated_at) values (%s, %s, %s, "
                 "now() - make_interval(hours => %s + 1, mins => 30), now())",
-                [owner, зритель, объявление, i + j],
+                [owner, зритель, номер, i + j],
             )
 
     # Раскрытия — часами раньше: «N секунд назад» разошлось бы между сторонами
@@ -641,3 +642,754 @@ def _просмотры() -> None:
         "created_at, updated_at) values (%s, %s, null, now() - interval '40 days', now())",
         [owner, зрители[0]],
     )
+
+
+СЧЁТЧИКИ = {"listings": 4, "contacts": 1, "incoming": 2, "reviews": 1, "chats": 1}
+
+
+# ── Посредники ──────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("path", "вход_", "запомнен"),
+    [
+        ("/cabinet", "/login", "/cabinet"),
+        # Адрес запоминается без префикса языка, вход — на языке адреса
+        ("/uz/cabinet", "/uz/login", "/cabinet"),
+        ("/cabinet?tab=x&a=1", "/login", "/cabinet?a=1&tab=x"),
+    ],
+)
+def test_гость_уходит_на_вход(сайт, path, вход_, запомнен):
+    ответ, payload = с_сессией(сайт, path)
+
+    assert ответ["status"] == 302 and ответ["headers"]["location"] == сайт + вход_
+    intended = (сайт + запомнен).replace("/", "\\/")
+    assert f'"url":{{"intended":"{intended}"}}' in payload and '"locale"' not in payload
+
+
+def test_xhr_гостя_тоже_на_вход(сайт):
+    """JSON с 401 у Laravel был только для api/*: XHR страницы уходит на вход."""
+    ответ, payload = с_сессией(
+        сайт, "/cabinet", headers={"X-Requested-With": "XMLHttpRequest", "Accept": "*/*"}
+    )
+
+    assert ответ["status"] == 302 and ответ["headers"]["location"] == сайт + "/login"
+    assert "intended" in payload
+
+
+def test_выданный_пароль_уводит_на_смену(сайт):
+    пользователь("temp@savdex.uz", must_change_password=True)
+    ответ, payload = с_сессией(сайт, "/cabinet", войти("temp@savdex.uz"))
+
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == сайт + "/password/change"
+    assert '"warning":' in payload and '"new":["warning"]' not in payload
+
+
+# ── Сводка ──────────────────────────────────────────────────────────
+
+НЕ_ХВАТАЕТ = {
+    "ru": [
+        "ИНН или СТИР",
+        "юридический адрес",
+        "описание компании (от 100 символов)",
+        "логотип",
+        "подтверждённые документы",
+    ],
+    "uz": [
+        "INN yoki STIR",
+        "yuridik manzil",
+        "kompaniya tavsifi (100 belgidan boshlab)",
+        "logotip",
+        "tasdiqlangan hujjatlar",
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("path", "язык"),
+    # Подписей профиля на английском нет (lang/en/company.php) — русские
+    [("/cabinet", "ru"), ("/en/cabinet", "ru"), ("/uz/cabinet", "uz")],
+)
+def test_сводка(сайт, path, язык):
+    ответ, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+
+    assert ответ["status"] == 200 and стр["component"] == "cabinet/Dashboard"
+    assert props["counts"] == СЧЁТЧИКИ
+    # Профиль: нет ИНН, адреса (одни пробелы), описания короче 100, логотипа
+    assert props["company"]["slug"] == "owner" and props["company"]["completeness"] == 30
+    assert props["company"]["missing"] == НЕ_ХВАТАЕТ[язык]
+    assert props["expiring"] == 3 and props["drafts"] == 1
+    # Последние пять событий одной секунды — по убыванию номера
+    assert [e["message"] for e in props["events"]] == [f"Событие {i}" for i in (7, 6, 5, 4, 3)]
+    # 30 дней к предыдущим 30; удалённое объявление тоже в счёте
+    assert props["metrics"]["impressions"] == {"value": 348, "delta": -8.7, "format": "int"}
+    assert len(props["series"]["impressions"]) == 30
+    assert props["limits"]["contacts"] == {"used": 2, "total": 10}
+    assert props["plan"]["name"] == "Flash"
+
+
+def test_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet", без_компании("nocompany@savdex.uz"))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Dashboard"
+    assert props["company"] is None and props["counts"] is None
+    assert props["metrics"] is None and props["events"] == []
+
+
+def test_счётчики_только_в_кабинете(сайт):
+    _, стр = зайти(сайт, "/about", владелец(сайт))
+
+    assert стр["component"] == "About" and стр["props"]["counts"] is None
+
+
+def test_переход_inertia(сайт):
+    куки = владелец(сайт)
+    полная = открыть(сайт, "/cabinet", куки)
+    версия = страница(полная["body"])["version"]
+
+    ответ = открыть(
+        сайт,
+        "/cabinet",
+        куки,
+        {
+            "X-Inertia": "true",
+            "X-Inertia-Version": версия,
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+
+    # Переход Inertia — JSON страницы той же версии, без HTML
+    assert ответ["status"] == 200 and ответ["headers"]["x-inertia"] == "true"
+    assert ответ["body"].startswith("{")
+    стр = страница(ответ["body"])
+    assert стр["component"] == "cabinet/Dashboard" and стр["version"] == версия
+    assert стр["props"]["counts"] == СЧЁТЧИКИ
+    assert куки_ответа(полная)[СЕССИЯ]["value"]
+
+
+# ── Аналитика ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("query", "period", "показы"),
+    [
+        ("", 30, 348),
+        ("?period=7", 7, 67),
+        ("?period=90", 90, 821),
+        # Непонятный период — 30 дней; «7abc» — как (int) у PHP, 7
+        ("?period=abc", 30, 348),
+        ("?period=", 30, 348),
+        ("?period[]=7", 30, 348),
+        ("?period=7abc", 7, 67),
+    ],
+)
+def test_аналитика(сайт, query, period, показы):
+    _, стр = зайти(сайт, "/cabinet/analytics" + query, владелец(сайт))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Analytics"
+    assert props["period"] == period and props["metrics"]["impressions"]["value"] == показы
+    assert len(props["series"]["impressions"]) == period
+    assert props["funnel"][0]["value"] == показы
+    # Города компаний, открывавших контакты
+    assert sorted(g["label"] for g in props["geography"]) == ["Самарканд", "Ташкент"]
+    # Тариф без расширенной аналитики: ни запросов, ни сравнения
+    assert props["advanced"] is False and props["queries"] == [] and props["benchmark"] == []
+
+
+@pytest.mark.parametrize(
+    ("path", "показы"),
+    [("/uz/cabinet/analytics?period=90", [9, 9, 6, 6]), ("/en/cabinet/analytics", [6, 6, 4, 4])],
+)
+def test_аналитика_расширенная(сайт, path, показы):
+    """Тариф с расширенной аналитикой: запросы и сравнение с категорией."""
+    sql(
+        "update subscriptions set plan_id = (select id from plans where advanced_analytics "
+        "order by id limit 1) where company_id = (select id from companies where slug = 'owner')"
+    )
+    _, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+
+    assert props["advanced"] is True and props["benchmark"]
+    # Равные показы — порядок по запросу
+    assert [(q["query"], q["impressions"]) for q in props["queries"]] == list(
+        zip(["бетон", "цемент", "арматура", "кирпич"], показы, strict=True)
+    )
+
+
+def test_аналитика_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/analytics", без_компании("nocompany2@savdex.uz"))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Analytics" and props["period"] == 30
+    assert props["metrics"] is None and props["funnel"] == [] and props["plan"] is None
+
+
+# ── Кто мной интересуется ───────────────────────────────────────────
+
+
+@pytest.mark.parametrize("names", [False, True])
+@pytest.mark.parametrize("path", ["/cabinet/incoming", "/uz/cabinet/incoming"])
+def test_кто_интересуется(сайт, path, names):
+    _просмотры()
+    sql(
+        "update subscriptions set plan_id = (select id from plans where sees_interested_names = %s "
+        "order by id limit 1) where company_id = (select id from companies where slug = 'owner')",
+        [names],
+    )
+    _, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Incoming" and props["sees_names"] is names
+    # Две компании открыли контакты, две смотрели (просмотр старше месяца не в счёте)
+    assert len(props["rows"]) == 2 and [v["views"] for v in props["viewers"]] == [2, 4]
+    # Имена — только на тарифе, где их видно
+    имена = [r["name"] for r in props["rows"] + props["viewers"]]
+    assert all(имена) if names else not any(имена)
+
+
+def test_кто_интересуется_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/incoming", без_компании("nocompany3@savdex.uz"))
+    props = стр["props"]
+
+    assert props["counts"] is None and props["rows"] == [] and props["viewers"] == []
+
+
+# ── Отзывы ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/reviews", "/zh/cabinet/reviews"])
+def test_отзывы(сайт, path):
+    _отзывы()
+    _, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+    reviews = props["reviews"]
+
+    # Скрытый отзыв не показывается
+    assert стр["component"] == "cabinet/Reviews"
+    assert props["summary"]["total"] == 5 and len(reviews) == 5
+    assert props["summary"]["average"] == 4.2
+    assert [d["count"] for d in props["summary"]["distribution"]] == [2, 2, 1, 0, 0]
+    # Ответ, спор с решением модератора, автор в корзине — без имени
+    assert [r["reply"] for r in reviews].count("Спасибо") == 1
+    assert ("rejected", "Отзыв по делу") in [
+        (r["dispute_status"], r["moderator_note"]) for r in reviews
+    ]
+    assert [r["author"] is None for r in reviews].count(True) == 1
+
+
+def test_отзывы_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/reviews", без_компании("nocompany4@savdex.uz"))
+    props = стр["props"]
+
+    assert props["reviews"] == [] and props["summary"] is None and props["counts"] is None
+
+
+# ── Мои контакты ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("query", "filters", "компании"),
+    [
+        ("", ("", ""), ["ООО «Компания 2»", "Поставщик 0", "Поставщик 1", "Поставщик 2", None]),
+        ("?status=deal", ("", "deal"), ["Поставщик 1"]),
+        (
+            "?status=nonsense",
+            ("", "nonsense"),
+            ["ООО «Компания 2»", "Поставщик 0", "Поставщик 1", "Поставщик 2", None],
+        ),
+        (
+            "?q=%D0%9F%D0%BE%D1%81%D1%82%D0%B0%D0%B2%D1%89%D0%B8%D0%BA",
+            ("Поставщик", ""),
+            ["Поставщик 0", "Поставщик 1", "Поставщик 2"],
+        ),
+        # Поиск и по заметке
+        ("?q=%D0%9A%D0%9F", ("КП", ""), ["Поставщик 2"]),
+        (
+            "?q=%20%20&status=",
+            ("", ""),
+            ["ООО «Компания 2»", "Поставщик 0", "Поставщик 1", "Поставщик 2", None],
+        ),
+        # «%» не экранируется (как у Laravel): любое имя, удалённой компании — нет
+        ("?q=%25", ("%", ""), ["ООО «Компания 2»", "Поставщик 0", "Поставщик 1", "Поставщик 2"]),
+    ],
+)
+def test_мои_контакты(сайт, query, filters, компании):
+    _раскрытия()
+    _, стр = зайти(сайт, "/cabinet/contacts" + query, владелец(сайт))
+    props = стр["props"]
+    contacts = props["contacts"]
+
+    assert стр["component"] == "cabinet/Contacts"
+    assert (props["filters"]["q"], props["filters"]["status"]) == filters
+    assert [c["company"]["name"] for c in contacts] == компании
+
+    # Открытые контакты — все: публичные и нет, телефоны и почты
+    for c in contacts:
+        if c["company"]["name"] == "Поставщик 1":
+            assert c["phones"] == ["+998900000001", "+998710000001"]
+            assert c["emails"] == ["p1@x.uz"] and c["status_label"] == "Сделка"
+
+
+def test_мои_контакты_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/contacts", без_компании("nocompany5@savdex.uz"))
+
+    assert стр["props"]["contacts"] == [] and стр["props"]["counts"] is None
+
+
+# ── Настройки ───────────────────────────────────────────────────────
+
+
+def test_настройки(сайт):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+    sql(
+        "update users set phone = '+998901112233', last_login_at = '2026-09-20 08:05:00', "
+        "last_login_ip = '10.1.2.3', telegram_username = 'owner_tg', company_role = 'owner' "
+        "where id = %s",
+        [uid],
+    )
+    sql("delete from notification_preferences where user_id = %s", [uid])
+    sql(
+        "insert into notification_preferences (user_id, event, email, telegram, created_at, "
+        "updated_at) values (%s, 'new_review', false, true, now(), now()), "
+        "(%s, 'digest', true, false, now(), now()), (%s, 'unknown', false, false, now(), now())",
+        [uid, uid, uid],
+    )
+
+    for path, locale in (("/cabinet/settings", "ru"), ("/tr/cabinet/settings", "tr")):
+        _, стр = зайти(сайт, path, куки)
+        props = стр["props"]
+
+        assert стр["component"] == "cabinet/Settings" and props["locale"] == locale
+        assert props["profile"]["phone"] == "+998901112233"
+        assert props["security"]["last_login_ip"] == "10.1.2.3"
+        assert props["is_owner"] is True
+        # Свои настройки поверх «всё по почте»; неизвестное событие не показывается
+        assert [(n["event"], n["email"], n["telegram"]) for n in props["notifications"]] == [
+            ("contact_unlocked", True, False),
+            ("new_review", False, True),
+            ("moderation", True, False),
+            ("listing_expiring", True, False),
+            ("digest", True, False),
+        ]
+
+
+def test_настройки_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/settings", без_компании("nocompany6@savdex.uz"))
+    props = стр["props"]
+
+    assert props["counts"] is None and props["profile"]["email"] == "nocompany6@savdex.uz"
+
+
+# ── Уведомления ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("query", "filter_", "заголовки"),
+    [
+        # Рассылка — в одну секунду: порядок решает номер
+        ("", "all", [2, 1, 0, 3, 4, 5, 6]),
+        ("?filter=unread", "unread", [1, 3, 5]),
+        ("?filter=other", "all", [2, 1, 0, 3, 4, 5, 6]),
+        ("?filter=", "all", [2, 1, 0, 3, 4, 5, 6]),
+    ],
+)
+def test_уведомления(сайт, query, filter_, заголовки):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+
+    if not sql("select 1 from user_notifications where user_id = %s", [uid]):
+        for i in range(7):
+            sql(
+                "insert into user_notifications (user_id, type, tone, title, body, url, "
+                "is_broadcast, read_at, created_at, updated_at) values (%s, %s, 'primary', %s, "
+                "%s, %s, %s, %s, now() - make_interval(hours => %s, mins => 30), now())",
+                [
+                    uid,
+                    "broadcast" if i < 3 else "review",
+                    f"Уведомление {i}",
+                    "Текст" if i % 2 else None,
+                    "/cabinet/reviews" if i % 3 == 0 else None,
+                    i < 3,
+                    None if i % 2 else "2026-09-01 10:00:00",
+                    1 if i < 3 else i + 1,
+                ],
+            )
+
+    _, стр = зайти(сайт, "/notifications" + query, куки)
+    props = стр["props"]
+
+    assert стр["component"] == "Notifications"
+    assert props["filter"] == filter_ and props["unread"] == 3
+    assert [n["title"] for n in props["notifications"]] == [f"Уведомление {i}" for i in заголовки]
+
+
+# ── Избранное ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/favorites", "/uz/favorites"])
+def test_избранное(сайт, path):
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+    _избранное(uid)
+    _, стр = зайти(сайт, path, куки)
+    items = стр["props"]["items"]
+
+    # Черновик, на модерации и удалённое — не показываются; истёкшее и
+    # архивное — неактивными; у удалённой компании — без имени
+    assert стр["component"] == "Favorites"
+    assert len(items) == 4 and [i["active"] for i in items].count(False) == 2
+    assert [i["company"]["name"] is None for i in items].count(True) == 1
+
+
+# ── Мои объявления ──────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("query", "вкладка", "статусы"),
+    [
+        ("", "active", ["active"] * 4),
+        ("?status=draft", "draft", ["draft"]),
+        ("?status=needs_changes", "needs_changes", ["needs_changes"]),
+        ("?status=expired", "expired", ["expired"]),
+        # Архива среди вкладок нет — активные
+        ("?status=archived", "active", ["active"] * 4),
+        ("?status=", "active", ["active"] * 4),
+    ],
+)
+def test_мои_объявления(сайт, query, вкладка, статусы):
+    _объявления()
+    _, стр = зайти(сайт, "/cabinet/listings" + query, владелец(сайт))
+    props = стр["props"]
+    listings = props["listings"]
+
+    assert стр["component"] == "cabinet/listings/Index" and props["status"] == вкладка
+    assert [x["status"] for x in listings] == статусы
+    assert list(props["tabs"]) == ["active", "draft", "needs_changes", "expired", "rejected"]
+
+    if вкладка == "needs_changes":
+        assert listings[0]["moderation_note"] == "Добавьте фото"
+
+    if вкладка == "active":
+        # Значок — у «Срочно»; у «Выделения» значка нет
+        assert [x["badges"] for x in listings].count(["Срочно"]) == 1
+        assert [x["expiring_soon"] for x in listings].count(True) == 3
+
+
+def test_мои_объявления_по_узбекски(сайт):
+    _объявления()
+    _, стр = зайти(сайт, "/uz/cabinet/listings", владелец(сайт))
+    props = стр["props"]
+
+    assert props["locale"] == "uz" and props["status"] == "active" and len(props["listings"]) == 4
+    assert props["tabs"]["active"] != "Активные"
+
+
+def test_мои_объявления_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/listings", без_компании("nocompany7@savdex.uz"))
+
+    assert стр["props"]["listings"] == [] and стр["props"]["counts"] is None
+
+
+# ── Чаты ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/chats", "/en/cabinet/chats"])
+def test_чаты(сайт, path):
+    _чаты()
+    _, стр = зайти(сайт, path, владелец(сайт))
+    threads = стр["props"]["threads"]
+
+    assert стр["component"] == "cabinet/Chats" and len(threads) == 6
+    # Пустой разговор — без последнего сообщения; последнее своё — отмечено
+    assert threads[0]["last"] is None and threads[0]["unread"] == 0
+    assert [t["last_mine"] for t in threads].count(True) == 1
+    assert threads[-1]["last"] == "Здравствуйте"
+    # Разговор об IT-задаче — с её названием
+    [задача] = sql("select title from it_tasks where company_id != %s", [_owner()])
+    assert задача[0] in [t["listing"] for t in threads]
+
+
+def test_чаты_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/chats", без_компании("nocompany8@savdex.uz"))
+
+    assert стр["props"]["threads"] == [] and стр["props"]["hasCompany"] is False
+
+
+# ── Продвижение ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/promo", "/uz/cabinet/promo"])
+def test_продвижение(сайт, path):
+    _объявления()
+    # Эффект: прирост показов; у второго «до» — ноль (эффекта нет); одна секунда
+    sql(
+        "update promotions set impressions_before = case when mod(id, 2) = 0 then 40 else 0 end, "
+        "impressions_after = 57, created_at = '2026-09-26 09:00:00'"
+    )
+    _, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Promo"
+    # (57 − 40) / 40 = 42,5 % → 43
+    assert [(p["before"], p["after"], p["effect"]) for p in props["active"]] == [
+        (40, 57, 43),
+        (0, 57, None),
+    ]
+    assert {t["code"] for t in props["types"]} >= {"bump", "urgent", "highlight"}
+
+
+def test_продвижение_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/promo", без_компании("nocompany9@savdex.uz"))
+    props = стр["props"]
+
+    assert props["active"] == [] and props["types"] == [] and props["units"] == 0
+
+
+# ── Моё резюме ──────────────────────────────────────────────────────
+
+
+def test_резюме_пустое(сайт):
+    пользователь("seeker0@savdex.uz", phone="+998900000001")
+    _, стр = зайти(сайт, "/cabinet/resume", войти("seeker0@savdex.uz"))
+    props = стр["props"]
+
+    # Резюме нет — форма с контактами из профиля
+    assert стр["component"] == "cabinet/Resume" and props["resume"] is None
+    assert props["defaults"] == {
+        "contact_name": "Покупатель seeker0@savdex.uz",
+        "contact_email": "seeker0@savdex.uz",
+        "contact_phone": "+998900000001",
+    }
+
+
+@pytest.mark.parametrize("path", ["/cabinet/resume", "/uz/cabinet/resume", "/zh/cabinet/resume"])
+def test_резюме(сайт, path):
+    email = "seeker@savdex.uz"
+
+    if not sql("select 1 from users where email = %s", [email]):
+        _резюме(пользователь(email))
+
+    _, стр = зайти(сайт, path, войти(email))
+    resume = стр["props"]["resume"]
+
+    assert стр["component"] == "cabinet/Resume"
+    assert (resume["title"], resume["status"], resume["moderation_note"]) == (
+        "Логист",
+        "draft",
+        "Уточните зарплату",
+    )
+    # 45 месяцев опыта — 3 года 9 месяцев
+    assert resume["experience"] == {"years": 3, "months": 9}
+    assert resume["employment"] == ["full", "project"] and resume["skills"] == ["1С", "Excel"]
+    assert resume["photo"] == сайт + "/storage/resumes/p.webp"
+
+
+# ── Профиль компании ────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/company", "/uz/cabinet/company"])
+def test_профиль_компании(сайт, path):
+    _документы()
+    sql(
+        "update users set company_role = 'owner', phone_verified_at = '2026-09-01 10:00:00' "
+        "where email = 'owner@savdex.uz'"
+    )
+    _, стр = зайти(сайт, path, владелец(сайт))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/Company" and props["company"]["slug"] == "owner"
+    # Подтверждённый документ засчитан в заполненность
+    assert props["company"]["completeness"] == 40
+    # Новые сверху; файла нет на диске — «missing»
+    assert [(d["type"], d["status"], d["missing"]) for d in props["documents"]] == [
+        ("price_list", "pending", True),
+        ("license", "pending", True),
+        ("registration", "approved", False),
+    ]
+    assert [c["value"] for c in props["contacts"]] == ["+998901234567", "sales@owner.uz"]
+    assert len(props["employees"]) == 2
+
+
+def test_профиль_без_компании(сайт):
+    _, стр = зайти(сайт, "/cabinet/company", без_компании("nocompany10@savdex.uz"))
+    props = стр["props"]
+
+    assert props["company"] is None and props["contacts"] == [] and props["documents"] == []
+
+
+# ── Мои IT-задачи ───────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["/cabinet/it-tasks", "/uz/cabinet/it-tasks"])
+def test_мои_задачи(сайт, path):
+    _задачи()
+    _, стр = зайти(сайт, path, владелец(сайт))
+    tasks = стр["props"]["tasks"]
+
+    assert стр["component"] == "cabinet/it-tasks/Index"
+    assert [t["status"] for t in tasks] == ["closed", "completed", "active"]
+    # Исполнитель, отклики (компания в корзине — без имени) и файлы — у своих задач
+    assert tasks[1]["contractor"] == "Tashkent Soft"
+    assert tasks[2]["files"] == 2 and len(tasks[2]["responders"]) == 2
+    assert tasks[2]["responders"][0]["name"] == "Tashkent Soft"
+
+    if path == "/cabinet/it-tasks":
+        assert [t["budget"] for t in tasks] == ["Договорной", "500 – 900 USD", "1 500 000 сум"]
+
+
+def test_задача_форма(сайт):
+    task = _задачи()
+    куки = владелец(сайт)
+
+    _, новая = зайти(сайт, "/cabinet/it-tasks/create", куки)
+    assert новая["component"] == "cabinet/it-tasks/Form" and новая["props"]["task"] is None
+
+    _, своя = зайти(сайт, f"/cabinet/it-tasks/{task}/edit", куки)
+    assert своя["props"]["task"]["id"] == task
+    assert своя["props"]["task"]["budget_type"] == "fixed"
+
+    чужая = it_задача()
+    ответ, _ = зайти(сайт, f"/cabinet/it-tasks/{чужая}/edit", куки)
+    assert ответ["status"] == 404
+
+
+def test_задачи_без_компании(сайт):
+    куки = без_компании("nocompany11@savdex.uz")
+    _, стр = зайти(сайт, "/cabinet/it-tasks", куки)
+    assert стр["props"]["tasks"] == [] and стр["props"]["hasCompany"] is False
+
+    # Без компании форма уводит в профиль с предупреждением в сессии
+    ответ, payload = с_сессией(сайт, "/cabinet/it-tasks/create", куки)
+
+    assert ответ["headers"]["location"] == сайт + "/cabinet/company"
+    assert '"warning":' in payload
+
+
+# ── Мини-сайт ───────────────────────────────────────────────────────
+
+
+def test_мини_сайт_без_сайта(сайт):
+    sql("delete from company_sites where company_id = %s", [_owner()])
+    _, стр = зайти(сайт, "/cabinet/site", владелец(сайт))
+
+    assert стр["component"] == "cabinet/Site" and стр["props"]["site"] is None
+
+
+def test_мини_сайт(сайт):
+    _мини_сайт()
+    куки = владелец(сайт)
+
+    for path in ("/cabinet/site", "/uz/cabinet/site"):
+        _, стр = зайти(сайт, path, куки)
+        props = стр["props"]
+
+        # Тариф без мини-сайта: страница есть, публиковать нельзя
+        assert props["available"] is False
+        assert props["site"]["subdomain"] == "owner-shop" and props["site"]["status"] == "published"
+        # Черновик отличается от опубликованного
+        assert props["site"]["unpublished_changes"] is True
+        # Оформление нормализовано: цвет строчными, неизвестный режим — светлый
+        assert props["theme"]["primary"] == "#aabbcc" and props["theme"]["mode"] == "light"
+        assert "extra" not in props["theme"]
+        # Товары — по порядку, затем по номеру
+        assert [p["title"] for p in props["products"]] == ["Щебень", "Арматура", "Цемент"]
+        assert props["products"][2]["image"] == сайт + "/storage/sites/1/hero.webp"
+
+
+def test_мини_сайт_без_компании(сайт):
+    ответ, _ = зайти(сайт, "/cabinet/site", без_компании("nocompany12@savdex.uz"))
+
+    assert ответ["status"] == 302 and ответ["headers"]["location"] == сайт + "/cabinet/company"
+
+
+# ── Разговор ────────────────────────────────────────────────────────
+
+
+def test_разговор_отмечает_прочитанное(сайт):
+    _чаты()
+    owner = _owner()
+    threads = sql(
+        "select id, buyer_company_id = %s from message_threads where %s in "
+        "(buyer_company_id, seller_company_id) and exists (select 1 from messages m "
+        "where m.thread_id = message_threads.id) order by id",
+        [owner, owner],
+    )
+    куки = владелец(сайт)
+
+    for thread, is_buyer in threads[:3]:
+        column, other = (
+            ("buyer_read_at", "seller_read_at") if is_buyer else ("seller_read_at", "buyer_read_at")
+        )
+        [(before_other,)] = sql(f"select {other} from message_threads where id = %s", [thread])
+        sql(f"update message_threads set {column} = null where id = %s", [thread])
+
+        _, стр = зайти(сайт, f"/cabinet/chats/{thread}", куки)
+
+        assert стр["component"] == "cabinet/Chat" and стр["props"]["thread"]["id"] == thread
+        assert стр["props"]["messages"]
+        # Отмечена своя сторона, чужая не тронута
+        assert sql(
+            f"select {column} > now() - interval '1 minute', {other} is not distinct from %s "
+            "from message_threads where id = %s",
+            [before_other, thread],
+        ) == [(True, True)]
+
+
+def test_чужой_разговор_404(сайт):
+    _чаты()
+    чужой = вставить("message_threads", buyer_company_id=компания(), seller_company_id=компания())
+    куки = владелец(сайт)
+
+    for path in (f"/cabinet/chats/{чужой}", "/cabinet/chats/999999"):
+        ответ, _ = зайти(сайт, path, куки)
+        assert ответ["status"] == 404
+
+
+# ── Мастер объявления ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("prefix", ["", "/uz"])
+def test_мастер_объявления(сайт, prefix):
+    listing = _черновик()
+    _, стр = зайти(сайт, f"{prefix}/cabinet/listings/{listing}/edit", владелец(сайт))
+    props = стр["props"]
+
+    assert стр["component"] == "cabinet/listings/Wizard"
+    assert (
+        props["listing"]["title"] == "Цемент М400 навалом 50 кг" and props["listing"]["step"] == 3
+    )
+    assert props["listing"]["attributes"]["mark"] == "М400"
+    # Фото — по порядку sort; превью, если есть
+    assert [i["thumb"].removeprefix(сайт) for i in props["listing"]["images"]] == [
+        "/storage/l/w1.webp",
+        "/storage/l/wt0.webp",
+    ]
+    # Блок «Информация о товаре» (ProductSpecs): поля у каждого подраздела,
+    # детали в теги не идут
+    assert all("specs" in c for p in props["categories"] for c in p["children"])
+    assert any(c["specs"] for p in props["categories"] for c in p["children"])
+    assert "50 kg" not in props["tagOptions"] and "цемент" in props["tagOptions"]
+
+
+def test_мастер_чужое_и_неподтверждённая_почта(сайт):
+    listing = _черновик()
+    чужое = объявление(draft=True)
+    ответ, _ = зайти(сайт, f"/cabinet/listings/{чужое}/edit", владелец(сайт))
+    assert ответ["status"] == 404
+
+    пользователь("unverified@savdex.uz")
+    sql(
+        "update users set email_verified_at = null, company_id = (select id from companies "
+        "where slug = 'owner') where email = 'unverified@savdex.uz'"
+    )
+    ответ, payload = с_сессией(
+        сайт, f"/cabinet/listings/{listing}/edit", войти("unverified@savdex.uz")
+    )
+
+    assert ответ["headers"]["location"] == сайт + "/verify-email"
+    assert '"intended":' in payload

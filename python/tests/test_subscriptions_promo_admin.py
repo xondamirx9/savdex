@@ -21,8 +21,8 @@ import subprocess
 import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -192,9 +192,7 @@ def test_назначить(люди, дни, кошелёк):
     # Кошелёк на новый период: кредиты остаются, единицы продвижения
     # тарифа (50) добавляются, счётчик раскрытий — с нуля; срок — дни
     # тарифа, у бессрочного — месяц
-    assert база["wallets"] == (
-        [(2, 3 + 50, 0, 14 * 24)] if кошелёк else [(0, 50, 0, 30 * 24)]
-    )
+    assert база["wallets"] == ([(2, 3 + 50, 0, 14 * 24)] if кошелёк else [(0, 50, 0, 30 * 24)])
     текст = "Действует бессрочно." if дни == "0" else f"Действует до {до(int(дни or 30))}."
     assert база["notifications"] == [
         ("billing", "Вам назначен тариф «Business»", текст, "success", "/cabinet/billing")
