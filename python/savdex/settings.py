@@ -157,6 +157,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # «База отвечает медленно» — полсекунды запросов на странице (как у Laravel)
+    "savdex.web.slowdb.SlowDatabaseMiddleware",
     # Служебный адрес Render — на свой домен (CanonicalHost, этап 8)
     "savdex.web.fallback.CanonicalHostMiddleware",
     # POST с _method — PATCH или DELETE, как у Laravel (этап 4, шаг 62)

@@ -284,11 +284,66 @@ class SavdexAdminSite(admin.AdminSite):
         apps = super().get_app_list(request, app_label)
 
         for app in apps:
+            # Порядок разделов — как в меню Filament, а не по алфавиту
+            # («Возвраты» после «Счетов и оплат»); неизвестные — в конце
+            app["models"].sort(
+                key=lambda model, app=app: (
+                    MENU_ORDER.get(f"{app['app_label']}.{model['object_name'].lower()}", 999),
+                    model["name"],
+                )
+            )
+
             for model in app["models"]:
                 key = f"{app['app_label']}.{model['object_name']}"
                 model["icon"] = f"admin/icons/{ICONS.get(key, DEFAULT_ICON)}.svg"
 
         return apps
+
+
+#: Порядок разделов внутри приложения — как было в меню Filament
+#: (app/Providers/Filament/AdminPanelProvider.php)
+MENU_ORDER: dict[str, int] = {
+    key: index
+    for index, key in enumerate(
+        [
+            "crm.lead",
+            "crm.deal",
+            "crm.contact",
+            "crm.task",
+            "crm.communication",
+            "moderation.review",
+            "moderation.platformreview",
+            "data.companyrecord",
+            "data.listing",
+            "data.ittask",
+            "moderation.companydocument",
+            "finance.complaint",
+            "moderation.resume",
+            "support.ticket",
+            "site.landingblock",
+            "site.newspost",
+            "site.page",
+            "tenders.tender",
+            "site.banner",
+            "accounts.user",
+            "system.broadcast",
+            "site.setting",
+            "journal.adminaction",
+            "accounts.staffmember",
+            "billing.plan",
+            "finance.subscription",
+            "finance.payment",
+            "finance.refund",
+            "finance.wallettransaction",
+            "billing.creditpack",
+            "finance.promocode",
+            "catalogs.category",
+            "catalogs.companytype",
+            "geo.country",
+            "geo.city",
+        ]
+    )
+}
 
 
 site = SavdexAdminSite(name="savdex_admin")
