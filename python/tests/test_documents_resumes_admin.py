@@ -14,7 +14,7 @@
   дата публикации остаётся; строки журнала о решении;
 - поддержка смотрит, но не снимает; удаление — в корзину, суперадмином.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

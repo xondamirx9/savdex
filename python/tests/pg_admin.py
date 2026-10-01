@@ -1,12 +1,12 @@
 """
 Разделы админки на Django сквозь настоящую базу — общая часть проверок.
 
-PostgreSQL со схемой Laravel (migrate:fresh), сотрудники с разными
+PostgreSQL со схемой из снимка (как manage.py schema), сотрудники с разными
 ролями входят по пропуску и работают с разделом так, как работали бы
 в браузере. Django запускается отдельным процессом на каждый заход:
 настройки читают окружение при запуске, а у pytest-django своя база.
 
-Нужны PHP (миграции) и PostgreSQL (SAVDEX_PARITY_PG_URL).
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ APP_KEY = "base64:" + base64.b64encode(KEY).decode()
 
 нужна_база = pytest.mark.skipif(
     not АДРЕС,
-    reason="нет SAVDEX_PARITY_PG_URL — проверка требует PHP и PostgreSQL",
+    reason="нет SAVDEX_PARITY_PG_URL — проверка требует PostgreSQL",
 )
 
 ОКРУЖЕНИЕ = {
@@ -204,22 +204,6 @@ def django(
 def файл(name: str, content: bytes) -> dict[str, str]:
     """Загружаемый файл для шага django()."""
     return {"file": name, "b64": base64.b64encode(content).decode()}
-
-
-def php(code: str, env: dict[str, str] | None = None) -> str:
-    """Выполнить PHP внутри Laravel (tinker) и вернуть вывод."""
-    вывод = subprocess.run(
-        ["php", "artisan", "tinker", "--execute", code],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **(env or {})},
-        capture_output=True,
-        text=True,
-    )
-    # Ошибка PHP — в выводе tinker, а не в коде возврата: без него
-    # упавшая подготовка данных ничего не объясняет
-    assert вывод.returncode == 0, (вывод.stdout + вывод.stderr)[-3000:]
-
-    return вывод.stdout.strip()
 
 
 def журнал(action: str) -> dict[str, Any]:

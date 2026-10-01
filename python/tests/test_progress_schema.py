@@ -4,7 +4,7 @@
 Новая таблица Laravel без места в карте не попала бы ни в один этап —
 и страница хода переноса молча считала бы без неё.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

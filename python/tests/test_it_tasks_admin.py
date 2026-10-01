@@ -8,7 +8,7 @@ IT-задачи на Django, этап 6: раздел вместо Filament.
 - «Снять» — в архив и дата закрытия, строка журнала;
 - поддержка смотрит, но не правит; удаление — суперадмин.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

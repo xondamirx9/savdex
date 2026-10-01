@@ -8,7 +8,7 @@ CRM на Django, этап 6: раздел «Контакты» вместо Fila
 - удаление — в корзину (deleted_at и updated_at), только суперадмин;
 - права: продажи правят, поддержка только смотрит, модератор не видит.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

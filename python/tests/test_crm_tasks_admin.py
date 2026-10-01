@@ -12,7 +12,7 @@ CRM на Django, этап 6, шаг 3: разделы «Задачи» и «Ко
   только суперадмином, в журнале — номер удалённой записи (подпись —
   «Communication #N», как у AdminLog::label).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

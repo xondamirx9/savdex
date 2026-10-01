@@ -10,7 +10,7 @@
 - переписка видна на странице обращения;
 - новое обращение: пустые поля — NULL; удаление — в корзину, суперадмином.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
