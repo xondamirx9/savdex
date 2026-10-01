@@ -73,12 +73,16 @@ def _expects_json(request: HttpRequest) -> bool:
     return (ajax and not pjax and any_type) or wants_json
 
 
-def context(request: HttpRequest, redirect: bool = True) -> Context | HttpResponse:
+def context(
+    request: HttpRequest, redirect: bool = True, start_session: bool = True
+) -> Context | HttpResponse:
     """
     Контекст страницы или готовый ответ (отказ роботу, переход на язык).
 
     redirect=False — без перехода на запомненный язык: так контекст
     нужен ограничению частоты, которое у Laravel стоит раньше SetLocale.
+    start_session=False — без сессии вовсе (только чтение): страница
+    ошибки несовпавшего маршрута, где группа web у Laravel не работает.
     """
     agent = request.headers.get("User-Agent", "")
 
@@ -92,7 +96,7 @@ def context(request: HttpRequest, redirect: bool = True) -> Context | HttpRespon
     url_locale, path = locales.split(request.path)
     query = request.META.get("QUERY_STRING", "")
     root = root_of(request)
-    started = session.start(request)
+    started = session.start(request) if start_session else None
 
     if started is None:
         visitor = laravel_session.identify(request.COOKIES, connection)
