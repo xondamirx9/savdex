@@ -12,8 +12,14 @@
   Выше всего — стартовый экран сотрудника (savdex/dashboard/, вместо
   виджетов Filament): то, что требует действия сегодня, по его роли.
   Колонка «Последние действия» убрана, поэтому страница в одну колонку.
+
+  Меню разделов слева — и на главной, как у панели Filament (Django его
+  здесь прячет: разделы у него — списком на самой странице, а под
+  виджетами этот список уезжал вниз). Сам список остаётся только для
+  узкого экрана: там Django меню слева не показывает.
 {% endcomment %}
 {% block coltype %}colM{% endblock %}
+{% block nav-sidebar %}{% include "admin/nav_sidebar.html" %}{% endblock %}
 {% block content_subtitle %}
 {% if dashboard %}
 {% include "admin/dashboard/styles.html" %}
@@ -73,5 +79,13 @@
   .savdex-note ul { margin: 6px 0 0 18px; padding: 0; }
 </style>
 {% endif %}
+{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  /* Разделы уже в меню слева; списком — только когда меню скрыто (узкий экран) */
+  @media (min-width: 768px) {
+    .dashboard #content-main { display: none; }
+  }
+</style>
 {% endblock %}
 {% block sidebar %}{% endblock %}
