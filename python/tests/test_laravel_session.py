@@ -111,7 +111,7 @@ def _отправить(сайт: str, path: str, куки: dict[str, str], фо
     )
 
 
-def _войти(сайт: str, email: str, *, remember: bool = False) -> dict[str, str]:
+def _вход_формой(сайт: str, email: str, *, remember: bool = False) -> dict[str, str]:
     """Вход формой /login, как в браузере; куки вошедшего."""
     куки = гостевая(сайт)
     форма = {"email": email, "password": ПАРОЛЬ} | ({"remember": "1"} if remember else {})
@@ -145,7 +145,7 @@ def кто(куки: dict[str, str], env: dict[str, str] | None = None) -> dict[
 
 def test_вошёл_в_laravel_узнан_в_django(сайт):
     uid = _пользователь("buyer1@savdex.uz")
-    ответ = кто(_войти(сайт, "buyer1@savdex.uz"))
+    ответ = кто(_вход_формой(сайт, "buyer1@savdex.uz"))
 
     assert ответ["status"] == 200
     assert ответ["authenticated"] is True
@@ -158,7 +158,7 @@ def test_вошёл_в_laravel_узнан_в_django(сайт):
 
 def test_гость_и_подменённая_кука(сайт):
     _пользователь("buyer2@savdex.uz")
-    куки = _войти(сайт, "buyer2@savdex.uz")
+    куки = _вход_формой(сайт, "buyer2@savdex.uz")
     # Имя куки — от APP_NAME=SAVDEX, как на боевом
     имя = "savdex-session"
     assert имя in куки
@@ -178,9 +178,9 @@ def test_гость_и_подменённая_кука(сайт):
     assert кто(куки, env={"APP_KEY": чужой, "APP_PREVIOUS_KEYS": APP_KEY})["authenticated"]
 
 
-def test_выход_гость(сайт):
+def test_после_выхода_не_узнан(сайт):
     _пользователь("buyer3@savdex.uz")
-    до_выхода = _войти(сайт, "buyer3@savdex.uz")
+    до_выхода = _вход_формой(сайт, "buyer3@savdex.uz")
     assert кто(до_выхода)["authenticated"] is True
 
     ответ = _отправить(сайт, "/logout", до_выхода, {})
@@ -193,7 +193,7 @@ def test_выход_гость(сайт):
 
 def test_просроченная_сессия(сайт):
     _пользователь("buyer4@savdex.uz")
-    куки = _войти(сайт, "buyer4@savdex.uz")
+    куки = _вход_формой(сайт, "buyer4@savdex.uz")
     assert кто(куки)["authenticated"] is True
     sql("update sessions set last_activity = %s", [int(time.time()) - 121 * 60])
 
@@ -202,7 +202,7 @@ def test_просроченная_сессия(сайт):
 
 def test_запомнить_меня(сайт):
     uid = _пользователь("buyer5@savdex.uz")
-    куки = _войти(сайт, "buyer5@savdex.uz", remember=True)
+    куки = _вход_формой(сайт, "buyer5@savdex.uz", remember=True)
     assert laravel_session.REMEMBER_COOKIE in куки
 
     # Сессия кончилась — впускает кука «запомнить меня»
@@ -217,13 +217,13 @@ def test_запомнить_меня(сайт):
 
 def test_пользователь_в_корзине(сайт):
     uid = _пользователь("buyer6@savdex.uz")
-    куки = _войти(сайт, "buyer6@savdex.uz")
+    куки = _вход_формой(сайт, "buyer6@savdex.uz")
     sql("update users set deleted_at = now() where id = %s", [uid])
 
     assert кто(куки)["authenticated"] is False
 
 
-def _зашифровать_как_laravel(text: str, key: bytes, iv: bytes) -> str:
+def _зашифровать_как_encrypter(text: str, key: bytes, iv: bytes) -> str:
     """
     Encrypter::encryptString у Laravel, написанный отдельно от сайта:
     AES-256-CBC с PKCS7, base64; mac — HMAC-SHA256 от iv и value; всё —
@@ -245,14 +245,14 @@ def _зашифровать_как_laravel(text: str, key: bytes, iv: bytes) -> 
     return base64.b64encode(тело.encode()).decode()
 
 
-def test_расшифровка_формата_laravel():
+def test_расшифровка_формата_куки():
     """Зашифрованное по-ларавеловски (куки уже вошедших) Python читает; чужой ключ — нет."""
     for text in ("savdex", "Вошёл · 登录 · giriş", "x" * 1000):
-        payload = _зашифровать_как_laravel(text, _key(), bytes(range(16)))
+        payload = _зашифровать_как_encrypter(text, _key(), bytes(range(16)))
 
         assert laravel_session.decrypt(payload, [_key()]) == text
 
-    payload = _зашифровать_как_laravel("secret", _key(), b"\x07" * 16)
+    payload = _зашифровать_как_encrypter("secret", _key(), b"\x07" * 16)
     assert laravel_session.decrypt(payload, [b"x" * 32]) is None
     # Испорченная подпись — тоже ничего
     испорченный = json.loads(base64.b64decode(payload))

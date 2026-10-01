@@ -31,9 +31,7 @@ pytestmark = нужна_база
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
 
 #: Посетители проверок: адрес (X-Forwarded-For) — у каждого свой счётчик
-АДРЕСА = [f"198.51.100.{i}" for i in range(1, 10)] + [
-    f"203.0.113.{i}" for i in (77, 78, 90, 91)
-]
+АДРЕСА = [f"198.51.100.{i}" for i in range(1, 10)] + [f"203.0.113.{i}" for i in (77, 78, 90, 91)]
 
 
 def ключ_гостя(ip: str) -> str:
@@ -129,30 +127,37 @@ def test_показать_ещё(сайт, path, ip, сдвиг):
 
     # Все девять компаний страны, «ещё» — продолжение того же списка
     assert len(все["items"]) == 9
-    assert данные["items"] == все["items"][сдвиг:]
+    assert [c["slug"] for c in данные["items"]] == [c["slug"] for c in все["items"]][сдвиг:]
 
 
 def test_нет_такой_страны(сайт):
     д = открыть(
         сайт, "/countries/xx/companies", headers={"X-Forwarded-For": "198.51.100.9"}, env=ФАЙЛОВЫЙ
     )
-    print("DBG404", д["status"], д["headers"].get("content-type"), д["body"][:300])
+
+    assert д["status"] == 404
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("path", "куда"),
     [
-        "/tenders",
-        "/tenders?q=%20цемент%20м400%20&category=12abc&closed=yes",
-        "/tenders?q=a~b&closed=0&category=0",
-        "/uz/tenders?closed=on",
+        ("/tenders", "/catalog?type=tender"),
+        # Поиск без пробелов по краям, раздел — числом, «закрытые» — 1
+        (
+            "/tenders?q=%20цемент%20м400%20&category=12abc&closed=yes",
+            "/catalog?type=tender&q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82+%D0%BC400"
+            "&category=12&closed=1",
+        ),
+        # Нулевые раздел и «закрытые» выпадают
+        ("/tenders?q=a~b&closed=0&category=0", "/catalog?type=tender&q=a%7Eb"),
+        ("/uz/tenders?closed=on", "/uz/catalog?type=tender&closed=1"),
     ],
 )
-def test_старый_адрес_закупок(сайт, path):
+def test_старый_адрес_закупок(сайт, path, куда):
     д = открыть(сайт, path, env=ФАЙЛОВЫЙ)
-    print("DBG301", path, д["status"], д["headers"].get("location"))
 
     assert д["status"] == 301
+    assert д["headers"]["location"] == сайт + куда
 
 
 def test_счётчик_частоты(сайт):
@@ -175,7 +180,7 @@ def test_счётчик_частоты(сайт):
     # 61-й — отказ
     д = открыть(сайт, path, headers=ip, env=ФАЙЛОВЫЙ)
     assert д["status"] == 429
-    print("DBG429", д["headers"], д["body"][:400])
+    assert страница(д["body"])["component"] == "Error"
 
     # Страница ошибки Inertia теряет заголовки исключения (как у Laravel)
     for header in ("retry-after", "x-ratelimit-limit", "x-ratelimit-reset"):

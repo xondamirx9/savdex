@@ -35,7 +35,7 @@ pytestmark = нужна_база
 КУРС = ("cbu.rates", "cbu.rates.last", "cbu.rate.usd.last")
 
 #: Свой адрес посетителя: счётчик частоты в общем файловом кэше — только наш
-IP = {"X-Forwarded-For": "198.51.100.47"}
+IP = {"X-Forwarded-For": "192.0.2.148"}
 
 ГЕО = ("countries", "country_translations", "cities", "city_translations")
 РАЗДЕЛЫ = ("categories", "category_translations", "category_fields")

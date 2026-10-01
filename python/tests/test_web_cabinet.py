@@ -186,10 +186,10 @@ def владелец(сайт: str) -> dict[str, str]:
     # Язык из адреса прошлой страницы (/uz/cabinet) уводил бы на /uz/…
     sql("update users set locale = 'ru' where email = %s", [email])
 
-    return войти(email)
+    return куки_входа(email)
 
 
-def войти(email: str) -> dict[str, str]:
+def куки_входа(email: str) -> dict[str, str]:
     """Куки вошедшего (сессия в базе, без формы входа)."""
     [(uid,)] = sql("select id from users where email = %s", [email])
 
@@ -199,7 +199,7 @@ def войти(email: str) -> dict[str, str]:
 def без_компании(email: str) -> dict[str, str]:
     пользователь(email)
 
-    return войти(email)
+    return куки_входа(email)
 
 
 def зайти(
@@ -679,7 +679,7 @@ def test_xhr_гостя_тоже_на_вход(сайт):
 
 def test_выданный_пароль_уводит_на_смену(сайт):
     пользователь("temp@savdex.uz", must_change_password=True)
-    ответ, payload = с_сессией(сайт, "/cabinet", войти("temp@savdex.uz"))
+    ответ, payload = с_сессией(сайт, "/cabinet", куки_входа("temp@savdex.uz"))
 
     assert ответ["status"] == 302
     assert ответ["headers"]["location"] == сайт + "/password/change"
@@ -1092,7 +1092,9 @@ def test_мои_объявления_по_узбекски(сайт):
 def test_мои_объявления_без_компании(сайт):
     _, стр = зайти(сайт, "/cabinet/listings", без_компании("nocompany7@savdex.uz"))
 
-    assert стр["props"]["listings"] == [] and стр["props"]["counts"] is None
+    assert стр["props"]["listings"] == []
+    # Счётчики вкладок — нули
+    assert set(стр["props"]["counts"].values()) == {0}
 
 
 # ── Чаты ────────────────────────────────────────────────────────────
@@ -1155,7 +1157,7 @@ def test_продвижение_без_компании(сайт):
 
 def test_резюме_пустое(сайт):
     пользователь("seeker0@savdex.uz", phone="+998900000001")
-    _, стр = зайти(сайт, "/cabinet/resume", войти("seeker0@savdex.uz"))
+    _, стр = зайти(сайт, "/cabinet/resume", куки_входа("seeker0@savdex.uz"))
     props = стр["props"]
 
     # Резюме нет — форма с контактами из профиля
@@ -1174,7 +1176,7 @@ def test_резюме(сайт, path):
     if not sql("select 1 from users where email = %s", [email]):
         _резюме(пользователь(email))
 
-    _, стр = зайти(сайт, path, войти(email))
+    _, стр = зайти(сайт, path, куки_входа(email))
     resume = стр["props"]["resume"]
 
     assert стр["component"] == "cabinet/Resume"
@@ -1282,14 +1284,18 @@ def test_мини_сайт_без_сайта(сайт):
 
 def test_мини_сайт(сайт):
     _мини_сайт()
+    sql(
+        "update subscriptions set plan_id = (select id from plans where has_microsite "
+        "order by id limit 1) where company_id = %s",
+        [_owner()],
+    )
     куки = владелец(сайт)
 
     for path in ("/cabinet/site", "/uz/cabinet/site"):
         _, стр = зайти(сайт, path, куки)
         props = стр["props"]
 
-        # Тариф без мини-сайта: страница есть, публиковать нельзя
-        assert props["available"] is False
+        assert стр["component"] == "cabinet/Site" and props["available"] is True
         assert props["site"]["subdomain"] == "owner-shop" and props["site"]["status"] == "published"
         # Черновик отличается от опубликованного
         assert props["site"]["unpublished_changes"] is True
@@ -1388,7 +1394,7 @@ def test_мастер_чужое_и_неподтверждённая_почта(
         "where slug = 'owner') where email = 'unverified@savdex.uz'"
     )
     ответ, payload = с_сессией(
-        сайт, f"/cabinet/listings/{listing}/edit", войти("unverified@savdex.uz")
+        сайт, f"/cabinet/listings/{listing}/edit", куки_входа("unverified@savdex.uz")
     )
 
     assert ответ["headers"]["location"] == сайт + "/verify-email"

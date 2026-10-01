@@ -163,7 +163,7 @@ class TestШирина:
             ("Название", "text", 26),
         ],
     )
-    def test_как_у_php(self, header, kind, expected):
+    def test_ширина_как_у_php_версии(self, header, kind, expected):
         assert width(header, kind) == expected
 
 
@@ -205,7 +205,7 @@ class TestОписаниеЛистов:
 
 
 class TestЗапись:
-    def test_книга_устроена_как_у_php(self, tmp_path):
+    def test_книга_устроена_как_у_php_версии(self, tmp_path):
         sheet = Sheet(
             name="Компании",
             table="companies",

@@ -1,72 +1,139 @@
 """
-Постраничный вывод — копия LengthAwarePaginator: сверка с настоящим
-Laravel на сотне сочетаний «всего, на странице, текущая, запрос».
+Постраничный вывод — копия LengthAwarePaginator (toArray) у Laravel.
 
 Окно номеров с «...» (UrlWindow) появляется только от 14 страниц —
-в тестах страниц сайта столько данных нет, поэтому окно сверяется
-здесь, на самом классе Laravel. Нужен PHP.
+в тестах страниц сайта столько данных нет, поэтому окно проверяется
+здесь, на самом построителе: по три номера вокруг текущей, первые и
+последние два, «...» между ними. Ожидания — правила UrlWindow
+(onEachSide = 3): до 14 страниц — все номера; текущая до 7-й — первые
+десять; ближе семи к концу — последние десять; иначе — окно ±3.
 """
 
 from __future__ import annotations
-
-import json
-import shutil
-import subprocess
 
 import pytest
 
 from savdex.web import paginator
 
-from .pg_admin import КОРЕНЬ
-
-pytestmark = pytest.mark.skipif(shutil.which("php") is None, reason="нужен PHP")
-
-СЛУЧАИ = [
-    (total, per_page, current, query)
-    for total in (0, 1, 19, 20, 21, 95, 260, 281, 300, 1000)
-    for per_page in (20,)
-    for current in (1, 2, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 50)
-    for query in ("", "page=3&q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82&a%5B%5D=1&a%5B%5D=2&b=~")
-]
-
-#: Отдельным скриптом, а не через tinker: тот портит строку «...»
-PHP = r"""<?php
-require 'vendor/autoload.php';
-$app = require 'bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-$cases = json_decode(stream_get_contents(STDIN), true);
-$out = [];
-foreach ($cases as [$total, $perPage, $current, $query, $locale]) {
-    app()->setLocale($locale);
-    parse_str($query, $params);
-    $items = array_slice(range(1, max($total, 1)), ($current - 1) * $perPage, $perPage);
-    $items = $total === 0 ? [] : $items;
-    $p = new Illuminate\Pagination\LengthAwarePaginator($items, $total, $perPage, $current,
-        ['path' => 'http://savdex.test/uz/resumes', 'pageName' => 'page']);
-    $out[] = $p->appends($params)->toArray();
-}
-echo json_encode($out);
-"""
+PATH = "http://savdex.test/uz/resumes"
+ЗАПРОС = "page=3&q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82&a%5B%5D=1&a%5B%5D=2&b=~"
 
 
-def test_как_у_laravel(tmp_path):
-    cases = [[*case, locale] for case in СЛУЧАИ for locale in ("ru", "en")]
-    script = tmp_path / "paginator.php"
-    script.write_text(PHP)
-    result = subprocess.run(
-        ["php", str(script)],
-        cwd=КОРЕНЬ,
-        input=json.dumps(cases),
-        capture_output=True,
-        text=True,
-        check=True,
+def построить(total: int, current: int, query: str = "", locale: str = "ru") -> dict:
+    начало = (current - 1) * 20
+    items = list(range(начало, min(начало + 20, total)))
+
+    return paginator.build(PATH, query, locale, paginator.Page(items, total, 20, current))
+
+
+def номера(страницы: dict) -> list[str]:
+    """Подписи окна номеров — без «назад» и «вперёд»."""
+    return [link["label"] for link in страницы["links"][1:-1]]
+
+
+def по(начало: int, конец: int) -> list[str]:
+    return [str(n) for n in range(начало, конец + 1)]
+
+
+@pytest.mark.parametrize(
+    ("total", "current", "окно"),
+    [
+        (0, 1, ["1"]),
+        (1, 1, ["1"]),
+        (20, 1, ["1"]),
+        (21, 2, ["1", "2"]),
+        # 13 страниц — все номера, без «...»
+        (260, 1, по(1, 13)),
+        (260, 7, по(1, 13)),
+        (260, 13, по(1, 13)),
+        # 15 страниц: у начала — первые десять и последние две
+        (281, 1, [*по(1, 10), "...", "14", "15"]),
+        (281, 7, [*по(1, 10), "...", "14", "15"]),
+        # Середина — окно ±3 между двумя «...»
+        (281, 8, ["1", "2", "...", *по(5, 11), "...", "14", "15"]),
+        # Ближе семи к концу — последние десять
+        (281, 9, ["1", "2", "...", *по(6, 15)]),
+        (281, 15, ["1", "2", "...", *по(6, 15)]),
+        (1000, 14, ["1", "2", "...", *по(11, 17), "...", "49", "50"]),
+        (1000, 50, ["1", "2", "...", *по(41, 50)]),
+        # Страница за последней — окно последней, ссылки «вперёд» нет
+        (300, 50, ["1", "2", "...", *по(6, 15)]),
+    ],
+)
+def test_окно_номеров(total, current, окно):
+    страницы = построить(total, current)
+
+    assert номера(страницы) == окно
+    assert страницы["last_page"] == max(1, -(-total // 20))
+    assert [link["label"] for link in страницы["links"] if link["active"]] == (
+        [str(current)] if str(current) in окно else []
     )
-    expected = json.loads(result.stdout.strip().splitlines()[-1])
+    # «...» — без адреса и номера
+    for link in страницы["links"]:
+        if link["label"] == "...":
+            assert link == {"url": None, "label": "...", "active": False}
 
-    for case, want in zip(cases, expected, strict=True):
-        total, per_page, current, query, locale = case
-        items = list(range(1, max(total, 1) + 1))[(current - 1) * per_page : current * per_page]
-        page = paginator.Page(items if total else [], total, per_page, current)
-        got = paginator.build("http://savdex.test/uz/resumes", query, locale, page)
+    assert (страницы["prev_page_url"] is None) is (current == 1)
+    assert (страницы["next_page_url"] is None) is (current >= страницы["last_page"])
 
-        assert got == want, case
+
+@pytest.mark.parametrize(
+    ("total", "current", "с", "по_"),
+    [(0, 1, None, None), (95, 1, 1, 20), (95, 5, 81, 95), (95, 6, None, None), (21, 2, 21, 21)],
+)
+def test_с_по(total, current, с, по_):
+    страницы = построить(total, current)
+
+    assert (страницы["from"], страницы["to"], страницы["total"]) == (с, по_, total)
+    assert страницы["per_page"] == 20 and страницы["current_page"] == current
+
+
+def test_адреса_страниц():
+    """
+    withQueryString(): параметры — в порядке запроса, page — последним,
+    массивы — a[0], a[1] (http_build_query), «~» не кодируется (RFC 3986).
+    """
+    страницы = построить(95, 2, ЗАПРОС, "en")
+    запрос = "q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82&a%5B0%5D=1&a%5B1%5D=2&b=~"
+
+    assert страницы["path"] == PATH
+    assert страницы["first_page_url"] == f"{PATH}?{запрос}&page=1"
+    assert страницы["last_page_url"] == f"{PATH}?{запрос}&page=5"
+    assert страницы["prev_page_url"] == f"{PATH}?{запрос}&page=1"
+    assert страницы["next_page_url"] == f"{PATH}?{запрос}&page=3"
+    assert страницы["links"][3] == {
+        "url": f"{PATH}?{запрос}&page=3",
+        "label": "3",
+        "page": 3,
+        "active": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("locale", "назад", "вперёд"),
+    [
+        # Перевод подписей есть только у английского (из самого фреймворка);
+        # на остальных языках — ключ как есть
+        ("en", "&laquo; Previous", "Next &raquo;"),
+        ("ru", "pagination.previous", "pagination.next"),
+        ("uz", "pagination.previous", "pagination.next"),
+    ],
+)
+def test_подписи(locale, назад, вперёд):
+    страницы = построить(95, 2, "", locale)
+
+    assert страницы["links"][0] == {
+        "url": f"{PATH}?page=1",
+        "label": назад,
+        "page": 1,
+        "active": False,
+    }
+    assert страницы["links"][-1] == {
+        "url": f"{PATH}?page=3",
+        "label": вперёд,
+        "page": 3,
+        "active": False,
+    }
+
+    первая = построить(95, 1, "", locale)
+    assert первая["links"][0] == {"url": None, "label": назад, "page": None, "active": False}

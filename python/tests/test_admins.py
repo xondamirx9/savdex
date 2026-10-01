@@ -105,7 +105,7 @@ class TestПочта:
             ("", ""),
         ],
     )
-    def test_нормализация_как_php(self, адрес, итог):
+    def test_нормализация_trim_и_нижний_регистр(self, адрес, итог):
         """mb_strtolower(trim($e)): пробелы по краям прочь, всё — строчными."""
         assert admins.normalize_email(адрес) == итог
 
@@ -139,13 +139,13 @@ class TestПароль:
     def test_пароли_не_повторяются(self):
         assert len({admins.generate_password() for _ in range(200)}) == 200
 
-    def test_хеш_с_префиксом_php(self):
+    def test_хеш_с_префиксом_2y(self):
         хеш = admins.hash_password("Savdex2026!x", rounds=4)
 
         assert хеш.startswith("$2y$04$")
         assert bcrypt.checkpw(b"Savdex2026!x", хеш.replace("$2y$", "$2b$", 1).encode())
 
-    def test_длинный_пароль_обрезается_как_в_php(self):
+    def test_длинный_пароль_обрезается_до_72_байт(self):
         хеш = admins.hash_password("a" * 100, rounds=4).replace("$2y$", "$2b$", 1).encode()
 
         assert bcrypt.checkpw(b"a" * 72, хеш)
@@ -172,7 +172,7 @@ class TestПараметры:
         ("значение", "ожидается"),
         [("", ""), ("0", ""), ("00", "00"), ("finance", "finance"), (" ", " ")],
     )
-    def test_пустое_как_в_php(self, значение, ожидается):
+    def test_пустое_и_ноль_значат_не_задано(self, значение, ожидается):
         """`--password=0` для PHP — «сгенерировать»: строка «0» ложна."""
         assert _filled(значение) == ожидается
 

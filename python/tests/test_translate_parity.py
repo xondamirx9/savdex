@@ -111,7 +111,7 @@ def переводы(текст: Any, ручные: dict[str, Any] | None = None
     return итог
 
 
-def как_php(значение: Any) -> str:
+def как_json_encode(значение: Any) -> str:
     """json_encode у PHP: не ASCII — \\uXXXX, «/» — «\\/»: так json хранит текст."""
     return json.dumps(значение, separators=(",", ":")).replace("/", "\\/")
 
@@ -119,7 +119,7 @@ def как_php(значение: Any) -> str:
 def json_столбец(текст: str, ждём: Any) -> None:
     """Столбец json: то же значение, в том же порядке ключей и в записи PHP."""
     assert json.loads(текст) == ждём
-    assert текст == как_php(ждём)
+    assert текст == как_json_encode(ждём)
 
 
 # ── Объявления ──────────────────────────────────────────────────────

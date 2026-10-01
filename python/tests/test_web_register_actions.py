@@ -42,7 +42,7 @@ pytestmark = нужна_база
 #: Свой журнал писем и свой адрес посетителя: storage/ и файловый кэш
 #: (счётчик регистраций с адреса) — общие с другими проверками
 _ЖУРНАЛ = Path(КОРЕНЬ) / "storage/logs/python-mail-test-register.log"
-IP = "198.51.100.48"
+IP = "192.0.2.149"
 
 
 @pytest.fixture(scope="module")
