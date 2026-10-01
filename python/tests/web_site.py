@@ -1,11 +1,10 @@
 """
-Сверка страниц сайта Laravel и Django — общая часть (этап 3).
+Проверки страниц и форм сайта — общая часть.
 
-Laravel запущен по-настоящему (php artisan serve), Django отвечает
-в отдельном процессе через тестовый клиент — оба на одной базе и с
-одним APP_KEY. Один и тот же запрос (адрес, куки, заголовки) уходит
-в обе стороны, ответы разбираются одинаково: статус, объект страницы
-Inertia, теги <head>.
+Django отвечает в отдельном процессе через тестовый клиент (настройки
+читают окружение при запуске): адрес, куки и заголовки — как у браузера,
+ответ разбирается на статус, объект страницы Inertia и теги <head>.
+Сессия и куки — в формате Laravel, как их ведёт сайт (savdex/laravel_session.py).
 """
 
 from __future__ import annotations
@@ -19,13 +18,12 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 from urllib.parse import unquote
 
 import bcrypt
-import httpx
 
 from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql
 
@@ -83,7 +81,7 @@ def _порт() -> int:
 
 
 #: Манифест сборки на время сверки, если фронт не собран (так в CI):
-#: без него страницу не соберёт ни Laravel (@vite), ни Django
+#: без него Django не соберёт страницу (ссылки на стили и скрипты)
 ПОДСТАВНОЙ_МАНИФЕСТ = {
     "resources/css/app.css": {
         "file": "assets/app-ci.css",
@@ -118,45 +116,6 @@ def _манифест() -> Iterator[None]:
         path.unlink(missing_ok=True)
 
 
-@contextmanager
-def laravel(**окружение: str) -> Iterator[str]:
-    """
-    Laravel на своём порту; адрес сайта — http://127.0.0.1:<порт>.
-
-    Окружение сверх САЙТ (например, CACHE_STORE=file) — то же надо
-    передать и в сверить(), чтобы Django работал с теми же настройками.
-    """
-    with _манифест(), _сервер(окружение) as root:
-        yield root
-
-
-@contextmanager
-def _сервер(окружение: dict[str, str]) -> Iterator[str]:
-    port = _порт()
-    root = f"http://127.0.0.1:{port}"
-    env = {**ОКРУЖЕНИЕ, **САЙТ, **окружение, "APP_URL": root}
-    сервер = subprocess.Popen(
-        ["php", "artisan", "serve", "--host=127.0.0.1", f"--port={port}"],
-        cwd=КОРЕНЬ,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    try:
-        for _ in range(100):
-            try:
-                httpx.get(f"{root}/up", timeout=1)
-                break
-            except httpx.HTTPError:
-                time.sleep(0.2)
-
-        yield root
-    finally:
-        сервер.terminate()
-        сервер.wait(timeout=10)
-
-
 def пользователь(email: str, **поля: Any) -> int:
     hashed = "$2y$" + bcrypt.hashpw(ПАРОЛЬ.encode(), bcrypt.gensalt(rounds=4)).decode()[4:]
     columns = {
@@ -175,77 +134,6 @@ def пользователь(email: str, **поля: Any) -> int:
     )
 
     return int(uid)
-
-
-def войти(root: str, email: str) -> dict[str, str]:
-    """Вход формой /login; куки вошедшего."""
-    клиент = httpx.Client(base_url=root, follow_redirects=False, timeout=30)
-    клиент.get("/login", headers={"X-Inertia": "true"})
-    ответ = клиент.post(
-        "/login",
-        data={"email": email, "password": ПАРОЛЬ},
-        headers={"X-XSRF-TOKEN": unquote(клиент.cookies["XSRF-TOKEN"]), "Referer": root},
-    )
-    assert ответ.status_code == 302, ответ.text[:2000]
-
-    return {c.name: c.value for c in клиент.cookies.jar}
-
-
-def гость(root: str) -> dict[str, str]:
-    """Куки гостя, которому Laravel уже завёл сессию."""
-    клиент = httpx.Client(base_url=root, follow_redirects=False, timeout=30)
-    клиент.get("/login", headers={"X-Inertia": "true"})
-
-    return {c.name: c.value for c in клиент.cookies.jar}
-
-
-def из_laravel(
-    root: str,
-    path: str,
-    cookies: dict[str, str] | None = None,
-    headers: dict[str, str] | None = None,
-    method: str = "GET",
-    body: str = "",
-    content_type: str = "",
-) -> dict[str, Any]:
-    headers = dict(headers or {})
-
-    if content_type:
-        headers["Content-Type"] = content_type
-
-    r = httpx.request(
-        method,
-        root + path,
-        cookies=cookies or {},
-        headers=headers,
-        # Двоичное тело (файлы в multipart) приходит как «base64:…»
-        content=(base64.b64decode(body[7:]) if body.startswith("base64:") else body.encode())
-        if method != "GET"
-        else None,
-        timeout=30,
-    )
-
-    return {
-        "status": r.status_code,
-        "headers": dict(r.headers),
-        "cookies": dict(_куки_ответа(r.headers.get_list("set-cookie"))),
-        "body": r.text,
-        "sha256": hashlib.sha256(r.content).hexdigest(),
-    }
-
-
-def _куки_ответа(заголовки: list[str]) -> Iterator[tuple[str, dict[str, Any]]]:
-    """Set-Cookie от Laravel — в том же виде, что куки ответа Django."""
-    for заголовок in заголовки:
-        первая, *атрибуты = [часть.strip() for часть in заголовок.split(";")]
-        имя, _, значение = первая.partition("=")
-        разобранные: dict[str, Any] = {"value": значение}
-
-        for атрибут in атрибуты:
-            ключ, есть, знач = атрибут.partition("=")
-            разобранные[ключ.lower()] = знач if есть else True
-
-        yield имя, разобранные
 
 
 def из_django(
@@ -316,122 +204,150 @@ def шапка(body: str) -> list[str]:
     return cleaned
 
 
-def разница(д: Any, л: Any, путь: str = "") -> list[str]:
-    """Где расходятся два значения JSON: «путь: Django | Laravel»."""
-    числа = (int, float)
+# ── Адрес, запрос, вход и сессия ────────────────────────────────────
 
-    if type(д) is not type(л) and not (isinstance(д, числа) and isinstance(л, числа)):
-        return [f"{путь}: {д!r:.200} | {л!r:.200}"]
-
-    if isinstance(д, dict):
-        строки = []
-
-        for key in list(л) + [k for k in д if k not in л]:
-            if key not in д or key not in л:
-                строки.append(f"{путь}/{key}: есть у Django — {key in д}, у Laravel — {key in л}")
-            else:
-                строки += разница(д[key], л[key], f"{путь}/{key}")
-
-        return строки
-
-    if isinstance(д, list):
-        строки = [f"{путь}: длина {len(д)} | {len(л)}"] if len(д) != len(л) else []
-
-        for i, (x, y) in enumerate(zip(д, л, strict=False)):
-            строки += разница(x, y, f"{путь}[{i}]")
-
-        return строки
-
-    return [] if д == л else [f"{путь}: {д!r:.200} | {л!r:.200}"]
+#: Имя куки сессии: APP_NAME=SAVDEX (САЙТ)
+СЕССИЯ = "savdex-session"
 
 
-#: Данные, которые есть только у Django: с 28.09 Laravel не дополняется
-#: (docs/migration-to-python.md), и новые возможности появляются только в
-#: Python. Сверка с Laravel их не видит — их проверяют свои тесты
-ТОЛЬКО_DJANGO = frozenset({"government"})
+@contextmanager
+def адрес(**_окружение: str) -> Iterator[str]:
+    """
+    Адрес сайта для проверок: http://127.0.0.1:<свободный порт>. Сервера
+    за ним нет — запросы идут тестовым клиентом Django (из_django), адрес
+    нужен для ссылок и APP_URL. Манифест сборки — подставной, если фронт
+    не собран.
+    """
+    with _манифест():
+        yield f"http://127.0.0.1:{_порт()}"
 
 
-def без_новых(value: Any) -> Any:
-    """Страница Django без ключей ТОЛЬКО_DJANGO — для сверки с Laravel."""
-    if isinstance(value, dict):
-        return {k: без_новых(v) for k, v in value.items() if k not in ТОЛЬКО_DJANGO}
-
-    if isinstance(value, list):
-        return [без_новых(v) for v in value]
-
-    return value
-
-
-def сверить(
+def открыть(
     сайт: str,
     path: str,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
     env: dict[str, str] | None = None,
-    перед: Callable[[], object] | None = None,
-    после: Callable[[dict[str, Any]], object] | None = None,
-    чистка: Callable[[dict[str, Any]], object] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """
-    Django, затем Laravel; статус, страница и шапка должны совпасть.
+    **запрос: Any,
+) -> dict[str, Any]:
+    """Запрос к Django; ошибка сервера (5xx) — сразу провал с телом ответа."""
+    ответ = из_django(сайт, path, cookies, headers, env, **запрос)
+    assert ответ["status"] < 500, (ответ["status"], ответ["body"][:3000])
 
-    чистка — правит пропсы обеих сторон перед сравнением: то, что
-    зависит от мгновения ответа (сколько дней осталось до даты).
+    return ответ
 
-    перед — вызывается перед каждой из сторон: страницы, которые пишут
-    (счётчик просмотров), иначе видели бы запись друг друга; после —
-    сразу после ответа каждой стороны (снять то, что она записала).
-    """
-    if перед is not None:
-        перед()
 
-    д = из_django(сайт, path, cookies, headers, env)
+def кука(имя: str, значение: str) -> str:
+    """Кука, как её ставит сайт (шифр Laravel), — в виде, в каком её шлёт браузер."""
+    from urllib.parse import quote
 
-    if после is not None:
-        после(д)
+    from savdex import laravel_session
 
-    if перед is not None:
-        перед()
+    from .pg_admin import KEY
 
-    л = из_laravel(сайт, path, cookies, headers)
+    return str(quote(laravel_session.encrypt_cookie(имя, значение, KEY), safe=""))
 
-    if после is not None:
-        после(л)
 
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
+def расшифровать(имя: str, значение: str) -> str | None:
+    from savdex import laravel_session
 
-    if л["status"] in (301, 302, 409):
-        for header in ("location", "x-inertia-location"):
-            assert д["headers"].get(header) == л["headers"].get(header), header
+    from .pg_admin import KEY
 
-        return д, л
+    return laravel_session.cookie_value(имя, unquote(значение), [KEY])
 
-    стр_д, стр_л = страница(д["body"]), страница(л["body"])
 
-    if чистка is not None:
-        чистка(стр_д["props"])
-        чистка(стр_л["props"])
+def завести(
+    sid: str, payload: dict[str, Any], *, last: int | None = None, user_id: int | None = None
+) -> None:
+    """Строка sessions, как её оставил сайт после прошлого запроса."""
+    sql("delete from sessions where id = %s", [sid])
+    sql(
+        "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
+        "values (%s, %s, '127.0.0.1', 'x', %s, %s)",
+        [
+            sid,
+            user_id,
+            base64.b64encode(json.dumps(payload).encode()).decode(),
+            last if last is not None else int(time.time()),
+        ],
+    )
 
-    # Словарь интерфейса у сторон общий (lang/*/ui.php) — его не трогаем
-    стр_д["props"] = {
-        k: v if k == "translations" else без_новых(v) for k, v in стр_д["props"].items()
+
+def строка(sid: str) -> dict[str, Any] | None:
+    """Строка sessions: payload без случайного _token, кто вошёл, адрес, браузер."""
+    rows = sql(
+        "select payload, user_id, ip_address, user_agent, last_activity "
+        "from sessions where id = %s",
+        [sid],
+    )
+
+    if not rows:
+        return None
+
+    payload, user_id, ip, agent, last = rows[0]
+    text = base64.b64decode(payload).decode()
+    token = json.loads(text).get("_token", "")
+
+    assert abs(int(last) - time.time()) < 60
+
+    return {
+        # Порядок ключей и экранирование — как json_encode у PHP
+        "payload": text.replace(json.dumps(token), '"<token>"'),
+        "token": token,
+        "user_id": user_id,
+        "ip": ip,
+        "agent": agent,
     }
 
-    for key in ("component", "url", "version", "sharedProps"):
-        assert стр_д.get(key) == стр_л.get(key), key
 
-    for prop in стр_л["props"]:
-        assert стр_д["props"].get(prop) == стр_л["props"][prop], f"проп {prop}:\n" + "\n".join(
-            разница(стр_д["props"].get(prop), стр_л["props"][prop])[:20]
-        )
+def куки_ответа(ответ: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Куки ответа: значение расшифровано, атрибуты — в нижнем регистре."""
+    итог = {}
 
-    assert list(стр_д["props"]) == list(стр_л["props"])
-    assert set(стр_д) == set(стр_л)
+    for имя, кука_ in ответ["cookies"].items():
+        атрибуты = {k.lower(): v for k, v in кука_.items() if k.lower() not in ("value", "expires")}
+        атрибуты = {
+            k: (str(v).lower() if k == "samesite" else v if v is True else str(v))
+            for k, v in атрибуты.items()
+            if v not in (False, "")
+        }
+        итог[имя] = {"value": расшифровать(имя, кука_["value"]), **атрибуты}
 
-    if "<head>" in л["body"]:
-        assert шапка(д["body"]) == шапка(л["body"])
-        assert д["headers"].get("link") == л["headers"].get("link")
+    return итог
 
-    assert д["headers"].get("vary") == л["headers"].get("vary")
 
-    return д, л
+def сессия_из(ответ: dict[str, Any]) -> str:
+    """Номер сессии из куки ответа."""
+    sid = куки_ответа(ответ)[СЕССИЯ]["value"]
+    assert sid is not None and re.fullmatch(r"[A-Za-z0-9]{40}", sid)
+
+    return sid
+
+
+#: Токен CSRF в сессиях, заведённых проверками
+ТОКЕН_СЕССИИ = "t" * 40
+
+
+def вход(uid: int, *, sid: str | None = None, **payload: Any) -> dict[str, str]:
+    """
+    Куки вошедшего пользователя: строка sessions с отметкой входа (ключ
+    login_web_…, как у Laravel) — без формы входа. payload — что ещё
+    лежит в сессии.
+    """
+    from savdex import laravel_session
+
+    sid = sid or hashlib.sha1(f"вход-{uid}-{time.time_ns()}".encode()).hexdigest()
+    завести(
+        sid,
+        {"_token": ТОКЕН_СЕССИИ, laravel_session.LOGIN_KEY: uid, **payload},
+        user_id=uid,
+    )
+
+    return {СЕССИЯ: кука(СЕССИЯ, sid)}
+
+
+def гостевая(сайт: str) -> dict[str, str]:
+    """Куки гостя, которому сайт уже завёл сессию (первый заход на /login)."""
+    ответ = открыть(сайт, "/login", headers={"X-Inertia": "true"})
+
+    return {имя: значение["value"] for имя, значение in ответ["cookies"].items()}

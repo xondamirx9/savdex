@@ -5,9 +5,8 @@
 которая ходит в настоящий платёжный шлюз, — это либо запрос в боевую
 кассу, либо падение без сети.
 
-Значения маскировки получены прогоном самих PHP-функций
-App\\Console\\Commands\\UzumPing::mask и ::maskProxy, а не написаны
-по памяти: смысл переноса в том, чтобы вывод совпадал.
+Значения маскировки — не по памяти: так маскировали прежние
+UzumPing::mask и ::maskProxy, и вывод прозвона должен остаться прежним.
 """
 
 from __future__ import annotations
@@ -65,7 +64,7 @@ class TestМаскировкаКлючей:
             ("x" * 40, "xxx" + "*" * 34 + "xxx"),
         ],
     )
-    def test_совпадает_с_php(self, значение, ожидается):
+    def test_маска(self, значение, ожидается):
         assert mask(значение) == ожидается
 
     def test_короткий_ключ_закрыт_целиком(self):
@@ -88,7 +87,7 @@ class TestМаскировкаПрокси:
             ("http://noauth@proxy:8080", "http://noauth@proxy:8080"),
         ],
     )
-    def test_совпадает_с_php(self, значение, ожидается):
+    def test_маска_прокси(self, значение, ожидается):
         assert mask_proxy(значение) == ожидается
 
     def test_пароль_с_собакой_не_утекает(self):
@@ -234,7 +233,7 @@ class TestПрозвон:
 
 
 class TestНастройкиИзОкружения:
-    def test_читаются_те_же_переменные_что_у_laravel(self, monkeypatch):
+    def test_читаются_переменные_payments_uzum(self, monkeypatch):
         monkeypatch.setenv("PAYMENTS_UZUM_ENABLED", "true")
         monkeypatch.setenv("PAYMENTS_UZUM_BASE_URL", "https://chk.uzum.uz")
         monkeypatch.setenv("PAYMENTS_UZUM_TERMINAL_ID", "T-1")

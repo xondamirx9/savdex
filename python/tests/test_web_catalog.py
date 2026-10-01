@@ -1,214 +1,367 @@
 """
-Этап 4, шаг 7: каталог объявлений /catalog на Django неотличим от Laravel.
+Этап 4, шаг 7: каталог объявлений /catalog на Django.
 
-Выдача: живые объявления активных компаний, на других языках — без
-импортированных непереведённых; поиск, тип, раздел с подразделами,
+Выдача: живые объявления активных компаний, на всех языках — и
+загруженные из книги без перевода; поиск, тип, раздел с подразделами,
 город, проверенные, с ценой; сортировки (подходящие — продвинутые
 выше), постраничный вывод. И статистика: показы (listings, listing_stats)
-с отсевом повторов и поисковые запросы (search_hits) — у Django ровно
-то же, что у Laravel.
+с отсевом повторов в файловом кэше и поисковые запросы (search_hits).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
+import sys
+import time
 from collections.abc import Iterator
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, из_django, из_laravel, сверить, страница
+from .factories import компания, объявление
+from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import адрес, гостевая, открыть, страница
 
 pytestmark = нужна_база
 
-#: Файловый кэш, общий с Laravel: курс ЦБ для цен в валюте языка Django
-#: берёт из него (в CI у Laravel есть сеть, и курс он получает сам)
+#: Файловый кэш, как на боевом: курс ЦБ для цен в валюте языка, отсев
+#: повторных показов и счётчик частоты живут в нём. Корень сайта
+#: (LARAVEL_ROOT) — свой, во временной папке (сайт() дописывает): кэш
+#: storage/framework/cache общий с другими проверками, и чужой курс ЦБ
+#: менял бы цены
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
 
-#: Ключи курса ЦБ в кэше Laravel (CurrencyRate)
-КУРС = ("cbu.rates", "cbu.rates.last", "cbu.rate.usd.last")
+#: Свой адрес посетителя: счётчик частоты — только наш
+IP = {"X-Forwarded-For": "192.0.2.148"}
+
+ГЕО = ("countries", "country_translations", "cities", "city_translations")
+РАЗДЕЛЫ = ("categories", "category_translations", "category_fields")
 
 
-def очистить_кэш() -> None:
-    """Кэш с нуля — заодно и счётчик ограничения частоты."""
-    subprocess.run(
-        ["php", "artisan", "cache:clear"],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **ФАЙЛОВЫЙ},
-        check=True,
-        capture_output=True,
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (GeoSeeder, CategorySeeder,
+    PromotionTypeSeeder). Как на свежей базе (fresh): типы продвижения
+    заводятся только так.
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"only = {list(таблицы)!r}; "
+        "seeds.seed(fresh=True, data={k: v if k in only else [] for k, v in data.items()})"
     )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
+
+
+def файл_кэша(key: str, корень: Path = КОРЕНЬ) -> Path:
+    """FileStore::path: data/aa/bb/<sha1 ключа>."""
+    digest = hashlib.sha1(key.encode()).hexdigest()
+
+    return корень / "storage/framework/cache/data" / digest[:2] / digest[2:4] / digest
+
+
+def _свой_корень() -> Path:
+    return Path(ФАЙЛОВЫЙ["LARAVEL_ROOT"])
+
+
+def счётчик_частоты() -> None:
+    """Счётчик throttle гостя с адресом IP — с нуля (ключ sha1(«|IP»))."""
+    key = hashlib.sha1(f"|{IP['X-Forwarded-For']}".encode()).hexdigest()
+
+    for name in (key, key + ":timer"):
+        файл_кэша(name, _свой_корень()).unlink(missing_ok=True)
+
+
+def курс() -> None:
+    """Курс ЦБ — в кэш заранее: страница к ЦБ не ходит, цены в валюте языка известны."""
+    from savdex import laravel_cache
+
+    файл = файл_кэша("cbu.rates", _свой_корень())
+    файл.parent.mkdir(parents=True, exist_ok=True)
+    # Как Cache::put на сутки: срок (время Unix, 10 знаков) и serialize()
+    файл.write_bytes(
+        str(int(time.time()) + 86400).encode()
+        + laravel_cache._serialize(
+            {
+                "USD": 12650.5,
+                "CNY": 1760.25,
+                "TRY": 305.1,
+                "EUR": 13710.0,
+                "RUB": 140.2,
+                "KZT": 25.3,
+            }
+        )
+    )
+
+
+#: Что завёл сайт(): номера объявлений, городов и разделов
+ДАННЫЕ: dict[str, Any] = {}
 
 
 @pytest.fixture(scope="module")
-def сайт() -> Iterator[str]:
-    свежая_база()
+def сайт(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    # Свой корень: storage — свой, сборка фронта и ресурсы — общие
+    корень = tmp_path_factory.mktemp("laravel-root")
 
-    for seeder in ("GeoSeeder", "CategorySeeder", "PromotionTypeSeeder"):
-        subprocess.run(
-            ["php", "artisan", "db:seed", f"--class={seeder}", "--force"],
-            cwd=КОРЕНЬ,
-            env=ОКРУЖЕНИЕ,
-            check=True,
-            capture_output=True,
-        )
+    for папка in ("public", "resources"):
+        (корень / папка).symlink_to(КОРЕНЬ / папка)
+
+    ФАЙЛОВЫЙ["LARAVEL_ROOT"] = str(корень)
+    свежая_база()
+    справочники(*ГЕО, *РАЗДЕЛЫ, "promotion_types")
 
     # 26 живых (две страницы) у трёх компаний, импорт без перевода,
     # черновик, объявление заблокированной компании; продвижения
-    php(
-        "$uz = App\\Models\\Country::where('code', 'uz')->value('id');"
-        "$cities = App\\Models\\City::where('country_id', $uz)->orderBy('id')"
-        "->limit(2)->pluck('id');"
-        "$root = App\\Models\\Category::whereNull('parent_id')->orderBy('sort')->first();"
-        "$child = App\\Models\\Category::where('parent_id', $root->id)->orderBy('sort')->first();"
-        "$other = App\\Models\\Category::whereNull('parent_id')->orderBy('sort')"
-        "->skip(1)->first();"
-        "$companies = collect(range(0, 2))->map(fn ($i) => App\\Models\\Company::factory()"
-        "->create(['verification_level' => $i, 'city_id' => $cities[$i % 2]]));"
-        "$ids = [];"
-        "foreach (range(1, 26) as $i) { $l = App\\Models\\Listing::factory()->create(["
-        "'company_id' => $companies[$i % 3]->id, 'type' => $i % 4 ? 'supply' : 'demand',"
-        "'title' => ($i % 5 ? 'Цемент М400 ' : 'Sement M500 ').$i,"
-        "'category_id' => [$root->id, $child->id, $other->id][$i % 3],"
-        "'city_id' => $cities[$i % 2], 'price' => $i % 6 ? 100000 * ($i % 7) : null,"
-        "'price_negotiable' => $i % 9 === 0,"
-        "'published_at' => Carbon\\Carbon::parse('2026-09-20 12:00:00')->subHours($i % 8)]);"
-        " $ids[] = $l->id; }"
-        "App\\Models\\Listing::factory()->create(['source' => 'import', 'title_i18n' => null,"
-        "'company_id' => $companies[0]->id]);"
-        "App\\Models\\Listing::factory()->draft()->create(['company_id' => $companies[0]->id]);"
-        "$blocked = App\\Models\\Company::factory()->create(['status' => 'blocked']);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $blocked->id]);"
-        "$types = App\\Models\\PromotionType::pluck('id', 'code');"
-        "foreach ([[$ids[20], 'bump'], [$ids[21], 'highlight'], [$ids[22], 'urgent']]"
-        " as [$id, $code]) { App\\Models\\Promotion::create(['listing_id' => $id,"
-        " 'company_id' => App\\Models\\Listing::find($id)->company_id,"
-        " 'promotion_type_id' => $types[$code], 'units_spent' => 1, 'status' => 'active',"
-        " 'starts_at' => now(), 'ends_at' => now()->addDays(7)]); }"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    [(uz,)] = sql("select id from countries where code = 'uz'")
+    города = [
+        r[0] for r in sql("select id from cities where country_id = %s order by id limit 2", [uz])
+    ]
+    [(раздел,)] = sql("select id from categories where parent_id is null order by sort, id limit 1")
+    [(подраздел,)] = sql(
+        "select id from categories where parent_id = %s order by sort, id limit 1", [раздел]
     )
-    очистить_кэш()
-    # Курс ЦБ — в кэш заранее: Laravel не пойдёт за ним в сеть (в CI она
-    # есть, локально нет), и цены в валюте языка у обеих сторон одни
-    php(
-        "Illuminate\\Support\\Facades\\Cache::put('cbu.rates', ['USD' => 12650.5,"
-        "'CNY' => 1760.25, 'TRY' => 305.1, 'EUR' => 13710.0, 'RUB' => 140.2, 'KZT' => 25.3],"
-        "now()->addDay());"
-        "echo 'ok';",
-        ФАЙЛОВЫЙ,
+    [(другой,)] = sql(
+        "select id from categories where parent_id is null order by sort, id offset 1 limit 1"
     )
+    компании_ = [компания(verification_level=i, city_id=города[i % 2]) for i in range(3)]
+    начало = datetime(2026, 9, 20, 12)
+    ids = [
+        объявление(
+            company_id=компании_[i % 3],
+            type="supply" if i % 4 else "demand",
+            title=("Цемент М400 " if i % 5 else "Sement M500 ") + str(i),
+            category_id=[раздел, подраздел, другой][i % 3],
+            city_id=города[i % 2],
+            price=100_000 * (i % 7) if i % 6 else None,
+            price_negotiable=i % 9 == 0,
+            published_at=начало - timedelta(hours=i % 8),
+        )
+        for i in range(1, 27)
+    ]
+    # Загруженное из книги, без перевода: видно на всех языках
+    объявление(
+        source="import",
+        title_i18n=None,
+        title="Щебень фракция 5-20",
+        company_id=компании_[0],
+        published_at=начало - timedelta(days=10),
+    )
+    объявление(draft=True, company_id=компании_[0])
+    объявление(company_id=компания(status="blocked"))
+
+    типы = dict(sql("select code, id from promotion_types"))
+
+    for lid, code in ((ids[20], "bump"), (ids[21], "highlight"), (ids[22], "urgent")):
+        sql(
+            "insert into promotions (listing_id, company_id, promotion_type_id, units_spent, "
+            "status, starts_at, ends_at, active_key, created_at, updated_at) "
+            "select id, company_id, %s, 1, 'active', now(), now() + interval '7 days', %s, "
+            "now(), now() from listings where id = %s",
+            [типы[code], f"{lid}:{типы[code]}", lid],
+        )
+
+    курс()
+    счётчик_частоты()
+    ДАННЫЕ.update(ids=ids, города=города, раздел=раздел, подраздел=подраздел, другой=другой)
 
     try:
-        with laravel(**ФАЙЛОВЫЙ) as root:
+        with адрес() as root:
             yield root
     finally:
-        очистить_кэш()
-
-
-def без_кэша() -> None:
-    """
-    Файлы кэша Laravel — прочь (отсев повторов и счётчик частоты с нуля),
-    кроме курса ЦБ: его Django берёт из этого кэша, а в CI Laravel
-    получает курс из сети.
-    """
-    import hashlib
-
-    курс = {hashlib.sha1(k.encode()).hexdigest() for k in КУРС}
-
-    for файл in (КОРЕНЬ / "storage/framework/cache/data").rglob("*"):
-        if файл.is_file() and файл.name not in курс:
-            файл.unlink(missing_ok=True)
+        ФАЙЛОВЫЙ.pop("LARAVEL_ROOT")
 
 
 def обнулить() -> None:
-    """Статистика с нуля перед каждой стороной сверки."""
-    без_кэша()
+    """Статистика и счётчик частоты с нуля."""
+    счётчик_частоты()
     sql("update listings set impressions_count = 0")
     sql("delete from listing_stats")
     sql("delete from search_hits")
 
 
+def каталог(сайт: str, path: str, cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    """Страница каталога со статистикой с нуля; сразу после ответа."""
+    обнулить()
+    д = открыть(сайт, path, cookies, IP, ФАЙЛОВЫЙ)
+    assert д["status"] == 200, д["body"][:500]
+
+    return страница(д["body"])
+
+
+def заголовки(props: dict[str, Any]) -> list[str]:
+    return [x["title"] for x in props["listings"]["data"]]
+
+
+#: 26 живых и одно загруженное: 27; черновик и объявление заблокированной
+#: компании — не в выдаче
 @pytest.mark.parametrize(
-    "path",
+    ("path", "total", "на_странице", "фильтры"),
     [
-        "/catalog",
-        "/catalog?page=2",
-        "/en/catalog",
-        "/uz/catalog?page=2",
-        "/catalog?sort=fresh",
-        "/catalog?sort=cheap&page=2",
-        "/catalog?sort=expensive",
-        "/catalog?sort=nonsense",
-        "/catalog?type=demand",
-        "/catalog?type=supply&verified=1",
-        "/catalog?with_price=yes",
-        "/catalog?city=abc",
-        "/catalog?q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82",
-        "/catalog?q=sement",
-        "/catalog?q=%20%20",
-        "/zh/catalog?q=0&type=0",
-        "/tr/catalog?q=%D0%BD%D0%B5%D1%82%D1%83",
+        ("/catalog", 27, 20, {}),
+        ("/catalog?page=2", 27, 7, {}),
+        ("/en/catalog", 27, 20, {}),
+        ("/uz/catalog?page=2", 27, 7, {}),
+        ("/catalog?sort=fresh", 27, 20, {"sort": "fresh"}),
+        ("/catalog?sort=cheap&page=2", 27, 7, {"sort": "cheap"}),
+        ("/catalog?sort=expensive", 27, 20, {"sort": "expensive"}),
+        ("/catalog?sort=nonsense", 27, 20, {"sort": "relevant"}),
+        # Спрос — каждое четвёртое: 4, 8 … 24
+        ("/catalog?type=demand", 6, 6, {"type": "demand"}),
+        # Проверена только третья компания: 2, 5 … 26 без спроса (8, 20)
+        ("/catalog?type=supply&verified=1", 7, 7, {"type": "supply", "verified": True}),
+        # Без цены (6, 12, 18, 24) и «договорная» (9) — нет
+        ("/catalog?with_price=yes", 22, 20, {"with_price": True}),
+        ("/catalog?city=abc", 27, 20, {"city": None}),
+        # «Цемент» кириллицей — кроме каждого пятого (Sement M500)
+        ("/catalog?q=%D1%86%D0%B5%D0%BC%D0%B5%D0%BD%D1%82", 21, 20, {"q": "цемент"}),
+        # Латиницей — все 26: поиск находит и кириллицу (обе графики), но не щебень
+        ("/catalog?q=sement", 26, 20, {"q": "sement"}),
+        ("/catalog?q=%20%20", 27, 20, {"q": ""}),
+        # «0» — строка поиска (есть во всех «М400», «5-20»), а тип «0» — без отбора
+        ("/zh/catalog?q=0&type=0", 27, 20, {"q": "0", "type": "0"}),
+        ("/tr/catalog?q=%D0%BD%D0%B5%D1%82%D1%83", 0, 0, {"q": "нету"}),
     ],
 )
-def test_выдача(сайт, path):
-    сверить(сайт, path, перед=обнулить, env=ФАЙЛОВЫЙ)
+def test_выдача(сайт, path, total, на_странице, фильтры):
+    стр = каталог(сайт, path)
+    props = стр["props"]
+
+    assert стр["component"] == "catalog/Index"
+    assert props["total"] == props["listings"]["total"] == total
+    assert len(props["listings"]["data"]) == на_странице
+    assert {k: props["filters"][k] for k in фильтры} == фильтры
+    # Показы засчитаны ровно тому, что попало в выдачу
+    assert sql("select coalesce(sum(impressions_count), 0) from listings")[0][0] == на_странице
+
+
+def test_подходящие_продвинутые_выше(сайт):
+    первая = каталог(сайт, "/catalog")["props"]["listings"]["data"]
+    вторая = каталог(сайт, "/catalog?page=2")["props"]["listings"]["data"]
+
+    # Поднятое (bump) и срочное (urgent) — первыми, дальше — по свежести
+    assert [x["title"] for x in первая[:3]] == [
+        "Цемент М400 21",
+        "Цемент М400 23",
+        "Цемент М400 24",
+    ]
+    assert [x["promoted"] for x in первая[:3]] == [True, True, False]
+    # Выделение (highlight) в карточке видно, но выше не поднимает
+    [выделенное] = [x for x in вторая if x["title"] == "Цемент М400 22"]
+    assert выделенное["promoted"]
+
+
+def test_цена_в_валюте_языка(сайт):
+    """Курс ЦБ — из файлового кэша: 200 000 сум по 12 650,5 — 15,8 доллара."""
+    карточки = {x["title"]: x for x in каталог(сайт, "/en/catalog")["props"]["listings"]["data"]}
+
+    assert карточки["Цемент М400 23"]["converted"] == {"price": 15.8, "currency": "USD"}
+    assert карточки["Цемент М400 8"]["converted"] == {"price": 7.9, "currency": "USD"}
+    # Без цены и «договорная» — без пересчёта
+    assert карточки["Цемент М400 24"]["converted"] is None
+    assert карточки["Цемент М400 9"]["converted"] is None
+
+
+def test_сортировки(сайт):
+    свежие = заголовки(каталог(сайт, "/catalog?sort=fresh")["props"])
+    дорогие = каталог(сайт, "/catalog?sort=expensive")["props"]["listings"]["data"]
+    дешёвые = каталог(сайт, "/catalog?sort=cheap&page=2")["props"]["listings"]["data"]
+
+    # Опубликованы в 12:00 — 8, 16, 24; при равенстве — новее номер
+    assert свежие[:3] == ["Цемент М400 24", "Цемент М400 16", "Цемент М400 8"]
+    assert [x["title"] for x in дорогие[:2]] == ["Sement M500 20", "Цемент М400 13"]
+    цены = [x["price"] for x in дорогие]
+    assert цены == sorted(цены, reverse=True)
+    # Без цены — в конце и у «дешёвых»
+    assert [x["price"] for x in дешёвые][-4:] == [None] * 4
 
 
 def test_раздел_и_город(сайт):
-    д, _ = сверить(сайт, "/catalog", перед=обнулить, env=ФАЙЛОВЫЙ)
-    props = страница(д["body"])["props"]
+    props = каталог(сайт, "/catalog")["props"]
     раздел = props["categories"][0]["id"]
     город = props["cities"][0]["id"]
+    assert раздел == ДАННЫЕ["раздел"]
 
-    сверить(сайт, f"/catalog?category={раздел}&city={город}", перед=обнулить, env=ФАЙЛОВЫЙ)
+    props = каталог(сайт, f"/catalog?category={раздел}&city={город}")["props"]
+
+    # Раздел — с подразделом (i % 3 = 0 и 1), город — свой у чётных и нечётных
+    ожидаемо = [i for i in range(1, 27) if i % 3 != 2 and ДАННЫЕ["города"][i % 2] == город]
+    assert props["filters"]["category"] == раздел
+    assert props["filters"]["city"] == город
+    assert props["total"] == len(ожидаемо)
+    assert sorted(int(t.split()[-1]) for t in заголовки(props)) == ожидаемо
 
 
 def статистика() -> tuple[object, ...]:
     return (
-        sql("select id, impressions_count from listings order by id"),
-        sql("select listing_id, date, impressions, views from listing_stats order by listing_id"),
-        sql("select company_id, query, date, impressions from search_hits order by company_id"),
+        sql("select id, impressions_count from listings where impressions_count > 0 order by id"),
+        sql("select listing_id, impressions, views from listing_stats order by listing_id"),
+        sql("select company_id, query, impressions from search_hits order by company_id"),
     )
 
 
-@pytest.mark.parametrize(
+def test_статистика_страницы(сайт):
+    """Вторая страница: показ каждому из семи, строка дня; запроса нет — нет и search_hits."""
+    props = каталог(сайт, "/catalog?page=2")["props"]
+    показанные = sorted(x["id"] for x in props["listings"]["data"])
+    объявления_, дни, запросы = статистика()
+
+    assert объявления_ == [(i, 1) for i in показанные]
+    assert дни == [(i, 1, 0) for i in показанные]
+    assert запросы == []
+    [(сегодня,)] = sql("select count(*) from listing_stats where date = current_date")
+    assert сегодня == 7
+
+
+def test_статистика_поиска(сайт):
+    """Запрос — как его увидит компания: пробелы схлопнуты, строчными; по разу на компанию."""
     # «М400» — кириллицей, как в заголовках
-    "path",
-    ["/catalog?page=2", "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20%D0%9C400"],
-)
-def test_статистика_как_у_laravel(сайт, path):
-    обнулить()
-    из_laravel(сайт, path)
-    laravel_side = статистика()
+    props = каталог(сайт, "/catalog?q=%20%D0%A6%D0%B5%D0%BC%D0%B5%D0%BD%D1%82%20%20%D0%9C400")[
+        "props"
+    ]
+    объявления_, _, запросы = статистика()
 
-    обнулить()
-    из_django(сайт, path, env=ФАЙЛОВЫЙ)
+    assert props["total"] == 21
+    assert len(объявления_) == 20
+    показанные = [x["id"] for x in props["listings"]["data"]]
+    компании_ = [
+        r[0]
+        for r in sql(
+            "select distinct company_id from listings where id = any(%s) order by 1",
+            [показанные],
+        )
+    ]
+    assert запросы == [(c, "цемент м400", 1) for c in компании_]
 
-    assert статистика() == laravel_side
-    assert laravel_side[0] and any(n for _, n in laravel_side[0])
 
+def test_повтор_показа_отсеивает_кэш(сайт):
+    """Одна сессия: показы засчитаны — повтор в течение получаса их не считает."""
+    куки = гостевая(сайт)
 
-def test_повтор_показа_отсеивает_общий_кэш(сайт):
-    """Одна сессия: Laravel засчитал показы — Django в течение получаса их не считает."""
-    import httpx
+    каталог(сайт, "/catalog", куки)
+    assert sql("select sum(impressions_count) from listings")[0][0] == 20
 
-    # Сессия — в базе, чтобы Django её узнал; кэш — файловый, общий
-    файловый = {"CACHE_STORE": "file", "SESSION_DRIVER": "database"}
+    sql("update listings set impressions_count = 0")
+    открыть(сайт, "/catalog", куки, IP, ФАЙЛОВЫЙ)
+    assert sql("select sum(impressions_count) from listings")[0][0] == 0
 
-    with laravel(**файловый) as root:
-        обнулить()
-        ответ = httpx.get(root + "/catalog", timeout=30)
-        куки = {k: v for k, v in ответ.cookies.items() if k.endswith("-session")}
-        assert куки
-        assert sql("select sum(impressions_count) from listings")[0][0] > 0
-
-        sql("update listings set impressions_count = 0")
-        из_django(root, "/catalog", куки, env=файловый)
-        assert sql("select sum(impressions_count) from listings")[0][0] == 0
-
-        # Другая страница — другие объявления, их Django засчитывает
-        из_django(root, "/catalog?page=2", куки, env=файловый)
-        assert sql("select sum(impressions_count) from listings")[0][0] > 0
+    # Другая страница — другие объявления, их засчитывает
+    открыть(сайт, "/catalog?page=2", куки, IP, ФАЙЛОВЫЙ)
+    assert sql("select sum(impressions_count) from listings")[0][0] == 7

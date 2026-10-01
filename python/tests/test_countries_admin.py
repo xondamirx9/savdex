@@ -7,7 +7,7 @@ PostgreSQL со схемой Laravel (migrate:fresh), сотрудники с р
 (AdminAccess), правила Country (код строчными, запрет удаления при
 ссылках, русское название) и строки журнала admin_actions.
 
-Нужны PHP (миграции) и PostgreSQL (SAVDEX_PARITY_PG_URL); общая
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая
 часть — в pg_admin.py.
 """
 

@@ -1,7 +1,7 @@
 """
-Этап 5, шаг 21: первые формы кабинета на Django неотличимы от Laravel —
-ответ (переход, страница ошибки), строка sessions после ответа
-(сообщения, ошибки проверки, ввод) и то, что записано в базу.
+Этап 5, шаг 21: первые формы кабинета на Django — ответ (переход,
+страница ошибки), строка sessions после ответа (сообщения, ошибки
+проверки, ввод) и то, что записано в базу.
 
 Посредники: без токена CSRF — 419 (кроме Sec-Fetch-Site: same-origin),
 токен — из ввода, X-CSRF-TOKEN или зашифрованного X-XSRF-TOKEN; гость —
@@ -12,7 +12,7 @@
 журнал администратора); настройки уведомлений (updateOrCreate, ошибки
 проверки — тексты Laravel); смена языка.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -24,11 +24,21 @@ from typing import Any
 
 import pytest
 
-from savdex import laravel_session
+from savdex import laravel_cache, laravel_session
 
-from .pg_admin import KEY, php, sql, нужна_база, свежая_база
-from .test_web_session import СЕССИЯ, завести, кука, куки_ответа, строка
-from .web_site import laravel, из_django, из_laravel, пользователь, разница, страница
+from .factories import объявление
+from .pg_admin import KEY, sql, нужна_база, свежая_база
+from .web_site import (  # noqa: F401 — куки_ответа берут отсюда другие проверки
+    СЕССИЯ,
+    адрес,
+    завести,
+    из_django,
+    кука,
+    куки_ответа,
+    открыть,
+    пользователь,
+    строка,
+)
 
 pytestmark = нужна_база
 
@@ -40,7 +50,7 @@ SID = "F" * 40
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -87,69 +97,37 @@ def отправить(
     чистка: Callable[[str], str] = lambda payload: payload,
 ) -> dict[str, Any]:
     """
-    drop — ключи ответа, которые не сверяются (время в JSON-ответе);
-    чистка — изменчивое в сессии (свежий хеш пароля) прочь перед сверкой.
+    Отправка формы сайту: подготовить() — данные, затем сессия с токеном
+    (и входом uid), запрос к Django. Итог — ответ, строка сессии после
+    него и снимок базы (снимок()). Ошибка сервера (5xx) — провал.
 
-    POST на обе стороны с одинаковой подготовкой; ответ, сессия и снимок
-    базы после каждой — одинаковые. Итог — ответ Django, строка сессии
-    и снимок.
+    drop и чистка остались от сверки с Laravel и больше ничего не делают.
     """
+    del drop, чистка
     payload = {"_token": ТОКЕН, **(данные or {})}
 
     if uid is not None:
         payload[laravel_session.LOGIN_KEY] = uid
 
     raw = body if isinstance(body, str) else json.dumps(body if body is not None else {})
-    стороны = {}
-
-    for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
-        подготовить()
-        завести(SID, payload)
-        kwargs: dict[str, Any] = {"method": method, "body": raw, "content_type": content_type}
-
-        if сторона is из_django and env:
-            kwargs["env"] = env
-
-        ответ = сторона(
-            сайт,
-            path,
-            {СЕССИЯ: кука(СЕССИЯ, SID)},
-            {
-                "Referer": сайт + "/cabinet/settings",
-                **(headers if headers is not None else inertia()),
-            },
-            **kwargs,
-        )
-        стороны[имя] = (ответ, строка(SID), снимок())
-
-    (д, сессия_д, база_д), (л, сессия_л, база_л) = стороны["django"], стороны["laravel"]
-
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:800])
-
-    for header in ("location", "x-inertia-location", "x-ratelimit-limit", "x-ratelimit-remaining"):
-        assert д["headers"].get(header) == л["headers"].get(header), header
-
-    if д["status"] not in (301, 302, 303) and (д["body"] or л["body"]):
-        стр_д, стр_л = страница(д["body"]), страница(л["body"])
-
-        for key in drop:
-            стр_д.pop(key, None)
-            стр_л.pop(key, None)
-        строки = разница(стр_д, стр_л)
-        assert not строки, "\n".join(строки[:30])
-
-    assert set(куки_ответа(д)) == set(куки_ответа(л)), (куки_ответа(д), куки_ответа(л))
-    assert сессия_д is not None and сессия_л is not None
-
-    assert чистка(сессия_д["payload"]) == чистка(сессия_л["payload"]), (
-        сессия_д["payload"],
-        сессия_л["payload"],
+    подготовить()
+    завести(SID, payload)
+    ответ = из_django(
+        сайт,
+        path,
+        {СЕССИЯ: кука(СЕССИЯ, SID)},
+        {
+            "Referer": сайт + "/cabinet/settings",
+            **(headers if headers is not None else inertia()),
+        },
+        env,
+        method=method,
+        body=raw,
+        content_type=content_type,
     )
-    assert сессия_д["user_id"] == сессия_л["user_id"]
+    assert ответ["status"] < 500, (ответ["status"], ответ["body"][:3000])
 
-    assert база_д == база_л, json.dumps([база_д, база_л], ensure_ascii=False, default=str)
-
-    return {"ответ": д, "сессия": сессия_д, "база": база_д}
+    return {"ответ": ответ, "сессия": строка(SID), "база": снимок()}
 
 
 def время(value: Any) -> Any:
@@ -303,6 +281,7 @@ def test_прочитать_все(сайт):
 
     assert итог["ответ"]["headers"]["location"].endswith("/uz/cabinet/settings")
     assert '"success":' in итог["сессия"]["payload"]
+    assert [r for _, r, _ in итог["база"]] == ["set", "set", "set"]
 
 
 # ── Избранное ───────────────────────────────────────────────────────
@@ -314,14 +293,10 @@ def _объявление() -> int:
     if found:
         return int(found[0][0])
 
-    php(
-        "App\\Models\\Listing::factory()->create(['slug' => 'fav-listing']);"
-        "App\\Models\\Listing::factory()->draft()->create(['slug' => 'fav-draft']);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    lid = объявление(slug="fav-listing")
+    объявление(draft=True, slug="fav-draft")
 
-    return int(sql("select id from listings where slug = 'fav-listing'")[0][0])
+    return lid
 
 
 def _избранное(uid: int, lid: int, было: bool, счётчик: int = 3) -> Callable[[], None]:
@@ -411,20 +386,33 @@ def _снимок_настроек(uid: int) -> Callable[[], Any]:
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ожидание"),
     [
-        {
-            "notifications": [
-                {"event": "digest", "email": False, "telegram": True},
-                {"event": "moderation", "email": False, "telegram": True},
-                {"event": "new_review", "email": True, "telegram": "0"},
-                {"event": "contact_unlocked", "email": 1},
-            ]
-        },
-        {"notifications": {"a": {"event": "digest", "email": "1", "telegram": 0}}},
+        (
+            {
+                "notifications": [
+                    {"event": "digest", "email": False, "telegram": True},
+                    {"event": "moderation", "email": False, "telegram": True},
+                    {"event": "new_review", "email": True, "telegram": "0"},
+                    {"event": "contact_unlocked", "email": 1},
+                ]
+            },
+            # (событие, почта, телеграм, правилась ли строка сейчас):
+            # «moderation» не изменилась — updateOrCreate её не трогает
+            [
+                ("contact_unlocked", True, False, True),
+                ("digest", False, True, True),
+                ("moderation", False, True, False),
+                ("new_review", True, False, True),
+            ],
+        ),
+        (
+            {"notifications": {"a": {"event": "digest", "email": "1", "telegram": 0}}},
+            [("digest", True, False, True), ("moderation", False, True, False)],
+        ),
     ],
 )
-def test_настройки_сохраняются(сайт, body):
+def test_настройки_сохраняются(сайт, body, ожидание):
     uid = учётка("forms-prefs@savdex.uz")
     итог = отправить(
         сайт,
@@ -439,6 +427,7 @@ def test_настройки_сохраняются(сайт, body):
     # Inertia: PATCH, ответивший переходом, — 303
     assert итог["ответ"]["status"] == 303
     assert '"success":' in итог["сессия"]["payload"]
+    assert итог["база"] == ожидание
 
 
 @pytest.mark.parametrize(
@@ -465,8 +454,11 @@ def test_настройки_с_ошибками(сайт, body, prefix):
         method="PATCH",
     )
 
+    assert итог["ответ"]["status"] == 303
     assert '"errors":' in итог["сессия"]["payload"]
     assert '"_old_input":' in итог["сессия"]["payload"]
+    # Ничего не сохранено: строки — как до формы
+    assert итог["база"] == [("digest", True, False, True), ("moderation", False, True, False)]
 
 
 # ── Язык ────────────────────────────────────────────────────────────
@@ -517,36 +509,25 @@ def test_смена_языка(сайт, path, referer, admin):
 
 def test_журнал_администратора_при_языке_из_адреса(сайт):
     """SetLocale у администратора — строка журнала, как AuditObserver (страница Django)."""
-    from .test_web_session import по_сторонам
-
     uid = учётка("forms-admin-page@savdex.uz", is_admin=True)
-    снимки = []
+    sql("delete from admin_actions where section = 'users'")
+    sql("update users set locale = 'ru' where id = %s", [uid])
+    завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: uid})
 
-    def подготовить() -> None:
-        if снимки:
-            снимки.append(
-                sql(
-                    "select user_id, action, section, subject_label, changes::text, ip "
-                    "from admin_actions where section = 'users' order by id"
-                )
-            )
-
-        sql("delete from admin_actions where section = 'users'")
-        sql("update users set locale = 'ru' where id = %s", [uid])
-        завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: uid})
-        снимки.append(None)
-
-    по_сторонам(сайт, "/uz/about", подготовить, cookies={СЕССИЯ: кука(СЕССИЯ, SID)})
-    laravel_journal = sql(
+    д = открыть(сайт, "/uz/about", cookies={СЕССИЯ: кука(СЕССИЯ, SID)})
+    журнал = sql(
         "select user_id, action, section, subject_label, changes::text, ip "
         "from admin_actions where section = 'users' order by id"
     )
 
-    assert снимки[1] == laravel_journal and laravel_journal, (снимки, laravel_journal)
-    assert '"uz"' in laravel_journal[0][4]
+    assert д["status"] == 200
+    assert sql("select locale from users where id = %s", [uid]) == [("uz",)]
+    assert len(журнал) == 1, журнал
+    assert журнал[0][:3] == (uid, "updated", "users"), журнал
+    assert '"uz"' in журнал[0][4] and '"ru"' in журнал[0][4], журнал
 
 
-def test_английские_тексты_ошибок_из_laravel(сайт):
+def test_английские_тексты_ошибок(сайт):
     uid = учётка("forms-prefs@savdex.uz")
     итог = отправить(
         сайт,
@@ -569,6 +550,7 @@ def test_избранное_частота(inertia_):
     иначе 429. Ключ — приставка «favorite» + sha1 номера пользователя.
     """
     import hashlib
+    import time
 
     файловый = {"CACHE_STORE": "file"}
     uid = учётка("forms-throttle@savdex.uz")
@@ -578,31 +560,37 @@ def test_избранное_частота(inertia_):
     def подготовить(счёт: int) -> Callable[[], None]:
         def run() -> None:
             _избранное(uid, lid, False)()
-            php(
-                f"Illuminate\\Support\\Facades\\Cache::put('{ключ}', {счёт}, 60);"
-                f"Illuminate\\Support\\Facades\\Cache::put('{ключ}:timer', time() + 60, 60);"
-                "echo 'ok';",
-                файловый,
-            )
+            # Счётчик и метка окна — в файловом кэше, как их пишет RateLimiter
+            laravel_cache.put(ключ, счёт, 60)
+            laravel_cache.put(f"{ключ}:timer", int(time.time()) + 60, 60)
 
         return run
 
-    with laravel(**файловый) as root:
-        for счёт, запрет in ((10, False), (60, True)):
-            итог = отправить(
-                root,
-                f"/favorites/{lid}",
-                подготовить(счёт),
-                _снимок_избранного(uid, lid),
-                uid=uid,
-                headers=inertia() if inertia_ else {"X-CSRF-TOKEN": ТОКЕН},
-                env=файловый,
-            )
+    try:
+        with адрес() as root:
+            for счёт, запрет in ((10, False), (60, True)):
+                итог = отправить(
+                    root,
+                    f"/favorites/{lid}",
+                    подготовить(счёт),
+                    _снимок_избранного(uid, lid),
+                    uid=uid,
+                    headers=inertia() if inertia_ else {"X-CSRF-TOKEN": ТОКЕН},
+                    env=файловый,
+                )
 
-            if not запрет:
-                assert итог["ответ"]["headers"]["x-ratelimit-remaining"] == "49"
-            elif inertia_:
-                assert итог["ответ"]["status"] == 302
-                assert '"error":' in итог["сессия"]["payload"]
-            else:
-                assert итог["ответ"]["status"] == 429
+                if not запрет:
+                    assert итог["ответ"]["status"] == 302
+                    assert итог["ответ"]["headers"]["x-ratelimit-remaining"] == "49"
+                    assert итог["ответ"]["headers"]["x-ratelimit-limit"] == "60"
+                    assert итог["база"]["favorites"] == [(lid,)]
+                elif inertia_:
+                    assert итог["ответ"]["status"] == 302
+                    assert '"error":' in итог["сессия"]["payload"]
+                    assert итог["база"]["favorites"] == []
+                else:
+                    assert итог["ответ"]["status"] == 429
+                    assert итог["база"]["favorites"] == []
+    finally:
+        for имя in (ключ, f"{ключ}:timer"):
+            laravel_cache.file_path(имя).unlink(missing_ok=True)

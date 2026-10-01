@@ -6,13 +6,13 @@ tests/Feature/Admin/ListingWorkbookImportTest.php, тем же порядком.
 Книга собирается здесь же, а не лежит файлом: тест должен ломаться при
 изменении разбора, а не при пересохранении фикстуры. Значения пишет
 openpyxl, фотографии — openpyxl.drawing.image с настоящим PNG от Pillow
-(загрузка проверяет файлы). Данные заводят фабрики Laravel (tinker),
+(загрузка проверяет файлы). Данные заводят фабрики tests/factories.py,
 загрузка идёт в отдельном процессе Django — под ролью savdex_django,
 если задан SAVDEX_PARITY_DJANGO_URL, как на сервере. Публичный диск —
 во временном каталоге (Storage::fake у Laravel).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
-Разбор рисунков по-PHP-шному (относительные ссылки, twoCellAnchor) и
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Разбор рисунков, как их пишет Excel (относительные ссылки, twoCellAnchor) и
 образец книги проверяются и без базы.
 """
 
@@ -29,7 +29,8 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, АДРЕС, ОКРУЖЕНИЕ, php, sql, свежая_база
+from . import factories
+from .pg_admin import PYTHON, АДРЕС, ОКРУЖЕНИЕ, sql, свежая_база
 
 HEADERS = ["Номер", "Название", "Компания", "Категория", "Цена", "Валюта", "Город", "Фото"]
 
@@ -74,7 +75,7 @@ print(json.dumps(out, ensure_ascii=False))
 @pytest.fixture(scope="module")
 def база() -> None:
     if not АДРЕС:
-        pytest.skip("нет SAVDEX_PARITY_PG_URL — проверка требует PHP и PostgreSQL")
+        pytest.skip("нет SAVDEX_PARITY_PG_URL — проверка требует PostgreSQL")
 
     свежая_база()
 
@@ -141,57 +142,47 @@ def загрузить(
     return dict(json.loads(вывод.stdout))
 
 
-def фабрика(code: str) -> Any:
-    """Данные фабриками Laravel; код печатает JSON последней строкой."""
-    return json.loads(php(code, {"MACHINE_TRANSLATION_ENABLED": "false"}).splitlines()[-1])
-
-
 def компания(name: str = "ООО «Стройбаза»") -> int:
-    return int(
-        фабрика(
-            f"echo json_encode(App\\Models\\Company::factory()->create(['name' => '{name}'])->id);"
-        )
-    )
+    return factories.компания(name=name)
 
 
-def товар(company: int | None, title: str, extra: str = "") -> int:
-    """Listing::factory()->for($company)->create([...]); без компании — своя у каждого."""
-    owner = (
-        f"App\\Models\\Company::query()->findOrFail({company})"
-        if company is not None
-        else "App\\Models\\Company::factory()->create()"
-    )
+def товар(company: int | None, title: str, **поля: Any) -> int:
+    """ListingFactory у компании; без компании — своя у каждого."""
+    if company is not None:
+        поля["company_id"] = company
 
-    return int(
-        фабрика(
-            f"echo json_encode(App\\Models\\Listing::factory()->for({owner})->create("
-            f"['title' => '{title}'{extra}])->id);"
-        )
-    )
+    return factories.объявление(title=title, **поля)
 
 
 def категория(name: str, parent: int | None = None) -> int:
-    child = f"->child(App\\Models\\Category::query()->findOrFail({parent}))" if parent else ""
+    return factories.категория(name, parent_id=parent)
 
-    return int(
-        фабрика(
-            f"echo json_encode(App\\Models\\Category::factory()->named('{name}'){child}"
-            "->create()->id);"
-        )
+
+def перевод_категории(category: int, locale: str, name: str) -> None:
+    sql(
+        "insert into category_translations (category_id, locale, name, created_at, updated_at) "
+        "values (%s, %s, %s, now(), now())",
+        [category, locale, name],
     )
 
 
-def город(name: str) -> int:
+def город(name: str, *, locale: str = "ru") -> int:
     """Город с русским названием — как city() в тесте Laravel."""
-    return int(
-        фабрика(
-            "$country = App\\Models\\Country::query()->firstOrCreate(['code' => 'uz'], "
-            "['sort' => 0, 'is_active' => true]);"
-            "$city = App\\Models\\City::query()->create(['country_id' => $country->id, "
-            "'slug' => 'tashkent', 'sort' => 0, 'is_active' => true]);"
-            f"$city->translations()->create(['locale' => 'ru', 'name' => '{name}']);"
-            "echo json_encode($city->id);"
-        )
+    [(city,)] = sql(
+        "insert into cities (country_id, slug, sort, is_active, created_at, updated_at) "
+        "values (%s, 'tashkent', 0, true, now(), now()) returning id",
+        [factories.узбекистан()],
+    )
+    перевод_города(city, locale, name)
+
+    return int(city)
+
+
+def перевод_города(city: int, locale: str, name: str) -> None:
+    sql(
+        "insert into city_translations (city_id, locale, name, created_at, updated_at) "
+        "values (%s, %s, %s, now(), now())",
+        [city, locale, name],
     )
 
 
@@ -322,7 +313,7 @@ def лист(name: str, rows: list[list[Any]]) -> bytes:
     return out.getvalue()
 
 
-def рисунки_как_в_php(content: bytes, pictures: dict[int, int], sheet: int = 1) -> bytes:
+def рисунки_как_в_excel(content: bytes, pictures: dict[int, int], sheet: int = 1) -> bytes:
     """
     addPictures() теста Laravel: рисунки дописываются в готовую книгу так,
     как это делает Excel, — twoCellAnchor и ссылки относительно части.
@@ -509,7 +500,7 @@ def test_незнакомая_категория_пропускается_а_т�
 
 
 def test_строка_с_номером_правит_существующее_объявление(диск):
-    listing = товар(компания(), "Старое название", ", 'price' => 100")
+    listing = товар(компания(), "Старое название", price=100)
 
     result = загрузить(
         диск,
@@ -646,15 +637,9 @@ def test_столбцы_на_любом_языке_узнаются(диск):
     # Каждый столбец назван на своём языке, значения — тоже
     компания("Uyut Gulistan Mebel")
     furniture = категория("Мебель")
-    фабрика(
-        f"App\\Models\\Category::query()->findOrFail({furniture})->translations()"
-        "->create(['locale' => 'zh', 'name' => '家具']); echo json_encode(1);"
-    )
+    перевод_категории(furniture, "zh", "家具")
     city = город("Ташкент")
-    фабрика(
-        f"App\\Models\\City::query()->findOrFail({city})->translations()"
-        "->create(['locale' => 'uz', 'name' => 'Toshkent']); echo json_encode(1);"
-    )
+    перевод_города(city, "uz", "Toshkent")
 
     result = загрузить(
         диск,
@@ -791,7 +776,7 @@ def test_пустая_ячейка_перевода_не_стирает_стар
     listing = товар(
         компания(),
         "Кирпич керамический М150",
-        ", 'title_i18n' => ['en' => 'Ceramic brick M150', 'tr' => 'Seramik tuğla M150']",
+        title_i18n={"en": "Ceramic brick M150", "tr": "Seramik tuğla M150"},
     )
 
     # Переводчик дошёл только до описания: заголовок в книге пуст
@@ -1116,8 +1101,8 @@ def test_перевод_напротив_пустой_русской_строк�
 
 
 def test_одинаковый_заголовок_у_разных_компаний_требует_компанию(диск):
-    first = товар(None, "Кирпич керамический М150", ", 'price' => 100")
-    second = товар(None, "Кирпич керамический М150", ", 'price' => 200")
+    first = товар(None, "Кирпич керамический М150", price=100)
+    second = товар(None, "Кирпич керамический М150", price=200)
 
     # Ни номера, ни компании: править первое попавшееся — значит менять
     # цену чужого товара
@@ -1374,7 +1359,7 @@ def test_рисунки_как_их_вставляет_excel(диск):
     """Относительные ссылки и twoCellAnchor, как в addPictures() теста Laravel."""
     listing = товар(компания(), "Кирпич керамический М150")
 
-    result = загрузить(диск, рисунки_как_в_php(книга({2: КИРПИЧ}, {}), {2: 2}))
+    result = загрузить(диск, рисунки_как_в_excel(книга({2: КИРПИЧ}, {}), {2: 2}))
 
     assert result["photos"] == 2
     assert [image["sort"] for image in фото(listing)] == [0, 1]
@@ -1390,7 +1375,7 @@ def test_фотографии_по_строкам_и_колонкам(tmp_path):
     """
     from savdex.data.workbook import extract_photos
 
-    book = рисунки_как_в_php(книга({2: КИРПИЧ, 3: ПРЯЖА}, {}), {3: 2, 2: 1})
+    book = рисунки_как_в_excel(книга({2: КИРПИЧ, 3: ПРЯЖА}, {}), {3: 2, 2: 1})
 
     with zipfile.ZipFile(io.BytesIO(book)) as source:
         drawing = source.read("xl/drawings/drawing1.xml").decode()

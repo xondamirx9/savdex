@@ -1,6 +1,5 @@
 """
-Этап 7, шаг 52: касса /cabinet/billing и печатный счёт на Django
-неотличимы от Laravel.
+Этап 7, шаг 52: касса /cabinet/billing и печатный счёт на Django.
 
 Касса: тариф компании с ценой в сумах и долларах (по курсу из кэша
 Laravel или своей сумовой), подписка с оставшимися днями, кошелёк,
@@ -13,19 +12,24 @@ Laravel или своей сумовой), подписка с оставшим�
 и напоминание про номер в назначении платежа, у оплаченного — дата
 оплаты.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, войти, из_django, из_laravel, пользователь, сверить, страница
+from savdex import laravel_cache
+
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import адрес, вход, открыть, пользователь, страница
 
 pytestmark = нужна_база
 
@@ -33,26 +37,43 @@ pytestmark = нужна_база
 КАССА = {"PAYMENTS_UZUM_ENABLED": "true", "PAYMENTS_UZUM_CHECKOUT_ENABLED": "true"}
 
 
+#: Курсы ЦБ в файловом кэше (CurrencyRate) — на время проверок свои
+КУРСЫ = "cbu.rates"
+
+
 def очистить_кэш() -> None:
+    laravel_cache.file_path(КУРСЫ).unlink(missing_ok=True)
+
+
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (PlanSeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
     subprocess.run(
-        ["php", "artisan", "cache:clear"],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **ФАЙЛОВЫЙ},
-        check=True,
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
         capture_output=True,
+        check=True,
     )
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    справочники("plans")
     sql("update plans set price_uzs = 499000 where code = 'flash'")
     sql("update plans set price_usd = 19.99 where code = 'business'")
     sql("update plans set is_active = false where code = 'vip'")
@@ -69,55 +90,75 @@ def сайт() -> Iterator[str]:
             [code, name, credits, usd, uzs, sort, active],
         )
 
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'owner',"
-        " 'legal_name' => 'ООО «Касса & Ко»', 'tin' => '301234567']);"
-        "$o = App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "$plan = App\\Models\\Plan::where('code', 'business')->first();"
-        "$s = App\\Models\\Subscription::create(['company_id' => $c->id, 'plan_id' => $plan->id,"
-        " 'status' => 'active', 'auto_renew' => true, 'started_at' => now()->subDays(10),"
-        " 'ends_at' => now()->addDays(20)->addHours(5)]);"
-        "App\\Models\\Wallet::create(['company_id' => $c->id, 'credits' => 12, 'promo_units' => 3,"
-        " 'contacts_used_this_period' => 4, 'period_resets_at' => now()->addDays(9)]);"
-        "$m1 = App\\Models\\PaymentMethod::create(['company_id' => $c->id, 'provider' => 'uzum',"
-        " 'token' => 't1', 'brand' => 'Humo', 'last4' => '1234', 'expires' => '12/28',"
-        " 'is_default' => true]);"
-        "App\\Models\\PaymentMethod::create(['company_id' => $c->id, 'provider' => 'uzum',"
-        " 'token' => 't2', 'brand' => null, 'last4' => '9876']);"
-        "$m3 = App\\Models\\PaymentMethod::create(['company_id' => $o->id, 'provider' => 'uzum',"
-        " 'token' => 't3', 'brand' => 'Visa', 'last4' => '5555']);"
-        "foreach ([[$c, $m1, 'paid', 30, 29, 'SVX-1', 'Тариф «Бизнес»', 'UZS', 'uzum'],"
-        " [$c, null, 'paid', 25, 20, 'SVX-2', 'Пакет кредитов', 'UZS', 'bank'],"
-        " [$c, $m3, 'failed', 15, null, 'SVX-3', 'Тариф <b>Премиум</b>', 'UZS', null],"
-        " [$c, null, 'pending', 6, null, 'SVX-4', 'Тариф «Флеш»', 'UZS', 'bank'],"
-        " [$c, null, 'pending', 3, null, 'SVX-5', 'Кредиты в долларах', 'USD', null],"
-        " [$c, null, 'refunded', 40, 39, 'SVX-6', 'Возврат', 'UZS', 'uzum'],"
-        " [$o, null, 'pending', 2, null, 'SVX-7', 'Чужой счёт', 'UZS', 'bank']]"
-        " as [$who, $m, $status, $ago, $paid, $num, $desc, $cur, $prov]) {"
-        " $p = App\\Models\\Payment::forceCreate(['company_id' => $who->id,"
-        " 'payment_method_id' => $m?->id, 'subscription_id' => null, 'purpose' => 'plan',"
-        " 'description' => $desc, 'amount' => 1234567, 'currency' => $cur,"
-        " 'provider' => $prov, 'status' => $status,"
-        " 'paid_at' => $paid === null ? null : now()->subDays($paid), 'number' => $num]);"
-        " $p->forceFill(['created_at' => now()->subDays($ago)->subHours(2)])->save(); }"
-        "echo 'ok';",
-        ФАЙЛОВЫЙ,
+    c = компания(slug="owner", legal_name="ООО «Касса & Ко»", tin="301234567")
+    o = компания(slug="other")
+    sql(
+        "insert into subscriptions (company_id, plan_id, status, auto_renew, started_at, ends_at, "
+        "created_at, updated_at) select %s, id, 'active', true, now() - interval '10 days', "
+        "now() + interval '20 days 5 hours', now(), now() from plans where code = 'business'",
+        [c],
     )
+    sql(
+        "insert into wallets (company_id, credits, promo_units, contacts_used_this_period, "
+        "period_resets_at, created_at, updated_at) "
+        "values (%s, 12, 3, 4, now() + interval '9 days', now(), now())",
+        [c],
+    )
+    карты = {}
+
+    for company, token, brand, last4, expires, default in (
+        (c, "t1", "Humo", "1234", "12/28", True),
+        (c, "t2", None, "9876", None, False),
+        (o, "t3", "Visa", "5555", None, False),
+    ):
+        [(карты[token],)] = sql(
+            "insert into payment_methods (company_id, provider, token, brand, last4, expires, "
+            "is_default, created_at, updated_at) values (%s, 'uzum', %s, %s, %s, %s, %s, now(), "
+            "now()) returning id",
+            [company, token, brand, last4, expires, default],
+        )
+
+    for who, card, status, ago, paid, number, description, currency, provider in (
+        (c, "t1", "paid", 30, 29, "SVX-1", "Тариф «Бизнес»", "UZS", "uzum"),
+        (c, None, "paid", 25, 20, "SVX-2", "Пакет кредитов", "UZS", "bank"),
+        (c, "t3", "failed", 15, None, "SVX-3", "Тариф <b>Премиум</b>", "UZS", None),
+        (c, None, "pending", 6, None, "SVX-4", "Тариф «Флеш»", "UZS", "bank"),
+        (c, None, "pending", 3, None, "SVX-5", "Кредиты в долларах", "USD", None),
+        (c, None, "refunded", 40, 39, "SVX-6", "Возврат", "UZS", "uzum"),
+        (o, None, "pending", 2, None, "SVX-7", "Чужой счёт", "UZS", "bank"),
+    ):
+        sql(
+            "insert into payments (company_id, payment_method_id, subscription_id, purpose, "
+            "description, amount, currency, provider, status, paid_at, number, created_at, "
+            "updated_at) values (%s, %s, null, 'plan', %s, 1234567, %s, %s, %s, "
+            "now() - make_interval(days => %s), %s, "
+            "now() - make_interval(days => %s) - interval '2 hours', now())",
+            [
+                who,
+                карты.get(card),
+                description,
+                currency,
+                provider,
+                status,
+                paid,
+                number,
+                ago,
+            ],
+        )
 
     # Получатель — полное наименование; пустой счёт в реквизиты не идёт
-    php(
-        "App\\Models\\Setting::put('legal_full_name', 'ООО «SavdEx Market»');"
-        "App\\Models\\Setting::put('legal_account', '');"
-        "App\\Models\\Setting::put('legal_bank', 'АКБ <Капиталбанк>');"
-        "echo 'ok';",
-        ФАЙЛОВЫЙ,
-    )
+    for key, value in (
+        ("legal_full_name", "ООО «SavdEx Market»"),
+        ("legal_account", ""),
+        ("legal_bank", "АКБ <Капиталбанк>"),
+    ):
+        sql("update settings set value = %s where key = %s", [json.dumps(value), key])
 
     очистить_кэш()
-    php("Cache::put('cbu.rates', ['USD' => 12650.0], now()->addDay()); echo 'ok';", ФАЙЛОВЫЙ)
+    laravel_cache.put(КУРСЫ, {"USD": 12650.0}, 86400)
 
     try:
-        with laravel(**ФАЙЛОВЫЙ) as root:
+        with адрес() as root:
             yield root
     finally:
         очистить_кэш()
@@ -125,54 +166,61 @@ def сайт() -> Iterator[str]:
 
 def владелец(сайт: str) -> dict[str, str]:
     email = "owner@savdex.uz"
+    found = sql("select id from users where email = %s", [email])
+    uid = int(found[0][0]) if found else пользователь(email)
+    sql(
+        "update users set locale = 'ru', "
+        "company_id = (select id from companies where slug = 'owner') where id = %s",
+        [uid],
+    )
 
-    if not sql("select 1 from users where email = %s", [email]):
-        пользователь(email)
-        sql(
-            "update users set company_id = (select id from companies where slug = 'owner') "
-            "where email = %s",
-            [email],
-        )
-
-    sql("update users set locale = 'ru' where email = %s", [email])
-
-    return войти(сайт, email)
+    return вход(uid)
 
 
-def дни(props: dict[str, Any]) -> None:
-    """Сколько дней до конца подписки — от мгновения ответа: сверяем до минуты."""
-    подписка = props.get("subscription")
+def касса(
+    сайт: str, path: str, куки: dict[str, str], env: dict[str, str] | None = None
+) -> dict[str, Any]:
+    д = открыть(сайт, path, куки, env={**ФАЙЛОВЫЙ, **(env or {})})
 
-    if подписка and подписка.get("days_left") is not None:
-        подписка["days_left"] = round(подписка["days_left"] * 1440)
+    assert д["status"] == 200, д["status"]
+    assert страница(д["body"])["component"] == "cabinet/Billing"
 
-
-def касса(сайт: str, path: str, куки: dict[str, str], env: dict[str, str] | None = None):
-    return сверить(сайт, path, куки, env={**ФАЙЛОВЫЙ, **(env or {})}, чистка=дни)
+    return д
 
 
 # ── Касса ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("path", "язык", "выбран"),
     [
-        "/cabinet/billing",
-        "/en/cabinet/billing",
-        "/uz/cabinet/billing",
-        "/cabinet/billing?plan=business",
-        "/cabinet/billing?plan=",
+        ("/cabinet/billing", "ru", None),
+        ("/en/cabinet/billing", "en", None),
+        ("/uz/cabinet/billing", "uz", None),
+        ("/cabinet/billing?plan=business", "ru", "business"),
+        ("/cabinet/billing?plan=", "ru", None),
     ],
 )
-def test_касса(сайт, path):
-    д, _ = касса(сайт, path, владелец(сайт))
+def test_касса(сайт, path, язык, выбран):
+    д = касса(сайт, path, владелец(сайт))
     props = страница(д["body"])["props"]
 
-    if path != "/cabinet/billing":
-        return
-
+    assert props["locale"] == язык
+    assert props["selected"] == выбран
     assert props["plan"]["code"] == "business" and props["plan"]["price_usd"] == 19.99
+    # Сумовой цены у пакета нет — по курсу из кэша (12 650), до тысяч:
+    # 7.5 × 12 650 = 94 875 → 95 000; у «Среднего» своя сумовая цена
+    packs = {p["name"]: p for p in props["packs"]}
+    assert packs["Малый"]["price_uzs"] == 95000 and packs["Малый"]["per_credit"] == 9500
+    assert packs["Средний"]["price_uzs"] == 350000
+    plans = {p["code"]: p for p in props["plans"]}
+    # Своя сумовая цена «Флеш» — в долларах по курсу: 499 000 / 12 650
+    assert (plans["flash"]["price_uzs"], plans["flash"]["price_usd"]) == (499000, 39.4)
+    assert plans["business"]["current"] is True
     assert props["subscription"]["auto_renew"] is True
+    # Как ends_at->diffInDays(now()) у Carbon 3 — со знаком минус; страница
+    # это поле не показывает
+    assert 20 < abs(props["subscription"]["days_left"]) < 21
     assert props["wallet"]["credits"] == 12
     assert sorted(c["masked"] for c in props["cards"]) == ["Humo •••• 1234", "Карта •••• 9876"]
     # В истории только оплаченное и возвраты: отменённый SVX-3
@@ -181,17 +229,15 @@ def test_касса(сайт, path):
     assert [p["method"] for p in props["payments"]] == ["Bank", "Uzum · Humo •••• 1234", "Uzum"]
     assert [p["number"] for p in props["invoices"]] == ["SVX-5", "SVX-4"]
     assert props["invoices"][0]["amount"] == "1 234 567 USD"
-    packs = {p["name"]: p for p in props["packs"]}
-    assert "Старый" not in packs and packs["Средний"]["price_uzs"] == 350000
-    assert "vip" not in [p["code"] for p in props["plans"]]
+    assert "Старый" not in packs
+    assert "vip" not in plans
     assert props["checkout"] is False and props["promoAllowed"] is True
     assert next(iter(props["requisites"].values())) == "ООО «SavdEx Market»"
 
 
 def test_касса_онлайн(сайт):
-    """Онлайн-касса включена у обеих сторон."""
-    with laravel(**ФАЙЛОВЫЙ, **КАССА) as root:
-        д, _ = касса(root, "/cabinet/billing", владелец(root), КАССА)
+    """Онлайн-касса включена."""
+    д = касса(сайт, "/cabinet/billing", владелец(сайт), КАССА)
 
     assert страница(д["body"])["props"]["checkout"] is True
 
@@ -205,7 +251,7 @@ def test_касса_без_подписки_и_кошелька(сайт):
     sql("update wallets set company_id = (select id from companies where slug = 'other')")
 
     try:
-        д, _ = касса(сайт, "/cabinet/billing", владелец(сайт))
+        д = касса(сайт, "/cabinet/billing", владелец(сайт))
     finally:
         sql(
             "update subscriptions set status = 'active' "
@@ -216,6 +262,7 @@ def test_касса_без_подписки_и_кошелька(сайт):
     props = страница(д["body"])["props"]
 
     assert props["subscription"] is None and props["wallet"]["credits"] == 0
+    assert props["plan"]["code"] == "free"
 
 
 def test_промокод_использован(сайт):
@@ -229,7 +276,7 @@ def test_промокод_использован(сайт):
     )
 
     try:
-        д, _ = касса(сайт, "/cabinet/billing", владелец(сайт))
+        д = касса(сайт, "/cabinet/billing", владелец(сайт))
     finally:
         sql("delete from promo_codes where code = 'USED1'")
 
@@ -237,16 +284,18 @@ def test_промокод_использован(сайт):
 
 
 def test_без_компании(сайт):
-    пользователь("nocompany@savdex.uz")
-    д, _ = касса(сайт, "/cabinet/billing", войти(сайт, "nocompany@savdex.uz"))
+    д = касса(сайт, "/cabinet/billing", вход(пользователь("nocompany@savdex.uz")))
+    props = страница(д["body"])["props"]
 
-    assert страница(д["body"])["props"]["plan"] is None
+    assert props["plan"] is None and props["subscription"] is None
+    assert props["payments"] == [] and props["invoices"] == [] and props["cards"] == []
 
 
 def test_гость_уходит_на_вход(сайт):
-    д, _ = сверить(сайт, "/cabinet/billing", env=ФАЙЛОВЫЙ)
+    д = открыть(сайт, "/cabinet/billing", env=ФАЙЛОВЫЙ)
 
     assert д["status"] == 302
+    assert д["headers"]["location"] == сайт + "/login"
 
 
 # ── Печатный счёт ───────────────────────────────────────────────────
@@ -256,51 +305,50 @@ def _счёт(number: str) -> int:
     return int(sql("select id from payments where number = %s", [number])[0][0])
 
 
-def сверить_счёт(сайт: str, path: str, куки: dict[str, str]) -> dict[str, Any]:
-    д = из_django(сайт, path, куки, env=ФАЙЛОВЫЙ)
-    л = из_laravel(сайт, path, куки)
-
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:500])
-
-    if л["status"] == 200:
-        assert д["body"] == л["body"], (д["body"][:3000], л["body"][:3000])
-        assert д["headers"].get("content-type") == л["headers"].get("content-type")
-    else:
-        for header in ("location",):
-            assert д["headers"].get(header) == л["headers"].get(header)
-
-    return д
+def счёт(сайт: str, path: str, куки: dict[str, str]) -> dict[str, Any]:
+    return открыть(сайт, path, куки, env=ФАЙЛОВЫЙ)
 
 
 @pytest.mark.parametrize("number", ["SVX-1", "SVX-3", "SVX-4", "SVX-5", "SVX-6"])
 def test_счёт(сайт, number):
-    д = сверить_счёт(сайт, f"/cabinet/billing/invoice/{_счёт(number)}", владелец(сайт))
+    д = счёт(сайт, f"/cabinet/billing/invoice/{_счёт(number)}", владелец(сайт))
 
     assert д["status"] == 200 and number in д["body"]
+    assert д["headers"]["content-type"].startswith("text/html")
+    # Плательщик и получатель; угловые скобки из настроек экранированы
+    assert "ООО «Касса &amp; Ко»" in д["body"] and "301234567" in д["body"]
+    assert "ООО «SavdEx Market»" in д["body"]
+    assert "АКБ &lt;Капиталбанк&gt;" in д["body"]
+    assert "<b>Премиум</b>" not in д["body"]
 
 
 def test_счёт_на_английском(сайт):
-    сверить_счёт(сайт, f"/en/cabinet/billing/invoice/{_счёт('SVX-4')}", владелец(сайт))
+    д = счёт(сайт, f"/en/cabinet/billing/invoice/{_счёт('SVX-4')}", владелец(сайт))
+
+    # Счёт — документ на русском при любом языке сайта
+    assert д["status"] == 200 and "<title>Счёт SVX-4 · SAVDEX</title>" in д["body"]
 
 
 @pytest.mark.parametrize("номер", ["чужой", "нет"])
 def test_чужой_счёт(сайт, номер):
     payment = _счёт("SVX-7") if номер == "чужой" else 999999
-    д = сверить_счёт(сайт, f"/cabinet/billing/invoice/{payment}", владелец(сайт))
+    д = счёт(сайт, f"/cabinet/billing/invoice/{payment}", владелец(сайт))
 
     assert д["status"] == 404
 
 
 def test_счёт_без_компании(сайт):
-    пользователь("nocompany2@savdex.uz")
-    д = сверить_счёт(
-        сайт, f"/cabinet/billing/invoice/{_счёт('SVX-4')}", войти(сайт, "nocompany2@savdex.uz")
+    д = счёт(
+        сайт,
+        f"/cabinet/billing/invoice/{_счёт('SVX-4')}",
+        вход(пользователь("nocompany2@savdex.uz")),
     )
 
     assert д["status"] == 404
 
 
 def test_счёт_гостю(сайт):
-    д = сверить_счёт(сайт, f"/cabinet/billing/invoice/{_счёт('SVX-4')}", {})
+    д = счёт(сайт, f"/cabinet/billing/invoice/{_счёт('SVX-4')}", {})
 
     assert д["status"] == 302
+    assert д["headers"]["location"] == сайт + "/login"

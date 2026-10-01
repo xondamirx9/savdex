@@ -285,7 +285,7 @@ def test_кнопка_фон_и_скачивание_на_базе(tmp_path):
     from .pg_admin import АДРЕС, django, sql, свежая_база, сотрудник
 
     if not АДРЕС:
-        pytest.skip("нет SAVDEX_PARITY_PG_URL — проверка требует PHP и PostgreSQL")
+        pytest.skip("нет SAVDEX_PARITY_PG_URL — проверка требует PostgreSQL")
 
     свежая_база()
     admin = сотрудник("superadmin")

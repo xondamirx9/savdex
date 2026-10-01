@@ -1,18 +1,19 @@
 """
-Шаг 69: первые шаги регистрации на Django неотличимы от Laravel —
+Шаг 69: первые шаги регистрации на Django —
 почта (POST /register/email), код из письма (/register/code, POST
 /register/code/resend) и страница анкеты (/register/details).
 
-Сверяются ответ, сессия после него, запись кода в кэше Laravel (адрес
+Проверяются ответ, сессия после него, запись кода в файловом кэше (адрес
 хешем, попытки) и письмо с кодом (код скрыт — он случайный, но сходится
 с хешем в кэше).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -21,18 +22,18 @@ import pytest
 
 from savdex.web import register_code
 
-from .pg_admin import php, sql, нужна_база, свежая_база
+from .factories import категория
+from .pg_admin import sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить
 from .test_web_register_actions import (
     ЖУРНАЛ_DJANGO,
-    ЖУРНАЛ_LARAVEL,
     КЭШ,
     ОКРУЖЕНИЕ_ПОЧТЫ,
     _без_изменчивого,
     _письма,
     _разбор,
 )
-from .web_site import laravel
+from .web_site import адрес, страница
 
 pytestmark = нужна_база
 
@@ -44,15 +45,10 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "App\\Models\\Category::factory()->create(['slug' => 'cement', 'parent_id' => null]);"
-        "App\\Models\\Category::factory()->create(['slug' => 'off', 'parent_id' => null,"
-        " 'is_active' => false]);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    категория(slug="cement", parent_id=None)
+    категория(slug="off", parent_id=None, is_active=False)
 
-    with laravel(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
+    with адрес(**ОКРУЖЕНИЕ_ПОЧТЫ) as root:
         yield root
 
 
@@ -77,7 +73,7 @@ def подготовка(код: str | None = None, попытки: int = 0) -> 
         from savdex.web import guard
 
         shutil.rmtree(КЭШ, ignore_errors=True)
-        ЖУРНАЛ_LARAVEL.write_text("")
+        ЖУРНАЛ_DJANGO.parent.mkdir(parents=True, exist_ok=True)
         ЖУРНАЛ_DJANGO.write_text("")
 
         if код is not None:
@@ -97,11 +93,7 @@ def снимок(сайт: str) -> Callable[[], Any]:
 
         import bcrypt
 
-        письма = [
-            _разбор(п)
-            for журнал in (ЖУРНАЛ_DJANGO, ЖУРНАЛ_LARAVEL)
-            for п in _письма(журнал.read_text())
-        ]
+        письма = [_разбор(п) for п in _письма(ЖУРНАЛ_DJANGO.read_text())]
         запись = _кэш(АДРЕС)
         код = None
 
@@ -214,41 +206,70 @@ def test_почта_снимает_прежнее_подтверждение(с�
 
 
 @pytest.mark.parametrize(
-    ("данные", "prefix"),
+    ("данные", "prefix", "status"),
     [
-        ({}, ""),
-        (_ждёт(), ""),
-        (_ждёт(), "/en"),
-        ({**_ждёт(), "status": "Письмо отправлено", "_flash": {"old": [], "new": ["status"]}}, ""),
+        ({}, "", None),
+        (_ждёт(), "", None),
+        (_ждёт(), "/en", None),
+        (
+            {**_ждёт(), "status": "Письмо отправлено", "_flash": {"old": [], "new": ["status"]}},
+            "",
+            "Письмо отправлено",
+        ),
     ],
 )
-def test_страница_кода(сайт, данные, prefix):
+def test_страница_кода(сайт, данные, prefix, status):
     итог = шаг(сайт, prefix + "/register/code", данные=данные, method="GET")
 
     if not данные:
-        assert итог["ответ"]["headers"]["location"].endswith("/register")
+        # Почта ещё не указана — к первому шагу
+        assert итог["ответ"]["status"] == 302
+        assert итог["ответ"]["headers"]["location"] == сайт + "/register"
+        return
+
+    стр = страница(итог["ответ"]["body"])
+
+    assert итог["ответ"]["status"] == 200
+    assert стр["component"] == "auth/RegisterCode"
+    assert стр["props"]["email"] == АДРЕС
+    assert стр["props"]["status"] == status
+    assert стр["props"]["locale"] == (prefix.strip("/") or "ru")
+
+
+НЕ_ПОДОШЁЛ = "Код не подошёл или устарел. Отправьте письмо повторно и введите код из него."
 
 
 @pytest.mark.parametrize(
-    ("body", "попытки", "prefix"),
+    ("body", "попытки", "prefix", "ошибка", "осталось"),
     [
-        ({"code": КОД}, 0, ""),
-        ({"code": КОД}, 0, "/tr"),
-        ({"code": "111111"}, 0, ""),
-        ({"code": КОД}, 5, ""),
-        ({"code": "12ab"}, 0, ""),
-        ({}, 0, ""),
+        ({"code": КОД}, 0, "", None, None),
+        ({"code": КОД}, 0, "/tr", None, None),
+        # Неверный код — попытка засчитана
+        ({"code": "111111"}, 0, "", НЕ_ПОДОШЁЛ, 1),
+        # Попытки кончились — и верный код уже не принимается, запись снята
+        ({"code": КОД}, 5, "", НЕ_ПОДОШЁЛ, None),
+        # Не шесть цифр или пусто — попытка не тратится
+        ({"code": "12ab"}, 0, "", "Код — шесть цифр", 0),
+        ({}, 0, "", "Введите код из письма", 0),
     ],
 )
-def test_код(сайт, body, попытки, prefix):
+def test_код(сайт, body, попытки, prefix, ошибка, осталось):
     итог = шаг(сайт, prefix + "/register/code", данные=_ждёт(), body=body, код=КОД, попытки=попытки)
+    payload = итог["сессия"]["payload"]
 
-    if body.get("code") == КОД and попытки == 0:
-        assert итог["ответ"]["headers"]["location"].endswith(prefix + "/register/details")
-        assert '"verified_email":"aziz@reg.savdex.uz"' in итог["сессия"]["payload"]
+    assert итог["ответ"]["status"] == 302
+
+    if ошибка is None:
+        assert итог["ответ"]["headers"]["location"] == сайт + prefix + "/register/details"
+        assert '"verified_email":"aziz@reg.savdex.uz"' in payload
         assert итог["база"]["entry"] is None  # верный код одноразов
-    elif body.get("code") == "111111":
-        assert итог["база"]["entry"]["attempts"] == 1
+    else:
+        assert итог["ответ"]["headers"]["location"] == сайт + "/register"
+        assert json.loads(payload)["errors"]["default"]["messages"] == {"code": [ошибка]}
+        assert "verified_email" not in payload
+        assert (
+            None if итог["база"]["entry"] is None else итог["база"]["entry"]["attempts"]
+        ) == осталось
 
 
 def test_код_без_почты(сайт):

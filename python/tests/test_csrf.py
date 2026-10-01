@@ -3,7 +3,7 @@ CSRF Django — только для /py/ (savdex/csrf.py).
 
 Формы сайта, адрес которых общий со страницей (/login, /register,
 /cabinet/promo…), раньше получали 403 «CSRF cookie not set» от
-CsrfViewMiddleware: браузер куки Django не имеет, а токен Laravel
+CsrfViewMiddleware: браузер куки Django не имеет, а токен сессии
 проверяет forms.action. Тестовый клиент Django CSRF не проверяет,
 поэтому здесь — настоящая проверка (enforce_csrf_checks).
 """
@@ -45,7 +45,7 @@ def проверка(path: str) -> HttpResponse | None:
         "/cabinet/settings/telegram",
     ],
 )
-def test_формы_сайта_проверяет_токен_laravel(path):
+def test_формы_сайта_проверяет_токен_сессии(path):
     assert проверка(path) is None
 
 

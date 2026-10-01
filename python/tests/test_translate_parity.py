@@ -1,16 +1,15 @@
 """
-Этап 5, шаг 22: машинный перевод на Python пишет в базу ровно то же,
-что задачи Laravel (TranslateListing, TranslateResume, TranslateTender,
-TranslateNewsPost) и translations:fill.
+Этап 5, шаг 22: машинный перевод на Python (manage.py translate) —
+объявления, резюме, закупки, новости (как задачи TranslateListing,
+TranslateResume, TranslateTender, TranslateNewsPost у Laravel) и тексты
+страниц (translations:fill).
 
-Переводчик — заглушка с одной логикой на обеих сторонах: у PHP —
-Http::fake в tinker, у Python — HTTP-сервер (SAVDEX_TRANSLATE_URL).
-Перевод — «<язык>:<текст>»; текст со словом FAIL — ошибка 500, RATE —
-отказ 429. Каждая сторона начинает с одинаковых данных; сравниваются
-json-столбцы текстом (json хранит текст как есть), search_text и то,
-тронута ли строка (updated_at).
+Переводчик — заглушка, HTTP-сервер (SAVDEX_TRANSLATE_URL). Перевод —
+«<язык>:<текст>»; текст со словом FAIL — ошибка 500, RATE — отказ 429.
+Проверяются json-столбцы текстом (json хранит текст как есть),
+search_text и то, тронута ли строка (updated_at).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL).
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL).
 """
 
 from __future__ import annotations
@@ -26,23 +25,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import объявление, пользователь, тендер
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
 
 ВКЛЮЧЁН = {"MACHINE_TRANSLATION_ENABLED": "true"}
-
-#: Та же заглушка у PHP: ответ по языку и тексту запроса
-ПОДДЕЛКА = """
-use Illuminate\\Support\\Facades\\Http;
-Http::fake(function ($request) {
-    parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
-    $text = (string) ($request->data()['q'] ?? '');
-    if (str_contains($text, 'FAIL')) { return Http::response('', 500); }
-    if (str_contains($text, 'RATE')) { return Http::response('', 429); }
-    return Http::response([[[$query['tl'].':'.$text, $text]]], 200);
-});
-"""
 
 
 class _Заглушка(BaseHTTPRequestHandler):
@@ -80,15 +68,6 @@ def переводчик() -> Iterator[str]:
         сервер.shutdown()
 
 
-def _laravel(задача: str, номер: int) -> None:
-    php(
-        ПОДДЕЛКА + f"(new App\\Jobs\\{задача}({номер}))"
-        "->handle(app(App\\Services\\MachineTranslator::class));"
-        "echo 'ok';",
-        ВКЛЮЧЁН,
-    )
-
-
 def _python(url: str, *args: str) -> None:
     вывод = subprocess.run(
         [sys.executable, "manage.py", "translate", *args],
@@ -100,32 +79,65 @@ def _python(url: str, *args: str) -> None:
     assert вывод.returncode == 0, вывод.stderr[-3000:]
 
 
-def сверить(
+def перевести(
     url: str,
     подготовить: Callable[[], None],
     снимок: Callable[[], Any],
-    laravel: Callable[[], None],
     python_args: list[str],
 ) -> Any:
+    """Подготовка, перевод manage.py translate, снимок базы после него."""
     подготовить()
     _python(url, *python_args)
-    после_python = снимок()
-    подготовить()
-    laravel()
-    после_laravel = снимок()
 
-    assert после_python == после_laravel, json.dumps(
-        [после_python, после_laravel], ensure_ascii=False, default=str, indent=1
-    )
+    return снимок()
 
-    return после_python
+
+#: Язык сайта → код языка у переводчика
+ЯЗЫКИ = (("en", "en"), ("uz", "uz"), ("tr", "tr"), ("zh", "zh-CN"))
+
+
+def переводы(текст: Any, ручные: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    Ожидаемые переводы: ручные остаются (пустые — прочь, но и не
+    переводятся), недостающие языки — «<код>:<текст>» в порядке ЯЗЫКИ.
+    """
+    ручные = ручные or {}
+    итог = {k: v for k, v in ручные.items() if v not in ("", None)}
+
+    for язык, код in ЯЗЫКИ:
+        if язык not in ручные:
+            итог[язык] = текст(код) if callable(текст) else f"{код}:{текст}"
+
+    return итог
+
+
+def как_json_encode(значение: Any) -> str:
+    """json_encode у PHP: не ASCII — \\uXXXX, «/» — «\\/»: так json хранит текст."""
+    return json.dumps(значение, separators=(",", ":")).replace("/", "\\/")
+
+
+def json_столбец(текст: str, ждём: Any) -> None:
+    """Столбец json: то же значение, в том же порядке ключей и в записи PHP."""
+    assert json.loads(текст) == ждём
+    assert текст == как_json_encode(ждём)
 
 
 # ── Объявления ──────────────────────────────────────────────────────
 
-ДЛИННОЕ = "\n\n".join(
-    [("Абзац про цемент. " * 150).strip(), "Короткий абзац.", ("Длинное " * 700).strip()]
-)
+ПЕРВЫЙ = ("Абзац про цемент. " * 150).strip()
+ДЛИННЫЙ = ("Длинное " * 700).strip()
+ДЛИННОЕ = "\n\n".join([ПЕРВЫЙ, "Короткий абзац.", ДЛИННЫЙ])
+
+
+def длинное(код: str) -> str:
+    """
+    Длинный текст — кусками до 4000 знаков: два первых абзаца вместе, а
+    абзац длиннее куска — по границе слов (500 и 200 слов).
+    """
+    слова = ДЛИННЫЙ.split(" ")
+    куски = [ПЕРВЫЙ + "\n\nКороткий абзац.", " ".join(слова[:500]), " ".join(слова[500:])]
+
+    return "\n\n".join(f"{код}:{кусок}" for кусок in куски)
 
 
 def _объявление() -> int:
@@ -134,12 +146,7 @@ def _объявление() -> int:
     if found:
         return int(found[0][0])
 
-    php(
-        "App\\Models\\Listing::factory()->create(['slug' => 'tr-listing']); echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
-
-    return int(sql("select id from listings where slug = 'tr-listing'")[0][0])
+    return объявление(slug="tr-listing")
 
 
 def _снимок_объявления(lid: int) -> Callable[[], Any]:
@@ -151,17 +158,33 @@ def _снимок_объявления(lid: int) -> Callable[[], Any]:
 
 
 @pytest.mark.parametrize(
-    ("title", "description", "titles", "descriptions"),
+    ("title", "description", "titles", "descriptions", "ждём"),
     [
-        ("Цемент М400 оптом", "Мешки по 50 кг / самовывоз", None, None),
-        ("Цемент", None, '{"en":"Manual","uz":"","zh":null}', '{"tr":"Elle"}'),
-        ("Цемент FAIL", "Описание", None, "[]"),
-        ("Кирпич", ДЛИННОЕ, None, None),
-        ("Песок", "   ", '{"en":"a","uz":"b","tr":"c","zh":"d"}', None),
-        ("Щебень «гранит» 5/20", "Описание RATE", '{"zh":"已有"}', None),
+        (
+            "Цемент М400 оптом", "Мешки по 50 кг / самовывоз", None, None,
+            (переводы("Цемент М400 оптом"), переводы("Мешки по 50 кг / самовывоз")),
+        ),
+        # Ручной перевод остаётся; пустой и null — не переводятся и уходят
+        (
+            "Цемент", None, '{"en":"Manual","uz":"","zh":null}', '{"tr":"Elle"}',
+            ({"en": "Manual", "tr": "tr:Цемент"}, {"tr": "Elle"}),
+        ),
+        # Ошибка переводчика (500) — без перевода, остальное переводится
+        ("Цемент FAIL", "Описание", None, "[]", ([], переводы("Описание"))),
+        ("Кирпич", ДЛИННОЕ, None, None, (переводы("Кирпич"), переводы(длинное))),
+        # Всё переведено вручную; пустое описание — пустой список
+        (
+            "Песок", "   ", '{"en":"a","uz":"b","tr":"c","zh":"d"}', None,
+            ({"en": "a", "uz": "b", "tr": "c", "zh": "d"}, []),
+        ),
+        # Отказ 429 на описании — описания нет, заголовок уже переведён
+        (
+            "Щебень «гранит» 5/20", "Описание RATE", '{"zh":"已有"}', None,
+            (переводы("Щебень «гранит» 5/20", {"zh": "已有"}), []),
+        ),
     ],
-)
-def test_объявление(переводчик, title, description, titles, descriptions):
+)  # fmt: skip
+def test_объявление(переводчик, title, description, titles, descriptions, ждём):
     lid = _объявление()
 
     def подготовить() -> None:
@@ -172,13 +195,20 @@ def test_объявление(переводчик, title, description, titles, 
             [title, description, titles, descriptions, lid],
         )
 
-    сверить(
+    [(заголовки, описания, search_text, тронута)] = перевести(
         переводчик,
         подготовить,
         _снимок_объявления(lid),
-        lambda: _laravel("TranslateListing", lid),
         ["--kind", "listings", "--id", str(lid)],
     )
+
+    json_столбец(заголовки, ждём[0])
+    json_столбец(описания, ждём[1])
+    assert тронута is True
+    # Поиск — по заголовку, описанию и переводам заголовка (и транслитом)
+    assert search_text.startswith(title.lower())
+    assert all(str(v).lower() in search_text for v in (ждём[0] or {}).values())
+    assert "old" not in search_text.split()
 
 
 # ── Резюме ──────────────────────────────────────────────────────────
@@ -190,30 +220,53 @@ def _резюме() -> int:
     if found:
         return int(found[0][0])
 
-    php(
-        "$u = App\\Models\\User::factory()->create();"
-        "$r = new App\\Models\\Resume(); $r->forceFill(['user_id' => $u->id, 'slug' => 'tr-resume',"
-        "'title' => 'Бухгалтер', 'status' => 'published'])->saveQuietly();"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    [(rid,)] = sql(
+        "insert into resumes (user_id, slug, title, status, created_at, updated_at) "
+        "values (%s, 'tr-resume', 'Бухгалтер', 'published', now(), now()) returning id",
+        [пользователь()],
     )
 
-    return int(sql("select id from resumes where slug = 'tr-resume'")[0][0])
+    return int(rid)
+
+
+ДЕСЯТЬ = [{"position": f"Должность {i}", "duties": "Учёт" if i % 2 else ""} for i in range(10)]
+
+
+def места(код: str, jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Места работы: переводятся первые восемь (их и читают), дальше —
+    пустые строки на тех же местах; пустые обязанности — null.
+    """
+    return [
+        {
+            "position": f"{код}:{job['position']}" if i < 8 else None,
+            "duties": f"{код}:{job['duties']}" if job["duties"] and i < 8 else None,
+        }
+        for i, job in enumerate(jobs)
+    ]
 
 
 @pytest.mark.parametrize(
-    ("about", "jobs", "jobs_i18n"),
+    ("about", "jobs", "jobs_i18n", "ждём"),
     [
         (
-            "Опыт 10 лет",
-            [{"position": f"Должность {i}", "duties": "Учёт" if i % 2 else ""} for i in range(10)],
-            None,
+            "Опыт 10 лет", ДЕСЯТЬ, None,
+            (переводы("Опыт 10 лет"), переводы(lambda к: места(к, ДЕСЯТЬ))),
         ),
-        (None, [{"position": "Бухгалтер", "duties": None}], '{"en":[{"position":"x"}]}'),
-        ("О себе FAIL", [], None),
+        (
+            None, [{"position": "Бухгалтер", "duties": None}], '{"en":[{"position":"x"}]}',
+            (
+                [],
+                переводы(
+                    lambda к: места(к, [{"position": "Бухгалтер", "duties": None}]),
+                    {"en": [{"position": "x"}]},
+                ),
+            ),
+        ),
+        ("О себе FAIL", [], None, ([], [])),
     ],
-)
-def test_резюме(переводчик, about, jobs, jobs_i18n):
+)  # fmt: skip
+def test_резюме(переводчик, about, jobs, jobs_i18n, ждём):
     rid = _резюме()
 
     def подготовить() -> None:
@@ -223,7 +276,7 @@ def test_резюме(переводчик, about, jobs, jobs_i18n):
             [about, json.dumps(jobs, ensure_ascii=False), jobs_i18n, rid],
         )
 
-    сверить(
+    [(заголовки, о_себе, работа, тронута)] = перевести(
         переводчик,
         подготовить,
         lambda: sql(
@@ -231,9 +284,13 @@ def test_резюме(переводчик, about, jobs, jobs_i18n):
             "updated_at > now() - interval '1 hour' from resumes where id = %s",
             [rid],
         ),
-        lambda: _laravel("TranslateResume", rid),
         ["--kind", "resumes", "--id", str(rid)],
     )
+
+    json_столбец(заголовки, переводы("Бухгалтер"))
+    json_столбец(о_себе, ждём[0])
+    json_столбец(работа, ждём[1])
+    assert тронута is True
 
 
 # ── Закупки и новости ───────────────────────────────────────────────
@@ -245,19 +302,20 @@ def _закупка() -> int:
     if found:
         return int(found[0][0])
 
-    php(
-        "App\\Models\\Tender::factory()->create(['title' => 'Закупка для перевода']); echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
-
-    return int(sql("select id from tenders where title = 'Закупка для перевода'")[0][0])
+    return тендер(title="Закупка для перевода")
 
 
 @pytest.mark.parametrize(
-    ("description", "customer", "titles"),
-    [("Поставка труб", "Ташкентводоканал", None), (None, None, '{"en":"Pipes"}')],
-)
-def test_закупка(переводчик, description, customer, titles):
+    ("description", "customer", "titles", "ждём"),
+    [
+        (
+            "Поставка труб", "Ташкентводоканал", None,
+            (переводы("Закупка для перевода"), переводы("Поставка труб")),
+        ),
+        (None, None, '{"en":"Pipes"}', (переводы("Закупка для перевода", {"en": "Pipes"}), [])),
+    ],
+)  # fmt: skip
+def test_закупка(переводчик, description, customer, titles, ждём):
     tid = _закупка()
 
     def подготовить() -> None:
@@ -268,7 +326,7 @@ def test_закупка(переводчик, description, customer, titles):
             [description, customer, titles, tid],
         )
 
-    сверить(
+    [(заголовки, описания, search_text, тронута)] = перевести(
         переводчик,
         подготовить,
         lambda: sql(
@@ -276,9 +334,17 @@ def test_закупка(переводчик, description, customer, titles):
             "updated_at > now() - interval '1 hour' from tenders where id = %s",
             [tid],
         ),
-        lambda: _laravel("TranslateTender", tid),
         ["--kind", "tenders", "--id", str(tid)],
     )
+
+    json_столбец(заголовки, ждём[0])
+    json_столбец(описания, ждём[1])
+    assert тронута is True
+    # Поиск — заголовок, описание, заказчик и переводы заголовка
+    assert search_text.startswith(
+        " ".join(x.lower() for x in ("Закупка для перевода", description, customer) if x)
+    )
+    assert all(v.lower() in search_text for v in ждём[0].values())
 
 
 def _новость() -> int:
@@ -287,21 +353,27 @@ def _новость() -> int:
     if found:
         return int(found[0][0])
 
-    php(
-        "$p = new App\\Models\\NewsPost(); $p->forceFill(['slug' => 'tr-news',"
-        "'title' => 'Новость площадки', 'category' => 'platform', 'excerpt' => '',"
-        "'body' => '', 'is_published' => true])->saveQuietly(); echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    [(nid,)] = sql(
+        "insert into news_posts (slug, title, category, excerpt, body, is_published, "
+        "created_at, updated_at) values ('tr-news', 'Новость площадки', 'platform', '', '', "
+        "true, now(), now()) returning id"
     )
 
-    return int(sql("select id from news_posts where slug = 'tr-news'")[0][0])
+    return int(nid)
 
 
 @pytest.mark.parametrize(
-    ("excerpt", "body", "titles"),
-    [("Коротко", "Текст новости\n\nВторой абзац", None), ("", "  ", '{"uz":"Yangilik"}')],
-)
-def test_новость(переводчик, excerpt, body, titles):
+    ("excerpt", "body", "titles", "ждём"),
+    [
+        (
+            "Коротко", "Текст новости\n\nВторой абзац", None,
+            (переводы("Новость площадки"), переводы("Коротко"),
+             переводы("Текст новости\n\nВторой абзац")),
+        ),
+        ("", "  ", '{"uz":"Yangilik"}', (переводы("Новость площадки", {"uz": "Yangilik"}), [], [])),
+    ],
+)  # fmt: skip
+def test_новость(переводчик, excerpt, body, titles, ждём):
     nid = _новость()
 
     def подготовить() -> None:
@@ -312,7 +384,7 @@ def test_новость(переводчик, excerpt, body, titles):
             [excerpt, body, titles, nid],
         )
 
-    сверить(
+    [(заголовки, анонсы, тексты, тронута)] = перевести(
         переводчик,
         подготовить,
         lambda: sql(
@@ -320,9 +392,13 @@ def test_новость(переводчик, excerpt, body, titles):
             "updated_at > now() - interval '1 hour' from news_posts where id = %s",
             [nid],
         ),
-        lambda: _laravel("TranslateNewsPost", nid),
         ["--kind", "news", "--id", str(nid)],
     )
+
+    json_столбец(заголовки, ждём[0])
+    json_столбец(анонсы, ждём[1])
+    json_столбец(тексты, ждём[2])
+    assert тронута is True
 
 
 # ── Тексты страниц ──────────────────────────────────────────────────
@@ -350,18 +426,38 @@ def test_тексты_страниц(переводчик, rate):
                 [f"{i:040d}", source, "done" if i == 2 else None, attempts],
             )
 
-    сверить(
+    итог = перевести(
         переводчик,
         подготовить,
         lambda: sql(
             "select source, translation, attempts, updated_at > now() - interval '1 hour' "
             "from content_translations order by id"
         ),
-        lambda: php(
-            ПОДДЕЛКА + "Artisan::call('translations:fill', ['--limit' => 20]); echo 'ok';", ВКЛЮЧЁН
-        ),
         ["--once", "--limit", "20"],
     )
+
+    # (текст, перевод, попытки, тронута): переведённое и сдавшееся
+    # (5 попыток) не трогаются; ошибка 500 — +1 попытка
+    if rate:
+        # Отказ 429 прерывает проход: очередь — по числу попыток, текст
+        # с двумя попытками до отказа не дошёл
+        assert итог == [
+            ("Описание компании", "en:Описание компании", 0, True),
+            ("Сломанный FAIL", None, 2, False),
+            ("Уже переведено", "done", 0, False),
+            ("Сдался FAIL", None, 5, False),
+            ("Отказ RATE", None, 1, False),
+            ("Последний", "en:Последний", 0, True),
+        ]
+    else:
+        assert итог == [
+            ("Описание компании", "en:Описание компании", 0, True),
+            ("Сломанный FAIL", None, 3, True),
+            ("Уже переведено", "done", 0, False),
+            ("Сдался FAIL", None, 5, False),
+            ("Ещё текст", "en:Ещё текст", 1, True),
+            ("Последний", "en:Последний", 0, True),
+        ]
 
 
 # ── Добор ────────────────────────────────────────────────────────────
@@ -380,7 +476,4 @@ def test_добор_переводит_недостающее(переводчи
     _python(переводчик, "--once")
     [(titles,)] = sql("select title_i18n::text from listings where id = %s", [lid])
 
-    assert json.loads(titles) == {
-        loc: f"{code}:Цемент для добора"
-        for loc, code in (("en", "en"), ("uz", "uz"), ("tr", "tr"), ("zh", "zh-CN"))
-    }
+    assert json.loads(titles) == переводы("Цемент для добора")

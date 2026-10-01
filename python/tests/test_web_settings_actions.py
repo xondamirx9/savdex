@@ -1,13 +1,14 @@
 """
-Профиль в настройках на Django неотличим от Laravel: имя, телефон
+Профиль в настройках на Django: имя, телефон
 (шаблон PHP, смена номера сбрасывает подтверждение), язык (в профиль и
 в сессию), проверка ввода; у администратора — строка журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -18,8 +19,7 @@ from savdex import laravel_session
 
 from .pg_admin import sql, нужна_база, свежая_база
 from .test_web_forms import SID, ТОКЕН, inertia, отправить, учётка
-from .test_web_session import СЕССИЯ, завести, кука
-from .web_site import laravel
+from .web_site import СЕССИЯ, адрес, завести, кука, открыть
 
 pytestmark = нужна_база
 
@@ -28,7 +28,7 @@ pytestmark = нужна_база
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -71,25 +71,34 @@ def снимок() -> Any:
 ВЕРНО = {"name": "Азиз Каримов", "phone": "+998 90 111-22-33", "locale": "uz"}
 
 
+#: Профиль до формы: (имя, телефон, подтверждён ли, язык, тронут ли сейчас)
+БЫЛО = ("Азиз", "+998 90 111-22-33", True, "ru", False)
+
+
 @pytest.mark.parametrize(
-    "body",
+    ("body", "стало"),
     [
-        ВЕРНО,
-        {**ВЕРНО, "phone": "+998 (91) 222 33 44"},
-        {**ВЕРНО, "locale": "ru", "name": "Азиз"},
-        {**ВЕРНО, "phone": "998"},
-        {**ВЕРНО, "phone": "+998 90 111-22-33 доб. 5"},
-        {**ВЕРНО, "name": "А"},
-        {**ВЕРНО, "name": ""},
-        {**ВЕРНО, "locale": "de"},
-        {**ВЕРНО, "phone": 998901112233},
-        {},
+        (ВЕРНО, ("Азиз Каримов", "+998 90 111-22-33", True, "uz", True)),
+        # Другой номер — подтверждение сброшено
+        (
+            {**ВЕРНО, "phone": "+998 (91) 222 33 44"},
+            ("Азиз Каримов", "+998 (91) 222 33 44", False, "uz", True),
+        ),
+        # Ничего не изменилось — строку не трогают
+        ({**ВЕРНО, "locale": "ru", "name": "Азиз"}, БЫЛО),
+        ({**ВЕРНО, "phone": "998"}, {"phone"}),
+        ({**ВЕРНО, "phone": "+998 90 111-22-33 доб. 5"}, {"phone"}),
+        ({**ВЕРНО, "name": "А"}, {"name"}),
+        ({**ВЕРНО, "name": ""}, {"name"}),
+        ({**ВЕРНО, "locale": "de"}, {"locale"}),
+        ({**ВЕРНО, "phone": 998901112233}, {"phone"}),
+        ({}, {"name", "phone", "locale"}),
     ],
 )
 @pytest.mark.parametrize("admin", [False, True])
-def test_профиль(сайт, body, admin):
+def test_профиль(сайт, body, стало, admin):
     uid = учётка("person@savdex.uz")
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/settings/profile",
         человек(admin),
@@ -99,6 +108,31 @@ def test_профиль(сайт, body, admin):
         method="PATCH",
         headers=inertia(),
     )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["status"] == 303
+    assert итог["ответ"]["headers"]["location"].endswith("/cabinet/settings")
+
+    if isinstance(стало, set):
+        # Ошибки проверки: назад с вводом, профиль прежний
+        assert set(сессия["errors"]["default"]["messages"]) == стало
+        assert "_old_input" in сессия and "success" not in сессия
+        assert итог["база"] == {"user": [БЫЛО], "journal": []}
+
+        return
+
+    assert сессия["success"] == "Профиль обновлён"
+    # Язык — и в профиль, и в сессию
+    assert сессия["locale"] == стало[3]
+    assert итог["база"]["user"] == [стало]
+    журнал = итог["база"]["journal"]
+
+    if admin and стало != БЫЛО:
+        [(action, section, label, changes)] = журнал
+        assert (action, section, label) == ("updated", "users", "Азиз Каримов")
+        assert ("phone_verified_at" in changes) is (not стало[2])
+    else:
+        assert журнал == []
 
 
 @pytest.mark.parametrize("prefix", ["/en", "/zh"])
@@ -114,7 +148,14 @@ def test_профиль_на_языке(сайт, prefix):
         headers=inertia(),
     )
 
+    сессия = json.loads(итог["сессия"]["payload"])
+
     assert итог["ответ"]["status"] == 303
+    assert итог["ответ"]["headers"]["location"].endswith(f"{prefix}/cabinet/settings")
+    # Сообщение — на языке адреса, а выбранный язык уже в профиле и сессии
+    assert сессия["success"] == {"/en": "Profile updated", "/zh": "资料已更新"}[prefix]
+    assert сессия["locale"] == "tr"
+    assert итог["база"]["user"] == [("Азиз Каримов", "+998 90 111-22-33", True, "tr", True)]
 
 
 # ── Telegram ────────────────────────────────────────────────────────
@@ -148,7 +189,13 @@ def test_привязка_без_бота(сайт):
         env={"TELEGRAM_BOT_TOKEN": "", "TELEGRAM_BOT_USERNAME": ""},
     )
 
-    assert '"telegram"' in итог["сессия"]["payload"]
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["status"] == 302
+    assert сессия["errors"]["default"]["messages"] == {
+        "telegram": ["Привязка Telegram пока не настроена площадкой."]
+    }
+    assert итог["база"] == [(None, None, False, False)]
 
 
 @pytest.mark.parametrize("admin", [False, True])
@@ -167,34 +214,34 @@ def test_отвязка(сайт, admin):
     assert итог["база"] == [(None, None, False, True)]
 
 
-def test_привязка_уводит_к_боту(сайт):
-    """Токен случайный: сверяются ответ 409 и начало адреса бота у обеих сторон."""
-    from .web_site import из_django, из_laravel
+def test_привязка_уводит_к_боту(сайт, monkeypatch):
+    """Токен случайный: ответ 409 и адрес бота с токеном; токен — в кэше."""
+    человек()()
+    uid = учётка("person@savdex.uz")
+    завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: uid})
+    ответ = открыть(
+        сайт,
+        "/cabinet/settings/telegram",
+        {СЕССИЯ: кука(СЕССИЯ, SID)},
+        inertia(),
+        env={**БОТ, "CACHE_STORE": "file"},
+        method="POST",
+        body="{}",
+        content_type="application/json",
+    )
 
-    with laravel(**БОТ) as root:
-        ответы = []
+    assert ответ["status"] == 409
+    адрес_бота = ответ["headers"]["x-inertia-location"]
+    assert re.fullmatch(r"https://t\.me/savdex_bot\?start=[A-Za-z0-9]{32}", адрес_бота)
 
-        for сторона in (из_django, из_laravel):
-            человек()()
-            завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: учётка("person@savdex.uz")})
-            kwargs: dict[str, Any] = {"method": "POST", "body": "{}"}
+    # Токен привязки живёт в кэше и ведёт к пользователю (его читает вебхук бота)
+    from savdex import laravel_cache
 
-            if сторона is из_django:
-                kwargs["env"] = БОТ
+    ключ = f"telegram.link.{адрес_бота.rsplit('=', 1)[1]}"
 
-            ответы.append(
-                сторона(
-                    root,
-                    "/cabinet/settings/telegram",
-                    {СЕССИЯ: кука(СЕССИЯ, SID)},
-                    inertia(),
-                    **kwargs,
-                )
-            )
+    monkeypatch.setenv("CACHE_STORE", "file")
 
-    for ответ in ответы:
-        assert ответ["status"] == 409
-        assert re.fullmatch(
-            r"https://t\.me/savdex_bot\?start=[A-Za-z0-9]{32}",
-            ответ["headers"]["x-inertia-location"],
-        )
+    try:
+        assert laravel_cache.get(ключ) == uid
+    finally:
+        laravel_cache.file_path(ключ).unlink(missing_ok=True)

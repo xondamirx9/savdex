@@ -1,50 +1,48 @@
 """
-Этап 7, шаг 53: формы кассы на Django неотличимы от Laravel —
-отмена и включение автопродления, отвязка карты, отказ от счёта.
+Этап 7, шаг 53: формы кассы на Django — отмена и включение
+автопродления, отвязка карты, отказ от счёта.
 
 Нет подписки — 404; включить можно только оплаченную; основную карту
 при автопродлении не отвязать; чужая карта и чужой или уже оплаченный
 счёт — 404; отменённый счёт возвращает скидочный промокод, если по нему
 нет живой карточной транзакции. У администратора — строка журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
-
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
+    # Тарифы, как при деплое (вместо PlanSeeder) — под владельцем базы
     subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
+        [sys.executable, "manage.py", "seed"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"], "PYTHONPATH": str(PYTHON)},
         check=True,
         capture_output=True,
     )
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'mine']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="mine")
+    компания(slug="other")
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес() as root:
         yield root
 
 
@@ -65,12 +63,12 @@ def сброс(
     транзакция: str | None = None,
 ) -> Callable[[], None]:
     def run() -> None:
-        # Номера с единицы: карта и счёт в адресе — те же у обеих сторон
+        # Номера с единицы: карта и счёт в адресе — предсказуемые
         sql(
             "truncate payment_transactions, payments, promo_codes, payment_methods, "
             "subscriptions, admin_actions restart identity cascade"
         )
-        # Язык из адреса (/en/…) правит учётку — у каждой стороны заново
+        # Язык из адреса (/en/…) правит учётку — каждый раз заново
         sql("update users set locale = 'ru'")
 
         mine = _id("companies", "slug = 'mine'")
@@ -154,39 +152,110 @@ def снимок() -> Any:
     }
 
 
+def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
+def _журнал(итог: dict[str, Any]) -> list[tuple[str, str]]:
+    """Журнал администратора: (раздел, правка) без смены языка учётки."""
+    return [(section, changes) for _, section, _, _, changes in итог["база"]["journal"]]
+
+
+ЯЗЫК = {
+    "en": '{"before":{"locale":"ru"},"after":{"locale":"en"}}',
+    "uz": '{"before":{"locale":"ru"},"after":{"locale":"uz"}}',
+}
+
+
 @pytest.mark.parametrize(
-    "подготовка",
+    ("подготовка", "ждём"),
     [
-        {},
-        {"автопродление": False},
-        {"конец": None},
-        {"подписка": None},
-        {"конец": "now() - interval '1 day'"},
+        # ждём: правка в журнале — или None, когда подписки нет / она истекла (404)
+        ({}, '{"before":{"auto_renew":true,"cancelled_at":null},"after":{"auto_renew":false,'
+             '"cancelled_at":"T"}}'),
+        # Автопродление уже выключено — отмечается только отмена
+        ({"автопродление": False}, '{"before":{"cancelled_at":null},"after":{"cancelled_at":"T"}}'),
+        ({"конец": None}, '{"before":{"auto_renew":true,"cancelled_at":null},"after":{'
+                          '"auto_renew":false,"cancelled_at":"T"}}'),
+        ({"подписка": None}, None),
+        ({"конец": "now() - interval '1 day'"}, None),
     ],
-)
+)  # fmt: skip
 @pytest.mark.parametrize("admin", [False, True])
-def test_отмена_автопродления(сайт, подготовка, admin):
+def test_отмена_автопродления(сайт, подготовка, ждём, admin):
     итог = отправить(
         сайт, "/cabinet/billing/cancel", сброс(**подготовка), снимок, uid=владелец(admin)
     )
+    подписки = итог["база"]["subscriptions"]
 
-    if not подготовка:
-        assert итог["база"]["subscriptions"][0][0] is False
+    if ждём is None:
+        assert итог["ответ"]["status"] == 404
+        assert подписки in ([], [(True, False, None, False)])
+        assert итог["база"]["journal"] == []
+
+        return
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+    # Выключено и отменено сейчас
+    assert подписки == [(False, True, True, True)]
+
+    if подготовка.get("конец", "") is None:
+        assert _сессия(итог)["success"] == "Автопродление отключено."
+    else:
+        [(до,)] = sql(
+            "select to_char(ends_at at time zone 'Asia/Tashkent', 'DD.MM.YYYY') from subscriptions"
+        )
+        assert _сессия(итог)["success"] == f"Автопродление отключено. Тариф действует до {до}."
+
+    assert _журнал(итог) == ([("subscriptions", ждём)] if admin else [])
 
 
 @pytest.mark.parametrize(
-    "подготовка",
+    ("подготовка", "ждём"),
     [
-        {"автопродление": False},
-        {},
-        {"подписка": "promo"},
-        {"подписка": "manual"},
-        {"подписка": None},
+        # ждём: (сообщение, правилась ли подписка) — или None (404)
+        ({"автопродление": False}, ("success", True)),
+        # Уже включено — строка не трогается
+        ({}, ("success", False)),
+        # Тариф без оплаты продлевать нечем
+        ({"подписка": "promo"}, ("warning", False)),
+        ({"подписка": "manual"}, ("warning", False)),
+        ({"подписка": None}, None),
     ],
 )
 @pytest.mark.parametrize("admin", [False, True])
-def test_включение_автопродления(сайт, подготовка, admin):
-    отправить(сайт, "/en/cabinet/billing/resume", сброс(**подготовка), снимок, uid=владелец(admin))
+def test_включение_автопродления(сайт, подготовка, ждём, admin):
+    итог = отправить(
+        сайт, "/en/cabinet/billing/resume", сброс(**подготовка), снимок, uid=владелец(admin)
+    )
+    # Язык из адреса сотрудник тоже записывает в журнал
+    журнал = [("users", ЯЗЫК["en"])] if admin else []
+
+    if ждём is None:
+        assert итог["ответ"]["status"] == 404
+        assert итог["база"]["subscriptions"] == []
+        assert _журнал(итог) == журнал
+
+        return
+
+    вид, правка = ждём
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/en/cabinet/settings"
+    assert _сессия(итог)[вид] == (
+        "Auto-renewal is on"
+        if вид == "success"
+        else "This plan was granted without payment — there is nothing to renew. "
+        "Issue an invoice when the period ends."
+    )
+    assert итог["база"]["subscriptions"] == [(True, False, None, правка)]
+
+    if admin and правка:
+        журнал.append(
+            ("subscriptions", '{"before":{"auto_renew":false},"after":{"auto_renew":true}}')
+        )
+
+    assert _журнал(итог) == журнал
 
 
 def _карта(token: str) -> int:
@@ -194,20 +263,21 @@ def _карта(token: str) -> int:
 
 
 @pytest.mark.parametrize(
-    ("карта", "подготовка"),
+    ("карта", "подготовка", "ждём"),
     [
-        ("a", {}),
-        ("a", {"автопродление": False}),
-        ("a", {"подписка": None}),
-        ("b", {}),
-        ("c", {}),
-        (None, {}),
+        # ждём: карты после — или None (404: чужая или нет такой)
+        ("a", {}, ["a", "b", "c"]),
+        ("a", {"автопродление": False}, ["b", "c"]),
+        ("a", {"подписка": None}, ["b", "c"]),
+        ("b", {}, ["a", "c"]),
+        ("c", {}, None),
+        (None, {}, None),
     ],
 )
-def test_отвязка_карты(сайт, карта, подготовка):
+def test_отвязка_карты(сайт, карта, подготовка, ждём):
     сброс(**подготовка)()
     номер = _карта(карта) if карта else 999999
-    отправить(
+    итог = отправить(
         сайт,
         f"/cabinet/billing/card/{номер}",
         сброс(**подготовка),
@@ -215,26 +285,69 @@ def test_отвязка_карты(сайт, карта, подготовка):
         uid=владелец(),
         method="DELETE",
     )
+    карты = [token for (token,) in итог["база"]["cards"]]
+
+    if ждём is None:
+        assert итог["ответ"]["status"] == 404
+        assert карты == ["a", "b", "c"]
+
+        return
+
+    # Inertia: DELETE, ответивший переходом, — 303
+    assert итог["ответ"]["status"] == 303
+    assert карты == ждём
+
+    if карты == ["a", "b", "c"]:
+        # Основная карта при автопродлении остаётся
+        assert _сессия(итог)["error"] == (
+            "Это основная карта, по ней идёт автопродление. Сначала привяжите другую "
+            "или отключите автопродление."
+        )
+    else:
+        assert _сессия(итог)["success"] == "Карта отвязана"
 
 
 def _счёт(number: str) -> int:
     return _id("payments", f"number = '{number}'")
 
 
+ОТМЕНЁН = [
+    ("SVX-1", "failed", None, None, True),
+    ("SVX-2", "paid", None, "заметка", False),
+    ("SVX-3", "pending", None, "заметка", False),
+]
+НЕ_ТРОНУТЫ = [
+    ("SVX-1", "pending", None, "заметка", False),
+    ("SVX-2", "paid", None, "заметка", False),
+    ("SVX-3", "pending", None, "заметка", False),
+]
+
+
 @pytest.mark.parametrize(
-    ("счёт", "подготовка"),
+    ("счёт", "подготовка", "промокод"),
     [
-        ("SVX-1", {}),
-        ("SVX-1", {"промокод": True}),
-        ("SVX-1", {"промокод": True, "транзакция": "now() - interval '5 minutes'"}),
-        ("SVX-1", {"промокод": True, "транзакция": "now() - interval '2 hours'"}),
-        ("SVX-2", {}),
-        ("SVX-3", {}),
-        (None, {}),
+        # промокод после отмены: (свободен, кем занят, правился) — или [] без него
+        ("SVX-1", {}, []),
+        ("SVX-1", {"промокод": True}, [(True, None, None, True)]),
+        # Живая карточная транзакция (свежее часа) держит промокод занятым
+        (
+            "SVX-1",
+            {"промокод": True, "транзакция": "now() - interval '5 minutes'"},
+            [(False, 1, None, False)],
+        ),
+        (
+            "SVX-1",
+            {"промокод": True, "транзакция": "now() - interval '2 hours'"},
+            [(True, None, None, True)],
+        ),
+        # Оплаченный, чужой и несуществующий — 404
+        ("SVX-2", {}, None),
+        ("SVX-3", {}, None),
+        (None, {}, None),
     ],
 )
 @pytest.mark.parametrize("admin", [False, True])
-def test_отказ_от_счёта(сайт, счёт, подготовка, admin):
+def test_отказ_от_счёта(сайт, счёт, подготовка, промокод, admin):
     сброс(**подготовка)()
     номер = _счёт(счёт) if счёт else 999999
     итог = отправить(
@@ -245,9 +358,32 @@ def test_отказ_от_счёта(сайт, счёт, подготовка, ad
         uid=владелец(admin),
         headers=inertia(),
     )
+    журнал = [("users", ЯЗЫК["uz"])] if admin else []
 
-    if счёт == "SVX-1" and len(подготовка) == 1:
-        assert итог["база"]["promo"][0][:2] == (True, None)
+    if промокод is None:
+        assert итог["ответ"]["status"] == 404
+        assert итог["база"]["payments"] == НЕ_ТРОНУТЫ
+        assert _журнал(итог) == журнал
+
+        return
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/uz/cabinet/settings"
+    assert _сессия(итог)["success"] == "SVX-1 hisob-fakturasi bekor qilindi"
+    # Счёт — «не оплачен», заметка администратора снята
+    assert итог["база"]["payments"] == ОТМЕНЁН
+    assert итог["база"]["promo"] == промокод
+
+    if admin:
+        журнал.append(
+            (
+                "payments",
+                '{"before":{"status":"pending","admin_note":"\\u0437\\u0430\\u043c\\u0435'
+                '\\u0442\\u043a\\u0430"},"after":{"status":"failed","admin_note":null}}',
+            )
+        )
+
+    assert _журнал(итог) == журнал
 
 
 def test_без_компании(сайт):
@@ -259,8 +395,18 @@ def test_без_компании(сайт):
         ("/cabinet/billing/card/1", "DELETE"),
         ("/cabinet/billing/invoice/1/cancel", "POST"),
     ):
-        отправить(сайт, path, сброс(), снимок, uid=uid, method=method)
+        итог = отправить(сайт, path, сброс(), снимок, uid=uid, method=method)
+        база = итог["база"]
+
+        # Без компании нет ни подписки, ни карт, ни счетов — 404, ничего не тронуто
+        assert итог["ответ"]["status"] == 404, path
+        assert база["subscriptions"] == [(True, False, None, False)]
+        assert len(база["cards"]) == 3 and база["payments"] == НЕ_ТРОНУТЫ
 
 
-def test_гость(сайт):
-    отправить(сайт, "/cabinet/billing/cancel", сброс(), снимок)
+def test_гость_уходит_на_вход(сайт):
+    итог = отправить(сайт, "/cabinet/billing/cancel", сброс(), снимок)
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/login"
+    assert итог["база"]["subscriptions"] == [(True, False, None, False)]

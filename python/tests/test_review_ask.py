@@ -2,15 +2,14 @@
 Этап 5, шаг 65: просьбы оставить отзыв (reviews:ask у Laravel) —
 задача reviews_ask расписания Django (savdex/schedule.py).
 
-На одних данных задача Django оставляет те же уведомления, что команда
-Laravel: о площадке — через неделю после регистрации, не админу, не
+Задача оставляет уведомления: о площадке — через неделю после регистрации, не админу, не
 неподтверждённому, не отключённому, не тому, кто уже написал отзыв или
 уже получил просьбу; о компании — через 3–30 дней после раскрытия, одна
 на пару «человек — компания» (первое раскрытие), не удалённой и не заблокированной
 компании, не после жалобы, не при уже написанном отзыве и не повторно.
 Язык — профиля человека.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -21,24 +20,20 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 ЦЕЛИ = ("t-ok", "t-gone", "t-blocked", "t-fresh", "t-old", "t-complaint", "t-reviewed", "t-asked")
 
 
 @pytest.fixture(scope="module")
 def компании() -> dict[str, int]:
     свежая_база()
-    php(
-        "foreach (['buyer', 'other', 'other2', 'other3', "
-        + ", ".join(f"'{slug}'" for slug in ЦЕЛИ)
-        + "] as $s) { App\\Models\\Company::factory()->create(['slug' => $s, "
-        "'name' => 'ООО '.$s, 'status' => 'active']); } echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+
+    for slug in ("buyer", "other", "other2", "other3", *ЦЕЛИ):
+        компания(slug=slug, name=f"ООО {slug}", status="active")
 
     return {r[0]: r[1] for r in sql("select slug, id from companies")}
 
@@ -140,11 +135,7 @@ def снимок() -> list[tuple[Any, ...]]:
     )
 
 
-def test_как_у_laravel(компании, tmp_path):
-    подготовка(компании)
-    php("Illuminate\\Support\\Facades\\Artisan::call('reviews:ask'); echo 'ok';", БЕЗ_ПЕРЕВОДА)
-    л = снимок()
-
+def test_просьбы_об_отзывах(компании, tmp_path):
     подготовка(компании)
     out = subprocess.run(
         [sys.executable, "manage.py", "schedule", "--once", "reviews_ask"],
@@ -160,12 +151,24 @@ def test_как_у_laravel(компании, tmp_path):
     )
     д = снимок()
 
-    assert д == л, (д, л)
     assert "Просьб о площадке: 2, о компаниях: 2." in out.stdout
-    новые = [row for row in д if row[3] != "Было"]
-    assert {(row[0], row[2]) for row in новые} == {
-        ("uz-week@example.uz", "platform_review_ask"),
-        ("en-week@example.uz", "platform_review_ask"),
-        ("uz-week@example.uz", "review_ask"),
-        ("fresh@example.uz", "review_ask"),
+    buyer, other = компании["buyer"], компании["other"]
+    новые = {
+        (row[0], row[1], row[2], row[3], row[5], row[6], row[7]) for row in д if row[3] != "Было"
     }
+
+    # Язык — профиля; компания уведомления — того, кто раскрывал
+    assert новые == {
+        ("uz-week@example.uz", buyer, "platform_review_ask",
+         "SavdEx’ni baholang — bu bir daqiqa oladi", "info", "/reviews/new", None),
+        ("en-week@example.uz", buyer, "platform_review_ask",
+         "Rate SavdEx — it takes a minute", "info", "/reviews/new", None),
+        ("uz-week@example.uz", buyer, "review_ask",
+         "«ООО t-ok» bilan hamkorlik qanday o‘tdi?", "info", "/company/t-ok#reviews", None),
+        ("fresh@example.uz", other, "review_ask",
+         "Как прошло сотрудничество с «ООО t-ok»?", "info", "/company/t-ok#reviews", None),
+    }  # fmt: skip
+    assert all(row[4] for row in д if row[3] != "Было"), "у каждой просьбы есть текст"
+    # Прежние просьбы не тронуты и не повторены
+    assert [row[0] for row in д if row[3] == "Было"] == ["asked@example.uz", "uz-week@example.uz"]
+    assert len(д) == 6

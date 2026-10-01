@@ -1,9 +1,10 @@
 """
-Раздел «Страницы и FAQ» админки на Django — сквозь настоящую базу и Laravel.
+Раздел «Страницы и FAQ» админки на Django — сквозь настоящую базу и
+страницы сайта.
 
-Страницы и вопросы помощи заводит миграция Laravel
-(2026_09_28_160000_pages_from_dictionaries) — с текстами на всех
-языках, какими их показывал сайт. Проверяется то, ради чего раздел
+Страницы и вопросы помощи заводит миграция
+(2026_09_28_160000_pages_from_dictionaries, в снимке схемы) — с текстами
+на всех языках, какими их показывал сайт. Проверяется то, ради чего раздел
 устроен именно так:
 
 - правка доходит до сайта, в том числе свой текст языка;
@@ -13,17 +14,19 @@
 - вопросы помощи правятся вместе со страницей и попадают в журнал;
 - страницы не заводятся и не удаляются, «О компании» не скрывается.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import django, php, sql, журнал, нужна_база, свежая_база, сотрудник
+from .pg_admin import django, sql, журнал, нужна_база, свежая_база, сотрудник
+from .web_site import адрес, открыть, страница
 
 pytestmark = нужна_база
 
@@ -36,6 +39,20 @@ def люди() -> dict[str, int]:
     свежая_база()
 
     return {role: сотрудник(role) for role in ("content_manager", "sales")}
+
+
+@pytest.fixture(scope="module")
+def сайт(люди) -> Iterator[str]:
+    with адрес() as root:
+        yield root
+
+
+def на_сайте(сайт: str, path: str) -> dict[str, Any]:
+    """Пропсы страницы сайта (About или DocPage)."""
+    д = открыть(сайт, path)
+    assert д["status"] == 200, д["status"]
+
+    return dict(страница(д["body"])["props"])
 
 
 def _page(key: str) -> dict[str, Any]:
@@ -157,16 +174,11 @@ def test_список_и_права(люди):
     assert чужой["status"] == 403
 
 
-def test_правка_доходит_до_сайта_и_в_журнал(люди):
+def test_правка_доходит_до_сайта_и_в_журнал(люди, сайт):
     _сохранить(люди, "about", excerpt="Новый подзаголовок", excerpt_uz="Yangi sarlavha")
 
-    assert php("echo App\\Models\\Page::where('key','about')->first()->localized('excerpt');") == (
-        "Новый подзаголовок"
-    )
-    assert (
-        php("echo App\\Models\\Page::where('key','about')->first()->localized('excerpt', 'uz');")
-        == "Yangi sarlavha"
-    )
+    assert на_сайте(сайт, "/about")["page"]["lead"] == "Новый подзаголовок"
+    assert на_сайте(сайт, "/uz/about")["page"]["lead"] == "Yangi sarlavha"
 
     запись = журнал("updated")
     assert запись["section"] == "content"
@@ -174,15 +186,12 @@ def test_правка_доходит_до_сайта_и_в_журнал(люди
     assert запись["changes"]["after"]["excerpt"] == "Новый подзаголовок"
 
 
-def test_очищенный_язык_уходит_в_машинный_перевод(люди):
+def test_очищенный_язык_уходит_в_машинный_перевод(люди, сайт):
     _сохранить(люди, "guide", title_en="")
 
     assert "en" not in _page("guide")["title_i18n"]
     # Перевода ещё нет: сайт показывает русский и ставит текст в очередь
-    assert (
-        php("echo App\\Models\\Page::where('key','guide')->first()->localized('title', 'en');")
-        == "Инструкция использования"
-    )
+    assert на_сайте(сайт, "/en/guide")["page"]["title"] == "Инструкция использования"
     assert sql(
         "select count(*) from content_translations where locale = 'en' and source = %s",
         ["Инструкция использования"],
@@ -205,7 +214,7 @@ def test_предупреждение_о_прежнем_переводе(люд�
     assert "свой перевод остался прежним" not in список["body"]
 
 
-def test_о_компании_не_скрывается_а_инструкция_скрывается(люди):
+def test_о_компании_не_скрывается_а_инструкция_скрывается(люди, сайт):
     _, форма = django(
         люди["content_manager"], ("get", f"{LIST}{_page('about')['id']}/change/", None)
     )
@@ -216,8 +225,11 @@ def test_о_компании_не_скрывается_а_инструкция_�
 
     _сохранить(люди, "help", is_published=None)
     assert _page("help")["published"] is False
-    assert php("echo App\\Models\\Page::where('key','help')->value('is_published') ? 1 : 0;") == "0"
+    # Скрытую страницу сайт не показывает, «О компании» — на месте
+    assert открыть(сайт, "/help")["status"] == 404
+    assert на_сайте(сайт, "/about")["page"]["key"] == "about"
     _сохранить(люди, "help", is_published="on")
+    assert на_сайте(сайт, "/help")["page"]["key"] == "help"
 
 
 def test_удалить_страницу_нельзя(люди):
@@ -230,7 +242,7 @@ def test_удалить_страницу_нельзя(люди):
     assert sql("select count(*) from pages where key = 'contacts'") == [(1,)]
 
 
-def test_вопросы_помощи(люди):
+def test_вопросы_помощи(люди, сайт):
     help_id = _page("help")["id"]
     form = _форма("help")
     n = int(form["faq_items-TOTAL_FORMS"])
@@ -258,11 +270,9 @@ def test_вопросы_помощи(люди):
     assert "Сколько стоит разместить объявление?" not in [q for q, _ in rows]
 
     # Сайт видит новый вопрос, и по-узбекски — своим текстом
-    вопросы = php(
-        "echo App\\Models\\Page::where('key','help')->first()->faq"
-        "->map(fn ($f) => $f->localized('question', 'uz'))->implode('|');"
-    )
+    вопросы = [f["question"] for f in на_сайте(сайт, "/uz/help")["faq"]]
     assert "Hisob bo‘yicha to‘lash mumkinmi?" in вопросы
+    assert len(вопросы) == n
 
     # Вопросы — часть страницы: их правка в журнале страницы
     запись = журнал("updated")

@@ -1,23 +1,25 @@
 """
-Отзывы о своей компании на Django неотличимы от Laravel: ответ на
+Отзывы о своей компании на Django: ответ на
 отзыв (10–2000 знаков, повторный заменяет прежний, свои тексты ошибок)
 и спор (один, причина 20–1000 знаков). Отзыв о чужой компании или
 неопубликованный — 404. У администратора — строка журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
 
-from .pg_admin import php, sql, нужна_база, свежая_база
+from .factories import компания, отзыв
+from .pg_admin import sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -25,17 +27,13 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'seller']);"
-        "$o = App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "foreach ([[$c, 'published'], [$c, 'moderation'], [$o, 'published']] as [$to, $s]) {"
-        " App\\Models\\Review::factory()->create(['company_id' => $to->id, 'status' => $s,"
-        " 'body' => 'Хороший поставщик']); }"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
+    c = компания(slug="seller")
+    o = компания(slug="other")
 
-    with laravel(MACHINE_TRANSLATION_ENABLED="false") as root:
+    for to, status in ((c, "published"), (c, "moderation"), (o, "published")):
+        отзыв(company_id=to, status=status, body="Хороший поставщик")
+
+    with адрес() as root:
         yield root
 
 
@@ -95,20 +93,28 @@ def снимок() -> Any:
 ПРИЧИНА = "Покупатель ничего у нас не заказывал, сделки не было"
 
 
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Сессия после ответа: сообщение (success/error) и ошибки проверки по полям."""
+    payload = json.loads(итог["сессия"]["payload"])
+    ошибки = payload.get("errors", {}).get("default", {}).get("messages", {})
+
+    return {"success": payload.get("success"), "error": payload.get("error"), "errors": ошибки}
+
+
 @pytest.mark.parametrize("admin", [False, True])
 @pytest.mark.parametrize(
-    ("body", "прежний"),
+    ("body", "прежний", "ошибка"),
     [
-        ({"reply": ОТВЕТ}, None),
-        ({"reply": ОТВЕТ}, ОТВЕТ),
-        ({"reply": "Другой ответ, подробнее"}, ОТВЕТ),
-        ({"reply": "коротко"}, None),
-        ({}, None),
-        ({"reply": "x" * 2001}, None),
-        ({"reply": ["массив"]}, None),
+        ({"reply": ОТВЕТ}, None, None),
+        ({"reply": ОТВЕТ}, ОТВЕТ, None),
+        ({"reply": "Другой ответ, подробнее"}, ОТВЕТ, None),
+        ({"reply": "коротко"}, None, "Ответ слишком короткий"),
+        ({}, None, "Напишите ответ"),
+        ({"reply": "x" * 2001}, None, ""),
+        ({"reply": ["массив"]}, None, ""),
     ],
 )
-def test_ответ(сайт, body, прежний, admin):
+def test_ответ(сайт, body, прежний, ошибка, admin):
     итог = отправить(
         сайт,
         f"/cabinet/reviews/{отзывы()[0]}/reply",
@@ -118,24 +124,46 @@ def test_ответ(сайт, body, прежний, admin):
         body=body,
         headers=inertia(),
     )
+    ответ, итог_сессии = итог["ответ"], сессия(итог)
+    reply, есть, свежий = итог["база"]["reviews"][0][:3]
     записан = admin and body.get("reply") in (ОТВЕТ, "Другой ответ, подробнее")
+
+    # Назад, откуда пришла форма
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == сайт + "/cabinet/settings"
+
+    if ошибка is None:
+        # Ответ (и повторный — заменяет прежний) с новой отметкой времени
+        assert итог_сессии["success"] == "Ответ опубликован" and not итог_сессии["errors"]
+        assert (reply, есть, свежий) == (body["reply"], True, True)
+    else:
+        assert list(итог_сессии["errors"]) == ["reply"]
+        assert ошибка in итог_сессии["errors"]["reply"][-1]
+        assert reply == прежний and итог_сессии["success"] is None
 
     assert bool(итог["база"]["journal"]) is записан, итог["база"]["journal"]
 
 
-@pytest.mark.parametrize("prefix", ["", "/en", "/uz"])
 @pytest.mark.parametrize(
-    ("body", "спор"),
+    ("prefix", "сообщения"),
     [
-        ({"reason": ПРИЧИНА}, False),
-        ({"reason": ПРИЧИНА}, True),
-        ({"reason": "мало"}, False),
-        ({"reason": ""}, False),
-        ({"reason": "x" * 1001}, False),
+        ("", ("Отзыв отправлен на проверку модератору", "Отзыв уже на рассмотрении")),
+        ("/en", None),
+        ("/uz", None),
     ],
 )
-def test_спор(сайт, body, спор, prefix):
-    отправить(
+@pytest.mark.parametrize(
+    ("body", "спор", "принят"),
+    [
+        ({"reason": ПРИЧИНА}, False, True),
+        ({"reason": ПРИЧИНА}, True, False),
+        ({"reason": "мало"}, False, False),
+        ({"reason": ""}, False, False),
+        ({"reason": "x" * 1001}, False, False),
+    ],
+)
+def test_спор(сайт, body, спор, принят, prefix, сообщения):
+    итог = отправить(
         сайт,
         f"{prefix}/cabinet/reviews/{отзывы()[0]}/dispute",
         сброс(спор=спор),
@@ -144,6 +172,32 @@ def test_спор(сайт, body, спор, prefix):
         body=body,
         headers=inertia(),
     )
+    ответ, итог_сессии = итог["ответ"], сессия(итог)
+    _, _, _, статус, причина, изменён, _ = итог["база"]["reviews"][0]
+
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == f"{сайт}{prefix}/cabinet/settings"
+
+    if принят:
+        # Спор открыт с причиной, в журнале администратора — строка
+        assert (статус, причина, изменён) == ("pending", ПРИЧИНА, True)
+        assert итог_сессии["success"] and not итог_сессии["errors"]
+        assert len(итог["база"]["journal"]) == 1
+    elif спор:
+        # Второй спор не открывается: прежний на месте
+        assert (статус, причина, изменён) == ("pending", None, False)
+        assert итог_сессии["error"] and итог_сессии["success"] is None
+        assert итог["база"]["journal"] == []
+    else:
+        assert list(итог_сессии["errors"]) == ["reason"]
+        assert (статус, причина, изменён) == (None, None, False)
+        assert итог["база"]["journal"] == []
+
+    if сообщения is not None:
+        if принят:
+            assert итог_сессии["success"] == сообщения[0]
+        elif спор:
+            assert итог_сессии["error"] == сообщения[1]
 
 
 @pytest.mark.parametrize("which", ["moderation", "other"])
@@ -159,3 +213,4 @@ def test_не_свой_отзыв_404(сайт, which):
     )
 
     assert итог["ответ"]["status"] == 404
+    assert all(r[0] is None for r in итог["база"]["reviews"])

@@ -9,7 +9,7 @@
 - журнал: «изменено» раздела «Пользователи» (AuditObserver у User) и
   строка «Выдача прав» / «Отзыв прав».
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

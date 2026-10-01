@@ -1,17 +1,18 @@
 """
 Этап 7, шаг 55: сверка денег.
 
-Оплаты проводит сам Laravel (OrderService и PromoCodeService: тариф,
+Оплаты проводит сама Django (savdex/web/orders.py и settlement.py: тариф,
 пакет, скидочный промокод, подтверждение администратором, отмена) —
-сверка на Django не находит ни одного расхождения. Затем данные портятся
+сверка не находит ни одного расхождения. Затем данные портятся
 так, как их испортила бы ошибка выдачи, — и каждая порча находится.
 Письмо о расхождении приходит один раз.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL).
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL).
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -19,11 +20,92 @@ from pathlib import Path
 
 import pytest
 
-from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import компания, пользователь
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
+ЗАПУСК = {
+    **ОКРУЖЕНИЕ,
+    "MACHINE_TRANSLATION_ENABLED": "false",
+    "DJANGO_SETTINGS_MODULE": "savdex.settings",
+    "PYTHONPATH": str(PYTHON),
+}
+
+#: Оплаты, как их проводит сайт: заказ из кабинета, колбэк кассы,
+#: подтверждение администратором, промокоды и отмена счёта
+ОПЛАТЫ = """
+import json, sys
+import django
+django.setup()
+from django.test import RequestFactory
+
+from savdex import laravel_session
+from savdex.moderation.services import AdminContext
+from savdex.web import orders, settlement
+from savdex.web.shared import Context, _rows
+
+ids = json.loads(sys.argv[1])
+ctx = Context(
+    request=RequestFactory().post("/cabinet/billing"), root="http://127.0.0.1",
+    path="/cabinet/billing", query="", locale="ru", visitor=laravel_session.GUEST,
+)
+
+def one(query, params):
+    return _rows(query, params)[0]
+
+def company(slug):
+    return one("select * from companies where id = %s", [ids["companies"][slug]])
+
+def user(slug):
+    return one("select * from users where id = %s", [ids["users"][slug]])
+
+def fresh(payment):
+    return one("select * from payments where id = %s", [payment["id"]])
+
+plan = one("select * from plans where code = 'business'", [])
+flash = one("select * from plans where code = 'flash'", [])
+pack = one("select * from credit_packs where code = 'm'", [])
+admin = one("select id, name, email from users where id = %s", [ids["admin"]])
+staff = AdminContext(request=RequestFactory().post("/py/admin/"), user={**admin, "is_admin": True})
+
+# Тариф по колбэку кассы, пакет по колбэку, тариф — подтвердил администратор
+# (сайт берёт счёт из базы целиком — fresh)
+settlement.mark_paid(
+    ctx, fresh(orders.order_plan(ctx, company("a"), plan, user("a"))),
+    {"provider": "uzum", "external_id": "T-1"},
+)
+settlement.mark_paid(ctx, fresh(orders.order_credits(ctx, company("a"), pack, user("a"))), {})
+settlement.confirm(
+    staff, fresh(orders.order_plan(ctx, company("b"), flash, user("b"))), admin, "перевод"
+)
+# Скидочный промокод: счёт на остаток, оплачен
+kind, payment = orders.redeem(ctx, "SALE", company("c"), user("c"))
+assert kind == "payment"
+settlement.mark_paid(ctx, fresh(payment), {})
+# Ждущий счёт со скидкой и отменённый
+kind, _ = orders.redeem(ctx, "WAIT", company("d"), user("d"))
+assert kind == "payment"
+orders.cancel(ctx, fresh(orders.order_credits(ctx, company("d"), pack, user("d"))))
+print("ok")
+"""
+
+
+def справочники(*таблицы: str) -> None:
+    """Справочники из снимка savdex/bootstrap/seeds.json — только эти таблицы (PlanSeeder)."""
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        # Справочники заводит владелец базы, как миграции
+        env={**ЗАПУСК, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"]},
+        capture_output=True,
+        check=True,
+    )
 
 
 def сверка(*args: str, env: dict[str, str] | None = None) -> tuple[int, list[tuple[str, str]]]:
@@ -42,50 +124,38 @@ def сверка(*args: str, env: dict[str, str] | None = None) -> tuple[int, li
 @pytest.fixture(scope="module")
 def оплаты() -> Iterator[None]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    справочники("plans")
     sql(
         "insert into credit_packs (code, name, credits, price_usd, price_uzs, sort, is_active, "
         "created_at, updated_at) values ('m', 'Средний', 50, 30, 350000, 1, true, now(), now())"
     )
-    php(
-        "$orders = app(App\\Services\\OrderService::class);"
-        "$promos = app(App\\Services\\PromoCodeService::class);"
-        "$plan = App\\Models\\Plan::where('code', 'business')->first();"
-        "$flash = App\\Models\\Plan::where('code', 'flash')->first();"
-        "$pack = App\\Models\\CreditPack::where('code', 'm')->first();"
-        "$admin = App\\Models\\User::factory()->create(['is_admin' => true,"
-        " 'admin_role' => 'superadmin', 'email' => 'boss@savdex.uz']);"
-        "foreach (['a', 'b', 'c', 'd'] as $slug) {"
-        " $c[$slug] = App\\Models\\Company::factory()->create(['slug' => $slug]);"
-        " $u[$slug] = App\\Models\\User::factory()->create(['company_id' => $c[$slug]->id]); }"
-        # Тариф по колбэку кассы, пакет по колбэку, тариф — подтвердил администратор
-        "$orders->markPaid($orders->orderPlan($c['a'], $plan, $u['a']),"
-        " ['provider' => 'uzum', 'external_id' => 'T-1']);"
-        "$orders->markPaid($orders->orderCredits($c['a'], $pack, $u['a']));"
-        "$orders->confirm($orders->orderPlan($c['b'], $flash, $u['b']), $admin, 'перевод');"
-        # Скидочный промокод: счёт на остаток, оплачен
-        "App\\Models\\PromoCode::create(['code' => 'SALE', 'plan_id' => $plan->id, 'days' => 0,"
-        " 'discount_percent' => 20]);"
-        "$orders->markPaid($promos->redeem('SALE', $c['c'], $u['c']));"
-        # Ждущий счёт со скидкой и отменённый
-        "App\\Models\\PromoCode::create(['code' => 'WAIT', 'plan_id' => $plan->id, 'days' => 0,"
-        " 'discount_percent' => 10]);"
-        "$promos->redeem('WAIT', $c['d'], $u['d']);"
-        "$orders->cancel($orders->orderCredits($c['d'], $pack, $u['d']));"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
+    admin = пользователь(is_admin=True, admin_role="superadmin", email="boss@savdex.uz")
+    companies = {slug: компания(slug=slug) for slug in "abcd"}
+    users = {slug: пользователь(company_id=c) for slug, c in companies.items()}
+    [(plan,)] = sql("select id from plans where code = 'business'")
+    sql(
+        "insert into promo_codes (code, plan_id, days, discount_percent, created_at, updated_at) "
+        "values ('SALE', %s, 0, 20, now(), now()), ('WAIT', %s, 0, 10, now(), now())",
+        [plan, plan],
     )
+    вывод = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            ОПЛАТЫ,
+            json.dumps({"admin": admin, "companies": companies, "users": users}),
+        ],
+        cwd=PYTHON,
+        env=ЗАПУСК,
+        capture_output=True,
+        text=True,
+    )
+    assert вывод.returncode == 0 and "ok" in вывод.stdout, вывод.stderr[-3000:]
 
     yield
 
 
-def test_проведённое_laravel_сходится(оплаты):
+def test_проведённое_сходится(оплаты):
     код, найдено = сверка("--all")
 
     assert (код, найдено) == (0, [])

@@ -1,43 +1,42 @@
 """
-Выдача доступа в админку: PHP-команда против Python-команды на одной базе.
+Выдача доступа в админку: команда manage.py admin на настоящей базе.
 
-Первая перенесённая команда, которая пишет. Поэтому сверяется не вывод,
-а итог в базе: на одних и тех же входах обе команды обязаны оставить
-в users одинаковые строки (кроме соли в хеше и времени), одинаково
-отказать и одинаково ответить. И отдельно — главный вопрос: пустит ли
-Laravel администратора, заведённого Python-версией.
+Команда пишет, поэтому проверяется не только вывод, но и итог в базе:
+строка users после команды (кроме соли в хеше и времени), отказы и их
+тексты — те же, что были у PHP-команды savdex:admin. И отдельно —
+главный вопрос: пускает ли вход сайта администратора с выданным паролем.
 
-Каждый случай готовится дважды с нуля: состояние → PHP → снимок строки,
-то же состояние → Python → снимок, затем сравнение.
+Каждый случай готовится с нуля: состояние → команда → снимок строки.
 
-Нужны PHP с зависимостями и PostgreSQL (SAVDEX_PARITY_PG_URL); без
-них проверка пропускается. В CI есть обе вещи.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); без него проверка пропускается.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
+import bcrypt
 import pytest
 
-КОРЕНЬ = Path(__file__).resolve().parents[2]
+from savdex import laravel_session
+
+from .pg_admin import свежая_база
+
 PYTHON = Path(__file__).resolve().parents[1]
 АДРЕС = os.environ.get("SAVDEX_PARITY_PG_URL", "")
 
 pytestmark = pytest.mark.skipif(
     not АДРЕС,
-    reason="нет SAVDEX_PARITY_PG_URL — сравнение требует PHP и PostgreSQL",
+    reason="нет SAVDEX_PARITY_PG_URL — проверка требует PostgreSQL",
 )
 
-#: Общее окружение обеих команд: одна база, один адрес сайта, одна
-#: стоимость bcrypt (малая — ради скорости; совпадение цены тоже сверяется)
+#: Окружение команды: база, адрес сайта, стоимость bcrypt (малая — ради
+#: скорости; цена тоже проверяется)
 ОКРУЖЕНИЕ = {
     **os.environ,
     "DB_CONNECTION": "pgsql",
@@ -50,7 +49,7 @@ pytestmark = pytest.mark.skipif(
     "BCRYPT_ROUNDS": "4",
 }
 
-#: Столбцы, которые обязаны совпасть буква в букву
+#: Столбцы строки users, которые проверяются буква в букву
 СТОЛБЦЫ = (
     "name",
     "email",
@@ -68,16 +67,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module", autouse=True)
 def база():
-    if "test" not in urlparse(АДРЕС).path:
-        pytest.fail("SAVDEX_PARITY_PG_URL ведёт в базу без «test» в имени — отказываюсь стирать")
-
-    subprocess.run(
-        ["php", "artisan", "migrate:fresh", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        check=True,
-    )
+    свежая_база()
 
 
 def _sql(query: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
@@ -87,16 +77,6 @@ def _sql(query: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
         курсор = соединение.execute(query, params or [])
 
         return курсор.fetchall() if курсор.description else []
-
-
-def _php(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["php", "artisan", "savdex:admin", *args],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        text=True,
-    )
 
 
 def _python(*args: str) -> subprocess.CompletedProcess[str]:
@@ -141,54 +121,25 @@ def _вывод(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
-def _сравнить(
-    подготовка: list[str], email: str, *args: str
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Одно и то же состояние → обе команды → итоги для сравнения."""
-    итоги = []
+def _выполнить(подготовка: list[str], email: str, *args: str) -> dict[str, Any]:
+    """Состояние с нуля → команда → код, вывод и строка users после неё."""
+    _sql("delete from users where email = %s", [email])
 
-    for команда in (_php, _python):
-        _sql("delete from users where email = %s", [email])
+    for query in подготовка:
+        _sql(query)
 
-        for query in подготовка:
-            _sql(query)
+    до = _строка(email)
+    результат = _python(*args)
+    после = _строка(email)
 
-        до = _строка(email)
-        результат = команда(*args)
-        после = _строка(email)
-
-        итоги.append(
-            {
-                "код": результат.returncode,
-                # Одним текстом: Laravel печатает ошибки в stdout,
-                # Python-команды — в stderr, как положено. Слова те же
-                "вывод": _вывод(результат.stdout + результат.stderr),
-                "строка": после,
-                "до": до,
-            }
-        )
-
-    return итоги[0], итоги[1]
-
-
-def _без_времени(итог: dict[str, Any]) -> dict[str, Any]:
-    итог = dict(итог)
-
-    if итог["строка"] is not None:
-        строка = dict(итог["строка"])
-
-        for поле in ("created_at", "updated_at"):
-            строка[поле] = строка[поле] is not None
-
-        # Подтверждение: у новых — «сейчас», у подтверждённых — прежнее
-        if итог["до"] is None or итог["до"]["email_verified_at"] is None:
-            строка["email_verified_at"] = строка["email_verified_at"] is not None
-
-        итог["строка"] = строка
-
-    итог.pop("до")
-
-    return итог
+    return {
+        "код": результат.returncode,
+        # Одним текстом: ошибки команда печатает в stderr
+        "вывод": _вывод(результат.stdout + результат.stderr),
+        "пароль": re.search(r"\| Пароль\s+\| (\S+)", результат.stdout),
+        "строка": после,
+        "до": до,
+    }
 
 
 СУЩЕСТВУЮЩИЙ = (
@@ -196,45 +147,90 @@ def _без_времени(итог: dict[str, Any]) -> dict[str, Any]:
     "values ('Старый', 'old@savdex.uz', 'x', 'blocked', {verified}, now(), now())"
 )
 
+РОЛИ = (
+    "superadmin, admin, sales, supplier_manager, buyer_manager, moderator, finance, support, "
+    "content_manager"
+)
+
+
+def администратор(name: str, email: str, role: str) -> dict[str, Any]:
+    """Строка users администратора, которого выдала команда."""
+    return {
+        "name": name,
+        "email": email,
+        "is_admin": True,
+        "admin_role": role,
+        "admin_permissions": None,
+        "status": "active",
+        # Выданный пароль знают двое — при первом входе его надо сменить
+        "must_change_password": True,
+        "locale": "ru",
+        "company_role": "owner",
+        "company_id": None,
+        "deleted_at": None,
+        # bcrypt, цена BCRYPT_ROUNDS=4, в виде PHP ($2y$)
+        "password": "$2y$04$",
+    }
+
 
 @pytest.mark.parametrize(
-    ("подготовка", "email", "args"),
+    ("подготовка", "email", "args", "строка", "вывод"),
     [
         pytest.param(
             [],
             "boss@savdex.uz",
             ("boss@savdex.uz", "--password=Savdex2026!x"),
+            администратор("boss", "boss@savdex.uz", "superadmin"),
+            "Администратор создан.",
             id="новый суперадмин",
         ),
         pytest.param(
             [],
             "fin@savdex.uz",
             ("fin@savdex.uz", "--role=finance", "--name=Финансы Ташкент"),
+            администратор("Финансы Ташкент", "fin@savdex.uz", "finance"),
+            "| Роль | Финансы |",
             id="новый с ролью и именем",
         ),
-        pytest.param([], "mod@savdex.uz", ("mod@savdex.uz", "--moderator"), id="модератор"),
+        pytest.param(
+            [],
+            "mod@savdex.uz",
+            ("mod@savdex.uz", "--moderator"),
+            администратор("mod", "mod@savdex.uz", "moderator"),
+            "| Роль | Модератор |",
+            id="модератор",
+        ),
         pytest.param(
             [],
             "caps@savdex.uz",
             ("  CAPS@Savdex.UZ ", "--role=support"),
+            администратор("caps", "caps@savdex.uz", "support"),
+            "| Почта | caps@savdex.uz |",
             id="почта с пробелами и прописными",
         ),
         pytest.param(
             [],
             "zero@savdex.uz",
             ("zero@savdex.uz", "--password=0", "--role=0", "--name=0"),
+            # «0» у PHP — ложь: пароль сгенерирован, роль и имя — по умолчанию
+            администратор("zero", "zero@savdex.uz", "superadmin"),
+            "| Роль | Суперадмин |",
             id="ноль как пусто",
         ),
         pytest.param(
             [СУЩЕСТВУЮЩИЙ.format(verified="null")],
             "old@savdex.uz",
             ("old@savdex.uz", "--role=sales"),
+            администратор("Старый", "old@savdex.uz", "sales"),
+            "Роль выдана существующему пользователю, пароль заменён.",
             id="существующий заблокированный без подтверждения",
         ),
         pytest.param(
             [СУЩЕСТВУЮЩИЙ.format(verified="'2026-01-02 03:04:05'")],
             "old@savdex.uz",
             ("old@savdex.uz",),
+            администратор("Старый", "old@savdex.uz", "superadmin"),
+            "Роль выдана существующему пользователю, пароль заменён.",
             id="существующий подтверждённый",
         ),
         pytest.param(
@@ -244,6 +240,9 @@ def _без_времени(итог: dict[str, Any]) -> dict[str, Any]:
             ],
             "gone@savdex.uz",
             ("gone@savdex.uz",),
+            None,
+            "Учётка gone@savdex.uz удалена 06.05.2026. Восстановите её в админке или выберите "
+            "другую почту.",
             id="удалённая учётка",
         ),
         pytest.param(
@@ -255,66 +254,134 @@ def _без_времени(итог: dict[str, Any]) -> dict[str, Any]:
             ],
             "same@savdex.uz",
             ("same@savdex.uz", "--role=support"),
+            администратор("Вернулся", "same@savdex.uz", "support"),
+            "Роль выдана существующему пользователю, пароль заменён.",
             id="удалённая и действующая на одной почте",
         ),
         pytest.param(
-            [], "new@savdex.uz", ("new@savdex.uz", "--role=sales-manager"), id="неизвестная роль"
+            [],
+            "new@savdex.uz",
+            ("new@savdex.uz", "--role=sales-manager"),
+            None,
+            f"Роли «sales-manager» нет. Доступны: {РОЛИ}.",
+            id="неизвестная роль",
         ),
-        pytest.param([], "не-почта", ("не-почта",), id="не почта"),
-        pytest.param([], "a@b", ("a@b",), id="почта без домена верхнего уровня"),
+        pytest.param(
+            [],
+            "не-почта",
+            ("не-почта",),
+            None,
+            "«не-почта» не похоже на адрес почты.",
+            id="не почта",
+        ),
+        pytest.param(
+            [],
+            "a@b",
+            ("a@b",),
+            None,
+            "«a@b» не похоже на адрес почты.",
+            id="почта без домена верхнего уровня",
+        ),
     ],
 )
-def test_обе_команды_оставляют_одно_и_то_же(подготовка, email, args):
-    php, python = _сравнить(подготовка, email, *args)
+def test_команда_оставляет_в_базе(подготовка, email, args, строка, вывод):
+    итог = _выполнить(подготовка, email, *args)
 
-    assert _без_времени(python) == _без_времени(php)
+    assert вывод in итог["вывод"], итог["вывод"]
+
+    if строка is None:
+        # Отказ: код ошибки, строка — какой была до команды
+        assert итог["код"] == 1
+        assert итог["строка"] == итог["до"]
+
+        return
+
+    assert итог["код"] == 0, итог["вывод"]
+    assert (
+        "Пароль показан один раз. При первом входе система попросит его сменить." in итог["вывод"]
+    )
+    assert {k: итог["строка"][k] for k in строка} == строка
+    assert итог["строка"]["created_at"] is not None and итог["строка"]["updated_at"] is not None
+
+    # Подтверждение: у новых — «сейчас», у подтверждённых — прежнее
+    if итог["до"] is not None and итог["до"]["email_verified_at"] is not None:
+        assert итог["строка"]["email_verified_at"] == итог["до"]["email_verified_at"]
+    else:
+        assert итог["строка"]["email_verified_at"] is not None
+
+    # Свой пароль печатается как есть; пустой или «0» — сгенерирован:
+    # 14 букв и цифр (Str::password(14, symbols: false))
+    assert итог["пароль"] is not None
+    пароль = итог["пароль"].group(1)
+    свой = next((a.split("=", 1)[1] for a in args if a.startswith("--password=")), "0")
+
+    if свой != "0":
+        assert пароль == свой
+    else:
+        assert re.fullmatch(r"[A-Za-z0-9]{14}", пароль), пароль
+
+    # В базе — хеш именно этого пароля (Hash::check у Laravel: $2y$ = $2b$)
+    [(хеш,)] = _sql("select password from users where email = %s and deleted_at is null", [email])
+    assert bcrypt.checkpw(пароль.encode(), ("$2b$" + хеш[4:]).encode())
 
 
 def test_случаи_различают():
-    """Сверка слепа, если все случаи кончаются одинаково — проверка самой проверки."""
-    удачный = _php("check-ok@savdex.uz", "--password=Savdex2026!x")
-    неудачный = _php("check-bad@savdex.uz", "--role=нет")
+    """Проверка слепа, если все случаи кончаются одним и тем же — проверка самой проверки."""
+    удачный = _python("check-ok@savdex.uz", "--password=Savdex2026!x")
+    неудачный = _python("check-bad@savdex.uz", "--role=нет")
 
     assert удачный.returncode == 0
     assert неудачный.returncode != 0
 
 
-def _laravel_о(email: str, password: str) -> dict[str, Any]:
-    вывод = subprocess.run(
-        ["php", "python/tests/fixtures/admin_probe.php", email, password],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-    return json.loads(вывод)
-
-
-def test_laravel_пускает_администратора_от_python():
+def test_вход_пускает_администратора():
     """
-    Главное: пароль, выданный Python-версией, принимает сам Laravel —
-    той же проверкой, что при входе, — и видит того же администратора,
-    что после PHP-команды.
+    Главное: пароль, выданный командой, принимает вход сайта (та же
+    проверка bcrypt, что у Laravel) — и после входа администратор должен
+    сменить пароль.
     """
-    итоги = {}
+    from .test_web_forms import отправить
+    from .web_site import адрес, сессия_из, строка
 
-    for имя, команда in (("php", _php), ("python", _python)):
-        email = f"login-{имя}@savdex.uz"
-        _sql("delete from users where email = %s", [email])
+    email = "login-python@savdex.uz"
+    _sql("delete from users where email = %s", [email])
 
-        результат = команда(email, "--role=content_manager")
-        assert результат.returncode == 0, результат.stderr
+    результат = _python(email, "--role=content_manager")
+    assert результат.returncode == 0, результат.stderr
 
-        пароль = re.search(r"\| Пароль\s+\| (\S+)", результат.stdout)
-        assert пароль is not None, результат.stdout
-        assert len(пароль.group(1)) == 14
+    пароль = re.search(r"\| Пароль\s+\| (\S+)", результат.stdout)
+    assert пароль is not None, результат.stdout
+    assert len(пароль.group(1)) == 14
+    [(uid,)] = _sql("select id from users where email = %s", [email])
 
-        итоги[имя] = _laravel_о(email, пароль.group(1))
+    with адрес() as сайт:
+        итог = отправить(
+            сайт,
+            "/login",
+            lambda: None,
+            body={"email": email, "password": пароль.group(1)},
+        )
+        неверный = отправить(
+            сайт,
+            "/login",
+            lambda: None,
+            body={"email": email, "password": "не-тот-пароль"},
+        )
 
-    assert итоги["python"]["password_ok"] is True, итоги["python"]
-    assert итоги["python"] == итоги["php"]
+    # Вошёл: сессия под новым номером (migrate), в ней — он; первым делом —
+    # смена пароля
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"].endswith("/password/change")
+    assert итог["сессия"] is None
+    новая = строка(сессия_из(итог["ответ"]))
+    assert новая is not None and новая["user_id"] == uid
+    assert f'"{laravel_session.LOGIN_KEY}":{uid}' in новая["payload"]
+
+    # Чужой пароль — назад с ошибкой, не вошёл
+    assert неверный["ответ"]["status"] == 302
+    assert неверный["сессия"]["user_id"] is None
+    assert laravel_session.LOGIN_KEY not in неверный["сессия"]["payload"]
+    assert '"errors":' in неверный["сессия"]["payload"]
 
 
 def test_деплой_не_сбрасывает_пароль():

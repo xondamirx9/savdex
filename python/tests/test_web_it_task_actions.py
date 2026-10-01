@@ -1,15 +1,17 @@
 """
-Свои IT-задачи на Django неотличимы от Laravel: закрыть (только
+Свои IT-задачи на Django: закрыть (только
 открытую), отметить выполненной (ссылка по правилу url, исполнитель
 только из откликнувшихся), открыть заново, удалить задачу (файл с
-диска, каскад файлов и разговоров, переход к списку) и файл задачи.
+диска и строки файлов, разговоры остаются без задачи, переход к
+списку) и файл задачи.
 Чужая задача — 404. У администратора — строка журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -17,28 +19,22 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, php, sql, нужна_база, свежая_база
+from .factories import Выражение, it_задача, компания
+from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
-
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 ФАЙЛ = "it-tasks/parity/spec.pdf"
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'customer']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'dev']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    for slug in ("customer", "dev", "other"):
+        компания(slug=slug)
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес() as root:
         yield root
 
 
@@ -59,18 +55,25 @@ def задача(status: str = "active", *, компания: str = "customer") 
         sql("delete from admin_actions where section = 'ittasks'")
         sql("select setval('it_tasks_id_seq', 1, false)")
         sql("select setval('it_task_files_id_seq', 1, false)")
-        php(
-            "$t = App\\Models\\ItTask::factory()->create(["
-            f"'company_id' => {_компания(компания)}, 'status' => '{status}',"
-            "'title' => 'Сайт магазина стройматериалов', 'description' => 'Каталог и корзина',"
-            "'published_at' => now()->subDay(),"
-            "'closed_at' => " + ("null" if status == "active" else "'2026-09-01 10:00:00'") + "]);"
-            f"$t->files()->create(['title' => 'ТЗ', 'file_path' => '{ФАЙЛ}',"
-            " 'file_size' => 3, 'mime' => 'application/pdf']);"
-            "App\\Models\\MessageThread::create(['it_task_id' => $t->id,"
-            f" 'buyer_company_id' => {_компания('dev')}, 'seller_company_id' => $t->company_id]);"
-            "echo 'ok';",
-            БЕЗ_ПЕРЕВОДА,
+        владелец = _компания(компания)
+        pk = it_задача(
+            company_id=владелец,
+            status=status,
+            title="Сайт магазина стройматериалов",
+            description="Каталог и корзина",
+            published_at=Выражение("now() - interval '1 day'"),
+            closed_at=None if status == "active" else "2026-09-01 10:00:00",
+        )
+        sql(
+            "insert into it_task_files (it_task_id, title, file_path, file_size, mime, "
+            "created_at, updated_at) values (%s, 'ТЗ', %s, 3, 'application/pdf', now(), now())",
+            [pk, ФАЙЛ],
+        )
+        # Отклик компании dev — разговор по задаче
+        sql(
+            "insert into message_threads (it_task_id, buyer_company_id, seller_company_id, "
+            "created_at, updated_at) values (%s, %s, %s, now(), now())",
+            [pk, _компания("dev"), владелец],
         )
         путь = Path(КОРЕНЬ) / "storage/app/private" / ФАЙЛ
         путь.parent.mkdir(parents=True, exist_ok=True)
@@ -102,11 +105,51 @@ def снимок() -> Any:
     }
 
 
+def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
+def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
+    return dict(((_сессия(итог).get("errors") or {}).get("default") or {}).get("messages") or {})
+
+
+ЗАКРЫТА = "Задача закрыта — на витрине её больше нет, чаты остались"
+ОТКРЫТА = "Задача снова открыта для откликов"
+ВЫПОЛНЕНА = "Задача отмечена выполненной — она попала в «Выполненные» на витрине"
+ТОЛЬКО_ОТКЛИКНУВШИЕСЯ = "Исполнителем можно отметить только компанию, которая откликалась на задачу"
+
+
+#: (действие, статус) → (статус после, закрыта, закрыта сейчас, опубликована сейчас,
+#: правка в журнале администратора или None)
+ПЕРЕХОДЫ = {
+    ("close", "active"): (
+        "closed", True, True, False,
+        '{"before":{"status":"active","closed_at":null},"after":{"status":"closed",'
+        '"closed_at":"T"}}',
+    ),
+    # Закрыть можно только открытую — прочее не меняется
+    ("close", "closed"): ("closed", True, False, False, None),
+    ("close", "completed"): ("completed", True, False, False, None),
+    ("reopen", "active"): ("active", False, None, False, None),
+    # Открыта заново — снова на витрине с сегодняшней датой
+    ("reopen", "closed"): (
+        "active", False, None, True,
+        '{"before":{"status":"closed","published_at":"T","closed_at":"T"},"after":{'
+        '"status":"active","published_at":"T","closed_at":null}}',
+    ),
+    ("reopen", "completed"): (
+        "active", False, None, True,
+        '{"before":{"status":"completed","published_at":"T","closed_at":"T"},"after":{'
+        '"status":"active","published_at":"T","closed_at":null}}',
+    ),
+}  # fmt: skip
+
+
 @pytest.mark.parametrize("admin", [False, True])
 @pytest.mark.parametrize("verb", ["close", "reopen"])
 @pytest.mark.parametrize("status", ["active", "closed", "completed"])
 def test_закрыть_и_открыть(сайт, verb, status, admin):
-    отправить(
+    итог = отправить(
         сайт,
         f"/cabinet/it-tasks/1/{verb}",
         задача(status),
@@ -114,23 +157,46 @@ def test_закрыть_и_открыть(сайт, verb, status, admin):
         uid=заказчик(admin),
         headers=inertia(),
     )
+    после, закрыта, сейчас, опубликована, правка = ПЕРЕХОДЫ[(verb, status)]
+    [task] = итог["база"]["tasks"]
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+    assert _сессия(итог)["success"] == (ЗАКРЫТА if verb == "close" else ОТКРЫТА)
+    assert task[1:6] == (после, закрыта, сейчас, False, опубликована)
+    assert итог["база"]["journal"] == (
+        [("updated", "ittasks", "Сайт магазина стройматериалов", правка)]
+        if admin and правка
+        else []
+    )
 
 
 @pytest.mark.parametrize(
-    "body",
+    ("body", "ждём"),
     [
-        {},
-        {"result_url": "https://shop.uz", "result_summary": "Сдали в срок", "contractor": True},
-        {"result_url": "shop.uz"},
-        {"result_url": "https://" + "a" * 250 + ".uz"},
-        {"result_summary": "x" * 601},
-        {"contractor_company_id": "abc"},
-        {"contractor": "other"},
-        {"result_url": "", "result_summary": "", "contractor_company_id": ""},
+        # ждём: (ссылка, итог, исполнитель) выполненной задачи — или ошибки
+        ({}, (None, None, None)),
+        (
+            {"result_url": "https://shop.uz", "result_summary": "Сдали в срок", "contractor": True},
+            ("https://shop.uz", "Сдали в срок", "dev"),
+        ),
+        (
+            {"result_url": "shop.uz"},
+            {"result_url": ["Ссылка должна начинаться с http:// или https://"]},
+        ),
+        ({"result_url": "https://" + "a" * 250 + ".uz"}, {"result_url": ["validation.max.string"]}),
+        ({"result_summary": "x" * 601}, {"result_summary": ["validation.max.string"]}),
+        (
+            {"contractor_company_id": "abc"},
+            {"contractor_company_id": ["validation.integer", ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]},
+        ),
+        ({"contractor": "other"}, {"contractor_company_id": [ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]}),
+        # Пустые поля — null
+        ({"result_url": "", "result_summary": "", "contractor_company_id": ""}, (None, None, None)),
     ],
 )
 @pytest.mark.parametrize("admin", [False, True])
-def test_выполнено(сайт, body, admin):
+def test_выполнено(сайт, body, ждём, admin):
     body = dict(body)
 
     кто = body.pop("contractor", None)
@@ -138,7 +204,7 @@ def test_выполнено(сайт, body, admin):
     if кто is not None:
         body["contractor_company_id"] = _компания("other" if кто == "other" else "dev")
 
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/it-tasks/1/complete",
         задача("closed"),
@@ -147,6 +213,31 @@ def test_выполнено(сайт, body, admin):
         body=body,
         headers=inertia(),
     )
+    [task] = итог["база"]["tasks"]
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/settings"
+
+    if isinstance(ждём, dict):
+        assert _ошибки(итог) == ждём
+        # Задача как была — закрыта, не выполнена
+        assert task[1:9] == ("closed", True, False, False, False, None, None, None)
+        assert итог["база"]["journal"] == []
+
+        return
+
+    url, summary, кто_сделал = ждём
+    исполнитель = _компания(кто_сделал) if кто_сделал else None
+    assert _сессия(итог)["success"] == ВЫПОЛНЕНА
+    assert task[1:9] == ("completed", True, False, True, False, url, summary, исполнитель)
+    assert [(a, s, label) for a, s, label, _ in итог["база"]["journal"]] == (
+        [("updated", "ittasks", "Сайт магазина стройматериалов")] if admin else []
+    )
+
+    if admin:
+        правка = json.loads(итог["база"]["journal"][0][3])
+        assert правка["after"]["status"] == "completed"
+        assert правка["after"].get("contractor_company_id") == исполнитель
 
 
 def test_исполнитель_не_из_откликнувшихся(сайт):
@@ -160,7 +251,8 @@ def test_исполнитель_не_из_откликнувшихся(сайт)
         headers=inertia(),
     )
 
-    assert '"contractor_company_id"' in итог["сессия"]["payload"]
+    assert _ошибки(итог) == {"contractor_company_id": [ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]}
+    assert итог["база"]["tasks"][0][1] == "active"
 
 
 @pytest.mark.parametrize("admin", [False, True])
@@ -177,7 +269,16 @@ def test_удалить(сайт, admin, prefix):
     )
 
     assert итог["ответ"]["status"] == 303
+    assert итог["ответ"]["headers"]["location"] == f"{сайт}{prefix}/cabinet/it-tasks"
+    assert _сессия(итог)["success"] == (
+        "Задача удалена" if not prefix else "The project has been deleted"
+    )
     assert not итог["база"]["tasks"] and not итог["база"]["files"] and not итог["база"]["disk"]
+    # Разговор с откликнувшимся остаётся, но уже без задачи
+    assert итог["база"]["threads"] == [(None, _компания("dev"))]
+    assert итог["база"]["journal"] == (
+        [("deleted", "ittasks", "Сайт магазина стройматериалов", "")] if admin else []
+    )
 
 
 @pytest.mark.parametrize("file_id", [1, 2])
@@ -194,6 +295,15 @@ def test_удалить_файл(сайт, file_id):
 
     assert итог["база"]["disk"] is (file_id != 1)
 
+    if file_id == 1:
+        assert итог["ответ"]["status"] == 303
+        assert _сессия(итог)["success"] == "Файл удалён"
+        assert итог["база"]["files"] == []
+    else:
+        # Нет такого файла у задачи — 404
+        assert итог["ответ"]["status"] == 404
+        assert итог["база"]["files"] == [(1, 1, ФАЙЛ)]
+
 
 @pytest.mark.parametrize(
     ("method", "path"),
@@ -207,3 +317,5 @@ def test_чужая_задача_404(сайт, method, path):
     итог = отправить(сайт, path, задача(компания="other"), снимок, uid=заказчик(), method=method)
 
     assert итог["ответ"]["status"] == 404
+    assert итог["база"]["tasks"][0][1:3] == ("active", False)
+    assert итог["база"]["disk"] is True

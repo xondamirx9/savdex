@@ -10,7 +10,7 @@ Filament (удаление в два шага — tests/test_users_admin.py).
 - чужую учётку сотрудника (почта, пароль, статус) — только с roles.edit;
 - выгрузка — право users.export.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

@@ -1,12 +1,12 @@
 """
 Ежедневные задачи Django (savdex/schedule.py, manage.py schedule).
 
-Чистка «Кто смотрел» (audience-views:prune у Laravel): старше 90 дней —
-прочь, остальное — как было; то же, что оставляет запрос Laravel.
-Первый запуск после часа задачи день пропускает — его уже сделал
-Laravel; пройденный день пишется в файл.
+Чистка «Кто смотрел» (была audience-views:prune у Laravel): старше 90
+дней — прочь, остальное — как было. Пересчёт рейтингов (был
+ratings:recalculate). Первый запуск после часа задачи день пропускает —
+его уже сделал прежний планировщик; пройденный день пишется в файл.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -20,22 +20,19 @@ from pathlib import Path
 
 import pytest
 
-from .pg_admin import PYTHON, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from savdex.web.search_text import index
+
+from .factories import компании as завести_компании
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
-
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def компании() -> list[int]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->count(4)->create(); echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
 
-    return [r[0] for r in sql("select id from companies order by id")]
+    return завести_компании(4)
 
 
 def просмотры(компании: list[int]) -> None:
@@ -64,24 +61,17 @@ def schedule(*args: str, state: Path, timeout: float | None = None) -> str:
     return out.stdout
 
 
-def test_чистка_как_у_laravel(компании, tmp_path):
-    просмотры(компании)
-    php(
-        "App\\Models\\AudienceView::query()->where('created_at', '<', now()->subDays(90))"
-        "->delete(); echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
-    л = sql("select id from audience_views order by id")
-
+def test_чистка_старше_90_дней(компании, tmp_path):
     просмотры(компании)
     вывод = schedule("--once", "audience_views_prune", state=tmp_path / "state")
     д = sql("select id from audience_views order by id")
 
-    assert д == л == [(4,), (5,)]
+    # 400, 91 и 90,9 дня — прочь; 89 и 1 — остаются
+    assert д == [(4,), (5,)]
     assert "Удалено просмотров: 3." in вывод
 
 
-#: Суточные задачи, которые Laravel делал раньше Django
+#: Суточные задачи, которые раньше делал Laravel
 ДНЕВНЫЕ = {"audience_views_prune", "expire_listings", "ratings_recalculate", "reviews_ask"}
 
 
@@ -150,7 +140,7 @@ def рейтинги(компании: list[int]) -> None:
             "created_at, updated_at) values (%s, %s, %s, 'Отзыв', %s, now(), now())",
             [company, author, rating, status],
         )
-    # Удалённую компанию Laravel не пересчитывает (SoftDeletes)
+    # Удалённую компанию пересчёт не трогает (SoftDeletes у Laravel)
     sql("update companies set deleted_at = now() where id = %s", [d])
 
 
@@ -161,21 +151,26 @@ def рейтинги_снимок() -> list[tuple]:
     )
 
 
-def test_рейтинги_как_у_laravel(компании, tmp_path):
-    рейтинги(компании)
-    php(
-        "Illuminate\\Support\\Facades\\Artisan::call('ratings:recalculate'); echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
-    л = рейтинги_снимок()
-
+def test_рейтинги(компании, tmp_path):
     рейтинги(компании)
     вывод = schedule("--once", "ratings_recalculate", state=tmp_path / "state")
     д = рейтинги_снимок()
+    a, b, c, d = компании
+    поиск = {
+        pk: index(f"{name} {legal or ''}".strip())
+        for pk, name, legal in sql("select id, name, legal_name from companies")
+    }
 
-    assert д == л, (д, л)
-    # Среднее по площадке — (5 + 4 + 3 + 5 + 5) / 5 = 4,4: у a (5×4,4+9)/7
-    assert д[0][1:3] == ("4.43", 2) and д[2][1:3] == ("0.00", 0)
+    # Среднее по площадке — (5 + 4 + 3 + 5 + 5) / 5 = 4,4, вес 5:
+    # у a (5×4,4 + 9) / 7 = 4,43, у b (5×4,4 + 3) / 6 = 4,17; у c отзывов нет.
+    # Сохранённые компании получают и свежий search_text
+    assert д == [
+        (a, "4.43", 2, поиск[a], True),
+        (b, "4.17", 1, поиск[b], True),
+        (c, "0.00", 0, поиск[c], True),
+        # Удалённая — как была
+        (d, "0.00", 0, "stale", False),
+    ]
     assert "Пересчитано компаний: 3." in вывод
 
 

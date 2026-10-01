@@ -1,12 +1,12 @@
 """
-Новая IT-задача и её правка на Django неотличимы от Laravel: проверка
+Новая IT-задача и её правка на Django: проверка
 ввода (бюджет: required_if и gte, стек, срок позже сегодня, до пяти
 файлов по типу содержимого), чистка стека и бюджета, адрес из заголовка
 и номера, файлы на диск local, переход к списку задач. Правку с файлами
 браузер шлёт POST с _method=patch — Django подменяет метод, как Laravel;
 так же _method=delete удаляет задачу. У администратора — строки журнала.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -21,28 +21,24 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, php, sql, нужна_база, свежая_база
+from .factories import компания
+from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_company_file_actions import PDF
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 ДИСК = Path(КОРЕНЬ) / "storage/app/private/it-tasks"
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    php(
-        "App\\Models\\Company::factory()->create(['slug' => 'customer']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'other']);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    компания(slug="customer")
+    компания(slug="other")
 
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес() as root:
         yield root
 
 
@@ -179,27 +175,43 @@ def поля(изменения: dict[str, Any], стек: list[str], файлы
     return пары
 
 
+def сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    """Сообщение и ошибки проверки в сессии после ответа."""
+    payload = json.loads(итог["сессия"]["payload"])
+    ошибки = payload.get("errors", {}).get("default", {}).get("messages", {})
+
+    return {"success": payload.get("success"), "errors": ошибки}
+
+
+ОПУБЛИКОВАНА = "Задача опубликована в разделе «Доп. услуги». Отклики исполнителей придут в чаты."
+
+#: (изменения, стек, файлы, ошибки проверки — или бюджет и число файлов новой задачи)
 НОВЫЕ = [
-    ({}, ["php", "laravel"], [ТЗ, ТЕКСТ]),
-    ({"title": "Бот для заказов в Telegram"}, [" python ", "", "0", "python", "aiogram"], []),
-    ({"budget_type": "negotiable", "budget_to": "20000000"}, [], []),
-    ({"budget_type": "range", "budget_to": "20000000"}, [], [ТЗ]),
-    ({"budget_type": "range", "budget_to": "1000"}, [], []),
-    ({"budget_type": "range", "budget_to": ""}, [], []),
-    ({"budget_from": ""}, [], []),
-    ({"title": "Коротко", "service_type": "space", "currency": "EUR"}, [], []),
-    ({"deadline_at": "2020-01-01"}, [], []),
-    ({"deadline_at": "не дата"}, [], []),
-    ({}, [f"tag{i}" for i in range(11)], []),
-    ({}, ["x" * 31], []),
-    ({}, [], [ТЗ] * 6),
-    ({}, [], [EXE]),
-]
+    ({}, ["php", "laravel"], [ТЗ, ТЕКСТ], ("fixed", "15000000.00", None, 2)),
+    # Пустой навык — не строка
+    ({"title": "Бот для заказов в Telegram"}, [" python ", "", "0", "python", "aiogram"], [],
+     ["stack.1"]),
+    # Договорной — без бюджета, даже если границу прислали
+    ({"budget_type": "negotiable", "budget_to": "20000000"}, [], [], ("negotiable", None, None, 0)),
+    ({"budget_type": "range", "budget_to": "20000000"}, [], [ТЗ],
+     ("range", "15000000.00", "20000000.00", 1)),
+    ({"budget_type": "range", "budget_to": "1000"}, [], [], ["budget_to"]),
+    ({"budget_type": "range", "budget_to": ""}, [], [], ["budget_to"]),
+    ({"budget_from": ""}, [], [], ["budget_from"]),
+    ({"title": "Коротко", "service_type": "space", "currency": "EUR"}, [], [],
+     ["title", "service_type", "currency"]),
+    ({"deadline_at": "2020-01-01"}, [], [], ["deadline_at"]),
+    ({"deadline_at": "не дата"}, [], [], ["deadline_at"]),
+    ({}, [f"tag{i}" for i in range(11)], [], ["stack"]),
+    ({}, ["x" * 31], [], ["stack.0"]),
+    ({}, [], [ТЗ] * 6, ["files"]),
+    ({}, [], [EXE], ["files.0"]),
+]  # fmt: skip
 
 
-@pytest.mark.parametrize(("изменения", "стек", "файлы"), НОВЫЕ)
+@pytest.mark.parametrize(("изменения", "стек", "файлы", "ожидание"), НОВЫЕ)
 @pytest.mark.parametrize("admin", [False, True])
-def test_новая(сайт, изменения, стек, файлы, admin):
+def test_новая(сайт, изменения, стек, файлы, ожидание, admin):
     тело, тип = multipart(поля(изменения, стек, файлы))
     итог = отправить(
         сайт,
@@ -211,10 +223,33 @@ def test_новая(сайт, изменения, стек, файлы, admin):
         content_type=тип,
         headers=inertia(),
     )
+    ответ, база = итог["ответ"], итог["база"]
+    итог_сессии = сессия(итог)
 
-    if (изменения, стек, файлы) == НОВЫЕ[0]:
-        assert итог["база"]["tasks"][0][3] == "internet-magazin-tsementa-1"
-        assert len(итог["база"]["files"]) == 2 and len(итог["база"]["disk"]) == 2
+    assert ответ["status"] == 302
+
+    if isinstance(ожидание, list):
+        # Назад к форме с ошибками; ни задачи, ни файлов
+        assert ответ["headers"]["location"] == сайт + "/cabinet/settings"
+        assert sorted(итог_сессии["errors"]) == sorted(ожидание)
+        assert база["tasks"] == [] and база["files"] == [] and база["disk"] == []
+        assert база["journal"] == []
+        return
+
+    вид, от, до, файлов = ожидание
+    [задача] = база["tasks"]
+
+    assert ответ["headers"]["location"] == сайт + "/cabinet/it-tasks"
+    assert итог_сессии["success"] == ОПУБЛИКОВАНА and not итог_сессии["errors"]
+    # Адрес — из заголовка и номера; задача сразу активна
+    assert задача[3] == "internet-magazin-tsementa-1" and задача[13] == "active"
+    assert (задача[8], задача[9], задача[10]) == (вид, от, до)
+    assert json.loads(задача[7]) == стек
+    # Файлы — на диске local, под случайными именами
+    assert len(база["files"]) == len(база["disk"]) == файлов
+    assert [(a, label) for a, label, _ in база["journal"]] == (
+        [("created", "Интернет-магазин цемента")] if admin else []
+    )
 
 
 def test_новая_json(сайт):
@@ -228,12 +263,15 @@ def test_новая_json(сайт):
         headers=inertia(),
     )
 
+    assert итог["ответ"]["headers"]["location"] == сайт + "/en/cabinet/it-tasks"
+    # Повтор в стеке убран, бюджет — числом
     assert json.loads(итог["база"]["tasks"][0][7]) == ["go", "grpc"]
+    assert итог["база"]["tasks"][0][9] == "500.00"
 
 
 def test_новая_без_почты(сайт):
     тело, тип = multipart(поля({}, [], []))
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/it-tasks",
         задачи(-1),
@@ -244,21 +282,36 @@ def test_новая_без_почты(сайт):
         headers=inertia(),
     )
 
+    # Почта не подтверждена — сначала подтвердить, задача не заводится
+    assert (итог["ответ"]["status"], итог["ответ"]["headers"]["location"]) == (
+        302,
+        сайт + "/verify-email",
+    )
+    assert итог["база"]["tasks"] == []
 
+
+#: (изменения, стек, файлы, было файлов, ошибки — или итог: название, бюджет, срок, файлов)
 ПРАВКИ = [
-    ({"_method": "patch"}, [], [], 0),
-    ({"_method": "patch", "title": "Сайт и мобильное приложение"}, ["php", "vue"], [ТЗ], 4),
-    ({"_method": "PATCH", "budget_type": "negotiable"}, ["php", "laravel"], [ТЗ, ТЕКСТ], 4),
-    ({"_method": "patch", "deadline_at": "2099-01-15"}, ["php", "laravel"], [], 0),
-    ({"_method": "patch", "deadline_at": ""}, [], [], 0),
-    ({"_method": "patch", "title": ""}, [], [], 0),
-    ({"_method": "delete"}, [], [], 2),
-]
+    ({"_method": "patch"}, [], [], 0,
+     ("Интернет-магазин цемента", "fixed", "2099-06-30", 0)),
+    ({"_method": "patch", "title": "Сайт и мобильное приложение"}, ["php", "vue"], [ТЗ], 4,
+     ("Сайт и мобильное приложение", "fixed", "2099-06-30", 5)),
+    # Мест под файлы — одно: второй не сохраняется
+    ({"_method": "PATCH", "budget_type": "negotiable"}, ["php", "laravel"], [ТЗ, ТЕКСТ], 4,
+     ("Интернет-магазин цемента", "negotiable", "2099-06-30", 5)),
+    ({"_method": "patch", "deadline_at": "2099-01-15"}, ["php", "laravel"], [], 0,
+     ("Интернет-магазин цемента", "fixed", "2099-01-15", 0)),
+    # Срок можно убрать
+    ({"_method": "patch", "deadline_at": ""}, [], [], 0,
+     ("Интернет-магазин цемента", "fixed", None, 0)),
+    ({"_method": "patch", "title": ""}, [], [], 0, ["title"]),
+    ({"_method": "delete"}, [], [], 2, None),
+]  # fmt: skip
 
 
-@pytest.mark.parametrize(("изменения", "стек", "файлы", "было"), ПРАВКИ)
+@pytest.mark.parametrize(("изменения", "стек", "файлы", "было", "ожидание"), ПРАВКИ)
 @pytest.mark.parametrize("admin", [False, True])
-def test_правка_формой(сайт, изменения, стек, файлы, было, admin):
+def test_правка_формой(сайт, изменения, стек, файлы, было, ожидание, admin):
     тело, тип = multipart(поля(изменения, стек, файлы))
     итог = отправить(
         сайт,
@@ -270,17 +323,42 @@ def test_правка_формой(сайт, изменения, стек, фа�
         content_type=тип,
         headers=inertia(),
     )
+    ответ, база = итог["ответ"], итог["база"]
+    итог_сессии = сессия(итог)
+
+    # Метод из _method: ответ Inertia на PATCH и DELETE — 303
+    assert ответ["status"] == 303
 
     if изменения["_method"] == "delete":
-        assert итог["база"]["tasks"] == [] and итог["база"]["disk"] == []
-    elif было == 4 and файлы:
-        # Мест под файлы — одно: второй не сохраняется
-        assert len(итог["база"]["files"]) == 5
+        # Задача удалена вместе с файлами на диске
+        assert ответ["headers"]["location"] == сайт + "/cabinet/it-tasks"
+        assert итог_сессии["success"] == "Задача удалена"
+        assert база["tasks"] == [] and база["disk"] == []
+        assert [a for a, _, _ in база["journal"]] == (["deleted"] if admin else [])
+    elif isinstance(ожидание, list):
+        assert ответ["headers"]["location"] == сайт + "/cabinet/settings"
+        assert sorted(итог_сессии["errors"]) == ожидание
+        # Задача прежняя
+        assert база["tasks"][0][4] == "Сайт магазина стройматериалов"
+        assert база["journal"] == []
+    else:
+        название, вид, срок, файлов = ожидание
+        [задача] = база["tasks"]
+
+        assert ответ["headers"]["location"] == сайт + "/cabinet/it-tasks"
+        assert итог_сессии["success"] == "Задача обновлена"
+        # Адрес задачи при правке не меняется
+        assert (задача[3], задача[4], задача[8], задача[12]) == ("site-1", название, вид, срок)
+        assert json.loads(задача[7]) == стек
+        assert len(база["files"]) == len(база["disk"]) == файлов
+        assert [(a, label) for a, label, _ in база["journal"]] == (
+            [("updated", название)] if admin else []
+        )
 
 
 @pytest.mark.parametrize("компания", ["customer", "other"])
 def test_правка_json(сайт, компания):
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/it-tasks/1",
         задачи(0, компания=компания),
@@ -290,3 +368,17 @@ def test_правка_json(сайт, компания):
         method="PATCH",
         headers=inertia(),
     )
+    [задача] = итог["база"]["tasks"]
+
+    if компания == "other":
+        # Чужая задача — 404, без изменений
+        assert итог["ответ"]["status"] == 404
+        assert задача[4] == "Сайт магазина стройматериалов"
+    else:
+        assert итог["ответ"]["status"] == 303
+        assert (задача[4], задача[8], задача[9], задача[10]) == (
+            "Интернет-магазин цемента",
+            "range",
+            "1000000.00",
+            "5000000.00",
+        )

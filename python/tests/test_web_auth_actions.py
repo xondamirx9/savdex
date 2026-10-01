@@ -1,12 +1,12 @@
 """
-Вход и выход на Django неотличимы от Laravel: проверка ввода, единое
+Вход и выход на Django: проверка ввода, единое
 сообщение с остатком попыток, блокировка после пяти неудач, запрет для
 заблокированного, пересчёт хеша пароля, «запомнить меня» (токен и кука),
 метка последнего входа, url.intended, выданный пароль — на смену; выход —
 сессия заново, токен «запомнить» — новый, кука — забыта. После входа у
 сессии новый номер: он берётся из куки ответа.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from savdex import laravel_session
 from .pg_admin import KEY, sql, нужна_база, свежая_база
 from .test_web_forms import SID, ТОКЕН, inertia, учётка
 from .test_web_session import СЕССИЯ, завести, кука, строка
-from .web_site import ПАРОЛЬ, laravel, из_django, из_laravel
+from .web_site import ПАРОЛЬ, адрес, открыть
 
 pytestmark = нужна_база
 
@@ -35,7 +35,7 @@ pytestmark = нужна_база
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel() as root:
+    with адрес() as root:
         yield root
 
 
@@ -93,39 +93,31 @@ def вход(
     payload: dict[str, Any] | None = None,
     cookies: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Одна и та же форма — Django и Laravel; ответы, сессии и база совпадают."""
-    стороны = {}
-
-    for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
-        подготовка()
-        завести(SID, {"_token": ТОКЕН, **(payload or {})})
-        ответ = сторона(
-            сайт,
-            path,
-            {СЕССИЯ: кука(СЕССИЯ, SID), **(cookies or {})},
-            {**inertia(), "Referer": сайт + "/login", "User-Agent": "savdex-parity"},
-            method="POST",
-            body=json.dumps(body),
-            content_type="application/json",
-        )
-        сессия = _сессия_из_ответа(ответ)
-        стороны[имя] = {
-            "status": ответ["status"],
-            "location": ответ["headers"].get("location"),
-            "cookies": sorted(ответ["cookies"]),
-            "remember_value": _remember(ответ),
-            "session": None
-            if сессия is None
-            else {"payload": сессия["payload"], "user_id": сессия["user_id"]},
-            "same_sid": сессия is not None and строка(SID) is not None,
-            "db": снимок(),
-        }
-
-    assert стороны["django"] == стороны["laravel"], json.dumps(
-        стороны, ensure_ascii=False, default=str
+    """Форма Django: ответ, новая сессия из куки ответа, кука «запомнить» и база."""
+    подготовка()
+    завести(SID, {"_token": ТОКЕН, **(payload or {})})
+    ответ = открыть(
+        сайт,
+        path,
+        {СЕССИЯ: кука(СЕССИЯ, SID), **(cookies or {})},
+        {**inertia(), "Referer": сайт + "/login", "User-Agent": "savdex-parity"},
+        method="POST",
+        body=json.dumps(body),
+        content_type="application/json",
     )
+    сессия = _сессия_из_ответа(ответ)
 
-    return стороны["django"]
+    return {
+        "status": ответ["status"],
+        "location": ответ["headers"].get("location"),
+        "cookies": sorted(ответ["cookies"]),
+        "remember_value": _remember(ответ),
+        "session": None
+        if сессия is None
+        else {"payload": сессия["payload"], "user_id": сессия["user_id"]},
+        "same_sid": сессия is not None and строка(SID) is not None,
+        "db": снимок(),
+    }
 
 
 def _remember(ответ: dict[str, Any]) -> str | None:
@@ -171,31 +163,99 @@ def сброс(*, неудач: int = 0, **поля: Any) -> Callable[[], None]:
 
 
 ВЕРНО = {"email": ПОЧТА, "password": ПАРОЛЬ}
+НЕВЕРНО = "Неверная почта или пароль. Осталось попыток: "
+МНОГО = "Слишком много попыток входа. Попробуйте через "
+
+
+def ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
+    """Ошибки проверки в сессии после ответа."""
+    payload = json.loads(итог["session"]["payload"])
+
+    return dict(payload.get("errors", {}).get("default", {}).get("messages", {}))
+
+
+def вошёл(итог: dict[str, Any], uid: int) -> bool:
+    """Сессия после ответа — новая (номер из куки ответа) и с отметкой входа."""
+    payload = json.loads(итог["session"]["payload"])
+
+    return (
+        итог["session"]["user_id"] == uid
+        and payload.get(laravel_session.LOGIN_KEY) == uid
+        and not итог["same_sid"]
+    )
 
 
 @pytest.mark.parametrize(
-    ("body", "подготовка"),
+    ("body", "подготовка", "ожидание"),
     [
-        (ВЕРНО, {}),
-        ({**ВЕРНО, "email": "  Login@SAVDEX.uz "}, {}),
-        ({**ВЕРНО, "remember": True}, {}),
-        ({**ВЕРНО, "remember": "on"}, {"is_admin": True}),
-        (ВЕРНО, {"must_change_password": True}),
-        (ВЕРНО, {"status": "blocked"}),
-        ({**ВЕРНО, "password": "wrong"}, {}),
-        ({**ВЕРНО, "password": "wrong"}, {"неудач": 3}),
-        ({**ВЕРНО, "password": "wrong"}, {"неудач": 4}),
-        (ВЕРНО, {"неудач": 5}),
-        ({"email": "nobody@savdex.uz", "password": "x"}, {}),
-        ({"email": "не почта", "password": ""}, {}),
-        ({}, {}),
+        (ВЕРНО, {}, {"куда": "/cabinet"}),
+        # Почта — без пробелов вокруг и без учёта регистра
+        ({**ВЕРНО, "email": "  Login@SAVDEX.uz "}, {}, {"куда": "/cabinet"}),
+        ({**ВЕРНО, "remember": True}, {}, {"куда": "/cabinet", "запомнить": True}),
+        (
+            {**ВЕРНО, "remember": "on"},
+            {"is_admin": True},
+            {"куда": "/cabinet", "запомнить": True, "журнал": 2},
+        ),
+        # Выданный пароль — сразу на смену
+        (ВЕРНО, {"must_change_password": True}, {"куда": "/password/change"}),
+        (ВЕРНО, {"status": "blocked"}, {"email": "Учётная запись заблокирована"}),
+        ({**ВЕРНО, "password": "wrong"}, {}, {"email": НЕВЕРНО + "4 из 5"}),
+        ({**ВЕРНО, "password": "wrong"}, {"неудач": 3}, {"email": НЕВЕРНО + "1 из 5"}),
+        ({**ВЕРНО, "password": "wrong"}, {"неудач": 4}, {"email": МНОГО + "15 мин."}),
+        # Пять неудач за 15 минут — и верный пароль не пускает
+        (ВЕРНО, {"неудач": 5}, {"email": МНОГО + "14 мин."}),
+        ({"email": "nobody@savdex.uz", "password": "x"}, {}, {"email": НЕВЕРНО + "4 из 5"}),
+        (
+            {"email": "не почта", "password": ""},
+            {},
+            {"email": "Проверьте адрес почты", "password": "Введите пароль"},
+        ),
+        ({}, {}, {"email": "Введите почту", "password": "Введите пароль"}),
     ],
 )
-def test_вход(сайт, body, подготовка):
+def test_вход(сайт, body, подготовка, ожидание):
     итог = вход(сайт, "/login", сброс(**подготовка), body=body)
+    [(uid,)] = sql("select id from users where email = %s", [ПОЧТА])
+    [(_, _, remember, last_login, ip)] = итог["db"]["users"]
+    попытки = итог["db"]["attempts"]
 
-    if body == ВЕРНО and not подготовка:
-        assert итог["status"] == 302 and итог["location"].endswith("/cabinet")
+    assert итог["status"] == 302
+
+    if "куда" in ожидание:
+        assert итог["location"] == f"{сайт}{ожидание['куда']}"
+        assert вошёл(итог, uid) and not ошибки(итог)
+        # Хеш пароля пересчитан со стоимостью 12, вход отмечен
+        assert итог["db"]["users"][0][1] is True
+        assert (last_login, ip) == (True, "127.0.0.1")
+        assert попытки == [(ПОЧТА, "127.0.0.1", True, True)]
+        запомнить = ожидание.get("запомнить", False)
+        assert remember is запомнить
+        assert итог["remember_value"] == (f"{uid}|True|True" if запомнить else None)
+        assert len(итог["db"]["journal"]) == ожидание.get("журнал", 0)
+    else:
+        assert итог["location"] == f"{сайт}/login"
+        assert итог["session"]["user_id"] is None
+        assert (last_login, ip, remember) == (False, None, False)
+        assert итог["db"]["journal"] == []
+
+        найдено = ошибки(итог)
+        assert sorted(найдено) == sorted(k for k in ожидание if k in ("email", "password"))
+        for поле in найдено:
+            assert найдено[поле][0].startswith(ожидание[поле]), найдено[поле]
+
+        неудач = подготовка.get("неудач", 0)
+        if body.get("password") == "wrong" or body.get("email") == "nobody@savdex.uz":
+            # Неверная пара записана — с тем адресом, что ввели
+            assert len(попытки) == неудач + 1
+            assert попытки[-1] == (body["email"], "127.0.0.1", False, True)
+        else:
+            # Заблокированный, ошибка ввода и перебор — без новой попытки
+            assert len(попытки) == неудач
+
+        if подготовка.get("status") == "blocked":
+            # Сессия заблокированного — заново, без входа
+            assert not итог["same_sid"]
 
 
 def test_вход_туда_куда_шёл(сайт):
@@ -208,11 +268,20 @@ def test_вход_туда_куда_шёл(сайт):
     )
 
     assert итог["location"] == "http://savdex.test/cabinet/listings?status=active"
+    [(uid,)] = sql("select id from users where email = %s", [ПОЧТА])
+    assert вошёл(итог, uid)
+    # Язык адреса формы остаётся в сессии
+    assert json.loads(итог["session"]["payload"])["locale"] == "en"
 
 
 def test_вошедшему_форма_не_нужна(сайт):
     uid = пользователь()
-    вход(сайт, "/login", сброс(), body=ВЕРНО, payload={laravel_session.LOGIN_KEY: uid})
+    итог = вход(сайт, "/login", сброс(), body=ВЕРНО, payload={laravel_session.LOGIN_KEY: uid})
+
+    # Сразу на главную: та же сессия, вход не повторяется и не записывается
+    assert (итог["status"], итог["location"]) == (302, сайт)
+    assert итог["same_sid"] and итог["session"]["user_id"] == uid
+    assert итог["db"]["attempts"] == [] and итог["db"]["users"][0][3] is False
 
 
 @pytest.mark.parametrize("admin", [False, True])
@@ -242,5 +311,21 @@ def test_выход(сайт, admin, remember):
         payload={laravel_session.LOGIN_KEY: uid},
         cookies=cookies,
     )
+    payload = json.loads(итог["session"]["payload"])
 
-    assert итог["status"] == 302
+    # На главную с новой сессией без входа
+    assert (итог["status"], итог["location"]) == (302, сайт)
+    assert not итог["same_sid"] and итог["session"]["user_id"] is None
+    assert laravel_session.LOGIN_KEY not in payload and payload["_token"] == "<token>"
+
+    if remember:
+        # Кука «запомнить» забыта, токен в базе — новый
+        assert итог["remember_value"] == "<пусто>"
+        [(token,)] = sql("select remember_token from users where id = %s", [uid])
+        assert token and token != "r" * 60
+    else:
+        assert итог["remember_value"] is None
+        assert итог["db"]["users"][0][2] is False
+
+    # Новый токен «запомнить» у администратора — в журнале
+    assert len(итог["db"]["journal"]) == (1 if admin and remember else 0)

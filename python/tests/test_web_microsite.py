@@ -1,5 +1,5 @@
 """
-Мини-сайт компании на Django неотличим от Laravel: страница /s/<адрес>
+Мини-сайт компании на Django: страница /s/<адрес>
 (оформление — переменные SiteTheme с подбором читаемых цветов, шрифты,
 свой корневой шаблон с вывеской компании; контакты целиком, товары сайта
 и объявления, файлы, отзывы), 404 для черновика, заблокированной
@@ -7,26 +7,28 @@
 редактора или черновик); с MICROSITE_DOMAIN — сайт на поддомене,
 301 с /s/<адрес>, сам домен — в каталог компаний, прочее там — 404.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import Выражение, компания, объявление, отзыв
+from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .test_web_forms import учётка
-from .web_site import laravel, войти, сверить, страница
+from .web_site import адрес, вход, открыть, страница
 
 pytestmark = нужна_база
 
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 ДОМЕН = {"MICROSITE_DOMAIN": "savdex.site"}
 ТЕМА = {
     "template": "bold",
@@ -40,36 +42,62 @@ pytestmark = нужна_база
 }
 
 
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (PlanSeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
+    subprocess.run(
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
+        capture_output=True,
+        check=True,
+    )
+
+
 @pytest.fixture(scope="module")
 def база() -> None:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
+    справочники("plans")
+    c = компания(
+        slug="mine",
+        name="ООО «Цемент»",
+        description="  Цемент   М400\n и арматура " + "оптом " * 40,
     )
-    php(
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'mine', 'name' => 'ООО «Цемент»',"
-        " 'description' => \"  Цемент   М400\\n и арматура \" . str_repeat('оптом ', 40)]);"
-        "$o = App\\Models\\Company::factory()->create(['slug' => 'buyer', 'name' => 'Покупатель']);"
-        "foreach ([['phone', '+998 90 123-45-67', true], ['telegram', '@cement', true],"
-        " ['email', 'hidden@cement.uz', false]] as $i => [$type, $value, $public]) {"
-        " App\\Models\\CompanyContact::create(['company_id' => $c->id, 'type' => $type,"
-        " 'value' => $value, 'is_public' => $public, 'sort_order' => 3 - $i]); }"
-        "foreach (range(1, 3) as $i) { App\\Models\\Listing::factory()->create(["
-        " 'company_id' => $c->id, 'status' => $i === 3 ? 'archived' : 'active',"
-        " 'title' => 'Цемент '.$i, 'published_at' => now()->subDays($i)]); }"
-        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
-        " 'author_company_id' => $o->id, 'status' => 'published', 'rating' => 5,"
-        " 'body' => 'Отличный цемент']);"
-        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
-        " 'author_company_id' => App\\Models\\Company::factory()->create()->id,"
-        " 'status' => 'moderation', 'rating' => 1]);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    o = компания(slug="buyer", name="Покупатель")
+
+    for i, (type_, value, public) in enumerate(
+        [("phone", "+998 90 123-45-67", True), ("telegram", "@cement", True),
+         ("email", "hidden@cement.uz", False)]
+    ):  # fmt: skip
+        sql(
+            "insert into company_contacts (company_id, type, value, is_public, sort_order, "
+            "created_at, updated_at) values (%s, %s, %s, %s, %s, now(), now())",
+            [c, type_, value, public, 3 - i],
+        )
+
+    for i in range(1, 4):
+        объявление(
+            company_id=c,
+            status="archived" if i == 3 else "active",
+            title=f"Цемент {i}",
+            published_at=Выражение(f"now() - interval '{i} days'"),
+        )
+
+    отзыв(company_id=c, author_company_id=o, status="published", rating=5, body="Отличный цемент")
+    отзыв(company_id=c, author_company_id=компания(), status="moderation", rating=1)
     sql(
         "insert into company_site_products (company_id, title, description, price, currency, "
         "unit, sort, created_at, updated_at) select id, 'Свой товар', '  Мешок  50 кг ', "
@@ -86,7 +114,7 @@ def база() -> None:
 
 @pytest.fixture(scope="module")
 def сайт(база) -> Iterator[str]:
-    with laravel(**БЕЗ_ПЕРЕВОДА) as root:
+    with адрес() as root:
         yield root
 
 
@@ -113,91 +141,183 @@ def сброс(
     return run
 
 
+def мини_сайт(ответ: dict[str, Any]) -> dict[str, Any]:
+    """Пропсы мини-сайта: страница site/Show."""
+    стр = страница(ответ["body"])
+
+    assert ответ["status"] == 200 and стр["component"] == "site/Show", ответ["status"]
+
+    return dict(стр["props"])
+
+
 @pytest.mark.parametrize(
-    ("path", "настройка"),
+    ("path", "настройка", "ожидание"),
     [
-        ("/s/mine", {}),
-        ("/en/s/mine", {}),
-        ("/s/mine", {"тема": {"mode": "dark", "primary": "#0f172a", "accent": "#0f172a"}}),
-        ("/s/mine", {"тема": {"primary": "#ffffff", "heading_font": "oswald", "radius": "x"}}),
-        ("/s/mine", {"тема": {"primary": "#5b3cc4", "accent": "#e11d74", "template": "minimal"}}),
-        ("/s/mine", {"статус": "draft"}),
-        ("/s/mine", {"тариф": False}),
-        ("/s/mine", {"блок": True}),
-        ("/s/nothing", {}),
+        (
+            "/s/mine",
+            {},
+            {"template": "bold", "--ms-radius": "22px", "--ms-primary-text": "#857220"},
+        ),
+        ("/en/s/mine", {}, {"template": "bold", "marketplace": "/en/company/mine"}),
+        # Тёмная тема и тёмный основной цвет — текст основного цвета светлее
+        (
+            "/s/mine",
+            {"тема": {"mode": "dark", "primary": "#0f172a", "accent": "#0f172a"}},
+            {"template": "classic", "--ms-bg": "#0b1120", "--ms-primary-text": "#7c828f"},
+        ),
+        # Белый основной на светлом — читаемый серый; неизвестное скругление — обычное
+        (
+            "/s/mine",
+            {"тема": {"primary": "#ffffff", "heading_font": "oswald", "radius": "x"}},
+            {
+                "template": "classic",
+                "--ms-primary-text": "#6f747f",
+                "--ms-radius": "10px",
+                "--ms-font-heading": "'Oswald', sans-serif",
+            },
+        ),
+        (
+            "/s/mine",
+            {"тема": {"primary": "#5b3cc4", "accent": "#e11d74", "template": "minimal"}},
+            {"template": "minimal", "--ms-primary-text": "#5b3cc4", "--ms-on-accent": "#ffffff"},
+        ),
+        # Черновик, тариф без мини-сайта, заблокированная компания, нет сайта — 404
+        ("/s/mine", {"статус": "draft"}, None),
+        ("/s/mine", {"тариф": False}, None),
+        ("/s/mine", {"блок": True}, None),
+        ("/s/nothing", {}, None),
     ],
 )
-def test_страница(сайт, path, настройка):
-    сверить(сайт, path, перед=сброс(**настройка))
+def test_страница(сайт, path, настройка, ожидание):
+    сброс(**настройка)()
+    д = открыть(сайт, path)
+
+    if ожидание is None:
+        assert д["status"] == 404
+        assert страница(д["body"])["component"] == "Error"
+        return
+
+    props = мини_сайт(д)
+    найдено = {"template": props["theme"]["template"], **props["vars"]}
+    найдено["marketplace"] = props["site"]["marketplace"].removeprefix(сайт)
+
+    assert {k: найдено[k] for k in ожидание} == ожидание
+    assert props["preview"] is False
+    assert props["site"]["url"] == f"{сайт}/s/mine"
+    # Свой корневой шаблон: вывеска компании, шрифты темы
+    assert "<title inertia>ООО «Цемент»</title>" in д["body"]
+    assert 'id="ms-fonts"' in д["body"]
 
 
 def test_оформление_читаемо(сайт):
-    д, _ = сверить(сайт, "/s/mine", перед=сброс())
-    props = страница(д["body"])["props"]
+    сброс()()
+    props = мини_сайт(открыть(сайт, "/s/mine"))
 
     assert props["vars"]["--ms-primary-text"] != "#facc15"
-    assert props["hero"] and props["contacts"] and len(props["products"]) == 4
+    assert props["hero"] == f"{сайт}/storage/sites/1/hero.webp"
+    # Только открытые контакты — по порядку
+    assert [c["value"] for c in props["contacts"]] == ["@cement", "+998 90 123-45-67"]
+    # Товары сайта по порядку, затем объявления (без архивного)
+    assert [(p["key"], p["title"]) for p in props["products"]] == [
+        ("p2", "Под заказ"),
+        ("p1", "Свой товар"),
+        ("l1", "Цемент 1"),
+        ("l2", "Цемент 2"),
+    ]
+    assert props["products"][1]["excerpt"] == "Мешок 50 кг"
+    # Только опубликованные отзывы
+    assert (props["reviews"]["count"], props["reviews"]["rating"]) == (1, 5)
+    assert [r["body"] for r in props["reviews"]["latest"]] == ["Отличный цемент"]
+
+
+def владелец() -> dict[str, str]:
+    uid = учётка("owner@savdex.uz")
+    sql(
+        "update users set company_id = (select id from companies where slug = 'mine') "
+        "where id = %s",
+        [uid],
+    )
+
+    return вход(uid)
 
 
 @pytest.mark.parametrize(
-    "query",
+    ("query", "оформление"),
     [
-        "",
-        "?theme=" + quote(json.dumps({"mode": "dark", "primary": "#112233"})),
-        "?theme=" + quote("[1,2]"),
-        "?theme=oops",
-        "?theme=5",
+        # Без оформления в адресе — черновик из редактора
+        ("", ("minimal", "#0f6e56", "light")),
+        (
+            "?theme=" + quote(json.dumps({"mode": "dark", "primary": "#112233"})),
+            ("classic", "#112233", "dark"),
+        ),
+        # Массив вместо оформления — оформление по умолчанию
+        ("?theme=" + quote("[1,2]"), ("classic", "#1a56db", "light")),
+        # Не JSON и не объект — черновик
+        ("?theme=oops", ("minimal", "#0f6e56", "light")),
+        ("?theme=5", ("minimal", "#0f6e56", "light")),
     ],
 )
-def test_предпросмотр(сайт, query):
-    учётка("owner@savdex.uz")
-    sql(
-        "update users set company_id = (select id from companies where slug = 'mine') "
-        "where email = 'owner@savdex.uz'"
+def test_предпросмотр(сайт, query, оформление):
+    куки = владелец()
+    сброс(черновик={"template": "minimal", "primary": "#0f6e56"})()
+    д = открыть(сайт, "/cabinet/site/preview" + query, куки)
+    props = мини_сайт(д)
+
+    assert props["preview"] is True
+    assert (props["theme"]["template"], props["theme"]["primary"], props["theme"]["mode"]) == (
+        оформление
     )
-    куки = войти(сайт, "owner@savdex.uz")
-    сверить(
-        сайт,
-        "/cabinet/site/preview" + query,
-        куки,
-        перед=сброс(черновик={"template": "minimal", "primary": "#0f6e56"}),
-    )
+    assert props["vars"]["--ms-primary"] == оформление[1]
+    # Предпросмотр поисковикам не показывается
+    assert '<meta name="robots" content="noindex, nofollow">' in д["body"]
 
 
 def test_предпросмотр_без_сайта_и_без_компании(сайт):
-    учётка("nocompany@savdex.uz")
-    куки = войти(сайт, "nocompany@savdex.uz")
-    д, _ = сверить(сайт, "/cabinet/site/preview", куки)
-    assert д["status"] == 302
+    д = открыть(сайт, "/cabinet/site/preview", вход(учётка("nocompany@savdex.uz")))
+    assert (д["status"], д["headers"]["location"]) == (302, f"{сайт}/cabinet/company")
 
-    учётка("owner@savdex.uz")
-    sql(
-        "update users set company_id = (select id from companies where slug = 'mine') "
-        "where email = 'owner@savdex.uz'"
-    )
-    куки = войти(сайт, "owner@savdex.uz")
+    куки = владелец()
     sql("delete from company_sites")
-    сверить(сайт, "/cabinet/site/preview", куки)
+    props = мини_сайт(открыть(сайт, "/cabinet/site/preview", куки))
+    assert props["preview"] is True
+    assert props["theme"]["template"] == "classic"
 
 
 @pytest.fixture(scope="module")
 def поддомены(база) -> Iterator[str]:
-    with laravel(**БЕЗ_ПЕРЕВОДА, **ДОМЕН) as root:
+    with адрес() as root:
         yield root
 
 
 @pytest.mark.parametrize(
-    ("host", "path"),
+    ("host", "path", "ожидание"),
     [
-        ("mine.savdex.site", "/"),
-        ("mine.savdex.site", "/uz"),
-        ("nothing.savdex.site", "/"),
-        ("savdex.site", "/"),
-        ("mine.savdex.site", "/catalog"),
-        (None, "/s/mine"),
+        ("mine.savdex.site", "/", "ru"),
+        ("mine.savdex.site", "/uz", "uz"),
+        ("nothing.savdex.site", "/", 404),
+        # Сам домен мини-сайтов — в каталог компаний площадки
+        ("savdex.site", "/", "/companies"),
+        # Прочее на поддомене — 404
+        ("mine.savdex.site", "/catalog", 404),
+        # Старый адрес — навсегда на поддомен
+        (None, "/s/mine", "mine.savdex.site"),
     ],
 )
-def test_поддомены(поддомены, host, path):
+def test_поддомены(поддомены, host, path, ожидание):
     port = поддомены.rsplit(":", 1)[1]
     headers = {"Host": f"{host}:{port}"} if host else None
-    сверить(поддомены, path, headers=headers, env=ДОМЕН, перед=сброс())
+    сброс()()
+    д = открыть(поддомены, path, headers=headers, env=ДОМЕН)
+
+    if ожидание == 404:
+        assert д["status"] == 404
+    elif ожидание == "/companies":
+        assert (д["status"], д["headers"]["location"]) == (302, f"{поддомены}/companies")
+    elif ожидание == "mine.savdex.site":
+        assert (д["status"], д["headers"]["location"]) == (301, f"http://mine.savdex.site:{port}")
+    else:
+        props = мини_сайт(д)
+        assert props["locale"] == ожидание
+        assert props["site"]["url"] == f"http://mine.savdex.site:{port}"
+        prefix = "" if ожидание == "ru" else f"/{ожидание}"
+        assert props["site"]["marketplace"] == f"{поддомены}{prefix}/company/mine"

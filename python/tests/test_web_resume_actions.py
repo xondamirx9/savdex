@@ -1,15 +1,17 @@
 """
-Своё резюме на Django неотличимо от Laravel: опубликовать (дата — если
-не было, заблокированное — ошибка поля status), скрыть (только
-опубликованное), удалить (мягко, фото — с диска, DELETE от Inertia —
-303). Без резюме — 404.
+Своё резюме на Django: опубликовать (дата — если не было,
+заблокированное — ошибка поля status), скрыть (только опубликованное),
+удалить (мягко, фото — с диска, DELETE от Inertia — 303), править
+(проверка полей, пустые пункты отбрасываются, адрес — один раз),
+фото. Без резюме — 404.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -20,7 +22,7 @@ import pytest
 
 from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import laravel
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -31,7 +33,7 @@ pytestmark = нужна_база
 def сайт() -> Iterator[str]:
     свежая_база()
 
-    with laravel(MACHINE_TRANSLATION_ENABLED="false") as root:
+    with адрес() as root:
         yield root
 
 
@@ -75,6 +77,39 @@ def снимок() -> Any:
     }
 
 
+#: (действие, статус, опубликовано ли раньше) → статус и дата публикации
+#: после; дата «сейчас» — публикуется впервые; строка — ошибка поля status
+ПУБЛИКАЦИЯ = {
+    ("publish", "draft", False): ("published", "сейчас"),
+    ("publish", "published", True): ("published", "2026-09-01 10:00:00"),
+    ("publish", "hidden", True): ("published", "2026-09-01 10:00:00"),
+    ("publish", "hidden", False): ("published", "сейчас"),
+    ("publish", "blocked", True): "blocked",
+    # Скрыть можно только опубликованное, прочее — без изменений
+    ("hide", "draft", False): ("draft", None),
+    ("hide", "published", True): ("hidden", "2026-09-01 10:00:00"),
+    ("hide", "hidden", True): ("hidden", "2026-09-01 10:00:00"),
+    ("hide", "hidden", False): ("hidden", None),
+    ("hide", "blocked", True): ("blocked", "2026-09-01 10:00:00"),
+}
+
+СООБЩЕНИЯ = {
+    ("", "publish"): "Резюме опубликовано — теперь его видят компании.",
+    ("", "hide"): "Резюме снято с публикации.",
+    ("", "blocked"): "Резюме снято модерацией. Напишите в поддержку, если это ошибка.",
+    ("/en", "publish"): "Resume published — companies can see it now.",
+    ("/en", "hide"): "Resume unpublished.",
+    (
+        "/en",
+        "blocked",
+    ): "The resume was removed by moderation. Contact support if this is a mistake.",
+}
+
+
+def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
+    return dict(json.loads(итог["сессия"]["payload"]))
+
+
 @pytest.mark.parametrize("verb", ["publish", "hide"])
 @pytest.mark.parametrize(
     ("status", "опубликовано"),
@@ -89,7 +124,7 @@ def снимок() -> Any:
 )
 @pytest.mark.parametrize("prefix", ["", "/en"])
 def test_опубликовать_и_скрыть(сайт, verb, status, опубликовано, prefix):
-    отправить(
+    итог = отправить(
         сайт,
         f"{prefix}/cabinet/resume/{verb}",
         резюме(status, опубликовано=опубликовано),
@@ -97,6 +132,30 @@ def test_опубликовать_и_скрыть(сайт, verb, status, опу
         uid=соискатель(),
         headers=inertia(),
     )
+    ответ, база = итог["ответ"], итог["база"]
+
+    if status is None:
+        assert ответ["status"] == 404
+        assert база["resumes"] == []
+
+        return
+
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == f"{сайт}{prefix}/cabinet/settings"
+    ждём = ПУБЛИКАЦИЯ[(verb, status, опубликовано)]
+    [(после, дата, удалено, тронуто)] = база["resumes"]
+    assert удалено is False and база["photo"] is True
+
+    if ждём == "blocked":
+        assert (после, тронуто) == ("blocked", False)
+        assert json_errors(_сессия(итог)) == {"status": [СООБЩЕНИЯ[(prefix, "blocked")]]}
+
+        return
+
+    assert (после, дата) == ждём
+    # Строка правится, только если статус или дата меняются
+    assert тронуто is ((после, дата) != (status, "2026-09-01 10:00:00" if опубликовано else None))
+    assert _сессия(итог)["status"] == СООБЩЕНИЯ[(prefix, verb)]
 
 
 @pytest.mark.parametrize("status", ["published", None])
@@ -111,9 +170,14 @@ def test_удалить(сайт, status):
         headers=inertia(),
     )
 
-    if status is not None:
-        assert итог["ответ"]["status"] == 303
-        assert итог["база"]["resumes"][0][2] is True and not итог["база"]["photo"]
+    if status is None:
+        assert итог["ответ"]["status"] == 404
+        assert итог["база"]["photo"] is False
+
+        return
+
+    assert итог["ответ"]["status"] == 303
+    assert итог["база"]["resumes"][0][2] is True and not итог["база"]["photo"]
 
 
 # ── Правка ──────────────────────────────────────────────────────────
@@ -174,28 +238,97 @@ def нет_резюме() -> None:
 }
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
+#: Столбцы снимок_правки()
+СТОЛБЦЫ = (
+    "slug", "title", "field", "country_id", "city_id", "salary", "currency", "employment",
+    "schedule", "experience_months", "about", "skills", "jobs", "education", "languages",
+    "contact_name", "contact_phone", "contact_email", "show_phone", "show_email", "title_i18n",
+    "about_i18n", "jobs_i18n", "свежее",
+)  # fmt: skip
+JSON = {"employment", "schedule", "skills", "jobs", "education", "languages"} | {
+    "title_i18n", "about_i18n", "jobs_i18n"
+}  # fmt: skip
+
+
+def _строка(row: tuple[Any, ...]) -> dict[str, Any]:
+    return {
+        k: json.loads(v) if k in JSON and v is not None else v
+        for k, v in zip(СТОЛБЦЫ, row, strict=True)
+    }
+
+
+#: Опыт: 2018-03 … сейчас (вторая работа без конца перекрывает первую)
+ОПЫТ_ПОЛНОГО = 103
+
+ПРАВКИ = [
+    # (тело, ждём): ждём — поля сохранённого резюме или ошибки проверки
+    (
         ПОЛНОЕ,
+        {
+            "title": "Прораб / мастер участка",
+            "field": "construction",
+            "salary": 15000000,
+            "employment": ["full", "project"],
+            "experience_months": ОПЫТ_ПОЛНОГО,
+            # Пустые навыки, работы, учёба и языки отброшены, лишние ключи — тоже
+            "skills": ["AutoCAD", "Сметы"],
+            "jobs": [
+                {
+                    "company": "ООО Цемент",
+                    "position": "Прораб",
+                    "start": "2018-03",
+                    "end": "2021-06",
+                },
+                # Пустой конец — null: работает до сих пор
+                {"company": "Бетон", "position": "Мастер", "start": "2020-01", "end": None},
+            ],
+            "education": [{"institution": "ТАСИ", "level": "bachelor", "year": "2012"}],
+            "languages": [{"name": "Русский", "level": "native"}],
+            "show_phone": False,
+            "show_email": True,
+            # Заголовок и «о себе» сменились — прежний перевод не годится
+            "title_i18n": None,
+            "about_i18n": None,
+        },
+    ),
+    (
         {"title": "Прораб"},
+        # Заголовок прежний — перевод остаётся (если резюме было)
+        {"title": "Прораб", "skills": [], "jobs": [], "experience_months": 0},
+    ),
+    (
         {"title": "Прораб", "about": "Новое о себе", "employment": []},
+        {"title": "Прораб", "employment": [], "about_i18n": None},
+    ),
+    (
         {"title": "Инженер ПТО", "jobs": [{"company": "A", "position": "B", "start": "2019"}]},
-        {"title": "ab"},
-        {**ПОЛНОЕ, "jobs": [{"company": "Без должности"}]},
-        {**ПОЛНОЕ, "education": [{"institution": "ТАСИ", "year": "1900"}]},
-        {**ПОЛНОЕ, "country_id": 999999, "city_id": "abc"},
-        {**ПОЛНОЕ, "contact_email": "не почта"},
-        {**ПОЛНОЕ, "skills": [f"навык {i}" for i in range(31)]},
+        {
+            "title": "Инженер ПТО",
+            "jobs": [{"company": "A", "position": "B", "start": "2019"}],
+            "experience_months": 93,
+            "title_i18n": None,
+        },
+    ),
+    ({"title": "ab"}, ["title"]),
+    ({**ПОЛНОЕ, "jobs": [{"company": "Без должности"}]}, ["jobs.0.position"]),
+    ({**ПОЛНОЕ, "education": [{"institution": "ТАСИ", "year": "1900"}]}, ["education.0.year"]),
+    ({**ПОЛНОЕ, "country_id": 999999, "city_id": "abc"}, ["city_id", "country_id"]),
+    ({**ПОЛНОЕ, "contact_email": "не почта"}, ["contact_email"]),
+    ({**ПОЛНОЕ, "skills": [f"навык {i}" for i in range(31)]}, ["skills"]),
+    (
         {**ПОЛНОЕ, "employment": ["full", "boss"], "salary": -5, "show_phone": "yes"},
-        {**ПОЛНОЕ, "field": "space", "currency": "BTC"},
-        {},
-    ],
-)
+        ["employment.1", "salary", "show_phone"],
+    ),
+    ({**ПОЛНОЕ, "field": "space", "currency": "BTC"}, ["currency", "field"]),
+    ({}, ["title"]),
+]
+
+
+@pytest.mark.parametrize(("body", "ждём"), ПРАВКИ)
 @pytest.mark.parametrize("было", ["есть", "нет", "без адреса"])
-def test_правка(сайт, body, было):
+def test_правка(сайт, body, ждём, было):
     подготовка = {"есть": есть_резюме(), "нет": нет_резюме, "без адреса": есть_резюме(None)}[было]
-    отправить(
+    итог = отправить(
         сайт,
         "/cabinet/resume",
         подготовка,
@@ -205,11 +338,72 @@ def test_правка(сайт, body, было):
         method="PATCH",
         headers=inertia(),
     )
+    ответ = итог["ответ"]
+    строки = [_строка(row) for row in итог["база"]]
+
+    # Inertia: PATCH, ответивший переходом, — 303, назад
+    assert ответ["status"] == 303
+    assert ответ["headers"]["location"] == сайт + "/cabinet/settings"
+
+    if isinstance(ждём, list):
+        assert sorted(json_errors(_сессия(итог))) == ждём
+
+        if было == "нет":
+            assert строки == []
+        else:
+            # Ничего не записано
+            [строка] = строки
+            assert (строка["title"], строка["свежее"]) == ("Прораб", False)
+
+        return
+
+    assert _сессия(итог)["status"] == "Резюме сохранено."
+    [строка] = строки
+    assert строка["свежее"] is True
+    # Адрес — один раз: есть — прежний, нет — из заголовка и номера
+    адрес_ = "prorab-1" if было == "есть" else _адрес_нового(строка["title"])
+    assert строка["slug"] == адрес_
+
+    for поле, значение in ждём.items():
+        if было == "нет" and поле.endswith("_i18n"):
+            continue
+
+        assert строка[поле] == значение, поле
+
+    if было != "нет" and body.get("title") == "Прораб" and "about" not in body:
+        assert строка["title_i18n"] == {"en": "Foreman"}
 
 
-@pytest.mark.parametrize("prefix", ["/en", "/uz"])
-def test_правка_на_языке(сайт, prefix):
-    отправить(
+def _адрес_нового(title: str) -> str:
+    """Адрес нового резюме: заголовок латиницей и номер строки (1)."""
+    return {
+        "Прораб / мастер участка": "prorab-master-uchastka-1",
+        "Прораб": "prorab-1",
+        "Инженер ПТО": "inzhener-pto-1",
+    }[title]
+
+
+@pytest.mark.parametrize(
+    ("prefix", "ждём"),
+    [
+        (
+            "/en",
+            {
+                "title": ["The title field must be at least 3 characters."],
+                "jobs.0.position": [
+                    "The jobs.0.position field is required when jobs.0.company is present."
+                ],
+            },
+        ),
+        # У узбекского словаря своих текстов проверки нет — ключи, как у Laravel
+        (
+            "/uz",
+            {"title": ["validation.min.string"], "jobs.0.position": ["validation.required_with"]},
+        ),
+    ],
+)
+def test_правка_на_языке(сайт, prefix, ждём):
+    итог = отправить(
         сайт,
         f"{prefix}/cabinet/resume",
         нет_резюме,
@@ -220,26 +414,27 @@ def test_правка_на_языке(сайт, prefix):
         headers=inertia(),
     )
 
+    assert итог["ответ"]["status"] == 303
+    assert итог["ответ"]["headers"]["location"] == f"{сайт}{prefix}/cabinet/settings"
+    assert json_errors(_сессия(итог)) == ждём
+    assert итог["база"] == []
 
-# ── Фото резюме: только Django ──────────────────────────────────────
+
+# ── Фото резюме ─────────────────────────────────────────────────────
 #
-# У Laravel загрузка фото всегда кончается ошибкой 500 (ImageStore::store
-# получает [400, 400] вместо ['w' => 400, 'h' => 400]). По решению
-# владельца форма переезжает сразу рабочей, поэтому сверять не с чем:
-# проверяется сам Django.
+# У Laravel загрузка фото всегда кончалась ошибкой 500 (ImageStore::store
+# получал [400, 400] вместо ['w' => 400, 'h' => 400]); форма переехала
+# на Django сразу рабочей.
 
 
 def _фото(
     сайт: str, файл: tuple[str, bytes] | None, env: dict[str, str] | None = None
 ) -> tuple[dict[str, Any], Any]:
-    import json
-
     from savdex import laravel_session
 
     from .test_web_company_profile_actions import multipart
     from .test_web_forms import SID, ТОКЕН
-    from .test_web_session import СЕССИЯ, завести, кука
-    from .web_site import из_django
+    from .web_site import СЕССИЯ, завести, из_django, кука
 
     завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: соискатель()})
     тело, тип = multipart({"photo": файл} if файл else {"note": "x"})

@@ -1,43 +1,37 @@
 """
 Этап 7, шаг 59: «Жалобы на контакты» на Django вместо страницы Filament.
 
-«Вернуть списанное» и «Отказать» — база и журнал после кнопки на Django
-такие же, как после ModerationService у Laravel: кредит — в кошелёк с
+«Вернуть списанное» и «Отказать» — база и журнал после кнопки (как
+было у ModerationService Laravel): кредит — в кошелёк с
 историей «complaint_refund», контакт по тарифу — в месячный лимит,
 дважды не возвращается; уведомление компании; строка журнала с
 пометкой. Формулировка — от 15 знаков. Решает модератор и
 администратор; поддержка раздел видит, но не решает.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
 
-from .pg_admin import django, php, sql, нужна_база, свежая_база, сотрудник
+from .factories import компания, пользователь
+from .pg_admin import django, sql, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
 LIST = "/py/admin/finance/complaint/"
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 ПРИЧИНА = "Контакт проверен, компания не отвечает — возвращаем"
 
 
 @pytest.fixture(scope="module")
 def люди() -> dict[str, int]:
     свежая_база()
-    php(
-        "$a = App\\Models\\Company::factory()->create(['slug' => 'buyer',"
-        " 'name' => 'ООО Покупатель']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'seller', 'name' => 'ООО Продавец']);"
-        "App\\Models\\User::factory()->create(['company_id' => $a->id]);"
-        "echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+    a = компания(slug="buyer", name="ООО Покупатель")
+    компания(slug="seller", name="ООО Продавец")
+    пользователь(company_id=a)
 
     return {role: сотрудник(role) for role in ("moderator", "admin", "support", "finance")}
 
@@ -89,28 +83,6 @@ def снимок() -> dict[str, Any]:
     }
 
 
-def по_сторонам(подготовка: Callable[[], None], laravel: str, django_шаг: Callable[[], Any]) -> Any:
-    подготовка()
-    php(laravel, БЕЗ_ПЕРЕВОДА)
-    л = снимок()
-
-    подготовка()
-    ответ = django_шаг()
-    д = снимок()
-
-    assert д == л, (д, л)
-
-    return ответ, д
-
-
-def _служба(uid: int, метод: str, note: str) -> str:
-    return (
-        f"Illuminate\\Support\\Facades\\Auth::login($u = App\\Models\\User::find({uid}));"
-        f"app(App\\Services\\ModerationService::class)->{метод}("
-        f"App\\Models\\ContactUnlock::firstOrFail(), $u, '{note}'); echo 'ok';"
-    )
-
-
 def test_кто_видит(люди):
     сброс()
 
@@ -126,38 +98,64 @@ def test_кто_видит(люди):
     assert django(люди["finance"], ("get", LIST, None))[1]["status"] == 403
 
 
+UNLOCK = "App\\Models\\ContactUnlock"
+ВЕРНУЛИ = "Жалоба на контакт подтверждена — потраченное вернули"
+
+
 @pytest.mark.parametrize(
-    "настройка",
+    ("настройка", "кошельки", "история", "уведомлена"),
     [
-        {},
-        {"spent": 0},
-        {"refunded": True},
-        {"кошелёк": False},
-        {"удалена": True},
+        # Потрачен кредит — вернулся в кошелёк с историей
+        ({}, [(3, 3)], [("credits", 1, 3, "complaint_refund", UNLOCK, 1, "uid")], True),
+        # Контакт по тарифу — вернулся в месячный лимит
+        ({"spent": 0}, [(2, 2)], [], True),
+        # Уже возвращали — дважды не возвращается
+        ({"refunded": True}, [(2, 3)], [], True),
+        ({"кошелёк": False}, [], [], True),
+        # Удалённой компании ни возврата, ни уведомления
+        ({"удалена": True}, [(2, 3)], [], False),
     ],
 )
-def test_вернуть(люди, настройка):
+def test_вернуть(люди, настройка, кошельки, история, уведомлена):
     uid = люди["moderator"]
-    _, база = по_сторонам(
-        lambda: сброс(**настройка),
-        _служба(uid, "acceptComplaint", ПРИЧИНА),
-        lambda: django(uid, ("post", LIST + "1/accept/", {"note": ПРИЧИНА})),
+    сброс(**настройка)
+
+    _, ответ = django(uid, ("post", LIST + "1/accept/", {"note": ПРИЧИНА}))
+    база = снимок()
+
+    assert ответ["status"] == 302 and ответ["location"] == LIST
+    assert база["unlocks"] == [("accepted", True, ПРИЧИНА, uid, True)]
+    assert база["wallets"] == кошельки
+    assert база["wallet_log"] == [tuple(uid if v == "uid" else v for v in r) for r in история]
+    assert база["notifications"] == (
+        [("moderation", ВЕРНУЛИ, ПРИЧИНА, "success", "/cabinet/contacts")] if уведомлена else []
     )
-
-    assert база["unlocks"][0][:2] == ("accepted", True)
-
-    if not настройка:
-        assert база["wallets"] == [(3, 3)] and база["wallet_log"][0][3] == "complaint_refund"
+    assert база["events"] == (
+        [("moderation", "success", ВЕРНУЛИ, "/cabinet/contacts")] if уведомлена else []
+    )
+    assert база["journal"] == [
+        (uid, "refunded", "complaints", UNLOCK, 1, "ContactUnlock #1", None, ПРИЧИНА)
+    ]
 
 
 def test_отказать(люди):
     uid = люди["admin"]
     note = "Контакт рабочий, дозвонились с первого раза"
-    по_сторонам(
-        сброс,
-        _служба(uid, "declineComplaint", note),
-        lambda: django(uid, ("post", LIST + "1/decline/", {"note": note})),
-    )
+    сброс()
+
+    _, ответ = django(uid, ("post", LIST + "1/decline/", {"note": note}))
+
+    assert ответ["status"] == 302 and ответ["location"] == LIST
+    assert снимок() == {
+        "unlocks": [("declined", False, note, uid, True)],
+        "wallets": [(2, 3)],
+        "wallet_log": [],
+        "notifications": [
+            ("moderation", "Жалоба на контакт отклонена", note, "warning", "/cabinet/contacts")
+        ],
+        "events": [("moderation", "warning", "Жалоба на контакт отклонена", "/cabinet/contacts")],
+        "journal": [(uid, "rejected", "complaints", UNLOCK, 1, "ContactUnlock #1", None, note)],
+    }
 
 
 def test_короткая_формулировка(люди):

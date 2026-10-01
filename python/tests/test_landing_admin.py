@@ -1,8 +1,8 @@
 """
-Раздел «Главная страница» админки на Django — сквозь настоящую базу и Laravel.
+Раздел «Главная страница» админки на Django — сквозь настоящую базу и сайт.
 
-Секции главной заводит миграция Laravel
-(2026_09_28_180000_landing_from_dictionaries) — с текстами на всех
+Секции главной заводит снимок схемы (миграция
+2026_09_28_180000_landing_from_dictionaries) — с текстами на всех
 языках, какими их показывал сайт. Проверяется то, ради чего раздел
 устроен именно так:
 
@@ -12,7 +12,7 @@
 - секцию можно скрыть, первый экран — нельзя;
 - секции не заводятся и не удаляются.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -24,7 +24,8 @@ import pytest
 
 from savdex.site.landing_admin import LANDING_FIELDS
 
-from .pg_admin import django, php, sql, журнал, нужна_база, свежая_база, сотрудник
+from .pg_admin import django, sql, журнал, нужна_база, свежая_база, сотрудник
+from .web_site import адрес, открыть, страница
 
 pytestmark = нужна_база
 
@@ -83,13 +84,15 @@ def _сохранить(
 
 
 def _card(key: str, locale: str = "ru") -> dict[str, Any]:
-    out = php(
-        f"app()->setLocale('{locale}'); "
-        f"echo json_encode(App\\Models\\LandingBlock::where('key', '{key}')->first()->card(), "
-        "JSON_UNESCAPED_UNICODE);"
-    )
+    """Секция, как её показывает главная сайта на этом языке (проп blocks)."""
+    with адрес() as сайт:
+        ответ = открыть(сайт, "/" if locale == "ru" else f"/{locale}")
 
-    return dict(json.loads(out))
+    assert ответ["status"] == 200
+    page = страница(ответ["body"])
+    assert page["component"] == "Home"
+
+    return dict(page["props"]["blocks"][key])
 
 
 def test_миграция_перенесла_секции_макета(люди):

@@ -1,114 +1,176 @@
 """
-Тарифы на Django неотличимы от Laravel (этап 3).
+Тарифы на Django (этап 3).
 
 Цены из базы, сумовая — своя или по курсу ЦБ с округлением до тысяч
 (половина — вверх, как round() у PHP). Курс Django читает из файлового
-кэша Laravel — того же, что на боевом, поэтому обе стороны здесь
-работают с CACHE_STORE=file, а курс в кэш кладёт сам Laravel.
+кэша (формат Laravel, как на боевом), поэтому проверки работают с
+CACHE_STORE=file, а курс в кэш кладут сами.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import subprocess
+import sys
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, из_django, сверить, страница
+from savdex import laravel_cache
+
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import адрес, из_django, открыть, страница
 
 pytestmark = нужна_база
 
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
 
 
-def кэш(code: str) -> None:
-    php(code, ФАЙЛОВЫЙ)
+#: Ключи файлового кэша, которые трогают проверки
+КУРСЫ, ЗАПАСНЫЕ = "cbu.rates", "cbu.rates.last"
+СЧЁТЧИК = "pricing-promo:127.0.0.1"
+
+
+def забыть(*ключи: str) -> None:
+    """Cache::forget в файловом кэше."""
+    for ключ in ключи:
+        laravel_cache.file_path(ключ).unlink(missing_ok=True)
+
+
+def курсы() -> None:
+    # 150 $ × 12 650 = 1 897,5 тыс. — половина: PHP округляет вверх
+    laravel_cache.put(КУРСЫ, {"USD": 12650.0, "EUR": 13790.25}, 86400)
 
 
 def очистить_кэш() -> None:
+    забыть(КУРСЫ, ЗАПАСНЫЕ, СЧЁТЧИК, f"{СЧЁТЧИК}:timer")
+
+
+def справочники(*таблицы: str) -> None:
+    """
+    Справочники из снимка savdex/bootstrap/seeds.json (savdex/seeds.py) —
+    только эти таблицы, как один сидер Laravel (PlanSeeder).
+    """
+    код = (
+        "import json, django; django.setup(); from savdex import seeds; "
+        "data = json.loads(seeds.DATA.read_text(encoding='utf-8')); "
+        f"seeds.seed(data={{k: v if k in {list(таблицы)!r} else [] for k, v in data.items()}})"
+    )
     subprocess.run(
-        ["php", "artisan", "cache:clear"],
-        cwd=КОРЕНЬ,
-        env={**ОКРУЖЕНИЕ, **ФАЙЛОВЫЙ},
-        check=True,
+        [sys.executable, "-c", код],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            # Справочники заводит владелец базы, как миграции
+            "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"],
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "PYTHONPATH": str(PYTHON),
+        },
         capture_output=True,
+        check=True,
     )
 
 
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=PlanSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    справочники("plans")
     # Своя сумовая цена, дробная долларовая и выключенный тариф
     sql("update plans set price_uzs = 499000 where code = 'flash'")
     sql("update plans set price_usd = 19.99 where code = 'business'")
     sql("update plans set is_active = false where code = 'vip'")
     очистить_кэш()
-    # 150 $ × 12 650 = 1 897,5 тыс. — половина: PHP округляет вверх
-    кэш("Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25], now()->addDay());")
+    курсы()
 
     try:
-        with laravel(**ФАЙЛОВЫЙ) as root:
+        with адрес() as root:
             yield root
     finally:
         очистить_кэш()
 
 
-@pytest.mark.parametrize("path", ["/pricing", "/uz/pricing", "/en/pricing", "/zh/pricing"])
-def test_тарифы(сайт, path):
-    д, _ = сверить(сайт, path, env=ФАЙЛОВЫЙ)
-    plans = {p["code"]: p for p in страница(д["body"])["props"]["plans"]}
+def тарифы(
+    сайт: str, path: str, headers: dict[str, str] | None = None, *, курс: bool = True
+) -> dict[str, Any]:
+    if курс:
+        # Курс — заново перед каждым заходом: кэш на диске общий с другими проверками
+        курсы()
 
-    assert "vip" not in plans
+    д = открыть(сайт, path, headers=headers, env=ФАЙЛОВЫЙ)
+
+    assert д["status"] == 200
+    стр = страница(д["body"])
+    assert стр["component"] == "Pricing"
+
+    return стр
+
+
+@pytest.mark.parametrize(
+    ("path", "язык"),
+    [("/pricing", "ru"), ("/uz/pricing", "uz"), ("/en/pricing", "en"), ("/zh/pricing", "zh")],
+)
+def test_тарифы(сайт, path, язык):
+    стр = тарифы(сайт, path)
+    plans = {p["code"]: p for p in стр["props"]["plans"]}
+
+    assert стр["props"]["locale"] == язык
+    assert list(plans) == ["free", "flash", "business", "premium"]
     assert plans["flash"]["price_uzs"] == 499000
     assert plans["premium"]["price_uzs"] == 1_898_000
     assert plans["business"]["price_usd"] == 19.99
+    # 19.99 × 12 650 = 252 873,5 → 253 тыс.
+    assert plans["business"]["price_uzs"] == 253_000
 
 
 def test_переход_inertia(сайт):
-    версия = страница(из_django(сайт, "/pricing", env=ФАЙЛОВЫЙ)["body"])["version"]
-
-    сверить(
+    версия = тарифы(сайт, "/pricing")["version"]
+    д = открыть(
         сайт,
         "/en/pricing",
         headers={"X-Inertia": "true", "X-Inertia-Version": версия},
         env=ФАЙЛОВЫЙ,
     )
 
-
-def test_курс_из_запасной_таблицы(сайт):
-    """
-    Основной таблицы нет — Django берёт последнюю удачную, к ЦБ не ходит.
-
-    Laravel в этом случае сначала сходил бы в ЦБ, поэтому сверки с ним
-    здесь нет: проверяется только Django.
-    """
-    кэш(
-        "Cache::forget('cbu.rates');"
-        "Cache::put('cbu.rates.last', ['USD' => 12000.0], now()->addMonth());"
+    # Ответ перехода — JSON страницы, без вёрстки
+    assert д["status"] == 200
+    assert д["headers"]["x-inertia"] == "true"
+    assert д["headers"]["content-type"].startswith("application/json")
+    стр = страница(д["body"])
+    assert (стр["component"], стр["url"], стр["props"]["locale"]) == (
+        "Pricing",
+        "/en/pricing",
+        "en",
     )
 
+    # Устаревшая версия сборки — 409 и полный переход
+    д = открыть(
+        сайт,
+        "/en/pricing",
+        headers={"X-Inertia": "true", "X-Inertia-Version": "old"},
+        env=ФАЙЛОВЫЙ,
+    )
+    # (адрес — без языкового префикса: его срезает LocalizeUrl, язык — в сессии)
+    assert д["status"] == 409
+    assert д["headers"]["x-inertia-location"] == сайт + "/pricing"
+
+
+def test_курс_из_запасной_таблицы(сайт):
+    """Основной таблицы нет — Django берёт последнюю удачную, к ЦБ не ходит."""
+    забыть(КУРСЫ)
+    laravel_cache.put(ЗАПАСНЫЕ, {"USD": 12000.0}, 30 * 86400)
+
     try:
-        д = из_django(сайт, "/pricing", env=ФАЙЛОВЫЙ)
-        plans = {p["code"]: p for p in страница(д["body"])["props"]["plans"]}
+        plans = {p["code"]: p for p in тарифы(сайт, "/pricing", курс=False)["props"]["plans"]}
         assert plans["premium"]["price_uzs"] == 1_800_000
 
         # Ни основной, ни запасной — запасной курс CurrencyRate::DEFAULT_USD
-        кэш("Cache::forget('cbu.rates.last');")
-        д = из_django(сайт, "/pricing", env=ФАЙЛОВЫЙ)
-        plans = {p["code"]: p for p in страница(д["body"])["props"]["plans"]}
+        забыть(ЗАПАСНЫЕ)
+        plans = {p["code"]: p for p in тарифы(сайт, "/pricing", курс=False)["props"]["plans"]}
         assert plans["premium"]["price_uzs"] == 1_920_000
     finally:
-        кэш("Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25], now()->addDay());")
+        курсы()
 
 
 # ── Промокод на витрине (шаг 70) ────────────────────────────────────
@@ -143,72 +205,83 @@ def _коды() -> None:
 
 
 def _сброс_счётчика() -> None:
-    кэш(
-        "RateLimiter::clear('pricing-promo:127.0.0.1');"
-        "Cache::put('cbu.rates', ['USD' => 12650.0, 'EUR' => 13790.25], now()->addDay());"
-    )
+    """RateLimiter::clear('pricing-promo:<IP>') и свежие курсы."""
+    забыть(СЧЁТЧИК, f"{СЧЁТЧИК}:timer")
+    курсы()
+
+
+СКИДКА_30 = {"code": "SALE-30", "plan_code": "business", "discount_percent": 30, "days": None}
 
 
 @pytest.mark.parametrize(
-    "promo",
+    ("promo", "код", "цена", "ошибка"),
     [
-        "SALE-30",
-        "%20sale%E2%80%9430%20",  # « sale—30 », как его кодирует браузер
-        "free_14",
-        "FREE-0",
-        "ZERO",
-        "USED",
-        "OLD",
-        "OFF",
-        "GONE",
-        "NOPE",
-        "FLASH-15",
-        "",
-        "%20",
+        # 253 000 × 0,7; доллары — 19,99 × 0,7
+        ("SALE-30", СКИДКА_30, ("business", 13.99, 177100), None),
+        # « sale—30 », как его кодирует браузер: регистр, пробелы и тире — неважны
+        ("%20sale%E2%80%9430%20", СКИДКА_30, ("business", 13.99, 177100), None),
+        (
+            "free_14",
+            {"code": "FREE-14", "plan_code": "premium", "discount_percent": None, "days": 14},
+            ("premium", 0, 0),
+            None,
+        ),
+        ("FREE-0", None, None, "Промокод выпущен с ошибкой: срок доступа не задан."),
+        ("ZERO", None, None, "Промокод выпущен с ошибкой: размер скидки не задан."),
+        ("USED", None, None, "Этот промокод уже активирован."),
+        ("OLD", None, None, "Срок действия промокода истёк."),
+        ("OFF", None, None, "Промокод отключён."),
+        ("GONE", None, None, "Тариф по этому промокоду больше не выдаётся."),
+        ("NOPE", None, None, "Такого промокода нет."),
+        (
+            "FLASH-15",
+            {"code": "FLASH-15", "plan_code": "flash", "discount_percent": 15, "days": None},
+            # Своя сумовая цена: 499 000 × 0,85
+            ("flash", 34, 424150),
+            None,
+        ),
+        ("", None, None, None),
+        ("%20", None, None, None),
     ],
 )
-def test_промокод(сайт, promo):
+def test_промокод(сайт, promo, код, цена, ошибка):
     _коды()
     _сброс_счётчика()
-    д, _ = сверить(сайт, f"/pricing?promo={promo}", env=ФАЙЛОВЫЙ, перед=_сброс_счётчика)
-    props = страница(д["body"])["props"]
+    props = тарифы(сайт, f"/pricing?promo={promo}")["props"]
+    со_скидкой = {
+        p["code"]: (p["promo_price"]["price_usd"], p["promo_price"]["price_uzs"])
+        for p in props["plans"]
+        if p.get("promo_price")
+    }
 
-    if promo == "SALE-30":
-        assert props["promo"] == {
-            "code": "SALE-30",
-            "plan_code": "business",
-            "discount_percent": 30,
-            "days": None,
-        }
-        business = next(p for p in props["plans"] if p["code"] == "business")
-        assert business["promo_price"]["price_usd"] == 13.99
-    elif promo in ("USED", "NOPE"):
-        assert props["promo"] is None and props["promoError"]
+    assert props["promo"] == код
+    assert со_скидкой == ({цена[0]: цена[1:]} if цена else {})
+
+    if ошибка is None:
+        assert props["promoError"] is None
+    else:
+        assert props["promoError"].startswith(ошибка), props["promoError"]
 
 
 def test_промокод_массивом(сайт):
-    """?promo[]=… — (string) массива у PHP: страница 500 у обеих сторон."""
-    from .web_site import из_laravel
+    """?promo[]=… — (string) массива у PHP: страница 500, как была у Laravel."""
+    д = из_django(сайт, "/pricing?promo[]=x", env=ФАЙЛОВЫЙ)
 
-    ответы = [
-        сторона(сайт, "/pricing?promo[]=x", env=ФАЙЛОВЫЙ)
-        if сторона is из_django
-        else сторона(сайт, "/pricing?promo[]=x")
-        for сторона in (из_django, из_laravel)
-    ]
-
-    assert [о["status"] for о in ответы] == [500, 500]
+    assert д["status"] == 500
 
 
 def test_промокод_десять_проверок_в_час(сайт):
     _коды()
     _сброс_счётчика()
 
-    # Счётчик общий: пять проверок Django и пять Laravel — одиннадцатая отклоняется
-    for _ in range(5):
-        сверить(сайт, "/pricing?promo=NOPE", env=ФАЙЛОВЫЙ)
+    # Десять проверок в час на адрес — одиннадцатая отклоняется, даже верный код
+    for _ in range(10):
+        props = тарифы(сайт, "/pricing?promo=NOPE")["props"]
+        assert props["promo"] is None and props["promoError"]
 
-    д, _ = сверить(сайт, "/pricing?promo=SALE-30", env=ФАЙЛОВЫЙ)
-    props = страница(д["body"])["props"]
+    props = тарифы(сайт, "/pricing?promo=SALE-30")["props"]
 
-    assert props["promo"] is None and props["promoError"]
+    assert props["promo"] is None
+    assert props["promoError"] == "Слишком много попыток ввести промокод. Попробуйте через час."
+    # Без промокода страница счётчик не трогает
+    assert тарифы(сайт, "/pricing")["props"]["promoError"] is None

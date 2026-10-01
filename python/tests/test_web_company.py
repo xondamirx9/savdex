@@ -1,27 +1,29 @@
 """
-Этап 4, шаг 6: визитка компании /company/<адрес> на Django неотличима
-от Laravel.
+Этап 4, шаг 6: визитка компании /company/<адрес> на Django.
 
 Шапка (businessCard), контакты: гостю и не заплатившему — маской,
 кроме сайта; заплатившему и своей компании — открыты. Файлы: материалы
 сразу, документы после одобрения, пропавшие с диска не видны. Отзывы,
 право оставить свой, кошелёк смотрящего. И запись «Кто мной
-интересуется»: вошедший с компанией — одна строка на полчаса, у обеих
-сторон одна и та же.
+интересуется»: вошедший с компанией — одна строка на полчаса (по
+таблице и по ключу сессии в файловом кэше).
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
 
 from __future__ import annotations
 
 import shutil
-import subprocess
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
-from .pg_admin import КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
-from .web_site import laravel, войти, из_django, из_laravel, пользователь, сверить, страница
+from .factories import компания as новая
+from .factories import объявление, отзыв
+from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
+from .test_web_catalog import ГЕО, справочники
+from .web_site import адрес, вход, открыть, пользователь, страница
 
 pytestmark = нужна_база
 
@@ -31,92 +33,174 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=GeoSeeder", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
+    справочники(*ГЕО)
     ФАЙЛЫ.mkdir(parents=True, exist_ok=True)
 
     for name in ("license.pdf", "price.xlsx", "photo.JPG", "old.png"):
         (ФАЙЛЫ / name).write_bytes(b"x" * 10)
 
-    php(
-        "$uz = App\\Models\\Country::where('code', 'uz')->value('id');"
-        "$city = App\\Models\\City::where('country_id', $uz)->value('id');"
-        "$c = App\\Models\\Company::factory()->create(['slug' => 'stroybaza',"
-        " 'name' => 'ООО «Стройбаза»',"
-        "'legal_name' => 'ООО «Стройбаза Групп»', 'country_id' => $uz, 'city_id' => $city,"
-        "'address' => 'Ташкент, Чиланзар 5', 'lat' => 41.3, 'lng' => 69.2, 'tin' => '301234567',"
-        "'founded_year' => 2012, 'employees_range' => '11-50', 'verification_level' => 2,"
-        "'is_it_provider' => true, 'it_specializations' => ['web', 'erp', 'unknown'],"
-        "'custom_category' => 'Сухие смеси', 'website' => 'stroybaza.uz', 'rating' => 4.35,"
-        "'reviews_count' => 2, 'description' => str_repeat('Поставки цемента. ', 10)]);"
-        "foreach ([['phone', '+998 90 123-45-67', true], ['email', 'sales@stroybaza.uz', false],"
-        "['telegram', '@stroybaza', false], ['whatsapp', '+998901234567', false],"
-        "['website', 'https://stroybaza.uz', false], ['phone', '123', false]] as $i => [$t, $v,"
-        " $p]) {"
-        " $c->contacts()->create(['type' => $t, 'value' => $v,"
-        " 'label' => $i === 1 ? 'Отдел продаж' : null,"
-        " 'contact_person' => $i === 0 ? 'Азиз' : null, 'is_primary' => $p, 'is_public' => true,"
-        " 'sort_order' => $i]); }"
-        "$c->contacts()->create(['type' => 'phone', 'value' => '+998 71 000-00-00',"
-        " 'is_public' => false]);"
-        "foreach ([['license', 'Лицензия', 'license.pdf', 'approved', 2516582, '2020-01-01'],"
-        "['price_list', 'Прайс', 'price.xlsx', 'pending', 800, null],"
-        "['certificate', 'Сертификат', 'photo.JPG', 'pending', 5000, null],"
-        "['quality', 'Качество', 'old.png', 'approved', null, '2099-05-01'],"
-        "['license', 'Пропавшая', 'missing.pdf', 'approved', 100, null]] as [$t, $title, $f, $s,"
-        " $size, $valid]) {"
-        " $c->documents()->forceCreate(['type' => $t, 'title' => $title,"
-        " 'file_path' => 'parity-docs/'.$f, 'moderation_status' => $s, 'file_size' => $size,"
-        " 'valid_until' => $valid, 'is_public' => true]); }"
-        "$author = App\\Models\\Company::factory()->create(['name' => 'Андижан Текстиль']);"
-        "$gone = App\\Models\\Company::factory()->create(['name' => 'Ушедшая компания']);"
-        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
-        " 'author_company_id' => $author->id,"
-        "'status' => 'published', 'rating' => 5, 'reply' => 'Спасибо!', 'deal_confirmed' => true]);"
-        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
-        " 'author_company_id' => $gone->id,"
-        "'status' => 'published', 'rating' => 3]);"
-        "App\\Models\\Review::factory()->create(['company_id' => $c->id,"
-        "'author_company_id' => App\\Models\\Company::factory()->create()->id,"
-        "'status' => 'moderation']);"
-        "$gone->delete();"
-        "App\\Models\\Listing::factory()->count(3)->create(['company_id' => $c->id]);"
-        "App\\Models\\Listing::factory()->create(['company_id' => $c->id, 'source' => 'import']);"
-        "App\\Models\\Company::factory()->create(['slug' => 'bare', 'name' => 'ИП Каримов',"
-        "'legal_form' => 'individual', 'type' => null, 'city_id' => null, 'tin' => null,"
-        "'description' => null, 'lat' => null]);"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
+    [(uz,)] = sql("select id from countries where code = 'uz'")
+    [(city,)] = sql("select id from cities where country_id = %s order by id limit 1", [uz])
+    c = новая(
+        slug="stroybaza",
+        name="ООО «Стройбаза»",
+        legal_name="ООО «Стройбаза Групп»",
+        country_id=uz,
+        city_id=city,
+        address="Ташкент, Чиланзар 5",
+        lat=41.3,
+        lng=69.2,
+        tin="301234567",
+        founded_year=2012,
+        employees_range="11-50",
+        verification_level=2,
+        is_it_provider=True,
+        it_specializations=["web", "erp", "unknown"],
+        custom_category="Сухие смеси",
+        website="stroybaza.uz",
+        rating=4.35,
+        reviews_count=2,
+        description="Поставки цемента. " * 10,
+    )
+    контакты = [
+        ("phone", "+998 90 123-45-67", True),
+        ("email", "sales@stroybaza.uz", False),
+        ("telegram", "@stroybaza", False),
+        ("whatsapp", "+998901234567", False),
+        ("website", "https://stroybaza.uz", False),
+        ("phone", "123", False),
+    ]
+
+    for i, (вид, значение, главный) in enumerate(контакты):
+        sql(
+            "insert into company_contacts (company_id, type, value, label, contact_person, "
+            "is_primary, is_public, sort_order, created_at, updated_at) "
+            "values (%s, %s, %s, %s, %s, %s, true, %s, now(), now())",
+            [
+                c,
+                вид,
+                значение,
+                "Отдел продаж" if i == 1 else None,
+                "Азиз" if i == 0 else None,
+                главный,
+                i,
+            ],
+        )
+
+    sql(
+        "insert into company_contacts (company_id, type, value, is_public, created_at, "
+        "updated_at) values (%s, 'phone', '+998 71 000-00-00', false, now(), now())",
+        [c],
+    )
+    документы = [
+        ("license", "Лицензия", "license.pdf", "approved", 2516582, "2020-01-01"),
+        ("price_list", "Прайс", "price.xlsx", "pending", 800, None),
+        ("certificate", "Сертификат", "photo.JPG", "pending", 5000, None),
+        ("quality", "Качество", "old.png", "approved", None, "2099-05-01"),
+        ("license", "Пропавшая", "missing.pdf", "approved", 100, None),
+    ]
+
+    for вид, title, файл, статус, размер, срок in документы:
+        sql(
+            "insert into company_documents (company_id, type, title, file_path, "
+            "moderation_status, file_size, valid_until, is_public, created_at, updated_at) "
+            "values (%s, %s, %s, %s, %s, %s, %s, true, now(), now())",
+            [c, вид, title, f"parity-docs/{файл}", статус, размер, срок],
+        )
+
+    автор = новая(name="Андижан Текстиль")
+    ушедшая = новая(name="Ушедшая компания")
+    отзыв(
+        company_id=c,
+        author_company_id=автор,
+        status="published",
+        rating=5,
+        reply="Спасибо!",
+        deal_confirmed=True,
+    )
+    отзыв(company_id=c, author_company_id=ушедшая, status="published", rating=3)
+    отзыв(company_id=c, author_company_id=новая(), status="moderation")
+    sql("update companies set deleted_at = now() where id = %s", [ушедшая])
+
+    for _ in range(3):
+        объявление(company_id=c)
+
+    объявление(company_id=c, source="import")
+    новая(
+        slug="bare",
+        name="ИП Каримов",
+        legal_form="individual",
+        type=None,
+        city_id=None,
+        tin=None,
+        description=None,
+        lat=None,
     )
 
     try:
-        with laravel() as root:
+        with адрес() as root:
             yield root
     finally:
         shutil.rmtree(ФАЙЛЫ, ignore_errors=True)
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["/company/stroybaza", "/en/company/stroybaza", "/uz/company/stroybaza", "/company/bare"],
-)
-def test_визитка_гостю(сайт, path):
-    д, _ = сверить(сайт, path)
-    props = страница(д["body"])["props"]
+def визитка(сайт: str, path: str, cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    д = открыть(сайт, path, cookies)
+    стр = страница(д["body"])
 
-    if path.endswith("stroybaza"):
-        # Сайт открыт всегда, остальные контакты — маской
-        assert [c["locked"] for c in props["contacts"]] == [True, True, True, True, False, True]
-        assert props["wallet"] is None
+    assert д["status"] == 200
+    assert стр["component"] == "companies/Show"
+
+    return dict(стр["props"])
+
+
+@pytest.mark.parametrize(
+    ("path", "locale"),
+    [
+        ("/company/stroybaza", "ru"),
+        ("/en/company/stroybaza", "en"),
+        ("/uz/company/stroybaza", "uz"),
+    ],
+)
+def test_визитка_гостю(сайт, path, locale):
+    props = визитка(сайт, path)
+
+    assert props["locale"] == locale
+    assert props["company"]["name"] == "ООО «Стройбаза»"
+    assert props["company"]["website"] == "https://stroybaza.uz"
+    assert props["company"]["coords"] == {"lat": 41.3, "lng": 69.2}
+    # Скрытый телефон не показан; сайт открыт всегда, остальные контакты — маской
+    assert [c["locked"] for c in props["contacts"]] == [True, True, True, True, False, True]
+    assert props["contacts"][0]["value"] == "+998 90 ••• •• ••"
+    assert props["contacts"][1]["value"] == "s••••@stroybaza.uz"
+    assert props["locked_count"] == 5 and props["unlocked"] is False
+    # Материал (прайс) — сразу; документы — после одобрения; пропавший с диска не виден
+    assert [f["title"] for f in props["files"]] == ["Лицензия", "Прайс", "Качество"]
+    assert [f["expired"] for f in props["files"]] == [True, False, False]
+    # Отзывы — опубликованные; автор удалён — без имени
+    assert [r["rating"] for r in props["reviews"]] == [5, 3]
+    assert props["reviews"][0]["author"] == "Андижан Текстиль"
+    assert props["reviews"][0]["reply"] == "Спасибо!"
+    assert props["reviews"][1]["initials"] == "?"
+    # Три объявления и загруженное из книги
+    assert props["listings_count"] == 4
+    assert props["wallet"] is None and props["is_own"] is False
+
+
+def test_визитка_без_данных(сайт):
+    props = визитка(сайт, "/company/bare")
+
+    assert props["company"]["name"] == "ИП Каримов"
+    # Типа нет — вместо него правовая форма
+    assert props["company"]["type"] is None
+    assert props["company"]["type_label"] == props["company"]["legal_form_label"]
+    assert props["company"]["coords"] is None and props["company"]["city"] is None
+    assert props["contacts"] == [] and props["files"] == [] and props["reviews"] == []
+    assert props["listings_count"] == 0 and props["locked_count"] == 0
 
 
 def test_нет_компании(сайт):
-    д, _ = сверить(сайт, "/company/nothing")
+    д = открыть(сайт, "/company/nothing")
     assert д["status"] == 404
 
 
@@ -125,13 +209,13 @@ def компания(slug: str) -> int:
 
 
 def новая_компания() -> int:
-    return int(php("echo App\\Models\\Company::factory()->create()->id;").splitlines()[-1])
+    return новая()
 
 
 def вошедший(сайт: str, email: str, company_id: int | None, **поля: object) -> dict[str, str]:
-    пользователь(email, company_id=company_id, **поля)
+    del сайт
 
-    return войти(сайт, email)
+    return вход(пользователь(email, company_id=company_id, **поля))
 
 
 def просмотры(target: int) -> int:
@@ -151,13 +235,16 @@ def test_чужая_компания_без_раскрытия(сайт):
     куки = вошедший(сайт, "viewer@savdex.uz", своя)
     sql("delete from audience_views")
 
-    д, _ = сверить(сайт, "/company/stroybaza", куки)
-    props = страница(д["body"])["props"]
+    props = визитка(сайт, "/company/stroybaza", куки)
 
     assert props["wallet"] == {"contacts_left": 1, "credits": 7}
     assert props["unlocked"] is False and props["locked_count"] == 5
+    # Контакты не раскрыты — отзыв оставить нельзя
     assert props["review_blocked"] is not None
-    # Две стороны за полчаса — одна строка «Кто мной интересуется»
+    assert просмотры(цель) == 1
+
+    # Повтор за полчаса — та же одна строка «Кто мной интересуется»
+    визитка(сайт, "/company/stroybaza", куки)
     assert просмотры(цель) == 1
 
 
@@ -171,13 +258,12 @@ def test_раскрытые_контакты(сайт):
     )
     куки = вошедший(сайт, "buyer@savdex.uz", своя)
 
-    # Без префикса языка: с ним Laravel пишет язык в профиль, а Django
-    # профиль до этапа 5 не трогает (раздел «Этап 3» документа)
     for path in ("/company/stroybaza", "/company/stroybaza?utm=1"):
-        д, _ = сверить(сайт, path, куки)
-        props = страница(д["body"])["props"]
+        props = визитка(сайт, path, куки)
 
         assert props["unlocked"] is True and props["locked_count"] == 0
+        assert not any(c["locked"] for c in props["contacts"])
+        assert props["contacts"][0]["value"] == "+998 90 123-45-67"
         # Раскрыл — можно оставить отзыв
         assert props["review_blocked"] is None
 
@@ -187,22 +273,31 @@ def test_своя_компания(сайт):
     куки = вошедший(сайт, "owner@savdex.uz", цель)
     было = просмотры(цель)
 
-    д, _ = сверить(сайт, "/company/stroybaza", куки)
-    props = страница(д["body"])["props"]
+    props = визитка(сайт, "/company/stroybaza", куки)
 
     assert props["is_own"] is True and props["wallet"] is None
+    assert not any(c["locked"] for c in props["contacts"])
+    # Свою визитку в «Кто мной интересуется» не пишет
     assert просмотры(цель) == было
 
 
 @pytest.mark.parametrize(
-    ("email", "поля"),
+    ("email", "поля", "причина"),
     [
-        ("nocompany@savdex.uz", {}),
-        ("unverified@savdex.uz", {"email_verified_at": None}),
-        ("blocked@savdex.uz", {"status": "blocked"}),
+        (
+            "nocompany@savdex.uz",
+            {},
+            "Отзывы оставляют от имени компании — заполните её данные в кабинете.",
+        ),
+        (
+            "unverified@savdex.uz",
+            {"email_verified_at": None},
+            "Подтвердите почту, чтобы оставлять отзывы.",
+        ),
+        ("blocked@savdex.uz", {"status": "blocked"}, "Ваша учётная запись заблокирована."),
     ],
 )
-def test_почему_нельзя_оставить_отзыв(сайт, email, поля):
+def test_почему_нельзя_оставить_отзыв(сайт, email, поля, причина):
     company_id = None if email.startswith("nocompany") else новая_компания()
     куки = вошедший(сайт, email, company_id)
 
@@ -212,23 +307,22 @@ def test_почему_нельзя_оставить_отзыв(сайт, email, 
     if "status" in поля:
         sql("update users set status = %s where email = %s", [поля["status"], email])
 
-    сверить(сайт, "/company/stroybaza", куки)
+    props = визитка(сайт, "/company/stroybaza", куки)
+
+    assert props["review_blocked"] == причина
 
 
-def test_повтор_отсеивает_общий_кэш(сайт):
-    """Ключ повтора — в файловом кэше Laravel: Django поставил, Laravel видит."""
+def test_повтор_отсеивает_кэш(сайт):
+    """Ключ повтора — в файловом кэше: строку убрали, повтор отсеивает ключ сессии."""
     цель = компания("bare")
     своя = новая_компания()
     файловый = {"CACHE_STORE": "file"}
+    куки = вошедший(сайт, "cache@savdex.uz", своя)
+    sql("delete from audience_views")
 
-    with laravel(**файловый) as root:
-        куки = вошедший(root, "cache@savdex.uz", своя)
-        sql("delete from audience_views")
+    открыть(сайт, "/company/bare", куки, env=файловый)
+    assert просмотры(цель) == 1
 
-        из_django(root, "/company/bare", куки, env=файловый)
-        assert просмотры(цель) == 1
-
-        # Строку убрали — повтор отсеивает уже только ключ сессии в кэше
-        sql("delete from audience_views")
-        из_laravel(root, "/company/bare", куки)
-        assert просмотры(цель) == 0
+    sql("delete from audience_views")
+    открыть(сайт, "/company/bare", куки, env=файловый)
+    assert просмотры(цель) == 0

@@ -8,19 +8,16 @@
 Сценарии PHP — одноимённые проверки ниже (каждый вызов import() у PHP —
 отдельная таблица из одной строки, как очередь Filament). Сверх них:
 отчёт по файлу (номера строк и причины, незнакомые столбцы, нет столбца
-«Название»), поля новой компании и журнал — и сверка с настоящим
-CompanyImporter: одни и те же строки через PHP и через Django дают одни
-и те же компании и строки журнала.
+«Название»), поля новой компании и журнал — и все сценарии подряд
+одной очередью: какие компании и строки журнала получаются в итоге.
 
-Проверки с базой требуют PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая
+Проверки с базой требуют PostgreSQL (SAVDEX_PARITY_PG_URL); общая
 часть — в pg_admin.py.
 """
 
 from __future__ import annotations
 
-import base64
 import json
-import shutil
 import subprocess
 import sys
 from typing import Any
@@ -30,7 +27,7 @@ import pytest
 from savdex.data import company_import
 from savdex.data.company_import import column_map
 
-from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база, сотрудник
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база, сотрудник
 
 #: import_companies() в отдельном процессе Django: по таблице на вызов
 ПРОБА = """
@@ -97,51 +94,89 @@ def test_ячейки_набранные_руками():
     assert company_import.type_key("Логистика") == "логистика"
 
 
-@pytest.mark.skipif(
-    shutil.which("php") is None or not (КОРЕНЬ / "vendor/autoload.php").exists(),
-    reason="нет PHP с зависимостями",
+@pytest.mark.parametrize(
+    ("название", "итог"),
+    [
+        # Капсом — с заглавной каждое слово; формы собственности — как есть
+        ("TOSHKENT MATRAS LYUKS", "Toshkent Matras Lyuks"),
+        ("ООО «СТРОЙБАЗА»", "ООО «Стройбаза»"),
+        ("O'ZBEK-TEST 3D AB.CD", "O'zbek-Test 3D Ab.cd"),
+        # Есть строчные (ß) — не капс, не трогаем
+        ("STRASSE ß", "STRASSE ß"),
+        ("Tashkent Matras", "Tashkent Matras"),
+        ("12345", "12345"),
+        ("  МЧЖ ХК QURILISH MCHJ ", "МЧЖ ХК Qurilish MCHJ"),
+        # mb_strtolower делает из «İ» «i» и точку сверху отдельным знаком
+        ("İSTANBUL ÇELİK", "I\u0307stanbul Çeli\u0307k"),
+        ("X_Y É1A", "X_Y É1A"),
+        ("DŽEM OOO LLC JV", "Džem OOO LLC JV"),
+        ("", ""),
+    ],
 )
-def test_ячейки_как_у_php():
-    """CompanyNameStyle и ImportCell::year/employees — те же ответы, что у PHP."""
-    names = [
-        "TOSHKENT MATRAS LYUKS", "ООО «СТРОЙБАЗА»", "O'ZBEK-TEST 3D AB.CD", "STRASSE ß",
-        "Tashkent Matras", "12345", "  МЧЖ ХК QURILISH MCHJ ", "İSTANBUL ÇELİK", "X_Y É1A",
-        "DŽEM OOO LLC JV", "",
-    ]  # fmt: skip
-    types = [
-        "IT", "ИТ", "Айти", "IT-услуги", "IT services", "Логистика", "Üretim ve ihracat",
-        "производство", "Import-export", "Дилер", " ", None,
-    ]  # fmt: skip
-    years = ["1827 / 2003", "осн. 1998 г.", "—", "1499", "2999", "3000 1990", "١٩٩٨ 2003"]
-    staff = [
-        "около 6500 (по публичным данным)", "50-100", "50 – 100", "1 000+", "не указано",
-        "много", "12345678901234567", "очень много сотрудников в компании",
-    ]  # fmt: skip
-    вывод = subprocess.run(
-        [
-            "php",
-            "-r",
-            'require "vendor/autoload.php";'
-            "use App\\Support\\CompanyNameStyle as S; use App\\Support\\ImportCell as C;"
-            "$in = json_decode(stream_get_contents(STDIN), true);"
-            "echo json_encode([array_map(fn ($s) => S::humanize($s), $in[0]),"
-            " array_map(fn ($s) => S::typeKey($s), $in[1]),"
-            " array_map(fn ($s) => C::year($s), $in[2]),"
-            " array_map(fn ($s) => C::employees($s), $in[3])]);",
-        ],
-        cwd=КОРЕНЬ,
-        input=json.dumps([names, types, years, staff]),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+def test_название_капсом(название, итог):
+    """CompanyNameStyle::humanize."""
+    assert company_import.humanize(название) == итог
 
-    assert json.loads(вывод.stdout) == [
-        [company_import.humanize(s) for s in names],
-        [company_import.type_key(s) for s in types],
-        [company_import.year(s) for s in years],
-        [company_import.employees(s) for s in staff],
-    ]
+
+@pytest.mark.parametrize(
+    ("тип", "ключ"),
+    [
+        ("IT", "service"),
+        ("ИТ", "service"),
+        ("Айти", "service"),
+        ("IT-услуги", "service"),
+        ("IT services", "service"),
+        # Вне справочника — как есть, строчными
+        ("Логистика", "логистика"),
+        ("Üretim ve ihracat", "manufacturer"),
+        ("производство", "manufacturer"),
+        ("Import-export", "importer"),
+        ("Дилер", "distributor"),
+        (" ", None),
+        (None, None),
+    ],
+)
+def test_тип_компании(тип, ключ):
+    """CompanyNameStyle::typeKey."""
+    assert company_import.type_key(тип) == ключ
+
+
+@pytest.mark.parametrize(
+    ("ячейка", "год"),
+    [
+        ("1827 / 2003", 1827),
+        ("осн. 1998 г.", 1998),
+        ("—", None),
+        # Вне 1500…текущего года — не год
+        ("1499", None),
+        ("2999", None),
+        ("3000 1990", 1990),
+        # Цифры другой письменности не считаются
+        ("١٩٩٨ 2003", 2003),
+    ],
+)
+def test_год_основания(ячейка, год):
+    """ImportCell::year: первое правдоподобное четырёхзначное число."""
+    assert company_import.year(ячейка) == год
+
+
+@pytest.mark.parametrize(
+    ("ячейка", "численность"),
+    [
+        ("около 6500 (по публичным данным)", "6500"),
+        ("50-100", "50-100"),
+        ("50 – 100", "50-100"),
+        ("1 000+", "1000+"),
+        ("не указано", None),
+        ("много", "много"),
+        # Длинное — обрезается до 16 знаков
+        ("12345678901234567", "1234567890123456"),
+        ("очень много сотрудников в компании", "очень много"),
+    ],
+)
+def test_численность(ячейка, численность):
+    """ImportCell::employees."""
+    assert company_import.employees(ячейка) == численность
 
 
 # ── С базой ──────────────────────────────────────────────────────────
@@ -455,9 +490,9 @@ def test_без_столбца_названия_не_загружается_ни
     assert _компании() == []
 
 
-# ── Сверка с настоящим CompanyImporter ──────────────────────────────
+# ── Все сценарии подряд ─────────────────────────────────────────────
 
-#: Строки всех сценариев PHP подряд, и сверх них — капс, пометки в заголовках
+#: Строки всех сценариев подряд, и сверх них — капс, пометки в заголовках
 СВЕРКА = [
     {"ИНН": "304561278", "Компания": "ООО «Стройбаза»", "Тип": "Производитель",
      "Год основания": "1998", "Контактный телефон": "+998 71 200-00-00",
@@ -489,7 +524,7 @@ def test_без_столбца_названия_не_загружается_ни
 
 
 def _снимок() -> dict[str, Any]:
-    """Компании и журнал без номеров и меток времени — у сторон они свои."""
+    """Компании и журнал без номеров записей и меток времени."""
     журнал = []
 
     for действие, раздел, подпись, изменения, роль in sql(
@@ -515,37 +550,87 @@ def _снимок() -> dict[str, Any]:
     return {"компании": _компании(), "журнал": журнал}
 
 
+ИСТОЧНИК = "Данные компании взяты из открытых источников."
+
+
 @нужна_база
-def test_как_у_php(админ):
-    """Одни и те же строки через CompanyImporter и через Django — одно и то же."""
-    _польша()
-    задания = [[column_map(строка), строка] for строка in СВЕРКА]
-    закодированные = base64.b64encode(json.dumps(задания).encode()).decode()
-
-    php(
-        f"$user = App\\Models\\User::find({админ}); auth()->setUser($user);"
-        f"foreach (json_decode(base64_decode('{закодированные}'), true) as [$map, $row]) {{"
-        " $import = Filament\\Actions\\Imports\\Models\\Import::create(['user_id' => $user->id,"
-        " 'file_name' => 'companies.csv', 'file_path' => 'companies.csv',"
-        " 'importer' => App\\Filament\\Imports\\CompanyImporter::class, 'total_rows' => 1]);"
-        " try { (new App\\Filament\\Imports\\CompanyImporter($import, $map, []))($row); }"
-        " catch (Illuminate\\Validation\\ValidationException $e) { } }"
-        "echo 'ok';",
-        {"MACHINE_TRANSLATION_ENABLED": "false"},
-    )
-    у_php = _снимок()
-
-    sql("delete from companies")
-    sql("delete from admin_actions")
+def test_все_сценарии_подряд(админ):
+    """Строки всех сценариев одной очередью: итоговые компании и журнал."""
+    польша = _польша()
     отчёты = _импорт(админ, *СВЕРКА)
-    у_django = _снимок()
+    снимок = _снимок()
+    поля = ("name", "tin", "type", "email", "phone", "website", "founded_year",
+            "employees_range", "country_id", "address")  # fmt: skip
 
-    assert len(у_php["компании"]) == 14
-    assert [з[0] for з in у_php["журнал"]].count("updated") == 2
-    assert len(у_php["журнал"]) == 16
-    assert у_django["компании"] == у_php["компании"]
-    assert у_django["журнал"] == у_php["журнал"]
-    # Две строки PHP отклонил проверкой — у Django они в отчёте с причиной
+    # (название, ИНН, тип, почта, телефон, сайт, год, численность, страна, адрес)
+    assert [tuple(c[k] for k in поля) for c in снимок["компании"]] == [
+        # ИНН совпал со строкой «СТРОЙБАЗА ГРУПП MCHJ» — та же компания, обновлена
+        ("Стройбаза Групп MCHJ", "304561278", "manufacturer", "info@stroybaza.uz",
+         "+998 71 200-00-00", "stroybaza.uz", 1998, None, None, None),
+        ("Tashkent Matras", "305000111", "manufacturer", None, None, "matras.uz", 2005, "50-100",
+         None, None),
+        ("Быстрая логистика", "300111222", "логистика", None, None, None, None, None, None, None),
+        # Прочерки и «н/д» — пусто
+        ("Awal Dairy", None, None, None, None, None, None, None, None, None),
+        ("Alba", None, None, None, None, None, None, None, None, None),
+        # Несколько значений через «/» — первое
+        ("Arabian Pipes", None, None, "info@arabian-pipes.com", "+966 11 8133333",
+         "https://arabian-pipes.com", 1827, None, None, None),
+        ("Villeroy & Boch", None, None, None, None, None, 1790, "6500", None, None),
+        ("Hateks", None, "manufacturer", None, None, None, None, None, None, None),
+        ("ITWorx", None, "service", None, None, None, None, None, None, None),
+        ("Forte", None, None, None, None, None, None, None, польша, None),
+        ("Szynaka", None, None, None, None, None, None, None, None, None),
+        # Повтор без ИНН — та же компания, обновлена
+        ("Comforty", None, None, "info@comforty.pl", None, None, 1995, None, None, None),
+        # Без ИНН компанию с ИНН не трогает — новая
+        ("Стройбаза Групп MCHJ", None, None, "other@example.com", None, None, None, None, None,
+         None),
+        # Пометки в заголовках («Название*», «Тип компании:») узнаются
+        ("Ekol", None, "manufacturer", None, None, None, None, None, None, "İstanbul"),
+    ]  # fmt: skip
+    первая = снимок["компании"][0]
+
+    assert первая["legal_name"] == "ООО «Стройбаза Групп»"
+    # Двойные пробелы в описании схлопываются; slug — от первого названия
+    assert первая["description"] == "Цемент и бетон"
+    assert первая["slug"] == "ooo-stroibaza"
+    assert all(
+        (c["status"], c["verification_level"], c["source_note"]) == ("active", 0, ИСТОЧНИК)
+        for c in снимок["компании"]
+    )
+
+    # Журнал: 14 созданий и 2 правки — от имени суперадмина
+    assert [(з[0], з[2]) for з in снимок["журнал"]] == [
+        # Подпись — название на момент записи
+        ("created", "ООО «Стройбаза»"),
+        *[("created", c["name"]) for c in снимок["компании"][1:12]],
+        ("updated", "Comforty"),
+        ("updated", "Стройбаза Групп MCHJ"),
+        ("created", "Стройбаза Групп MCHJ"),
+        ("created", "Ekol"),
+    ]
+    assert {(з[1], з[4]) for з in снимок["журнал"]} == {("companies", "superadmin")}
+    # Поля правки в журнале — по порядку
+    assert снимок["журнал"][13][3] == {
+        "after": [
+            ("name", "Стройбаза Групп MCHJ"),
+            ("legal_name", "ООО «Стройбаза Групп»"),
+            ("description", "Цемент и бетон"),
+            ("email", "info@stroybaza.uz"),
+        ],
+        "before": [
+            ("name", "ООО «Стройбаза»"),
+            ("legal_name", None),
+            ("description", None),
+            ("email", None),
+        ],
+    }
+    assert снимок["журнал"][12][3] == {
+        "after": [("email", "info@comforty.pl"), ("founded_year", 1995)],
+        "before": [("email", "comforty@comforty.pl"), ("founded_year", None)],
+    }
+    # Две строки отклонены проверкой — в отчёте с причиной
     assert [о["failed"] for о in отчёты if о["failed"]] == [
         [[2, "нет названия"]],
         [[2, "тип компании длиннее 32 знаков: очень длинный вид деятельности компании"]],

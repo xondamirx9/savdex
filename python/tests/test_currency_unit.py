@@ -35,5 +35,5 @@ def test_испорченное_значение(data):
     ("value", "expected"),
     [(1897.5, 1898), (3162.5, 3163), (2.5, 3), (-2.5, -3), (1.49, 1), (0.0, 0)],
 )
-def test_округление_как_у_php(value, expected):
+def test_округление_половины_от_нуля(value, expected):
     assert php_round(value) == expected

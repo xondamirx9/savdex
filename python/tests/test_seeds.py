@@ -1,15 +1,15 @@
 """
-Шаг 73: справочники при деплое заводит Django (manage.py seed) вместо
-сидеров Laravel — и заводит то же самое.
+Шаг 73: справочники при деплое заводит Django (manage.py seed) — из
+снимка savdex/bootstrap/seeds.json, как прежде сидеры Laravel.
 
-- снимок savdex/bootstrap/seeds.json не отстал от сидеров Laravel;
-- пустая база после manage.py seed --fresh — та же, что после db:seed,
-  номер в номер;
+- пустая база после manage.py seed --fresh — весь снимок, номер в номер
+  (строки по порядку снимка, номера с 1 подряд), и снимок с неё —
+  тот же seeds.json;
 - на заполненной базе — как сидеры деплоя: недостающее досоздаётся,
   правки (название страны, выключенная категория, цена тарифа) не
   откатываются, поля категорий возвращаются к снимку.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -23,18 +23,9 @@ import pytest
 
 from savdex import seeds
 
-from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
-
-LARAVEL = {**ОКРУЖЕНИЕ, "MACHINE_TRANSLATION_ENABLED": "false", "QUEUE_CONNECTION": "sync"}
-
-
-def artisan(*args: str) -> None:
-    subprocess.run(
-        ["php", "artisan", *args, "--force"], cwd=КОРЕНЬ, env=LARAVEL, check=True,
-        capture_output=True,
-    )  # fmt: skip
 
 
 def django(*args: str) -> str:
@@ -63,15 +54,23 @@ def снимок() -> dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
-def после_laravel() -> dict[str, Any]:
+def снимок_seeds() -> dict[str, Any]:
+    return dict(json.loads(seeds.DATA.read_text(encoding="utf-8")))
+
+
+def test_пустая_база_номер_в_номер(снимок_seeds, tmp_path):
     свежая_база()
-    artisan("db:seed")
+    вывод = django("--fresh")
+    база = снимок()
 
-    return снимок()
+    # Весь снимок, по порядку и с номерами 1, 2, 3… — как db:seed на пустой базе
+    for table in seeds.TABLES:
+        assert [r["id"] for r in база[table]] == list(range(1, len(снимок_seeds[table]) + 1)), table
 
+    assert "countries 33" in вывод and "settings" in вывод
+    assert [r["code"] for r in база["countries"]][:2] == ["uz", "kz"]
 
-def test_снимок_не_отстал(после_laravel, tmp_path):
-    """data.json — то, что сидеры Laravel заводят на пустой базе."""
+    # Снимок с заведённой базы — тот же seeds.json: ничего не потеряно и не добавлено
     путь = tmp_path / "data.json"
     subprocess.run(
         [
@@ -88,46 +87,41 @@ def test_снимок_не_отстал(после_laravel, tmp_path):
         capture_output=True,
     )  # fmt: skip
 
-    assert json.loads(путь.read_text()) == json.loads(seeds.DATA.read_text()), (
-        "Сидеры Laravel заводят не то, что в снимке: manage.py seed --export"
-    )
+    assert json.loads(путь.read_text()) == снимок_seeds
 
 
-def test_пустая_база_как_db_seed(после_laravel):
-    свежая_база()
-    вывод = django("--fresh")
-
-    assert снимок() == после_laravel
-    assert "countries 33" in вывод and "settings" in вывод
+def _правки_остаются() -> None:
+    """Правки из админки, которые деплой не откатывает."""
+    sql("update country_translations set name = 'Моя страна' where locale = 'ru' and "
+        "country_id = (select id from countries where code = 'kz')")  # fmt: skip
+    sql("update categories set is_active = false where slug = 'metally'")
+    sql("update plans set price_usd = 99 where code = 'flash'")
+    sql("update settings set value = to_json('Своё'::text) where key = 'site_name'")
 
 
 def _правки() -> None:
-    sql("update country_translations set name = 'Моя страна' where locale = 'ru' and "
-        "country_id = (select id from countries where code = 'kz')")  # fmt: skip
+    _правки_остаются()
+    # Удалённое деплой досоздаёт, поля категорий возвращает к снимку
     sql("delete from city_translations where city_id in (select id from cities where slug = "
         "'samarkand')")  # fmt: skip
     sql("delete from cities where slug = 'samarkand'")
-    sql("update categories set is_active = false where slug = 'metally'")
     sql("delete from category_translations where category_id in "
         "(select id from categories where slug = 'stanki')")  # fmt: skip
     sql("delete from categories where slug = 'stanki'")
     sql("update category_fields set label = 'Другое имя' where key = 'mark'")
-    sql("update plans set price_usd = 99 where code = 'flash'")
     sql("delete from plans where code = 'vip'")
-    sql("update settings set value = to_json('Своё'::text) where key = 'site_name'")
     sql("delete from settings where key = 'support_email'")
 
 
-def test_деплой_на_заполненной_базе(после_laravel):
+def test_деплой_на_заполненной_базе():
+    # Ожидание: свежие справочники, на которых остались только правки админки
     свежая_база()
-    artisan("db:seed")
-    _правки()
-    for seeder in ("PlanSeeder", "CategorySeeder", "GeoSeeder", "SettingSeeder"):
-        artisan("db:seed", f"--class={seeder}")
-    л = снимок()
+    django("--fresh")
+    _правки_остаются()
+    ожидание = снимок()
 
     свежая_база()
-    artisan("db:seed")
+    django("--fresh")
     _правки()
     вывод = django()
     д = снимок()
@@ -142,7 +136,16 @@ def test_деплой_на_заполненной_базе(после_laravel):
             for t, rows in данные.items()
         }  # fmt: skip
 
-    assert без_номеров(д) == без_номеров(л)
+    assert без_номеров(д) == без_номеров(ожидание)
     assert "cities 1" in вывод and "plans 1" in вывод and "settings 1" in вывод
-    # Правки из админки на месте
+    assert "categories 1" in вывод
+    # Правки из админки на месте, поле категории — как в снимке
     assert sql("select price_usd from plans where code = 'flash'")[0][0] == 99
+    assert sql("select is_active from categories where slug = 'metally'") == [(False,)]
+    assert sql("select label from category_fields where key = 'mark'") == [("Марка",)]
+    assert sql(
+        "select t.name from country_translations t join countries c on c.id = t.country_id "
+        "where c.code = 'kz' and t.locale = 'ru'"
+    ) == [("Моя страна",)]
+    assert sql("select count(*) from city_translations t join cities c on c.id = t.city_id "
+               "where c.slug = 'samarkand'") == [(5,)]  # fmt: skip

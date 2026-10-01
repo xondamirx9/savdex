@@ -15,7 +15,7 @@
 - отзыв о площадке: опубликовать и отклонить — автору уведомление на
   его языке, заводить и править нельзя.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations

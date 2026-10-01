@@ -2,14 +2,13 @@
 Этап 4: снятие истёкших объявлений на Django (задача expire_listings в
 manage.py schedule) вместо расписания Laravel listings:expire.
 
-На одних данных команда Django оставляет ту же базу, что команда
-Laravel: истёкшие активные — «истёкшие» с пересчитанным search_text,
+Проверки Django: истёкшие активные — «истёкшие» с пересчитанным search_text,
 компании — событие в ленте и уведомление каждому сотруднику (удалённой
 компании — нет), за три дня — предупреждение; архивные, удалённые и
 живые объявления не трогаются. Повторный проход ничего не повторяет,
 первый запуск после 06:00 свой день пропускает.
 
-Нужны PHP и PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
+Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в pg_admin.py.
 """
 
 from __future__ import annotations
@@ -22,29 +21,20 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, php, sql, нужна_база, свежая_база
+from .factories import Выражение, компания, объявление, пользователь
+from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 
 pytestmark = нужна_база
-
-БЕЗ_ПЕРЕВОДА = {"MACHINE_TRANSLATION_ENABLED": "false"}
 
 
 @pytest.fixture(scope="module")
 def компании() -> dict[str, int]:
     свежая_база()
-    subprocess.run(
-        ["php", "artisan", "db:seed", "--class=CategorySeeder", "--force"],
-        cwd=str(КОРЕНЬ),
-        env=ОКРУЖЕНИЕ,
-        check=True,
-        capture_output=True,
-    )
-    php(
-        "foreach (['a', 'gone'] as $s) { $c = App\\Models\\Company::factory()->create("
-        "['slug' => $s]); App\\Models\\User::factory()->count(2)->create("
-        "['company_id' => $c->id]); } echo 'ok';",
-        БЕЗ_ПЕРЕВОДА,
-    )
+
+    for slug in ("a", "gone"):
+        c = компания(slug=slug)
+        пользователь(company_id=c)
+        пользователь(company_id=c)
 
     return {r[0]: r[1] for r in sql("select slug, id from companies")}
 
@@ -65,18 +55,17 @@ def подготовка(компании: dict[str, int]) -> None:
         (a, "Утеплитель", "active", "+10 days", False),
         (a, "Бессрочное", "active", None, False),
     ]
-    code = []
 
     for company, title, status, shift, trashed in строки:
-        expires = f"now()->modify('{shift}')" if shift else "null"
-        code.append(
-            f"$l = App\\Models\\Listing::factory()->create(['company_id' => {company}, "
-            f"'title' => '{title}', 'description' => 'Описание: {title}', "
-            f"'status' => '{status}', 'expires_at' => {expires}]);"
-            + ("$l->delete();" if trashed else "")
+        объявление(
+            company_id=company,
+            title=title,
+            description=f"Описание: {title}",
+            status=status,
+            expires_at=Выражение(f"now() + interval '{shift}'") if shift else None,
+            **({"deleted_at": Выражение("now()")} if trashed else {}),
         )
 
-    php("".join(code) + "echo 'ok';", БЕЗ_ПЕРЕВОДА)
     # Устаревший индекс поиска: сохранение модели обязано его пересчитать
     sql("update listings set search_text = 'stale' where title = 'Цемент М500'")
     sql("update companies set deleted_at = now() where id = %s", [gone])
@@ -111,25 +100,76 @@ def django(*args: str, state: Path) -> str:
     return out.stdout
 
 
-def test_как_у_laravel(компании, tmp_path):
-    подготовка(компании)
-    php("Illuminate\\Support\\Facades\\Artisan::call('listings:expire'); echo 'ok';", БЕЗ_ПЕРЕВОДА)
-    л = снимок()
+def test_снятие_истёкших(компании, tmp_path):
+    from savdex.web.search_text import index
 
     подготовка(компании)
     вывод = django("--once", "expire_listings", state=tmp_path / "state")
     д = снимок()
 
-    assert д == л, (д, л)
     assert "Снято с публикации: 3. Предупреждений отправлено: 2." in вывод
-    # Проверка самих данных, а не только равенства с Laravel
     статусы = {title: status for title, status, *_ in д["listings"]}
-    assert статусы["Цемент М500"] == "expired" and статусы["Щебень гранитный"] == "expired"
-    assert статусы["Кирпич облицовочный"] == "archived" and статусы["Песок речной"] == "active"
-    assert статусы["Газоблок D500"] == "active" and статусы["Бессрочное"] == "active"
-    assert "stale" not in {text for _, _, text, _ in д["listings"]}
-    # Две компании-снятия и одно предупреждение — только у живой компании
-    assert len(д["events"]) == 3 and len(д["notifications"]) == 6
+    assert статусы == {
+        "Цемент М500": "expired",
+        "Арматура А500С": "expired",
+        "Щебень гранитный": "expired",
+        "Кирпич облицовочный": "archived",
+        "Песок речной": "active",
+        "Газоблок D500": "active",
+        "Доска обрезная": "active",
+        "Утеплитель": "active",
+        "Бессрочное": "active",
+    }
+    # Сохранение пересчитало устаревший индекс поиска
+    поиск = {title: text for title, _, text, _ in д["listings"]}
+    assert поиск["Цемент М500"] == index("Цемент М500 Описание: Цемент М500")
+
+    # Лента и уведомления — только у живой компании: два снятия и одно
+    # предупреждение, уведомление каждому из двух сотрудников
+    a = компании["a"]
+    снято = "снято: истёк срок размещения"
+    assert д["events"] == [
+        (
+            a,
+            "listing_expiring",
+            "warning",
+            f"Объявление «Арматура А500С» {снято}",
+            "/cabinet/listings?status=expired",
+        ),
+        (
+            a,
+            "listing_expiring",
+            "warning",
+            "Объявление «Газоблок D500» истекает через 3 дня",
+            "/cabinet/listings",
+        ),
+        (
+            a,
+            "listing_expiring",
+            "warning",
+            f"Объявление «Цемент М500» {снято}",
+            "/cabinet/listings?status=expired",
+        ),
+    ]
+    сотрудники = {uid for (uid,) in sql("select id from users where company_id = %s", [a])}
+    assert len(д["notifications"]) == 6
+    assert {n[0] for n in д["notifications"]} == сотрудники
+    assert {n[1] for n in д["notifications"]} == {a}
+    assert all(n[7] is None for n in д["notifications"])
+    assert sorted({(n[3], n[4]) for n in д["notifications"]}) == [
+        (
+            f"Объявление «Арматура А500С» {снято}",
+            "Продлите его в кабинете — показы возобновятся сразу.",
+        ),
+        (
+            "Объявление «Газоблок D500» истекает через 3 дня",
+            "После истечения показы прекращаются. Продлите в один клик.",
+        ),
+        (
+            f"Объявление «Цемент М500» {снято}",
+            "Продлите его в кабинете — показы возобновятся сразу.",
+        ),
+    ]
 
 
 def test_день_не_повторяется(компании, tmp_path):
