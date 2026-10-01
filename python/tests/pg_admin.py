@@ -151,6 +151,10 @@ def свежая_база() -> None:
                 [миграция.stem],
             )
 
+    from . import factories
+
+    factories.сначала()
+
 
 def сотрудник(role: str) -> int:
     [(uid,)] = sql(
