@@ -19,25 +19,31 @@
 
 from __future__ import annotations
 
-import base64
-import json
-import re
 import time
 from collections.abc import Iterator
 from typing import Any
-from urllib.parse import quote, unquote
 
 import pytest
 
 from savdex import laravel_session
 
-from .pg_admin import KEY, sql, нужна_база, свежая_база
-from .web_site import laravel, пользователь, сверить, страница
+from .pg_admin import sql, нужна_база, свежая_база
+from .web_site import (  # noqa: F401 — общие помощники сессии берут отсюда и другие проверки
+    СЕССИЯ,
+    laravel,
+    завести,
+    кука,
+    куки_ответа,
+    пользователь,
+    расшифровать,
+    сверить,
+    сессия_из,
+    страница,
+    строка,
+)
 
 pytestmark = нужна_база
 
-#: Имя куки сессии: APP_NAME=SAVDEX (web_site.САЙТ)
-СЕССИЯ = "savdex-session"
 
 АГЕНТ = {"User-Agent": "savdex-parity/1.0"}
 
@@ -48,79 +54,6 @@ def сайт() -> Iterator[str]:
 
     with laravel() as root:
         yield root
-
-
-def кука(имя: str, значение: str) -> str:
-    """Кука, как её поставил бы Laravel, — в виде, в каком её шлёт браузер."""
-    return quote(laravel_session.encrypt_cookie(имя, значение, KEY), safe="")
-
-
-def расшифровать(имя: str, значение: str) -> str | None:
-    return laravel_session.cookie_value(имя, unquote(значение), [KEY])
-
-
-def строка(sid: str) -> dict[str, Any] | None:
-    rows = sql(
-        "select payload, user_id, ip_address, user_agent, last_activity "
-        "from sessions where id = %s",
-        [sid],
-    )
-
-    if not rows:
-        return None
-
-    payload, user_id, ip, agent, last = rows[0]
-    text = base64.b64decode(payload).decode()
-    token = json.loads(text).get("_token", "")
-
-    assert abs(int(last) - time.time()) < 60
-
-    return {
-        # Порядок ключей и экранирование — как json_encode у PHP
-        "payload": text.replace(json.dumps(token), '"<token>"'),
-        "token": token,
-        "user_id": user_id,
-        "ip": ip,
-        "agent": agent,
-    }
-
-
-def завести(sid: str, payload: dict[str, Any], *, last: int | None = None) -> None:
-    """Строка sessions, как её оставил Laravel после прошлого запроса."""
-    sql("delete from sessions where id = %s", [sid])
-    sql(
-        "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
-        "values (%s, null, '127.0.0.1', 'x', %s, %s)",
-        [
-            sid,
-            base64.b64encode(json.dumps(payload).encode()).decode(),
-            last if last is not None else int(time.time()),
-        ],
-    )
-
-
-def куки_ответа(ответ: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Куки ответа: значение расшифровано, атрибуты — в нижнем регистре."""
-    итог = {}
-
-    for имя, кука_ in ответ["cookies"].items():
-        атрибуты = {k.lower(): v for k, v in кука_.items() if k.lower() not in ("value", "expires")}
-        атрибуты = {
-            k: (str(v).lower() if k == "samesite" else v if v is True else str(v))
-            for k, v in атрибуты.items()
-            # Флаги: у Django — True, у Symfony — присутствие
-            if v not in (False, "")
-        }
-        итог[имя] = {"value": расшифровать(имя, кука_["value"]), **атрибуты}
-
-    return итог
-
-
-def сессия_из(ответ: dict[str, Any]) -> str:
-    sid = куки_ответа(ответ)[СЕССИЯ]["value"]
-    assert sid is not None and re.fullmatch(r"[A-Za-z0-9]{40}", sid)
-
-    return sid
 
 
 def по_сторонам(

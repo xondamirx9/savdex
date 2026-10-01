@@ -435,3 +435,155 @@ def сверить(
     assert д["headers"].get("vary") == л["headers"].get("vary")
 
     return д, л
+
+
+# ── Без Laravel ─────────────────────────────────────────────────────
+#
+# Сайт целиком на Django (этап 8): адрес, запрос, вход и сессия без
+# PHP. Сверки с Laravel выше уходят вместе с ним.
+
+#: Имя куки сессии: APP_NAME=SAVDEX (САЙТ)
+СЕССИЯ = "savdex-session"
+
+
+@contextmanager
+def адрес(**_окружение: str) -> Iterator[str]:
+    """
+    Адрес сайта для проверок: http://127.0.0.1:<свободный порт>. Сервера
+    за ним нет — запросы идут тестовым клиентом Django (из_django), адрес
+    нужен для ссылок и APP_URL. Манифест сборки — подставной, если фронт
+    не собран.
+    """
+    with _манифест():
+        yield f"http://127.0.0.1:{_порт()}"
+
+
+def открыть(
+    сайт: str,
+    path: str,
+    cookies: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    env: dict[str, str] | None = None,
+    **запрос: Any,
+) -> dict[str, Any]:
+    """Запрос к Django; ошибка сервера (5xx) — сразу провал с телом ответа."""
+    ответ = из_django(сайт, path, cookies, headers, env, **запрос)
+    assert ответ["status"] < 500, (ответ["status"], ответ["body"][:3000])
+
+    return ответ
+
+
+def кука(имя: str, значение: str) -> str:
+    """Кука, как её ставит сайт (шифр Laravel), — в виде, в каком её шлёт браузер."""
+    from urllib.parse import quote
+
+    from savdex import laravel_session
+
+    from .pg_admin import KEY
+
+    return str(quote(laravel_session.encrypt_cookie(имя, значение, KEY), safe=""))
+
+
+def расшифровать(имя: str, значение: str) -> str | None:
+    from savdex import laravel_session
+
+    from .pg_admin import KEY
+
+    return laravel_session.cookie_value(имя, unquote(значение), [KEY])
+
+
+def завести(
+    sid: str, payload: dict[str, Any], *, last: int | None = None, user_id: int | None = None
+) -> None:
+    """Строка sessions, как её оставил сайт после прошлого запроса."""
+    sql("delete from sessions where id = %s", [sid])
+    sql(
+        "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
+        "values (%s, %s, '127.0.0.1', 'x', %s, %s)",
+        [
+            sid,
+            user_id,
+            base64.b64encode(json.dumps(payload).encode()).decode(),
+            last if last is not None else int(time.time()),
+        ],
+    )
+
+
+def строка(sid: str) -> dict[str, Any] | None:
+    """Строка sessions: payload без случайного _token, кто вошёл, адрес, браузер."""
+    rows = sql(
+        "select payload, user_id, ip_address, user_agent, last_activity "
+        "from sessions where id = %s",
+        [sid],
+    )
+
+    if not rows:
+        return None
+
+    payload, user_id, ip, agent, last = rows[0]
+    text = base64.b64decode(payload).decode()
+    token = json.loads(text).get("_token", "")
+
+    assert abs(int(last) - time.time()) < 60
+
+    return {
+        # Порядок ключей и экранирование — как json_encode у PHP
+        "payload": text.replace(json.dumps(token), '"<token>"'),
+        "token": token,
+        "user_id": user_id,
+        "ip": ip,
+        "agent": agent,
+    }
+
+
+def куки_ответа(ответ: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Куки ответа: значение расшифровано, атрибуты — в нижнем регистре."""
+    итог = {}
+
+    for имя, кука_ in ответ["cookies"].items():
+        атрибуты = {k.lower(): v for k, v in кука_.items() if k.lower() not in ("value", "expires")}
+        атрибуты = {
+            k: (str(v).lower() if k == "samesite" else v if v is True else str(v))
+            for k, v in атрибуты.items()
+            if v not in (False, "")
+        }
+        итог[имя] = {"value": расшифровать(имя, кука_["value"]), **атрибуты}
+
+    return итог
+
+
+def сессия_из(ответ: dict[str, Any]) -> str:
+    """Номер сессии из куки ответа."""
+    sid = куки_ответа(ответ)[СЕССИЯ]["value"]
+    assert sid is not None and re.fullmatch(r"[A-Za-z0-9]{40}", sid)
+
+    return sid
+
+
+#: Токен CSRF в сессиях, заведённых проверками
+ТОКЕН_СЕССИИ = "t" * 40
+
+
+def вход(uid: int, *, sid: str | None = None, **payload: Any) -> dict[str, str]:
+    """
+    Куки вошедшего пользователя: строка sessions с отметкой входа (ключ
+    login_web_…, как у Laravel) — без формы входа. payload — что ещё
+    лежит в сессии.
+    """
+    from savdex import laravel_session
+
+    sid = sid or hashlib.sha1(f"вход-{uid}-{time.time_ns()}".encode()).hexdigest()
+    завести(
+        sid,
+        {"_token": ТОКЕН_СЕССИИ, laravel_session.LOGIN_KEY: uid, **payload},
+        user_id=uid,
+    )
+
+    return {СЕССИЯ: кука(СЕССИЯ, sid)}
+
+
+def гостевая(сайт: str) -> dict[str, str]:
+    """Куки гостя, которому сайт уже завёл сессию (первый заход на /login)."""
+    ответ = открыть(сайт, "/login", headers={"X-Inertia": "true"})
+
+    return {имя: значение["value"] for имя, значение in ответ["cookies"].items()}

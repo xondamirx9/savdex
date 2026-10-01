@@ -27,6 +27,8 @@ import pytest
 
 КОРЕНЬ = Path(__file__).resolve().parents[2]
 PYTHON = Path(__file__).resolve().parents[1]
+СНИМОК = PYTHON / "savdex/bootstrap/baseline.sql"
+ПРАВА = PYTHON / "savdex/bootstrap/grants.sql"
 АДРЕС = os.environ.get("SAVDEX_PARITY_PG_URL", "")
 KEY = b"countries-admin-key-0123456789ab"
 APP_KEY = "base64:" + base64.b64encode(KEY).decode()
@@ -106,17 +108,48 @@ def sql(query: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
 
 
 def свежая_база() -> None:
-    """Схема Laravel с нуля. Только в базе с «test» в имени."""
+    """
+    Схема с нуля, как на пустом сервере: снимок миграций
+    (savdex/bootstrap/baseline.sql), права роли Django и миграции SQL —
+    то же, что делает manage.py schema. Только в базе с «test» в имени.
+    """
+    import psycopg
+
     if "test" not in urlparse(АДРЕС).path:
         pytest.fail("SAVDEX_PARITY_PG_URL ведёт в базу без «test» в имени — отказываюсь стирать")
 
-    subprocess.run(
-        ["php", "artisan", "migrate:fresh", "--force"],
-        cwd=КОРЕНЬ,
-        env=ОКРУЖЕНИЕ,
-        capture_output=True,
-        check=True,
-    )
+    with psycopg.connect(АДРЕС, autocommit=True) as соединение:
+        соединение.execute("drop schema public cascade")
+        соединение.execute("create schema public")
+        соединение.execute("grant usage, create on schema public to public")
+        роль = соединение.execute(
+            "select 1 from pg_roles where rolname = 'savdex_django'"
+        ).fetchone()
+
+        # Права по умолчанию живут в схеме и уходят вместе с ней — вернуть,
+        # как их настраивают на Render (docs/migration-to-python.md, роль
+        # savdex_django): новые таблицы Django видит на чтение
+        if роль:
+            соединение.execute("grant usage on schema public to savdex_django")
+            соединение.execute(
+                "alter default privileges in schema public grant select on tables to savdex_django"
+            )
+
+        соединение.execute(СНИМОК.read_text(encoding="utf-8"))
+        соединение.execute(
+            "select pg_catalog.set_config('search_path', '\"$user\", public', false)"
+        )
+
+        if роль:
+            соединение.execute(ПРАВА.read_text(encoding="utf-8"))
+
+        for миграция in sorted((PYTHON / "savdex/bootstrap/migrations").glob("*.sql")):
+            соединение.execute(миграция.read_text(encoding="utf-8"))
+            соединение.execute(
+                "insert into migrations (migration, batch) "
+                "values (%s, (select coalesce(max(batch), 0) + 1 from migrations))",
+                [миграция.stem],
+            )
 
 
 def сотрудник(role: str) -> int:

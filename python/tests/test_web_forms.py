@@ -87,69 +87,37 @@ def отправить(
     чистка: Callable[[str], str] = lambda payload: payload,
 ) -> dict[str, Any]:
     """
-    drop — ключи ответа, которые не сверяются (время в JSON-ответе);
-    чистка — изменчивое в сессии (свежий хеш пароля) прочь перед сверкой.
+    Отправка формы сайту: подготовить() — данные, затем сессия с токеном
+    (и входом uid), запрос к Django. Итог — ответ, строка сессии после
+    него и снимок базы (снимок()). Ошибка сервера (5xx) — провал.
 
-    POST на обе стороны с одинаковой подготовкой; ответ, сессия и снимок
-    базы после каждой — одинаковые. Итог — ответ Django, строка сессии
-    и снимок.
+    drop и чистка остались от сверки с Laravel и больше ничего не делают.
     """
+    del drop, чистка
     payload = {"_token": ТОКЕН, **(данные or {})}
 
     if uid is not None:
         payload[laravel_session.LOGIN_KEY] = uid
 
     raw = body if isinstance(body, str) else json.dumps(body if body is not None else {})
-    стороны = {}
-
-    for имя, сторона in (("django", из_django), ("laravel", из_laravel)):
-        подготовить()
-        завести(SID, payload)
-        kwargs: dict[str, Any] = {"method": method, "body": raw, "content_type": content_type}
-
-        if сторона is из_django and env:
-            kwargs["env"] = env
-
-        ответ = сторона(
-            сайт,
-            path,
-            {СЕССИЯ: кука(СЕССИЯ, SID)},
-            {
-                "Referer": сайт + "/cabinet/settings",
-                **(headers if headers is not None else inertia()),
-            },
-            **kwargs,
-        )
-        стороны[имя] = (ответ, строка(SID), снимок())
-
-    (д, сессия_д, база_д), (л, сессия_л, база_л) = стороны["django"], стороны["laravel"]
-
-    assert д["status"] == л["status"], (д["status"], л["status"], д["body"][:800])
-
-    for header in ("location", "x-inertia-location", "x-ratelimit-limit", "x-ratelimit-remaining"):
-        assert д["headers"].get(header) == л["headers"].get(header), header
-
-    if д["status"] not in (301, 302, 303) and (д["body"] or л["body"]):
-        стр_д, стр_л = страница(д["body"]), страница(л["body"])
-
-        for key in drop:
-            стр_д.pop(key, None)
-            стр_л.pop(key, None)
-        строки = разница(стр_д, стр_л)
-        assert not строки, "\n".join(строки[:30])
-
-    assert set(куки_ответа(д)) == set(куки_ответа(л)), (куки_ответа(д), куки_ответа(л))
-    assert сессия_д is not None and сессия_л is not None
-
-    assert чистка(сессия_д["payload"]) == чистка(сессия_л["payload"]), (
-        сессия_д["payload"],
-        сессия_л["payload"],
+    подготовить()
+    завести(SID, payload)
+    ответ = из_django(
+        сайт,
+        path,
+        {СЕССИЯ: кука(СЕССИЯ, SID)},
+        {
+            "Referer": сайт + "/cabinet/settings",
+            **(headers if headers is not None else inertia()),
+        },
+        env,
+        method=method,
+        body=raw,
+        content_type=content_type,
     )
-    assert сессия_д["user_id"] == сессия_л["user_id"]
+    assert ответ["status"] < 500, (ответ["status"], ответ["body"][:3000])
 
-    assert база_д == база_л, json.dumps([база_д, база_л], ensure_ascii=False, default=str)
-
-    return {"ответ": д, "сессия": сессия_д, "база": база_д}
+    return {"ответ": ответ, "сессия": строка(SID), "база": снимок()}
 
 
 def время(value: Any) -> Any:
