@@ -15,8 +15,10 @@ from __future__ import annotations
 import hashlib
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,13 +30,13 @@ from .web_site import адрес, гостевая, открыть, страни
 pytestmark = нужна_база
 
 #: Файловый кэш, как на боевом: курс ЦБ для цен в валюте языка, отсев
-#: повторных показов и счётчик частоты живут в нём
+#: повторных показов и счётчик частоты живут в нём. Корень сайта
+#: (LARAVEL_ROOT) — свой, во временной папке (сайт() дописывает): кэш
+#: storage/framework/cache общий с другими проверками, и чужой курс ЦБ
+#: менял бы цены
 ФАЙЛОВЫЙ = {"CACHE_STORE": "file"}
 
-#: Ключи курса ЦБ в кэше (CurrencyRate)
-КУРС = ("cbu.rates", "cbu.rates.last", "cbu.rate.usd.last")
-
-#: Свой адрес посетителя: счётчик частоты в общем файловом кэше — только наш
+#: Свой адрес посетителя: счётчик частоты — только наш
 IP = {"X-Forwarded-For": "192.0.2.148"}
 
 ГЕО = ("countries", "country_translations", "cities", "city_translations")
@@ -69,11 +71,15 @@ def справочники(*таблицы: str) -> None:
     )
 
 
-def файл_кэша(key: str):
+def файл_кэша(key: str, корень: Path = КОРЕНЬ) -> Path:
     """FileStore::path: data/aa/bb/<sha1 ключа>."""
     digest = hashlib.sha1(key.encode()).hexdigest()
 
-    return КОРЕНЬ / "storage/framework/cache/data" / digest[:2] / digest[2:4] / digest
+    return корень / "storage/framework/cache/data" / digest[:2] / digest[2:4] / digest
+
+
+def _свой_корень() -> Path:
+    return Path(ФАЙЛОВЫЙ["LARAVEL_ROOT"])
 
 
 def счётчик_частоты() -> None:
@@ -81,17 +87,28 @@ def счётчик_частоты() -> None:
     key = hashlib.sha1(f"|{IP['X-Forwarded-For']}".encode()).hexdigest()
 
     for name in (key, key + ":timer"):
-        файл_кэша(name).unlink(missing_ok=True)
+        файл_кэша(name, _свой_корень()).unlink(missing_ok=True)
 
 
 def курс() -> None:
     """Курс ЦБ — в кэш заранее: страница к ЦБ не ходит, цены в валюте языка известны."""
     from savdex import laravel_cache
 
-    laravel_cache.put(
-        "cbu.rates",
-        {"USD": 12650.5, "CNY": 1760.25, "TRY": 305.1, "EUR": 13710.0, "RUB": 140.2, "KZT": 25.3},
-        86400,
+    файл = файл_кэша("cbu.rates", _свой_корень())
+    файл.parent.mkdir(parents=True, exist_ok=True)
+    # Как Cache::put на сутки: срок (время Unix, 10 знаков) и serialize()
+    файл.write_bytes(
+        str(int(time.time()) + 86400).encode()
+        + laravel_cache._serialize(
+            {
+                "USD": 12650.5,
+                "CNY": 1760.25,
+                "TRY": 305.1,
+                "EUR": 13710.0,
+                "RUB": 140.2,
+                "KZT": 25.3,
+            }
+        )
     )
 
 
@@ -100,7 +117,14 @@ def курс() -> None:
 
 
 @pytest.fixture(scope="module")
-def сайт() -> Iterator[str]:
+def сайт(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    # Свой корень: storage — свой, сборка фронта и ресурсы — общие
+    корень = tmp_path_factory.mktemp("laravel-root")
+
+    for папка in ("public", "resources"):
+        (корень / папка).symlink_to(КОРЕНЬ / папка)
+
+    ФАЙЛОВЫЙ["LARAVEL_ROOT"] = str(корень)
     свежая_база()
     справочники(*ГЕО, *РАЗДЕЛЫ, "promotion_types")
 
@@ -162,10 +186,7 @@ def сайт() -> Iterator[str]:
         with адрес() as root:
             yield root
     finally:
-        for key in КУРС:
-            файл_кэша(key).unlink(missing_ok=True)
-
-        счётчик_частоты()
+        ФАЙЛОВЫЙ.pop("LARAVEL_ROOT")
 
 
 def обнулить() -> None:
