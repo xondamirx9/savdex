@@ -1,35 +1,162 @@
 {% extends "admin/base_site.html" %}
 {% comment %}
-  Вход в админку (savdex/adminlogin.py) — вместо страницы входа Filament.
-  Вход пишет сессию Laravel, поэтому форма несёт её токен (_token), а не
-  джанговский.
+  Вход в админку (savdex/adminlogin.py). Форма несёт токен сессии (_token),
+  а не джанговский.
+
+  Карточка по центру экрана, как была страница входа Filament: знак и
+  название, поля одно под другим во всю ширину карточки, «Войти» — во всю
+  ширину. Шапки с меню здесь нет: до входа в ней нечего показать.
 {% endcomment %}
 {% block bodyclass %}{{ block.super }} login{% endblock %}
+{% block header %}{% endblock %}
 {% block usertools %}{% endblock %}
 {% block nav-breadcrumbs %}{% endblock %}
 {% block nav-sidebar %}{% endblock %}
 {% block content_title %}{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  html body.login {
+    min-height: 100vh;
+    padding: 0;
+    background: var(--sx-canvas);
+  }
+
+  /* У responsive.css Django на узком экране — свои отступы у входа */
+  body.login #container {
+    margin: 0;
+  }
+
+  body.login #container,
+  body.login .main,
+  body.login #content-start {
+    min-height: 100vh;
+  }
+
+  body.login #content-start {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    box-sizing: border-box;
+  }
+
+  body.login #content {
+    width: 100%;
+    max-width: 440px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .sx-login-card {
+    box-sizing: border-box;
+    width: 100%;
+    background: var(--sx-surface);
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow);
+    padding: 32px;
+  }
+
+  .sx-login-brand {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .sx-login-brand img {
+    height: 48px;
+    width: auto;
+    margin-bottom: 12px;
+  }
+
+  #content .sx-login-brand h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--sx-text-strong);
+  }
+
+  .sx-login-brand p {
+    margin: 4px 0 0;
+    color: var(--sx-muted);
+    font-size: 14px;
+  }
+
+  .sx-login-card .sx-field {
+    margin-bottom: 16px;
+  }
+
+  .sx-login-card .sx-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--sx-text-2, var(--sx-text));
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .sx-login-card input[type="email"],
+  .sx-login-card input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sx-login-extra {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+
+  .sx-login-extra label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--sx-text);
+  }
+
+  .sx-login-card input[type="submit"] {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  .sx-login-card .errornote {
+    margin: 0 0 16px;
+  }
+
+  @media (max-width: 480px) {
+    .sx-login-card {
+      padding: 24px 20px;
+    }
+  }
+</style>
+{% endblock %}
 {% block content %}
-<div id="content-main">
+<div id="content-main" class="sx-login-card">
+  <div class="sx-login-brand">
+    {% if savdex_logo %}<img src="{{ savdex_logo }}" alt="">{% endif %}
+    <h1>{{ site_header }}</h1>
+    <p>Вход в панель управления</p>
+  </div>
   {% if error %}<p class="errornote">{{ error }}</p>{% endif %}
   <form method="post" action="{% url 'savdex_admin_login' %}" id="login-form">
     <input type="hidden" name="_token" value="{{ token }}">
     <input type="hidden" name="next" value="{{ next }}">
-    <div class="form-row">
+    <div class="sx-field">
       <label class="required" for="id_email">Почта</label>
       <input type="email" name="email" id="id_email" value="{{ email }}" autocomplete="username" autofocus required>
     </div>
-    <div class="form-row">
+    <div class="sx-field">
       <label class="required" for="id_password">Пароль</label>
       <input type="password" name="password" id="id_password" autocomplete="current-password" required>
     </div>
-    <div class="form-row">
+    <div class="sx-login-extra">
       <label><input type="checkbox" name="remember" value="1"> Запомнить меня</label>
+      <a href="/forgot-password">Забыли пароль?</a>
     </div>
-    <div class="submit-row">
-      <input type="submit" value="Войти">
-    </div>
-    <p><a href="/forgot-password">Забыли пароль?</a></p>
+    <input type="submit" class="default" value="Войти">
   </form>
 </div>
 {% endblock %}

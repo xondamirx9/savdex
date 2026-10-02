@@ -18,7 +18,7 @@
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo" height="32" style="height:32px;width:auto">{% endif %}<span>{{ site_header }}</span></a> <span class="sx-brand-note">· разделы на Python</span></div>
+<div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo" height="32" style="height:32px;width:auto">{% endif %}<span>{{ site_header }}</span></a></div>
 {% endblock %}
 
 {% block usertools %}

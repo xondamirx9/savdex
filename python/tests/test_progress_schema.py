@@ -25,13 +25,11 @@ def test_карта_совпадает_со_схемой():
     assert sorted(mapped - real) == [], "в карте переноса таблицы, которых нет в базе"
 
 
-def test_ход_переноса_на_главной_админки():
-    """Любой сотрудник с доступом к разделам на Python видит ход переноса."""
+def test_главная_админки_без_хода_переноса():
+    """Перенос закончен: на главной админки хода переноса больше нет."""
     свежая_база()
     _, главная = django(сотрудник("content_manager"), ("get", "/py/admin/", None))
-    total = progress.summary()
 
     assert главная["status"] == 200
-    assert "Ход переноса на Python" in главная["body"]
-    assert f"{total['tables_done']} из {total['tables_total']}" in главная["body"]
-    assert "Этап 2. Справочники и содержимое" in главная["body"]
+    assert "Ход переноса" not in главная["body"]
+    assert "Python" not in главная["body"]

@@ -1,17 +1,13 @@
 {% extends "admin/index.html" %}
 {% comment %}
-  Главная админки на Python.
+  Главная админки.
 
   «Последние действия» у Django берутся из его журнала
-  (django_admin_log) — такой таблицы нет: журнал общий с Laravel,
-  admin_actions, и смотрят его в админке Laravel.
+  (django_admin_log) — такой таблицы нет: журнал действий — admin_actions,
+  раздел «Журнал действий». Колонка убрана, страница в одну колонку.
 
-  Над разделами — ход переноса (savdex/progress.py): заказчик хотел
-  видеть, как идёт перенос, не читая документы.
-
-  Выше всего — стартовый экран сотрудника (savdex/dashboard/, вместо
-  виджетов Filament): то, что требует действия сегодня, по его роли.
-  Колонка «Последние действия» убрана, поэтому страница в одну колонку.
+  Выше всего — стартовый экран сотрудника (savdex/dashboard/): то, что
+  требует действия сегодня, по его роли.
 
   Меню разделов слева — и на главной, как у панели Filament (Django его
   здесь прячет: разделы у него — списком на самой странице, а под
@@ -26,58 +22,6 @@
 <div class="savdex-dashboard">
   {% for widget in dashboard %}{% include widget.template with w=widget %}{% endfor %}
 </div>
-{% endif %}
-<p>Разделы переезжают сюда из админки по одному. Правки здесь попадают в тот же журнал действий, что и в основной админке.</p>
-{% if progress %}
-<section class="savdex-progress" aria-labelledby="savdex-progress-title">
-  <h2 id="savdex-progress-title">Ход переноса на Python</h2>
-  <p class="savdex-progress-total">
-    Таблиц у Python: <b>{{ progress.tables_done }} из {{ progress.tables_total }}</b> ({{ progress.percent }}%)
-  </p>
-  <div class="savdex-bar" role="progressbar" aria-valuenow="{{ progress.percent }}" aria-valuemin="0" aria-valuemax="100">
-    <span style="width: {{ progress.percent }}%"></span>
-  </div>
-  <ol class="savdex-stages">
-    {% for p in progress.stages %}
-    <li class="savdex-stage savdex-stage--{{ p.state }}">
-      <div class="savdex-stage-head">
-        <span>Этап {{ p.stage.number }}. {{ p.stage.title }}</span>
-        <span class="savdex-stage-state">
-          {% if p.state == "done" %}сделан{% elif p.state == "active" %}идёт{% else %}впереди{% endif %}
-          {% if p.total %}· {{ p.done }} из {{ p.total }}{% if p.stage.commands %} команд{% elif p.stage.steps %} шагов{% endif %}{% endif %}
-        </span>
-      </div>
-      {% if p.total %}
-      <div class="savdex-bar savdex-bar--thin"><span style="width: {{ p.percent }}%"></span></div>
-      {% endif %}
-      {% if p.stage.note %}<p class="savdex-note">{{ p.stage.note }}</p>{% endif %}
-      {% if p.kept %}
-      <details class="savdex-note">
-        <summary>Остаются за основной админкой: {{ p.kept|length }}</summary>
-        <ul>{% for table, why in p.kept.items %}<li><code>{{ table }}</code> — {{ why }}</li>{% endfor %}</ul>
-      </details>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ol>
-</section>
-<style>
-  .savdex-progress { margin: 16px 0 28px; padding: 16px 20px; border: 1px solid var(--hairline-color); border-radius: 6px; max-width: 760px; }
-  .savdex-progress h2 { margin: 0 0 8px; font-size: 1rem; }
-  .savdex-progress-total { margin: 0 0 8px; }
-  .savdex-bar { height: 10px; background: var(--darkened-bg); border-radius: 5px; overflow: hidden; }
-  .savdex-bar span { display: block; height: 100%; background: #16a34a; }
-  .savdex-bar--thin { height: 6px; margin-top: 6px; }
-  .savdex-stages { list-style: none; margin: 16px 0 0; padding: 0; }
-  .savdex-stage { padding: 10px 0; border-top: 1px solid var(--hairline-color); }
-  .savdex-stage-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-weight: 600; }
-  .savdex-stage-state { font-weight: 400; color: var(--body-quiet-color); }
-  .savdex-stage--done .savdex-stage-state { color: var(--sx-status-success, #16a34a); font-weight: 600; }
-  .savdex-stage--active .savdex-stage-state { color: var(--sx-status-warning, #d97706); font-weight: 600; }
-  .savdex-stage--active .savdex-bar span { background: #d97706; }
-  .savdex-note { margin: 6px 0 0; color: var(--body-quiet-color); font-size: 0.8125rem; }
-  .savdex-note ul { margin: 6px 0 0 18px; padding: 0; }
-</style>
 {% endif %}
 {% endblock %}
 {% block extrastyle %}{{ block.super }}
