@@ -155,6 +155,28 @@ def test_вкладки_статусов_и_отборы(люди):
     assert 'href="?" class="sx-chip is-active"' in покупаю["body"]
 
 
+def test_залежавшееся_на_проверке_помечено(люди):
+    company = _компания()
+    _объявление("Свежее на проверке", company_id=company)
+    старое = _объявление("Лежит четвёртый день", company_id=company)
+    sql("update listings set created_at = now() - interval '4 days' where id = %s", [старое])
+
+    _, список = django(люди["moderator"], ("get", LIST, None))
+
+    assert "Ждёт проверки 4 дня" in список["body"]
+    assert список["body"].count("sx-waiting") == 1, "поданное сегодня не торопим"
+
+
+def test_срок_датой_словами(люди):
+    company = _компания()
+    pk = _объявление("Активное объявление", status="active", company_id=company)
+    sql("update listings set expires_at = '2026-12-01 12:00' where id = %s", [pk])
+
+    _, список = django(люди["moderator"], ("get", LIST, None))
+
+    assert "1 декабря 2026" in список["body"] and "01.12.2026" not in список["body"]
+
+
 # ── Решения ─────────────────────────────────────────────────────────
 
 

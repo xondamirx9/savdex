@@ -448,6 +448,11 @@ ICON_EDIT = (
 #: Осталось дней — «скоро»: подсвечиваем, чтобы продлили вовремя
 EXPIRES_SOON_DAYS = 7
 
+#: Сколько дней объявление может лежать на проверке, прежде чем это
+#: станет просрочкой: за двое суток продавец успевает решить, что
+#: площадка о нём забыла
+WAITING_TOO_LONG_DAYS = 2
+
 
 def _days_word(days: int) -> str:
     """1 день, 2 дня, 5 дней."""
@@ -973,10 +978,35 @@ class ListingAdmin(SavdexModelAdmin):
         )
 
         return format_html(
-            '<span class="sx-title">{}</span><span class="sx-sub">{}{}</span>',
+            '<span class="sx-title">{}</span><span class="sx-sub">{}{}</span>{}',
             obj.title,
             format_html(kind),
             self._category_name(obj.category_id),
+            self._waiting(obj),
+        )
+
+    @staticmethod
+    def _waiting(obj: Listing) -> str:
+        """
+        Объявление, которое ждёт уже нас.
+
+        Очередь проверки видна на вкладке, но внутри неё всё выглядит
+        одинаково, а разница есть: поданное час назад подождёт, а то,
+        что лежит третий день, — уже просрочка, продавец ждёт ответа
+        и не понимает, почему его нет.
+        """
+        if obj.status != "moderation" or obj.created_at is None:
+            return ""
+
+        days = (timezone.localdate() - timezone.localtime(obj.created_at).date()).days
+
+        if days < WAITING_TOO_LONG_DAYS:
+            return ""
+
+        return format_html(
+            '<span class="sx-sub sx-waiting">Ждёт проверки {} {} — продавец ждёт ответа</span>',
+            days,
+            _days_word(days),
         )
 
     @staticmethod
@@ -1039,7 +1069,9 @@ class ListingAdmin(SavdexModelAdmin):
         return format_html(
             '<span class="sx-until{}"><span>{}</span><span class="sx-sub">{}</span></span>',
             " is-soon" if soon else "",
-            date.strftime("%d.%m.%Y"),
+            # Словами, как в «Заказах на услуги»: «22.09.2026» сверяют
+            # с календарём, «22 сентября 2026» читают
+            date_format(date, "j E Y"),
             note,
         )
 
