@@ -393,6 +393,7 @@ div.breadcrumbs a:hover {
     opacity: .9;
 }
 
+#nav-sidebar .current-app .section,
 #nav-sidebar .current-app .section:link,
 #nav-sidebar .current-app .section:visited {
     color: var(--sx-accent-text);

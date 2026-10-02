@@ -2,7 +2,8 @@
 {% comment %}
   Как у Django (admin/app_list.html), плюс значок раздела слева —
   как в меню Filament. Значок выбирает SavdexAdminSite.get_app_list.
-  Ссылки «Добавить» (зелёный плюс) нет: добавляют кнопкой в разделе
+  Ссылки «Добавить» (зелёный плюс) нет: добавляют кнопкой в разделе.
+  Название группы — не ссылка
 {% endcomment %}
 
 {% if app_list %}
@@ -10,7 +11,8 @@
     <div class="app-{{ app.app_label }} module{% if app.app_url in request.path|urlencode %} current-app{% endif %}">
       <table>
         <caption>
-          <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">{{ app.name }}</a>
+          {# Название группы — подпись, не ссылка: страница группы ничего не добавляет, а нажатие перезагружало админку #}
+          <span class="section">{{ app.name }}</span>
         </caption>
         <thead class="visually-hidden">
           <tr>
