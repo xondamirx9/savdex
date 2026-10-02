@@ -8,4 +8,5 @@ class AccountsConfig(AppConfig):
 
     name = "savdex.accounts"
     label = "accounts"
-    verbose_name = "Пользователи"
+    # Как группа этого раздела в меню (adminsite.MENU_GROUPS) — в «хлебных крошках»
+    verbose_name = "Система"

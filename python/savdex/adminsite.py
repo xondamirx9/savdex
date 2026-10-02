@@ -254,6 +254,27 @@ class SavdexAdminSite(admin.AdminSite):
             {"dashboard": widgets.for_request(request), **(extra_context or {})},
         )
 
+    def app_index(
+        self,
+        request: HttpRequest,
+        app_label: str,
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> TemplateResponse:
+        """
+        Страница приложения из «хлебных крошек» (у закупок «Данные» ведёт
+        на /py/admin/tenders/) — вся группа меню с этим именем, а не одни
+        разделы приложения.
+        """
+        from django.apps import apps
+
+        name = apps.get_app_config(app_label).verbose_name
+        group = [g for g in self.get_app_list(request) if g["name"] == name]
+
+        if group:
+            extra_context = {"title": name, "app_list": group, **(extra_context or {})}
+
+        return super().app_index(request, app_label, extra_context)
+
     def each_context(self, request: HttpRequest) -> dict[str, Any]:
         context = super().each_context(request)
         admin_ = getattr(request, "admin", None)
@@ -281,7 +302,7 @@ class SavdexAdminSite(admin.AdminSite):
             # («Возвраты» после «Счетов и оплат»); неизвестные — в конце
             app["models"].sort(
                 key=lambda model, app=app: (
-                    MENU_ORDER.get(f"{app['app_label']}.{model['object_name'].lower()}", 999),
+                    MENU_ORDER.get(_menu_key(app, model), 999),
                     model["name"],
                 )
             )
@@ -290,39 +311,37 @@ class SavdexAdminSite(admin.AdminSite):
                 key = f"{app['app_label']}.{model['object_name']}"
                 model["icon"] = f"admin/icons/{ICONS.get(key, DEFAULT_ICON)}.svg"
 
-        return apps
+        # С приложением (app_index проверяет, есть ли что показать) — его
+        # разделы как есть; меню слева и главная — группы MENU_GROUPS
+        return apps if app_label else _grouped(apps, request.path)
 
 
-#: Порядок разделов внутри приложения — как было в меню Filament
-#: (app/Providers/Filament/AdminPanelProvider.php)
-MENU_ORDER: dict[str, int] = {
-    key: index
-    for index, key in enumerate(
-        [
-            "crm.lead",
-            "crm.deal",
-            "crm.contact",
-            "crm.task",
-            "crm.communication",
+#: Меню слева: разделы по работе, а не по приложениям Django — иначе
+#: «Закупки», «Поддержка», «География» висели группами из одного пункта.
+#: Внутри группы — порядок меню Filament. Раздела нет в списке — он
+#: остаётся в своём приложении, после групп
+MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "crm",
+        "CRM",
+        ("crm.lead", "crm.deal", "crm.contact", "crm.task", "crm.communication", "support.ticket"),
+    ),
+    (
+        "moderation",
+        "Модерация",
+        (
             "moderation.review",
             "moderation.platformreview",
-            "data.companyrecord",
-            "data.listing",
-            "data.ittask",
             "moderation.companydocument",
             "finance.complaint",
             "moderation.resume",
-            "support.ticket",
-            "site.landingblock",
-            "site.newspost",
-            "site.page",
-            "tenders.tender",
-            "site.banner",
-            "accounts.user",
-            "system.broadcast",
-            "site.setting",
-            "journal.adminaction",
-            "accounts.staffmember",
+        ),
+    ),
+    ("data", "Данные", ("data.companyrecord", "data.listing", "data.ittask", "tenders.tender")),
+    (
+        "money",
+        "Монетизация",
+        (
             "billing.plan",
             "finance.subscription",
             "finance.payment",
@@ -330,13 +349,72 @@ MENU_ORDER: dict[str, int] = {
             "finance.wallettransaction",
             "billing.creditpack",
             "finance.promocode",
-            "catalogs.category",
-            "catalogs.companytype",
-            "geo.country",
-            "geo.city",
-        ]
-    )
+        ),
+    ),
+    ("content", "Контент", ("site.landingblock", "site.newspost", "site.page", "site.banner")),
+    (
+        "catalogs",
+        "Справочники",
+        ("catalogs.category", "catalogs.companytype", "geo.country", "geo.city"),
+    ),
+    (
+        "system",
+        "Система",
+        (
+            "accounts.user",
+            "accounts.staffmember",
+            "system.broadcast",
+            "site.setting",
+            "journal.adminaction",
+        ),
+    ),
+)
+
+#: Место раздела в меню: «finance.payment» → номер по MENU_GROUPS
+MENU_ORDER: dict[str, int] = {
+    key: index for index, key in enumerate(key for _, _, keys in MENU_GROUPS for key in keys)
 }
+
+
+def _menu_key(app: Mapping[str, Any], model: Mapping[str, Any]) -> str:
+    return f"{app['app_label']}.{model['object_name'].lower()}"
+
+
+def _grouped(apps: list[dict[str, Any]], path: str) -> list[dict[str, Any]]:
+    """
+    Разделы приложений → группы меню. Группа без видимых сотруднику
+    разделов не показывается. У группы нет своей страницы (app_url
+    пустой): заголовок в меню — просто подпись; «current» — открыт
+    один из её разделов.
+    """
+    from urllib.parse import quote
+
+    here = quote(path)
+    models = {_menu_key(app, model): model for app in apps for model in app["models"]}
+    groups: list[dict[str, Any]] = []
+
+    for label, name, keys in MENU_GROUPS:
+        items = [models.pop(key) for key in keys if key in models]
+
+        if items:
+            groups.append(
+                {
+                    "name": name,
+                    "app_label": label,
+                    "app_url": "",
+                    "has_module_perms": True,
+                    "current": any(m["admin_url"] and m["admin_url"] in here for m in items),
+                    "models": items,
+                }
+            )
+
+    for app in apps:
+        rest = [model for model in app["models"] if _menu_key(app, model) in models]
+
+        if rest:
+            groups.append({**app, "models": rest})
+
+    return groups
 
 
 site = SavdexAdminSite(name="savdex_admin")

@@ -8,4 +8,5 @@ class GeoConfig(AppConfig):
 
     name = "savdex.geo"
     label = "geo"
-    verbose_name = "География"
+    # Как группа этого раздела в меню (adminsite.MENU_GROUPS) — в «хлебных крошках»
+    verbose_name = "Справочники"
