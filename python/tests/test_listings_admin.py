@@ -345,6 +345,33 @@ def test_компания_меняется_в_форме(люди):
     assert журнал("updated")["changes"]["after"]["company_id"] == владелец
 
 
+def test_тип_пачкой(люди):
+    """Загруженные «Предложениями» заявки исправляются пачкой; без права править — нет."""
+    чугун = _объявление("Куплю чугун передельный", source="import")
+    пряжа = _объявление("Требуется поставщик пряжи", source="import")
+    уже = _объявление("Куплю цемент", type="demand")
+    отмечены = {
+        "action": "mark_demand",
+        "_selected_action": [str(чугун), str(пряжа), str(уже)],
+    }
+
+    django(люди["support"], ("post", LIST, отмечены))
+    assert sql("select count(*) from listings where type = 'demand'") == [(1,)]
+
+    _, ответ = django(люди["admin"], ("post", LIST, отмечены))
+
+    assert ответ["status"] == 302
+    assert sql("select id, type from listings order by id") == [
+        (чугун, "demand"),
+        (пряжа, "demand"),
+        (уже, "demand"),
+    ]
+    assert журнал("updated")["changes"] == {
+        "before": {"type": "supply"},
+        "after": {"type": "demand"},
+    }
+
+
 def test_опубликовать_отмеченные(люди):
     """«Одобрить» пачкой: на проверке — на витрину, опубликованное пропускается."""
     первая = _объявление("Куплю цемент М400")
