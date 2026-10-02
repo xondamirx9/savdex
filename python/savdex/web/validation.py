@@ -6,11 +6,11 @@
 ввода на месте правила; правила поля идут подряд, провал «неявного»
 (required) останавливает поле; ошибки — по полям в порядке правил.
 
-Тексты — __('validation.<правило>'). Словаря validation в проекте нет,
-поэтому по-английски Laravel берёт текст из самого фреймворка, а на
-остальных языках отдаёт сам ключ («validation.required») — Django
-повторяет и то и другое (словарь — savdex/locale/ui). Свои
-тексты формы передаёт в messages: «поле.правило» или «правило».
+Тексты — __('validation.<правило>') из словаря savdex/locale/ui (группа
+validation): по-английски — тексты фреймворка Laravel, на остальных
+языках — свои, короткие и без имени поля (ошибка показывается под
+самим полем). Свои тексты формы передаёт в messages: «поле.правило»
+или «правило».
 """
 
 from __future__ import annotations
@@ -491,7 +491,7 @@ def _message(
 
     if text is None:
         # Правила размера — текст по виду значения (validation.min.array)
-        sized = rule in ("min", "max", "between")
+        sized = rule in ("min", "max", "between", "gte")
         key = f"validation.{rule}" + (f".{kind}" if sized else "")
         line = ui.group_node(key, locale)
         text = line if isinstance(line, str) else key
@@ -522,6 +522,14 @@ def _message(
     if param is not None and rule == "after":
         # replaceAfter: дата-параметр как есть («today»)
         text = text.replace(":date", param)
+
+    if param is not None and rule == "digits":
+        # replaceDigits: сколько цифр
+        text = text.replace(":digits", param)
+
+    if param is not None and rule == "mimes":
+        # replaceMimes: допустимые расширения через запятую
+        text = text.replace(":values", ", ".join(param.split(",")))
 
     return (
         text.replace(":attribute", name)
@@ -675,6 +683,13 @@ def validate(
                     )
 
                 if not passed:
+                    shown = param or None
+
+                    if rule == "gte" and param:
+                        # replaceGte: :value — значение поля-сравнения, если оно есть
+                        other = _get(data, param.split("."))
+                        shown = param if other is _MISSING or other is None else str(other)
+
                     text = _message(
                         rule,
                         attribute,
@@ -682,7 +697,7 @@ def validate(
                         locale,
                         messages or {},
                         _kind(field_rules, value),
-                        param or None,
+                        shown,
                     )
                     found = errors.setdefault(attribute, [])
 
