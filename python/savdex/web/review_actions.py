@@ -25,7 +25,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import eloquent
+from savdex.web import eloquent, ui
 from savdex.web import review_screening as screening
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
@@ -300,13 +300,17 @@ def _create(ctx: Context, target: dict[str, Any], data: dict[str, Any]) -> tuple
         if not flags:
             return True, ctx.t("messages.review.sent_to_moderation")
 
-        return True, ctx.t("messages.review.sent_flagged", reason=flags[0].lower())
+        reason = ctx.t(screening.REASON_KEYS[flags[0]])
+
+        return True, ctx.t("messages.review.sent_flagged", reason=reason)
 
     _notify_company(
         ctx,
         target,
         "review",
-        f"Компания «{author['name']}» оставила отзыв: {rating} из 5",
+        lambda locale: ui.t(
+            "messages.review.notify_title", locale, company=author["name"], rating=rating
+        ),
         "success" if rating >= 4 else "warning",
         "/cabinet/reviews",
         str_limit(body, 140),

@@ -2,7 +2,7 @@ import { Building2, CalendarDays, MapPin, Wallet } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
-import { getLocale } from '@/lib/locale';
+import { formatNumber } from '@/components/cabinet';
 import { routes } from '@/routes';
 
 /**
@@ -32,7 +32,7 @@ export interface TenderRow {
 export function budgetLabel(budget: number | null, currency: string): string {
     if (budget === null) return t('tenders.budget_none');
 
-    const amount = new Intl.NumberFormat(getLocale() === 'ru' ? 'ru-RU' : getLocale()).format(budget);
+    const amount = formatNumber(budget);
 
     return `${amount} ${currency === 'UZS' ? t('catalog.currency_uzs') : currency}`;
 }

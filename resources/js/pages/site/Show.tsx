@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { BadgeCheck, Download, ExternalLink, FileText, Globe, Mail, MapPin, Package, Phone, Send, Star } from 'lucide-react';
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { money } from '@/components/ProductCard';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { unitLabel } from '@/lib/units';
 
 /**
@@ -193,7 +193,7 @@ export default function SiteShow(props: Props) {
                     <Section id="reviews" title={t('site.reviews.title')} tinted>
                         <p className="ms-rating">
                             <Star aria-hidden className="size-5" fill="currentColor" />
-                            <b>{reviews.rating.toFixed(1)}</b>
+                            <b>{formatDecimal(reviews.rating)}</b>
                             <span className="ms-muted">{tChoice('site.reviews.count', reviews.count)}</span>
                         </p>
                         <div className="ms-grid ms-grid-wide">

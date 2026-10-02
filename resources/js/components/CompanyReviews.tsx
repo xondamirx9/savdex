@@ -2,7 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { BadgeCheck, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { StarPicker, Stars } from '@/components/Stars';
-import { t } from '@/lib/i18n';
+import { formatDecimal, t } from '@/lib/i18n';
 
 export interface CompanyReview {
     id: number;
@@ -70,7 +70,7 @@ export function CompanyReviews({
                 {reviews.length > 0 && (
                     <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                         <Stars value={Math.round(rating)} />
-                        <b>{rating.toFixed(1)}</b>
+                        <b>{formatDecimal(rating)}</b>
                     </div>
                 )}
             </div>

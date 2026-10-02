@@ -44,6 +44,15 @@ export function numberLocale(): string {
     return NUMBER_LOCALES[locale] ?? 'ru-RU';
 }
 
+/**
+ * Дробное число для показа — оценка, процент: «4,7» по-русски
+ * и по-турецки, «4.7» по-английски. toFixed() разделитель не знает
+ * и всегда ставит точку.
+ */
+export function formatDecimal(value: number, digits = 1): string {
+    return value.toLocaleString(numberLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 function lookup(key: string): string | undefined {
     let node: unknown = dict;
 

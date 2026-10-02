@@ -8,7 +8,7 @@ import { TaskCover } from '@/components/TaskCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
-import { getLocale } from '@/lib/locale';
+import { formatNumber } from '@/components/cabinet';
 import { openServiceSection, serviceFilterOptions, type ServiceSection } from '@/lib/serviceSections';
 import { routes } from '@/routes';
 import { Pagination } from '@/components/Pagination';
@@ -71,7 +71,7 @@ interface Props {
 }
 
 function money(value: number): string {
-    return new Intl.NumberFormat(getLocale() === 'ru' ? 'ru-RU' : getLocale()).format(value);
+    return formatNumber(value);
 }
 
 /** «20 000 000 – 50 000 000 сум», «от 5 000 000 сум» или «договорной». */

@@ -23,11 +23,11 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import cabinet, content, inertia, platform
+from savdex.web import cabinet, content, inertia, platform, ui
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
-from savdex.web.it_tasks import SERVICE_TYPES, number_format
+from savdex.web.it_tasks import SERVICE_TYPES, _decimal, number_format
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, initials
 from savdex.web.throttle import throttled
@@ -211,15 +211,17 @@ def _extension(path: str) -> str:
     return name.rsplit(".", 1)[1] if "." in name else ""
 
 
-def _file_size(size: int | None) -> str | None:
-    """CompanyDocument::sizeLabel."""
+def _file_size(size: int | None, locale: str) -> str | None:
+    """CompanyDocument::sizeLabel на языке страницы."""
     if size is None:
         return None
 
     if size >= 1048576:
-        return number_format(size / 1048576, 1) + " МБ"
+        return ui.t(
+            "common.size_mb", locale, size=_decimal(number_format(size / 1048576, 1), locale)
+        )
 
-    return number_format(size / 1024, 0) + " КБ"
+    return ui.t("common.size_kb", locale, size=number_format(size / 1024, 0))
 
 
 def _files(ctx: Context, company_id: int) -> list[dict[str, Any]]:
@@ -253,7 +255,7 @@ def _files(ctx: Context, company_id: int) -> list[dict[str, Any]]:
                 "type_label": label
                 if label != f"ui.cabinet.files.types.{d['type']}"
                 else d["type"],
-                "size": _file_size(d["file_size"]),
+                "size": _file_size(d["file_size"], ctx.locale),
                 "is_material": material,
                 # isPast: срок — полночь даты, то есть сегодняшний уже прошёл
                 "expired": valid is not None
@@ -430,7 +432,8 @@ def business_card(
 def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     """SeoBuilders::company: заголовок, описание, разметка организации и крошки."""
     city = card["city"]
-    parts = [card["type_label"], city, f"ИНН {c['tin']}" if c["tin"] is not None else None]
+    tin = f"{ctx.t('companies_page.tin')} {c['tin']}" if c["tin"] is not None else None
+    parts = [card["type_label"], city, tin]
     fallback = ", ".join(p for p in parts if not _falsy(p)).strip(_TRIM)
     url = ctx.url(f"company/{c['slug']}")
 
@@ -439,7 +442,7 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     seo.description(
         c["description"]
         if not _falsy(c["description"])
-        else fallback + ". Контакты, объявления и отзывы на SAVDEX."
+        else fallback + ". " + ctx.t("seo.company_tail")
     )
     seo.canonical(url)
     seo.image(card["logo"])
@@ -483,7 +486,7 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
                 {
                     "@type": "ListItem",
                     "position": 1,
-                    "name": "Компании",
+                    "name": ctx.t("companies_page.title"),
                     "item": ctx.url("companies"),
                 },
                 {"@type": "ListItem", "position": 2, "name": c["name"], "item": url},
@@ -508,10 +511,15 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
         return not_found(ctx)
 
     c = found[0]
-    company_view(ctx, c["id"])
-
     user = ctx.user
     viewer = user["company_id"] if user is not None else None
+
+    # Заблокированной компании нет ни в каталоге, ни на мини-сайте — нет и
+    # визитки; себя компания видит (причина блокировки — в кабинете)
+    if c["status"] != "active" and viewer != c["id"]:
+        return not_found(ctx)
+
+    company_view(ctx, c["id"])
     unlocked = viewer is not None and (
         viewer == c["id"]
         or bool(

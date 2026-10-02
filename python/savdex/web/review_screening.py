@@ -31,6 +31,14 @@ _NOT_LETTER = regex.compile(r"[^\p{L}]+")
 _NOT_UPPER = regex.compile(r"[^\p{Lu}]+")
 
 
+#: Причина → ключ словаря: человеку — на языке страницы, модератору — по-русски
+REASON_KEYS = {
+    "В тексте есть контакты: телефон, почта или ссылка": "messages.review.flag_contacts",
+    "В тексте есть брань": "messages.review.flag_profanity",
+    "Текст набран заглавными буквами": "messages.review.flag_caps",
+}
+
+
 def reasons(text: str) -> list[str]:
     """ReviewScreening::reasons: пустой список — можно публиковать."""
     found = []

@@ -820,6 +820,9 @@ def test_аналитика_расширенная(сайт, path, показы)
     props = стр["props"]
 
     assert props["advanced"] is True and props["benchmark"]
+    # Шаги воронки — на языке страницы
+    первый = "Impressions in search" if path.startswith("/en") else "Qidiruvdagi ko‘rsatuvlar"
+    assert props["funnel"][0]["label"] == первый
     # Равные показы — порядок по запросу
     assert [(q["query"], q["impressions"]) for q in props["queries"]] == list(
         zip(["бетон", "цемент", "арматура", "кирпич"], показы, strict=True)
@@ -1064,10 +1067,11 @@ def test_избранное(сайт, path):
     _, стр = зайти(сайт, path, куки)
     items = стр["props"]["items"]
 
-    # Черновик, на модерации и удалённое — не показываются; истёкшее и
-    # архивное — неактивными; у удалённой компании — без имени
+    # Черновик, на модерации и удалённое — не показываются; истёкшее,
+    # архивное и объявление удалённой компании (его страницы больше нет) —
+    # неактивными; у удалённой компании — без имени
     assert стр["component"] == "Favorites"
-    assert len(items) == 4 and [i["active"] for i in items].count(False) == 2
+    assert len(items) == 4 and [i["active"] for i in items].count(False) == 3
     assert [i["company"]["name"] is None for i in items].count(True) == 1
 
 
@@ -1168,6 +1172,10 @@ def test_продвижение(сайт, path):
         (0, 57, None),
     ]
     assert {t["code"] for t in props["types"]} >= {"bump", "urgent", "highlight"}
+    # Цена — на языке страницы; «/» перед сроком ждёт страница
+    подписи = " ".join(t["cost_label"] for t in props["types"])
+    assert ("ед." in подписи) == (path == "/cabinet/promo")
+    assert ("birlik" in подписи) == (path != "/cabinet/promo")
 
 
 def test_продвижение_без_компании(сайт):

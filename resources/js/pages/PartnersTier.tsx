@@ -2,7 +2,7 @@ import { ArrowRight, Star } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
 import { VerificationBadge } from '@/components/VerificationBadge';
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { TIER_LOOK, type PartnerTierSlug } from '@/lib/partnerTiers';
 import { routes } from '@/routes';
 
@@ -91,7 +91,7 @@ export default function PartnersTier({
                                 </span>
                                 <span className="supplier-facts">
                                     <span className="listing-rating">
-                                        <Star aria-hidden className="size-3.5" /> <b>{p.rating.toFixed(1)}</b>
+                                        <Star aria-hidden className="size-3.5" /> <b>{formatDecimal(p.rating)}</b>
                                     </span>
                                     <span>{tChoice('home.suppliers_listings', p.listings_count)}</span>
                                 </span>

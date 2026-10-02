@@ -138,8 +138,16 @@ def company_file(request: HttpRequest, document_id: str) -> HttpResponse:
 
 
 def _company_file(ctx: Context, document_id: int) -> HttpResponse:
-    """Своим — всё, прочим — показанное на визитке."""
-    rows = _rows("select * from company_documents where id = %s", [document_id])
+    """
+    Своим — всё, прочим — показанное на визитке действующей компании:
+    у заблокированной и удалённой визитки нет, нет и файлов.
+    """
+    rows = _rows(
+        "select d.*, c.status as company_status from company_documents d "
+        "left join companies c on c.id = d.company_id and c.deleted_at is null "
+        "where d.id = %s",
+        [document_id],
+    )
 
     if not rows:
         return not_found(ctx)
@@ -147,7 +155,11 @@ def _company_file(ctx: Context, document_id: int) -> HttpResponse:
     document = rows[0]
     own = _viewer_company(ctx) == document["company_id"]
     material = document["type"] in ("presentation", "price_list", "catalog", "other")
-    visible = document["is_public"] and (material or document["moderation_status"] == "approved")
+    visible = (
+        document["company_status"] == "active"
+        and document["is_public"]
+        and (material or document["moderation_status"] == "approved")
+    )
 
     if not own and not visible:
         return not_found(ctx)

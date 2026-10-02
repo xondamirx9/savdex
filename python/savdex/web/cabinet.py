@@ -452,17 +452,17 @@ def _smooth(values: list[int], window: int = 7) -> list[float]:
     return out
 
 
-#: CabinetMetrics::funnel — подписи в коде, по-русски на всех языках
+#: CabinetMetrics::funnel — шаги и тон; подписи — cabinet.analytics.funnel_steps
 _FUNNEL = (
-    ("Показы в выдаче", "impressions", "primary"),
-    ("Просмотры карточки", "views", "primary"),
-    ("Добавили в избранное", "favorites", "primary"),
-    ("Открыли контакт", "unlocks", "success"),
-    ("Оставили отзыв", "reviews", "warning"),
+    ("impressions", "primary"),
+    ("views", "primary"),
+    ("favorites", "primary"),
+    ("unlocks", "success"),
+    ("reviews", "warning"),
 )
 
 
-def funnel(company_id: int, days: int) -> list[dict[str, Any]]:
+def funnel(company_id: int, days: int, locale: str) -> list[dict[str, Any]]:
     """CabinetMetrics::funnel: показы → просмотры → избранное → контакты → отзывы."""
     totals: dict[str, int] = dict(_sum(company_id, _from(days), _today()))
     totals["reviews"] = _count(
@@ -474,12 +474,12 @@ def funnel(company_id: int, days: int) -> list[dict[str, Any]]:
 
     return [
         {
-            "label": label,
+            "label": ui.t(f"cabinet.analytics.funnel_steps.{key}", locale),
             "value": totals[key],
             "share": php_round(totals[key] / top * 100, 1),
             "tone": tone,
         }
-        for label, key, tone in _FUNNEL
+        for key, tone in _FUNNEL
     ]
 
 
@@ -500,7 +500,7 @@ def geography(company_id: int, locale: str) -> list[dict[str, Any]]:
         [company_id],
     ):
         label = cities.get(row["city_id"]) if row["city_id"] is not None else None
-        label = label if label is not None else "Не указан"
+        label = label if label is not None else ui.t("cabinet.incoming.city_unknown", locale)
         groups[label] = groups.get(label, 0) + 1
 
     # sortDesc устойчив: равные остаются в порядке появления
@@ -573,7 +573,7 @@ def analytics_props(ctx: Context) -> dict[str, Any]:
     return {
         "metrics": metrics,
         "series": series(cid, period),
-        "funnel": funnel(cid, period),
+        "funnel": funnel(cid, period, ctx.locale),
         "geography": geography(cid, ctx.locale),
         "queries": queries(cid, period) if advanced else [],
         "benchmark": _benchmark(ctx, metrics) if advanced else [],
@@ -1126,7 +1126,7 @@ def favorites_props(ctx: Context) -> dict[str, Any]:
 
     assert ctx.user is not None
     rows = _rows(
-        f"select l.*, {_LISTING_COMPANY} from listings l "
+        f"select l.*, {_LISTING_COMPANY}, c.status as c_status from listings l "
         "left join companies c on c.id = l.company_id and c.deleted_at is null "
         "where l.status in ('active', 'expired', 'archived') and l.deleted_at is null "
         "and l.id in (select listing_id from favorites where user_id = %s) "
@@ -1137,7 +1137,8 @@ def favorites_props(ctx: Context) -> dict[str, Any]:
 
     return {
         "items": [
-            {**card, "active": row["status"] == "active"}
+            # Объявление заблокированной или удалённой компании открыть нельзя
+            {**card, "active": row["status"] == "active" and row["c_status"] == "active"}
             for card, row in zip(cards.present(rows), rows, strict=True)
         ]
     }
@@ -1327,14 +1328,14 @@ def promo(request: HttpRequest) -> HttpResponse:
     return inertia.render(ctx, "cabinet/Promo", promo_props(ctx), _seo(ctx))
 
 
-def _cost_label(t: dict[str, Any]) -> str:
-    """PromotionType::costLabel — по-русски на всех языках, как в коде."""
-    units = f"{t['cost_units']} ед."
+def _cost_label(ctx: Context, t: dict[str, Any]) -> str:
+    """PromotionType::costLabel на языке страницы; «/» перед сроком ждёт Promo.tsx."""
+    units = ctx.t("cabinet.promo.cost_units", count=t["cost_units"])
 
     return (
-        f"{units} / {t['duration_days']} дн."
+        f"{units} / {ctx.t('cabinet.promo.cost_days', days=t['duration_days'])}"
         if (t["duration_days"] or 0) > 0
-        else f"{units} разово"
+        else f"{units} {ctx.t('cabinet.promo.once')}"
     )
 
 
@@ -1402,7 +1403,7 @@ def promo_props(ctx: Context) -> dict[str, Any]:
                 "description": translations.text(t["description"]),
                 "effect_hint": translations.text(t["effect_hint"]),
                 "cost": t["cost_units"],
-                "cost_label": _cost_label(t),
+                "cost_label": _cost_label(ctx, t),
                 "icon": t["icon"],
                 "slots": t["slots"],
                 "taken": taken.get(t["id"], 0) if t["slots"] is not None else None,
@@ -1574,7 +1575,7 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "type_label": label if label != f"ui.cabinet.files.types.{d['type']}" else d["type"],
             "title": d["title"],
             "status": d["moderation_status"],
-            "size": _file_size(d["file_size"]),
+            "size": _file_size(d["file_size"], ctx.locale),
             "is_material": d["type"] in _MATERIALS,
             "is_public": bool(d["is_public"]),
             "valid_until": _date(d["valid_until"]),
@@ -1849,7 +1850,7 @@ def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
                 "status": t["status"],
             },
             "files": [
-                {"id": f["id"], "title": f["title"], "size": size_label(f["file_size"])}
+                {"id": f["id"], "title": f["title"], "size": size_label(f["file_size"], ctx.locale)}
                 for f in _rows(
                     "select id, title, file_size from it_task_files where it_task_id = %s "
                     "order by id",

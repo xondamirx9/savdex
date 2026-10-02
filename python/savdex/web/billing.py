@@ -97,11 +97,13 @@ def number_format(value: int) -> str:
     return f"{value:,}".replace(",", " ")
 
 
-def amount_label(payment: dict[str, Any]) -> str:
-    """Payment::amountLabel."""
+def amount_label(payment: dict[str, Any], sum_label: str = "сум") -> str:
+    """Payment::amountLabel; sum_label — «сум» на языке страницы (печатный счёт — по-русски)."""
     currency = payment["currency"]
 
-    return number_format(int(payment["amount"])) + " " + ("сум" if currency == "UZS" else currency)
+    return (
+        number_format(int(payment["amount"])) + " " + (sum_label if currency == "UZS" else currency)
+    )
 
 
 def expires_at(payment: dict[str, Any]) -> datetime | None:
@@ -114,9 +116,9 @@ def expires_at(payment: dict[str, Any]) -> datetime | None:
     return created + timedelta(days=EXPIRES_DAYS)
 
 
-def masked(method: dict[str, Any]) -> str:
-    """PaymentMethod::masked."""
-    return f"{method['brand'] or 'Карта'} •••• {method['last4']}".strip()
+def masked(method: dict[str, Any], card: str = "Карта") -> str:
+    """PaymentMethod::masked; card — подпись карты без бренда на языке страницы."""
+    return f"{method['brand'] or card} •••• {method['last4']}".strip()
 
 
 def _ucfirst(value: str) -> str:
@@ -234,7 +236,11 @@ def props(ctx: Context) -> dict[str, Any]:
         provider = _ucfirst(str(payment["provider"] or ""))
         method = linked.get(payment["payment_method_id"])
 
-        return f"{provider} · {masked(method)}" if method is not None else provider
+        return (
+            f"{provider} · {masked(method, ctx.t('cabinet.billing.card'))}"
+            if method is not None
+            else provider
+        )
 
     return {
         "plan": {
@@ -266,7 +272,7 @@ def props(ctx: Context) -> dict[str, Any]:
         "cards": [
             {
                 "id": m["id"],
-                "masked": masked(m),
+                "masked": masked(m, ctx.t("cabinet.billing.card")),
                 "expires": m["expires"],
                 "provider": m["provider"],
                 "is_default": bool(m["is_default"]),
@@ -317,7 +323,7 @@ def props(ctx: Context) -> dict[str, Any]:
                 "id": p["id"],
                 "number": p["number"],
                 "description": translations.text(p["description"]),
-                "amount": amount_label(p),
+                "amount": amount_label(p, ctx.t("catalog.currency_uzs")),
                 "created_at": _date(p["created_at"]),
                 "expires_at": _date(expires_at(p)),
             }

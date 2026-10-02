@@ -313,7 +313,11 @@ def order(request: HttpRequest) -> HttpResponse:
     flash(
         ctx,
         "success",
-        ctx.t("messages.billing.issued", number=payment["number"], amount=amount_label(payment)),
+        ctx.t(
+            "messages.billing.issued",
+            number=payment["number"],
+            amount=amount_label(payment, ctx.t("catalog.currency_uzs")),
+        ),
     )
 
     return back(ctx)
@@ -370,7 +374,7 @@ def promo(request: HttpRequest) -> HttpResponse:
                 "messages.billing.promo_discount",
                 percent=codes[0]["discount_percent"] if codes else None,
                 number=result["number"],
-                amount=amount_label(result),
+                amount=amount_label(result, ctx.t("catalog.currency_uzs")),
             ),
         )
 

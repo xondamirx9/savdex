@@ -476,6 +476,14 @@ def hero_ratio(values: dict[str, Any]) -> float | None:
     return php_round(width / height, 4) if height > 0 else None
 
 
+#: Объявление действующей компании — как в каталоге: у заблокированной
+#: и удалённой объявлений в счётчиках и фильтрах нет
+LIVE_COMPANY = (
+    " and exists (select 1 from companies co where co.id = l.company_id "
+    "and co.status = 'active' and co.deleted_at is null)"
+)
+
+
 def popular_categories(locale: str) -> list[dict[str, Any]]:
     """PageController::popularCategories: с подкатегориями, без пустых."""
     visible, params = visible_in(locale)
@@ -483,7 +491,8 @@ def popular_categories(locale: str) -> list[dict[str, Any]]:
         r["category_id"]: int(r["total"])
         for r in _rows(
             "select category_id, count(*) as total from listings l where l.status = 'active' "
-            f"and l.deleted_at is null{visible} and l.category_id is not null group by category_id",
+            f"and l.deleted_at is null{visible}{LIVE_COMPANY} and l.category_id is not null "
+            "group by category_id",
             params,
         )
     }
@@ -584,7 +593,8 @@ def city_options(locale: str) -> list[dict[str, Any]]:
         {"id": r["id"], "name": names[r["id"]]}
         for r in _rows(
             "select id from cities c where is_active and exists (select 1 from listings l "
-            "where l.city_id = c.id and l.status = 'active' and l.deleted_at is null)"
+            "where l.city_id = c.id and l.status = 'active' and l.deleted_at is null"
+            f"{LIVE_COMPANY})"
         )
     ]
 

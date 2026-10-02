@@ -127,6 +127,14 @@ def _xml(body: str) -> HttpResponse:
     return response
 
 
+def _live(table: str) -> str:
+    """Условие «компания строки действует»: заблокированных и удалённых в карте нет."""
+    return (
+        f"exists (select 1 from companies co where co.id = {table}.company_id "
+        "and co.status = 'active' and co.deleted_at is null)"
+    )
+
+
 def _count(query: str, params: list[Any] | None = None) -> int:
     return int(_rows(query, params)[0]["n"])
 
@@ -140,7 +148,10 @@ def sitemap(request: HttpRequest) -> HttpResponse:
 
     parts = ["static", "categories", "companies"]
     listings = math.ceil(
-        _count("select count(*) as n from listings where status = 'active' and deleted_at is null")
+        _count(
+            "select count(*) as n from listings where status = 'active' and deleted_at is null "
+            f"and {_live('listings')}"
+        )
         / CHUNK
     )
     parts += [f"listings-{page}" for page in range(1, max(1, listings) + 1)]
@@ -157,7 +168,7 @@ def sitemap(request: HttpRequest) -> HttpResponse:
     ):
         parts.append("tenders")
 
-    if _rows("select 1 from it_tasks where status = 'active' limit 1"):
+    if _rows(f"select 1 from it_tasks where status = 'active' and {_live('it_tasks')} limit 1"):
         parts.append("it-tasks")
 
     lastmod = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -220,7 +231,8 @@ def _categories(ctx: Context) -> list[dict[str, Any]]:
         {"loc": ctx.url(f"/catalog?category={r['id']}"), "priority": "0.8", "changefreq": "daily"}
         for r in _rows(
             "select c.id, (select count(*) from listings l where c.id = l.category_id "
-            "and l.status = 'active' and l.deleted_at is null) as active from categories c "
+            f"and l.status = 'active' and l.deleted_at is null and {_live('l')}) as active "
+            "from categories c "
             "where c.is_active = true"
         )
         if r["active"] > 0
@@ -249,7 +261,8 @@ def _listing_locales(row: dict[str, Any]) -> list[str]:
 def _listings(ctx: Context, page: int) -> list[dict[str, Any]]:
     rows = _rows(
         "select slug, updated_at, source, title_i18n from listings where status = 'active' "
-        "and deleted_at is null and slug is not null order by id limit %s offset %s",
+        f"and deleted_at is null and slug is not null and {_live('listings')} "
+        "order by id limit %s offset %s",
         [CHUNK, max(0, (page - 1) * CHUNK)],
     )
 
@@ -312,7 +325,10 @@ def _part(ctx: Context, name: str) -> list[dict[str, Any]] | None:
         return _dated(
             ctx,
             "/it-services",
-            _rows("select slug, updated_at from it_tasks where status = 'active'"),
+            _rows(
+                "select slug, updated_at from it_tasks where status = 'active' "
+                f"and {_live('it_tasks')}"
+            ),
             "0.6",
             "weekly",
         )

@@ -5,7 +5,7 @@ import { VerificationBadge } from '@/components/VerificationBadge';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { SERVICE_PAGE_ICONS } from '@/lib/serviceSections';
 import { routes } from '@/routes';
 import { TaskCard, type TaskRow } from './Index';
@@ -201,7 +201,7 @@ export default function Section({
                                     </span>
                                     <span className="supplier-facts">
                                         <span className="listing-rating">
-                                            <Star aria-hidden className="size-3.5" /> <b>{p.rating.toFixed(1)}</b>
+                                            <Star aria-hidden className="size-3.5" /> <b>{formatDecimal(p.rating)}</b>
                                         </span>
                                     </span>
                                 </Link>

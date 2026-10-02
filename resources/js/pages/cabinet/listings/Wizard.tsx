@@ -7,7 +7,8 @@ import { SelectField } from '@/components/SelectField';
 import { useConfirm } from '@/components/useConfirm';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { numberLocale, t } from '@/lib/i18n';
+import { localize } from '@/lib/locale';
 
 interface Field {
     key: string;
@@ -130,7 +131,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
     const save = useCallback(async () => {
         const token = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1];
 
-        const res = await fetch(`/cabinet/listings/${listing.id}/autosave`, {
+        const res = await fetch(localize(`/cabinet/listings/${listing.id}/autosave`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -141,7 +142,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
         });
 
         if (res.ok) {
-            setSavedAgo(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+            setSavedAgo(new Date().toLocaleTimeString(numberLocale(), { hour: '2-digit', minute: '2-digit' }));
 
             const body = (await res.json()) as { tag_options?: string[] };
             if (body.tag_options) setTagChoices(body.tag_options);

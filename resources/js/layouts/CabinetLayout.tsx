@@ -28,6 +28,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { routes } from '@/routes';
 import type { CabinetCounts, SharedProps } from '@/types';
 import { t } from '@/lib/i18n';
+import { stripLocale } from '@/lib/locale';
 
 type Icon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
@@ -119,7 +120,7 @@ export function CabinetLayout({
 }) {
     const { auth, flash, counts } = usePage<SharedProps>().props;
     const GROUPS = groups(Boolean(auth?.company?.person));
-    const path = typeof window !== 'undefined' ? window.location.pathname : routes.cabinet;
+    const path = typeof window !== 'undefined' ? stripLocale(window.location.pathname) : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
 
     const isActive = (href: string) => (href === routes.cabinet ? path === href : path.startsWith(href));

@@ -7,6 +7,7 @@ import { Button, PasswordInput, TextInput } from '@/components/ui';
 import { SelectField } from '@/components/SelectField';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
+import { localize } from '@/lib/locale';
 import { routes } from '@/routes';
 import { cn } from '@/lib/cn';
 
@@ -395,9 +396,9 @@ export default function Register({ email = '', categories = [], serviceSections 
                             глагол стоит в конце), поэтому фраза собирается из
                             префикса, двух ссылок, союза и суффикса */}
                         <span>
-                            {t('auth.terms_prefix')} <a href="/terms" className="text-primary-700 hover:underline">{t('auth.terms_offer')}</a>{' '}
+                            {t('auth.terms_prefix')} <a href={localize(routes.terms)} className="text-primary-700 hover:underline">{t('auth.terms_offer')}</a>{' '}
                             {t('auth.terms_and')}{' '}
-                            <a href="/privacy" className="text-primary-700 hover:underline">
+                            <a href={localize(routes.privacy)} className="text-primary-700 hover:underline">
                                 {t('auth.terms_privacy')}
                             </a>
                             {t('auth.terms_suffix')}
