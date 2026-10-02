@@ -28,7 +28,7 @@ from typing import Any, ClassVar
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
-from django.contrib.admin.views.main import PAGE_VAR, SEARCH_VAR
+from django.contrib.admin.views.main import SEARCH_VAR
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -37,7 +37,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.html import format_html
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import SavdexModelAdmin, _admin_of, register, state_tabs
 from savdex.crm.admin import _badge
 from savdex.data.models import (
     IT_STATUSES,
@@ -294,13 +294,7 @@ class ItTaskAdmin(SavdexModelAdmin):
     _can_archive = False
 
     def _tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
-        """
-        Вкладки состояний со счётчиками — они же отбор по статусу.
-
-        Считается то, что откроется при нажатии: поиск и направление
-        остаются, меняется только состояние. Иначе вкладка обещала бы
-        сорок заказов, а показывала два — и верить ей перестали бы.
-        """
+        """Вкладки состояний: считается то, что откроется при нажатии."""
         rows = self.get_queryset(request)
 
         if service := request.GET.get(ServiceType.parameter_name):
@@ -310,33 +304,24 @@ class ItTaskAdmin(SavdexModelAdmin):
             rows = rows.filter(title__icontains=term)
 
         # order_by() обязателен: со списочной сортировкой Django кладёт
-        # created_at в GROUP BY, и каждая задача считается отдельной
+        # поле сортировки в GROUP BY, и каждый заказ считается отдельной
         # группой — вкладки показывали единицы вместо десятков
-        counts = dict(rows.order_by().values_list("status").annotate(total=Count("id")))
-        current = request.GET.get(ItStatus.parameter_name) or ""
+        counts = dict(rows.order_by().values_list("status").annotate(total=Count("pk")))
+        parameter = ItStatus.parameter_name
 
-        def tab(code: str, label: str, total: int) -> dict[str, Any]:
-            query = request.GET.copy()
-            query.pop(ItStatus.parameter_name, None)
-            # Страница отбора сбрасывается: вторая страница «всех»
-            # для двух снятых заказов не существует
-            query.pop(PAGE_VAR, None)
-
-            if code:
-                query[ItStatus.parameter_name] = code
-
-            return {
-                "code": code,
-                "label": label,
-                "count": total,
-                "current": code == current,
-                "url": f"?{query.urlencode()}" if query else "?",
-            }
-
-        return [
-            tab("", "Все", sum(counts.values())),
-            *(tab(code, label, counts.get(code, 0)) for code, (label, _) in IT_STATES.items()),
-        ]
+        return state_tabs(
+            request,
+            [
+                (parameter, "", "Все", sum(counts.values())),
+                *(
+                    (parameter, code, label, counts.get(code, 0))
+                    for code, (label, _) in IT_STATES.items()
+                ),
+            ],
+            # Заказ, который ищет исполнителя, — то, ради чего сюда и
+            # заходят: пусть счётчик видно и с другой вкладки
+            alert=("active",),
+        )
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_archive = self.has_change_permission(request)
@@ -1444,45 +1429,26 @@ class ListingAdmin(SavdexModelAdmin):
         return response
 
     def status_tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
-        """
-        Вкладки над списком: статус или корзина, с числом объявлений.
-        Остальные отборы и поиск переходят на вкладку как есть, номер
-        страницы — нет: на другой вкладке своя первая страница.
-        """
-        from django.db.models import Count
-
+        """Вкладки над списком: статус или корзина, с числом объявлений."""
         base = Listing.objects.exclude(status="draft", title="")
         alive = base.filter(deleted_at__isnull=True)
-        rows = alive.values("status").annotate(n=Count("id")).values_list("status", "n")
-        counts: dict[str, int] = dict(rows)
+        counts = dict(alive.values_list("status").annotate(n=Count("pk")))
         counts[""] = sum(counts.values())
-        trashed = base.filter(deleted_at__isnull=False).count()
+        counts["trashed"] = base.filter(deleted_at__isnull=False).count()
 
-        in_trash = request.GET.get("trashed") == "1"
-        current = request.GET.get("status", "")
-        tabs = []
-
-        for parameter, value, label in LISTING_TABS:
-            query = request.GET.copy()
-
-            for name in ("status", "trashed", "p", "e"):
-                query.pop(name, None)
-
-            if value:
-                query[parameter] = value
-
-            is_trash = parameter == "trashed"
-            tabs.append(
-                {
-                    "label": label,
-                    "count": trashed if is_trash else counts.get(value, 0),
-                    "url": "?" + query.urlencode() if query else "?",
-                    "active": in_trash if is_trash else (not in_trash and current == value),
-                    "alert": value == "moderation" and counts.get(value, 0) > 0,
-                }
-            )
-
-        return tabs
+        return state_tabs(
+            request,
+            [
+                (
+                    parameter,
+                    value,
+                    label,
+                    counts.get("trashed" if parameter == "trashed" else value, 0),
+                )
+                for parameter, value, label in LISTING_TABS
+            ],
+            alert=("moderation",),
+        )
 
     @staticmethod
     def filter_chips(request: HttpRequest) -> list[dict[str, Any]]:

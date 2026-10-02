@@ -25,15 +25,7 @@
 {% endblock %}
 
 {% block search %}
-  {% if status_tabs %}
-    <nav class="sx-tabs" aria-label="Статус объявлений">
-      {% for tab in status_tabs %}
-        <a href="{{ tab.url }}" class="sx-tab{% if tab.active %} is-active{% endif %}{% if tab.alert %} is-alert{% endif %}"{% if tab.active %} aria-current="page"{% endif %}>
-          {{ tab.label }} <b>{{ tab.count }}</b>
-        </a>
-      {% endfor %}
-    </nav>
-  {% endif %}
+  {% include "admin/state_tabs.html" with sx_tabs=status_tabs sx_tabs_label="Статус объявлений" %}
   {{ block.super }}
   {% if filter_chips %}
     <div class="sx-chips" role="group" aria-label="Отбор">

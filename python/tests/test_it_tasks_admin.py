@@ -100,9 +100,7 @@ def _вкладки(body: str) -> dict[str, int]:
 
     return {
         подпись.strip(): int(число)
-        for подпись, число in re.findall(
-            r'class="sx-tab[^"]*"[^>]*>([^<]+)<span class="sx-tab-count">(\d+)</span>', body
-        )
+        for подпись, число in re.findall(r'class="sx-tab[^"]*"[^>]*>([^<]+)<b>(\d+)</b>', body)
     }
 
 
