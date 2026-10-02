@@ -185,6 +185,17 @@ def test_визитка_гостю(сайт, path, locale):
     # Три объявления и загруженное из книги
     assert props["listings_count"] == 4
     assert props["wallet"] is None and props["is_own"] is False
+    # Специализации и критерии отзыва — на языке страницы; неизвестной нет
+    assert props["company"]["it_specializations"] == СПЕЦИАЛИЗАЦИИ[locale]
+    assert props["criteria"]["rating_quality"] == КАЧЕСТВО[locale]
+
+
+СПЕЦИАЛИЗАЦИИ = {
+    "ru": ["Сайты и веб-приложения", "1С, учёт и ERP"],
+    "en": ["Websites and web apps", "1C, accounting and ERP"],
+    "uz": ["Saytlar va veb-ilovalar", "1C, hisob va ERP"],
+}
+КАЧЕСТВО = {"ru": "Качество товара", "en": "Product quality", "uz": "Mahsulot sifati"}
 
 
 def test_визитка_без_данных(сайт):

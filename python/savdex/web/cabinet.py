@@ -767,13 +767,13 @@ def _viewers(
 
 # ── Отзывы /cabinet/reviews (Cabinet\ReviewController::index) ───────
 
-#: Review::CRITERIA — подписи в коде, по-русски на всех языках
-CRITERIA = {
-    "rating_description": "Соответствие описанию",
-    "rating_response": "Скорость ответа",
-    "rating_deadlines": "Соблюдение сроков",
-    "rating_quality": "Качество товара",
-}
+#: Review::CRITERIA — поля оценок по критериям
+CRITERIA = ("rating_description", "rating_response", "rating_deadlines", "rating_quality")
+
+
+def review_criteria(locale: str) -> dict[str, str]:
+    """Подписи критериев отзыва на языке страницы (reviews.criteria)."""
+    return {field: ui.t(f"reviews.criteria.{field}", locale) for field in CRITERIA}
 
 
 def reviews(request: HttpRequest) -> HttpResponse:
@@ -791,7 +791,7 @@ def reviews_props(ctx: Context) -> dict[str, Any]:
     company = company_of(ctx)
 
     if company is None:
-        return {"reviews": [], "summary": None, "criteria": CRITERIA}
+        return {"reviews": [], "summary": None, "criteria": review_criteria(ctx.locale)}
 
     rows = _rows(
         "select r.*, a.name as a_name, a.verification_level as a_level, l.title as l_title "
@@ -821,19 +821,19 @@ def reviews_props(ctx: Context) -> dict[str, Any]:
             }
             for r in rows
         ],
-        "summary": _reviews_summary(rows),
-        "criteria": CRITERIA,
+        "summary": _reviews_summary(rows, ctx.locale),
+        "criteria": review_criteria(ctx.locale),
     }
 
 
-def _reviews_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _reviews_summary(rows: list[dict[str, Any]], locale: str) -> dict[str, Any] | None:
     """Средние по критериям и распределение оценок, от пяти звёзд к одной."""
     if not rows:
         return None
 
     criteria = []
 
-    for key, label in CRITERIA.items():
+    for key, label in review_criteria(locale).items():
         # ->filter(): ни пустых, ни нулей
         values = [r[key] for r in rows if r[key]]
         criteria.append(
@@ -856,14 +856,13 @@ def _reviews_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 # ── Мои контакты /cabinet/contacts (ContactController::index) ───────
 
-#: ContactUnlock::STATUSES — подписи в коде, по-русски на всех языках
-UNLOCK_STATUSES = {
-    "new": "Новый",
-    "contacted": "Связался",
-    "negotiating": "В переговорах",
-    "deal": "Сделка",
-    "rejected": "Не подошёл",
-}
+#: ContactUnlock::STATUSES — коды статусов контакта по порядку
+UNLOCK_STATUSES = ("new", "contacted", "negotiating", "deal", "rejected")
+
+
+def unlock_statuses(locale: str) -> dict[str, str]:
+    """Подписи статусов контакта на языке страницы (cabinet.contacts.statuses)."""
+    return {code: ui.t(f"cabinet.contacts.statuses.{code}", locale) for code in UNLOCK_STATUSES}
 
 
 def contacts(request: HttpRequest) -> HttpResponse:
@@ -880,11 +879,12 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
     from savdex.web.shared import initials
 
     company = company_of(ctx)
+    statuses = unlock_statuses(ctx.locale)
 
     if company is None:
         return {
             "contacts": [],
-            "statuses": UNLOCK_STATUSES,
+            "statuses": statuses,
             "filters": {"q": "", "status": ""},
         }
 
@@ -954,7 +954,7 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
                 "listing": u["l_title"],
                 "opened_at": _date(u["created_at"]),
                 "status": u["status"],
-                "status_label": UNLOCK_STATUSES.get(u["status"], u["status"]),
+                "status_label": statuses.get(u["status"], u["status"]),
                 "note": u["note"],
                 "can_review": u["status"] in ("deal", "negotiating"),
                 "complaint_status": u["complaint_status"],
@@ -965,7 +965,7 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
 
     return {
         "contacts": result,
-        "statuses": UNLOCK_STATUSES,
+        "statuses": statuses,
         "filters": {"q": q, "status": status},
     }
 
@@ -1517,21 +1517,16 @@ def _present_resume(r: dict[str, Any], public_url: Any) -> dict[str, Any]:  # no
 
 # ── Профиль компании /cabinet/company (CompanyProfileController::edit)
 
-#: ItTask::SERVICE_TYPES — подписи в коде, по-русски на всех языках
-SERVICE_TYPES = {
-    "web": "Сайты и веб-приложения",
-    "mobile": "Мобильные приложения",
-    "erp": "1С, учёт и ERP",
-    "integration": "Интеграции и API",
-    "design": "Дизайн и UX",
-    "automation": "Автоматизация и боты",
-    "support": "Поддержка и администрирование",
-    "logistics": "Логистика и перевозки",
-    "hr": "Подбор персонала",
-    "customs": "Декларирование и ВЭД",
-    "accounting": "Бухгалтерские услуги",
-    "other": "Другое",
-}
+#: ItTask::SERVICE_TYPES; подписи — it_tasks.types на языке страницы
+SERVICE_TYPES = (
+    "web", "mobile", "erp", "integration", "design", "automation", "support",
+    "logistics", "hr", "customs", "accounting", "other",
+)  # fmt: skip
+
+
+def service_types(ctx: Context) -> dict[str, str]:
+    return {code: ctx.t(f"it_tasks.types.{code}") for code in SERVICE_TYPES}
+
 
 #: CompanyDocument::MATERIAL_TYPES
 _MATERIALS = ("presentation", "price_list", "catalog", "other")
@@ -1621,7 +1616,7 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "missing": _missing(ctx, company, bool(approved)),
             "verification_level": company["verification_level"],
         },
-        "serviceTypes": SERVICE_TYPES,
+        "serviceTypes": service_types(ctx),
         "contacts": [
             {
                 "id": c["id"],
@@ -1684,13 +1679,8 @@ def company_props(ctx: Context) -> dict[str, Any]:
 
 # ── Мои IT-задачи /cabinet/it-tasks (Cabinet\ItTaskController) ──────
 
-#: ItTask::STATUSES и ::CURRENCIES — подписи в коде
-IT_TASK_STATUSES = {
-    "active": "Открыта",
-    "closed": "Закрыта",
-    "completed": "Выполнена",
-    "archived": "В архиве",
-}
+#: ItTask::STATUSES и ::CURRENCIES; подписи статусов — cabinet.it_tasks.statuses
+IT_TASK_STATUSES = ("active", "closed", "completed", "archived")
 IT_TASK_CURRENCIES = ["UZS", "USD"]
 
 
@@ -1760,11 +1750,19 @@ def it_tasks_props(ctx: Context) -> dict[str, Any]:
                 "id": t["id"],
                 "slug": t["slug"],
                 "title": t["title"],
-                "service_type": SERVICE_TYPES.get(t["service_type"], t["service_type"]),
+                "service_type": (
+                    ctx.t(f"it_tasks.types.{t['service_type']}")
+                    if t["service_type"] in SERVICE_TYPES
+                    else t["service_type"]
+                ),
                 "budget": _budget_label(ctx, t),
                 "deadline": day_month_year(t["deadline_at"], ctx.locale),
                 "status": t["status"],
-                "status_label": IT_TASK_STATUSES.get(t["status"], t["status"]),
+                "status_label": (
+                    ctx.t(f"cabinet.it_tasks.statuses.{t['status']}")
+                    if t["status"] in IT_TASK_STATUSES
+                    else t["status"]
+                ),
                 "responses": t["responses_count"],
                 "views": t["views_count"],
                 "files": t["files_count"],
@@ -1800,7 +1798,7 @@ def it_task_create(request: HttpRequest) -> HttpResponse:
         {
             "task": None,
             "files": [],
-            "serviceTypes": SERVICE_TYPES,
+            "serviceTypes": service_types(ctx),
             "currencies": IT_TASK_CURRENCIES,
         },
         _seo(ctx),
@@ -1858,7 +1856,7 @@ def it_task_edit(request: HttpRequest, task_id: str) -> HttpResponse:
                     [t["id"]],
                 )
             ],
-            "serviceTypes": SERVICE_TYPES,
+            "serviceTypes": service_types(ctx),
             "currencies": IT_TASK_CURRENCIES,
         },
         _seo(ctx),

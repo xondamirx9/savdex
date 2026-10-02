@@ -388,8 +388,8 @@ def до(дней: int) -> str:
             {"kind": "plan", "id": "PLAN:business"},
             ("subscription", "Тариф «Business» на 30 дн.", 1000),
         ),
-        # Бесплатный тариф заказывается так же — счётом на 0 сум
-        ({"kind": "plan", "id": "PLAN:free"}, ("subscription", "Тариф «Free» на 30 дн.", 0)),
+        # Бесплатный тариф не продаётся: счёта на 0 сум нет
+        ({"kind": "plan", "id": "PLAN:free"}, "бесплатно"),
         (
             {"kind": "credits", "id": "PACK"},
             ("credits", "Пакет «Средний»: 50 раскрытий контактов", 350000),
@@ -426,6 +426,11 @@ def test_заказ(сайт, body, ждём, admin):
         assert база["payments"] == база["notifications"] == []
         return
 
+    if ждём == "бесплатно":
+        assert сессия(итог)["warning"] == "Этот тариф бесплатный — счёт на него не нужен."
+        assert база["payments"] == база["notifications"] == []
+        return
+
     назначение, описание, сумма = ждём
     сумма_текст = f"{сумма:,}".replace(",", " ")
 
@@ -448,6 +453,28 @@ def test_заказ(сайт, body, ждём, admin):
         assert действия(база)[1][3] == {"after": {"number": "SVD-000001"}}
     else:
         assert база["journal"] == []
+
+
+def test_уведомление_о_счёте_на_языке_страницы(сайт):
+    """Заказ со страницы /en — заголовок и текст уведомления по-английски."""
+    итог = отправить(
+        сайт,
+        "/en/cabinet/billing/order",
+        сброс(),
+        снимок,
+        uid=владелец(),
+        body={"kind": "plan", "id": _plan("business")},
+        headers=inertia(),
+    )
+
+    assert счета(итог["база"]) == [("subscription", "SVD-000001", 1000, "invoice", None, "pending")]
+    assert владельцу(итог["база"]) == [
+        (
+            "Invoice SVD-000001 has been created",
+            "The “Business” plan for 30 days. Pay within 14 days — access opens once "
+            "the money arrives.",
+        )
+    ]
 
 
 @pytest.mark.parametrize("счёт", ["business", "pack"])

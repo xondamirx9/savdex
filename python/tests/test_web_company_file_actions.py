@@ -233,6 +233,7 @@ XLSX = _ooxml(
 ]
 ДОКУМЕНТ = "Документ загружен и отправлен на проверку"
 МАТЕРИАЛ = "Файл загружен и виден партнёрам на визитке"
+СКРЫТЫЙ = "Файл загружен. На визитке он скрыт — партнёры его не видят"
 
 
 def _сессия(итог: dict[str, Any]) -> dict[str, Any]:
@@ -294,7 +295,10 @@ def test_загрузка(сайт, поля, файл, ждём, admin):
         "mine": sorted([f"<random>.{ext}", "old-file.pdf"]),
         "other": ["old-file.pdf"],
     }
-    assert _сессия(итог)["success"] == (ДОКУМЕНТ if модерация == "pending" else МАТЕРИАЛ)
+    # Скрытый материал партнёрам не виден — сообщение об этом и говорит
+    assert _сессия(итог)["success"] == (
+        ДОКУМЕНТ if модерация == "pending" else МАТЕРИАЛ if показ else СКРЫТЫЙ
+    )
     # Журнал — только у сотрудника
     assert [j[:4] for j in база["journal"]] == (
         [("created", "documents", "App\\Models\\CompanyDocument", поля["title"])] if admin else []
