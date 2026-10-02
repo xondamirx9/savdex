@@ -1619,3 +1619,222 @@ html[data-theme="dark"] .sx-kind-buy {
     padding-left: 0;
     padding-right: 0;
 }
+
+/* ── Главная страница: секции по группам ── */
+
+.sx-landing {
+    display: grid;
+    gap: 20px;
+    max-width: 1100px;
+}
+
+.sx-landing-intro {
+    margin: 0;
+    color: var(--sx-text-2);
+    font-size: 14px;
+    max-width: 70ch;
+}
+
+.sx-landing-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: var(--sx-muted);
+    font-size: 12px;
+}
+
+.sx-landing-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sx-landing-group {
+    background: var(--sx-surface);
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    overflow: hidden;
+}
+
+.sx-landing-group-head {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--sx-border-soft);
+}
+
+#content .sx-landing-group-head h2 {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: var(--sx-text);
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.sx-landing-group-head p {
+    margin: 4px 0 0;
+    color: var(--sx-muted);
+    font-size: 13px;
+}
+
+.sx-landing-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sx-landing-row {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--sx-border-soft);
+    list-style: none;
+}
+
+.sx-landing-row:last-child {
+    border-bottom: 0;
+}
+
+.sx-landing-row:hover {
+    background: var(--sx-surface-2);
+}
+
+.sx-landing-row.is-hidden .sx-landing-main {
+    opacity: .6;
+}
+
+.sx-landing-place {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--sx-surface-2);
+    box-shadow: inset 0 0 0 1px var(--sx-border);
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.sx-landing-main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+a.sx-landing-name:link,
+a.sx-landing-name:visited {
+    color: var(--sx-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+a.sx-landing-name:hover {
+    color: var(--sx-accent-text);
+}
+
+.sx-landing-heading {
+    overflow: hidden;
+    color: var(--sx-text-2);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sx-landing-heading.is-note {
+    color: var(--sx-muted);
+    font-style: italic;
+}
+
+.sx-landing-langs {
+    display: flex;
+    gap: 4px;
+}
+
+.sx-lang {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: var(--sx-surface-2);
+    color: var(--sx-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.sx-lang.is-own {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+}
+
+.sx-landing-state {
+    min-width: 108px;
+}
+
+a.sx-landing-edit:link,
+a.sx-landing-edit:visited {
+    padding: 6px 12px;
+    border-radius: var(--sx-control-radius);
+    background: var(--sx-surface);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    color: var(--sx-text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+a.sx-landing-edit:hover {
+    background: var(--sx-surface-2);
+}
+
+@media (max-width: 900px) {
+    .sx-landing-row {
+        grid-template-columns: 32px minmax(0, 1fr) auto;
+        row-gap: 8px;
+    }
+
+    .sx-landing-state {
+        grid-column: 3;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    a.sx-landing-edit {
+        grid-column: 3;
+        grid-row: 2;
+        justify-self: end;
+    }
+
+    /* Языки — своей строкой под текстом, не наезжают на кнопку */
+    .sx-landing-langs {
+        grid-column: 2 / -1;
+        grid-row: 3;
+        flex-wrap: wrap;
+    }
+}
+
+/* Телефон: ссылки сотрудника под названием, а не поверх хлебных крошек */
+@media (max-width: 767px) {
+    /* #container — колонка флекса: без flex-shrink шапку сжимало до
+       64 px, и ссылки сотрудника налезали на хлебные крошки */
+    #header {
+        flex-shrink: 0;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 12px 16px;
+    }
+
+    #user-tools {
+        margin: 0;
+        text-align: left;
+        line-height: 1.6;
+        white-space: normal;
+    }
+}

@@ -77,6 +77,35 @@ LANDING_FIELDS: dict[str, dict[str, tuple[str, str]]] = {
     },
 }
 
+#: Группы секций в списке — в том порядке, в каком их видит посетитель,
+#: сверху вниз; у каждой — что она делает на странице
+LANDING_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "Верх страницы",
+        "Первое, что видит посетитель: заголовок с поиском и цифры площадки.",
+        ("hero", "stats"),
+    ),
+    (
+        "Товары и компании",
+        "Подборки с площадки: категории, VIP, свежие товары, запросы и поставщики. "
+        "Карточки подбираются сами, здесь — только заголовки секций.",
+        ("categories", "vip", "products", "requests", "suppliers"),
+    ),
+    (
+        "О площадке",
+        "Объясняет, как всё устроено, и снимает сомнения: шаги, отзывы, вопросы и новости.",
+        ("how", "reviews", "faq", "news"),
+    ),
+    (
+        "Низ страницы",
+        "Последний призыв зарегистрироваться перед подвалом.",
+        ("cta",),
+    ),
+)
+
+#: Что показать вместо заголовка у секции без текстов
+NO_TEXT_NOTE = {"stats": "Цифры считаются сами — можно только скрыть"}
+
 #: Секции, у которых текст — пункты «название + пояснение»
 WITH_ITEMS = frozenset({"how", "faq"})
 
@@ -166,6 +195,71 @@ class LandingBlockAdmin(SavdexModelAdmin):
     list_display = ("name", "texts", "languages", "state")
     ordering = ("sort", "id")
     list_per_page = 50
+
+    change_list_template = "admin/site/landingblock/change_list.html"
+
+    def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> Any:  # noqa: ANN401
+        return super().changelist_view(
+            request, {"landing_groups": self.landing_groups(), **(extra_context or {})}
+        )
+
+    @staticmethod
+    def landing_groups() -> list[dict[str, Any]]:
+        """
+        Секции по группам, сверху вниз, как на странице: номер места,
+        нынешний заголовок, что правится, языки и видимость.
+        """
+        from django.urls import reverse
+
+        blocks = list(LandingBlock.objects.order_by("sort", "id"))
+        place = {block.key: number for number, block in enumerate(blocks, start=1)}
+        by_key = {block.key: block for block in blocks}
+        listed: set[str] = set()
+        groups = []
+
+        def row(block: LandingBlock) -> dict[str, Any]:
+            fields = LANDING_FIELDS.get(block.key, {})
+            own: set[str] = set()
+
+            for column in ("heading_i18n", "body_i18n"):
+                own |= set((getattr(block, column) or {}).keys())
+
+            if not block.can_hide:
+                visibility = "always"
+            else:
+                visibility = "visible" if block.is_visible else "hidden"
+
+            heading = (block.heading or "").strip()
+
+            return {
+                "place": place[block.key],
+                "name": block.name,
+                "url": reverse("savdex_admin:site_landingblock_change", args=[block.pk]),
+                "heading": heading if len(heading) <= 90 else heading[:90].rstrip() + "…",
+                "note": NO_TEXT_NOTE.get(block.key, ""),
+                "fields": ", ".join(label.lower() for label, _ in fields.values()),
+                "languages": (
+                    [{"code": code, "own": code == "ru" or code in own} for code in LOCALES]
+                    if fields
+                    else []
+                ),
+                "visibility": visibility,
+            }
+
+        for title, hint, keys in LANDING_GROUPS:
+            rows = [row(by_key[key]) for key in keys if key in by_key]
+            listed.update(keys)
+
+            if rows:
+                groups.append({"title": title, "hint": hint, "rows": rows})
+
+        # Секция, которой нет в группах (появилась в базе позже), не теряется
+        rest = [row(block) for block in blocks if block.key not in listed]
+
+        if rest:
+            groups.append({"title": "Другие секции", "hint": "", "rows": rest})
+
+        return groups
 
     def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
         fields = tuple(LANDING_FIELDS.get(obj.key, {}) if obj is not None else ())
