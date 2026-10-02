@@ -1,14 +1,10 @@
 {% load i18n %}
 {% comment %}
-  Меню слева — как у Django (admin/nav_sidebar.html), плюс одно: место
-  прокрутки меню переживает переход по разделам.
-
-  Каждый щелчок в меню — новая страница, и Django рисует меню с самого
-  верха: открытый раздел внизу списка уезжал из виду. Перед уходом со
-  страницы прокрутка меню запоминается во вкладке (sessionStorage) и
-  ставится обратно сразу за меню, до того как страница дорисуется.
-  Если открытый раздел всё равно не виден (пришли не из меню) — меню
-  прокручивается к нему.
+  Как у Django (admin/nav_sidebar.html), плюс меню не прыгает наверх при
+  переходе между разделами: прокрутка меню запоминается перед уходом
+  со страницы и ставится обратно сразу, как меню нарисовано, — до первой
+  отрисовки, без рывка. Если открытый раздел всё равно не виден (пришли
+  не из меню) — меню прокручивается к нему.
 {% endcomment %}
 <button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
 <nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
@@ -20,10 +16,12 @@
 <script>
   (function () {
     var nav = document.getElementById('nav-sidebar');
-    var key = 'savdex.navSidebarScroll';
+    var KEY = 'savdex.admin.navScroll';
+
+    if (!nav) return;
 
     try {
-      var saved = sessionStorage.getItem(key);
+      var saved = sessionStorage.getItem(KEY);
       if (saved !== null) nav.scrollTop = parseInt(saved, 10) || 0;
     } catch (e) {}
 
@@ -42,10 +40,12 @@
       if (hidden()) current.scrollIntoView({block: 'nearest'});
     }
 
-    window.addEventListener('pagehide', function () {
-      try {
-        sessionStorage.setItem(key, String(nav.scrollTop));
-      } catch (e) {}
-    });
+    function remember() {
+      try { sessionStorage.setItem(KEY, String(nav.scrollTop)); } catch (e) {}
+    }
+
+    // Нажатие в меню — сохраняем сразу; pagehide — для переходов иначе
+    nav.addEventListener('click', remember);
+    window.addEventListener('pagehide', remember);
   })();
 </script>

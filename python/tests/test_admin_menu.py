@@ -9,7 +9,7 @@
 - «хлебные крошки» называют группу меню и ведут на всю группу
   (/py/admin/tenders/ — все «Данные»), хотя get_app_list с приложением
   по-прежнему отдаёт только его разделы, как у Django;
-- меню помнит прокрутку между страницами (savdex.navSidebarScroll).
+- меню помнит прокрутку между страницами (savdex.admin.navScroll).
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def test_открытая_группа():
     assert '<span class="section">Данные</span>' in html
     assert "Models in the" not in html, "у группы нет своей страницы — заголовок без ссылки"
     assert 'class="model-tender current-model"' in html
-    assert "savdex.navSidebarScroll" in html
+    assert "savdex.admin.navScroll" in html
 
 
 def test_страница_приложения_как_у_django():
