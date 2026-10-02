@@ -163,6 +163,10 @@ def _инн(текст: str) -> dict[str, list[str]]:
     return {"tin": [текст]}
 
 
+#: Текст правила exists — общий, без имени поля
+НЕ_НАЙДЕНО = "Выбранное значение не найдено."
+
+
 @pytest.mark.parametrize(
     ("правка", "поля", "ждём"),
     [
@@ -202,16 +206,16 @@ def _инн(текст: str) -> dict[str, list[str]]:
         (
             {"country_id": 99999, "city_id": 99998},
             {},
-            {"country_id": ["validation.exists"], "city_id": ["validation.exists"]},
+            {"country_id": [НЕ_НАЙДЕНО], "city_id": [НЕ_НАЙДЕНО]},
         ),
-        ({"primary_role": "seller"}, {}, {"primary_role": ["validation.in"]}),
+        ({"primary_role": "seller"}, {}, {"primary_role": ["Выберите значение из списка."]}),
         # Строка вместо списка: не массив, а max:5 у строки — длина «cement»
         (
             {"categories": "cement"},
             {},
             {
                 "categories": [
-                    "validation.array",
+                    "Неверный формат значения.",
                     "Не больше пяти категорий — иначе профиль перестаёт что-либо говорить "
                     "о компании",
                 ]
@@ -230,16 +234,16 @@ def _инн(текст: str) -> dict[str, list[str]]:
         (
             {"categories": [99999, "abc"]},
             {},
-            {"categories.0": ["validation.exists"], "categories.1": ["validation.integer"]},
+            {"categories.0": [НЕ_НАЙДЕНО], "categories.1": ["Укажите целое число."]},
         ),
         # Повтор направления — одна строка
         ({"categories": ["dup"]}, {}, ("legal", "302345678")),
         (
             {"custom_category": "x" * 81, "name": "Ц"},
             {},
-            {"name": ["validation.min.string"], "custom_category": ["validation.max.string"]},
+            {"name": ["Не короче 2 символов."], "custom_category": ["Не длиннее 80 символов."]},
         ),
-        ({"categories": None}, {}, {"categories": ["validation.array"]}),
+        ({"categories": None}, {}, {"categories": ["Неверный формат значения."]}),
     ],
 )
 def test_второй_шаг(сайт, правка, поля, ждём):
@@ -425,15 +429,15 @@ def снимок_отзыва() -> Any:
             {"rating": 6, "body": "коротко", "rating_support": 9},
             {},
             {
-                "rating": ["validation.between.numeric"],
-                "rating_support": ["validation.between.numeric"],
+                "rating": ["Значение должно быть от 1 до 5."],
+                "rating_support": ["Значение должно быть от 0 до 5."],
                 "body": [КОРОТКО],
             },
         ),
         (
             {"rating": "4.5", "body": ["x"]},
             {},
-            {"rating": ["validation.integer"], "body": ["validation.string", КОРОТКО]},
+            {"rating": ["Укажите целое число."], "body": ["Укажите текст.", КОРОТКО]},
         ),
         ({"rating": 4.0, "body": ОТЗЫВ["body"]}, {}, (НА_ПРОВЕРКУ, "moderation")),
         (ОТЗЫВ, {}, (НА_ПРОВЕРКУ, "moderation")),

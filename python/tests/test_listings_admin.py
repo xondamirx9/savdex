@@ -129,6 +129,54 @@ def test_список_без_пустых_черновиков(люди):
     assert список["body"].count('class="field-listing"') == 1
 
 
+def test_вкладки_статусов_и_отборы(люди):
+    company = _компания()
+    _объявление("Цемент М400 навалом", company_id=company)
+    _объявление("Щебень фракции 5-20", status="active", type="demand", company_id=company)
+    _объявление("Удалённое объявление", deleted_at="2026-09-01", company_id=company)
+
+    _, все, покупаю = django(
+        люди["moderator"], ("get", LIST, None), ("get", LIST + "?type=demand", None)
+    )
+
+    # Вкладки над списком с числом; «Ждут проверки» подсвечены
+    assert '<nav class="sx-tabs"' in все["body"]
+    assert 'class="sx-tab is-active" aria-current="page">Все <b>2</b>' in все["body"]
+    assert 'href="?status=moderation" class="sx-tab is-alert">' in все["body"]
+    assert "Ждут проверки <b>1</b>" in все["body"] and "Корзина <b>1</b>" in все["body"]
+    # Тип — понятными словами под названием, источник — под компанией
+    assert "Продаю" in все["body"] and "Покупаю" in все["body"]
+    assert "Предложение" not in все["body"]
+    assert "Добавила компания" in все["body"]
+    # Отбор «Покупаю»: вкладка «Все» его сохраняет, повторное нажатие снимает
+    assert "Щебень фракции 5-20" in покупаю["body"]
+    assert "Цемент М400 навалом" not in покупаю["body"]
+    assert 'href="?type=demand&amp;status=active"' in покупаю["body"]
+    assert 'href="?" class="sx-chip is-active"' in покупаю["body"]
+
+
+def test_залежавшееся_на_проверке_помечено(люди):
+    company = _компания()
+    _объявление("Свежее на проверке", company_id=company)
+    старое = _объявление("Лежит четвёртый день", company_id=company)
+    sql("update listings set created_at = now() - interval '4 days' where id = %s", [старое])
+
+    _, список = django(люди["moderator"], ("get", LIST, None))
+
+    assert "Ждёт проверки 4 дня" in список["body"]
+    assert список["body"].count("sx-waiting") == 1, "поданное сегодня не торопим"
+
+
+def test_срок_датой_словами(люди):
+    company = _компания()
+    pk = _объявление("Активное объявление", status="active", company_id=company)
+    sql("update listings set expires_at = '2026-12-01 12:00' where id = %s", [pk])
+
+    _, список = django(люди["moderator"], ("get", LIST, None))
+
+    assert "1 декабря 2026" in список["body"] and "01.12.2026" not in список["body"]
+
+
 # ── Решения ─────────────────────────────────────────────────────────
 
 
@@ -295,6 +343,33 @@ def test_компания_меняется_в_форме(люди):
     assert передано["status"] == 302, передано["body"][:2000]
     assert sql("select company_id from listings") == [(владелец,)]
     assert журнал("updated")["changes"]["after"]["company_id"] == владелец
+
+
+def test_тип_пачкой(люди):
+    """Загруженные «Предложениями» заявки исправляются пачкой; без права править — нет."""
+    чугун = _объявление("Куплю чугун передельный", source="import")
+    пряжа = _объявление("Требуется поставщик пряжи", source="import")
+    уже = _объявление("Куплю цемент", type="demand")
+    отмечены = {
+        "action": "mark_demand",
+        "_selected_action": [str(чугун), str(пряжа), str(уже)],
+    }
+
+    django(люди["support"], ("post", LIST, отмечены))
+    assert sql("select count(*) from listings where type = 'demand'") == [(1,)]
+
+    _, ответ = django(люди["admin"], ("post", LIST, отмечены))
+
+    assert ответ["status"] == 302
+    assert sql("select id, type from listings order by id") == [
+        (чугун, "demand"),
+        (пряжа, "demand"),
+        (уже, "demand"),
+    ]
+    assert журнал("updated")["changes"] == {
+        "before": {"type": "supply"},
+        "after": {"type": "demand"},
+    }
 
 
 def test_опубликовать_отмеченные(люди):

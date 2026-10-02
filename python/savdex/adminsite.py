@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import functools
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import admin, messages
 from django.contrib.admin import options
+from django.contrib.admin.views.main import ERROR_FLAG, PAGE_VAR
 from django.db import connections, models
 from django.http import Http404, HttpRequest, HttpResponse
 from django.template.response import TemplateResponse
@@ -646,6 +647,61 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     def delete_queryset(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         for obj in queryset:
             self.delete_model(request, obj)
+
+
+def state_tabs(
+    request: HttpRequest,
+    items: Sequence[tuple[str, str, str, int]],
+    *,
+    alert: Collection[str] = (),
+    current: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Вкладки над списком: подпись, число и адрес отбора.
+
+    Раздел открывают с вопросом «что сейчас требует внимания», и ответ
+    должен стоять над списком, а не прятаться в переключателях сбоку.
+    Вкладка ведёт на тот же ?параметр=значение, которым отбирает
+    фильтр: отбор один, видов у него два.
+
+    items — (параметр, значение, подпись, сколько). Пустое значение —
+    вкладка «Все»: она снимает все параметры, которыми отбирают
+    остальные вкладки. Остальные отборы и поиск переходят на вкладку
+    как есть, номер страницы — нет: на другой вкладке своя первая.
+
+    alert — значения, у которых счётчик подсвечивается, пока он не ноль
+    («Ждут проверки»). current — значения отборов, когда они берутся не
+    из адреса: у компаний вкладка по умолчанию зависит от роли.
+    """
+    parameters = {parameter for parameter, value, _, _ in items if value}
+    now = {
+        parameter: (current or {}).get(parameter, request.GET.get(parameter) or "")
+        for parameter in parameters
+    }
+    tabs = []
+
+    for parameter, value, label, count in items:
+        query = request.GET.copy()
+
+        for name in (*parameters, PAGE_VAR, ERROR_FLAG):
+            query.pop(name, None)
+
+        if value:
+            query[parameter] = value
+
+        tabs.append(
+            {
+                "label": label,
+                "count": count,
+                "url": "?" + query.urlencode() if query else "?",
+                "active": all(
+                    now[name] == (value if name == parameter else "") for name in parameters
+                ),
+                "alert": value in alert and count > 0,
+            }
+        )
+
+    return tabs
 
 
 def register(model: type[models.Model], section: str) -> Callable[[type[Any]], type[Any]]:

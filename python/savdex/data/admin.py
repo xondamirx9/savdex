@@ -14,10 +14,11 @@
 (savdex/data/workbook.py, как ListingWorkbookImport), право listings.import;
 «Выгрузить» — ListingExporter, право listings.export.
 
-IT-задачи: список с отбором по статусу и виду услуги, правка (создаются
-только из кабинета — задача от имени заказчика), «Снять» с витрины для
-спама и нарушений (заказчик увидит её в кабинете архивной), «На сайте» у
-открытой, удаление — с правом удалять.
+Заказы на услуги (в базе — it_tasks): состояние вкладками со
+счётчиками над списком, отбор по направлению, правка (создаются
+только из кабинета — заказ от имени заказчика), «Снять с витрины»
+для спама и нарушений (заказчик увидит заказ в кабинете архивным),
+«Открыть на сайте» у открытого, удаление — с правом удалять.
 """
 
 from __future__ import annotations
@@ -27,13 +28,16 @@ from typing import Any, ClassVar
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.admin.views.main import SEARCH_VAR
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.html import format_html
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import SavdexModelAdmin, _admin_of, register, state_tabs
 from savdex.crm.admin import _badge
 from savdex.data.models import (
     IT_STATUSES,
@@ -47,6 +51,7 @@ from savdex.data.models import (
     Listing,
 )
 from savdex.guards import allowed_writes
+from savdex.text import plural
 from savdex.web import locales
 
 
@@ -68,6 +73,13 @@ class StackField(forms.CharField):
 
 class ItTaskForm(forms.ModelForm):  # type: ignore[type-arg]
     stack = StackField(label="Стек", required=False, help_text="Через запятую: Laravel, React…")
+    # Подписи те же, что в списке и на вкладках: раздел должен
+    # называть состояние одинаково везде. Значения в базе прежние.
+    # Список отложен в вызываемое: IT_STATES объявлен ниже формы
+    status = forms.ChoiceField(
+        label="Что сейчас с заказом",
+        choices=lambda: [(code, label) for code, (label, _) in IT_STATES.items()],
+    )
 
     class Meta:
         model = ItTask
@@ -96,12 +108,37 @@ class ItTaskForm(forms.ModelForm):  # type: ignore[type-arg]
         return data
 
 
+#: Состояние заказа словами о деле и цвет плашки.
+#:
+#: В базе лежит «active», «completed» — и так же они назывались
+#: в списке: «Открыта», «Выполнена». Сотруднику поддержки эти слова
+#: ничего не говорят: открыта — кем, выполнена — кем и что дальше.
+#: Здесь то же состояние названо делом: заказ ищет исполнителя, работа
+#: сдана, заказчик закрыл, мы сняли с витрины. Значения в базе
+#: прежние — меняются только подписи, и те же слова стоят в форме
+#: правки, чтобы раздел говорил на одном языке.
+IT_STATES: dict[str, tuple[str, str]] = {
+    "active": ("Ищет исполнителя", "success"),
+    "closed": ("Закрыта заказчиком", "warning"),
+    "completed": ("Работа сдана", "info"),
+    "archived": ("Снята с витрины", "gray"),
+}
+
+
 class ItStatus(admin.SimpleListFilter):
+    """
+    Состояние: отбор тот же, но в правой колонке его нет — он стоит
+    вкладками над списком (шаблон change_list.html раздела). Пустой
+    шаблон вместо выброшенного фильтра: так адрес ?status=active
+    остаётся законным для Django и вкладки работают его же отбором.
+    """
+
     title = "статус"
     parameter_name = "status"
+    template = "admin/data/ittask/status_filter.html"
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return list(IT_STATUSES.items())
+        return [(code, label) for code, (label, _) in IT_STATES.items()]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(status=self.value()) if self.value() else queryset
@@ -121,8 +158,10 @@ class ServiceType(admin.SimpleListFilter):
 @register(ItTask, section="ittasks")
 class ItTaskAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\ItTask"
-    title_list = "IT-задачи"
-    title_change = "IT-задача"
+    title_list = "Заказы на услуги"
+    title_change = "Заказ на услугу"
+
+    change_list_template = "admin/data/ittask/change_list.html"
 
     form = ItTaskForm
     fieldsets = (
@@ -133,16 +172,22 @@ class ItTaskAdmin(SavdexModelAdmin):
         ),
         ("Статус", {"fields": ("status",)}),
     )
-    list_display = ("task", "service", "responses_count", "state", "published", "row_actions")
+    # Направление — строкой под названием, а не своей колонкой:
+    # места в разделе ровно столько, сколько оставляют меню слева
+    # и фильтр справа, и семь колонок в нём наезжали друг на друга
+    list_display = ("task", "responses", "state", "published", "row_actions")
     list_filter = (ItStatus, ServiceType)
     list_select_related = ("company",)
     search_fields = ("title",)
     ordering = ("-created_at", "-id")
     list_per_page = 50
     actions = ("delete_selected",)
+    # Пусто — значит пусто: прочерк Django в колонке действий читался
+    # как «данных нет», хотя с закрытым заказом просто нечего делать
+    empty_value_display = ""
 
     def has_add_permission(self, request: HttpRequest) -> bool:
-        # Задача — от имени заказчика: заводится только в кабинете
+        # Заказ — от имени заказчика: заводится только в кабинете
         return False
 
     def get_actions(self, request: HttpRequest) -> dict[str, Any]:
@@ -158,47 +203,84 @@ class ItTaskAdmin(SavdexModelAdmin):
 
         return attributes
 
-    @admin.display(description="задача", ordering="title")
+    @admin.display(description="что нужно сделать и кому", ordering="title")
     def task(self, obj: ItTask) -> str:
+        """
+        Название, под ним заказчик — и предупреждение, если заказ висит
+        впустую.
+
+        Открытый заказ без единого отклика — единственное, что в этом
+        списке требует вмешательства: либо описание не объясняет, что
+        нужно, либо направление выбрано не то. Раньше это приходилось
+        вылавливать глазами по колонке с нулём.
+        """
         title = obj.title if len(obj.title) <= 80 else obj.title[:80].rstrip() + "..."
         company = obj.company
+        stale = obj.status == "active" and obj.responses_count == 0
 
         return format_html(
-            "{}<br><small>{}</small>",
+            '<span class="sx-row-title">{}</span>'
+            '<span class="sx-row-meta"><small class="sx-row-sub">{}</small>'
+            '<span class="sx-chip">{}</span></span>{}',
             title,
             company.name if company is not None and company.deleted_at is None else "",
+            SERVICE_TYPES.get(obj.service_type, obj.service_type),
+            format_html(
+                '<small class="sx-row-care">Висит без откликов — стоит проверить описание</small>'
+            )
+            if stale
+            else "",
         )
 
-    @admin.display(description="вид услуги", ordering="service_type")
-    def service(self, obj: ItTask) -> str:
-        return SERVICE_TYPES.get(obj.service_type, obj.service_type)
+    @admin.display(description="отклики", ordering="responses_count")
+    def responses(self, obj: ItTask) -> str:
+        """
+        Число со словом: «6 откликов». Голая цифра в колонке «Откликов»
+        читалась как номер чего-то, а ноль — как пустая клетка.
+        """
+        if obj.responses_count == 0:
+            return format_html('<span class="sx-row-sub">нет откликов</span>')
 
-    @admin.display(description="статус", ordering="status")
+        number, word = plural(obj.responses_count, "отклик", "отклика", "откликов").split(" ", 1)
+
+        return format_html('<span class="sx-count"><b>{}</b>{}</span>', number, word)
+
+    @admin.display(description="что сейчас с заказом", ordering="status")
     def state(self, obj: ItTask) -> str:
-        return _badge(
-            IT_STATUSES.get(obj.status, obj.status), "success" if obj.status == "active" else "gray"
-        )
+        label, tone = IT_STATES.get(obj.status, (IT_STATUSES.get(obj.status, obj.status), "gray"))
 
-    @admin.display(description="опубликована", ordering="published_at")
+        return _badge(label, tone)
+
+    @admin.display(description="на витрине", ordering="published_at")
     def published(self, obj: ItTask) -> str:
-        return timezone.localtime(obj.published_at).strftime("%d.%m.%Y") if obj.published_at else ""
+        """Дата словами: «23 мая 2026». «23.05.2026» — это из отчёта."""
+        if obj.published_at is None:
+            return ""
+
+        return date_format(timezone.localtime(obj.published_at), "j E Y")
 
     @admin.display(description="")
     def row_actions(self, obj: ItTask) -> str:
-        """«На сайте» и «Снять» — у открытой задачи."""
+        """
+        «На сайте» и «Снять» — у открытой задачи. У остальных колонка
+        пустая: прочерк в ней читался как «данных нет», хотя делать
+        с закрытой задачей попросту нечего.
+        """
         if obj.status != "active":
             return ""
 
         link = (
             format_html(
-                '<a href="/it-services/{}" target="_blank" rel="noopener">На сайте</a> ', obj.slug
+                '<a class="sx-row-link" href="/it-services/{}" target="_blank" '
+                'rel="noopener">На сайте</a>',
+                obj.slug,
             )
             if obj.slug
             else ""
         )
         button = (
             format_html(
-                '<button type="submit" class="button" formaction="{}" formmethod="post" '
+                '<button type="submit" class="button sx-quiet" formaction="{}" formmethod="post" '
                 "onclick=\"return confirm('Снять задачу с витрины? Заказчик увидит её в кабинете "
                 "архивной.')\">Снять</button>",
                 reverse("savdex_admin:data_ittask_archive", args=[obj.pk]),
@@ -207,14 +289,46 @@ class ItTaskAdmin(SavdexModelAdmin):
             else ""
         )
 
-        return format_html("{}{}", link, button)
+        return format_html('<span class="sx-row-actions">{}{}</span>', link, button)
 
     _can_archive = False
+
+    def _tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
+        """Вкладки состояний: считается то, что откроется при нажатии."""
+        rows = self.get_queryset(request)
+
+        if service := request.GET.get(ServiceType.parameter_name):
+            rows = rows.filter(service_type=service)
+
+        if term := request.GET.get(SEARCH_VAR):
+            rows = rows.filter(title__icontains=term)
+
+        # order_by() обязателен: со списочной сортировкой Django кладёт
+        # поле сортировки в GROUP BY, и каждый заказ считается отдельной
+        # группой — вкладки показывали единицы вместо десятков
+        counts = dict(rows.order_by().values_list("status").annotate(total=Count("pk")))
+        parameter = ItStatus.parameter_name
+
+        return state_tabs(
+            request,
+            [
+                (parameter, "", "Все", sum(counts.values())),
+                *(
+                    (parameter, code, label, counts.get(code, 0))
+                    for code, (label, _) in IT_STATES.items()
+                ),
+            ],
+            # Заказ, который ищет исполнителя, — то, ради чего сюда и
+            # заходят: пусть счётчик видно и с другой вкладки
+            alert=("active",),
+        )
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_archive = self.has_change_permission(request)
 
-        return super().changelist_view(request, extra_context)
+        return super().changelist_view(
+            request, {"sx_tabs": self._tabs(request), **(extra_context or {})}
+        )
 
     def get_urls(self) -> list[Any]:
         return [
@@ -280,6 +394,71 @@ LISTING_TONES = {
     "needs_changes": "warning",
     "rejected": "danger",
 }
+
+#: Цвет метки статуса в списке: тона бейджей → классы sx-pill
+PILL_CLASSES = {"success": "ok", "warning": "warn", "danger": "bad"}
+
+#: Откуда объявление — как скажет человек, а не как названо в коде
+SOURCE_LABELS = {"cabinet": "Добавила компания", "import": "Загружено из Excel"}
+
+#: Вкладки над списком: (параметр, значение, подпись); «Ждут проверки»
+#: подсвечиваются, когда там что-то есть
+LISTING_TABS = (
+    ("status", "", "Все"),
+    ("status", "active", "Активные"),
+    ("status", "moderation", "Ждут проверки"),
+    ("status", "needs_changes", "На исправлении"),
+    ("status", "rejected", "Отклонены"),
+    ("status", "draft", "Черновики"),
+    ("status", "expired", "Истекли"),
+    ("status", "archived", "Сняты"),
+    ("trashed", "1", "Корзина"),
+)
+
+#: Heroicons (outline), как значки меню
+ICON_EXTERNAL = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" '
+    'd="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 '
+    '18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>'
+)
+ICON_EDIT = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" '
+    'd="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 '
+    "1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 "
+    '0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>'
+)
+
+#: Осталось дней — «скоро»: подсвечиваем, чтобы продлили вовремя
+EXPIRES_SOON_DAYS = 7
+
+#: Сколько дней объявление может лежать на проверке, прежде чем это
+#: станет просрочкой: за двое суток продавец успевает решить, что
+#: площадка о нём забыла
+WAITING_TOO_LONG_DAYS = 2
+
+
+def _days_word(days: int) -> str:
+    """1 день, 2 дня, 5 дней."""
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+
+    if 2 <= days % 10 <= 4 and not 12 <= days % 100 <= 14:
+        return "дня"
+
+    return "дней"
+
+
+def _initials(name: str) -> str:
+    """Две буквы для значка компании: без ООО, LLC и кавычек."""
+    words = [
+        w
+        for w in name.replace("«", " ").replace("»", " ").replace('"', " ").split()
+        if w.upper().strip(".") not in {"ООО", "OOO", "LLC", "ИП", "АО", "ЧП", "MCHJ", "XK"}
+    ]
+
+    return "".join(w[0] for w in words[:2]).upper() or "?"
 
 
 def _category_choices() -> list[tuple[int, str]]:
@@ -565,7 +744,11 @@ class WorkbooksForm(forms.Form):
         choices=[("supply", "Предложение (продаю)"), ("demand", "Запрос (куплю)")],
         initial="supply",
         required=False,
-        help_text="Когда в книге нет столбца «Тип» или ячейка в нём пуста.",
+        help_text=(
+            "Когда в книге нет столбца «Тип» или ячейка в нём пуста, а заголовок не "
+            "начинается с «Куплю», «Требуется», «Ищем» или «Продам», «Предлагаем» — "
+            "по таким тип ставится сам."
+        ),
     )
 
     def clean_default_company(self) -> int | None:
@@ -626,9 +809,15 @@ class TransferForm(forms.Form):
         return found
 
 
+#: Фильтр без блока в боковой колонке: им управляют вкладки и кнопки
+#: над списком — колонка справа отнимала 240 px у таблицы
+HIDDEN_FILTER = "admin/data/listing/hidden_filter.html"
+
+
 class ListingState(admin.SimpleListFilter):
     title = "статус"
     parameter_name = "status"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
         return list(LISTING_STATUSES.items())
@@ -638,22 +827,24 @@ class ListingState(admin.SimpleListFilter):
 
 
 class ListingType(admin.SimpleListFilter):
-    title = "тип"
+    title = "продаю или покупаю"
     parameter_name = "type"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return [("supply", "Предложение"), ("demand", "Запрос")]
+        return [("supply", "Продаю"), ("demand", "Покупаю")]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(type=self.value()) if self.value() else queryset
 
 
 class ListingSource(admin.SimpleListFilter):
-    title = "источник"
+    title = "откуда"
     parameter_name = "source"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return list(LISTING_SOURCES.items())
+        return [(code, SOURCE_LABELS.get(code, label)) for code, label in LISTING_SOURCES.items()]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(source=self.value()) if self.value() else queryset
@@ -664,6 +855,7 @@ class Trashed(admin.SimpleListFilter):
 
     title = "корзина"
     parameter_name = "trashed"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
         return [("1", "В корзине")]
@@ -687,18 +879,24 @@ class ListingAdmin(SavdexModelAdmin):
     list_display = (
         "listing",
         "company_name",
-        "kind",
         "state",
-        "views_count",
-        "unlocks_count",
+        "views",
+        "contacts",
         "until",
+        "row_actions",
     )
     list_filter = (ListingState, ListingType, ListingSource, Trashed)
     list_select_related = ("company",)
     search_fields = ("title", "company__name")
     ordering = ("-created_at", "-id")
     list_per_page = 50
-    actions = ("delete_selected", "approve_selected", "transfer_to_company")
+    actions = (
+        "delete_selected",
+        "approve_selected",
+        "transfer_to_company",
+        "mark_demand",
+        "mark_supply",
+    )
 
     def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
         languages = tuple(
@@ -766,9 +964,45 @@ class ListingAdmin(SavdexModelAdmin):
 
     @admin.display(description="объявление", ordering="title")
     def listing(self, obj: Listing) -> str:
-        title = obj.title if len(obj.title) <= 60 else obj.title[:60].rstrip() + "..."
+        # Под названием — продаёт компания или покупает, и категория:
+        # отдельная колонка «Тип» с «Предложение/Запрос» была непонятна
+        kind = (
+            '<span class="sx-kind sx-kind-buy">Покупаю</span>'
+            if obj.type == "demand"
+            else '<span class="sx-kind sx-kind-sell">Продаю</span>'
+        )
 
-        return format_html("{}<br><small>{}</small>", title, self._category_name(obj.category_id))
+        return format_html(
+            '<span class="sx-title">{}</span><span class="sx-sub">{}{}</span>{}',
+            obj.title,
+            format_html(kind),
+            self._category_name(obj.category_id),
+            self._waiting(obj),
+        )
+
+    @staticmethod
+    def _waiting(obj: Listing) -> str:
+        """
+        Объявление, которое ждёт уже нас.
+
+        Очередь проверки видна на вкладке, но внутри неё всё выглядит
+        одинаково, а разница есть: поданное час назад подождёт, а то,
+        что лежит третий день, — уже просрочка, продавец ждёт ответа
+        и не понимает, почему его нет.
+        """
+        if obj.status != "moderation" or obj.created_at is None:
+            return ""
+
+        days = (timezone.localdate() - timezone.localtime(obj.created_at).date()).days
+
+        if days < WAITING_TOO_LONG_DAYS:
+            return ""
+
+        return format_html(
+            '<span class="sx-sub sx-waiting">Ждёт проверки {} {} — продавец ждёт ответа</span>',
+            days,
+            _days_word(days),
+        )
 
     @staticmethod
     def _category_name(category_id: int | None) -> str:
@@ -780,24 +1014,84 @@ class ListingAdmin(SavdexModelAdmin):
 
     @admin.display(description="компания", ordering="company__name")
     def company_name(self, obj: Listing) -> str:
-        return obj.company.name if obj.company is not None else "—"
+        name = obj.company.name if obj.company is not None else "—"
+        source = SOURCE_LABELS.get(obj.source, LISTING_SOURCES.get(obj.source, ""))
 
-    @admin.display(description="тип", ordering="type")
-    def kind(self, obj: Listing) -> str:
-        return _badge(
-            "Запрос" if obj.type == "demand" else "Предложение",
-            "warning" if obj.type == "demand" else "info",
+        return format_html(
+            '<span class="sx-company"><span class="sx-avatar" aria-hidden="true">{}</span>'
+            '<span class="sx-company-text"><span class="sx-company-name">{}</span>'
+            '<span class="sx-sub">{}</span></span></span>',
+            _initials(name) if obj.company is not None else "—",
+            name,
+            source,
         )
 
     @admin.display(description="статус", ordering="status")
     def state(self, obj: Listing) -> str:
-        return _badge(
-            LISTING_STATUSES.get(obj.status, obj.status), LISTING_TONES.get(obj.status, "gray")
+        tone = PILL_CLASSES.get(LISTING_TONES.get(obj.status, ""), "gray")
+
+        return format_html(
+            '<span class="sx-pill sx-pill-{}">{}</span>',
+            tone,
+            LISTING_STATUSES.get(obj.status, obj.status),
         )
 
-    @admin.display(description="до", ordering="expires_at")
+    @admin.display(description="просмотры", ordering="views_count")
+    def views(self, obj: Listing) -> int:
+        return obj.views_count
+
+    @admin.display(description="открыли контакты", ordering="unlocks_count")
+    def contacts(self, obj: Listing) -> int:
+        return obj.unlocks_count
+
+    @admin.display(description="активно до", ordering="expires_at")
     def until(self, obj: Listing) -> str:
-        return timezone.localtime(obj.expires_at).strftime("%d.%m.%Y") if obj.expires_at else "—"
+        if obj.expires_at is None:
+            return "—"
+
+        date = timezone.localtime(obj.expires_at)
+        days = (date.date() - timezone.localdate()).days
+
+        if obj.status != "active":
+            note, soon = "", False
+        elif days < 0:
+            note, soon = "срок вышел", True
+        elif days == 0:
+            note, soon = "последний день", True
+        else:
+            note, soon = f"осталось {days} {_days_word(days)}", days <= EXPIRES_SOON_DAYS
+
+        return format_html(
+            '<span class="sx-until{}"><span>{}</span><span class="sx-sub">{}</span></span>',
+            " is-soon" if soon else "",
+            # Словами, как в «Заказах на услуги»: «22.09.2026» сверяют
+            # с календарём, «22 сентября 2026» читают
+            date_format(date, "j E Y"),
+            note,
+        )
+
+    @admin.display(description="")
+    def row_actions(self, obj: Listing) -> str:
+        """«Открыть на сайте» — у опубликованных; «Изменить» — всегда."""
+        edit = reverse("savdex_admin:data_listing_change", args=[obj.pk])
+        site = (
+            format_html(
+                '<a href="/listing/{}" class="sx-icon-btn" target="_blank" rel="noopener" '
+                'title="Открыть на сайте" aria-label="Открыть на сайте">{}</a>',
+                obj.slug,
+                format_html(ICON_EXTERNAL),
+            )
+            if obj.status == "active" and obj.slug and obj.deleted_at is None
+            else ""
+        )
+
+        return format_html(
+            '<span class="sx-row-actions">{}<a href="{}" class="sx-icon-btn" title="Изменить" '
+            'aria-label="Изменить">{}</a></span>',
+            site,
+            edit,
+            format_html(ICON_EDIT),
+        )
 
     # ── Удаление: в корзину; вернуть и насовсем — суперадмин ──
 
@@ -817,7 +1111,7 @@ class ListingAdmin(SavdexModelAdmin):
 
     # ── Публикация пачкой ──
 
-    @admin.action(description="Опубликовать отмеченные (одобрить)")
+    @admin.action(description="Одобрить")
     def approve_selected(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         """
         «Одобрить» для всех отмеченных сразу — как кнопка на странице
@@ -846,9 +1140,50 @@ class ListingAdmin(SavdexModelAdmin):
             messages.SUCCESS if approved else messages.WARNING,
         )
 
+    # ── Тип пачкой: исправить загруженное с неверным типом ──
+
+    def _set_type(self, request: HttpRequest, queryset: Any, kind: str) -> None:  # noqa: ANN401
+        """
+        Отмеченным — «Покупаю» (demand) или «Продаю» (supply). Книги заявок
+        без столбца «Тип» раньше загружались «Предложениями»; так их
+        исправляют пачкой. Каждая смена — строка журнала «изменено».
+        """
+        stamp = timezone.now().replace(microsecond=0)
+        changed = 0
+
+        for listing in queryset:
+            if listing.type == kind:
+                continue
+
+            before = listing.type
+
+            with allowed_writes("listings"):
+                Listing.objects.filter(pk=listing.pk).update(type=kind, updated_at=stamp)
+
+            listing.type = kind
+            self.journal(
+                request, "updated", listing, {"before": {"type": before}, "after": {"type": kind}}
+            )
+            changed += 1
+
+        label = "Покупаю" if kind == "demand" else "Продаю"
+        self.message_user(
+            request,
+            f"Тип «{label}»: {changed}." if changed else f"Все отмеченные уже «{label}».",
+            messages.SUCCESS if changed else messages.INFO,
+        )
+
+    @admin.action(description="Сделать «Покупаю»", permissions=["change"])
+    def mark_demand(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        self._set_type(request, queryset, "demand")
+
+    @admin.action(description="Сделать «Продаю»", permissions=["change"])
+    def mark_supply(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        self._set_type(request, queryset, "supply")
+
     # ── Передача настоящему владельцу ──
 
-    @admin.action(description="Передать компании…", permissions=["change"])
+    @admin.action(description="Передать другой компании", permissions=["change"])
     def transfer_to_company(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         """
         Отмеченные объявления — другой компании: заявки, загруженные без
@@ -1093,12 +1428,71 @@ class ListingAdmin(SavdexModelAdmin):
 
         return response
 
+    def status_tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
+        """Вкладки над списком: статус или корзина, с числом объявлений."""
+        base = Listing.objects.exclude(status="draft", title="")
+        alive = base.filter(deleted_at__isnull=True)
+        counts = dict(alive.values_list("status").annotate(n=Count("pk")))
+        counts[""] = sum(counts.values())
+        counts["trashed"] = base.filter(deleted_at__isnull=False).count()
+
+        return state_tabs(
+            request,
+            [
+                (
+                    parameter,
+                    value,
+                    label,
+                    counts.get("trashed" if parameter == "trashed" else value, 0),
+                )
+                for parameter, value, label in LISTING_TABS
+            ],
+            alert=("moderation",),
+        )
+
+    @staticmethod
+    def filter_chips(request: HttpRequest) -> list[dict[str, Any]]:
+        """
+        Кнопки-отборы над списком: «Продаю / Покупаю» и откуда объявление.
+        Нажатие включает отбор, повторное — снимает; в группе выбран один.
+        """
+        groups = (
+            ("type", [("supply", "Продаю"), ("demand", "Покупаю")]),
+            ("source", list(SOURCE_LABELS.items())),
+        )
+        chips = []
+
+        for parameter, options in groups:
+            current = request.GET.get(parameter, "")
+
+            for value, label in options:
+                query = request.GET.copy()
+
+                for name in (parameter, "p", "e"):
+                    query.pop(name, None)
+
+                if current != value:
+                    query[parameter] = value
+
+                chips.append(
+                    {
+                        "label": label,
+                        "url": "?" + query.urlencode() if query else "?",
+                        "active": current == value,
+                        "group_start": value == options[0][0],
+                    }
+                )
+
+        return chips
+
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         query = request.GET.urlencode()
 
         return super().changelist_view(
             request,
             {
+                "status_tabs": self.status_tabs(request),
+                "filter_chips": self.filter_chips(request),
                 "can_import": _admin_of(request).can("listings.import"),
                 "import_url": reverse("savdex_admin:data_listing_import"),
                 "can_export": _admin_of(request).can("listings.export"),

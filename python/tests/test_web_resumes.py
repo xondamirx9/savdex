@@ -207,8 +207,8 @@ def test_фильтр_по_городу(сайт):
 
 
 def test_подписи_назад_вперёд(сайт):
-    """Своего файла pagination у площадки нет: перевод — только английский."""
-    подписи = (("/resumes", "pagination.previous"), ("/en/resumes", "&laquo; Previous"))
+    """По-английски — подпись фреймворка, на русском — из словаря интерфейса."""
+    подписи = (("/resumes", "&laquo; Назад"), ("/en/resumes", "&laquo; Previous"))
 
     for path, previous in подписи:
         assert список(сайт, path)["resumes"]["links"][0]["label"] == previous

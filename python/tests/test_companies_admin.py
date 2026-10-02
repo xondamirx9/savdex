@@ -3,8 +3,11 @@
 разбор таблицы — tests/test_company_emblem.py, test_company_import.py;
 здесь — кнопки и страница загрузки).
 
-- список: ИНН под названием, вкладки «Поставщики» и «Покупатели» (у
-  «оба» — в обеих), менеджер поставщиков открывает свою по умолчанию;
+- список: роль, город, форма и ИНН строкой под названием; вкладки со
+  счётчиками («Поставщики», «Покупатели», «Ждут проверки»,
+  «Заблокированы», «Корзина»), у «оба» — в обеих ролевых, менеджер
+  поставщиков открывает свою по умолчанию; пометка у непроверенной
+  компании с объявлениями на витрине;
 - новая компания: адрес и search_text сами; правка формой — строка журнала;
 - верификация — владельцу уведомление; партнёрство — вид и порядок;
 - логотип: загрузить и снять;
@@ -83,11 +86,79 @@ def test_список_и_вкладки(люди):
     )
     _, менеджер = django(люди["supplier_manager"], ("get", LIST, None))
 
-    assert "ИНН 123456789" in все["body"] and "ИНН не указан" in все["body"]
+    assert "ИНН 123456789" in все["body"] and "без ИНН" in все["body"]
     assert "Поставщик Цемента" not in покупатели["body"]
     assert "Закупщик Кирпича" in покупатели["body"] and "Торговый Дом" in покупатели["body"]
     assert "Закупщик Кирпича" not in менеджер["body"], "своя вкладка по умолчанию"
     assert "Торговый Дом" in менеджер["body"]
+
+
+def _вкладки(body: str) -> dict[str, int]:
+    """Подпись вкладки → её счётчик."""
+    import re
+
+    return {
+        подпись.strip(): int(число)
+        for подпись, число in re.findall(r'class="sx-tab[^"]*"[^>]*>([^<]+)<b>(\d+)</b>', body)
+    }
+
+
+def _объявление(company: int, slug: str | None = None, **поля: Any) -> None:
+    строка = {"status": "active", "type": "supply", "currency": "UZS", **поля}
+    columns = ["company_id", "title", "slug", *строка]
+    sql(
+        f"insert into listings ({', '.join(columns)}, created_at, updated_at) "
+        f"values ({', '.join(['%s'] * len(columns))}, now(), now())",
+        [company, "Цемент М400", slug or f"cement-{company}", *строка.values()],
+    )
+
+
+def test_вкладки_со_счётчиками(люди):
+    поставщик = _компания("Поставщик Цемента", primary_role="supplier", verification_level=2)
+    _компания("Закупщик Кирпича", primary_role="buyer", verification_level=2)
+    _компания("Заблокированная", primary_role="supplier", status="blocked", verification_level=2)
+    ждёт = _компания("Без проверки", primary_role="supplier")
+    _компания("Без проверки и без витрины", primary_role="supplier")
+    _объявление(поставщик)
+    _объявление(ждёт)
+
+    _, все, очередь = django(люди["admin"], ("get", LIST, None), ("get", LIST + "?waiting=1", None))
+
+    assert _вкладки(все["body"]) == {
+        "Все": 5,
+        "Поставщики": 4,
+        "Покупатели": 1,
+        "Ждут проверки": 1,
+        "Заблокированы": 1,
+        "Корзина": 0,
+    }
+    # Вкладка показывает ровно то, что обещал счётчик: непроверенную
+    # без объявлений никто не ждёт
+    assert "Без проверки" in очередь["body"]
+    assert "Без проверки и без витрины" not in очередь["body"]
+    assert "Не проверена, а на витрине 1 объявление" in все["body"]
+    assert все["body"].count("sx-waiting") == 1
+
+
+def test_колонки_списка_словами(люди):
+    торгует = _компания("Поставщик Цемента", primary_role="supplier", verification_level=2)
+    sql("update companies set rating = 4.7, reviews_count = 23 where id = %s", [торгует])
+    _объявление(торгует)
+    _объявление(торгует, slug="cement-2")
+    _компания(
+        "Заблокированная",
+        primary_role="supplier",
+        status="blocked",
+        blocked_reason="Поддельные документы",
+        verification_level=2,
+    )
+
+    _, список = django(люди["admin"], ("get", LIST, None))
+
+    assert "<b>2</b>объявления" in список["body"]
+    assert "ничего не разместила" in список["body"]
+    assert "23 отзыва" in список["body"] and "пока нет" in список["body"]
+    assert "Поддельные документы" in список["body"], "видно, за что заблокирована"
 
 
 def _форма(**поля: str) -> dict[str, str]:

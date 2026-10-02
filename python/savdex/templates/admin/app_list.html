@@ -4,9 +4,9 @@
   как в меню Filament. Значок выбирает SavdexAdminSite.get_app_list.
   Ссылки «Добавить» (зелёный плюс) нет: добавляют кнопкой в разделе.
 
-  В меню слева и на главной — группы меню (MENU_GROUPS), а не приложения:
-  у группы нет своей страницы (app_url пустой), заголовок — подпись без
-  ссылки, а открытую группу отмечает app.current.
+  В меню слева и на главной — группы меню (MENU_GROUPS), а не приложения.
+  Название группы — подпись, не ссылка: у группы нет своей страницы
+  (app_url пустой), а открытую группу отмечает app.current.
 {% endcomment %}
 
 {% if app_list %}
@@ -14,11 +14,7 @@
     <div class="app-{{ app.app_label }} module{% if app.current or app.app_url and app.app_url in request.path|urlencode %} current-app{% endif %}">
       <table>
         <caption>
-          {% if app.app_url %}
-            <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">{{ app.name }}</a>
-          {% else %}
-            <span class="section">{{ app.name }}</span>
-          {% endif %}
+          <span class="section">{{ app.name }}</span>
         </caption>
         <thead class="visually-hidden">
           <tr>

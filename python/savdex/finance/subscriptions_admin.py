@@ -37,7 +37,6 @@ from django.utils.html import format_html
 
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.billing.models import Plan
-from savdex.crm.admin import _badge
 from savdex.finance.models import SOURCES, SUBSCRIPTION_STATUSES, Subscription
 from savdex.moderation.services import context_of
 from savdex.web import eloquent, orders
@@ -45,6 +44,16 @@ from savdex.web.cabinet import _rows
 
 SOURCE_TONES = {"manual": "warning", "promo": "info", "payment": "success"}
 STATUS_TONES = {"active": "success", "cancelled": "gray"}
+
+#: Тон метки → класс sx-pill (как в списке объявлений)
+PILL = {"success": "ok", "warning": "warn", "danger": "bad", "info": "info", "gray": "gray"}
+
+#: Осталось дней — «скоро кончится»: подсвечиваем
+EXPIRES_SOON_DAYS = 7
+
+
+def _pill(label: str, tone: str) -> str:
+    return format_html('<span class="sx-pill sx-pill-{}">{}</span>', PILL.get(tone, "gray"), label)
 
 
 def _date(value: datetime | None) -> str:
@@ -181,19 +190,34 @@ class SubscriptionAdmin(SavdexModelAdmin):
 
     # ── Список ──
 
+    def get_list_display(self, request: HttpRequest) -> Any:  # noqa: ANN401
+        """
+        Колонка «Действия» — только тем, кто вправе менять подписки. Право
+        проверяется на каждый запрос: раньше оно лежало в общем объекте
+        раздела, и в одновременных запросах двух сотрудников кнопки
+        показывались не тому.
+        """
+        columns = tuple(super().get_list_display(request))
+
+        return (*columns, "row_actions") if self.has_edit(request) else columns
+
     @admin.display(description="компания", ordering="company__name")
     def company_name(self, obj: Subscription) -> str:
+        tin = getattr(obj, "company_tin", "") or ""
+
         return format_html(
-            "{}<br><small>{}</small>", obj.company.name, getattr(obj, "company_tin", "") or ""
+            '<span class="sx-company-name">{}</span><span class="sx-sub">{}</span>',
+            obj.company.name,
+            f"ИНН {tin}" if tin else "ИНН не указан",
         )
 
     @admin.display(description="тариф", ordering="plan__name")
     def plan_name(self, obj: Subscription) -> str:
-        return _badge(obj.plan.name, "primary")
+        return format_html('<span class="sx-plan">{}</span>', obj.plan.name)
 
     @admin.display(description="откуда", ordering="source")
     def origin(self, obj: Subscription) -> str:
-        badge = _badge(SOURCES.get(obj.source, "Оплачен"), SOURCE_TONES.get(obj.source, "success"))
+        badge = _pill(SOURCES.get(obj.source, "Оплачен"), SOURCE_TONES.get(obj.source, "success"))
 
         # Основание — у всех неоплаченных: у промокода это его код
         if obj.source == "payment":
@@ -201,52 +225,58 @@ class SubscriptionAdmin(SavdexModelAdmin):
 
         who = obj.granted_by.name if obj.granted_by is not None else "администратор"
 
-        return format_html("{}<br><small>{}: {}</small>", badge, who, obj.grant_reason or "—")
+        return format_html(
+            '{}<span class="sx-sub sx-reason">{}: {}</span>', badge, who, obj.grant_reason or "—"
+        )
 
     @admin.display(description="статус", ordering="status")
     def state(self, obj: Subscription) -> str:
-        label = SUBSCRIPTION_STATUSES.get(obj.status, "Истекла")
-        badge = _badge(label, STATUS_TONES.get(obj.status, "danger"))
-
-        if not self._can_edit:
-            return badge
-
-        buttons = format_html(
-            '<br><a class="button" href="{}">Сменить или продлить</a>',
-            reverse("savdex_admin:finance_subscription_extend", args=[obj.pk]),
+        return _pill(
+            SUBSCRIPTION_STATUSES.get(obj.status, "Истекла"),
+            STATUS_TONES.get(obj.status, "danger"),
         )
-
-        if obj.status == "active":
-            buttons = format_html(
-                '{} <a class="button" href="{}">Отменить</a>',
-                buttons,
-                reverse("savdex_admin:finance_subscription_cancel", args=[obj.pk]),
-            )
-
-        return format_html("{}{}", badge, buttons)
 
     @admin.display(description="осталось", ordering="ends_at")
     def left(self, obj: Subscription) -> str:
         if obj.status != "active":
-            return "—"
+            return format_html('<span class="sx-sub">{}</span>', "—")
 
         days = days_left(obj.ends_at)
-        text = "бессрочно" if days is None else f"{days} дн."
-        tone = "danger" if days is not None and days <= 7 else "gray"
 
-        return format_html("{}<br><small>{}</small>", _badge(text, tone), _date(obj.ends_at))
+        if days is None:
+            return format_html('<span class="sx-until"><span>{}</span></span>', "бессрочно")
+
+        return format_html(
+            '<span class="sx-until{}"><span>{}</span><span class="sx-sub">до {}</span></span>',
+            " is-soon" if days <= EXPIRES_SOON_DAYS else "",
+            f"{days} дн.",
+            _date(obj.ends_at),
+        )
 
     @admin.display(description="начало", ordering="started_at")
     def started(self, obj: Subscription) -> str:
         return _date(obj.started_at)
 
-    _can_edit = False
+    @admin.display(description="")
+    def row_actions(self, obj: Subscription) -> str:
+        extend = format_html(
+            '<a class="sx-row-btn" href="{}">Сменить или продлить</a>',
+            reverse("savdex_admin:finance_subscription_extend", args=[obj.pk]),
+        )
+
+        if obj.status != "active":
+            return format_html('<span class="sx-row-actions">{}</span>', extend)
+
+        return format_html(
+            '<span class="sx-row-actions">{}<a class="sx-row-btn is-danger" href="{}">'
+            "Отменить</a></span>",
+            extend,
+            reverse("savdex_admin:finance_subscription_cancel", args=[obj.pk]),
+        )
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
-        self._can_edit = self.has_edit(request)
-
         return super().changelist_view(
-            request, {"can_grant": self._can_edit, **(extra_context or {})}
+            request, {"can_grant": self.has_edit(request), **(extra_context or {})}
         )
 
     # ── Действия ──

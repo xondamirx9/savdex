@@ -1,0 +1,12 @@
+{% comment %}
+  Вкладки над списком со счётчиками — общая разметка разделов, где
+  отбор и есть главный вопрос к списку: объявления, заказы на услуги,
+  компании. Данные готовит savdex.adminsite.state_tabs.
+{% endcomment %}
+{% if sx_tabs %}
+  <nav class="sx-tabs" aria-label="{{ sx_tabs_label|default:'Отбор' }}">
+    {% for tab in sx_tabs %}
+      <a href="{{ tab.url }}" class="sx-tab{% if tab.active %} is-active{% endif %}{% if tab.alert %} is-alert{% endif %}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }} <b>{{ tab.count }}</b></a>
+    {% endfor %}
+  </nav>
+{% endif %}

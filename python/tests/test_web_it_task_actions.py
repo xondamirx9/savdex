@@ -184,11 +184,14 @@ def test_закрыть_и_открыть(сайт, verb, status, admin):
             {"result_url": "shop.uz"},
             {"result_url": ["Ссылка должна начинаться с http:// или https://"]},
         ),
-        ({"result_url": "https://" + "a" * 250 + ".uz"}, {"result_url": ["validation.max.string"]}),
-        ({"result_summary": "x" * 601}, {"result_summary": ["validation.max.string"]}),
+        (
+            {"result_url": "https://" + "a" * 250 + ".uz"},
+            {"result_url": ["Не длиннее 255 символов."]},
+        ),
+        ({"result_summary": "x" * 601}, {"result_summary": ["Не длиннее 600 символов."]}),
         (
             {"contractor_company_id": "abc"},
-            {"contractor_company_id": ["validation.integer", ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]},
+            {"contractor_company_id": ["Укажите целое число.", ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]},
         ),
         ({"contractor": "other"}, {"contractor_company_id": [ТОЛЬКО_ОТКЛИКНУВШИЕСЯ]}),
         # Пустые поля — null

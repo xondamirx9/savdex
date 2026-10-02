@@ -62,7 +62,9 @@ from savdex.crm.models import (
     WithSubject,
 )
 
-#: Цвета значков — как у бейджей Filament
+#: Цвета значков — как у бейджей Filament. Светлая тема: в плашках
+#: (.sx-pill) цвет берёт сама тема, здесь он остался для подписей,
+#: которые красятся текстом, — «не назначен» и подобных
 TONES = {
     "warning": "#b45309",
     "info": "#0369a1",
@@ -90,7 +92,19 @@ DEAL_TONES = {
 
 
 def _badge(label: str, tone: str) -> str:
-    return format_html('<b style="color:{}">{}</b>', TONES.get(tone, TONES["gray"]), label)
+    """
+    Состояние — плашкой, а не цветным словом.
+
+    Цвет задавался здесь же, кодом светлой темы: в тёмной «Выполнена»
+    выходила тёмно-зелёной по тёмно-синему и читалась хуже обычного
+    текста. Теперь цвет берёт тема (.sx-pill--*), а подложка видна
+    боковым зрением — список читается по цвету, не вчитываясь.
+    """
+    return format_html(
+        '<span class="sx-pill sx-pill--{}">{}</span>',
+        tone if tone in TONES else "gray",
+        label,
+    )
 
 
 def employees(ability: str) -> list[int]:

@@ -62,7 +62,10 @@ ListingWorkbookTemplate и частью ImportLanguage и CatalogLookup, кот�
   указана или не нашлась; существующему объявлению продавца не меняет;
   повторная загрузка с настоящей компанией передаёт ей заявку служебной,
   а не заводит вторую;
-- тип новых объявлений из окна (default_type), когда ячейки «Тип» нет;
+- тип новых объявлений, когда ячейки «Тип» нет: по заголовку («Куплю…»,
+  «Требуется…» — запрос, «Продам…» — предложение), иначе из окна
+  (default_type); ячейка «Тип» понимает и «Запрос на закупку»,
+  «Покупаем», а непонятное слово — заметка, а не «Предложение» молча;
 - «Раздел → Подраздел»: «Прочее» — это «Другое» каталога, неизвестный
   подраздел — сам раздел с заметкой (listing_category);
 - длинный заголовок ищется обрезанным, как сохранён: повторная
@@ -1018,6 +1021,78 @@ _LEGAL_FORM = re.compile(
 )
 _SUPPLY = frozenset({"предложение", "продаю", "продажа", "supply", "offer", "sell", "sotaman"})
 
+#: Начало слов «покупаю» в ячейке «Тип»: ячейку пишут как придётся —
+#: «Запрос на закупку», «Покупаем», «Спрос», «Buy request», и точное
+#: совпадение со списком _DEMAND отдавало всё это в «Предложение»
+_DEMAND_STEMS = (
+    "запрос", "спрос", "закуп", "покуп", "купл", "куп", "потребн", "приобрет",
+    "demand", "request", "rfq", "buy", "purchas", "wanted",
+    "talab", "sotib", "xarid", "talep", "alım", "satın",
+    "采购", "求购", "需求",
+)  # fmt: skip
+_SUPPLY_STEMS = (
+    "предлож", "прода", "реализ", "supply", "offer", "sell", "sale",
+    "sotaman", "sotuv", "satış", "satılık", "出售", "供应",
+)  # fmt: skip
+
+#: Заголовок заявки на покупку: «Куплю…», «Требуется поставщик…», «Ищем…».
+#: По нему тип ставится, когда в книге нет столбца «Тип» — так собраны
+#: книги заявок с других площадок
+_DEMAND_TITLE = re.compile(
+    r"^\W*(куплю|купим|покупаем|покупаю|закупаем|закупим|закупка|приобрету|приобретём|"
+    r"приобретем|приобретаем|требуется|требуются|нужен|нужна|нужно|нужны|ищу|ищем|"
+    r"запрос|wanted|buy|buying|looking for|need|needed|rfq|request|"
+    r"sotib olaman|sotib olamiz|xarid qilamiz|kerak|alıyoruz|alınır|aranıyor|求购|采购)(?![\w])",
+    re.IGNORECASE,
+)
+_SUPPLY_TITLE = re.compile(
+    r"^\W*(продам|продаю|продаём|продаем|продаётся|продается|продаются|предлагаем|предлагаю|"
+    r"реализуем|в наличии|sell|selling|for sale|offer|sotaman|sotamiz|sotiladi|satılık|"
+    r"satıyoruz|出售|供应)(?![\w])",
+    re.IGNORECASE,
+)
+
+
+def type_from_cell(value: str) -> str | None:
+    """
+    Тип из ячейки «Тип»: «demand», «supply» или None, если слово не
+    распознано. Сначала точные слова, затем начало слова — «Запрос на
+    закупку», «Покупаем», «Продажа со склада».
+    """
+    text = importer.normalize(value)
+
+    if text in _DEMAND:
+        return "demand"
+
+    if text in _SUPPLY:
+        return "supply"
+
+    words = re.findall(r"\w+", text)
+
+    if any(word.startswith(_DEMAND_STEMS) for word in words) or any(
+        stem in text for stem in ("采购", "求购", "需求")
+    ):
+        return "demand"
+
+    if any(word.startswith(_SUPPLY_STEMS) for word in words) or any(
+        stem in text for stem in ("出售", "供应")
+    ):
+        return "supply"
+
+    return None
+
+
+def type_from_title(title: str) -> str | None:
+    """Тип по началу заголовка: «Куплю…» — demand, «Продам…» — supply, иначе None."""
+    if _DEMAND_TITLE.search(title):
+        return "demand"
+
+    if _SUPPLY_TITLE.search(title):
+        return "supply"
+
+    return None
+
+
 #: Как назвать столбец в отчёте
 _GUESSED = {
     "title": "заголовок",
@@ -1664,7 +1739,11 @@ class _Import:
         """ListingWorkbookImport::fill: поля строки — в объявление; пустая ячейка не стирает."""
         if not exists:
             listing["user_id"] = self.author_id
-            listing["type"] = self.default_type
+            # Без ячейки «Тип» — по заголовку («Куплю…», «Продам…»), и только
+            # если он ничего не говорит — тип из окна загрузки. Раньше всё шло
+            # из окна, где по умолчанию «Предложение», и заявки «Куплю…» из
+            # книг с других площадок становились предложениями
+            listing["type"] = type_from_title(_trim(fields.get("title", ""))) or self.default_type
             # Ждёт проверки: публикует администратор из списка — или сразу,
             # галочкой «Сразу опубликовать» в окне загрузки
             listing["status"] = "active" if self.publish else "moderation"
@@ -1708,9 +1787,18 @@ class _Import:
                 listing["city_id"] = city
 
         if _trim(fields.get("type", "")) != "":
-            listing["type"] = (
-                "demand" if importer.normalize(fields["type"]) in _DEMAND else "supply"
-            )
+            kind = type_from_cell(fields["type"])
+
+            if kind is None:
+                # Непонятное слово — не «Предложение» молча, как раньше:
+                # тип остаётся прежним (у новой строки — по заголовку или
+                # из окна), а в отчёте — заметка
+                self.skipped.append(
+                    f"тип «{_trim(fields['type'])}» не распознан — оставлен "
+                    f"«{'Запрос' if listing.get('type') == 'demand' else 'Предложение'}»"
+                )
+            else:
+                listing["type"] = kind
 
         if _trim(fields.get("price", "")) != "":
             listing["price"] = importer.amount(fields["price"])

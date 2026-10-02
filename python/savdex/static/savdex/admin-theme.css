@@ -971,6 +971,179 @@ ul.messagelist li.error {
     fill: var(--sx-text);
 }
 
+/* ── Строка списка: название, заказчик, пометка ── */
+
+.sx-row-title {
+    display: block;
+    font-weight: 600;
+    color: var(--sx-text);
+}
+
+/* Название — обычным текстом: синей ссылкой в каждой строке список
+   выглядел набором ссылок, хотя читают в нём заголовки. Что строка
+   открывается, видно по курсору и по подчёркиванию под указателем */
+#result_list a .sx-row-title {
+    color: var(--sx-text);
+}
+
+#result_list a:hover .sx-row-title {
+    color: var(--sx-accent-text);
+    text-decoration: underline;
+}
+
+.sx-row-sub,
+.sx-row-care {
+    display: block;
+    font-size: 12.5px;
+    color: var(--sx-muted);
+}
+
+/* Заказчик и направление — одной строкой, пока помещаются,
+   и каждое со своей, пока нет */
+.sx-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+}
+
+/* Заказ, который висит впустую: полоса слева по всей строке — её
+   видно, не читая колонок */
+.sx-row-care {
+    color: var(--sx-status-warning);
+}
+
+#result_list tbody tr:has(.sx-row-care) {
+    box-shadow: inset 3px 0 0 var(--sx-status-warning);
+}
+
+/* Направление — не заголовок и не ссылка: подпись, по которой
+   взгляд скользит */
+/* Число откликов: цифра и слово в два этажа — «11 откликов»
+   в одну строку колонке не по ширине, а перенос посреди фразы
+   читается как обрыв */
+.sx-count {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.sx-count b {
+    font-size: 15px;
+}
+
+/* Направление — обводка, а не заливка: заливка совпадала с подложкой
+   каждой второй строки, и половина чипов пропадала */
+.sx-chip {
+    display: inline-block;
+    border: 1px solid var(--sx-border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    color: var(--sx-text-2);
+}
+
+/* Ссылка и кнопка столбиком: рядом они не помещаются в колонку,
+   а колонке шире неоткуда взяться — рядом шесть других */
+.sx-row-actions {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+/* «Снять с витрины» — действие редкое и не главное: синяя кнопка
+   в каждой строке звала нажать на себя */
+.button.sx-quiet {
+    background: transparent;
+    border: 1px solid var(--sx-input-border);
+    color: var(--sx-text-2);
+    font-weight: 500;
+}
+
+.button.sx-quiet:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+/* Ширины колонок раздела компаний: без них название ломалось по
+   слову («ООО / «Андижан / текстиль»»), а правые колонки уезжали
+   за край */
+.model-companyrecord #result_list { table-layout: fixed }
+.model-companyrecord #result_list th.action-checkbox-column { width: 34px }
+.model-companyrecord #result_list th.column-company { width: 36% }
+.model-companyrecord #result_list th.column-level { width: 19% }
+.model-companyrecord #result_list th.column-listings { width: 13% }
+.model-companyrecord #result_list th.column-stars { width: 13% }
+.model-companyrecord #result_list th.column-state { width: 19% }
+.model-companyrecord #result_list td,
+.model-companyrecord #result_list thead th { padding-left: 12px; padding-right: 12px }
+.model-companyrecord #result_list thead th,
+.model-companyrecord #result_list .sx-pill { white-space: normal }
+
+/* Ширины колонок раздела заказов: без них название переносилось
+   по три слова в строку, дата — в три строки, а колонка действий
+   уезжала за край. Только здесь (.model-ittask): остальным разделам
+   колонки по содержимому подходят */
+.model-ittask #result_list { table-layout: fixed }
+.model-ittask #result_list th.action-checkbox-column { width: 34px }
+.model-ittask #result_list th.column-task { width: 35% }
+.model-ittask #result_list th.column-responses { width: 13% }
+.model-ittask #result_list th.column-state { width: 25% }
+.model-ittask #result_list th.column-published { width: 14% }
+.model-ittask #result_list th.column-row_actions { width: 13% }
+.model-ittask #result_list td,
+.model-ittask #result_list thead th { padding-left: 12px; padding-right: 12px }
+
+/* Заголовки и плашки переносятся по словам: колонки здесь заданы
+   долями, и длинная подпись иначе наезжает на соседнюю */
+.model-ittask #result_list thead th,
+.model-ittask #result_list .sx-pill { white-space: normal }
+
+/* ── Плашки состояний ──
+   «Открыта», «Ждёт проверки», «Возврат» — то, что печатает _badge().
+   Раньше это было цветное слово: среди такого же текста оно терялось,
+   а в тёмной теме тёмно-зелёное по тёмно-синему читалось хуже
+   обычного. Плашка с подложкой видна боковым зрением — список
+   читается по цвету, не вчитываясь в слова.
+
+   Подложка — тот же цвет, разведённый до четырнадцати процентов:
+   свой набор переменных на каждую тему не нужен, цвет текста темы
+   уже знают. Браузеру без color-mix достаётся ровная серая подложка —
+   плашка остаётся плашкой. */
+.sx-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 18px;
+    white-space: nowrap;
+    background: var(--sx-surface-2);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* Точка впереди: по ней состояние видно и тому, кто не различает
+   красный и зелёный, — плашки отличаются ещё и подписью */
+.sx-pill::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.sx-pill--success { color: var(--sx-status-success) }
+.sx-pill--info { color: var(--sx-status-info) }
+.sx-pill--primary { color: var(--sx-status-primary) }
+.sx-pill--warning { color: var(--sx-status-warning) }
+.sx-pill--danger { color: var(--sx-status-danger) }
+.sx-pill--gray { color: var(--sx-status-gray) }
+
 /* ── Цвета статусов из разделов ──
    Разделы красят подписи прямо в разметке (style="color:#b91c1c"): на
    тёмном фоне тёмно-красный и тёмно-зелёный почти не видны. Подменяем
@@ -985,3 +1158,875 @@ ul.messagelist li.error {
 [style^="color:#1d4ed8"] { color: var(--sx-status-primary) !important; }
 [style^="color:#6b7280"],
 [style^="color:#9ca3af"] { color: var(--sx-status-gray) !important; }
+
+/* ── Вкладки над списком, метки и колонки ──
+   Отбор, который сам отвечает на вопрос «а сколько их»: раздел
+   открывают, чтобы увидеть, что требует внимания. Разметка общая —
+   savdex/templates/admin/state_tabs.html, ею пользуются объявления,
+   заказы на услуги и компании */
+
+.sx-tabs {
+    display: flex;
+    /* Переносом, а не прокруткой: в разделах с колонкой фильтров
+       справа вкладки не помещаются в строку, и уехавшую за край
+       никто не искал бы */
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    border-bottom: 1px solid var(--sx-border-soft);
+    background: var(--sx-surface);
+}
+
+.sx-tab:link,
+.sx-tab:visited {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: var(--sx-control-radius);
+    color: var(--sx-text-2);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.sx-tab:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+.sx-tab b {
+    min-width: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--sx-surface-2);
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.sx-tab.is-active:link,
+.sx-tab.is-active:visited {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+.sx-tab.is-active b {
+    background: var(--sx-accent);
+    color: #fff;
+}
+
+/* «Ждут проверки» с объявлениями — заметно даже с другой вкладки */
+.sx-tab.is-alert b {
+    background: color-mix(in srgb, var(--sx-status-warning) 16%, transparent);
+    color: var(--sx-status-warning);
+}
+
+.sx-tab.is-alert.is-active b {
+    background: var(--sx-status-warning);
+    color: var(--sx-surface);
+}
+
+.sx-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 44ch;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.sx-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.sx-kind {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sx-kind-sell {
+    background: color-mix(in srgb, var(--sx-status-info) 12%, transparent);
+    color: var(--sx-status-info);
+}
+
+.sx-kind-buy {
+    background: color-mix(in srgb, #7c3aed 12%, transparent);
+    color: #7c3aed;
+}
+
+html[data-theme="dark"] .sx-kind-buy {
+    color: #a78bfa;
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] .sx-kind-buy {
+        color: #a78bfa;
+    }
+}
+
+.sx-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sx-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.sx-pill-ok {
+    background: color-mix(in srgb, var(--sx-status-success) 12%, transparent);
+    color: var(--sx-status-success);
+}
+
+.sx-pill-warn {
+    background: color-mix(in srgb, var(--sx-status-warning) 14%, transparent);
+    color: var(--sx-status-warning);
+}
+
+.sx-pill-bad {
+    background: color-mix(in srgb, var(--sx-status-danger) 12%, transparent);
+    color: var(--sx-status-danger);
+}
+
+.sx-pill-gray {
+    background: var(--sx-surface-2);
+    color: var(--sx-muted);
+}
+
+.sx-company {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.sx-avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.sx-company-text {
+    min-width: 0;
+}
+
+.sx-company-name {
+    display: block;
+    max-width: 22ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.sx-company .sx-sub {
+    margin-top: 1px;
+}
+
+/* Объявление, которое ждёт уже нас: полоса слева по всей строке —
+   её видно, не читая колонок */
+.sx-waiting {
+    color: var(--sx-status-warning);
+    font-weight: 600;
+}
+
+#result_list tbody tr:has(.sx-waiting) {
+    box-shadow: inset 3px 0 0 var(--sx-status-warning);
+}
+
+.sx-until {
+    display: block;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.sx-until.is-soon .sx-sub {
+    color: var(--sx-status-warning);
+    font-weight: 600;
+}
+
+.sx-row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+.sx-icon-btn:link,
+.sx-icon-btn:visited {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--sx-control-radius);
+    color: var(--sx-muted);
+}
+
+.sx-icon-btn:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+/* Числа — по правому краю, цифры одной ширины */
+#result_list .column-views,
+#result_list .column-contacts,
+#result_list td.field-views,
+#result_list td.field-contacts {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+#result_list .field-listing,
+#result_list .field-company_name,
+#result_list .field-until {
+    vertical-align: middle;
+}
+
+/* Название — главная колонка: не уже 300 px, иначе от заголовка
+   остаются два слова; остальное уезжает в прокрутку таблицы */
+#result_list .field-listing {
+    min-width: 230px;
+}
+
+.model-listing #result_list .column-row_actions,
+.model-listing #result_list td.field-row_actions {
+    width: 1%;
+    padding-left: 4px;
+    padding-right: 8px;
+}
+
+/* Колонок много — ячейки чуть плотнее, чтобы на 1440 px всё помещалось */
+.model-listing #result_list th,
+.model-listing #result_list td {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.model-listing .sx-company-name {
+    max-width: 16ch;
+}
+
+.model-listing #changelist .results {
+    overflow-x: auto;
+}
+
+.sx-company .sx-sub,
+.sx-until .sx-sub {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+/* Ссылка-заголовок строки — цвета текста, синяя при наведении: синим
+   в каждой строке список выглядел набором ссылок, хотя читают в нём
+   названия */
+#result_list th.field-listing a:link,
+#result_list th.field-listing a:visited,
+#result_list th.field-company a:link,
+#result_list th.field-company a:visited {
+    color: var(--sx-text);
+}
+
+#result_list th.field-listing a:hover .sx-title,
+#result_list th.field-company a:hover .sx-title {
+    color: var(--sx-accent-text);
+}
+
+/* Действия с отмеченными: видны, только когда что-то отмечено */
+.model-listing #changelist .actions {
+    display: none;
+}
+
+.model-listing #changelist .actions.is-visible {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    background: var(--sx-accent-soft);
+}
+
+.sx-bulk-buttons {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+#changelist .actions .sx-bulk-button {
+    border: 0;
+    border-radius: var(--sx-control-radius);
+    padding: 6px 12px;
+    background: var(--sx-surface);
+    color: var(--sx-text);
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    cursor: pointer;
+}
+
+#changelist .actions .sx-bulk-button:hover {
+    background: var(--sx-surface-2);
+}
+
+#changelist .actions .sx-bulk-button.is-danger {
+    color: var(--sx-danger);
+    box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
+}
+
+/* Вторичные кнопки над списком — белые с рамкой, основная — синяя */
+.object-tools a.sx-tool-secondary:link,
+.object-tools a.sx-tool-secondary:visited {
+    background: var(--sx-surface);
+    color: var(--sx-text);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+}
+
+.object-tools a.sx-tool-secondary:hover {
+    background: var(--sx-surface-2);
+}
+
+/* Отборы вкладками и кнопками над списком — колонки фильтров справа
+   у объявлений и компаний нет: она отнимала у таблицы 280 px */
+.model-listing #changelist-filter,
+.model-companyrecord #changelist-filter {
+    display: none;
+}
+
+.sx-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px 12px;
+    background: var(--sx-surface);
+    border-bottom: 1px solid var(--sx-border-soft);
+}
+
+.sx-chips-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--sx-border);
+}
+
+.sx-chip:link,
+.sx-chip:visited {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border: 1px dashed var(--sx-input-border);
+    border-radius: 999px;
+    color: var(--sx-text-2);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.sx-chip:hover {
+    border-color: var(--sx-accent);
+    color: var(--sx-accent-text);
+}
+
+.sx-chip.is-active:link,
+.sx-chip.is-active:visited {
+    border: 1px solid transparent;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+/* Старый выпадающий список действий — когда кнопки уже на месте */
+#changelist .actions.sx-has-buttons label,
+#changelist .actions.sx-has-buttons select,
+#changelist .actions.sx-has-buttons button[name="index"] {
+    display: none;
+}
+
+/* Поиск и отборы — одна полоса: черта только под отборами */
+.model-listing #changelist #toolbar {
+    border-bottom: 0;
+}
+
+/* Подписи над числами переносятся: «Открыли контакты» в две строки,
+   колонка не шире самих чисел */
+.model-listing #result_list thead th.column-views,
+.model-listing #result_list thead th.column-contacts {
+    width: 1%;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.model-listing #result_list thead th.column-views .text,
+.model-listing #result_list thead th.column-contacts .text {
+    white-space: normal;
+}
+
+/* У ссылки-заголовка свой отступ поверх отступа ячейки — у объявлений
+   лишний: таблица не помещалась на 1440 px */
+.model-listing #result_list thead th .text a,
+.model-listing #result_list thead th .text span {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ── Главная страница: секции по группам ── */
+
+.sx-landing {
+    display: grid;
+    gap: 20px;
+    max-width: 1100px;
+}
+
+.sx-landing-intro {
+    margin: 0;
+    color: var(--sx-text-2);
+    font-size: 14px;
+    max-width: 70ch;
+}
+
+.sx-landing-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: var(--sx-muted);
+    font-size: 12px;
+}
+
+.sx-landing-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sx-landing-group {
+    background: var(--sx-surface);
+    border-radius: var(--sx-card-radius);
+    box-shadow: var(--sx-card-shadow), var(--sx-ring);
+    overflow: hidden;
+}
+
+.sx-landing-group-head {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--sx-border-soft);
+}
+
+#content .sx-landing-group-head h2 {
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: var(--sx-text);
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.sx-landing-group-head p {
+    margin: 4px 0 0;
+    color: var(--sx-muted);
+    font-size: 13px;
+}
+
+.sx-landing-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sx-landing-row {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--sx-border-soft);
+    list-style: none;
+}
+
+.sx-landing-row:last-child {
+    border-bottom: 0;
+}
+
+.sx-landing-row:hover {
+    background: var(--sx-surface-2);
+}
+
+.sx-landing-row.is-hidden .sx-landing-main {
+    opacity: .6;
+}
+
+.sx-landing-place {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--sx-surface-2);
+    box-shadow: inset 0 0 0 1px var(--sx-border);
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.sx-landing-main {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+a.sx-landing-name:link,
+a.sx-landing-name:visited {
+    color: var(--sx-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+a.sx-landing-name:hover {
+    color: var(--sx-accent-text);
+}
+
+.sx-landing-heading {
+    overflow: hidden;
+    color: var(--sx-text-2);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sx-landing-heading.is-note {
+    color: var(--sx-muted);
+    font-style: italic;
+}
+
+.sx-landing-langs {
+    display: flex;
+    gap: 4px;
+}
+
+.sx-lang {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: var(--sx-surface-2);
+    color: var(--sx-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.sx-lang.is-own {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+}
+
+.sx-landing-state {
+    min-width: 108px;
+}
+
+a.sx-landing-edit:link,
+a.sx-landing-edit:visited {
+    padding: 6px 12px;
+    border-radius: var(--sx-control-radius);
+    background: var(--sx-surface);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    color: var(--sx-text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+a.sx-landing-edit:hover {
+    background: var(--sx-surface-2);
+}
+
+@media (max-width: 900px) {
+    .sx-landing-row {
+        grid-template-columns: 32px minmax(0, 1fr) auto;
+        row-gap: 8px;
+    }
+
+    .sx-landing-state {
+        grid-column: 3;
+        grid-row: 1;
+        min-width: 0;
+    }
+
+    a.sx-landing-edit {
+        grid-column: 3;
+        grid-row: 2;
+        justify-self: end;
+    }
+
+    /* Языки — своей строкой под текстом, не наезжают на кнопку */
+    .sx-landing-langs {
+        grid-column: 2 / -1;
+        grid-row: 3;
+        flex-wrap: wrap;
+    }
+}
+
+/* Телефон: ссылки сотрудника под названием, а не поверх хлебных крошек */
+@media (max-width: 767px) {
+    /* #container — колонка флекса: без flex-shrink шапку сжимало до
+       64 px, и ссылки сотрудника налезали на хлебные крошки */
+    #header {
+        flex-shrink: 0;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 12px 16px;
+    }
+
+    #user-tools {
+        margin: 0;
+        text-align: left;
+        line-height: 1.6;
+        white-space: normal;
+    }
+}
+
+/* ── Подписки и общие мелочи списков ── */
+
+.sx-pill-info {
+    background: color-mix(in srgb, var(--sx-status-info) 12%, transparent);
+    color: var(--sx-status-info);
+}
+
+/* Тариф — спокойная метка: не путается со статусом */
+.sx-plan {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Основание под меткой «Промокод» / «Вручную»: не шире колонки */
+.sx-reason {
+    display: block;
+    max-width: 30ch;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+/* Кнопки в строке: небольшие, с рамкой; опасное действие — красным */
+.sx-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+a.sx-row-btn:link,
+a.sx-row-btn:visited {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: var(--sx-control-radius);
+    background: var(--sx-surface);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    color: var(--sx-text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+a.sx-row-btn:hover {
+    background: var(--sx-surface-2);
+}
+
+a.sx-row-btn.is-danger:link,
+a.sx-row-btn.is-danger:visited {
+    color: var(--sx-danger);
+    box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
+}
+
+.model-subscription #result_list td,
+.model-subscription #result_list th {
+    vertical-align: middle;
+}
+
+.model-subscription #result_list td.field-row_actions {
+    width: 1%;
+}
+
+/* «5 дн.» у подписки, которой осталось меньше недели — заметно */
+.model-subscription .sx-until.is-soon > span:first-child {
+    color: var(--sx-status-warning);
+    font-weight: 600;
+}
+
+/* Подписки: колонок много, а справа ещё фильтры — таблица плотнее,
+   кнопки строки столбиком, чтобы всё помещалось на 1440 px */
+.model-subscription #result_list th,
+.model-subscription #result_list td {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.model-subscription #result_list thead th .text a,
+.model-subscription #result_list thead th .text span {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.model-subscription .sx-reason {
+    max-width: 22ch;
+}
+
+.model-subscription .sx-row-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+}
+
+.model-subscription a.sx-row-btn {
+    justify-content: center;
+}
+
+/* Подписки: фильтры — не колонкой справа, а строкой кнопок над
+   таблицей. Те же фильтры Django и те же адреса, меняется только вид */
+.model-subscription #changelist {
+    flex-direction: column;
+}
+
+/* У Django колонка фильтров — flex: 0 0 240px; в колонке флекса эти
+   240 px становились высотой полосы */
+.model-subscription #changelist-filter {
+    flex: none;
+    order: -1;
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+}
+
+.model-subscription #changelist-filter > h2,
+.model-subscription #changelist-filter-extra-actions {
+    display: none;
+}
+
+.model-subscription #changelist-filter details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.model-subscription #changelist-filter details > summary {
+    margin: 0 4px 0 0;
+    padding: 0;
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    list-style: none;
+    cursor: default;
+}
+
+.model-subscription #changelist-filter details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.model-subscription #changelist-filter details > summary::first-letter {
+    text-transform: uppercase;
+}
+
+.model-subscription #changelist-filter ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.model-subscription #changelist-filter li {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.model-subscription #changelist-filter li a:link,
+.model-subscription #changelist-filter li a:visited {
+    display: inline-flex;
+    padding: 4px 10px;
+    border: 1px solid var(--sx-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sx-text-2);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.model-subscription #changelist-filter li a:hover {
+    border-color: var(--sx-accent);
+    color: var(--sx-accent-text);
+}
+
+.model-subscription #changelist-filter li.selected a:link,
+.model-subscription #changelist-filter li.selected a:visited {
+    border-color: transparent;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+.model-subscription .changelist-form-container {
+    width: 100%;
+}
+
+/* Стрелка темы перед названием фильтра в строке не нужна */
+.model-subscription #changelist-filter details > summary::before,
+.model-subscription #changelist-filter details > summary::after {
+    display: none;
+}

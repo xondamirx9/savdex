@@ -6,11 +6,11 @@
 ввода на месте правила; правила поля идут подряд, провал «неявного»
 (required) останавливает поле; ошибки — по полям в порядке правил.
 
-Тексты — __('validation.<правило>'). Словаря validation в проекте нет,
-поэтому по-английски Laravel берёт текст из самого фреймворка, а на
-остальных языках отдаёт сам ключ («validation.required») — Django
-повторяет и то и другое (словарь — savdex/locale/ui). Свои
-тексты формы передаёт в messages: «поле.правило» или «правило».
+Тексты — __('validation.<правило>') из словаря savdex/locale/ui (группа
+validation): по-английски — тексты фреймворка Laravel, на остальных
+языках — свои, короткие и без имени поля (ошибка показывается под
+самим полем). Свои тексты формы передаёт в messages: «поле.правило»
+или «правило».
 """
 
 from __future__ import annotations
@@ -491,7 +491,7 @@ def _message(
 
     if text is None:
         # Правила размера — текст по виду значения (validation.min.array)
-        sized = rule in ("min", "max", "between")
+        sized = rule in ("min", "max", "between", "gte")
         key = f"validation.{rule}" + (f".{kind}" if sized else "")
         line = ui.group_node(key, locale)
         text = line if isinstance(line, str) else key
@@ -523,11 +523,30 @@ def _message(
         # replaceAfter: дата-параметр как есть («today»)
         text = text.replace(":date", param)
 
+    if param is not None and rule == "digits":
+        # replaceDigits: сколько цифр
+        text = text.replace(":digits", param)
+
+    if param is not None and rule == "mimes":
+        # replaceMimes: допустимые расширения через запятую
+        text = text.replace(":values", ", ".join(param.split(",")))
+
     return (
         text.replace(":attribute", name)
         .replace(":Attribute", name[:1].upper() + name[1:])
         .replace(":ATTRIBUTE", name.upper())
     )
+
+
+def _size_of(value: Any, kind: str) -> str:  # noqa: ANN401
+    """Validator::getSize для подстановки: число, длина строки или число элементов."""
+    if kind == "array" and isinstance(value, (list, dict)):
+        return str(len(value))
+
+    if kind == "numeric":
+        return str(value)
+
+    return str(len(str(value)))
 
 
 def _fill_asterisks(pattern: str, attribute: str, param: str) -> str:
@@ -675,6 +694,19 @@ def validate(
                     )
 
                 if not passed:
+                    shown = param or None
+
+                    if rule == "gte" and param:
+                        # replaceGte: :value — размер поля-сравнения (getSize), если
+                        # оно есть: число — само значение, строка — длина, список —
+                        # число элементов
+                        other = _get(data, param.split("."))
+                        shown = (
+                            param
+                            if other is _MISSING or other is None
+                            else _size_of(other, _kind(field_rules, value))
+                        )
+
                     text = _message(
                         rule,
                         attribute,
@@ -682,7 +714,7 @@ def validate(
                         locale,
                         messages or {},
                         _kind(field_rules, value),
-                        param or None,
+                        shown,
                     )
                     found = errors.setdefault(attribute, [])
 
