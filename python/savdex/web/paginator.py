@@ -3,10 +3,9 @@
 
 Страница Inertia получает объект целиком (toArray): data, ссылки на
 соседние страницы, окно номеров с «...» (UrlWindow) и подписи
-«назад/вперёд». Подписи — __('pagination.previous'): у площадки нет
-своего файла pagination, и перевод есть только у английского (из
-самого фреймворка); на остальных языках Laravel отдаёт ключ как есть,
-и Django — тоже.
+«назад/вперёд». Подписи — как у английского фреймворка («&laquo; Previous»),
+на остальных языках — из словаря интерфейса (common.prev_page/next_page):
+у Laravel там стоял сам ключ «pagination.previous».
 
 Адреса страниц — как withQueryString(): параметры запроса в том
 порядке, в каком пришли, без page — он всегда последним (appends()
@@ -21,6 +20,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from savdex.web import ui
 from savdex.web.phpquery import build_query, laravel_input
 from savdex.web.shared import Context
 
@@ -119,7 +119,10 @@ def build(
     next_url = url(current + 1) if current < last else None
 
     links: list[dict[str, Any]] = []
-    previous, following = _LABELS.get(locale, ("pagination.previous", "pagination.next"))
+    previous, following = _LABELS.get(locale) or (
+        "&laquo; " + ui.t("common.prev_page", locale),
+        ui.t("common.next_page", locale) + " &raquo;",
+    )
     links.append(
         {
             "url": prev_url,

@@ -279,12 +279,12 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
             {"category_id": None},
             {"category_id": ["Выберите категорию — без неё объявление не найдут"]},
         ),
-        # Своих текстов у этих правил нет ни у сайта, ни у Laravel (lang без
-        # validation.php) — ключ сообщения как есть
-        ({"category_id": 999999}, {"category_id": ["validation.exists"]}),
+        # Своих текстов у этих правил у формы нет — общие тексты проверки
+        # из словаря (группа validation), без имени поля
+        ({"category_id": 999999}, {"category_id": ["Выбранное значение не найдено."]}),
         (
             {"price": "-5", "bundle_price": "abc"},
-            {"price": ["validation.min.numeric"], "bundle_price": ["validation.numeric"]},
+            {"price": ["Значение не меньше 0."], "bundle_price": ["Укажите число."]},
         ),
     ],
 )
@@ -469,14 +469,14 @@ def с_деталями() -> None:
                 "tag_options": ["цемент", "м400", "ташкент", "m400", "tashkent"],
             },
         ),
-        ({"tags": ["x"] * 9}, {"errors": {"tags": ["validation.max.array"]}}),
+        ({"tags": ["x"] * 9}, {"errors": {"tags": ["Не больше 8 шт."]}}),
         (
             {"type": "barter", "step": 7, "price": "-1"},
             {
                 "errors": {
-                    "type": ["validation.in"],
-                    "price": ["validation.min.numeric"],
-                    "step": ["validation.between.numeric"],
+                    "type": ["Выберите значение из списка."],
+                    "price": ["Значение не меньше 0."],
+                    "step": ["Значение должно быть от 1 до 4."],
                 }
             },
         ),

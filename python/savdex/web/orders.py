@@ -112,10 +112,12 @@ def _create(
         section="payments",
         model="Payment",
     )
+    # Описание может само кончаться точкой («на 30 дн.») — вторую не ставим
+    description = str(payment["description"]).removesuffix(".")
     _notify_user(
         user,
         f"Счёт {payment['number']} сформирован",
-        f"{payment['description']}. Оплатите в течение {EXPIRES_DAYS} дней — доступ "
+        f"{description}. Оплатите в течение {EXPIRES_DAYS} дней — доступ "
         "откроется после зачисления.",
         "/cabinet/billing",
     )

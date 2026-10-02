@@ -696,6 +696,13 @@ def test_выданный_пароль_уводит_на_смену(сайт):
         "логотип",
         "подтверждённые документы",
     ],
+    "en": [
+        "TIN",
+        "legal address",
+        "company description (100+ characters)",
+        "logo",
+        "verified documents",
+    ],
     "uz": [
         "INN yoki STIR",
         "yuridik manzil",
@@ -708,8 +715,7 @@ def test_выданный_пароль_уводит_на_смену(сайт):
 
 @pytest.mark.parametrize(
     ("path", "язык"),
-    # Подписей профиля на английском нет (lang/en/company.php) — русские
-    [("/cabinet", "ru"), ("/en/cabinet", "ru"), ("/uz/cabinet", "uz")],
+    [("/cabinet", "ru"), ("/en/cabinet", "en"), ("/uz/cabinet", "uz")],
 )
 def test_сводка(сайт, path, язык):
     ответ, стр = зайти(сайт, path, владелец(сайт))

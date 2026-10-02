@@ -130,8 +130,9 @@ def снимок() -> Any:
 
 ПРАВИЛО = "Адрес: латиница, цифры и дефис, от 3 до 40 знаков, без дефиса в начале и в конце"
 БЕЗ_ТАРИФА = "Мини-сайт доступен на тарифах Business, Premium и VIP"
+ЗАПОЛНИТЕ = "Заполните это поле."
 ТЕМА_ОБЯЗАТЕЛЬНА = {
-    f"theme{k}": ["validation.required"]
+    f"theme{k}": [ЗАПОЛНИТЕ]
     for k in (
         "",
         ".template",
@@ -193,7 +194,10 @@ def назад(сайт: str, итог: dict[str, Any], status: int = 302) -> No
         ({"subdomain": "cement-trade", "theme": ТЕМА}, None),
         ({"subdomain": "mine", "theme": ТЕМА}, None),
         # Адрес: строчные, шаблон, зарезервированные и занятые
-        ({"subdomain": "Cement", "theme": ТЕМА}, {"subdomain": ["validation.lowercase", ПРАВИЛО]}),
+        (
+            {"subdomain": "Cement", "theme": ТЕМА},
+            {"subdomain": ["Только строчные буквы.", ПРАВИЛО]},
+        ),
         ({"subdomain": "ab", "theme": ТЕМА}, {"subdomain": [ПРАВИЛО]}),
         ({"subdomain": "-bad-", "theme": ТЕМА}, {"subdomain": [ПРАВИЛО]}),
         (
@@ -203,10 +207,10 @@ def назад(сайт: str, итог: dict[str, Any], status: int = 302) -> No
         ({"subdomain": "taken", "theme": ТЕМА}, {"subdomain": ["Этот адрес уже занят"]}),
         (
             {"subdomain": "cement-trade", "theme": {**ТЕМА, "primary": "red", "mode": "neon"}},
-            {"theme.primary": ["validation.regex"], "theme.mode": ["validation.in"]},
+            {"theme.primary": ["Неверный формат."], "theme.mode": ["Выберите значение из списка."]},
         ),
         ({"subdomain": "cement-trade"}, ТЕМА_ОБЯЗАТЕЛЬНА),
-        ({}, {"subdomain": ["validation.required"], **ТЕМА_ОБЯЗАТЕЛЬНА}),
+        ({}, {"subdomain": [ЗАПОЛНИТЕ], **ТЕМА_ОБЯЗАТЕЛЬНА}),
     ],
 )
 @pytest.mark.parametrize("было", ["есть", "нет", "без тарифа"])
@@ -476,13 +480,13 @@ def снимок_товаров() -> Any:
         ({**ТОВАР, "image": ("fake.png", b"nope")}, {"image": ["Допустимы JPG, PNG и WebP"]}),
         (
             {**ТОВАР, "price": "abc", "currency": "BTC"},
-            {"price": ["validation.numeric"], "currency": ["validation.in"]},
+            {"price": ["Укажите число."], "currency": ["Выберите значение из списка."]},
         ),
         ({**ТОВАР, "title": ""}, {"title": ["Укажите название товара"]}),
-        ({**ТОВАР, "price": "-1"}, {"price": ["validation.min.numeric"]}),
+        ({**ТОВАР, "price": "-1"}, {"price": ["Значение не меньше 0."]}),
         (
             {"title": "Ц"},
-            {"title": ["validation.min.string"], "currency": ["validation.required"]},
+            {"title": ["Не короче 2 символов."], "currency": [ЗАПОЛНИТЕ]},
         ),
     ],
 )
