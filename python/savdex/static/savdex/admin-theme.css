@@ -970,54 +970,6 @@ ul.messagelist li.error {
     fill: var(--sx-text);
 }
 
-/* ── Вкладки состояний над списком ──
-   Отбор, который сам отвечает на вопрос «а сколько их»: раздел
-   открывают, чтобы увидеть, что требует внимания, и счётчики должны
-   стоять над списком, а не прятаться в переключателях сбоку */
-.sx-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 16px 24px 0;
-}
-
-.sx-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid var(--sx-border);
-    border-radius: var(--sx-pill-radius, 999px);
-    padding: 7px 14px;
-    font-size: 13px;
-    color: var(--sx-text-2);
-    white-space: nowrap;
-}
-
-.sx-tab:hover {
-    background: var(--sx-surface-2);
-    color: var(--sx-text);
-}
-
-.sx-tab.is-on,
-.sx-tab.is-on:hover {
-    background: var(--sx-accent);
-    border-color: var(--sx-accent);
-    color: #fff;
-    font-weight: 600;
-}
-
-.sx-tab-count {
-    background: var(--sx-surface-2);
-    border-radius: 999px;
-    padding: 1px 8px;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-}
-
-.sx-tab.is-on .sx-tab-count {
-    background: rgba(255, 255, 255, .22);
-}
-
 /* ── Строка списка: название, заказчик, пометка ── */
 
 .sx-row-title {
@@ -1114,6 +1066,21 @@ ul.messagelist li.error {
     color: var(--sx-text);
 }
 
+/* Ширины колонок раздела компаний: без них название ломалось по
+   слову («ООО / «Андижан / текстиль»»), а правые колонки уезжали
+   за край */
+.model-companyrecord #result_list { table-layout: fixed }
+.model-companyrecord #result_list th.action-checkbox-column { width: 34px }
+.model-companyrecord #result_list th.column-company { width: 36% }
+.model-companyrecord #result_list th.column-level { width: 19% }
+.model-companyrecord #result_list th.column-listings { width: 13% }
+.model-companyrecord #result_list th.column-stars { width: 13% }
+.model-companyrecord #result_list th.column-state { width: 19% }
+.model-companyrecord #result_list td,
+.model-companyrecord #result_list thead th { padding-left: 12px; padding-right: 12px }
+.model-companyrecord #result_list thead th,
+.model-companyrecord #result_list .sx-pill { white-space: normal }
+
 /* Ширины колонок раздела заказов: без них название переносилось
    по три слова в строку, дата — в три строки, а колонка действий
    уезжала за край. Только здесь (.model-ittask): остальным разделам
@@ -1191,12 +1158,19 @@ ul.messagelist li.error {
 [style^="color:#6b7280"],
 [style^="color:#9ca3af"] { color: var(--sx-status-gray) !important; }
 
-/* ── Объявления: вкладки статусов, метки и колонки списка ── */
+/* ── Вкладки над списком, метки и колонки ──
+   Отбор, который сам отвечает на вопрос «а сколько их»: раздел
+   открывают, чтобы увидеть, что требует внимания. Разметка общая —
+   savdex/templates/admin/state_tabs.html, ею пользуются объявления,
+   заказы на услуги и компании */
 
 .sx-tabs {
     display: flex;
+    /* Переносом, а не прокруткой: в разделах с колонкой фильтров
+       справа вкладки не помещаются в строку, и уехавшую за край
+       никто не искал бы */
+    flex-wrap: wrap;
     gap: 4px;
-    overflow-x: auto;
     padding: 6px;
     border-bottom: 1px solid var(--sx-border-soft);
     background: var(--sx-surface);
@@ -1475,13 +1449,18 @@ html[data-theme="dark"] .sx-kind-buy {
     white-space: nowrap;
 }
 
-/* Ссылка-заголовок объявления — цвета текста, синяя при наведении */
+/* Ссылка-заголовок строки — цвета текста, синяя при наведении: синим
+   в каждой строке список выглядел набором ссылок, хотя читают в нём
+   названия */
 #result_list th.field-listing a:link,
-#result_list th.field-listing a:visited {
+#result_list th.field-listing a:visited,
+#result_list th.field-company a:link,
+#result_list th.field-company a:visited {
     color: var(--sx-text);
 }
 
-#result_list th.field-listing a:hover .sx-title {
+#result_list th.field-listing a:hover .sx-title,
+#result_list th.field-company a:hover .sx-title {
     color: var(--sx-accent-text);
 }
 
@@ -1537,8 +1516,10 @@ html[data-theme="dark"] .sx-kind-buy {
     background: var(--sx-surface-2);
 }
 
-/* Отборы кнопками под поиском — колонки фильтров справа у объявлений нет */
-.model-listing #changelist-filter {
+/* Отборы вкладками и кнопками над списком — колонки фильтров справа
+   у объявлений и компаний нет: она отнимала у таблицы 280 px */
+.model-listing #changelist-filter,
+.model-companyrecord #changelist-filter {
     display: none;
 }
 

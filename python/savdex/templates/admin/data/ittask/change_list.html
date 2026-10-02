@@ -7,15 +7,6 @@
   сдано, сколько снято.
 {% endcomment %}
 {% block search %}
-  {% if sx_tabs %}
-    <nav class="sx-tabs" aria-label="Состояние заказов">
-      {% for tab in sx_tabs %}
-        <a class="sx-tab{% if tab.current %} is-on{% endif %}" href="{{ tab.url }}"
-           {% if tab.current %}aria-current="page"{% endif %}>{{ tab.label }}
-          <span class="sx-tab-count">{{ tab.count }}</span>
-        </a>
-      {% endfor %}
-    </nav>
-  {% endif %}
+  {% include "admin/state_tabs.html" with sx_tabs_label="Состояние заказов" %}
   {{ block.super }}
 {% endblock %}

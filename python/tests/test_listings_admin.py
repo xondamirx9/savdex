@@ -141,7 +141,7 @@ def test_вкладки_статусов_и_отборы(люди):
 
     # Вкладки над списком с числом; «Ждут проверки» подсвечены
     assert '<nav class="sx-tabs"' in все["body"]
-    assert 'class="sx-tab is-active" aria-current="page">\n          Все <b>2</b>' in все["body"]
+    assert 'class="sx-tab is-active" aria-current="page">Все <b>2</b>' in все["body"]
     assert 'href="?status=moderation" class="sx-tab is-alert">' in все["body"]
     assert "Ждут проверки <b>1</b>" in все["body"] and "Корзина <b>1</b>" in все["body"]
     # Тип — понятными словами под названием, источник — под компанией
