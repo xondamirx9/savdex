@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+  Как у Django (admin/nav_sidebar.html), плюс меню не прыгает наверх при
+  переходе между разделами: прокрутка меню запоминается перед уходом
+  со страницы и ставится обратно сразу, как меню нарисовано, — до первой
+  отрисовки, без рывка.
+{% endcomment %}
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+  <input type="search" id="nav-filter"
+         placeholder="{% translate 'Start typing to filter…' %}"
+         aria-label="{% translate 'Filter navigation items' %}">
+  {% include 'admin/app_list.html' with app_list=available_apps show_changelinks=False %}
+</nav>
+<script>
+  (function () {
+    var nav = document.getElementById('nav-sidebar');
+    var KEY = 'savdex.admin.navScroll';
+
+    if (!nav) return;
+
+    try {
+      var saved = sessionStorage.getItem(KEY);
+      if (saved !== null) nav.scrollTop = parseInt(saved, 10) || 0;
+    } catch (e) {}
+
+    function remember() {
+      try { sessionStorage.setItem(KEY, String(nav.scrollTop)); } catch (e) {}
+    }
+
+    // Нажатие в меню — сохраняем сразу; pagehide — для переходов иначе
+    nav.addEventListener('click', remember);
+    window.addEventListener('pagehide', remember);
+  })();
+</script>
