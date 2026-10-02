@@ -196,8 +196,8 @@ def _theme_version() -> str:
 
 class SavdexAdminSite(admin.AdminSite):
     site_header = "SAVDEX · Управление"
-    site_title = "SAVDEX · разделы на Python"
-    index_title = "Разделы на Python"
+    site_title = "SAVDEX · Управление"
+    index_title = "Главная"
     # «Открыть сайт» — на сайт площадки
     site_url = "/"
     enable_nav_sidebar = True
@@ -245,20 +245,12 @@ class SavdexAdminSite(admin.AdminSite):
         ]
 
     def index(self, request: HttpRequest, extra_context: Any = None) -> TemplateResponse:  # noqa: ANN401
-        """
-        Главная: стартовый экран сотрудника (savdex/dashboard/ — вместо
-        виджетов Filament), разделы и ход переноса (savdex/progress.py).
-        """
-        from savdex import progress
+        """Главная: стартовый экран сотрудника (savdex/dashboard/) и разделы."""
         from savdex.dashboard import widgets
 
         return super().index(
             request,
-            {
-                "dashboard": widgets.for_request(request),
-                "progress": progress.summary(),
-                **(extra_context or {}),
-            },
+            {"dashboard": widgets.for_request(request), **(extra_context or {})},
         )
 
     def each_context(self, request: HttpRequest) -> dict[str, Any]:

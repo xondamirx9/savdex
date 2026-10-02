@@ -229,10 +229,8 @@ def test_кто_что_видит_и_в_каком_порядке(люди, кт
     body = _главная(люди[кто])
 
     assert виджеты(body) == ожидается
-    # Разделы и ход переноса — на месте, под виджетами
-    assert "Ход переноса на Python" in body
-    if ожидается:
-        assert body.index("savdex-dashboard") < body.index("Ход переноса на Python")
+    # Перенос закончен: ни хода переноса, ни «разделов на Python»
+    assert "Python" not in body
 
 
 def test_без_прав_только_объяснение(люди):
