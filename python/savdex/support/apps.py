@@ -8,4 +8,5 @@ class SupportConfig(AppConfig):
 
     name = "savdex.support"
     label = "support"
-    verbose_name = "Поддержка"
+    # Как группа этого раздела в меню (adminsite.MENU_GROUPS) — в «хлебных крошках»
+    verbose_name = "CRM"

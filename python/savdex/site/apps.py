@@ -8,4 +8,5 @@ class SiteConfig(AppConfig):
 
     name = "savdex.site"
     label = "site"
-    verbose_name = "Площадка"
+    # Как группа этого раздела в меню (adminsite.MENU_GROUPS) — в «хлебных крошках»
+    verbose_name = "Контент"

@@ -8,4 +8,5 @@ class TendersConfig(AppConfig):
 
     name = "savdex.tenders"
     label = "tenders"
-    verbose_name = "Закупки"
+    # Как группа этого раздела в меню (adminsite.MENU_GROUPS) — в «хлебных крошках»
+    verbose_name = "Данные"

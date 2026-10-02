@@ -1,0 +1,51 @@
+{% load i18n %}
+{% comment %}
+  Меню слева — как у Django (admin/nav_sidebar.html), плюс одно: место
+  прокрутки меню переживает переход по разделам.
+
+  Каждый щелчок в меню — новая страница, и Django рисует меню с самого
+  верха: открытый раздел внизу списка уезжал из виду. Перед уходом со
+  страницы прокрутка меню запоминается во вкладке (sessionStorage) и
+  ставится обратно сразу за меню, до того как страница дорисуется.
+  Если открытый раздел всё равно не виден (пришли не из меню) — меню
+  прокручивается к нему.
+{% endcomment %}
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+  <input type="search" id="nav-filter"
+         placeholder="{% translate 'Start typing to filter…' %}"
+         aria-label="{% translate 'Filter navigation items' %}">
+  {% include 'admin/app_list.html' with app_list=available_apps show_changelinks=False %}
+</nav>
+<script>
+  (function () {
+    var nav = document.getElementById('nav-sidebar');
+    var key = 'savdex.navSidebarScroll';
+
+    try {
+      var saved = sessionStorage.getItem(key);
+      if (saved !== null) nav.scrollTop = parseInt(saved, 10) || 0;
+    } catch (e) {}
+
+    var current = nav.querySelector('.current-model');
+    function hidden() {
+      var box = nav.getBoundingClientRect();
+      var row = current.getBoundingClientRect();
+      var bottom = Math.min(box.bottom, window.innerHeight);
+      return row.top < box.top || row.bottom > bottom ? [box, row, bottom] : null;
+    }
+    var off = current && hidden();
+    if (off) {
+      nav.scrollTop += off[1].top - off[0].top - (off[2] - off[0].top - off[1].height) / 2;
+      // Низ меню у Django уходит за край окна, пока не прокручена сама
+      // страница: последние пункты видны только так
+      if (hidden()) current.scrollIntoView({block: 'nearest'});
+    }
+
+    window.addEventListener('pagehide', function () {
+      try {
+        sessionStorage.setItem(key, String(nav.scrollTop));
+      } catch (e) {}
+    });
+  })();
+</script>
