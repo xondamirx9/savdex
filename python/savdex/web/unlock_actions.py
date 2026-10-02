@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import eloquent
+from savdex.web import eloquent, ui
 from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
@@ -179,12 +179,14 @@ def _after(
         ctx,
         target,
         "contact_unlocked",
-        f"Компания «{company['name']}» открыла ваши контакты",
+        lambda locale: ui.t("messages.unlock.notify_title", locale, company=company["name"]),
         "success",
         "/cabinet/incoming",
-        f"По объявлению «{listing['title']}». Это тёплый лид: за контакт заплатили."
-        if listing is not None
-        else "Это тёплый лид: за контакт заплатили.",
+        lambda locale: (
+            ui.t("messages.unlock.notify_body_listing", locale, listing=listing["title"])
+            if listing is not None
+            else ui.t("messages.unlock.notify_body", locale)
+        ),
     )
 
 

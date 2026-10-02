@@ -18,7 +18,7 @@ from savdex.web import content, inertia, ui
 from savdex.web.directory import _named, logo_url
 from savdex.web.it_tasks import _SELECT, _rows, card, types_under
 from savdex.web.request import context
-from savdex.web.resumes import FIELDS, SERVICE_SECTIONS, labels
+from savdex.web.resumes import FIELDS, LIVE_AUTHOR, SERVICE_SECTIONS, labels
 from savdex.web.resumes import card as resume_card
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, initials
@@ -137,7 +137,8 @@ def _providers(ctx: Context, types: list[str]) -> tuple[int, list[dict[str, Any]
 def _published_resumes() -> int:
     return int(
         _rows(
-            "select count(*) as n from resumes where status = 'published' and deleted_at is null"
+            "select count(*) as n from resumes r where r.status = 'published' "
+            f"and r.deleted_at is null and {LIVE_AUTHOR}"
         )[0]["n"]
     )
 
@@ -185,7 +186,7 @@ def _resumes(ctx: Context) -> list[dict[str, Any]]:
     rows = _rows(
         "select r.*, u.name as user_name from resumes r "
         "left join users u on u.id = r.user_id and u.deleted_at is null "
-        "where r.status = 'published' and r.deleted_at is null "
+        f"where r.status = 'published' and r.deleted_at is null and {LIVE_AUTHOR} "
         "order by r.published_at desc, r.id desc limit %s",
         [RESUMES],
     )

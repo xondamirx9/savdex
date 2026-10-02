@@ -6,7 +6,7 @@ import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { flag } from '@/lib/flag';
 import { localize } from '@/lib/locale';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 interface CompanyRow {
@@ -228,7 +228,7 @@ function CountrySection({ country: c }: { country: CountryRow }) {
                         <span className="supplier-meta">{[s.type_label, s.city].filter(Boolean).join(' · ')}</span>
                         <span className="supplier-facts">
                             <span className="listing-rating">
-                                <Star aria-hidden className="size-3.5" /> <b>{s.rating.toFixed(1)}</b>
+                                <Star aria-hidden className="size-3.5" /> <b>{formatDecimal(s.rating)}</b>
                             </span>
                             <span>{tChoice('home.suppliers_listings', s.listings_count)}</span>
                         </span>

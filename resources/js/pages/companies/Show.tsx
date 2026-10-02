@@ -10,7 +10,7 @@ import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { renderRichText } from '@/lib/richtext';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -389,7 +389,7 @@ export default function CompanyShow({
                     <div className="grid grid-4 grid-tight mt-24" style={{ paddingTop: 20, borderTop: '1px solid var(--border)' }}>
                         <div>
                             <div className="t-num" style={{ fontSize: 24, lineHeight: '32px' }}>
-                                {company.rating.toFixed(1)}
+                                {formatDecimal(company.rating)}
                             </div>
                             <div className="t-sm muted">
                                 {t('company.rating')} · {tChoice('company.reviews', company.reviews_count)}

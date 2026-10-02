@@ -276,7 +276,7 @@ def _throttle(
 
     if throttle.too_many(key, max_attempts):
         if first.request.headers.get("X-Inertia"):
-            wait = "Слишком много действий подряд — подождите минуту и попробуйте ещё раз."
+            wait = first.t("messages.throttled")
             store = _store(first)
             store.flash("errors", {"default": {"format": ":message", "messages": {"body": [wait]}}})
             store.flash("error", wait)

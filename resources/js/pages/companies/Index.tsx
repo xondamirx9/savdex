@@ -3,7 +3,7 @@ import { Link } from '@/components/ui/Link';
 import { CalendarDays, FileText, Globe, Handshake, Search, Star } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { VerificationBadge } from '@/components/VerificationBadge';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
 import { Pagination } from '@/components/Pagination';
@@ -255,7 +255,7 @@ export default function CompaniesIndex({
                                                 </p>
                                             </div>
                                             <div className="listing-rating" style={{ margin: 0 }}>
-                                                <Star aria-hidden className="size-3.5" /> <b>{c.rating.toFixed(1)}</b>
+                                                <Star aria-hidden className="size-3.5" /> <b>{formatDecimal(c.rating)}</b>
                                             </div>
                                         </div>
 

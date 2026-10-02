@@ -820,6 +820,9 @@ def test_аналитика_расширенная(сайт, path, показы)
     props = стр["props"]
 
     assert props["advanced"] is True and props["benchmark"]
+    # Шаги воронки — на языке страницы
+    первый = "Impressions in search" if path.startswith("/en") else "Qidiruvdagi ko‘rsatuvlar"
+    assert props["funnel"][0]["label"] == первый
     # Равные показы — порядок по запросу
     assert [(q["query"], q["impressions"]) for q in props["queries"]] == list(
         zip(["бетон", "цемент", "арматура", "кирпич"], показы, strict=True)
@@ -1168,6 +1171,10 @@ def test_продвижение(сайт, path):
         (0, 57, None),
     ]
     assert {t["code"] for t in props["types"]} >= {"bump", "urgent", "highlight"}
+    # Цена — на языке страницы; «/» перед сроком ждёт страница
+    подписи = " ".join(t["cost_label"] for t in props["types"])
+    assert ("ед." in подписи) == (path == "/cabinet/promo")
+    assert ("birlik" in подписи) == (path != "/cabinet/promo")
 
 
 def test_продвижение_без_компании(сайт):

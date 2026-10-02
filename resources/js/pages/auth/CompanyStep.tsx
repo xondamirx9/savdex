@@ -5,6 +5,7 @@ import { Button, TextInput } from '@/components/ui';
 import { SelectField } from '@/components/SelectField';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
+import { localize } from '@/lib/locale';
 import { cn } from '@/lib/cn';
 
 interface Props {
@@ -320,7 +321,7 @@ export default function CompanyStep({
 
             {/* Пропуск обязателен: аккаунт уже создан, и упереться
                 в форму на этом шаге — потерять человека совсем */}
-            <form method="post" action="/onboarding/skip" className="mt-8">
+            <form method="post" action={localize('/onboarding/skip')} className="mt-8">
                 <button
                     type="button"
                     className="btn btn-ghost btn-block btn-sm"

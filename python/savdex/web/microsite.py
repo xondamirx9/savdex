@@ -278,7 +278,7 @@ def _files(ctx: Context, company_id: int) -> list[dict[str, Any]]:
                 "type_label": label
                 if label != f"ui.cabinet.files.types.{d['type']}"
                 else d["type"],
-                "size": _file_size(d["file_size"]),
+                "size": _file_size(d["file_size"], ctx.locale),
                 # Относительный адрес: скачивание открыто и на домене мини-сайтов
                 "url": f"/files/{d['id']}",
             }

@@ -3,7 +3,7 @@ import { ReviewCard, type FeedReview } from '@/components/ReviewCard';
 import { Stars } from '@/components/Stars';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { numberLocale, t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 type FeedType = 'all' | 'platform' | 'company';
@@ -17,7 +17,7 @@ interface Summary {
 
 /** Оценка с одним знаком после запятой по правилам языка страницы. */
 function score(value: number): string {
-    return value.toLocaleString(numberLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    return formatDecimal(value);
 }
 
 function pageHref(type: FeedType, page: number): string {

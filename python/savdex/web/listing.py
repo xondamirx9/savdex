@@ -193,11 +193,11 @@ def _count_view(ctx: Context, row: dict[str, Any], visitor: str | None) -> None:
         remember_viewer(row["company_id"], viewer, row["id"])
 
 
-def _price_text(row: dict[str, Any]) -> str:
+def _price_text(ctx: Context, row: dict[str, Any]) -> str:
     if row["price_negotiable"] or row["price"] is None:
-        return "цена договорная"
+        return ctx.t("cabinet.listings.negotiable")
 
-    unit = "сум" if row["currency"] == "UZS" else row["currency"]
+    unit = ctx.t("catalog.currency_uzs") if row["currency"] == "UZS" else row["currency"]
 
     return f"{number_format(float(row['price']), 0)} {unit}"
 
@@ -220,7 +220,8 @@ def _seo(
     seo.description(
         description
         if description not in (None, "", "0")
-        else f"{title}. {_price_text(row)}. Поставщик: {company_name or ''}."
+        else f"{title}. {_price_text(ctx, row)}. "
+        + ctx.t("seo.listing_supplier", company=company_name or "")
     )
     seo.canonical(url)
     seo.locales = _visible_locales(row)
@@ -248,9 +249,9 @@ def _seo(
 
     seo.schema(product)
     crumbs = [
-        ("Каталог", ctx.url("catalog")),
+        (ctx.t("listing.catalog"), ctx.url("catalog")),
         (
-            category if category is not None else "Объявления",
+            category if category is not None else ctx.t("tabbar.listings"),
             ctx.url(f"catalog?category={row['category_id']}")
             if row["category_id"] is not None
             else ctx.url("catalog"),
@@ -303,8 +304,16 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     owner = viewer == row["company_id"]
     preview = row["status"] != "active"
 
-    # Черновик для чужих не существует: 404, а не 403
-    if preview and not owner:
+    companies = _rows(
+        "select * from companies where id = %s and deleted_at is null", [row["company_id"]]
+    )
+    company = companies[0] if companies else None
+
+    # Черновик для чужих не существует: 404, а не 403. Объявление
+    # заблокированной или удалённой компании — тоже: в каталоге его нет
+    hidden = preview or company is None or company["status"] != "active"
+
+    if hidden and not owner:
         return not_found(ctx)
 
     visitor = visitor_key(ctx)
@@ -317,10 +326,6 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     categories = _named("categories", locale)
     cities = _named("cities", locale)
     countries = _named("countries", locale)
-    companies = _rows(
-        "select * from companies where id = %s and deleted_at is null", [row["company_id"]]
-    )
-    company = companies[0] if companies else None
     city = cities.get(company["city_id"]) if company and company["city_id"] else None
     category = categories.get(row["category_id"]) if row["category_id"] else None
     parent = None

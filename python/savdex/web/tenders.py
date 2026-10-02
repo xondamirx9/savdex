@@ -22,7 +22,7 @@ from savdex import access, audit
 from savdex.guards import allowed_writes
 from savdex.web import inertia, paginator, search_text
 from savdex.web.directory import _named
-from savdex.web.home import _utc, banner, visible_in
+from savdex.web.home import LIVE_COMPANY, _utc, banner, visible_in
 from savdex.web.it_tasks import _date
 from savdex.web.phpquery import php_int
 from savdex.web.request import context
@@ -123,7 +123,8 @@ def cities(locale: str) -> list[dict[str, Any]]:
     visible, params = visible_in(locale)
     rows = _rows(
         "select c.id from cities c where c.is_active and exists (select 1 from listings l "
-        f"where l.city_id = c.id and l.status = 'active' and l.deleted_at is null{visible}) "
+        f"where l.city_id = c.id and l.status = 'active' and l.deleted_at is null{visible}"
+        f"{LIVE_COMPANY}) "
         "order by c.id",
         params,
     )

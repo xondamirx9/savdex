@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Empty } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 
 interface Row {
     id: number;
@@ -65,7 +65,7 @@ function CompanyCell({
                 <br />
                 <span className="t-caption muted">
                     {row.type}
-                    {row.rating > 0 && ` · ${t('cabinet.incoming.rating', { value: row.rating.toFixed(1) })}`}
+                    {row.rating > 0 && ` · ${t('cabinet.incoming.rating', { value: formatDecimal(row.rating) })}`}
                 </span>
             </span>
         </div>

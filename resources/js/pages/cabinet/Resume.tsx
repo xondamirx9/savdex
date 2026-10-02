@@ -5,6 +5,7 @@ import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
+import { localize } from '@/lib/locale';
 import { routes } from '@/routes';
 
 interface Job {
@@ -174,7 +175,7 @@ export default function Resume({ resume, defaults, options, countries, cities }:
                     </span>
 
                     {resume && status === 'published' && (
-                        <a href={routes.resume(resume.slug)} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
+                        <a href={localize(routes.resume(resume.slug))} className="btn btn-ghost btn-sm" target="_blank" rel="noreferrer">
                             <Eye aria-hidden className="size-4" /> {t('resume.open')}
                         </a>
                     )}

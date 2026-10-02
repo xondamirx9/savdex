@@ -15,6 +15,7 @@ updated_at). Перевод опубликованного ставить в о�
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -188,35 +189,62 @@ def _activate(ctx: Context, row: dict[str, Any], plan: dict[str, Any]) -> None:
     )
 
 
+#: Текст уведомления: готовая строка или «текст на языке» — для писем
+#: другой компании, у каждого сотрудника которой свой язык (users.locale)
+Text = str | Callable[[str], str]
+
+
+def _in(text: Text | None, locale: str) -> str | None:
+    return text(locale) if callable(text) else text
+
+
 def _notify_company(
     ctx: Context | None,
     company: dict[str, Any],
     type_: str,
-    title: str,
+    title: Text,
     tone: str,
     url: str,
-    body: str | None = None,
+    body: Text | None = None,
 ) -> None:
-    """Notifier::company: событие в ленте кабинета и уведомление каждому сотруднику."""
+    """
+    Notifier::company: событие в ленте кабинета и уведомление каждому
+    сотруднику — на его языке; лента компании — на языке первого из них.
+    """
     now = _stamp(_now())
+
+    # $company->users()->get(): без сортировки — тот же запрос, что у
+    # Laravel, отдаёт строки в том же порядке
+    users = _rows(
+        "select id, company_id, locale from users where company_id = %s and deleted_at is null",
+        [company["id"]],
+    )
+    first = min(users, key=lambda u: u["id"]) if users else None
+    feed = (first["locale"] if first else None) or "ru"
 
     with allowed_writes("activity_events", "user_notifications"), connection.cursor() as cursor:
         cursor.execute(
             "insert into activity_events (company_id, type, tone, message, url, created_at, "
             "updated_at) values (%s, %s, %s, %s, %s, %s, %s)",
-            [company["id"], type_, tone, title, url, now, now],
+            [company["id"], type_, tone, _in(title, feed), url, now, now],
         )
 
-        # $company->users()->get(): без сортировки — тот же запрос, что у
-        # Laravel, отдаёт строки в том же порядке
-        for user in _rows(
-            "select id, company_id from users where company_id = %s and deleted_at is null",
-            [company["id"]],
-        ):
+        for user in users:
+            locale = user["locale"] or "ru"
             cursor.execute(
                 "insert into user_notifications (user_id, company_id, type, title, body, tone, "
                 "url, created_at, updated_at) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                [user["id"], user["company_id"], type_, title, body, tone, url, now, now],
+                [
+                    user["id"],
+                    user["company_id"],
+                    type_,
+                    _in(title, locale),
+                    _in(body, locale),
+                    tone,
+                    url,
+                    now,
+                    now,
+                ],
             )
 
 

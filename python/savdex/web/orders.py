@@ -353,12 +353,17 @@ def assign(
         ctx,
         company,
         "billing",
-        f"Вам назначен тариф «{plan['name']}»"
-        if source == SOURCE_MANUAL
-        else f"Тариф «{plan['name']}» активирован",
+        ctx.t(
+            "messages.order.plan_assigned"
+            if source == SOURCE_MANUAL
+            else "messages.order.plan_activated",
+            plan=plan["name"],
+        ),
         "success",
         "/cabinet/billing",
-        f"Действует до {until}." if until is not None else "Действует бессрочно.",
+        ctx.t("messages.order.plan_until", date=until)
+        if until is not None
+        else ctx.t("messages.order.plan_forever"),
     )
 
     return subscription

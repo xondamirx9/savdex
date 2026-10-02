@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { numberLocale, t } from '@/lib/i18n';
+import { formatDecimal, numberLocale, t } from '@/lib/i18n';
 
 export interface MetricData {
     value: number;
@@ -61,7 +61,7 @@ export function Metric({
     const down = (data.delta ?? 0) < 0;
     const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
 
-    const value = data.format === 'percent' ? `${data.value.toFixed(1)} %` : formatNumber(data.value);
+    const value = data.format === 'percent' ? `${formatDecimal(data.value)} %` : formatNumber(data.value);
 
     // Конверсия измеряется в процентах, поэтому её изменение —
     // в процентных пунктах: «+2 %» и «+2 п.п.» это разные величины

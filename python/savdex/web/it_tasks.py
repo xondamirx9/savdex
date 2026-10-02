@@ -17,7 +17,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
-from savdex.web import content, inertia, paginator, search_text
+from savdex.web import content, inertia, paginator, search_text, ui
 from savdex.web.directory import _named, logo_url
 from savdex.web.home import _utc
 from savdex.web.news import day_month_year
@@ -312,14 +312,19 @@ def number_format(value: float, decimals: int) -> str:
     return sign + grouped + ("," + fraction if decimals else "")
 
 
-def size_label(size: int | None) -> str:
-    """ItTaskFile::sizeLabel."""
+def size_label(size: int | None, locale: str) -> str:
+    """ItTaskFile::sizeLabel на языке страницы: «1,5 МБ», «1.5 MB»."""
     kb = (size or 0) / 1024
 
     if kb >= 1024:
-        return number_format(kb / 1024, 1) + " МБ"
+        return ui.t("common.size_mb", locale, size=_decimal(number_format(kb / 1024, 1), locale))
 
-    return number_format(max(1, kb), 0) + " КБ"
+    return ui.t("common.size_kb", locale, size=number_format(max(1, kb), 0))
+
+
+def _decimal(value: str, locale: str) -> str:
+    """Десятичная запятая — у ru, uz, tr; у en и zh — точка."""
+    return value.replace(",", ".") if locale in ("en", "zh") else value
 
 
 def _extension(path: str) -> str:
@@ -436,7 +441,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
                     {
                         "id": f["id"],
                         "title": f["title"],
-                        "size": size_label(f["file_size"]),
+                        "size": size_label(f["file_size"], ctx.locale),
                         "ext": extension(f["title"], f["file_path"]),
                     }
                     for f in files

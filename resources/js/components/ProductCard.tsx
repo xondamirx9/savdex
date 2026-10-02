@@ -3,7 +3,7 @@ import { BadgeCheck, Building2, Clock, Heart, MapPin, Package, ShoppingCart, Sta
 import { Link } from '@/components/ui/Link';
 import { formatNumber } from '@/components/cabinet';
 import { cn } from '@/lib/cn';
-import { t } from '@/lib/i18n';
+import { formatDecimal, t } from '@/lib/i18n';
 import { unitLabel } from '@/lib/units';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -219,7 +219,7 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         {row.company.rating > 0 && (
                             <span className="listing-rating">
                                 <Star aria-hidden className="size-3" style={{ fill: 'currentColor', color: 'var(--warning)' }} />
-                                {row.company.rating.toFixed(1)}
+                                {formatDecimal(row.company.rating)}
                             </span>
                         )}
                     </li>

@@ -44,7 +44,7 @@ import { CountUp } from '@/components/CountUp';
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { SERVICE_PAGE_BY_CODE } from '@/lib/serviceSections';
 import { routes } from '@/routes';
 
@@ -598,7 +598,7 @@ export default function Home({
                                     </span>
                                     <span className="supplier-facts">
                                         <span className="listing-rating">
-                                            <Star aria-hidden className="size-3.5" /> <b>{s.rating.toFixed(1)}</b>
+                                            <Star aria-hidden className="size-3.5" /> <b>{formatDecimal(s.rating)}</b>
                                         </span>
                                         <span>{tChoice('home.suppliers_listings', s.listings_count)}</span>
                                     </span>

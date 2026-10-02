@@ -7,11 +7,7 @@ import re
 import unicodedata
 from typing import Any
 
-from savdex.web import locales
-
-ORGANIZATION_DESCRIPTION = (
-    "B2B-площадка Узбекистана и Центральной Азии: поставщики и закупщики находят друг друга"
-)
+from savdex.web import locales, ui
 
 
 def _width(char: str) -> int:
@@ -135,7 +131,7 @@ class Seo:
             "@type": "Organization",
             "name": "SAVDEX",
             "url": self.root,
-            "description": ORGANIZATION_DESCRIPTION,
+            "description": ui.t("seo.organization_description", self.locale),
             "areaServed": ["UZ", "KZ", "KG", "TJ"],
             **self.organization_details,
         }

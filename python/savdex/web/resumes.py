@@ -156,12 +156,21 @@ def card(
     }
 
 
+#: Автор резюме — живая учётка: резюме удалённого или заблокированного
+#: человека не показываем (контакты в нём — его)
+LIVE_AUTHOR = (
+    "exists (select 1 from users ra where ra.id = r.user_id "
+    "and ra.deleted_at is null and ra.status = 'active')"
+)
+
+
 def _cities(locale: str) -> list[dict[str, Any]]:
     """Города, где есть хоть одно опубликованное резюме, по имени."""
     names = _named("cities", locale)
     ids = _rows(
         "select c.id from cities c where c.is_active and exists (select 1 from resumes r "
-        "where r.city_id = c.id and r.status = 'published' and r.deleted_at is null) "
+        "where r.city_id = c.id and r.status = 'published' and r.deleted_at is null "
+        f"and {LIVE_AUTHOR}) "
         "order by c.id"
     )
     items = [{"id": r["id"], "name": names[r["id"]]} for r in ids]
@@ -190,7 +199,7 @@ def index(request: HttpRequest) -> HttpResponse:
     employment = string("employment")
     city = php_int(string("city"), 0)
 
-    where = ["r.status = 'published'", "r.deleted_at is null"]
+    where = ["r.status = 'published'", "r.deleted_at is null", LIVE_AUTHOR]
     params: list[Any] = []
 
     if term != "":
@@ -327,7 +336,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     select = (
         "select r.*, u.name as user_name from resumes r "
         "left join users u on u.id = r.user_id and u.deleted_at is null "
-        "where r.status = 'published' and r.deleted_at is null"
+        f"where r.status = 'published' and r.deleted_at is null and {LIVE_AUTHOR}"
     )
     found = _rows(f"{select} and r.slug = %s limit 1", [slug])
 

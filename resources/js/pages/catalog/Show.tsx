@@ -22,7 +22,7 @@ import { Gallery } from '@/components/Gallery';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { unitLabel } from '@/lib/units';
-import { t, tChoice } from '@/lib/i18n';
+import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -334,7 +334,7 @@ export default function ListingShow({
 
                             {company.reviews_count > 0 && (
                                 <p className="t-sm muted" style={{ marginBottom: 16 }}>
-                                    {t('listing.rating', { rating: company.rating.toFixed(1) })} ·{' '}
+                                    {t('listing.rating', { rating: formatDecimal(company.rating) })} ·{' '}
                                     {tChoice('listing.reviews', company.reviews_count)}
                                 </p>
                             )}

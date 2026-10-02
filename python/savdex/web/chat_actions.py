@@ -28,6 +28,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
+from savdex.web import ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.forms import action, back, flash, input_of, invalid, previous, redirect
@@ -161,7 +162,7 @@ def send_message(ctx: Context, thread: dict[str, Any], company: dict[str, Any], 
             ctx,
             recipient,
             "chat",
-            f"Новое сообщение от «{company['name']}»",
+            lambda locale: ui.t("messages.chat.notify_title", locale, company=company["name"]),
             "info",
             f"/cabinet/chats/{thread['id']}",
             body=str_limit(body, 120),
@@ -374,7 +375,8 @@ def respond(request: HttpRequest, listing_id: str) -> HttpResponse:
     try:
         seller = _company(listing["company_id"])
 
-        if seller is None:
+        # Заблокированная компания для откликов — как пропавшая
+        if seller is None or seller["status"] != "active":
             raise ChatRejectedError(ctx.t("messages.chat.listing_gone"))
 
         if seller["id"] == company["id"]:
@@ -450,7 +452,7 @@ def respond_task(request: HttpRequest, task_id: str) -> HttpResponse:
     try:
         customer = _company(task["company_id"])
 
-        if customer is None:
+        if customer is None or customer["status"] != "active":
             raise ChatRejectedError(ctx.t("messages.chat.task_gone"))
 
         if customer["id"] == company["id"]:
