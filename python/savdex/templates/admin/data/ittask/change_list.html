@@ -1,0 +1,21 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Вкладки состояний со счётчиками — вместо отбора по статусу в правой
+  колонке. Сотрудник приходит сюда с вопросом «что сейчас требует
+  внимания», и ответ должен стоять над списком, а не в наборе
+  переключателей сбоку: сколько заказов ищут исполнителя, сколько
+  сдано, сколько снято.
+{% endcomment %}
+{% block search %}
+  {% if sx_tabs %}
+    <nav class="sx-tabs" aria-label="Состояние заказов">
+      {% for tab in sx_tabs %}
+        <a class="sx-tab{% if tab.current %} is-on{% endif %}" href="{{ tab.url }}"
+           {% if tab.current %}aria-current="page"{% endif %}>{{ tab.label }}
+          <span class="sx-tab-count">{{ tab.count }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

@@ -14,10 +14,11 @@
 (savdex/data/workbook.py, как ListingWorkbookImport), право listings.import;
 «Выгрузить» — ListingExporter, право listings.export.
 
-IT-задачи: список с отбором по статусу и виду услуги, правка (создаются
-только из кабинета — задача от имени заказчика), «Снять» с витрины для
-спама и нарушений (заказчик увидит её в кабинете архивной), «На сайте» у
-открытой, удаление — с правом удалять.
+Заказы на услуги (в базе — it_tasks): состояние вкладками со
+счётчиками над списком, отбор по направлению, правка (создаются
+только из кабинета — заказ от имени заказчика), «Снять с витрины»
+для спама и нарушений (заказчик увидит заказ в кабинете архивным),
+«Открыть на сайте» у открытого, удаление — с правом удалять.
 """
 
 from __future__ import annotations
@@ -27,10 +28,13 @@ from typing import Any, ClassVar
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+from django.contrib.admin.views.main import PAGE_VAR, SEARCH_VAR
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.html import format_html
 
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
@@ -47,6 +51,7 @@ from savdex.data.models import (
     Listing,
 )
 from savdex.guards import allowed_writes
+from savdex.text import plural
 from savdex.web import locales
 
 
@@ -68,6 +73,13 @@ class StackField(forms.CharField):
 
 class ItTaskForm(forms.ModelForm):  # type: ignore[type-arg]
     stack = StackField(label="Стек", required=False, help_text="Через запятую: Laravel, React…")
+    # Подписи те же, что в списке и на вкладках: раздел должен
+    # называть состояние одинаково везде. Значения в базе прежние.
+    # Список отложен в вызываемое: IT_STATES объявлен ниже формы
+    status = forms.ChoiceField(
+        label="Что сейчас с заказом",
+        choices=lambda: [(code, label) for code, (label, _) in IT_STATES.items()],
+    )
 
     class Meta:
         model = ItTask
@@ -96,12 +108,37 @@ class ItTaskForm(forms.ModelForm):  # type: ignore[type-arg]
         return data
 
 
+#: Состояние заказа словами о деле и цвет плашки.
+#:
+#: В базе лежит «active», «completed» — и так же они назывались
+#: в списке: «Открыта», «Выполнена». Сотруднику поддержки эти слова
+#: ничего не говорят: открыта — кем, выполнена — кем и что дальше.
+#: Здесь то же состояние названо делом: заказ ищет исполнителя, работа
+#: сдана, заказчик закрыл, мы сняли с витрины. Значения в базе
+#: прежние — меняются только подписи, и те же слова стоят в форме
+#: правки, чтобы раздел говорил на одном языке.
+IT_STATES: dict[str, tuple[str, str]] = {
+    "active": ("Ищет исполнителя", "success"),
+    "closed": ("Закрыта заказчиком", "warning"),
+    "completed": ("Работа сдана", "info"),
+    "archived": ("Снята с витрины", "gray"),
+}
+
+
 class ItStatus(admin.SimpleListFilter):
+    """
+    Состояние: отбор тот же, но в правой колонке его нет — он стоит
+    вкладками над списком (шаблон change_list.html раздела). Пустой
+    шаблон вместо выброшенного фильтра: так адрес ?status=active
+    остаётся законным для Django и вкладки работают его же отбором.
+    """
+
     title = "статус"
     parameter_name = "status"
+    template = "admin/data/ittask/status_filter.html"
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return list(IT_STATUSES.items())
+        return [(code, label) for code, (label, _) in IT_STATES.items()]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(status=self.value()) if self.value() else queryset
@@ -121,8 +158,10 @@ class ServiceType(admin.SimpleListFilter):
 @register(ItTask, section="ittasks")
 class ItTaskAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\ItTask"
-    title_list = "IT-задачи"
-    title_change = "IT-задача"
+    title_list = "Заказы на услуги"
+    title_change = "Заказ на услугу"
+
+    change_list_template = "admin/data/ittask/change_list.html"
 
     form = ItTaskForm
     fieldsets = (
@@ -133,16 +172,22 @@ class ItTaskAdmin(SavdexModelAdmin):
         ),
         ("Статус", {"fields": ("status",)}),
     )
-    list_display = ("task", "service", "responses_count", "state", "published", "row_actions")
+    # Направление — строкой под названием, а не своей колонкой:
+    # места в разделе ровно столько, сколько оставляют меню слева
+    # и фильтр справа, и семь колонок в нём наезжали друг на друга
+    list_display = ("task", "responses", "state", "published", "row_actions")
     list_filter = (ItStatus, ServiceType)
     list_select_related = ("company",)
     search_fields = ("title",)
     ordering = ("-created_at", "-id")
     list_per_page = 50
     actions = ("delete_selected",)
+    # Пусто — значит пусто: прочерк Django в колонке действий читался
+    # как «данных нет», хотя с закрытым заказом просто нечего делать
+    empty_value_display = ""
 
     def has_add_permission(self, request: HttpRequest) -> bool:
-        # Задача — от имени заказчика: заводится только в кабинете
+        # Заказ — от имени заказчика: заводится только в кабинете
         return False
 
     def get_actions(self, request: HttpRequest) -> dict[str, Any]:
@@ -158,47 +203,84 @@ class ItTaskAdmin(SavdexModelAdmin):
 
         return attributes
 
-    @admin.display(description="задача", ordering="title")
+    @admin.display(description="что нужно сделать и кому", ordering="title")
     def task(self, obj: ItTask) -> str:
+        """
+        Название, под ним заказчик — и предупреждение, если заказ висит
+        впустую.
+
+        Открытый заказ без единого отклика — единственное, что в этом
+        списке требует вмешательства: либо описание не объясняет, что
+        нужно, либо направление выбрано не то. Раньше это приходилось
+        вылавливать глазами по колонке с нулём.
+        """
         title = obj.title if len(obj.title) <= 80 else obj.title[:80].rstrip() + "..."
         company = obj.company
+        stale = obj.status == "active" and obj.responses_count == 0
 
         return format_html(
-            "{}<br><small>{}</small>",
+            '<span class="sx-row-title">{}</span>'
+            '<span class="sx-row-meta"><small class="sx-row-sub">{}</small>'
+            '<span class="sx-chip">{}</span></span>{}',
             title,
             company.name if company is not None and company.deleted_at is None else "",
+            SERVICE_TYPES.get(obj.service_type, obj.service_type),
+            format_html(
+                '<small class="sx-row-care">Висит без откликов — стоит проверить описание</small>'
+            )
+            if stale
+            else "",
         )
 
-    @admin.display(description="вид услуги", ordering="service_type")
-    def service(self, obj: ItTask) -> str:
-        return SERVICE_TYPES.get(obj.service_type, obj.service_type)
+    @admin.display(description="отклики", ordering="responses_count")
+    def responses(self, obj: ItTask) -> str:
+        """
+        Число со словом: «6 откликов». Голая цифра в колонке «Откликов»
+        читалась как номер чего-то, а ноль — как пустая клетка.
+        """
+        if obj.responses_count == 0:
+            return format_html('<span class="sx-row-sub">нет откликов</span>')
 
-    @admin.display(description="статус", ordering="status")
+        number, word = plural(obj.responses_count, "отклик", "отклика", "откликов").split(" ", 1)
+
+        return format_html('<span class="sx-count"><b>{}</b>{}</span>', number, word)
+
+    @admin.display(description="что сейчас с заказом", ordering="status")
     def state(self, obj: ItTask) -> str:
-        return _badge(
-            IT_STATUSES.get(obj.status, obj.status), "success" if obj.status == "active" else "gray"
-        )
+        label, tone = IT_STATES.get(obj.status, (IT_STATUSES.get(obj.status, obj.status), "gray"))
 
-    @admin.display(description="опубликована", ordering="published_at")
+        return _badge(label, tone)
+
+    @admin.display(description="на витрине", ordering="published_at")
     def published(self, obj: ItTask) -> str:
-        return timezone.localtime(obj.published_at).strftime("%d.%m.%Y") if obj.published_at else ""
+        """Дата словами: «23 мая 2026». «23.05.2026» — это из отчёта."""
+        if obj.published_at is None:
+            return ""
+
+        return date_format(timezone.localtime(obj.published_at), "j E Y")
 
     @admin.display(description="")
     def row_actions(self, obj: ItTask) -> str:
-        """«На сайте» и «Снять» — у открытой задачи."""
+        """
+        «На сайте» и «Снять» — у открытой задачи. У остальных колонка
+        пустая: прочерк в ней читался как «данных нет», хотя делать
+        с закрытой задачей попросту нечего.
+        """
         if obj.status != "active":
             return ""
 
         link = (
             format_html(
-                '<a href="/it-services/{}" target="_blank" rel="noopener">На сайте</a> ', obj.slug
+                '<a class="sx-row-link" href="/it-services/{}" target="_blank" '
+                'rel="noopener">На сайте</a>',
+                obj.slug,
             )
             if obj.slug
             else ""
         )
         button = (
             format_html(
-                '<button type="submit" class="button" formaction="{}" formmethod="post" '
+                '<button type="submit" class="button sx-quiet" formaction="{}" formmethod="post" '
                 "onclick=\"return confirm('Снять задачу с витрины? Заказчик увидит её в кабинете "
                 "архивной.')\">Снять</button>",
                 reverse("savdex_admin:data_ittask_archive", args=[obj.pk]),
@@ -207,14 +289,61 @@ class ItTaskAdmin(SavdexModelAdmin):
             else ""
         )
 
-        return format_html("{}{}", link, button)
+        return format_html('<span class="sx-row-actions">{}{}</span>', link, button)
 
     _can_archive = False
+
+    def _tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
+        """
+        Вкладки состояний со счётчиками — они же отбор по статусу.
+
+        Считается то, что откроется при нажатии: поиск и направление
+        остаются, меняется только состояние. Иначе вкладка обещала бы
+        сорок заказов, а показывала два — и верить ей перестали бы.
+        """
+        rows = self.get_queryset(request)
+
+        if service := request.GET.get(ServiceType.parameter_name):
+            rows = rows.filter(service_type=service)
+
+        if term := request.GET.get(SEARCH_VAR):
+            rows = rows.filter(title__icontains=term)
+
+        # order_by() обязателен: со списочной сортировкой Django кладёт
+        # created_at в GROUP BY, и каждая задача считается отдельной
+        # группой — вкладки показывали единицы вместо десятков
+        counts = dict(rows.order_by().values_list("status").annotate(total=Count("id")))
+        current = request.GET.get(ItStatus.parameter_name) or ""
+
+        def tab(code: str, label: str, total: int) -> dict[str, Any]:
+            query = request.GET.copy()
+            query.pop(ItStatus.parameter_name, None)
+            # Страница отбора сбрасывается: вторая страница «всех»
+            # для двух снятых заказов не существует
+            query.pop(PAGE_VAR, None)
+
+            if code:
+                query[ItStatus.parameter_name] = code
+
+            return {
+                "code": code,
+                "label": label,
+                "count": total,
+                "current": code == current,
+                "url": f"?{query.urlencode()}" if query else "?",
+            }
+
+        return [
+            tab("", "Все", sum(counts.values())),
+            *(tab(code, label, counts.get(code, 0)) for code, (label, _) in IT_STATES.items()),
+        ]
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_archive = self.has_change_permission(request)
 
-        return super().changelist_view(request, extra_context)
+        return super().changelist_view(
+            request, {"sx_tabs": self._tabs(request), **(extra_context or {})}
+        )
 
     def get_urls(self) -> list[Any]:
         return [

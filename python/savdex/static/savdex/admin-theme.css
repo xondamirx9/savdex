@@ -970,6 +970,212 @@ ul.messagelist li.error {
     fill: var(--sx-text);
 }
 
+/* ── Вкладки состояний над списком ──
+   Отбор, который сам отвечает на вопрос «а сколько их»: раздел
+   открывают, чтобы увидеть, что требует внимания, и счётчики должны
+   стоять над списком, а не прятаться в переключателях сбоку */
+.sx-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 16px 24px 0;
+}
+
+.sx-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-pill-radius, 999px);
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--sx-text-2);
+    white-space: nowrap;
+}
+
+.sx-tab:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+.sx-tab.is-on,
+.sx-tab.is-on:hover {
+    background: var(--sx-accent);
+    border-color: var(--sx-accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.sx-tab-count {
+    background: var(--sx-surface-2);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.sx-tab.is-on .sx-tab-count {
+    background: rgba(255, 255, 255, .22);
+}
+
+/* ── Строка списка: название, заказчик, пометка ── */
+
+.sx-row-title {
+    display: block;
+    font-weight: 600;
+    color: var(--sx-text);
+}
+
+/* Название — обычным текстом: синей ссылкой в каждой строке список
+   выглядел набором ссылок, хотя читают в нём заголовки. Что строка
+   открывается, видно по курсору и по подчёркиванию под указателем */
+#result_list a .sx-row-title {
+    color: var(--sx-text);
+}
+
+#result_list a:hover .sx-row-title {
+    color: var(--sx-accent-text);
+    text-decoration: underline;
+}
+
+.sx-row-sub,
+.sx-row-care {
+    display: block;
+    font-size: 12.5px;
+    color: var(--sx-muted);
+}
+
+/* Заказчик и направление — одной строкой, пока помещаются,
+   и каждое со своей, пока нет */
+.sx-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+}
+
+/* Заказ, который висит впустую: полоса слева по всей строке — её
+   видно, не читая колонок */
+.sx-row-care {
+    color: var(--sx-status-warning);
+}
+
+#result_list tbody tr:has(.sx-row-care) {
+    box-shadow: inset 3px 0 0 var(--sx-status-warning);
+}
+
+/* Направление — не заголовок и не ссылка: подпись, по которой
+   взгляд скользит */
+/* Число откликов: цифра и слово в два этажа — «11 откликов»
+   в одну строку колонке не по ширине, а перенос посреди фразы
+   читается как обрыв */
+.sx-count {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.sx-count b {
+    font-size: 15px;
+}
+
+/* Направление — обводка, а не заливка: заливка совпадала с подложкой
+   каждой второй строки, и половина чипов пропадала */
+.sx-chip {
+    display: inline-block;
+    border: 1px solid var(--sx-border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    color: var(--sx-text-2);
+}
+
+/* Ссылка и кнопка столбиком: рядом они не помещаются в колонку,
+   а колонке шире неоткуда взяться — рядом шесть других */
+.sx-row-actions {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+/* «Снять с витрины» — действие редкое и не главное: синяя кнопка
+   в каждой строке звала нажать на себя */
+.button.sx-quiet {
+    background: transparent;
+    border: 1px solid var(--sx-input-border);
+    color: var(--sx-text-2);
+    font-weight: 500;
+}
+
+.button.sx-quiet:hover {
+    background: var(--sx-surface-2);
+    color: var(--sx-text);
+}
+
+/* Ширины колонок раздела заказов: без них название переносилось
+   по три слова в строку, дата — в три строки, а колонка действий
+   уезжала за край. Только здесь (.model-ittask): остальным разделам
+   колонки по содержимому подходят */
+.model-ittask #result_list { table-layout: fixed }
+.model-ittask #result_list th.action-checkbox-column { width: 34px }
+.model-ittask #result_list th.column-task { width: 35% }
+.model-ittask #result_list th.column-responses { width: 13% }
+.model-ittask #result_list th.column-state { width: 25% }
+.model-ittask #result_list th.column-published { width: 14% }
+.model-ittask #result_list th.column-row_actions { width: 13% }
+.model-ittask #result_list td,
+.model-ittask #result_list thead th { padding-left: 12px; padding-right: 12px }
+
+/* Заголовки и плашки переносятся по словам: колонки здесь заданы
+   долями, и длинная подпись иначе наезжает на соседнюю */
+.model-ittask #result_list thead th,
+.model-ittask #result_list .sx-pill { white-space: normal }
+
+/* ── Плашки состояний ──
+   «Открыта», «Ждёт проверки», «Возврат» — то, что печатает _badge().
+   Раньше это было цветное слово: среди такого же текста оно терялось,
+   а в тёмной теме тёмно-зелёное по тёмно-синему читалось хуже
+   обычного. Плашка с подложкой видна боковым зрением — список
+   читается по цвету, не вчитываясь в слова.
+
+   Подложка — тот же цвет, разведённый до четырнадцати процентов:
+   свой набор переменных на каждую тему не нужен, цвет текста темы
+   уже знают. Браузеру без color-mix достаётся ровная серая подложка —
+   плашка остаётся плашкой. */
+.sx-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 18px;
+    white-space: nowrap;
+    background: var(--sx-surface-2);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* Точка впереди: по ней состояние видно и тому, кто не различает
+   красный и зелёный, — плашки отличаются ещё и подписью */
+.sx-pill::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.sx-pill--success { color: var(--sx-status-success) }
+.sx-pill--info { color: var(--sx-status-info) }
+.sx-pill--primary { color: var(--sx-status-primary) }
+.sx-pill--warning { color: var(--sx-status-warning) }
+.sx-pill--danger { color: var(--sx-status-danger) }
+.sx-pill--gray { color: var(--sx-status-gray) }
+
 /* ── Цвета статусов из разделов ──
    Разделы красят подписи прямо в разметке (style="color:#b91c1c"): на
    тёмном фоне тёмно-красный и тёмно-зелёный почти не видны. Подменяем
