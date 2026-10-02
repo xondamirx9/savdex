@@ -1383,6 +1383,17 @@ html[data-theme="dark"] .sx-kind-buy {
     margin-top: 1px;
 }
 
+/* Объявление, которое ждёт уже нас: полоса слева по всей строке —
+   её видно, не читая колонок */
+.sx-waiting {
+    color: var(--sx-status-warning);
+    font-weight: 600;
+}
+
+#result_list tbody tr:has(.sx-waiting) {
+    box-shadow: inset 3px 0 0 var(--sx-status-warning);
+}
+
 .sx-until {
     display: block;
     white-space: nowrap;
