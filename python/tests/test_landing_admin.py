@@ -122,6 +122,30 @@ def test_список_и_права(люди):
     assert чужой["status"] == 403
 
 
+def test_список_по_группам_сверху_вниз(люди):
+    """
+    Секции разложены по группам в порядке страницы: у каждой — место,
+    нынешний заголовок и видимость; ни одна не потеряна.
+    """
+    from savdex.site.landing_admin import LANDING_GROUPS
+
+    _, список = django(люди["content_manager"], ("get", LIST, None))
+    body = список["body"]
+
+    # Группы — в порядке страницы, и вместе в них все секции макета
+    positions = [body.index(f">{title}</h2>") for title, _, _ in LANDING_GROUPS]
+    assert positions == sorted(positions)
+    assert sorted(key for _, _, keys in LANDING_GROUPS for key in keys) == sorted(LANDING_FIELDS)
+
+    # Нынешний заголовок вместо «заголовок секции», место на странице
+    assert "«Поставщики и закупщики находят друг друга»" in body
+    assert 'title="Место на странице">1</span>' in body
+    assert 'title="Место на странице">12</span>' in body
+    # Первый экран не скрывается — «Всегда видна»; счётчики — без текстов
+    assert "Всегда видна" in body
+    assert "Цифры считаются сами" in body
+
+
 def test_у_секции_только_её_поля(люди):
     _, поставщики, счётчики = django(
         люди["content_manager"],

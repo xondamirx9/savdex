@@ -1,0 +1,68 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Главная страница (savdex/site/landing_admin.py): секции по группам —
+  верх страницы, товары и компании, о площадке, низ, — в том порядке,
+  в каком их видит посетитель. У секции — место на странице, нынешний
+  заголовок, что в ней правится, свои языки и видимость. Секции не
+  заводятся и не переставляются, поэтому поиска, отборов и действий нет.
+{% endcomment %}
+{% block content %}
+<div id="content-main" class="sx-landing">
+  <p class="sx-landing-intro">
+    Секции идут в том порядке, в каком их видит посетитель — сверху вниз.
+    Нажмите на секцию, чтобы поменять её тексты или скрыть её с сайта.
+  </p>
+
+  <div class="sx-landing-legend" aria-hidden="true">
+    <span><b class="sx-lang is-own">ru</b> свой текст</span>
+    <span><b class="sx-lang">uz</b> переведётся машиной</span>
+  </div>
+
+  {% for group in landing_groups %}
+    <section class="sx-landing-group" aria-labelledby="landing-group-{{ forloop.counter }}">
+      <header class="sx-landing-group-head">
+        <h2 id="landing-group-{{ forloop.counter }}">{{ group.title }}</h2>
+        {% if group.hint %}<p>{{ group.hint }}</p>{% endif %}
+      </header>
+
+      <ol class="sx-landing-list">
+        {% for row in group.rows %}
+          <li class="sx-landing-row{% if row.visibility == 'hidden' %} is-hidden{% endif %}">
+            <span class="sx-landing-place" title="Место на странице">{{ row.place }}</span>
+
+            <div class="sx-landing-main">
+              <a href="{{ row.url }}" class="sx-landing-name">{{ row.name }}</a>
+              {% if row.heading %}
+                <span class="sx-landing-heading">«{{ row.heading }}»</span>
+              {% elif row.note %}
+                <span class="sx-landing-heading is-note">{{ row.note }}</span>
+              {% endif %}
+              {% if row.fields %}
+                <span class="sx-sub">Можно изменить: {{ row.fields }}</span>
+              {% endif %}
+            </div>
+
+            <div class="sx-landing-langs">
+              {% for lang in row.languages %}
+                <b class="sx-lang{% if lang.own %} is-own{% endif %}" title="{% if lang.own %}свой текст{% else %}переведётся машиной{% endif %}">{{ lang.code }}</b>
+              {% endfor %}
+            </div>
+
+            <div class="sx-landing-state">
+              {% if row.visibility == "always" %}
+                <span class="sx-pill sx-pill-ok" title="Первый экран не скрывается: на нём поиск">Всегда видна</span>
+              {% elif row.visibility == "visible" %}
+                <span class="sx-pill sx-pill-ok">Видна</span>
+              {% else %}
+                <span class="sx-pill sx-pill-gray">Скрыта</span>
+              {% endif %}
+            </div>
+
+            <a href="{{ row.url }}" class="sx-landing-edit">Изменить</a>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}
