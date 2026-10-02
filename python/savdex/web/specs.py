@@ -118,9 +118,8 @@ COMPOSITION = ["cotton", "polyester", "cotton_poly", "viscose", "wool", "silk", 
 
 def enabled() -> bool:
     """
-    Детали товара есть у Laravel — выгружен словарь lang/ru/specs.php.
-    Пока его нет (ProductSpecs не влит), страницы Django без блока, как
-    Laravel; появился — блок включается сам, без выкладки Django.
+    Блок деталей товара включён, когда в словаре интерфейса
+    (savdex/locale/ui) есть группа specs.fields; нет её — страницы без блока.
     """
     return ui.group_node("specs.fields", "ru") is not None
 

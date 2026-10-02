@@ -1,13 +1,10 @@
 """
 Словарь интерфейса и подписи «N минут назад» — savdex/locale/ui/<язык>.json.
 
-Выгрузка из Laravel (`php artisan savdex:export-ui --to=python/savdex/locale/ui`,
-app/Console/Commands/ExportUiForPython.php): словарь — PHP-массив
-lang/<язык>/ui.php поверх русского, подписи — правила склонения Carbon.
-С шага 73 выгрузка лежит в коде Python, а не выгружается при старте
-службы: Django не нужен Laravel. Что она не отстала от lang/*, следит
-tests/Feature/ExportUiForPythonTest у Laravel. SAVDEX_UI_DIR — другой
-каталог (проверки). Django перечитывает файл, только если он сменился.
+Когда-то выгружался из Laravel (lang/<язык>/ui.php поверх русского,
+подписи — правила склонения Carbon); с удалением PHP эти файлы — сам
+словарь: тексты правятся прямо в них. SAVDEX_UI_DIR — другой каталог
+(проверки). Django перечитывает файл, только если он сменился.
 """
 
 from __future__ import annotations
@@ -40,9 +37,7 @@ def _load(locale: str) -> dict[str, Any]:
     try:
         mtime = path.stat().st_mtime
     except FileNotFoundError as error:
-        raise UiNotExportedError(
-            f"Нет {path}: php artisan savdex:export-ui --to=python/savdex/locale/ui"
-        ) from error
+        raise UiNotExportedError(f"Нет словаря интерфейса {path} (savdex/locale/ui)") from error
 
     cached = _cache.get(locale)
 

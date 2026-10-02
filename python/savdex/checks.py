@@ -216,13 +216,13 @@ def check_schema(
     report: Report,
     tables: list[str],
 ) -> None:
-    """Схема, последняя миграция Laravel и данные."""
+    """Схема, последняя миграция и данные."""
     if not tables:
         report.note(
             "Схема",
             "таблиц нет",
-            "Схему создаёт Laravel: «php artisan migrate --force». Django "
-            "миграции не применяет (правило 4.2).",
+            "Схему создаёт «manage.py schema» (снимок savdex/bootstrap и "
+            "миграции SQL). Миграции Django не применяются (правило 4.2).",
         )
 
         return

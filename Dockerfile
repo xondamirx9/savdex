@@ -1,13 +1,12 @@
 # syntax=docker/dockerfile:1
 
-# Этап 8 переноса (docs/migration-to-python.md): в образе нет PHP.
 # Сайт и админку обслуживает Django (python/), Apache только отдаёт
 # готовые файлы из public/ и передаёт остальное Django
-# (docker/apache-python.conf).
+# (docker/apache-python.conf). PHP в проекте больше нет
+# (docs/migration-to-python.md, этап 8).
 
 # --- Фронтенд: собираем Vite-бандл ----------------------------------------
-# Пакеты PHP (vendor) сборке больше не нужны: тема Filament ушла вместе
-# с панелью, а классы Tailwind берутся из resources/.
+# Классы Tailwind берутся из resources/.
 FROM node:22-alpine AS assets
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -39,13 +38,12 @@ WORKDIR /var/www/html
 
 # Нужное Django из корня репозитория (settings.LARAVEL_ROOT): юридические
 # документы, картинки и фавикон из public/, собранный фронтенд, storage/.
-# public/index.php, .htaccess и файлы Filament не копируются: без PHP
-# Apache отдал бы index.php как текст.
+# Локальные public/storage и public/build в образ не попадают: первая —
+# ссылка на загрузки (её ставит render-entrypoint.sh), второй собирается
+# стадией assets
 COPY --chown=www-data:www-data resources/legal ./resources/legal
 COPY --chown=www-data:www-data public ./public
-RUN rm -rf public/index.php public/.htaccess public/css/filament public/js/filament \
-        public/fonts/filament public/storage public/build \
-    && find public -type d -empty -delete
+RUN rm -rf public/storage public/build
 COPY --from=assets --chown=www-data:www-data /app/public/build ./public/build
 RUN mkdir -p storage/app/public storage/app/private storage/framework/cache/data storage/logs \
     && chown -R www-data:www-data storage
