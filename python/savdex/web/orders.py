@@ -116,9 +116,8 @@ def _create(
     description = str(payment["description"]).removesuffix(".")
     _notify_user(
         user,
-        f"Счёт {payment['number']} сформирован",
-        f"{description}. Оплатите в течение {EXPIRES_DAYS} дней — доступ "
-        "откроется после зачисления.",
+        ctx.t("messages.order.issued_title", number=payment["number"]),
+        ctx.t("messages.order.issued_body", description=description, days=EXPIRES_DAYS),
         "/cabinet/billing",
     )
 

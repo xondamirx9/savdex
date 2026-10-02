@@ -214,13 +214,13 @@ def test_чужое_раскрытие_404(сайт):
 
 
 @pytest.mark.parametrize(
-    ("prefix", "шапка"),
+    ("prefix", "шапка", "новый"),
     [
-        ("", "Компания;Телефоны;Почта;Объявление;Открыт;Статус;Заметка"),
-        ("/en", "Company;Phones;Email;Listing;Unlocked;Status;Note"),
+        ("", "Компания;Телефоны;Почта;Объявление;Открыт;Статус;Заметка", "Новый"),
+        ("/en", "Company;Phones;Email;Listing;Unlocked;Status;Note", "New"),
     ],
 )
-def test_выгрузка_csv(сайт, prefix, шапка):
+def test_выгрузка_csv(сайт, prefix, шапка, новый):
     завести(SID, {"_token": ТОКЕН, laravel_session.LOGIN_KEY: покупатель()})
     д = открыть(сайт, f"{prefix}/cabinet/contacts/export", {СЕССИЯ: кука(СЕССИЯ, SID)})
 
@@ -239,7 +239,8 @@ def test_выгрузка_csv(сайт, prefix, шапка):
     assert len(строки) == 3
     # Кавычка после обратной косой не удваивается (escape у fputcsv), прочие — удваиваются
     assert строки[1].startswith('"Бетон \\"Юг\\" сервис";;;;')
-    assert строки[1].endswith(';Новый;"Второй ""важный"""')
+    # Статус — на языке страницы
+    assert строки[1].endswith(f';{новый};"Второй ""важный"""')
     # «;» в названии — в кавычках; телефоны с пробелами — тоже
     assert строки[2].startswith('"ООО «Цемент; Трейд»";"+998 90 111-22-33";sale@cement.uz;;')
-    assert строки[2].endswith(";Новый;Первый")
+    assert строки[2].endswith(f";{новый};Первый")

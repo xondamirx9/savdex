@@ -151,11 +151,15 @@ def store(request: HttpRequest) -> HttpResponse:
         row["id"] = cursor.fetchone()[0]
 
     eloquent.journal(ctx, "created", "documents", "CompanyDocument", row, {"after": dict(row)})
-    flash(
-        ctx,
-        "success",
-        ctx.t("messages.file.material_uploaded" if material else "messages.file.document_uploaded"),
-    )
+    # Скрытый материал партнёры не видят — так и говорим
+    if not material:
+        message = "messages.file.document_uploaded"
+    elif row["is_public"]:
+        message = "messages.file.material_uploaded"
+    else:
+        message = "messages.file.material_uploaded_hidden"
+
+    flash(ctx, "success", ctx.t(message))
 
     return back(ctx)
 

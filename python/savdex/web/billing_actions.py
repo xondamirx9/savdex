@@ -34,9 +34,10 @@ from savdex.guards import allowed_writes
 from savdex.payments import checkout as cashier
 from savdex.web import eloquent, locales, orders
 from savdex.web.actions import form
-from savdex.web.billing import _date, amount_label
+from savdex.web.billing import _date, amount_label, price_uzs
 from savdex.web.cabinet import _rows, active_subscription, company_of
 from savdex.web.chat_actions import _unverified
+from savdex.web.currency import CurrencyRate
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _as_id
 from savdex.web.shared import Context
@@ -293,6 +294,12 @@ def order(request: HttpRequest) -> HttpResponse:
 
     if not found:
         return not_found(ctx)
+
+    # Бесплатное не продаётся: счёт на 0 сум оплатить нечем и незачем
+    if price_uzs(found[0], CurrencyRate().usd()) <= 0:
+        flash(ctx, "warning", ctx.t("messages.billing.free_plan"))
+
+        return back(ctx)
 
     payment = (
         orders.order_plan(ctx, company, found[0], ctx.user)

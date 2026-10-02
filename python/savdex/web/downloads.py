@@ -169,7 +169,10 @@ def _company_file(ctx: Context, document_id: int) -> HttpResponse:
 
 
 def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
-    """ItTaskController::file (auth): активной задачи — всем, иначе только заказчику."""
+    """
+    ItTaskController::file (auth): активной задачи действующей компании — всем,
+    иначе только заказчику.
+    """
     from savdex.web.cabinet import page
 
     ctx = page(request)
@@ -178,8 +181,10 @@ def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
         return ctx
 
     rows = _rows(
-        "select f.*, t.company_id, t.status from it_task_files f "
-        "join it_tasks t on t.id = f.it_task_id where f.id = %s",
+        "select f.*, t.company_id, t.status, c.status as company_status from it_task_files f "
+        "join it_tasks t on t.id = f.it_task_id "
+        "left join companies c on c.id = t.company_id and c.deleted_at is null "
+        "where f.id = %s",
         [int(file_id)],
     )
 
@@ -189,7 +194,7 @@ def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
     file = rows[0]
     own = _viewer_company(ctx) == file["company_id"]
 
-    if file["status"] != "active" and not own:
+    if (file["status"] != "active" or file["company_status"] != "active") and not own:
         return not_found(ctx)
 
     path = private_root() / file["file_path"]

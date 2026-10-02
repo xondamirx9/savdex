@@ -151,9 +151,9 @@ def test_переход_inertia(сайт):
         headers={"X-Inertia": "true", "X-Inertia-Version": "old"},
         env=ФАЙЛОВЫЙ,
     )
-    # (адрес — без языкового префикса: его срезает LocalizeUrl, язык — в сессии)
+    # (адрес — с языковым префиксом: перезагрузка остаётся на /en)
     assert д["status"] == 409
-    assert д["headers"]["x-inertia-location"] == сайт + "/pricing"
+    assert д["headers"]["x-inertia-location"] == сайт + "/en/pricing"
 
 
 def test_курс_из_запасной_таблицы(сайт):
