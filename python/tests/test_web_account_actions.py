@@ -200,7 +200,7 @@ def куда(сайт: str, итог: dict[str, Any]) -> tuple[int, str | None]:
         ),
         (
             {"password": ["x"], "password_confirmation": ["x"]},
-            ["validation.string", "Пароль должен быть не короче 8 символов"],
+            ["Укажите текст.", "Пароль должен быть не короче 8 символов"],
         ),
         # Не тот же, что выдан
         (
@@ -306,7 +306,7 @@ def _свежий_токен() -> None:
         ({"email": ПОЧТА, "channel": "pigeon"}, None, None, True),
         # Не чаще раза в минуту: свежий токен — письма нет
         ({"email": ПОЧТА}, _свежий_токен, None, False),
-        ({"email": ПОЧТА, "channel": ["mail"]}, None, {"channel": ["validation.string"]}, False),
+        ({"email": ПОЧТА, "channel": ["mail"]}, None, {"channel": ["Укажите текст."]}, False),
     ],
 )
 def test_забыли_пароль(сайт, body, шаг, ошибки_, письмо):
@@ -383,7 +383,7 @@ def _токен(минут_назад: int = 0, token: str = ТОКЕН_СБРО
             {},
             _токен(),
             {
-                "token": ["validation.required"],
+                "token": ["Заполните это поле."],
                 "email": ["Введите почту"],
                 "password": ["Придумайте пароль"],
             },

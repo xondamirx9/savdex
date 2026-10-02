@@ -395,10 +395,10 @@ def _адрес_нового(title: str) -> str:
                 ],
             },
         ),
-        # У узбекского словаря своих текстов проверки нет — ключи, как у Laravel
+        # На узбекском — свои короткие тексты, без имени поля
         (
             "/uz",
-            {"title": ["validation.min.string"], "jobs.0.position": ["validation.required_with"]},
+            {"title": ["Kamida 3 belgi kiriting."], "jobs.0.position": ["Bu maydonni to‘ldiring."]},
         ),
     ],
 )

@@ -112,11 +112,13 @@ def test_адреса_страниц():
 @pytest.mark.parametrize(
     ("locale", "назад", "вперёд"),
     [
-        # Перевод подписей есть только у английского (из самого фреймворка);
-        # на остальных языках — ключ как есть
+        # Английский — подписи самого фреймворка; остальные языки — из
+        # словаря интерфейса (common.prev_page/next_page) с теми же «»
         ("en", "&laquo; Previous", "Next &raquo;"),
-        ("ru", "pagination.previous", "pagination.next"),
-        ("uz", "pagination.previous", "pagination.next"),
+        ("ru", "&laquo; Назад", "Вперёд &raquo;"),
+        ("uz", "&laquo; Orqaga", "Oldinga &raquo;"),
+        ("tr", "&laquo; Önceki", "Sonraki &raquo;"),
+        ("zh", "&laquo; 上一页", "下一页 &raquo;"),
     ],
 )
 def test_подписи(locale, назад, вперёд):

@@ -538,6 +538,17 @@ def _message(
     )
 
 
+def _size_of(value: Any, kind: str) -> str:  # noqa: ANN401
+    """Validator::getSize для подстановки: число, длина строки или число элементов."""
+    if kind == "array" and isinstance(value, (list, dict)):
+        return str(len(value))
+
+    if kind == "numeric":
+        return str(value)
+
+    return str(len(str(value)))
+
+
 def _fill_asterisks(pattern: str, attribute: str, param: str) -> str:
     """Validator::replaceAsterisksInParameters: «*» каждого условия — ключами поля."""
     keys = [
@@ -686,9 +697,15 @@ def validate(
                     shown = param or None
 
                     if rule == "gte" and param:
-                        # replaceGte: :value — значение поля-сравнения, если оно есть
+                        # replaceGte: :value — размер поля-сравнения (getSize), если
+                        # оно есть: число — само значение, строка — длина, список —
+                        # число элементов
                         other = _get(data, param.split("."))
-                        shown = param if other is _MISSING or other is None else str(other)
+                        shown = (
+                            param
+                            if other is _MISSING or other is None
+                            else _size_of(other, _kind(field_rules, value))
+                        )
 
                     text = _message(
                         rule,
