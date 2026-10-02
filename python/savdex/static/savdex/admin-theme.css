@@ -1838,3 +1838,213 @@ a.sx-landing-edit:hover {
         white-space: normal;
     }
 }
+
+/* ── Подписки и общие мелочи списков ── */
+
+.sx-pill-info {
+    background: color-mix(in srgb, var(--sx-status-info) 12%, transparent);
+    color: var(--sx-status-info);
+}
+
+/* Тариф — спокойная метка: не путается со статусом */
+.sx-plan {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Основание под меткой «Промокод» / «Вручную»: не шире колонки */
+.sx-reason {
+    display: block;
+    max-width: 30ch;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+/* Кнопки в строке: небольшие, с рамкой; опасное действие — красным */
+.sx-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+a.sx-row-btn:link,
+a.sx-row-btn:visited {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: var(--sx-control-radius);
+    background: var(--sx-surface);
+    box-shadow: inset 0 0 0 1px var(--sx-input-border);
+    color: var(--sx-text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+a.sx-row-btn:hover {
+    background: var(--sx-surface-2);
+}
+
+a.sx-row-btn.is-danger:link,
+a.sx-row-btn.is-danger:visited {
+    color: var(--sx-danger);
+    box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
+}
+
+.model-subscription #result_list td,
+.model-subscription #result_list th {
+    vertical-align: middle;
+}
+
+.model-subscription #result_list td.field-row_actions {
+    width: 1%;
+}
+
+/* «5 дн.» у подписки, которой осталось меньше недели — заметно */
+.model-subscription .sx-until.is-soon > span:first-child {
+    color: var(--sx-status-warning);
+    font-weight: 600;
+}
+
+/* Подписки: колонок много, а справа ещё фильтры — таблица плотнее,
+   кнопки строки столбиком, чтобы всё помещалось на 1440 px */
+.model-subscription #result_list th,
+.model-subscription #result_list td {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.model-subscription #result_list thead th .text a,
+.model-subscription #result_list thead th .text span {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.model-subscription .sx-reason {
+    max-width: 22ch;
+}
+
+.model-subscription .sx-row-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+}
+
+.model-subscription a.sx-row-btn {
+    justify-content: center;
+}
+
+/* Подписки: фильтры — не колонкой справа, а строкой кнопок над
+   таблицей. Те же фильтры Django и те же адреса, меняется только вид */
+.model-subscription #changelist {
+    flex-direction: column;
+}
+
+/* У Django колонка фильтров — flex: 0 0 240px; в колонке флекса эти
+   240 px становились высотой полосы */
+.model-subscription #changelist-filter {
+    flex: none;
+    order: -1;
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 24px;
+}
+
+.model-subscription #changelist-filter > h2,
+.model-subscription #changelist-filter-extra-actions {
+    display: none;
+}
+
+.model-subscription #changelist-filter details {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.model-subscription #changelist-filter details > summary {
+    margin: 0 4px 0 0;
+    padding: 0;
+    color: var(--sx-muted);
+    font-size: 12px;
+    font-weight: 600;
+    list-style: none;
+    cursor: default;
+}
+
+.model-subscription #changelist-filter details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.model-subscription #changelist-filter details > summary::first-letter {
+    text-transform: uppercase;
+}
+
+.model-subscription #changelist-filter ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.model-subscription #changelist-filter li {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.model-subscription #changelist-filter li a:link,
+.model-subscription #changelist-filter li a:visited {
+    display: inline-flex;
+    padding: 4px 10px;
+    border: 1px solid var(--sx-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sx-text-2);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.model-subscription #changelist-filter li a:hover {
+    border-color: var(--sx-accent);
+    color: var(--sx-accent-text);
+}
+
+.model-subscription #changelist-filter li.selected a:link,
+.model-subscription #changelist-filter li.selected a:visited {
+    border-color: transparent;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+    font-weight: 600;
+}
+
+.model-subscription .changelist-form-container {
+    width: 100%;
+}
+
+/* Стрелка темы перед названием фильтра в строке не нужна */
+.model-subscription #changelist-filter details > summary::before,
+.model-subscription #changelist-filter details > summary::after {
+    display: none;
+}
