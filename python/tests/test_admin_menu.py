@@ -126,3 +126,21 @@ def test_крошки_ведут_на_всю_группу(monkeypatch):
         "ItTask",
         "Tender",
     ]
+
+
+def test_многострочных_комментариев_в_шаблонах_нет():
+    """
+    Комментарий-решётка у Django однострочный: многострочный печатается
+    на странице как есть (так в шапку админки попал текст о переходах).
+    """
+    from pathlib import Path
+
+    шаблоны = Path(__file__).resolve().parents[1] / "savdex" / "templates"
+    плохие = [
+        f"{path.relative_to(шаблоны)}:{номер}"
+        for path in шаблоны.rglob("*.html")
+        for номер, строка in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "{#" in строка and "#}" not in строка.split("{#", 1)[1]
+    ]
+
+    assert плохие == []
