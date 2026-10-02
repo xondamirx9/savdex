@@ -88,8 +88,11 @@ class ItTask(Timestamped):
     class Meta:
         managed = False
         db_table = "it_tasks"
-        verbose_name = "IT-задача"
-        verbose_name_plural = "IT-задачи"
+        # «IT-задача» раздел перерос: сюда попадают логистика,
+        # бухгалтерия, декларирование и подбор персонала — всё,
+        # что заказывают в «Доп. услугах» на витрине
+        verbose_name = "заказ на услугу"
+        verbose_name_plural = "заказы на услуги"
         ordering = ("-created_at", "-id")
 
     def __str__(self) -> str:

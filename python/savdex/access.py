@@ -52,7 +52,7 @@ SECTIONS: dict[str, str] = {
     "companies": "Компании",
     "listings": "Объявления и товары",
     "tenders": "Тендеры и потребности",
-    "ittasks": "IT-задачи",
+    "ittasks": "Заказы на услуги",
     "documents": "Документы на проверку",
     "resumes": "Резюме соискателей",
     "reviews": "Отзывы",
