@@ -49,10 +49,20 @@ from savdex.web.shared import Context
 
 @dataclass
 class AdminContext:
-    """Сколько нужно общим частям сайта: кто действует и сам запрос."""
+    """
+    Сколько нужно общим частям сайта: кто действует, сам запрос и язык
+    текстов (админка русская — уведомления от её имени тоже).
+    """
 
     request: HttpRequest
     user: dict[str, Any]
+    locale: str = "ru"
+
+    def t(self, key: str, **replace: object) -> str:
+        """Context.t: строка словаря сайта."""
+        from savdex.web import ui
+
+        return ui.t(key, self.locale, **replace)
 
 
 def context_of(request: HttpRequest) -> Context:

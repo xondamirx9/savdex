@@ -1067,10 +1067,11 @@ def test_избранное(сайт, path):
     _, стр = зайти(сайт, path, куки)
     items = стр["props"]["items"]
 
-    # Черновик, на модерации и удалённое — не показываются; истёкшее и
-    # архивное — неактивными; у удалённой компании — без имени
+    # Черновик, на модерации и удалённое — не показываются; истёкшее,
+    # архивное и объявление удалённой компании (его страницы больше нет) —
+    # неактивными; у удалённой компании — без имени
     assert стр["component"] == "Favorites"
-    assert len(items) == 4 and [i["active"] for i in items].count(False) == 2
+    assert len(items) == 4 and [i["active"] for i in items].count(False) == 3
     assert [i["company"]["name"] is None for i in items].count(True) == 1
 
 

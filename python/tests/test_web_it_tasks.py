@@ -221,6 +221,10 @@ def задача(сайт: str, path: str, куки: dict[str, str] | None = Non
     return {"status": д["status"], **(страница(д["body"]) if д["status"] == 200 else {})}
 
 
+#: Размеры файлов: десятичная запятая у ru и uz, точка у en
+РАЗМЕРЫ = {"": ("1,5 МБ", "1 КБ"), "/en": ("1.5 MB", "1 KB"), "/uz": ("1,5 MB", "1 KB")}
+
+
 def test_страница_задачи(сайт):
     открытая = адрес("status = 'active'")
     sql(
@@ -238,11 +242,12 @@ def test_страница_задачи(сайт):
         assert стр["status"] == 200 and стр["component"] == "it-tasks/Show"
         assert карточка["slug"] == открытая and карточка["active"] is True
         assert срок is None or карточка["deadline"] == срок
-        # Файлы: размер по-человечески, расширение — из адреса файла
+        # Файлы: размер по-человечески на языке страницы, расширение — из адреса
+        мб, кб = РАЗМЕРЫ[prefix]
         assert [(f["title"], f["size"], f["ext"]) for f in карточка["files"]] == [
-            ("ТЗ.PDF", "1,5 МБ", "pdf"),
-            ("схема", "1 КБ", "docx"),
-            ("архив.tar.gz", "1 КБ", "gz"),
+            ("ТЗ.PDF", мб, "pdf"),
+            ("схема", кб, "docx"),
+            ("архив.tar.gz", кб, "gz"),
         ]
         assert стр["props"]["respond"] == {
             "guest": True,

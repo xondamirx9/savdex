@@ -222,7 +222,11 @@ def test_касса(сайт, path, язык, выбран):
     # это поле не показывает
     assert 20 < abs(props["subscription"]["days_left"]) < 21
     assert props["wallet"]["credits"] == 12
-    assert sorted(c["masked"] for c in props["cards"]) == ["Humo •••• 1234", "Карта •••• 9876"]
+    # Карта без бренда — подписью на языке страницы
+    карта = {"en": "Card", "uz": "Karta"}.get(язык, "Карта")
+    assert sorted(c["masked"] for c in props["cards"]) == sorted(
+        ["Humo •••• 1234", f"{карта} •••• 9876"]
+    )
     # В истории только оплаченное и возвраты: отменённый SVX-3
     # и неоплаченные SVX-4/5 туда не попадают
     assert [p["status"] for p in props["payments"]] == ["paid", "paid", "refunded"]

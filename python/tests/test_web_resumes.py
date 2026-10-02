@@ -55,8 +55,8 @@ def сайт() -> Iterator[str]:
     свежая_база()
     справочники("countries", "country_translations", "cities", "city_translations")
 
-    # 47 опубликованных (3 страницы по 20), черновик, удалённое;
-    # у части — перевод должности, фото, пустое имя «0», удалённый автор
+    # 47 опубликованных, черновик, удалённое; у части — перевод должности,
+    # фото, пустое имя «0»; у одного автор удалён — его резюме не видно (46)
     [(uz,)] = sql("select id from countries where code = 'uz'")
     cities = [
         c for (c,) in sql("select id from cities where country_id = %s order by id limit 3", [uz])
@@ -120,19 +120,20 @@ def список(сайт: str, path: str) -> dict:
 @pytest.mark.parametrize(
     ("path", "всего", "страница_", "последняя", "на_странице"),
     [
-        # 49 резюме: без черновика и удалённого — 47, по 20 на страницу
-        ("/resumes", 47, 1, 3, 20),
-        ("/resumes?page=2", 47, 2, 3, 20),
+        # 49 резюме: без черновика, удалённого и резюме удалённого автора —
+        # 46, по 20 на страницу
+        ("/resumes", 46, 1, 3, 20),
+        ("/resumes?page=2", 46, 2, 3, 20),
         # За последней страницей — пусто, но номер страницы тот, что просили
         ("/resumes?page=3&field=it", 12, 3, 1, 0),
-        ("/resumes?page=9", 47, 9, 3, 0),
+        ("/resumes?page=9", 46, 9, 3, 0),
         # Не номер, ведущий ноль, меньше единицы — первая; пробелы вокруг — можно
-        ("/resumes?page=abc", 47, 1, 3, 20),
-        ("/resumes?page=02", 47, 1, 3, 20),
-        ("/resumes?page=%202%20", 47, 2, 3, 20),
-        ("/resumes?page=-1", 47, 1, 3, 20),
-        ("/en/resumes?page=2", 47, 2, 3, 20),
-        ("/uz/resumes", 47, 1, 3, 20),
+        ("/resumes?page=abc", 46, 1, 3, 20),
+        ("/resumes?page=02", 46, 1, 3, 20),
+        ("/resumes?page=%202%20", 46, 2, 3, 20),
+        ("/resumes?page=-1", 46, 1, 3, 20),
+        ("/en/resumes?page=2", 46, 2, 3, 20),
+        ("/uz/resumes", 46, 1, 3, 20),
         ("/zh/resumes?q=supply", 0, 1, 1, 0),
         ("/tr/resumes?employment=full", 24, 1, 2, 20),
     ],
@@ -155,26 +156,26 @@ def test_список_и_страницы(сайт, path, всего, стран
     ("path", "всего", "фильтры", "первая"),
     [
         # Должность и места работы — как набрано и в транслитерации
-        ("/resumes?q=%D1%81%D0%BD%D0%B0%D0%B1%D0%B6%D0%B5%D0%BD", 47, {"q": "снабжен"}, None),
-        ("/resumes?q=snabjen", 47, {"q": "snabjen"}, None),
+        ("/resumes?q=%D1%81%D0%BD%D0%B0%D0%B1%D0%B6%D0%B5%D0%BD", 46, {"q": "снабжен"}, None),
+        ("/resumes?q=snabjen", 46, {"q": "snabjen"}, None),
         # Пробелы вокруг запроса отбрасываются; навыки — колонка json
         ("/resumes?q=%20%20Excel%20", 38, {"q": "Excel"}, "/resumes?q=Excel&page=1"),
         ("/resumes?q=autocad%2012", 1, {"q": "autocad 12"}, None),
         ("/resumes?q=g%CA%BBisht", 0, {"q": "gʻisht"}, None),
-        ("/resumes?q=", 47, {"q": ""}, "/resumes?page=1"),
-        ("/resumes?q=%27", 47, {"q": "'"}, None),
+        ("/resumes?q=", 46, {"q": ""}, "/resumes?page=1"),
+        ("/resumes?q=%27", 46, {"q": "'"}, None),
         # Город не числом — без фильтра по городу
-        ("/resumes?field=logistics&city=abc", 12, {"field": "logistics", "city": None}, None),
+        ("/resumes?field=logistics&city=abc", 11, {"field": "logistics", "city": None}, None),
         # Неизвестная сфера — без фильтра, но в форме остаётся
-        ("/resumes?field=nonsense", 47, {"field": "nonsense"}, None),
+        ("/resumes?field=nonsense", 46, {"field": "nonsense"}, None),
         (
             "/resumes?experience=from3&employment=project",
-            12,
+            11,
             {"experience": "from3", "employment": "project"},
             None,
         ),
         ("/resumes?experience=from6", 10, {"experience": "from6"}, None),
-        ("/resumes?employment=0", 47, {"employment": None}, "/resumes?employment=0&page=1"),
+        ("/resumes?employment=0", 46, {"employment": None}, "/resumes?employment=0&page=1"),
         # Чужие параметры запроса остаются в адресах страниц
         (
             "/resumes?z=1&page=2&field=sales&a=%7E",
@@ -218,8 +219,8 @@ def test_подписи_назад_вперёд(сайт):
     ("path", "найдено"),
     [
         # должность кириллицей, запрос латиницей — и наоборот
-        ("/resumes?q=snabjen", 47),
-        ("/resumes?q=%D1%81%D0%BD%D0%B0%D0%B1%D0%B6%D0%B5%D0%BD", 47),
+        ("/resumes?q=snabjen", 46),
+        ("/resumes?q=%D1%81%D0%BD%D0%B0%D0%B1%D0%B6%D0%B5%D0%BD", 46),
         # навыки — json: на PostgreSQL у Laravel здесь была ошибка 500
         ("/resumes?q=autocad%2012", 1),
         ("/resumes?field=it&employment=full", 12),
