@@ -10,8 +10,14 @@ CRM в админке Django (этап 6) — вместо разделов Fila
 свои лиды и нераспределённые, сделки — только свои. Открыть можно ровно
 то, что видно в списке: у Filament по прямой ссылке открывалась и
 сделка без ответственного, которой в списке нет. Лид берётся себе и
-превращается в сделку — кнопками на странице лида и действием над
-отмеченными в списке.
+превращается в сделку — кнопками на доске и странице лида и действием
+над отмеченными в архиве.
+
+Вместо списка лидов и сделок — доска по этапам воронки (savdex/crm/
+board.py, OnBoard): карточки переводят перетаскиванием или кнопкой, весь
+список с закрытыми — «Архив». Этапы и окно перевода правят суперадмин и
+администратор (раздел «Этапы воронки», StageAdmin); модератор доски
+видит, но не двигает.
 
 Задачи и коммуникации — тоже «только свои»: задачи по исполнителю (список
 дел отвечает на вопрос «что мне делать»), разговоры — по тому, кто
@@ -31,9 +37,10 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied
 from django.db import connections, transaction
-from django.db.models import Q, QuerySet, Sum
+from django.db.models import Case, IntegerField, OuterRef, Q, QuerySet, Subquery, Sum, Value, When
 from django.db.models.expressions import RawSQL
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -45,19 +52,22 @@ from django.utils.timesince import timesince
 
 from savdex import access, audit
 from savdex.accounts.models import User
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import SavdexModelAdmin, _admin_of, register, static_version
 from savdex.catalog import now
+from savdex.crm import board, stages
 from savdex.crm.models import (
     COMMUNICATION_TYPES,
-    DEAL_STAGES,
     LEAD_SOURCES,
-    LEAD_STATUSES,
+    PIPELINES,
+    STAGE_KINDS,
     SUBJECTS,
     Communication,
     Company,
     Contact,
     Deal,
     Lead,
+    OnStage,
+    Stage,
     Task,
     WithSubject,
 )
@@ -74,21 +84,29 @@ TONES = {
     "danger": "#b91c1c",
 }
 
-LEAD_TONES = {
-    "new": "warning",
-    "working": "info",
-    "qualified": "primary",
-    "converted": "success",
-    "lost": "gray",
-}
+#: Цвет этапа — по колонке: в работе, успех, отказ; новый — жёлтый
+KIND_TONES = {"open": "info", "won": "success", "lost": "gray"}
 
-DEAL_TONES = {
-    "new": "gray",
-    "negotiation": "info",
-    "proposal": "warning",
-    "won": "success",
-    "lost": "danger",
-}
+
+def stage_badge(obj: OnStage) -> str:
+    """Этап в списке: название и цвет — из подзапроса OnBoard.get_queryset."""
+    code = getattr(obj, obj.stage_field)
+    name = getattr(obj, "stage_name", None) or code
+    kind = getattr(obj, "stage_kind", None) or "open"
+
+    return _badge(name, "warning" if code == "new" else KIND_TONES.get(kind, "gray"))
+
+
+def stage_choices(pipeline: str, current: str | None = None) -> list[tuple[str, str]]:
+    """
+    Этапы для поля формы. Лид становится сделкой только кнопкой
+    «В сделку»: этапа «Стал сделкой» в форме нет, если лид уже не на нём.
+    """
+    return [
+        (stage.code, stage.name)
+        for stage in stages.of(pipeline)
+        if not (pipeline == "leads" and stage.kind == "won" and stage.code != current)
+    ]
 
 
 def _badge(label: str, tone: str) -> str:
@@ -249,7 +267,9 @@ class Scoped(CrmAdmin):
 
     def owner_field(self, request: HttpRequest, **kwargs: Any) -> forms.ModelChoiceField:  # type: ignore[type-arg]
         field = forms.ModelChoiceField(
-            queryset=User.objects.filter(pk__in=employees(f"{self.section}.view")).order_by(
+            # Ответственный — тот, кто может вести запись, а не только смотреть
+            # (модератор видит доски лидов и сделок, но не ведёт их)
+            queryset=User.objects.filter(pk__in=employees(f"{self.section}.edit")).order_by(
                 "name", "id"
             ),
             **kwargs,
@@ -363,6 +383,16 @@ class ContactAdmin(CrmAdmin):
 
 
 class LeadForm(forms.ModelForm):  # type: ignore[type-arg]
+    status = forms.ChoiceField(label="Этап")
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        current = self.instance.status if self.instance.pk else None
+        field = self.fields["status"]
+        assert isinstance(field, forms.ChoiceField)
+        field.choices = stage_choices("leads", current)
+        field.initial = current or "new"
+
     class Meta:
         model = Lead
         fields = (
@@ -381,7 +411,7 @@ class LeadForm(forms.ModelForm):  # type: ignore[type-arg]
         help_texts: ClassVar[dict[str, str]] = {
             "title": "Коротко: что нужно клиенту — «Поставка цемента М400, 20 т»",
             "owner": "Пусто — лид не распределён и виден всем продавцам",
-            "lost_reason": "Обязательна при статусе «Отказ»",
+            "lost_reason": "Обязательна на этапе отказа",
         }
 
     def clean(self) -> dict[str, Any]:
@@ -393,9 +423,54 @@ class LeadForm(forms.ModelForm):  # type: ignore[type-arg]
         return data
 
 
-class LeadOpen(OpenFilter):
-    title = "в работе"
-    open_q = ~Q(status__in=("converted", "lost"))
+class Outcome(admin.SimpleListFilter):
+    """Архив: все записи, отбор — в работе, успех, отказ."""
+
+    title = "итог"
+    parameter_name = "outcome"
+    pipeline: ClassVar[str]
+    labels: ClassVar[dict[str, str]]
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return list(self.labels.items())
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        if self.value() not in self.labels:
+            return queryset
+
+        codes = [s.code for s in stages.of(self.pipeline) if s.kind == self.value()]
+
+        return queryset.filter(**{f"{queryset.model.stage_field}__in": codes})
+
+
+class StageFilter(admin.SimpleListFilter):
+    """Этап — названиями из воронки, а не кодами."""
+
+    title = "этап"
+    parameter_name = "stage"
+    pipeline: ClassVar[str]
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [(s.code, s.name) for s in stages.of(self.pipeline)]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
+        if self.value():
+            return queryset.filter(**{queryset.model.stage_field: self.value()})
+
+        return queryset
+
+
+class LeadOutcome(Outcome):
+    pipeline = "leads"
+    labels: ClassVar[dict[str, str]] = {
+        "open": "В работе",
+        "won": "Стали сделками",
+        "lost": "Отказы",
+    }
+
+
+class LeadStage(StageFilter):
+    pipeline = "leads"
 
 
 class LeadOwner(admin.SimpleListFilter):
@@ -415,10 +490,197 @@ class LeadOwner(admin.SimpleListFilter):
         return queryset
 
 
+# ── Доска вместо списка ─────────────────────────────────────────────
+
+
+class OnBoard(Scoped):
+    """
+    Лиды и сделки: доска по этапам воронки вместо списка
+    (savdex/crm/board.py). Список всех записей, закрытые тоже, — «Архив»
+    (archive/), с массовыми действиями и отборами. С доски — перевод на
+    этап (move/) и назначение ответственного (assign/).
+    """
+
+    archive_title: ClassVar[str]
+    change_list_template = "admin/crm/archive.html"
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
+        """Название и колонка этапа — подзапросом: значок в архиве без запроса на строку."""
+        same = Stage.objects.filter(
+            pipeline=self.section,
+            code=OuterRef(self.model.stage_field),
+        )
+        queryset: QuerySet[Any] = (
+            super()
+            .get_queryset(request)
+            .annotate(
+                stage_name=Subquery(same.values("name")[:1]),
+                stage_kind=Subquery(same.values("kind")[:1]),
+            )
+        )
+
+        return queryset
+
+    def _url(self, name: str, *args: Any) -> str:
+        info = self.model._meta
+
+        return reverse(f"savdex_admin:{info.app_label}_{info.model_name}_{name}", args=args)
+
+    def back(self, request: HttpRequest, default: str | None = None) -> str:
+        """Куда вернуться после кнопки на доске: на доску с её отбором."""
+        target = request.POST.get("next", "")
+
+        if target and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            return target
+
+        return default or self._url("changelist")
+
+    def get_urls(self) -> list[Any]:
+        info = self.model._meta
+        name = f"{info.app_label}_{info.model_name}"
+
+        return [
+            path("archive/", self.admin_site.admin_view(self.archive_view), name=f"{name}_archive"),
+            path(
+                "<path:object_id>/move/",
+                self.admin_site.admin_view(self.move_view),
+                name=f"{name}_move",
+            ),
+            path(
+                "<path:object_id>/assign/",
+                self.admin_site.admin_view(self.assign_view),
+                name=f"{name}_assign",
+            ),
+            *super().get_urls(),
+        ]
+
+    def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
+        # Массовые действия из архива и сам архив — список Django; иначе доска
+        if request.method == "POST" or getattr(request, "_savdex_archive", False):
+            return super().changelist_view(
+                request, {"board_url": self._url("changelist"), **(extra_context or {})}
+            )
+
+        return self.board_view(request)
+
+    def archive_view(self, request: HttpRequest) -> HttpResponse:
+        request._savdex_archive = True  # type: ignore[attr-defined]
+
+        return self.changelist_view(request, {"title": self.archive_title})
+
+    def board_view(self, request: HttpRequest) -> HttpResponse:
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        request.current_app = self.admin_site.name
+        context = {
+            **self.admin_site.each_context(request),
+            "title": self.title_list,
+            "opts": self.model._meta,
+            "app_label": self.model._meta.app_label,
+            "pipeline": self.section,
+            "is_leads": self.model is Lead,
+            "add_url": self._url("add") if self.has_add_permission(request) else "",
+            "archive_url": self._url("archive"),
+            "stages_url": reverse("savdex_admin:crm_stage_changelist")
+            + f"?pipeline__exact={self.section}",
+            "here": request.get_full_path(),
+            "board_js": static_version("savdex/crm-board.js"),
+            "board_css": static_version("savdex/crm-board.css"),
+            **board.build(self, request),
+        }
+
+        return TemplateResponse(request, "admin/crm/board.html", context)
+
+    def _card(self, request: HttpRequest, object_id: str) -> OnStage:
+        """Карточка для кнопки доски: POST, право править, видна сотруднику."""
+        if request.method != "POST" or not _admin_of(request).can(f"{self.section}.edit"):
+            raise PermissionDenied
+
+        obj = self.get_object(request, unquote(object_id))
+
+        if not isinstance(obj, OnStage):
+            raise PermissionDenied
+
+        return obj
+
+    def move_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        obj = self._card(request, object_id)
+        back = self.back(request)
+        stage = Stage.objects.filter(
+            pipeline=self.section, code=request.POST.get("stage", "")
+        ).first()
+
+        if stage is None:
+            self.message_user(request, "Такого этапа нет.", messages.ERROR)
+
+            return HttpResponseRedirect(back)
+
+        if self.model is Lead and stage.kind == "won":
+            self.message_user(request, "Лид становится сделкой кнопкой «В сделку».", messages.ERROR)
+
+            return HttpResponseRedirect(back)
+
+        form = board.form_for(stage, board.owners(self.section))(request.POST)
+
+        if not form.is_valid():
+            problems = "; ".join(
+                f"{form.fields[key].label}: {' '.join(str(e) for e in errors)}"
+                if key in form.fields
+                else " ".join(str(e) for e in errors)
+                for key, errors in form.errors.items()
+            )
+            self.message_user(
+                request, f"«{obj}» не переведена на «{stage.name}»: {problems}", messages.ERROR
+            )
+
+            return HttpResponseRedirect(back)
+
+        board.move(self, request, obj, stage, form.cleaned_data)
+        self.message_user(request, f"«{obj}» — на этапе «{stage.name}».", messages.SUCCESS)
+
+        return HttpResponseRedirect(back)
+
+    def assign_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        """Назначить ответственного — тому, кто видит раздел целиком (не продавцу)."""
+        obj = self._card(request, object_id)
+
+        if _admin_of(request).scope_is_own(self.section):
+            raise PermissionDenied
+
+        raw = request.POST.get("owner", "")
+        owner = board.owners(self.section).filter(pk=raw).first() if raw.isdigit() else None
+
+        # Сделка без ответственного не бывает; лид — бывает (виден всем продавцам)
+        if owner is None and (raw or self.model is Deal):
+            self.message_user(request, "Выберите ответственного из списка.", messages.ERROR)
+
+            return HttpResponseRedirect(self.back(request))
+
+        if obj.owner_id != (owner.pk if owner else None):  # type: ignore[attr-defined]
+            before = self.snapshot(obj)
+            obj.owner = owner  # type: ignore[attr-defined]
+            obj.save()
+            self.journal_update(request, obj, before)
+
+        self.message_user(
+            request,
+            f"«{obj}»: ответственный — {owner.name}."
+            if owner
+            else f"«{obj}» — снова не распределён, виден всем продавцам.",
+            messages.SUCCESS,
+        )
+
+        return HttpResponseRedirect(self.back(request))
+
+
 @register(Lead, section="leads")
-class LeadAdmin(Scoped):
+class LeadAdmin(OnBoard):
     laravel_model = "App\\Models\\Crm\\Lead"
     title_list = "Лиды"
+    archive_title = "Архив лидов"
     title_add = "Новый лид"
     title_change = "Лид"
     change_form_template = "admin/crm/lead/change_form.html"
@@ -434,7 +696,7 @@ class LeadAdmin(Scoped):
         ("Работа по лиду", {"fields": ("note", "lost_reason")}),
     )
     list_display = ("lead", "who", "phone", "state", "owner_name", "created_at")
-    list_filter = (LeadOpen, "status", "source", LeadOwner)
+    list_filter = (LeadOutcome, LeadStage, "source", LeadOwner)
     list_select_related = ("company", "contact", "owner")
     search_fields = ("title",)
     ordering = ("-created_at", "-id")
@@ -474,9 +736,9 @@ class LeadAdmin(Scoped):
 
         return (contact.phone if live and contact is not None else None) or obj.contact_phone or ""
 
-    @admin.display(description="статус", ordering="status")
+    @admin.display(description="этап", ordering="status")
     def state(self, obj: Lead) -> str:
-        return _badge(LEAD_STATUSES.get(obj.status, obj.status), LEAD_TONES.get(obj.status, "gray"))
+        return stage_badge(obj)
 
     @admin.display(description="ответственный", ordering="owner__name")
     def owner_name(self, obj: Lead) -> str:
@@ -600,9 +862,12 @@ class LeadAdmin(Scoped):
         lead = self._one(request, object_id)
 
         if self.claim(request, lead):
-            self.message_user(request, "Лид закреплён за вами.", messages.SUCCESS)
+            self.message_user(request, f"«{lead}» закреплён за вами.", messages.SUCCESS)
 
-        return HttpResponseRedirect(reverse("savdex_admin:crm_lead_change", args=[lead.pk]))
+        # С доски — назад на доску, со страницы лида — на неё
+        return HttpResponseRedirect(
+            self.back(request, reverse("savdex_admin:crm_lead_change", args=[lead.pk]))
+        )
 
     def convert_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
         if not self.has_convert_permission(request):
@@ -643,6 +908,16 @@ class LeadAdmin(Scoped):
 
 
 class DealForm(forms.ModelForm):  # type: ignore[type-arg]
+    stage = forms.ChoiceField(label="Этап")
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        current = self.instance.stage if self.instance.pk else None
+        field = self.fields["stage"]
+        assert isinstance(field, forms.ChoiceField)
+        field.choices = stage_choices("deals", current)
+        field.initial = current or "new"
+
     class Meta:
         model = Deal
         fields = (
@@ -684,6 +959,19 @@ class DealOpen(OpenFilter):
     open_q = ~Q(stage__in=("won", "lost"))
 
 
+class DealOutcome(Outcome):
+    pipeline = "deals"
+    labels: ClassVar[dict[str, str]] = {
+        "open": "В работе",
+        "won": "Выигранные",
+        "lost": "Проигранные",
+    }
+
+
+class DealStage(StageFilter):
+    pipeline = "deals"
+
+
 class DealMine(admin.SimpleListFilter):
     title = "мои и просроченные"
     parameter_name = "only"
@@ -702,12 +990,12 @@ class DealMine(admin.SimpleListFilter):
 
 
 @register(Deal, section="deals")
-class DealAdmin(Scoped):
+class DealAdmin(OnBoard):
     laravel_model = "App\\Models\\Crm\\Deal"
     title_list = "Сделки"
+    archive_title = "Архив сделок"
     title_add = "Новая сделка"
     title_change = "Сделка"
-    change_list_template = "admin/crm/deal/change_list.html"
 
     form = DealForm
     fieldsets = (
@@ -717,7 +1005,7 @@ class DealAdmin(Scoped):
         ("Работа по сделке", {"fields": ("note", "lost_reason")}),
     )
     list_display = ("deal", "total", "state", "owner_name", "expected")
-    list_filter = (DealOpen, "stage", DealMine)
+    list_filter = (DealOutcome, DealStage, DealMine)
     list_select_related = ("company", "owner")
     search_fields = ("title",)
     ordering = ("expected_close_at", "id")
@@ -738,7 +1026,7 @@ class DealAdmin(Scoped):
 
     @admin.display(description="этап", ordering="stage")
     def state(self, obj: Deal) -> str:
-        return _badge(DEAL_STAGES.get(obj.stage, obj.stage), DEAL_TONES.get(obj.stage, "gray"))
+        return stage_badge(obj)
 
     @admin.display(description="ответственный", ordering="owner__name")
     def owner_name(self, obj: Deal) -> str:
@@ -769,6 +1057,380 @@ class DealAdmin(Scoped):
                 response.context_data["crm_total"] = f"{total:,}".replace(",", " ")
 
         return response
+
+
+# ── Этапы воронки ───────────────────────────────────────────────────
+
+
+def _cards(stage: Stage) -> QuerySet[Any]:
+    """Живые карточки этапа (удалённые в корзину не считаются)."""
+    model: type[OnStage] = Lead if stage.pipeline == "leads" else Deal
+
+    return model.objects.filter(**{model.stage_field: stage.code})
+
+
+def _stage_form(pipeline: str, stage: Stage | None) -> type[forms.ModelForm]:  # type: ignore[type-arg]
+    """
+    Форма этапа: название, норма дней и поля окна — по каталогу воронки
+    (stages.FIELDS), у каждого «не спрашивать / можно / обязательно».
+    """
+    chosen = stage.fields if stage is not None and isinstance(stage.fields, dict) else {}
+    lost = stage is not None and stage.kind == "lost"
+    fields: dict[str, Any] = {}
+
+    for key, (label, hint) in stages.FIELDS[pipeline].items():
+        if key == "lost_reason" and not lost:
+            continue  # причину отказа спрашивает только этап отказа — и всегда
+
+        fields[f"f_{key}"] = forms.ChoiceField(
+            label=label,
+            help_text=hint,
+            required=False,
+            choices=list(stages.MODES.items()),
+            initial="required" if key == "lost_reason" else chosen.get(key, ""),
+            disabled=key == "lost_reason",
+        )
+
+    class Meta:
+        model = Stage
+        fields = ("name", "limit_days")
+
+    return type("StageForm", (forms.ModelForm,), {**fields, "Meta": Meta})
+
+
+@register(Stage, section="pipelines")
+class StageAdmin(CrmAdmin):
+    """
+    Этапы воронок лидов и сделок — правят суперадмин и администратор.
+    Завести, переименовать, задать окно, сдвинуть выше или ниже, удалить
+    пустой — каждое действие строкой журнала. Системные этапы (вход,
+    успех, отказ) переименовываются, но не удаляются.
+    """
+
+    laravel_model = "App\\Models\\Crm\\Stage"
+    title_list = "Этапы воронки"
+    title_add = "Новый этап"
+    title_change = "Этап воронки"
+    change_form_template = "admin/crm/stage/change_form.html"
+    change_list_template = "admin/crm/stage/change_list.html"
+
+    list_display = ("name", "pipeline_name", "column", "norm", "window", "cards", "order")
+    list_display_links = ("name",)
+    list_filter = ("pipeline",)
+    list_per_page = 100
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Stage]:
+        # Как колонки доски: рабочие по порядку, затем успех, затем отказ
+        queryset: QuerySet[Stage] = (
+            super()
+            .get_queryset(request)
+            .annotate(
+                column_order=Case(
+                    When(kind="open", then=Value(0)),
+                    When(kind="won", then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("pipeline", "column_order", "position", "id")
+        )
+
+        return queryset
+
+    def get_actions(self, request: HttpRequest) -> dict[str, Any]:
+        return {}
+
+    def _pipeline(self, request: HttpRequest, obj: Stage | None) -> str:
+        if obj is not None:
+            return obj.pipeline
+
+        asked = request.POST.get("pipeline") or request.GET.get("pipeline", "")
+
+        return asked if asked in PIPELINES else "leads"
+
+    def get_form(
+        self,
+        request: HttpRequest,
+        obj: Any = None,  # noqa: ANN401
+        change: bool = False,
+        **kwargs: Any,
+    ) -> Any:  # noqa: ANN401
+        kwargs["form"] = _stage_form(self._pipeline(request, obj), obj)
+
+        return super().get_form(request, obj, change=change, **kwargs)
+
+    def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        pipeline = self._pipeline(request, obj)
+        window = [
+            f"f_{key}"
+            for key in stages.FIELDS[pipeline]
+            if key != "lost_reason" or (obj is not None and obj.kind == "lost")
+        ]
+
+        # У нового этапа воронка — в заголовке, колонка — всегда «в работе»
+        head: tuple[str, ...] = ("name", "limit_days")
+
+        if obj is not None:
+            head = ("pipeline_name", "column", *head)
+
+        return (
+            ("Этап", {"fields": head}),
+            (
+                "Окно при переводе на этап",
+                {
+                    "fields": window,
+                    "description": "Что спросить у сотрудника, когда он переводит "
+                    "карточку на этот этап — перетаскиванием или кнопкой.",
+                },
+            ),
+        )
+
+    def get_readonly_fields(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        return ("pipeline_name", "column")
+
+    @admin.display(description="воронка", ordering="pipeline")
+    def pipeline_name(self, obj: Stage | None) -> str:
+        return PIPELINES.get(obj.pipeline, obj.pipeline) if obj and obj.pk else ""
+
+    @admin.display(description="колонка")
+    def column(self, obj: Stage | None) -> str:
+        if obj is None or not obj.pk:
+            return "в работе"
+
+        return STAGE_KINDS.get(obj.kind, obj.kind) + (" · системный" if obj.is_system else "")
+
+    @admin.display(description="норма")
+    def norm(self, obj: Stage) -> str:
+        return f"{obj.limit_days} дн." if obj.limit_days else "—"
+
+    @admin.display(description="окно спрашивает")
+    def window(self, obj: Stage) -> str:
+        catalog = stages.FIELDS.get(obj.pipeline, {})
+        asked = stages.asked(obj)
+
+        return (
+            ", ".join(
+                catalog[key][0].lower() + (" *" if mode == "required" else "")
+                for key, mode in asked.items()
+            )
+            or "ничего — переводится сразу"
+        )
+
+    @admin.display(description="карточек")
+    def cards(self, obj: Stage) -> int:
+        return _cards(obj).count()
+
+    @admin.display(description="порядок")
+    def order(self, obj: Stage) -> str:
+        if not obj.is_open:
+            return ""
+
+        # Кнопки отправляют форму списка (в ней токен) на свой адрес:
+        # отдельная форма внутри формы списка невозможна
+        return format_html(
+            '<button type="submit" class="button sx-order" formaction="{}" '
+            'title="Выше" aria-label="Выше">↑</button> '
+            '<button type="submit" class="button sx-order" formaction="{}" '
+            'title="Ниже" aria-label="Ниже">↓</button>',
+            reverse("savdex_admin:crm_stage_up", args=[obj.pk]),
+            reverse("savdex_admin:crm_stage_down", args=[obj.pk]),
+        )
+
+    # ── Запись ──
+
+    def save_model(self, request: HttpRequest, obj: Any, form: Any, change: bool) -> None:  # noqa: ANN401
+        if not change:
+            obj.pipeline = self._pipeline(request, None)
+            obj.code = stages.new_code()
+            obj.kind = "open"
+            obj.position = stages.next_position(obj.pipeline)
+
+        obj.fields = {
+            key: form.cleaned_data[f"f_{key}"]
+            for key in stages.FIELDS[obj.pipeline]
+            if form.cleaned_data.get(f"f_{key}") in ("optional", "required")
+        }
+
+        if obj.kind == "lost":
+            obj.fields["lost_reason"] = "required"
+
+        super().save_model(request, obj, form, change)
+
+    def why_not_delete(self, obj: Stage) -> str:
+        if obj.is_system:
+            return "Системный этап не удаляется: на нём держатся вход, «В сделку» и отчёты."
+
+        count = _cards(obj).count()
+
+        if count:
+            return (
+                f"На этапе {count} карточек — сначала переведите их на другой этап "
+                "(кнопка ниже), потом удаляйте."
+            )
+
+        return ""
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
+        allowed = super().has_delete_permission(request, obj)
+
+        return allowed if obj is None or not allowed else not self.why_not_delete(obj)
+
+    def change_view(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        form_url: str = "",
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        stage = self.get_object(request, unquote(object_id))
+        extra = dict(extra_context or {})
+
+        if isinstance(stage, Stage):
+            extra["delete_blocked"] = self.why_not_delete(stage)
+            extra["cards_count"] = _cards(stage).count()
+            extra["move_targets"] = [
+                s
+                for s in stages.of(stage.pipeline)
+                if s.pk != stage.pk and not (s.pipeline == "leads" and s.kind == "won")
+            ]
+            extra["can_move_all"] = self.has_change_permission(request, stage) and _admin_of(
+                request
+            ).can(f"{stage.pipeline}.edit")
+
+        return super().change_view(request, object_id, form_url, extra)
+
+    def add_view(
+        self,
+        request: HttpRequest,
+        form_url: str = "",
+        extra_context: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        pipeline = self._pipeline(request, None)
+
+        return super().add_view(
+            request,
+            form_url,
+            {
+                "title": f"Новый этап — {PIPELINES[pipeline].lower()}",
+                "stage_pipeline": pipeline,
+                **(extra_context or {}),
+            },
+        )
+
+    def response_add(
+        self,
+        request: HttpRequest,
+        obj: Any,  # noqa: ANN401
+        post_url_continue: Any = None,  # noqa: ANN401
+    ) -> HttpResponse:
+        response = super().response_add(request, obj, post_url_continue)
+
+        # «Сохранить и добавить другой» — в ту же воронку
+        if "_addanother" in request.POST and isinstance(response, HttpResponseRedirect):
+            response["Location"] = (
+                reverse("savdex_admin:crm_stage_add") + f"?pipeline={obj.pipeline}"
+            )
+
+        return response
+
+    # ── Порядок и перенос карточек ──
+
+    def get_urls(self) -> list[Any]:
+        return [
+            path(
+                "<path:object_id>/up/",
+                self.admin_site.admin_view(self.up_view),
+                name="crm_stage_up",
+            ),
+            path(
+                "<path:object_id>/down/",
+                self.admin_site.admin_view(self.down_view),
+                name="crm_stage_down",
+            ),
+            path(
+                "<path:object_id>/move-all/",
+                self.admin_site.admin_view(self.move_all_view),
+                name="crm_stage_move_all",
+            ),
+            *super().get_urls(),
+        ]
+
+    def _stage(self, request: HttpRequest, object_id: str) -> Stage:
+        if request.method != "POST" or not self.has_change_permission(request):
+            raise PermissionDenied
+
+        stage = self.get_object(request, unquote(object_id))
+
+        if not isinstance(stage, Stage):
+            raise PermissionDenied
+
+        return stage
+
+    def _shift(self, request: HttpRequest, object_id: str, step: int) -> HttpResponse:
+        """Поменять местами с соседним рабочим этапом той же воронки."""
+        stage = self._stage(request, object_id)
+        row = [s for s in stages.of(stage.pipeline) if s.is_open]
+        index = next((i for i, s in enumerate(row) if s.pk == stage.pk), None)
+
+        if index is not None and 0 <= index + step < len(row):
+            # Порядок заново по местам: у старых этапов номера могли совпасть
+            row[index], row[index + step] = row[index + step], row[index]
+
+            for position, item in enumerate(row, 1):
+                if item.position != position:
+                    before = self.snapshot(item)
+                    item.position = position
+                    item.save()
+                    self.journal_update(request, item, before)
+
+            self.message_user(request, f"«{stage.name}» — на новом месте.", messages.SUCCESS)
+
+        return HttpResponseRedirect(
+            reverse("savdex_admin:crm_stage_changelist") + f"?pipeline__exact={stage.pipeline}"
+        )
+
+    def up_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        return self._shift(request, object_id, -1)
+
+    def down_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        return self._shift(request, object_id, 1)
+
+    def move_all_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        """
+        Перевести все карточки этапа на другой — чтобы этап можно было
+        удалить. Каждая карточка — своя строка журнала, как при переводе
+        с доски; окно этапа здесь не спрашивается.
+        """
+        stage = self._stage(request, object_id)
+
+        if not _admin_of(request).can(f"{stage.pipeline}.edit"):
+            raise PermissionDenied
+
+        target = Stage.objects.filter(
+            pipeline=stage.pipeline, code=request.POST.get("target", "")
+        ).first()
+        model: type[OnStage] = Lead if stage.pipeline == "leads" else Deal
+
+        if target is None or target.pk == stage.pk or (model is Lead and target.kind == "won"):
+            self.message_user(request, "Выберите, на какой этап перевести.", messages.ERROR)
+        else:
+            owner_admin = self.admin_site._registry[model]
+            assert isinstance(owner_admin, OnBoard)
+            moved = 0
+
+            for card in _cards(stage):
+                board.move(
+                    owner_admin,
+                    request,
+                    card,
+                    target,
+                    {"lost_reason": "Этап удалён"} if target.kind == "lost" else {},
+                )
+                moved += 1
+
+            self.message_user(request, f"Переведено на «{target.name}»: {moved}.", messages.SUCCESS)
+
+        return HttpResponseRedirect(reverse("savdex_admin:crm_stage_change", args=[stage.pk]))
 
 
 # ── Задачи и коммуникации: общее ────────────────────────────────────

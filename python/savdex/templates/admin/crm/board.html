@@ -1,0 +1,133 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+{% comment %}
+  Доска лидов или сделок (savdex/crm/board.py, OnBoard.board_view).
+
+  Колонки — этапы воронки, карточку переводят перетаскиванием (мышью
+  сразу, пальцем — долгим нажатием) или кнопкой «Перевести». Окно
+  перевода — одно на страницу: поля этапа берутся из <template> этого
+  этапа (их выбрал администратор), значения по умолчанию — из карточки.
+  Скрипт — static/savdex/crm-board.js, оформление — crm-board.css.
+{% endcomment %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'savdex/crm-board.css' %}?v={{ board_css }}">{% endblock %}
+{% block extrahead %}{{ block.super }}<script src="{% static 'savdex/crm-board.js' %}?v={{ board_js }}" defer></script>{% endblock %}
+{% block bodyclass %}{{ block.super }} sx-board-page{% endblock %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+{% block content %}
+<div id="content-main" class="sx-board" data-pipeline="{{ pipeline }}">
+  <div class="sx-board-bar">
+    <form method="get" class="sx-board-filter" role="search">
+      <input type="search" name="q" value="{{ filters.q }}" aria-label="Поиск"
+             placeholder="Название, компания{% if is_leads %}, имя, телефон{% endif %}">
+      <select name="owner" aria-label="Чьи" onchange="this.form.submit()">
+        <option value="">{% if scoped %}{% if is_leads %}Мои и ничьи{% else %}Мои{% endif %}{% else %}Все{% endif %}</option>
+        {% if not scoped or is_leads %}<option value="mine"{% if filters.owner == 'mine' %} selected{% endif %}>Только мои</option>{% endif %}
+        {% if is_leads %}<option value="none"{% if filters.owner == 'none' %} selected{% endif %}>Не распределены</option>{% endif %}
+        {% if not scoped %}
+          {% for person in people %}<option value="{{ person.pk }}"{% if filters.owner == person.pk|stringformat:'s' %} selected{% endif %}>{{ person.name }}</option>{% endfor %}
+        {% endif %}
+      </select>
+      <button type="submit" class="button">Найти</button>
+      {% if filters.q or filters.owner %}<a href="?" class="sx-board-reset">Сбросить</a>{% endif %}
+    </form>
+    <div class="sx-board-links">
+      {% if can_edit_stages %}<a class="button" href="{{ stages_url }}">Этапы воронки</a>{% endif %}
+      <a class="button" href="{{ archive_url }}">Архив</a>
+      {% if add_url %}<a class="button default" href="{{ add_url }}">{% if is_leads %}Новый лид{% else %}Новая сделка{% endif %}</a>{% endif %}
+    </div>
+  </div>
+  {% if rights.move %}
+    <p class="sx-board-hint">Перетащите карточку на другой этап — мышью или пальцем (нажмите и подержите), или нажмите «Перевести». Назад — тоже можно.</p>
+  {% endif %}
+
+  <div class="sx-board-columns">
+    {% for column in columns %}
+      <section class="sx-col sx-col-{{ column.stage.kind }}" data-stage="{{ column.stage.code }}"{% if column.droppable %} data-droppable{% endif %} aria-label="{{ column.stage.name }}">
+        <header class="sx-col-head">
+          <h2>{{ column.stage.name }}</h2>
+          <span class="sx-col-count">{{ column.total }}</span>
+        </header>
+        {% if not column.stage.is_open %}
+          <p class="sx-col-note">
+            За последнюю неделю{% if column.older %} · ещё {{ column.older }} — <a href="{{ archive_url }}?stage={{ column.stage.code }}">в архиве</a>{% endif %}
+          </p>
+        {% endif %}
+        {% if is_leads and column.stage.kind == 'won' %}
+          <p class="sx-col-note">Сюда лид попадает кнопкой «В сделку»</p>
+        {% endif %}
+        <div class="sx-col-cards">
+          {% for card in column.cards %}
+            {% include "admin/crm/board_card.html" %}
+          {% empty %}
+            <p class="sx-col-empty">Пусто</p>
+          {% endfor %}
+          {% if column.hidden %}
+            <p class="sx-col-note">Ещё {{ column.hidden }} — найдите поиском или в <a href="{{ archive_url }}?stage={{ column.stage.code }}">архиве</a></p>
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+</div>
+
+{% if rights.move %}
+  <dialog id="sx-move" class="sx-dialog" aria-labelledby="sx-move-title">
+    <form method="post" id="sx-move-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ here }}">
+      <h2 id="sx-move-title" class="sx-dialog-title">Перевести на этап</h2>
+      <p class="sx-dialog-card" data-card-title></p>
+      <div class="sx-field">
+        <label for="sx-move-stage">Этап</label>
+        <select name="stage" id="sx-move-stage" required>
+          {% for target in targets %}<option value="{{ target.stage.code }}">{{ target.stage.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div data-fields></div>
+      <div class="sx-dialog-actions">
+        <button type="button" class="button" data-close>Отмена</button>
+        <button type="submit" class="button default">Перевести</button>
+      </div>
+    </form>
+  </dialog>
+  {% for target in targets %}
+    <template id="sx-fields-{{ target.stage.code }}" data-count="{{ target.form.fields|length }}">
+      {% for field in target.form %}
+        <div class="sx-field{% if field.field.required %} is-required{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+        </div>
+      {% endfor %}
+    </template>
+  {% endfor %}
+{% endif %}
+
+{% if rights.assign %}
+  <dialog id="sx-assign" class="sx-dialog" aria-labelledby="sx-assign-title">
+    <form method="post" id="sx-assign-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ here }}">
+      <h2 id="sx-assign-title" class="sx-dialog-title">Ответственный</h2>
+      <p class="sx-dialog-card" data-card-title></p>
+      <div class="sx-field">
+        <label for="sx-assign-owner">Кто ведёт</label>
+        <select name="owner" id="sx-assign-owner">
+          {% if is_leads %}<option value="">Не распределён — виден всем продавцам</option>{% endif %}
+          {% for person in people %}<option value="{{ person.pk }}">{{ person.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="sx-dialog-actions">
+        <button type="button" class="button" data-close>Отмена</button>
+        <button type="submit" class="button default">Назначить</button>
+      </div>
+    </form>
+  </dialog>
+{% endif %}
+{% endblock %}

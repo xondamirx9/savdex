@@ -1,0 +1,41 @@
+{% comment %}
+  Карточка доски (board.html): лид или сделка. data-* — для окна
+  перевода: текущий этап и значения по умолчанию (ответственный, сумма).
+{% endcomment %}
+<article class="sx-card{% if card.late %} is-late{% endif %}" data-id="{{ card.id }}" data-title="{{ card.title }}"
+         data-stage="{{ card.stage }}" data-move-url="{{ card.move_url }}" data-assign-url="{{ card.assign_url }}"
+         data-owner="{{ card.owner_id }}" data-amount="{{ card.amount }}" data-currency="{{ card.currency }}"
+         data-expected="{{ card.expected }}"{% if card.can_move %} data-movable{% endif %}>
+  <a class="sx-card-title" href="{{ card.url }}">{{ card.title }}</a>
+  {% if card.money %}<div class="sx-card-money">{{ card.money }}</div>{% endif %}
+  {% if card.who or card.company %}
+    <div class="sx-card-who">{{ card.who }}{% if card.who and card.company %} · {% endif %}{{ card.company }}</div>
+  {% endif %}
+  {% if card.phone %}<a class="sx-card-phone" href="tel:{{ card.phone }}">{{ card.phone }}</a>{% endif %}
+  <div class="sx-card-meta">
+    <span class="sx-card-owner{% if not card.owner %} is-none{% endif %}">{{ card.owner|default:"не распределён" }}</span>
+    <span class="sx-card-days" title="Сколько на этапе{% if card.late %} — дольше нормы{% endif %}">{{ card.days }}</span>
+  </div>
+  {% if card.expected_label %}
+    <div class="sx-card-due{% if card.overdue %} is-overdue{% endif %}">Закрыть до {{ card.expected_label }}</div>
+  {% endif %}
+  {% if card.can_move or card.can_claim or card.can_convert or card.can_assign %}
+    <div class="sx-card-actions">
+      {% if card.can_move %}<button type="button" class="sx-card-button" data-move>Перевести</button>{% endif %}
+      {% if card.can_assign %}<button type="button" class="sx-card-button" data-assign>Назначить</button>{% endif %}
+      {% if card.can_claim %}
+        <form method="post" action="{{ card.claim_url }}">
+          {% csrf_token %}<input type="hidden" name="next" value="{{ here }}">
+          <button type="submit" class="sx-card-button">Взять себе</button>
+        </form>
+      {% endif %}
+      {% if card.can_convert %}
+        <form method="post" action="{{ card.convert_url }}"
+              onsubmit="return confirm('Лид перейдёт в «Стал сделкой». Компания, контакт и ответственный перенесутся в новую сделку.')">
+          {% csrf_token %}
+          <button type="submit" class="sx-card-button">В сделку</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endif %}
+</article>

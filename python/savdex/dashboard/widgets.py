@@ -40,8 +40,9 @@ from django.utils import timezone
 from savdex import access
 from savdex.accounts.models import User
 from savdex.adminsite import _admin_of, site
+from savdex.crm import stages
 from savdex.crm.admin import CrmAdmin, _today, when
-from savdex.crm.models import LEAD_SOURCES, LEAD_STATUSES, SUBJECTS, Lead, SoftDeleting, Task
+from savdex.crm.models import LEAD_SOURCES, SUBJECTS, Lead, SoftDeleting, Task
 from savdex.dashboard.metrics import Metric, PlatformMetrics, php_number, php_round
 from savdex.data.models import CompanyRecord, Listing
 from savdex.geo.models import City, Country
@@ -224,6 +225,7 @@ def my_leads(ctx: Context) -> dict[str, Any]:
         site._registry[Lead].get_queryset(ctx.request).exclude(status__in=("converted", "lost"))
     )
     leads = queryset.select_related("company", "contact", "owner").order_by("created_at", "id")
+    names = stages.names("leads")
 
     return table(
         heading="Лиды в работе",
@@ -239,7 +241,7 @@ def my_leads(ctx: Context) -> dict[str, Any]:
                         sub=CrmAdmin.company_label(lead.company),
                     ),
                     cell(
-                        LEAD_STATUSES.get(lead.status, lead.status),
+                        names.get(lead.status, lead.status),
                         badge=True,
                         tone="warning" if lead.status == "new" else "info",
                     ),
@@ -862,7 +864,8 @@ AWAITING_ROLE = Widget(
 
 #: Порядок Filament: $sort, при равном — порядок в AdminPanelProvider
 WIDGETS: tuple[Widget, ...] = (
-    Widget("my_leads", "admin/dashboard/table.html", lambda a: a.can("leads.view"), my_leads),
+    # Тем, кто ведёт лиды: модератор доску видит, но не звонит
+    Widget("my_leads", "admin/dashboard/table.html", lambda a: a.can("leads.edit"), my_leads),
     Widget("my_tasks", "admin/dashboard/table.html", lambda a: a.can("tasks.view"), my_tasks),
     Widget("intake_queue", "admin/dashboard/table.html", intake_visible, intake_queue),
     Widget("moderation_queue", "admin/dashboard/stats.html", moderation_visible, moderation_queue),

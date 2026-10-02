@@ -34,8 +34,10 @@ SECRET = frozenset(
     {"password", "remember_token", "two_factor_secret", "two_factor_recovery_codes", "api_token"}
 )
 
-#: AdminLog::NOISE — меняются при каждом сохранении и ничего не сообщают
-NOISE = frozenset({"updated_at", "created_at", "search_text"})
+#: AdminLog::NOISE — меняются при каждом сохранении и ничего не сообщают;
+#: stage_changed_at (когда карточка CRM пришла на этап) ставится сама, а
+#: перевод журнал и так показывает этапом «было» и «стало»
+NOISE = frozenset({"updated_at", "created_at", "search_text", "stage_changed_at"})
 
 
 def update_action(before: Mapping[str, Any], changed: Mapping[str, Any]) -> str:

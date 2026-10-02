@@ -158,6 +158,7 @@ ICONS = {
     "crm.Deal": "briefcase",
     "crm.Task": "check-circle",
     "crm.Communication": "chat-bubble-left-right",
+    "crm.Stage": "view-columns",
     "support.Ticket": "lifebuoy",
     "journal.AdminAction": "clock",
     "moderation.Review": "star",
@@ -178,15 +179,19 @@ ICONS = {
 DEFAULT_ICON = "rectangle-stack"
 
 
-@functools.cache
 def _theme_version() -> str:
+    return static_version("savdex/admin-theme.css")
+
+
+@functools.cache
+def static_version(name: str) -> str:
     """
-    Метка версии стилей админки для ссылки ?v=…: имя файла у WhiteNoise
+    Метка версии файла статики для ссылки ?v=…: имя файла у WhiteNoise
     без хеша, и кеш браузера или прокси иначе держит старые стили.
     """
     from django.contrib.staticfiles import finders
 
-    path = finders.find("savdex/admin-theme.css")
+    path = finders.find(name)
 
     if not isinstance(path, str):
         return "0"
@@ -324,7 +329,15 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "crm",
         "CRM",
-        ("crm.lead", "crm.deal", "crm.contact", "crm.task", "crm.communication", "support.ticket"),
+        (
+            "crm.lead",
+            "crm.deal",
+            "crm.contact",
+            "crm.task",
+            "crm.communication",
+            "support.ticket",
+            "crm.stage",
+        ),
     ),
     (
         "moderation",
