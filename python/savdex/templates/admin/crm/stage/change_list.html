@@ -1,0 +1,22 @@
+{% extends "admin/change_list.html" %}
+{% comment %}
+  Этапы воронки (StageAdmin): новый этап — отдельно для лидов и для
+  сделок, у них разные поля окна. Порядок — кнопками ↑ ↓ в строке.
+{% endcomment %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .sx-order { padding: 2px 10px; line-height: 1.4; }
+</style>
+{% endblock %}
+{% block object-tools-items %}
+  {% if has_add_permission %}
+    <li><a href="{% url 'savdex_admin:crm_stage_add' %}?pipeline=leads" class="addlink">Новый этап лидов</a></li>
+    <li><a href="{% url 'savdex_admin:crm_stage_add' %}?pipeline=deals" class="addlink">Новый этап сделок</a></li>
+  {% endif %}
+  <li><a href="{% url 'savdex_admin:crm_lead_changelist' %}" class="button">Доска лидов</a></li>
+  <li><a href="{% url 'savdex_admin:crm_deal_changelist' %}" class="button">Доска сделок</a></li>
+{% endblock %}
+{% block result_list %}
+  <p class="help">Колонки доски идут в этом порядке: рабочие этапы — как здесь, потом успех и отказ. Системные этапы можно переименовать, но не удалить.</p>
+  {{ block.super }}
+{% endblock %}

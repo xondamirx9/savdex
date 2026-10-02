@@ -1,0 +1,36 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Этап воронки (StageAdmin). У нового этапа воронка — из адреса
+  (?pipeline=), она же уходит скрытым полем. Удалить можно только пустой
+  несистемный этап: почему нельзя — над формой; карточки переводятся
+  на другой этап формой под ней (move-all/, каждая — строкой журнала).
+{% endcomment %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .sx-stage-move { margin-top: 24px; }
+  .sx-stage-move .form-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+</style>
+{% endblock %}
+{% block form_top %}
+  {% if add %}<input type="hidden" name="pipeline" value="{{ stage_pipeline }}">{% endif %}
+  {% if delete_blocked %}<p class="help">{{ delete_blocked }}</p>{% endif %}
+{% endblock %}
+{% block content %}
+  {{ block.super }}
+  {% if not add and can_move_all and cards_count %}
+    <div class="module aligned sx-stage-move">
+      <h2>Карточки на этапе: {{ cards_count }}</h2>
+      <form method="post" action="{% url 'savdex_admin:crm_stage_move_all' original.pk %}"
+            onsubmit="return confirm('Перевести все карточки этого этапа?')">
+        {% csrf_token %}
+        <div class="form-row">
+          <label for="sx-move-all">Перевести все на этап</label>
+          <select name="target" id="sx-move-all" required>
+            {% for target in move_targets %}<option value="{{ target.code }}">{{ target.name }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="button">Перевести</button>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}

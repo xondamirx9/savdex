@@ -19,7 +19,7 @@ CRM — таблицы crm_* глазами Django (этап 6). Схема — 
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from django.db import models
 
@@ -102,7 +102,9 @@ class Contact(SoftDeleting):
         return f"{self.name}, {self.position}" if self.position else self.name
 
 
-#: Lead::STATUSES
+#: Этапы по умолчанию — те, с которыми заводится воронка (миграция
+#: crm_stages). Настоящие этапы — в crm_stages, их правит администратор
+#: (savdex/crm/stages.py); здесь — коды, на которых держится код
 LEAD_STATUSES = {
     "new": "Новый",
     "working": "В работе",
@@ -122,7 +124,6 @@ LEAD_SOURCES = {
     "other": "Другое",
 }
 
-#: Deal::STAGES
 DEAL_STAGES = {
     "new": "Новая",
     "negotiation": "Переговоры",
@@ -159,8 +160,101 @@ def _link(model: type[models.Model] | str, verbose: str) -> models.ForeignKey:  
     )
 
 
-class Lead(SoftDeleting):
+#: Воронки (crm_stages.pipeline)
+PIPELINES = {"leads": "Лиды", "deals": "Сделки"}
+
+#: Колонки доски: в работе, успех, отказ. Закрытые («успех» и «отказ») —
+#: по одной на воронку, системные
+STAGE_KINDS = {"open": "в работе", "won": "успех", "lost": "отказ"}
+
+#: Системные этапы не удаляются: «new» — вход (с него начинает новый лид
+#: и сделка из лида), закрытые — «В сделку», причина отказа, отчёты
+SYSTEM_STAGES = {"leads": ("new", "converted", "lost"), "deals": ("new", "won", "lost")}
+
+
+class Stage(Timestamped):
+    """
+    Этап воронки — колонка доски лидов или сделок (savdex/crm/board.py).
+
+    Код этапа лежит в crm_leads.status / crm_deals.stage. fields — поля
+    окна при переводе на этап (каталог — savdex/crm/stages.FIELDS):
+    {"owner": "required", "comment": "optional"}. limit_days — сколько
+    дней на этапе нормально; дольше — карточка на доске красная.
+    """
+
+    pipeline = models.CharField("воронка", max_length=10, choices=list(PIPELINES.items()))
+    code = models.CharField("код", max_length=20, editable=False)
+    name = models.CharField("название", max_length=80)
+    kind = models.CharField(
+        "колонка", max_length=10, default="open", choices=list(STAGE_KINDS.items()), editable=False
+    )
+    position = models.IntegerField("порядок", default=0, editable=False)
+    limit_days = models.PositiveIntegerField(
+        "сколько дней нормально",
+        null=True,
+        blank=True,
+        help_text="Карточка, которая лежит на этапе дольше, на доске красная. Пусто — не следить",
+    )
+    fields = models.JSONField("поля окна", default=dict, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "crm_stages"
+        verbose_name = "этап воронки"
+        verbose_name_plural = "этапы воронки"
+        ordering = ("pipeline", "position", "id")
+
+    def __str__(self) -> str:
+        return f"{PIPELINES.get(self.pipeline, self.pipeline)}: {self.name}"
+
+    @property
+    def is_system(self) -> bool:
+        return self.code in SYSTEM_STAGES.get(self.pipeline, ())
+
+    @property
+    def is_open(self) -> bool:
+        return self.kind == "open"
+
+
+class OnStage(SoftDeleting):
+    """
+    Карточка доски: лид или сделка. stage_changed_at — когда карточка
+    пришла на свой этап («дней на этапе», закрытые за неделю); ставится
+    само при каждой смене этапа, откуда бы она ни пришла — доска, форма,
+    «Взять себе», «В сделку».
+    """
+
+    #: Столбец с кодом этапа
+    stage_field: ClassVar[str]
+
+    stage_changed_at = UTCDateTimeField("на этапе с", null=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Этап, с которым запись прочитана: сменился ли он к записи
+        self._stage_loaded = self.__dict__.get(self.stage_field)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        current = getattr(self, self.stage_field)
+
+        if (
+            self._state.adding
+            or self.stage_changed_at is None
+            or current != getattr(self, "_stage_loaded", current)
+        ):
+            self.stage_changed_at = now()
+
+        super().save(*args, **kwargs)
+        self._stage_loaded = current
+
+
+class Lead(OnStage):
     """App\\Models\\Crm\\Lead: заявка, которую ещё не превратили в сделку."""
+
+    stage_field = "status"
 
     title = models.CharField("что нужно клиенту", max_length=200)
     source = models.CharField(
@@ -172,9 +266,7 @@ class Lead(SoftDeleting):
     contact_phone = models.CharField("телефон", max_length=40, null=True, blank=True)
     contact_email = models.EmailField("почта", max_length=160, null=True, blank=True)
     owner = _owner("ответственный")
-    status = models.CharField(
-        "статус", max_length=20, default="new", choices=list(LEAD_STATUSES.items())
-    )
+    status = models.CharField("этап", max_length=20, default="new")
     lost_reason = models.TextField("причина отказа", null=True, blank=True)
     note = models.TextField("заметка", null=True, blank=True)
 
@@ -203,8 +295,10 @@ class Lead(SoftDeleting):
         return self.contact_name
 
 
-class Deal(SoftDeleting):
+class Deal(OnStage):
     """App\\Models\\Crm\\Deal: сделка с суммой и этапом."""
+
+    stage_field = "stage"
 
     title = models.CharField("сделка", max_length=200)
     company = _link(Company, "компания")
@@ -215,9 +309,7 @@ class Deal(SoftDeleting):
     currency = models.CharField(
         "валюта", max_length=3, default="UZS", choices=list(CURRENCIES.items())
     )
-    stage = models.CharField(
-        "этап", max_length=20, default="new", choices=list(DEAL_STAGES.items())
-    )
+    stage = models.CharField("этап", max_length=20, default="new")
     expected_close_at = models.DateField(
         "ожидаемое закрытие",
         null=True,

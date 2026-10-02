@@ -60,7 +60,7 @@ def test_у_суперадмина_нет_групп_из_одного_пунк�
     ]
     assert all(len(разделы) > 1 for разделы in меню.values()), меню
     assert меню["Данные"][-1] == "Tender"
-    assert меню["CRM"][-1] == "Ticket"
+    assert "Ticket" in меню["CRM"] and меню["CRM"][-1] == "Stage"
     assert меню["Модерация"].index("Complaint") > меню["Модерация"].index("CompanyDocument")
     assert меню["Система"][:2] == ["User", "StaffMember"]
     # «Возвраты» после «Счетов и оплат», как в Filament (8e32f2a)
@@ -80,10 +80,11 @@ def test_каждый_раздел_ровно_в_одной_группе():
 def test_сотруднику_только_свои_группы():
     модератор = _меню("moderator")
 
-    assert list(модератор) == ["Модерация", "Данные", "Справочники"]
+    assert list(модератор) == ["CRM", "Модерация", "Данные", "Справочники"]
+    # Доски лидов и сделок — смотреть; этапы воронки правят администраторы
+    assert модератор["CRM"] == ["Lead", "Deal"]
     assert "Complaint" in модератор["Модерация"]
     assert "Tender" in модератор["Данные"]
-    assert "Lead" not in str(модератор)
 
 
 def test_открытая_группа():

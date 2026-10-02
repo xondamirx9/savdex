@@ -153,6 +153,7 @@ STAGES: tuple[Stage, ...] = (
             "activity_events",
             "crm_leads",
             "crm_deals",
+            "crm_stages",
             "crm_contacts",
             "crm_tasks",
             "crm_communications",

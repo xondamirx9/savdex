@@ -62,6 +62,7 @@ SECTIONS: dict[str, str] = {
     "contacts": "Контакты",
     "tasks": "Задачи",
     "communications": "Коммуникации",
+    "pipelines": "Этапы воронки",
     "support": "Обращения в поддержку",
     "payments": "Счета и оплаты",
     "subscriptions": "Подписки",
@@ -92,6 +93,8 @@ _MATRIX: dict[str, dict[str, str]] = {
         "companies": "w", "listings": "w", "tenders": "w", "ittasks": "w",
         "documents": "r", "resumes": "m", "reviews": "w", "complaints": "w",
         "leads": "w", "deals": "w", "contacts": "w", "tasks": "w", "communications": "w",
+        # Этапы воронки: заводить, переименовывать, удалять
+        "pipelines": "f",
         "support": "w",
         "content": "w", "catalogs": "w", "broadcasts": "r",
     },
@@ -116,6 +119,9 @@ _MATRIX: dict[str, dict[str, str]] = {
     "moderator": {
         "companies": "m", "listings": "m", "tenders": "m", "ittasks": "m",
         "documents": "m", "resumes": "m", "reviews": "m", "complaints": "m",
+        # Доски лидов и сделок — все, но только смотреть: переводить
+        # карточки по этапам модератор не может
+        "leads": "r", "deals": "r",
         "catalogs": "r",
     },
     "finance": {
