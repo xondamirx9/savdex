@@ -410,6 +410,66 @@ LISTING_TONES = {
     "rejected": "danger",
 }
 
+#: Цвет метки статуса в списке: тона бейджей → классы sx-pill
+PILL_CLASSES = {"success": "ok", "warning": "warn", "danger": "bad"}
+
+#: Откуда объявление — как скажет человек, а не как названо в коде
+SOURCE_LABELS = {"cabinet": "Добавила компания", "import": "Загружено из Excel"}
+
+#: Вкладки над списком: (параметр, значение, подпись); «Ждут проверки»
+#: подсвечиваются, когда там что-то есть
+LISTING_TABS = (
+    ("status", "", "Все"),
+    ("status", "active", "Активные"),
+    ("status", "moderation", "Ждут проверки"),
+    ("status", "needs_changes", "На исправлении"),
+    ("status", "rejected", "Отклонены"),
+    ("status", "draft", "Черновики"),
+    ("status", "expired", "Истекли"),
+    ("status", "archived", "Сняты"),
+    ("trashed", "1", "Корзина"),
+)
+
+#: Heroicons (outline), как значки меню
+ICON_EXTERNAL = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" '
+    'd="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 '
+    '18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>'
+)
+ICON_EDIT = (
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" '
+    'd="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 '
+    "1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 "
+    '0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>'
+)
+
+#: Осталось дней — «скоро»: подсвечиваем, чтобы продлили вовремя
+EXPIRES_SOON_DAYS = 7
+
+
+def _days_word(days: int) -> str:
+    """1 день, 2 дня, 5 дней."""
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+
+    if 2 <= days % 10 <= 4 and not 12 <= days % 100 <= 14:
+        return "дня"
+
+    return "дней"
+
+
+def _initials(name: str) -> str:
+    """Две буквы для значка компании: без ООО, LLC и кавычек."""
+    words = [
+        w
+        for w in name.replace("«", " ").replace("»", " ").replace('"', " ").split()
+        if w.upper().strip(".") not in {"ООО", "OOO", "LLC", "ИП", "АО", "ЧП", "MCHJ", "XK"}
+    ]
+
+    return "".join(w[0] for w in words[:2]).upper() or "?"
+
 
 def _category_choices() -> list[tuple[int, str]]:
     """Активные категории, «Раздел → Подраздел», по алфавиту подписи."""
@@ -755,9 +815,15 @@ class TransferForm(forms.Form):
         return found
 
 
+#: Фильтр без блока в боковой колонке: им управляют вкладки и кнопки
+#: над списком — колонка справа отнимала 240 px у таблицы
+HIDDEN_FILTER = "admin/data/listing/hidden_filter.html"
+
+
 class ListingState(admin.SimpleListFilter):
     title = "статус"
     parameter_name = "status"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
         return list(LISTING_STATUSES.items())
@@ -767,22 +833,24 @@ class ListingState(admin.SimpleListFilter):
 
 
 class ListingType(admin.SimpleListFilter):
-    title = "тип"
+    title = "продаю или покупаю"
     parameter_name = "type"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return [("supply", "Предложение"), ("demand", "Запрос")]
+        return [("supply", "Продаю"), ("demand", "Покупаю")]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(type=self.value()) if self.value() else queryset
 
 
 class ListingSource(admin.SimpleListFilter):
-    title = "источник"
+    title = "откуда"
     parameter_name = "source"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return list(LISTING_SOURCES.items())
+        return [(code, SOURCE_LABELS.get(code, label)) for code, label in LISTING_SOURCES.items()]
 
     def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         return queryset.filter(source=self.value()) if self.value() else queryset
@@ -793,6 +861,7 @@ class Trashed(admin.SimpleListFilter):
 
     title = "корзина"
     parameter_name = "trashed"
+    template = HIDDEN_FILTER
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
         return [("1", "В корзине")]
@@ -816,11 +885,11 @@ class ListingAdmin(SavdexModelAdmin):
     list_display = (
         "listing",
         "company_name",
-        "kind",
         "state",
-        "views_count",
-        "unlocks_count",
+        "views",
+        "contacts",
         "until",
+        "row_actions",
     )
     list_filter = (ListingState, ListingType, ListingSource, Trashed)
     list_select_related = ("company",)
@@ -895,9 +964,20 @@ class ListingAdmin(SavdexModelAdmin):
 
     @admin.display(description="объявление", ordering="title")
     def listing(self, obj: Listing) -> str:
-        title = obj.title if len(obj.title) <= 60 else obj.title[:60].rstrip() + "..."
+        # Под названием — продаёт компания или покупает, и категория:
+        # отдельная колонка «Тип» с «Предложение/Запрос» была непонятна
+        kind = (
+            '<span class="sx-kind sx-kind-buy">Покупаю</span>'
+            if obj.type == "demand"
+            else '<span class="sx-kind sx-kind-sell">Продаю</span>'
+        )
 
-        return format_html("{}<br><small>{}</small>", title, self._category_name(obj.category_id))
+        return format_html(
+            '<span class="sx-title">{}</span><span class="sx-sub">{}{}</span>',
+            obj.title,
+            format_html(kind),
+            self._category_name(obj.category_id),
+        )
 
     @staticmethod
     def _category_name(category_id: int | None) -> str:
@@ -909,24 +989,82 @@ class ListingAdmin(SavdexModelAdmin):
 
     @admin.display(description="компания", ordering="company__name")
     def company_name(self, obj: Listing) -> str:
-        return obj.company.name if obj.company is not None else "—"
+        name = obj.company.name if obj.company is not None else "—"
+        source = SOURCE_LABELS.get(obj.source, LISTING_SOURCES.get(obj.source, ""))
 
-    @admin.display(description="тип", ordering="type")
-    def kind(self, obj: Listing) -> str:
-        return _badge(
-            "Запрос" if obj.type == "demand" else "Предложение",
-            "warning" if obj.type == "demand" else "info",
+        return format_html(
+            '<span class="sx-company"><span class="sx-avatar" aria-hidden="true">{}</span>'
+            '<span class="sx-company-text"><span class="sx-company-name">{}</span>'
+            '<span class="sx-sub">{}</span></span></span>',
+            _initials(name) if obj.company is not None else "—",
+            name,
+            source,
         )
 
     @admin.display(description="статус", ordering="status")
     def state(self, obj: Listing) -> str:
-        return _badge(
-            LISTING_STATUSES.get(obj.status, obj.status), LISTING_TONES.get(obj.status, "gray")
+        tone = PILL_CLASSES.get(LISTING_TONES.get(obj.status, ""), "gray")
+
+        return format_html(
+            '<span class="sx-pill sx-pill-{}">{}</span>',
+            tone,
+            LISTING_STATUSES.get(obj.status, obj.status),
         )
 
-    @admin.display(description="до", ordering="expires_at")
+    @admin.display(description="просмотры", ordering="views_count")
+    def views(self, obj: Listing) -> int:
+        return obj.views_count
+
+    @admin.display(description="открыли контакты", ordering="unlocks_count")
+    def contacts(self, obj: Listing) -> int:
+        return obj.unlocks_count
+
+    @admin.display(description="активно до", ordering="expires_at")
     def until(self, obj: Listing) -> str:
-        return timezone.localtime(obj.expires_at).strftime("%d.%m.%Y") if obj.expires_at else "—"
+        if obj.expires_at is None:
+            return "—"
+
+        date = timezone.localtime(obj.expires_at)
+        days = (date.date() - timezone.localdate()).days
+
+        if obj.status != "active":
+            note, soon = "", False
+        elif days < 0:
+            note, soon = "срок вышел", True
+        elif days == 0:
+            note, soon = "последний день", True
+        else:
+            note, soon = f"осталось {days} {_days_word(days)}", days <= EXPIRES_SOON_DAYS
+
+        return format_html(
+            '<span class="sx-until{}"><span>{}</span><span class="sx-sub">{}</span></span>',
+            " is-soon" if soon else "",
+            date.strftime("%d.%m.%Y"),
+            note,
+        )
+
+    @admin.display(description="")
+    def row_actions(self, obj: Listing) -> str:
+        """«Открыть на сайте» — у опубликованных; «Изменить» — всегда."""
+        edit = reverse("savdex_admin:data_listing_change", args=[obj.pk])
+        site = (
+            format_html(
+                '<a href="/listing/{}" class="sx-icon-btn" target="_blank" rel="noopener" '
+                'title="Открыть на сайте" aria-label="Открыть на сайте">{}</a>',
+                obj.slug,
+                format_html(ICON_EXTERNAL),
+            )
+            if obj.status == "active" and obj.slug and obj.deleted_at is None
+            else ""
+        )
+
+        return format_html(
+            '<span class="sx-row-actions">{}<a href="{}" class="sx-icon-btn" title="Изменить" '
+            'aria-label="Изменить">{}</a></span>',
+            site,
+            edit,
+            format_html(ICON_EDIT),
+        )
 
     # ── Удаление: в корзину; вернуть и насовсем — суперадмин ──
 
@@ -946,7 +1084,7 @@ class ListingAdmin(SavdexModelAdmin):
 
     # ── Публикация пачкой ──
 
-    @admin.action(description="Опубликовать отмеченные (одобрить)")
+    @admin.action(description="Одобрить")
     def approve_selected(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         """
         «Одобрить» для всех отмеченных сразу — как кнопка на странице
@@ -977,7 +1115,7 @@ class ListingAdmin(SavdexModelAdmin):
 
     # ── Передача настоящему владельцу ──
 
-    @admin.action(description="Передать компании…", permissions=["change"])
+    @admin.action(description="Передать другой компании", permissions=["change"])
     def transfer_to_company(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
         """
         Отмеченные объявления — другой компании: заявки, загруженные без
@@ -1222,12 +1360,90 @@ class ListingAdmin(SavdexModelAdmin):
 
         return response
 
+    def status_tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
+        """
+        Вкладки над списком: статус или корзина, с числом объявлений.
+        Остальные отборы и поиск переходят на вкладку как есть, номер
+        страницы — нет: на другой вкладке своя первая страница.
+        """
+        from django.db.models import Count
+
+        base = Listing.objects.exclude(status="draft", title="")
+        alive = base.filter(deleted_at__isnull=True)
+        rows = alive.values("status").annotate(n=Count("id")).values_list("status", "n")
+        counts: dict[str, int] = dict(rows)
+        counts[""] = sum(counts.values())
+        trashed = base.filter(deleted_at__isnull=False).count()
+
+        in_trash = request.GET.get("trashed") == "1"
+        current = request.GET.get("status", "")
+        tabs = []
+
+        for parameter, value, label in LISTING_TABS:
+            query = request.GET.copy()
+
+            for name in ("status", "trashed", "p", "e"):
+                query.pop(name, None)
+
+            if value:
+                query[parameter] = value
+
+            is_trash = parameter == "trashed"
+            tabs.append(
+                {
+                    "label": label,
+                    "count": trashed if is_trash else counts.get(value, 0),
+                    "url": "?" + query.urlencode() if query else "?",
+                    "active": in_trash if is_trash else (not in_trash and current == value),
+                    "alert": value == "moderation" and counts.get(value, 0) > 0,
+                }
+            )
+
+        return tabs
+
+    @staticmethod
+    def filter_chips(request: HttpRequest) -> list[dict[str, Any]]:
+        """
+        Кнопки-отборы над списком: «Продаю / Покупаю» и откуда объявление.
+        Нажатие включает отбор, повторное — снимает; в группе выбран один.
+        """
+        groups = (
+            ("type", [("supply", "Продаю"), ("demand", "Покупаю")]),
+            ("source", list(SOURCE_LABELS.items())),
+        )
+        chips = []
+
+        for parameter, options in groups:
+            current = request.GET.get(parameter, "")
+
+            for value, label in options:
+                query = request.GET.copy()
+
+                for name in (parameter, "p", "e"):
+                    query.pop(name, None)
+
+                if current != value:
+                    query[parameter] = value
+
+                chips.append(
+                    {
+                        "label": label,
+                        "url": "?" + query.urlencode() if query else "?",
+                        "active": current == value,
+                        "group_start": value == options[0][0],
+                    }
+                )
+
+        return chips
+
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         query = request.GET.urlencode()
 
         return super().changelist_view(
             request,
             {
+                "status_tabs": self.status_tabs(request),
+                "filter_chips": self.filter_chips(request),
                 "can_import": _admin_of(request).can("listings.import"),
                 "import_url": reverse("savdex_admin:data_listing_import"),
                 "can_export": _admin_of(request).can("listings.export"),

@@ -1,16 +1,96 @@
 {% extends "admin/change_list.html" %}
 {% comment %}
-  Объявления (savdex/data/admin.py, ListingAdmin): «Выгрузить» — список с
-  текущими отборами в XLSX или CSV (право listings.export), «Загрузить» —
-  книги Excel с фотографиями (право listings.import).
+  Объявления (savdex/data/admin.py, ListingAdmin).
+
+  - Вкладки над списком — статус и корзина с числом объявлений
+    (ListingAdmin.status_tabs); в боковой колонке они не дублируются.
+  - «Продаю / Покупаю» и откуда — кнопками под поиском
+    (ListingAdmin.filter_chips): колонка фильтров справа отнимала
+    у таблицы 240 px.
+  - Действия с отмеченными — кнопками, которые появляются, когда что-то
+    отмечено, вместо «Действие: --------- Выполнить».
+  - «Скачать» — список с текущими отборами в XLSX или CSV (право
+    listings.export), «Загрузить из Excel» — книги с фотографиями
+    (право listings.import).
 {% endcomment %}
 {% block object-tools-items %}
   {% if can_import %}
-    <li><a href="{{ import_url }}" class="addlink">Загрузить</a></li>
+    <li><a href="{{ import_url }}">Загрузить из Excel</a></li>
   {% endif %}
   {% if can_export %}
-    <li><a href="{{ export_url }}">Выгрузить XLSX</a></li>
-    <li><a href="{{ export_url }}{{ export_sep }}format=csv">Выгрузить CSV</a></li>
+    <li><a href="{{ export_url }}" class="sx-tool-secondary">Скачать XLSX</a></li>
+    <li><a href="{{ export_url }}{{ export_sep }}format=csv" class="sx-tool-secondary">Скачать CSV</a></li>
   {% endif %}
   {{ block.super }}
+{% endblock %}
+
+{% block search %}
+  {% if status_tabs %}
+    <nav class="sx-tabs" aria-label="Статус объявлений">
+      {% for tab in status_tabs %}
+        <a href="{{ tab.url }}" class="sx-tab{% if tab.active %} is-active{% endif %}{% if tab.alert %} is-alert{% endif %}"{% if tab.active %} aria-current="page"{% endif %}>
+          {{ tab.label }} <b>{{ tab.count }}</b>
+        </a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+  {{ block.super }}
+  {% if filter_chips %}
+    <div class="sx-chips" role="group" aria-label="Отбор">
+      {% for chip in filter_chips %}
+        {% if chip.group_start and not forloop.first %}<span class="sx-chips-sep" aria-hidden="true"></span>{% endif %}
+        <a href="{{ chip.url }}" class="sx-chip{% if chip.active %} is-active{% endif %}"{% if chip.active %} aria-pressed="true" title="Снять отбор"{% endif %}>{{ chip.label }}{% if chip.active %} <span aria-hidden="true">✕</span>{% endif %}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+  // Действия с отмеченными: кнопки вместо выпадающего списка, и только
+  // когда отмечено хоть одно объявление
+  document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('changelist-form');
+    var bar = form && form.querySelector('.actions');
+    var select = bar && bar.querySelector('select[name="action"]');
+    var go = bar && bar.querySelector('button[name="index"]');
+    var search = document.getElementById('searchbar');
+
+    if (search) search.placeholder = 'Название объявления или компании';
+    if (!select || !go) return;
+
+    var labels = { delete_selected: 'В корзину' };
+    var buttons = document.createElement('span');
+    buttons.className = 'sx-bulk-buttons';
+
+    Array.prototype.forEach.call(select.options, function (option) {
+      if (!option.value) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button sx-bulk-button' + (option.value === 'delete_selected' ? ' is-danger' : '');
+      button.textContent = labels[option.value] || option.textContent;
+      button.addEventListener('click', function () {
+        select.value = option.value;
+        go.click();
+      });
+      buttons.appendChild(button);
+    });
+
+    // style, а не hidden: тема задаёт подписи действий display
+    var label = select.closest('label');
+    (label || select).style.display = 'none';
+    go.style.display = 'none';
+    bar.insertBefore(buttons, bar.firstChild);
+    bar.classList.add('sx-has-buttons');
+
+    function sync() {
+      var picked = form.querySelectorAll('input.action-select:checked').length;
+      bar.classList.toggle('is-visible', picked > 0);
+    }
+
+    form.addEventListener('change', function () { setTimeout(sync, 0); });
+    sync();
+  });
+</script>
 {% endblock %}

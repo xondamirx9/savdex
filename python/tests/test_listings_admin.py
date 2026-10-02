@@ -129,6 +129,32 @@ def test_список_без_пустых_черновиков(люди):
     assert список["body"].count('class="field-listing"') == 1
 
 
+def test_вкладки_статусов_и_отборы(люди):
+    company = _компания()
+    _объявление("Цемент М400 навалом", company_id=company)
+    _объявление("Щебень фракции 5-20", status="active", type="demand", company_id=company)
+    _объявление("Удалённое объявление", deleted_at="2026-09-01", company_id=company)
+
+    _, все, покупаю = django(
+        люди["moderator"], ("get", LIST, None), ("get", LIST + "?type=demand", None)
+    )
+
+    # Вкладки над списком с числом; «Ждут проверки» подсвечены
+    assert '<nav class="sx-tabs"' in все["body"]
+    assert 'class="sx-tab is-active" aria-current="page">\n          Все <b>2</b>' in все["body"]
+    assert 'href="?status=moderation" class="sx-tab is-alert">' in все["body"]
+    assert "Ждут проверки <b>1</b>" in все["body"] and "Корзина <b>1</b>" in все["body"]
+    # Тип — понятными словами под названием, источник — под компанией
+    assert "Продаю" in все["body"] and "Покупаю" in все["body"]
+    assert "Предложение" not in все["body"]
+    assert "Добавила компания" in все["body"]
+    # Отбор «Покупаю»: вкладка «Все» его сохраняет, повторное нажатие снимает
+    assert "Щебень фракции 5-20" in покупаю["body"]
+    assert "Цемент М400 навалом" not in покупаю["body"]
+    assert 'href="?type=demand&amp;status=active"' in покупаю["body"]
+    assert 'href="?" class="sx-chip is-active"' in покупаю["body"]
+
+
 # ── Решения ─────────────────────────────────────────────────────────
 
 
