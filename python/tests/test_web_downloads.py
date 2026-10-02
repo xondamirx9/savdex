@@ -245,3 +245,14 @@ def test_файл_задачи(сайт, title, гость):
         assert (итог["status"], итог["location"]) == (302, сайт + "/login")
     else:
         assert итог == ЗАДАЧИ[title]
+
+
+def test_файл_задачи_заблокированной_компании(сайт):
+    """Задача заблокированной компании скрыта — и её файлы тоже."""
+    номер = int(sql("select id from it_task_files where title = 'ТЗ проекта.pdf'")[0][0])
+    sql("update companies set status = 'blocked' where slug = 'other'")
+
+    try:
+        assert _запрос(сайт, f"/it-services/files/{номер}", False) == _нет()
+    finally:
+        sql("update companies set status = 'active' where slug = 'other'")

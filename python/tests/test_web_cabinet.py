@@ -885,6 +885,10 @@ def test_отзывы(сайт, path):
         (r["dispute_status"], r["moderator_note"]) for r in reviews
     ]
     assert [r["author"] is None for r in reviews].count(True) == 1
+    # Критерии — на языке страницы
+    первый = "与描述相符" if path.startswith("/zh") else "Соответствие описанию"
+    assert props["criteria"]["rating_description"] == первый
+    assert props["summary"]["criteria"][0]["label"] == первый
 
 
 def test_отзывы_без_компании(сайт):
@@ -938,6 +942,21 @@ def test_мои_контакты(сайт, query, filters, компании):
         if c["company"]["name"] == "Поставщик 1":
             assert c["phones"] == ["+998900000001", "+998710000001"]
             assert c["emails"] == ["p1@x.uz"] and c["status_label"] == "Сделка"
+
+
+def test_мои_контакты_статусы_на_языке_страницы(сайт):
+    _раскрытия()
+    _, стр = зайти(сайт, "/en/cabinet/contacts", владелец(сайт))
+    props = стр["props"]
+
+    assert props["statuses"] == {
+        "new": "New",
+        "contacted": "Contacted",
+        "negotiating": "Negotiating",
+        "deal": "Deal",
+        "rejected": "Not a fit",
+    }
+    assert "Deal" in [c["status_label"] for c in props["contacts"]]
 
 
 def test_мои_контакты_без_компании(сайт):
@@ -1248,6 +1267,11 @@ def test_мои_задачи(сайт, path):
 
     if path == "/cabinet/it-tasks":
         assert [t["budget"] for t in tasks] == ["Договорной", "500 – 900 USD", "1 500 000 сум"]
+        assert [t["status_label"] for t in tasks] == ["Закрыта", "Выполнена", "Открыта"]
+    else:
+        # Статусы и виды услуг — на языке страницы
+        assert [t["status_label"] for t in tasks] == ["Yopilgan", "Bajarilgan", "Ochiq"]
+        assert all(t["service_type"] != "Сайты и веб-приложения" for t in tasks)
 
 
 def test_задача_форма(сайт):
@@ -1256,6 +1280,7 @@ def test_задача_форма(сайт):
 
     _, новая = зайти(сайт, "/cabinet/it-tasks/create", куки)
     assert новая["component"] == "cabinet/it-tasks/Form" and новая["props"]["task"] is None
+    assert новая["props"]["serviceTypes"]["web"] == "Сайты и веб-приложения"
 
     _, своя = зайти(сайт, f"/cabinet/it-tasks/{task}/edit", куки)
     assert своя["props"]["task"]["id"] == task
@@ -1264,6 +1289,10 @@ def test_задача_форма(сайт):
     чужая = it_задача()
     ответ, _ = зайти(сайт, f"/cabinet/it-tasks/{чужая}/edit", куки)
     assert ответ["status"] == 404
+
+    # Виды услуг — на языке страницы (последним: /en запоминает язык)
+    _, английская = зайти(сайт, "/en/cabinet/it-tasks/create", куки)
+    assert английская["props"]["serviceTypes"]["web"] == "Websites and web apps"
 
 
 def test_задачи_без_компании(сайт):

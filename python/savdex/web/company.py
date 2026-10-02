@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, platform
+from savdex.web import cabinet, content, inertia, platform
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
@@ -44,36 +44,10 @@ MATERIAL_TYPES = ("presentation", "price_list", "catalog", "other")
 #: Company::LEGAL_FORMS
 LEGAL_FORMS = ("legal", "individual", "freelancer")
 
-#: ItTask::SERVICE_TYPES — подписи специализаций (по-русски, как у Laravel)
-SERVICE_LABELS = {
-    "web": "Сайты и веб-приложения",
-    "mobile": "Мобильные приложения",
-    "erp": "1С, учёт и ERP",
-    "integration": "Интеграции и API",
-    "design": "Дизайн и UX",
-    "automation": "Автоматизация и боты",
-    "support": "Поддержка и администрирование",
-    "logistics": "Логистика и перевозки",
-    "hr": "Подбор персонала",
-    "customs": "Декларирование и ВЭД",
-    "accounting": "Бухгалтерские услуги",
-    "other": "Другое",
-}
-
-#: Review::CRITERIA
-CRITERIA = {
-    "rating_description": "Соответствие описанию",
-    "rating_response": "Скорость ответа",
-    "rating_deadlines": "Соблюдение сроков",
-    "rating_quality": "Качество товара",
-}
-
 #: PHP_INT_MAX — «безлимит» раскрытий в окне
 PHP_INT_MAX = 2**63 - 1
 
 _TRIM = " \t\n\r\0\x0b"
-
-assert set(SERVICE_LABELS) == set(SERVICE_TYPES)
 
 
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
@@ -411,7 +385,11 @@ def business_card(
     countries = _named("countries", ctx.locale)
     form = c["legal_form"] if c["legal_form"] in LEGAL_FORMS else "legal"
     specializations = (
-        [SERVICE_LABELS[s] for s in (c["it_specializations"] or []) if s in SERVICE_LABELS]
+        [
+            ctx.t(f"it_tasks.types.{s}")
+            for s in (c["it_specializations"] or [])
+            if s in SERVICE_TYPES
+        ]
         if c["is_it_provider"]
         else []
     )
@@ -569,7 +547,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
             "is_own": viewer == c["id"],
             "reviews": _reviews(ctx, c["id"]),
             "review_blocked": review_blocked(ctx, c["id"]),
-            "criteria": CRITERIA,
+            "criteria": cabinet.review_criteria(ctx.locale),
             "listings_count": listings,
             "wallet": _wallet(viewer, c["id"]),
             "locked_count": sum(1 for x in contacts if x["locked"]),

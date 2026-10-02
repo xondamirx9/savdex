@@ -34,8 +34,14 @@ def php_escape(text: object) -> str:
 
 
 def full_url(ctx: Context) -> str:
-    """Request::fullUrl: строка запроса разобрана и собрана заново (phpquery)."""
-    return ctx.root + phpquery.full_path(ctx.path, ctx.query)
+    """
+    Адрес, который просил браузер: строка запроса разобрана и собрана
+    заново (phpquery), языковой префикс — на месте. Без префикса
+    перезагрузка после 409 уводила бы /en/… на русскую страницу.
+    """
+    prefix = locales.prefix(ctx.url_locale) if ctx.url_locale else ""
+
+    return ctx.root + prefix + phpquery.full_path(ctx.path, ctx.query)
 
 
 def page_url(ctx: Context) -> str:

@@ -19,20 +19,11 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.web.actions import form
-from savdex.web.cabinet import _rows, company_of
+from savdex.web.cabinet import UNLOCK_STATUSES, _rows, company_of, unlock_statuses
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.shared import Context
 from savdex.web.validation import validate
 from savdex.web.views import not_found
-
-#: ContactUnlock::STATUSES — подписи в коде, по-русски на всех языках
-STATUSES = {
-    "new": "Новый",
-    "contacted": "Связался",
-    "negotiating": "В переговорах",
-    "deal": "Сделка",
-    "rejected": "Не подошёл",
-}
 
 
 def _now() -> str:
@@ -81,7 +72,7 @@ def update(request: HttpRequest, unlock_id: str) -> HttpResponse:
 
     data = input_of(request)
     rules = {
-        "status": ["nullable", "in:" + ",".join(STATUSES)],
+        "status": ["nullable", "in:" + ",".join(UNLOCK_STATUSES)],
         "note": ["nullable", "string", "max:500"],
     }
     errors = validate(data, rules, ctx.locale)
@@ -196,6 +187,7 @@ def export(request: HttpRequest) -> HttpResponse:
     ):
         contacts.setdefault(c["company_id"], []).append(c)
 
+    statuses = unlock_statuses(ctx.locale)
     lines = [
         "\ufeff",
         _fputcsv(
@@ -221,7 +213,7 @@ def export(request: HttpRequest) -> HttpResponse:
                     ", ".join(c["value"] for c in own if c["type"] == "email"),
                     r["l_title"] or "",
                     r["created_at"].strftime("%d.%m.%Y"),
-                    STATUSES.get(r["status"], r["status"] or ""),
+                    statuses.get(r["status"], r["status"] or ""),
                     r["note"] or "",
                 ]
             )

@@ -249,6 +249,7 @@ def index(request: HttpRequest) -> HttpResponse:
     rows = _rows(
         "select t.*, c.name as company_name, c.slug as company_slug, "
         "c.logo_path as company_logo, c.verification_level as company_verification, "
+        "c.status as company_status, "
         "c.city_id as company_city, k.name as contractor_name, k.slug as contractor_slug, "
         f"k.logo_path as contractor_logo {source} "
         "left join companies k on k.id = t.contractor_company_id and k.deleted_at is null "
@@ -291,6 +292,7 @@ def index(request: HttpRequest) -> HttpResponse:
 _SELECT = (
     "select t.*, c.name as company_name, c.slug as company_slug, "
     "c.logo_path as company_logo, c.verification_level as company_verification, "
+    "c.status as company_status, "
     "c.city_id as company_city, k.name as contractor_name, k.slug as contractor_slug, "
     "k.logo_path as contractor_logo from it_tasks t "
     "left join companies c on c.id = t.company_id and c.deleted_at is null "
@@ -369,8 +371,11 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     viewer_company = user["company_id"] if user is not None else None
     owner = viewer_company is not None and viewer_company == row["company_id"]
 
-    # Закрытую без результата видит только заказчик
-    if row["status"] not in ("active", "completed") and not owner:
+    # Закрытую без результата видит только заказчик; задачи заблокированной
+    # или удалённой компании — тоже только она, как и в списке
+    hidden = row["status"] not in ("active", "completed") or row["company_status"] != "active"
+
+    if hidden and not owner:
         return not_found(ctx)
 
     if not owner:
@@ -401,7 +406,8 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     seo.noindex = row["status"] != "active"
 
     similar = _rows(
-        f"{_SELECT} where t.status = 'active' and t.id != %s and t.service_type = %s "
+        f"{_SELECT} where t.status = 'active' and c.status = 'active' and t.id != %s "
+        "and t.service_type = %s "
         "order by t.published_at desc, t.id desc limit 3",
         [row["id"], row["service_type"]],
     )
