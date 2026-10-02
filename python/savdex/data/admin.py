@@ -759,7 +759,11 @@ class WorkbooksForm(forms.Form):
         choices=[("supply", "Предложение (продаю)"), ("demand", "Запрос (куплю)")],
         initial="supply",
         required=False,
-        help_text="Когда в книге нет столбца «Тип» или ячейка в нём пуста.",
+        help_text=(
+            "Когда в книге нет столбца «Тип» или ячейка в нём пуста, а заголовок не "
+            "начинается с «Куплю», «Требуется», «Ищем» или «Продам», «Предлагаем» — "
+            "по таким тип ставится сам."
+        ),
     )
 
     def clean_default_company(self) -> int | None:
@@ -901,7 +905,13 @@ class ListingAdmin(SavdexModelAdmin):
     search_fields = ("title", "company__name")
     ordering = ("-created_at", "-id")
     list_per_page = 50
-    actions = ("delete_selected", "approve_selected", "transfer_to_company")
+    actions = (
+        "delete_selected",
+        "approve_selected",
+        "transfer_to_company",
+        "mark_demand",
+        "mark_supply",
+    )
 
     def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
         languages = tuple(
@@ -1144,6 +1154,47 @@ class ListingAdmin(SavdexModelAdmin):
             + (f" Пропущено {skipped} — уже опубликованы или нет права." if skipped else ""),
             messages.SUCCESS if approved else messages.WARNING,
         )
+
+    # ── Тип пачкой: исправить загруженное с неверным типом ──
+
+    def _set_type(self, request: HttpRequest, queryset: Any, kind: str) -> None:  # noqa: ANN401
+        """
+        Отмеченным — «Покупаю» (demand) или «Продаю» (supply). Книги заявок
+        без столбца «Тип» раньше загружались «Предложениями»; так их
+        исправляют пачкой. Каждая смена — строка журнала «изменено».
+        """
+        stamp = timezone.now().replace(microsecond=0)
+        changed = 0
+
+        for listing in queryset:
+            if listing.type == kind:
+                continue
+
+            before = listing.type
+
+            with allowed_writes("listings"):
+                Listing.objects.filter(pk=listing.pk).update(type=kind, updated_at=stamp)
+
+            listing.type = kind
+            self.journal(
+                request, "updated", listing, {"before": {"type": before}, "after": {"type": kind}}
+            )
+            changed += 1
+
+        label = "Покупаю" if kind == "demand" else "Продаю"
+        self.message_user(
+            request,
+            f"Тип «{label}»: {changed}." if changed else f"Все отмеченные уже «{label}».",
+            messages.SUCCESS if changed else messages.INFO,
+        )
+
+    @admin.action(description="Сделать «Покупаю»", permissions=["change"])
+    def mark_demand(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        self._set_type(request, queryset, "demand")
+
+    @admin.action(description="Сделать «Продаю»", permissions=["change"])
+    def mark_supply(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
+        self._set_type(request, queryset, "supply")
 
     # ── Передача настоящему владельцу ──
 
