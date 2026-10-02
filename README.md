@@ -11,85 +11,70 @@ B2B-площадка для Узбекистана и Центральной А�
 
 | | Версия | Примечание |
 |---|---|---|
-| PHP | 8.3 | |
-| Laravel | 13.23 | не 12, как было в первой редакции ТЗ |
-| Filament | 5.7 | не 4 — Filament 4 несовместим с Laravel 13 |
-| Inertia + React | 19 | TypeScript в strict-режиме |
+| Python | 3.11+ (в образе 3.13) | зависимости — `uv`, по `python/uv.lock` |
+| Django | 5.2 | сайт, кабинет, формы, админка, задачи по расписанию |
+| PostgreSQL | 16 | единственная база |
+| Inertia + React | 19 | TypeScript в strict-режиме; страницы собирает Vite |
 | Tailwind CSS | 4 | |
-| PHPUnit | 12.5 | тесты помечаются атрибутом `#[Test]` |
+
+Площадка переехала с Laravel на Django; PHP в проекте больше нет. Как шёл
+перенос и почему — [docs/migration-to-python.md](docs/migration-to-python.md).
 
 ## Запуск
 
-```bash
-composer install
-npm install
-cp .env.example .env
-php artisan key:generate
-php artisan migrate --seed
-npm run build
-php artisan serve
-```
-
-Витрина — `http://127.0.0.1:8000`, админка — `/admin`.
-
-Готового администратора в сидерах нет намеренно: учётка с известным паролем,
-приехавшая на прод вместе с демо-данными, — открытая дверь. Доступ выдаётся
-командой; пароль показывается один раз и требует смены при первом входе:
+Нужны [uv](https://docs.astral.sh/uv/), Node.js 22 и PostgreSQL.
 
 ```bash
-php artisan savdex:admin you@example.com --name="Имя"
+npm ci && npm run build                  # фронтенд: public/build
+cd python
+uv sync --all-groups
+export DJANGO_DATABASE_URL=postgres://savdex:...@127.0.0.1:5432/savdex
+export APP_KEY="base64:$(openssl rand -base64 32)"
+uv run python manage.py schema           # схема на пустой базе
+uv run python manage.py seed --fresh     # справочники: страны, города, тарифы, категории
+uv run python manage.py admin you@example.com --name="Имя"
+uv run python manage.py runserver
 ```
 
-`--moderator` выдаёт роль модератора вместо суперадмина.
+Сайт — `http://127.0.0.1:8000`, админка — `/py/admin/`.
+
+Готового администратора в справочниках нет намеренно: учётка с известным
+паролем, приехавшая на прод, — открытая дверь. Доступ выдаёт команда `admin`;
+пароль показывается один раз и требует смены при первом входе.
 
 ## Проверки перед коммитом
 
 ```bash
-./vendor/bin/pint && php artisan test && npx tsc --noEmit
+cd python
+uv run ruff check . && uv run ruff format --check . && uv run mypy savdex
+SAVDEX_PARITY_PG_URL=postgres://.../savdex_test uv run pytest -q
+npx tsc --noEmit                         # из корня репозитория
 ```
+
+В имени проверочной базы обязательно «test»: проверки стирают схему целиком.
 
 ## Устройство
 
 ```
-app/
-  Models/                 Company, Listing, Plan, Subscription, Wallet, справочники с переводами
-  Services/               ContactUnlockService, SubscriptionService — операции с деньгами
-  Support/                Notifier, StatsRecorder, PlatformMetrics
-  Filament/Resources/     админка: модерация, справочники, тарифы, CMS
-  Http/Controllers/
-    Public/               каталог, карточки компаний и объявлений
-    Cabinet/              кабинет: объявления, контакты, продвижение, аналитика, биллинг
-  Console/Commands/       регламентные задачи и выдача доступа в админку
+python/savdex/            Django: настройки, адреса, предохранители записи
+  web/                    страницы и формы сайта и кабинета (Inertia)
+  payments/, finance/     касса, шлюз Uzum, счета, подписки, возвраты, сверки
+  data/, moderation/,     админка: компании, объявления, отзывы, CRM,
+  crm/, support/, …       поддержка, справочники, рассылки, выгрузки
+  bootstrap/              снимок схемы, права роли, справочники, миграции SQL
+  schedule.py             задачи по расписанию
+python/tests/             проверки pytest на настоящем PostgreSQL
 resources/js/pages/       React-страницы витрины и кабинета
-database/migrations/      схема; database/seeders/ — справочники и демо-данные
-tests/Feature/            261 тест
+resources/legal/          юридические документы
+docker/                   Apache перед Django, скрипт запуска контейнера
 ```
 
-## Решения, которые стоит знать до правок
+Подробнее о коде Python — [python/README.md](python/README.md).
 
-**Состав полей модели объявляется атрибутами**, а не свойствами:
+## На сервере
 
-```php
-#[Fillable(['name', 'email'])]
-class User extends Authenticatable {}
-```
-
-Массовое присвоение молча отбрасывает поля вне `#[Fillable]` — на этом уже
-ловились дважды. Служебные поля выставляются через `forceFill()`.
-
-**Ленивая загрузка связей отключена** (`Model::preventLazyLoading()`). В таблицах
-Filament обязателен `modifyQueryUsing(fn ($q) => $q->with(...))`, иначе страница
-падает с `LazyLoadingViolationException`.
-
-**Кредит за контакт списывается один раз и навсегда.** Обещание закреплено в базе
-уникальным индексом `(company_id, target_company_id)`, а не только в коде. Сначала
-расходуется месячный лимит тарифа и лишь потом купленные кредиты — обратный
-порядок съедал бы кредиты при неизрасходованном лимите.
-
-**Тесты гоняются на SQLite, прод работает на PostgreSQL.** `lower()` в SQLite не
-трогает кириллицу, `LIKE` в PostgreSQL регистрозависим, `DATE()` в PostgreSQL нет.
-Поэтому поиск идёт по нормализованной колонке `search_text`, а группировка по дням
-считается в PHP.
-
-**Бейдж «Проверена» выдаёт только модерация и только руками.** Купить его нельзя ни
-на одном тарифе — это обещание вынесено на витрину.
+Образ (`Dockerfile`) — Debian с Apache, Python и собранным фронтендом.
+Apache отдаёт готовые файлы из `public/`, остальное передаёт Django
+(gunicorn); рядом — задачи по расписанию, машинный перевод и сверка денег
+(`docker/render-entrypoint.sh`). Сборку и запуск контейнера целиком
+проверяет CI (`.github/workflows/docker.yml`).

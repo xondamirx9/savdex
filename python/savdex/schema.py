@@ -1,25 +1,23 @@
 """
-Схема базы без PHP (шаг 73): снимок того, что оставляют миграции Laravel
-на пустой базе, — savdex/bootstrap/baseline.sql (таблицы, индексы и строки,
-которые заводят сами миграции, вместе с таблицей migrations), и права
-роли savdex_django из миграций grant_django_* — savdex/bootstrap/grants.sql.
+Схема базы: снимок того, что оставляли миграции Laravel на пустой базе, —
+savdex/bootstrap/baseline.sql (таблицы, индексы и строки, которые заводили
+сами миграции, вместе с таблицей migrations), и права роли savdex_django —
+savdex/bootstrap/grants.sql. Миграций Laravel больше нет (PHP удалён):
+снимок и миграции SQL ниже — единственный источник схемы.
 
   manage.py schema            пустая база — создать схему из снимка
                               (и выдать права роли, если она есть);
                               затем — новые миграции из
                               savdex/bootstrap/migrations
   manage.py schema --status   «empty» или «ready»
-  manage.py schema --export   снять снимок с базы после migrate:fresh
+  manage.py schema --export   снять снимок с базы (DB_URL владельца)
 
-Таблица migrations в снимке полная, поэтому php artisan migrate после
-неё ничего не делает. Что снимок не отстал от миграций Laravel, проверяет
-tests/test_schema.py.
+Что снимок воспроизводится, проверяет tests/test_schema.py.
 
-С этапа 8 Laravel в образе нет, и изменения схемы — файлы SQL в
-savdex/bootstrap/migrations/<дата>_<что>.sql (имя — как у миграций
-Laravel, по нему же порядок). Каждый применяется один раз, целиком
-в одной транзакции, и записывается в ту же таблицу migrations — так
-php artisan migrate на копии с Laravel их не повторит. Права роли
+Изменения схемы — файлы SQL в savdex/bootstrap/migrations/<дата>_<что>.sql
+(имя — как у миграций Laravel, по нему же порядок). Каждый применяется
+один раз, целиком в одной транзакции, и записывается в ту же таблицу
+migrations. Права роли
 savdex_django на новые таблицы файл выдаёт сам, если роль есть:
 
   do $$ begin
