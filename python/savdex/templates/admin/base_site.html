@@ -13,6 +13,29 @@
 <link rel="stylesheet" href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap">
 <link rel="stylesheet" href="{% static 'savdex/admin-theme.css' %}?v={{ savdex_theme_version }}">
 {% if savdex_logo %}<link rel="icon" href="{{ savdex_logo }}">{% endif %}
+{# Переход между разделами без «перезагрузки»: страница раздела берётся
+   заранее, при наведении на ссылку, а шапка и меню при переходе стоят
+   на месте (View Transitions в CSS темы). Заранее — только просмотр:
+   выход, удаление, отмена, выгрузки и скачивания не трогаются #}
+<script type="speculationrules">
+{
+  "prefetch": [{
+    "where": {
+      "and": [
+        {"href_matches": "/py/admin/*"},
+        {"not": {"href_matches": "/py/admin/logout/*"}},
+        {"not": {"href_matches": "*/delete/*"}},
+        {"not": {"href_matches": "*/cancel/*"}},
+        {"not": {"href_matches": "*/export/*"}},
+        {"not": {"href_matches": "*/template/*"}},
+        {"not": {"href_matches": "*/files/*"}},
+        {"not": {"selector_matches": "[download], [target=_blank]"}}
+      ]
+    },
+    "eagerness": "moderate"
+  }]
+}
+</script>
 {% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}

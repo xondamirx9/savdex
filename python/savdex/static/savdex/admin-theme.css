@@ -2030,3 +2030,45 @@ a.sx-row-btn.is-danger:visited {
 .model-subscription #changelist-filter details > summary::after {
     display: none;
 }
+
+/* ── Переход между разделами ──
+   Страница админки по-прежнему грузится целиком, но браузер (Chrome,
+   Edge, Safari 18+) сводит две страницы плавно: шапка и меню стоят на
+   месте, меняется только содержимое — без белой вспышки */
+@view-transition {
+    navigation: auto;
+}
+
+#header {
+    view-transition-name: sx-header;
+}
+
+#nav-sidebar {
+    view-transition-name: sx-nav;
+}
+
+#toggle-nav-sidebar {
+    view-transition-name: sx-nav-toggle;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: 120ms;
+}
+
+/* Шапка и меню не мигают: старая и новая картинка — одно и то же */
+::view-transition-old(sx-header),
+::view-transition-new(sx-header),
+::view-transition-old(sx-nav),
+::view-transition-new(sx-nav),
+::view-transition-old(sx-nav-toggle),
+::view-transition-new(sx-nav-toggle) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    @view-transition {
+        navigation: none;
+    }
+}
