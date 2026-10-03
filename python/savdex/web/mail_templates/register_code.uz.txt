@@ -1,0 +1,15 @@
+SAVDEX: __APP_URL__
+
+# Assalomu alaykum!
+
+SAVDEX’da ro‘yxatdan o‘tish uchun kodingiz:
+
+# __CODE__
+
+Uni ro‘yxatdan o‘tish sahifasida kiriting. Kod 15 daqiqa amal qiladi va faqat bir marta ishlaydi.
+
+Agar SAVDEX’da ro‘yxatdan o‘tmagan bo‘lsangiz, bu xatni o‘chirib tashlang.
+
+SAVDEX jamoasi
+
+© __YEAR__ SAVDEX. Barcha huquqlar himoyalangan.

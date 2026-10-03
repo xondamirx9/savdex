@@ -1,0 +1,20 @@
+SAVDEX: __APP_URL__
+
+# Assalomu alaykum!
+
+SAVDEX platformasida elektron pochtani tasdiqlash kodingiz:
+
+# __CODE__
+
+Uni tasdiqlash sahifasida kiriting. Kod 15 daqiqa amal qiladi va faqat bir marta ishlaydi.
+
+Yoki bir bosishda tasdiqlang: __URL__
+
+Agar SAVDEX’da ro‘yxatdan o‘tmagan bo‘lsangiz, bu xatni o‘chirib tashlang — tasdiqlanmagan hisob faollashtirilmaydi.
+
+SAVDEX jamoasi
+
+«Yoki bir bosishda tasdiqlang» tugmasi ishlamasa, quyidagi havolani nusxalang
+va brauzeringizning manzil satriga joylashtiring: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Barcha huquqlar himoyalangan.

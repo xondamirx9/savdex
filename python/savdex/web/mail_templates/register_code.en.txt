@@ -1,0 +1,15 @@
+SAVDEX: __APP_URL__
+
+# Hello!
+
+Your SAVDEX registration code:
+
+# __CODE__
+
+Enter it on the registration page. The code is valid for 15 minutes and can be used only once.
+
+If you did not sign up for SAVDEX, simply delete this email.
+
+The SAVDEX team
+
+© __YEAR__ SAVDEX. All rights reserved.

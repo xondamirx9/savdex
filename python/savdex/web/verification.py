@@ -68,13 +68,17 @@ def link(ctx: Context, user: dict[str, Any]) -> str:
 
 
 def send(ctx: Context, user: dict[str, Any]) -> None:
-    """User::sendEmailVerificationNotification: сбой — в журнал, не в ответ."""
+    """
+    User::sendEmailVerificationNotification: сбой — в журнал, не в ответ.
+    Язык — страницы, откуда просили письмо; адрес без префикса — язык
+    из профиля (users.locale), затем язык контекста (сессия, ru).
+    """
     code = issue(user["id"])
     subject, body_html, body_text = mail.render(
         "verify",
         url=link(ctx, user),
         app_url=os.environ.get("APP_URL") or "http://localhost",
-        lang=ctx.locale,
+        lang=mail.language(ctx.url_locale, user.get("locale"), ctx.locale),
         code=code,
     )
     mail.send(str(user["email"]), subject, body_html, body_text)

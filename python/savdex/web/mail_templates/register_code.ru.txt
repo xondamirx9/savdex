@@ -12,4 +12,4 @@ SAVDEX: __APP_URL__
 
 Команда SAVDEX
 
-© __YEAR__ SAVDEX. All rights reserved.
+© __YEAR__ SAVDEX. Все права защищены.

@@ -14,7 +14,7 @@ SAVDEX: __APP_URL__
 
 Команда SAVDEX
 
-If you're having trouble clicking the "Или подтвердите одним нажатием" button, copy and paste the URL below
-into your web browser: [__URL__](__URL__)
+Если кнопка «Или подтвердите одним нажатием» не срабатывает, скопируйте ссылку ниже
+и вставьте её в адресную строку браузера: [__URL__](__URL__)
 
-© __YEAR__ SAVDEX. All rights reserved.
+© __YEAR__ SAVDEX. Все права защищены.

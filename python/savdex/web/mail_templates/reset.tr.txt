@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Merhaba!
+
+Hesabınız için bir şifre sıfırlama talebi aldığımızdan bu e-postayı alıyorsunuz.
+
+Şifreyi sıfırla: __URL__
+
+Şifre sıfırlama bağlantısı 60 dakika geçerlidir.
+
+Şifre sıfırlama talebinde bulunmadıysanız herhangi bir işlem yapmanıza gerek yoktur.
+
+Saygılarımızla,
+SAVDEX
+
+«Şifreyi sıfırla» düğmesi çalışmazsa aşağıdaki bağlantıyı kopyalayıp
+tarayıcınızın adres çubuğuna yapıştırın: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Tüm hakları saklıdır.

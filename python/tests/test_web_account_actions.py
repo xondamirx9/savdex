@@ -4,11 +4,13 @@
 - Смена выданного пароля: проверка, «не тот же, что выдан», флаг снят,
   хеш в сессии — новый, администратору — в панель (409 для Inertia).
 - «Забыли пароль»: ответ один при любом исходе, письмо со ссылкой
-  (оформление — как у Laravel), токен брокера в password_reset_tokens,
-  не чаще раза в минуту; гостевой маршрут.
+  (оформление — как у Laravel, язык — страницы, где просили сброс),
+  токен брокера в password_reset_tokens, не чаще раза в минуту;
+  гостевой маршрут.
 - Сброс по токену: проверка, чужой, просроченный и верный токен.
 - Подтверждение почты: код из кэша (попытки, одноразовость), письмо
-  ещё раз, подписанная ссылка (подпись, отпечаток почты, срок).
+  ещё раз (на языке страницы, без префикса — профиля), подписанная
+  ссылка (подпись, отпечаток почты, срок).
 
 Письма — в своём журнале (MAIL_MAILER=log), кэш — файловый.
 Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
@@ -332,13 +334,36 @@ def test_забыли_пароль(сайт, body, шаг, ошибки_, пис
     assert len(база["mail"]) == int(письмо)
 
     if письмо:
+        # Страница без префикса — письмо на русском
         [m] = база["mail"]
-        assert (m["subject"], m["to"]) == ("Reset your password", ПОЧТА)
+        assert (m["subject"], m["to"]) == ("Восстановление пароля — SAVDEX", ПОЧТА)
         assert m["from"] == "SAVDEX <hello@example.com>"
         assert (
-            "Reset Password: <сайт>/reset-password/<токен>?email=account%40savdex.uz" in m["text"]
+            "Сбросить пароль: <сайт>/reset-password/<токен>?email=account%40savdex.uz" in m["text"]
         )
-        assert "This password reset link will expire in 60 minutes." in m["text"]
+        assert "Ссылка для сброса пароля действует 60 минут." in m["text"]
+        assert ' lang="ru">' in m["html"]
+
+
+@pytest.mark.parametrize(
+    ("path", "данные", "lang", "тема", "кнопка"),
+    [
+        ("/en/forgot-password", None, "en", "Reset your password", "Reset Password"),
+        ("/uz/forgot-password", None, "uz", "Parolni tiklash — SAVDEX", "Parolni tiklash"),
+        ("/tr/forgot-password", None, "tr", "Şifre sıfırlama — SAVDEX", "Şifreyi sıfırla"),
+        # Адрес без префикса — язык страницы из сессии
+        ("/forgot-password", {"locale": "zh"}, "zh", "重置密码 — SAVDEX", "重置密码"),
+    ],
+)
+def test_забыли_пароль_на_языке_страницы(сайт, path, данные, lang, тема, кнопка):
+    """Письмо — на языке страницы, где просили сброс, а не на языке профиля."""
+    итог = форма(сайт, path, пользователь, данные=данные, body={"email": ПОЧТА})
+
+    [m] = итог["база"]["mail"]
+    assert (m["subject"], m["to"]) == (тема, ПОЧТА)
+    assert f"{кнопка}: <сайт>/reset-password/<токен>" in m["text"].replace("：", ": ")
+    assert f' lang="{lang}">' in m["html"] and f">{кнопка}</a>" in m["html"]
+    assert итог["база"]["tokens"] == [(ПОЧТА, True, True)]
 
 
 def test_забыли_пароль_вошедшему_нельзя(сайт):
@@ -520,6 +545,52 @@ def test_письмо_ещё_раз(сайт, проверена):
     [m] = база["mail"]
     assert (m["subject"], m["to"]) == ("Код подтверждения <код> — SAVDEX", ПОЧТА)
     assert "Ваш код подтверждения почты на площадке SAVDEX:\n\n# <код>" in m["text"]
+    отпечаток = hashlib.sha1(ПОЧТА.encode()).hexdigest()
+    assert f"<сайт>/verify-email/{uid}/{отпечаток}?expires=<срок>&signature=<подпись>" in m["text"]
+
+
+@pytest.mark.parametrize(
+    ("path", "профиль", "lang", "тема", "вводная"),
+    [
+        # Префикс адреса — язык страницы, даже если в профиле другой
+        (
+            "/en/email/verification-notification",
+            "ru",
+            "en",
+            "Confirmation code <код> — SAVDEX",
+            "Your email confirmation code for SAVDEX:",
+        ),
+        (
+            "/tr/email/verification-notification",
+            "uz",
+            "tr",
+            "Doğrulama kodu <код> — SAVDEX",
+            "SAVDEX’te e-posta doğrulama kodunuz:",
+        ),
+        # Без префикса — язык профиля (users.locale)
+        (
+            "/email/verification-notification",
+            "uz",
+            "uz",
+            "Tasdiqlash kodi <код> — SAVDEX",
+            "SAVDEX platformasida elektron pochtani tasdiqlash kodingiz:",
+        ),
+    ],
+)
+def test_письмо_ещё_раз_на_языке(сайт, path, профиль, lang, тема, вводная):
+    uid = пользователь(locale=профиль)
+    итог = форма(
+        сайт,
+        path,
+        lambda: пользователь(email_verified_at=None, locale=профиль),
+        uid=uid,
+        body={},
+    )
+
+    [m] = итог["база"]["mail"]
+    assert (m["subject"], m["to"]) == (тема, ПОЧТА)
+    assert f"{вводная}\n\n# <код>" in m["text"]
+    assert f' lang="{lang}">' in m["html"]
     отпечаток = hashlib.sha1(ПОЧТА.encode()).hexdigest()
     assert f"<сайт>/verify-email/{uid}/{отпечаток}?expires=<срок>&signature=<подпись>" in m["text"]
 

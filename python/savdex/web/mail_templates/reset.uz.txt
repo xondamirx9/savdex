@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Assalomu alaykum!
+
+Siz bu xatni hisobingiz uchun parolni tiklash so‘ralgani sababli oldingiz.
+
+Parolni tiklash: __URL__
+
+Parolni tiklash havolasi 60 daqiqa amal qiladi.
+
+Agar parolni tiklashni so‘ramagan bo‘lsangiz, hech narsa qilishingiz shart emas.
+
+Hurmat bilan,
+SAVDEX
+
+«Parolni tiklash» tugmasi ishlamasa, quyidagi havolani nusxalang
+va brauzeringizning manzil satriga joylashtiring: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Barcha huquqlar himoyalangan.
