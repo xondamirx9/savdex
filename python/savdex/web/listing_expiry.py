@@ -21,8 +21,10 @@ Django, и расписание переехало вместе с таблиц�
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
+from savdex.web import ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _now, save_listing
 
@@ -59,10 +61,10 @@ def expire(now: datetime) -> int:
                 None,
                 company,
                 "listing_expiring",
-                f"Объявление «{listing['title']}» снято: истёк срок размещения",
+                partial(ui.t, "messages.listing.expired_title", title=listing["title"]),
                 "warning",
                 f"/cabinet/listings?status={EXPIRED}",
-                "Продлите его в кабинете — показы возобновятся сразу.",
+                lambda locale: ui.t("messages.listing.expired_body", locale),
             )
 
     return len(found)
@@ -84,10 +86,10 @@ def warn(anchor: datetime) -> int:
             None,
             company,
             "listing_expiring",
-            f"Объявление «{listing['title']}» истекает через 3 дня",
+            partial(ui.t, "messages.listing.expiring_title", title=listing["title"]),
             "warning",
             "/cabinet/listings",
-            "После истечения показы прекращаются. Продлите в один клик.",
+            lambda locale: ui.t("messages.listing.expiring_body", locale),
         )
 
     return len(found)

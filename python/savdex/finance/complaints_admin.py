@@ -43,7 +43,7 @@ from savdex.finance.models import COMPLAINT_STATUSES, Complaint
 from savdex.finance.refunds_admin import _limit
 from savdex.guards import allowed_writes
 from savdex.moderation.services import context_of
-from savdex.web import eloquent, settlement
+from savdex.web import eloquent, settlement, ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.shared import Context
@@ -125,7 +125,7 @@ def accept(ctx: Context, actor: access.Admin, unlock: dict[str, Any], note: str)
             ctx,
             company,
             "moderation",
-            "Жалоба на контакт подтверждена — потраченное вернули",
+            lambda locale: ui.t("messages.complaint.accepted_notice", locale),
             "success",
             "/cabinet/contacts",
             note,
@@ -157,7 +157,7 @@ def decline(ctx: Context, actor: access.Admin, unlock: dict[str, Any], note: str
             ctx,
             company,
             "moderation",
-            "Жалоба на контакт отклонена",
+            lambda locale: ui.t("messages.complaint.declined_notice", locale),
             "warning",
             "/cabinet/contacts",
             note,

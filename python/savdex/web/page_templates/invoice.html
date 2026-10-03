@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Счёт {number} · SAVDEX</title>
+    <title>{doc_title} · SAVDEX</title>
     <style>
         :root { --line: #cbd5e1; --muted: #64748b; }
         * { box-sizing: border-box; }
@@ -40,6 +40,12 @@
             background: #fff; color: inherit; text-decoration: none; font: inherit; cursor: pointer;
         }
         .actions button { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+        /* Второй язык — строкой ниже, мельче: основной язык счёта английский */
+        .alt {
+            display: block; font-size: 12px; font-weight: 400; color: var(--muted);
+            text-transform: none; letter-spacing: 0;
+        }
+        h1 .alt { font-size: 14px; margin-top: 2px; }
 
         /* При печати остаётся только сам документ */
         @media print {
@@ -51,40 +57,40 @@
 </head>
 <body>
     <div class="actions">
-        <a href="/cabinet/billing">Вернуться в кабинет</a>
-        <button type="button" onclick="window.print()">Печать или PDF</button>
+        <a href="{back_url}">{back}</a>
+        <button type="button" onclick="window.print()">{print}</button>
     </div>
 
     <div class="sheet">
         <div class="top">
             <div>
                 <div class="brand">SAVDEX</div>
-                <div class="muted">B2B-площадка Узбекистана и Центральной Азии</div>
+                <div class="muted">{tagline}</div>
             </div>
             <div style="text-align: right">
-                <div class="muted">Счёт от {created}</div>
+                <div class="muted">{dated}</div>
                 <div style="font-size: 18px; font-weight: 700">{number}</div>
                 <div class="muted">{status}</div>
             </div>
         </div>
 
-        <h1>Счёт на оплату {number}</h1>
+        <h1>{heading}</h1>
         <div class="muted">
             
 {due}                    </div>
 
 {requisites}
         <dl>
-            <dt>Плательщик</dt>
+            <dt>{payer_label}</dt>
             <dd>{payer}</dd>
 {tin}        </dl>
 
         <table>
             <thead>
                 <tr>
-                    <th style="width: 40px">№</th>
-                    <th>Наименование</th>
-                    <th class="num">Сумма</th>
+                    <th style="width: 40px">{no}</th>
+                    <th>{item}</th>
+                    <th class="num">{amount_label}</th>
                 </tr>
             </thead>
             <tbody>
@@ -95,7 +101,7 @@
                 </tr>
                 <tr>
                     <td></td>
-                    <td class="total">Итого к оплате</td>
+                    <td class="total">{total}</td>
                     <td class="num total">{amount}</td>
                 </tr>
             </tbody>
@@ -104,12 +110,12 @@
         {note}
         <div class="sign">
             <div>
-                <div>Руководитель</div>
-                <div class="line">подпись, расшифровка</div>
+                <div>{director}</div>
+                <div class="line">{signature}</div>
             </div>
             <div>
-                <div>Главный бухгалтер</div>
-                <div class="line">подпись, расшифровка</div>
+                <div>{accountant}</div>
+                <div class="line">{signature}</div>
             </div>
         </div>
     </div>

@@ -167,10 +167,10 @@ def _expire_subscriptions(now: datetime) -> int:
                 None,
                 companies[0],
                 "payment",
-                "Срок тарифа истёк — вы перешли на Free",
+                lambda locale: ui.t("messages.billing.plan_expired_title", locale),
                 "warning",
                 "/cabinet/billing",
-                "Объявления и контакты сохранены. Лимиты теперь действуют по бесплатному тарифу.",
+                lambda locale: ui.t("messages.billing.plan_expired_body", locale),
             )
 
     return len(subscriptions)
