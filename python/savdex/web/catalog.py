@@ -314,4 +314,14 @@ def _seo(
     seo.canonical(ctx.url("catalog"))
     seo.noindex = any(key in query for key in _FILTERS) or current > 1
 
+    # Страница рубрики (только ?category=N) — своя посадочная: она в карте
+    # сайта и в крошках объявлений, поэтому индексируется под своим адресом
+    if (
+        category_name is not None
+        and current == 1
+        and not any(key in query for key in _FILTERS if key != "category")
+    ):
+        seo.canonical(ctx.url(f"catalog?category={category}"))
+        seo.noindex = False
+
     return seo

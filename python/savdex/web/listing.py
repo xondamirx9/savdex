@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import UTC, datetime
 from typing import Any
 
 from django.db import connection
@@ -159,12 +158,10 @@ def _count_view(ctx: Context, row: dict[str, Any], visitor: str | None) -> None:
     if not without_recent([row["id"]], "view", visitor):
         return
 
-    stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-
+    # updated_at не трогаем: просмотр — не правка (порядок «Моих объявлений», lastmod карты)
     with allowed_writes("listings"), connection.cursor() as cursor:
         cursor.execute(
-            "update listings set views_count = views_count + 1, updated_at = %s where id = %s",
-            [stamp, row["id"]],
+            "update listings set views_count = views_count + 1 where id = %s", [row["id"]]
         )
 
     before = row["views_count"]
@@ -229,13 +226,17 @@ def _seo(
     seo.image_meta = {"width": 1200, "height": 630, "type": "image/jpeg"}
     seo.type = "product"
 
+    url = seo.link(url)
+    # Название и описание — на языке страницы, как в <title>
     product: dict[str, Any] = {
         "@type": "Product",
-        "name": row["title"],
-        "description": row["description"] or "",
+        "name": title,
+        "description": description or "",
         "category": category,
-        "image": images,
     }
+
+    if images:
+        product["image"] = images
 
     if row["price"] is not None and not row["price_negotiable"]:
         product["offers"] = {
@@ -249,14 +250,14 @@ def _seo(
 
     seo.schema(product)
     crumbs = [
-        (ctx.t("listing.catalog"), ctx.url("catalog")),
+        (ctx.t("listing.catalog"), seo.link(ctx.url("catalog"))),
         (
             category if category is not None else ctx.t("tabbar.listings"),
-            ctx.url(f"catalog?category={row['category_id']}")
+            seo.link(ctx.url(f"catalog?category={row['category_id']}"))
             if row["category_id"] is not None
-            else ctx.url("catalog"),
+            else seo.link(ctx.url("catalog")),
         ),
-        (row["title"], url),
+        (title, url),
     ]
     # Одинаковые подписи у PHP — один ключ массива: остаётся последний адрес
     merged: dict[str, str] = {}

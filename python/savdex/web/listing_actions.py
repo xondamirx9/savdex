@@ -39,6 +39,9 @@ LIFETIME_DAYS = 90
 
 #: Листинг-статусы (Listing::STATUS_*)
 ACTIVE, ARCHIVED, REJECTED, NEEDS_CHANGES = "active", "archived", "rejected", "needs_changes"
+#: Продлить можно только то, что уже было на витрине: черновик и
+#: возвращённое на исправление идут через мастер с проверкой публикации
+RENEWABLE = (ACTIVE, ARCHIVED, "expired")
 
 
 def _now() -> datetime:
@@ -271,6 +274,14 @@ def _as_id(value: Any) -> int:  # noqa: ANN401
     return int(str(value).strip())
 
 
+def _not_renewable(ctx: Context, rows: list[dict[str, Any]]) -> str:
+    """Почему не продлить: отклонённое не вернуть, черновик — через мастер."""
+    if all(r["status"] == REJECTED for r in rows):
+        return ctx.t("messages.listing.resubmit_closed")
+
+    return ctx.t("messages.listing.renew_draft")
+
+
 # ── Действия ─────────────────────────────────────────────────────────
 
 
@@ -283,8 +294,8 @@ def renew(request: HttpRequest, listing_id: str) -> HttpResponse:
     if row is None:
         return not_found(ctx)
 
-    if row["status"] == REJECTED:
-        flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
+    if row["status"] not in RENEWABLE:
+        flash(ctx, "error", _not_renewable(ctx, [row]))
 
         return back(ctx)
 
@@ -433,11 +444,11 @@ def bulk(request: HttpRequest) -> HttpResponse:
         return refused
 
     if what == "renew":
-        # Отклонённые не продлеваются — иначе запрет обходился бы галочками
-        listings = [r for r in listings if r["status"] != REJECTED]
+        # Отклонённые и черновики не продлеваются — иначе запрет обходился бы галочками
+        picked, listings = listings, [r for r in listings if r["status"] in RENEWABLE]
 
         if not listings:
-            flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
+            flash(ctx, "error", _not_renewable(ctx, picked))
 
             return back(ctx)
 

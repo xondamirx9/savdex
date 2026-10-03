@@ -216,8 +216,14 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
 
 def _seo(ctx: Context) -> Seo:
-    """Страница без своего SEO — только заголовок сайта по умолчанию."""
-    return Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
+    """
+    Кабинет, вход, регистрация: заголовок сайта по умолчанию и noindex —
+    в поиске этим страницам делать нечего.
+    """
+    seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
+    seo.noindex = True
+
+    return seo
 
 
 def dashboard_props(ctx: Context) -> dict[str, Any]:

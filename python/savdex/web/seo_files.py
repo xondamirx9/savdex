@@ -33,22 +33,24 @@ CHUNK = 5000
 #: Page::DOCS
 DOCS = ("help", "guide", "rules")
 
-_ROBOTS_HEAD = """# Личный кабинет, админка и служебные адреса закрыты: индексировать
+#: Служебные адреса, закрытые от обхода, — и под префиксом каждого языка
+_CLOSED = (
+    "/cabinet", "/admin", "/onboarding", "/notifications", "/login", "/register",
+    "/forgot-password", "/reset-password", "/verify-email", "/password", "/files/",
+)  # fmt: skip
+
+_ROBOTS_HEAD = (
+    """# Личный кабинет, админка и служебные адреса закрыты: индексировать
 # там нечего, а робот тратит на них лимит обхода, который лучше уходит
 # на карточки объявлений и компаний.
 User-agent: *
-Disallow: /cabinet
-Disallow: /admin
-Disallow: /onboarding
-Disallow: /notifications
-Disallow: /login
-Disallow: /register
-Disallow: /forgot-password
-Disallow: /reset-password
-Disallow: /verify-email
-Disallow: /password
-Disallow: /files/
-
+"""
+    + "".join(
+        f"Disallow: {prefix}{path}\n"
+        for prefix in ("", "/uz", "/en", "/zh", "/tr")
+        for path in _CLOSED
+    )
+    + """
 # Сортировка и постраничная навигация дают одно и то же содержимое
 # под разными адресами. Карточки при этом остаются доступны — робот
 # приходит на них по ссылкам из карты сайта.
@@ -70,6 +72,7 @@ Disallow: /*&page=
 # DuckDuckGo, Apple и Petal приводят покупателей, ради них карта
 # сайта и существует.
 """
+)
 
 _ROBOTS_TAIL = """# Тем, кто читает это правило: страница в секунду — достаточно.
 # Google его игнорирует (частота задаётся в Search Console),
@@ -214,11 +217,11 @@ def _static(ctx: Context) -> list[dict[str, Any]]:
         item("/partners/multi", "0.4", "monthly"),
         item("/contact", "0.4", "yearly"),
         *docs,
-        item("/terms", "0.3", "yearly"),
-        item("/payment", "0.3", "yearly"),
-        item("/security", "0.3", "yearly"),
-        item("/privacy", "0.3", "yearly"),
-        item("/refunds", "0.3", "yearly"),
+        # Юридические документы — только на русском (как и их canonical)
+        *[
+            {**item(f"/{doc}", "0.3", "yearly"), "locales": [locales.DEFAULT]}
+            for doc in ("terms", "payment", "security", "privacy", "refunds")
+        ],
     ]
 
 

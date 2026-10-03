@@ -67,7 +67,8 @@ def store(request: HttpRequest) -> HttpResponse:
     data = input_of(request)
     rules: dict[str, list[Any]] = {
         "listing_id": ["required", "integer"],
-        "promotion_type_id": ["required", _exists("promotion_types")],
+        # Выключенный вид продвижения не купить и по прямому запросу
+        "promotion_type_id": ["required", _exists("promotion_types", "is_active")],
     }
     errors = validate(
         data,

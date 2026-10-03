@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
 from typing import Any
 
 from django.db import connection
@@ -312,16 +311,14 @@ def _contacts(row: dict[str, Any]) -> dict[str, Any] | list[Any]:
 
 
 def count_view(table: str, row_id: int) -> None:
-    """$model->increment('views_count'): +1 и updated_at, без событий сохранения."""
+    """
+    $model->increment('views_count'): +1 без событий сохранения и без
+    updated_at — просмотр не правка (lastmod карты сайта).
+    """
     from savdex.guards import allowed_writes
 
-    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-
     with allowed_writes(table), connection.cursor() as cursor:
-        cursor.execute(
-            f"update {table} set views_count = views_count + 1, updated_at = %s where id = %s",
-            [now, row_id],
-        )
+        cursor.execute(f"update {table} set views_count = views_count + 1 where id = %s", [row_id])
 
 
 def show(request: HttpRequest, slug: str) -> HttpResponse:

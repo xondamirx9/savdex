@@ -568,12 +568,12 @@ urlpatterns = [
         name="cabinet.site.products.update",
     ),
     re_path(
-        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]+)/edit$",
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/listings/(?P<listing_id>[0-9]{1,18})/edit$",
         cabinet.listing_wizard,
         name="cabinet.listings.edit",
     ),
     re_path(
-        r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats/(?P<thread_id>[0-9]+)$",
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/chats/(?P<thread_id>[0-9]{1,18})$",
         chat_actions.thread,
         name="cabinet.chats.show",
     ),
@@ -583,7 +583,7 @@ urlpatterns = [
         name="cabinet.it-tasks.create",
     ),
     re_path(
-        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]+)/edit$",
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/it-tasks/(?P<task_id>[0-9]{1,18})/edit$",
         cabinet.it_task_edit,
         name="cabinet.it-tasks.edit",
     ),

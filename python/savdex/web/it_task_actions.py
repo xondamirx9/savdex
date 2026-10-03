@@ -95,6 +95,12 @@ def complete(request: HttpRequest, task_id: str) -> HttpResponse:
     if task is None:
         return not_found(ctx)
 
+    # Завершённая уже подведена: повторный запрос не переписывает итог и исполнителя
+    if task["status"] == COMPLETED:
+        flash(ctx, "success", ctx.t("messages.it_task.completed"))
+
+        return back(ctx)
+
     responders = [
         str(r["buyer_company_id"])
         for r in _rows(
