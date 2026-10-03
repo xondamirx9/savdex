@@ -8,6 +8,7 @@ import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
+import { unitLabel } from '@/lib/units';
 
 interface Row {
     id: number;
@@ -58,7 +59,9 @@ function priceLabel(row: Row): string {
     const amount = formatNumber(row.price);
     const currency = row.currency === 'UZS' ? t('catalog.currency_uzs') : row.currency;
 
-    return row.unit ? `${amount} ${currency}/${row.unit}` : `${amount} ${currency}`;
+    const unit = unitLabel(row.unit);
+
+    return unit ? `${amount} ${currency}/${unit}` : `${amount} ${currency}`;
 }
 
 export default function ListingsIndex({ listings, counts, tabs, status, limit }: Props) {

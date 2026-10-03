@@ -26,7 +26,6 @@ from savdex.web.cabinet import _redirect, _rows, _seo, _store, company_of, page
 from savdex.web.phpquery import laravel_input, text
 from savdex.web.request import context
 from savdex.web.shared import Context
-from savdex.web.views import error
 
 #: Company::LEGAL_FORMS
 LEGAL_FORMS = ("legal", "individual", "freelancer")
@@ -66,17 +65,15 @@ def _flash(ctx: Context, key: str) -> Any:  # noqa: ANN401
     return store.get(key) if store is not None else None
 
 
-def _query(ctx: Context, key: str) -> str | None:
+def _query(ctx: Context, key: str) -> str:
     """
-    $request->string(key)->toString(): нет — пусто; массив (?key[]=…) —
-    None: у Laravel это «Array to string conversion» и страница 500.
+    $request->string(key)->toString(): нет — пусто. Массив (?key[]=…) —
+    тоже пусто: у Laravel это была страница 500 «Array to string
+    conversion», посетителю она ни к чему.
     """
     raw = laravel_input(ctx.query).get(key)
 
-    if raw is None:
-        return ""
-
-    return (text(raw) or "") if isinstance(raw, str) else None
+    return (text(raw) or "") if isinstance(raw, str) else ""
 
 
 # ── Гостевые ─────────────────────────────────────────────────────────
@@ -104,9 +101,6 @@ def register(request: HttpRequest) -> HttpResponse:
         return ctx
 
     plan = _query(ctx, "plan")
-
-    if plan is None:
-        return error(ctx, 500, message="Array to string conversion")
 
     if plan not in ("", "free") and _rows(
         "select 1 from plans where code = %s and is_active limit 1", [plan]
@@ -172,9 +166,6 @@ def reset_password(request: HttpRequest, token: str) -> HttpResponse:
         return ctx
 
     email = _query(ctx, "email")
-
-    if email is None:
-        return error(ctx, 500, message="Array to string conversion")
 
     return inertia.render(ctx, "auth/ResetPassword", {"token": token, "email": email}, _seo(ctx))
 

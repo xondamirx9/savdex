@@ -250,6 +250,12 @@ def update(request: HttpRequest) -> HttpResponse:
 
     fields = validated(data, rules)
 
+    # Пустое в обязательных колонках — без изменений (у новой — умолчание),
+    # иначе запись падала с 500
+    for key in ("primary_role", "is_it_provider"):
+        if key in fields and fields[key] is None:
+            del fields[key]
+
     # Заполненные сведения здесь не меняются — только из настроек
     # профиля и раз в полгода (CompanyInfoController у Laravel)
     locked = changed_profile_fields(company, fields) if company is not None else []

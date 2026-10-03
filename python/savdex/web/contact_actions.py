@@ -80,8 +80,14 @@ def update(request: HttpRequest, unlock_id: str) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    # validated(): только поля с правилами, которые пришли в запросе
-    _save(row, {k: data[k] for k in rules if k in data})
+    # validated(): только поля с правилами, которые пришли в запросе;
+    # пустой статус — без изменений (в базе он обязателен, было 500)
+    changes = {k: data[k] for k in rules if k in data}
+
+    if changes.get("status") is None:
+        changes.pop("status", None)
+
+    _save(row, changes)
     flash(ctx, "success", ctx.t("messages.saved"))
 
     return back(ctx)

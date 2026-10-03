@@ -1,4 +1,5 @@
 import { t } from '@/lib/i18n';
+import { localize } from '@/lib/locale';
 
 export interface DocsNavItem {
     key: string;
@@ -21,6 +22,16 @@ function localHref(href: string): string {
     return href.startsWith('/about#') ? href.slice('/about'.length) : href;
 }
 
+/**
+ * Внутренний путь получает язык страницы: сервер отдаёт пути без
+ * префикса, и на /uz/help ссылка «/rules» уводила бы на русскую
+ * версию. Якоря и внешние адреса localize() не трогает, а хвост
+ * «#contacts» переносит вместе с путём.
+ */
+function hrefFor(href: string, onAbout: boolean): string {
+    return localize(onAbout ? localHref(href) : href);
+}
+
 export function DocsNav({ items, active, onAbout = false }: { items: DocsNavItem[]; active: string; onAbout?: boolean }) {
     return (
         <aside>
@@ -28,7 +39,7 @@ export function DocsNav({ items, active, onAbout = false }: { items: DocsNavItem
                 {items.map((item) => (
                     <a
                         key={item.key}
-                        href={onAbout ? localHref(item.href) : item.href}
+                        href={hrefFor(item.href, onAbout)}
                         aria-current={active === item.key ? 'true' : undefined}
                     >
                         {item.label}

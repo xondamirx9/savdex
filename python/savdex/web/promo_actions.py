@@ -24,7 +24,7 @@ from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
 from savdex.web.forms import action, back, flash, input_of, invalid
-from savdex.web.listing_actions import _as_id, _notify_company, _stamp
+from savdex.web.listing_actions import _as_id, _notify_company, _stamp, refuse_blocked
 from savdex.web.resume_actions import _exists
 from savdex.web.validation import validate, validated
 from savdex.web.views import not_found
@@ -60,6 +60,9 @@ def store(request: HttpRequest) -> HttpResponse:
 
     if company is None:
         return not_found(ctx)
+
+    if (refused := refuse_blocked(ctx, company["id"])) is not None:
+        return refused
 
     data = input_of(request)
     rules: dict[str, list[Any]] = {

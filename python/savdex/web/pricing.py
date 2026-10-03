@@ -100,7 +100,6 @@ def _promo_price(plan: Plan, promo: dict[str, Any], rate: float) -> dict[str, An
 def pricing(request: HttpRequest) -> HttpResponse:
     """PageController::pricing."""
     from savdex.web.auth import _query
-    from savdex.web.views import error
 
     ctx = context(request)
 
@@ -110,12 +109,8 @@ def pricing(request: HttpRequest) -> HttpResponse:
     seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
     seo.title(ctx.t("seo.pricing_title")).description(ctx.t("seo.pricing_description"))
     seo.canonical(ctx.url("pricing"))
+    # ?promo[]=… — как без кода (у Laravel была страница 500)
     raw = _query(ctx, "promo")
-
-    if raw is None:
-        # ?promo[]=… — (string) массива у PHP: «Array to string conversion»
-        return error(ctx, 500, message="Array to string conversion")
-
     rate = CurrencyRate().usd()
     promo, promo_error = _promo(ctx, raw)
     plans = Plan.objects.filter(is_active=True).order_by("sort")

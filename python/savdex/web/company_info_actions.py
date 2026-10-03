@@ -238,6 +238,10 @@ def update(request: HttpRequest) -> HttpResponse:
         return _invalid(errors)
 
     fields = validated(data, rules)
+
+    # Пустое в обязательной колонке — без изменений (было 500)
+    if "is_it_provider" in fields and fields["is_it_provider"] is None:
+        del fields["is_it_provider"]
     changed = changed_profile_fields(company, fields)
     until = locked_until(company)
 

@@ -129,3 +129,38 @@ def test_резюме_только_живых_авторов(сайт):
     assert открыть(сайт, "/resume/alive-cv")["status"] == 200
     assert открыть(сайт, "/resume/deleted-cv")["status"] == 404
     assert открыть(сайт, "/resume/blocked-cv")["status"] == 404
+
+
+def test_заблокированная_компания_не_продлевает(сайт):
+    """Продление объявления заблокированной компанией — отказ с причиной, без продления."""
+    import json
+
+    from .test_web_forms import отправить
+
+    sql("update listings set status = 'expired' where slug = 'blocked-cement'")
+    владелец = пользователь("owner4@x.uz", company_id=_id("companies", "blocked"))
+    итог = отправить(
+        сайт,
+        f"/cabinet/listings/{_id('listings', 'blocked-cement')}/renew",
+        lambda: None,
+        uid=владелец,
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["status"] == 302
+    assert сессия["error"].startswith("Компания заблокирована модератором")
+    assert sql("select status from listings where slug = 'blocked-cement'") == [("expired",)]
+
+
+def test_заблокированный_пользователь_становится_гостем(сайт):
+    """Блокировка выводит из открытой сессии: кабинет уводит на вход."""
+    uid = пользователь("blocked-user@x.uz", company_id=_id("companies", "alive"))
+    куки = вход(uid)
+
+    assert открыть(сайт, "/cabinet", куки)["status"] == 200
+
+    sql("update users set status = 'blocked' where id = %s", [uid])
+    ответ = открыть(сайт, "/cabinet", куки)
+
+    assert ответ["status"] == 302
+    assert ответ["headers"]["location"] == сайт + "/login"

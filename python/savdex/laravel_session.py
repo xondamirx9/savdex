@@ -243,10 +243,14 @@ def session_data(connection: BaseDatabaseWrapper, session_id: str) -> dict[str, 
 
 
 def _live_user(connection: BaseDatabaseWrapper, user_id: int) -> tuple[Any, ...] | None:
-    """Строка пользователя, если он есть и не в корзине: (id, remember_token)."""
+    """
+    Строка пользователя, если он есть, не в корзине и не заблокирован:
+    (id, remember_token). Заблокированный — гость во всех открытых сессиях.
+    """
     with connection.cursor() as cursor:
         cursor.execute(
-            "select id, remember_token from users where id = %s and deleted_at is null",
+            "select id, remember_token from users where id = %s and deleted_at is null "
+            "and status = 'active'",
             [user_id],
         )
         row: tuple[Any, ...] | None = cursor.fetchone()

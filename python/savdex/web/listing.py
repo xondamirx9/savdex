@@ -342,7 +342,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
             "select key, label from category_fields where category_id = %s order by sort, id",
             [row["category_id"]],
         ):
-            fields.setdefault(f["key"], f["label"])
+            # Подписи полей раздела заводятся по-русски — на языке страницы
+            fields.setdefault(f["key"], translations.text(f["label"]) or f["label"])
 
     attributes = _rows(
         "select key, value from listing_attributes where listing_id = %s order by id", [row["id"]]

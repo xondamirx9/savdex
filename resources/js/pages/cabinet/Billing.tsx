@@ -203,7 +203,7 @@ export default function Billing({
                     />
                     <LimitBar
                         label={t('cabinet.billing.promo_units')}
-                        used={wallet.promo_limit - wallet.promo_units}
+                        used={Math.max(0, wallet.promo_limit - wallet.promo_units)}
                         total={wallet.promo_limit}
                     />
                 </div>

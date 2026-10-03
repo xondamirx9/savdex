@@ -63,7 +63,7 @@ export default function ResumeShow({ resume, options, similar }: Props) {
     return (
         <PublicLayout title={resume.title} description={resume.about ?? t('resume.meta_description')}>
             <div className="container" style={{ paddingBlock: '32px 96px' }}>
-                <div className="grid" style={{ gridTemplateColumns: 'minmax(0,2fr) minmax(260px,1fr)', gap: 24 }}>
+                <div className="grid grid-split" style={{ ['--split' as string]: 'minmax(0,2fr) minmax(260px,1fr)', gap: 24 }}>
                     <div className="min-w-0">
                         <div className="card">
                             <div className="row wrap" style={{ gap: 16, alignItems: 'center' }}>

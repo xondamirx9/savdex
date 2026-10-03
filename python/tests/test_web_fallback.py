@@ -48,6 +48,9 @@ def test_404_без_маршрута(сайт, path):
     assert стр["component"] == "Error" and стр["props"]["status"] == 404
     # Без сессии: посредники группы web на несовпавшем маршруте не работают
     assert not д["cookies"]
+    # Общие пропсы есть (без них страница была пустой), адрес — как в браузере
+    assert "support" in стр["props"] and стр["props"]["auth"]["user"] is None
+    assert стр["url"] == path
 
 
 @pytest.mark.parametrize("path", ["/help", "/uz/catalog?q=a", "/"])

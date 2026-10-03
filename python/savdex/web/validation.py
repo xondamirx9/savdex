@@ -385,11 +385,16 @@ def _strtotime(value: Any) -> tuple[datetime, bool] | None:  # noqa: ANN401
         parts = dict(zip(order, (int(g) for g in match.groups()), strict=True))
         hour, minute, second = (int(g) if g else 0 for g in rest.groups())
 
-        if parts["m"] > 12 or parts["d"] > 31 or hour > 23 or minute > 59:
+        if parts["m"] > 12 or parts["d"] > 31 or hour > 23 or minute > 59 or second > 59:
             return None
 
         # Месяц 0 strtotime понимает как декабрь прошлого года
         year, month = (parts["y"] - 1, 12) if parts["m"] == 0 else (parts["y"], parts["m"])
+
+        # Год до первого (0000-…) Python не представит — такая дата не дата
+        if year < 1:
+            return None
+
         base = datetime(year, month, 1, hour, minute, second or 0)
         real = parts["m"] > 0 and 1 <= parts["d"] <= calendar.monthrange(year, month)[1]
 
@@ -597,6 +602,11 @@ def validated(
 
         if "array" in field_rules and value is not None and nested:
             continue
+
+        # Правило integer пропускает true (как PHP) — в базу идёт 1, а не
+        # логическое значение, на котором падал insert
+        if isinstance(value, bool) and "integer" in field_rules:
+            value = int(value)
 
         node = result
         parts = key.split(".")
