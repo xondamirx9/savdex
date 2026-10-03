@@ -39,13 +39,13 @@ def issue(user_id: int) -> str:
 
 def check(user_id: int, code: str) -> bool:
     """EmailVerificationCode::check: верный код одноразов."""
-    entry = laravel_cache.get(_key(user_id))
+    entry = laravel_cache.get(_key(user_id), any_store=True)
 
     if not isinstance(entry, dict):
         return False
 
     if int(entry.get("attempts") or 0) >= MAX_ATTEMPTS:
-        laravel_cache.forget(_key(user_id))
+        laravel_cache.forget_file(_key(user_id))
 
         return False
 
@@ -55,7 +55,7 @@ def check(user_id: int, code: str) -> bool:
 
         return False
 
-    laravel_cache.forget(_key(user_id))
+    laravel_cache.forget_file(_key(user_id))
 
     return True
 
