@@ -21,7 +21,7 @@ import pytest
 
 from .factories import it_задача, компания, объявление
 from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
-from .test_web_forms import отправить
+from .test_web_forms import xsrf, отправить
 from .web_site import адрес, вход, открыть, пользователь
 
 pytestmark = нужна_база
@@ -228,3 +228,22 @@ def test_огромный_номер_в_адресе_404(сайт, path):
     куки = вход(_владелец(f"huge-{path.split('/')[2]}@x.uz"))
 
     assert открыть(сайт, path, куки)["status"] == 404
+
+
+def test_автосохранение_с_ошибкой_отвечает_422(сайт):
+    """fetch ждёт JSON: ошибка ввода — 422 с полями, а не редирект на HTML."""
+    итог = отправить(
+        сайт,
+        f"/cabinet/listings/{_id('listings', 'draft')}/autosave",
+        lambda: None,
+        uid=_владелец("autosave-422@x.uz"),
+        body={"price": -5},
+        headers={
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-XSRF-TOKEN": xsrf(),
+        },
+    )
+
+    assert итог["ответ"]["status"] == 422
+    assert list(json.loads(итог["ответ"]["body"])["errors"]) == ["price"]

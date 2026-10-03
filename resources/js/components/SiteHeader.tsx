@@ -795,8 +795,13 @@ export function SiteHeader() {
             setMenuTop(Math.max(0, headerRef.current.getBoundingClientRect().bottom));
         }
 
+        // Escape закрывает меню, как любое всплывающее окно
+        const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+        if (menuOpen) window.addEventListener('keydown', onKey);
+
         return () => {
             document.body.style.overflow = '';
+            window.removeEventListener('keydown', onKey);
         };
     }, [menuOpen]);
 

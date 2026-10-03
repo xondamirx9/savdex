@@ -335,7 +335,13 @@ def store(request: HttpRequest, slug: str) -> HttpResponse:
     if not targets:
         return not_found(ctx)
 
-    data = input_of(request)
+    data = dict(input_of(request))
+
+    # Ноль звёзд у дополнительного критерия — «без оценки», а не ошибка
+    for key in ("rating_description", "rating_response", "rating_deadlines", "rating_quality"):
+        if data.get(key) in (0, "0"):
+            data[key] = None
+
     errors = validate(
         data,
         RULES,

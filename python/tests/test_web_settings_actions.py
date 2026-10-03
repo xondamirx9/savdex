@@ -121,7 +121,11 @@ def test_профиль(сайт, body, стало, admin):
 
         return
 
-    assert сессия["success"] == "Профиль обновлён"
+    # Сменили язык — на ту же страницу уже на нём, с сообщением на нём же
+    assert сессия["success"] == {"ru": "Профиль обновлён", "uz": "Profil yangilandi"}[стало[3]]
+    assert итог["ответ"]["headers"]["location"].endswith(
+        "/uz/cabinet/settings" if стало[3] == "uz" else f"{сайт}/cabinet/settings"
+    )
     # Язык — и в профиль, и в сессию
     assert сессия["locale"] == стало[3]
     assert итог["база"]["user"] == [стало]
@@ -151,9 +155,9 @@ def test_профиль_на_языке(сайт, prefix):
     сессия = json.loads(итог["сессия"]["payload"])
 
     assert итог["ответ"]["status"] == 303
-    assert итог["ответ"]["headers"]["location"].endswith(f"{prefix}/cabinet/settings")
-    # Сообщение — на языке адреса, а выбранный язык уже в профиле и сессии
-    assert сессия["success"] == {"/en": "Profile updated", "/zh": "资料已更新"}[prefix]
+    # Новый язык — новый адрес: старый префикс перезаписал бы выбор
+    assert итог["ответ"]["headers"]["location"].endswith("/tr/cabinet/settings")
+    assert сессия["success"] == "Profil güncellendi"
     assert сессия["locale"] == "tr"
     assert итог["база"]["user"] == [("Азиз Каримов", "+998 90 111-22-33", True, "tr", True)]
 

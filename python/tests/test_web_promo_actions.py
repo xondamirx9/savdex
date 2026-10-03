@@ -215,19 +215,19 @@ def test_продвижение(сайт, что, подготовка, ошиб
             {},
             {
                 "listing_id": ["Choose a listing"],
-                "promotion_type_id": ["The promotion type id field is required."],
+                "promotion_type_id": ["This field is required."],
             },
         ),
         (
             {"listing_id": "abc", "promotion_type_id": 999},
             {
-                "listing_id": ["The listing id field must be an integer."],
-                "promotion_type_id": ["The selected promotion type id is invalid."],
+                "listing_id": ["This field must be an integer."],
+                "promotion_type_id": ["The selected value is invalid."],
             },
         ),
         (
             {"listing_id": 999999, "promotion_type_id": 999},
-            {"promotion_type_id": ["The selected promotion type id is invalid."]},
+            {"promotion_type_id": ["The selected value is invalid."]},
         ),
     ],
 )

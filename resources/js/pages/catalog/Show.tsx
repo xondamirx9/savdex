@@ -457,7 +457,7 @@ function RespondCard({ listingId, guest, owner }: { listingId: number; guest: bo
     if (guest) {
         return (
             <div className="card">
-                <Link href={routes.login} className="btn btn-primary btn-block">
+                <Link href={routes.loginBack()} className="btn btn-primary btn-block">
                     <MessageSquareText aria-hidden className="size-4" /> {t('listing.respond')}
                 </Link>
                 <p className="t-caption muted mt-8">{t('listing.respond_login')}</p>

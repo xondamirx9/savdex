@@ -49,6 +49,11 @@ export const routes = {
 
     // Вход
     login: '/login',
+    /** Вход с возвратом на текущую страницу (гость нажал «В избранное», «Откликнуться») */
+    loginBack: () =>
+        typeof window === 'undefined'
+            ? '/login'
+            : `/login?back=${encodeURIComponent(window.location.pathname + window.location.search)}`,
     logout: '/logout',
     register: '/register',
     registerEmail: '/register/email',

@@ -893,7 +893,9 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .catalog{grid-template-columns:1fr}
   .filters{display:none}
   .filters.open{
-    display:block;position:fixed;inset:auto 0 0 0;z-index:110;max-height:86vh;
+    display:block;position:fixed;inset:auto 0 0 0;z-index:110;max-height:86vh;overflow-y:auto;
+    /* Последние отборы не прячутся под кнопкой «Закрыть» */
+    padding-bottom:calc(56px + 14px + 48px + 24px + env(safe-area-inset-bottom));
     border-radius:16px 16px 0 0;box-shadow:var(--sh-modal);animation:sheetUp var(--t-slow)}
   @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
   /* Кнопка «Фильтры» стоит над нижней панелью, а не на ней: на 20
@@ -903,6 +905,9 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
     display:inline-flex;position:fixed;left:50%;transform:translateX(-50%);z-index:80;
     bottom:calc(56px + 14px + env(safe-area-inset-bottom));
     box-shadow:var(--sh-modal);height:48px}
+  /* Открытая шторка не накрывает кнопку, которой её закрывают */
+  .filter-fab.is-open{z-index:120}
+  .filters-backdrop{position:fixed;inset:0;z-index:105;background:rgba(15,23,42,.4)}
   .cabinet{grid-template-columns:1fr;gap:0;padding-bottom:88px}
   .side{display:none}
   .grid-4{grid-template-columns:1fr 1fr}
@@ -1010,7 +1015,9 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .modal{max-width:100%;border-radius:16px 16px 0 0;align-self:flex-end;max-height:92vh}
   .overlay{padding:0;align-items:flex-end}
   .modal-foot{flex-direction:column-reverse}
-  .modal-foot .btn{width:100%}
+  /* !important — против style={{flex:1}} у главной кнопки: в колонке
+     flex:1 сжимал её высоту до полоски в 17 пикселей */
+  .modal-foot .btn{width:100%;flex:none!important}
   .proto-bar{bottom:auto;top:70px;right:12px}
   .proto-panel{bottom:auto;top:56px}
   .hide-desktop{display:block}
@@ -2540,3 +2547,22 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
    бледно-синяя — полупрозрачный синий читался как «нажимается, но слабо» */
 .register-submit-locked:disabled{background:#CBD5E1!important;border-color:#CBD5E1!important;
   color:#475569!important;opacity:1!important;box-shadow:none!important;cursor:not-allowed}
+
+/* Шапка окна: крестик не сжимается длинным заголовком */
+.modal-head .btn-icon{flex-shrink:0}
+
+/* Итог действия (FlashToast) — у нижнего края, над нижней панелью телефона */
+.flash-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:130;
+  width:min(560px,calc(100vw - 32px));animation:toastIn var(--t-slow)}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
+.flash-toast-box{box-shadow:var(--sh-modal);align-items:flex-start}
+.flash-toast-box > div{display:flex;gap:12px;align-items:flex-start;width:100%}
+.flash-toast-text{flex:1;min-width:0}
+.flash-toast-close{flex-shrink:0;opacity:.7;line-height:0;padding:2px}
+.flash-toast-close:hover{opacity:1}
+@media (max-width:1024px){
+  .flash-toast{bottom:calc(56px + 12px + env(safe-area-inset-bottom))}
+}
+
+/* Открытое меню телефона — кнопка «Фильтры» каталога не висит поверх него */
+body:has(.mobile-menu.open) .filter-fab{display:none}

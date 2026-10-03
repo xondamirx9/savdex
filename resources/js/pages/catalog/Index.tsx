@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { BannerSlot, type BannerData } from '@/components/BannerSlot';
 import { Building2, Package, Search, SlidersHorizontal, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProductCard, type ProductRow } from '@/components/ProductCard';
 import { SelectField } from '@/components/SelectField';
 import { TenderCard, type TenderRow } from '@/components/TenderCard';
@@ -55,6 +55,14 @@ interface Props {
 export default function CatalogIndex({ banner, listings, tenders, filters, sorts, categories, cities, total }: Props) {
     const [q, setQ] = useState(filters.q);
     const [filtersOpen, setFiltersOpen] = useState(false);
+
+    // Шторку фильтров закрывает и Escape, как любое окно
+    useEffect(() => {
+        if (!filtersOpen) return;
+        const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFiltersOpen(false);
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [filtersOpen]);
 
     const isTenders = filters.type === 'tender';
     const feed = isTenders ? tenders : listings;
@@ -323,8 +331,14 @@ export default function CatalogIndex({ banner, listings, tenders, filters, sorts
                 </div>
             </div>
 
-            {/* На узком экране фильтры открываются шторкой снизу */}
-            <button className="btn btn-primary filter-fab" onClick={() => setFiltersOpen((v) => !v)}>
+            {/* На узком экране фильтры открываются шторкой снизу; кнопка
+                «Закрыть» остаётся поверх шторки, а тап мимо неё — закрывает */}
+            {filtersOpen && <div className="filters-backdrop" aria-hidden onClick={() => setFiltersOpen(false)} />}
+            <button
+                className={cn('btn btn-primary filter-fab', filtersOpen && 'is-open')}
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((v) => !v)}
+            >
                 {filtersOpen ? <X aria-hidden className="size-4" /> : <SlidersHorizontal aria-hidden className="size-4" />}
                 {filtersOpen ? t('catalog.filters_close') : t('catalog.filters')}
             </button>

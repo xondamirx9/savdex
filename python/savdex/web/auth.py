@@ -86,6 +86,21 @@ def login(request: HttpRequest) -> HttpResponse:
     if isinstance(ctx, HttpResponse):
         return ctx
 
+    # ?back=/listing/… — гость нажал «В избранное» или «Откликнуться»:
+    # после входа он вернётся туда же. Только свой адрес: «//чужой.сайт»
+    # и прочее, что браузер поймёт как другой хост, не принимается
+    back_to = _query(ctx, "back")
+    store = _store(ctx)
+
+    if (
+        store is not None
+        and back_to.startswith("/")
+        and not back_to.startswith(("//", "/\\"))
+        and not any(ch in back_to for ch in "\\\r\n")
+        and len(back_to) <= 2000
+    ):
+        store.put("url.intended", ctx.root + back_to)
+
     return inertia.render(ctx, "auth/Login", {"status": _flash(ctx, "status")}, _seo(ctx))
 
 

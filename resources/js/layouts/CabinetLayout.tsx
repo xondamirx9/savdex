@@ -22,7 +22,7 @@ import {
     Users,
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
-import { Alert } from '@/components/ui';
+import { FlashToast } from '@/components/FlashToast';
 import { MobileTabBar } from '@/components/MobileTabBar';
 import { SiteHeader } from '@/components/SiteHeader';
 import { routes } from '@/routes';
@@ -118,7 +118,7 @@ export function CabinetLayout({
     actions?: ReactNode;
     children: ReactNode;
 }) {
-    const { auth, flash, counts } = usePage<SharedProps>().props;
+    const { auth, counts } = usePage<SharedProps>().props;
     const GROUPS = groups(Boolean(auth?.company?.person));
     const path = typeof window !== 'undefined' ? stripLocale(window.location.pathname) : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
@@ -169,16 +169,9 @@ export function CabinetLayout({
                     </nav>
 
                     <main id="main" className="min-w-0">
-                            {flash?.success && (
-                                <Alert tone="success" className="mb-5">
-                                    {flash.success}
-                                </Alert>
-                            )}
-                            {flash?.error && (
-                                <Alert tone="danger" className="mb-5">
-                                    {flash.error}
-                                </Alert>
-                            )}
+                            {/* Итог действия — плашкой у края экрана (FlashToast):
+                                сверху страницы его не видно после preserveScroll */}
+                            <FlashToast />
 
                             {/* Заблокированная компания невидима на витрине,
                                 хотя объявления в кабинете значатся активными.

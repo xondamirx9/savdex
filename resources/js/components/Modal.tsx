@@ -43,6 +43,9 @@ export function Modal({
     useEffect(() => {
         if (!open) return;
 
+        // Кто открыл окно — туда фокус и вернётся, а не в начало страницы
+        const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
         const onKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') closeRef.current();
 
@@ -81,6 +84,7 @@ export function Modal({
         return () => {
             document.removeEventListener('keydown', onKey);
             document.body.style.overflow = '';
+            if (opener?.isConnected) opener.focus();
         };
     }, [open]);
 

@@ -52,6 +52,11 @@ export function CompanyReviews({
 
     function submit(e: React.FormEvent) {
         e.preventDefault();
+        // Неотмеченный критерий — «без оценки» (null), а не 0: правило
+        // between:1,5 отклоняло 0, и отзыв не уходил без видимой причины
+        form.transform((data) =>
+            Object.fromEntries(Object.entries(data).map(([k, v]) => [k, k in criteria && v === 0 ? null : v])) as typeof data,
+        );
         form.post(`/company/${slug}/review`, {
             preserveScroll: true,
             onSuccess: () => {
@@ -89,12 +94,16 @@ export function CompanyReviews({
                             )}
 
                             {Object.entries(criteria).map(([key, label]) => (
-                                <StarPicker
-                                    key={key}
-                                    label={label}
-                                    value={Number(form.data[key] ?? 0)}
-                                    onChange={(v) => form.setData(key, v)}
-                                />
+                                <div key={key}>
+                                    <StarPicker
+                                        label={label}
+                                        value={Number(form.data[key] ?? 0)}
+                                        onChange={(v) => form.setData(key, v)}
+                                    />
+                                    {form.errors[key] && (
+                                        <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors[key]}</p>
+                                    )}
+                                </div>
                             ))}
 
                             <div className="field">

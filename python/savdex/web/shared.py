@@ -521,7 +521,8 @@ def shared(ctx: Context) -> dict[str, Any]:
         if user
         else [],
         "flash": {
-            "success": ctx.session.get("success"),
+            # «status» — так сообщают о себе резюме и отвязка Telegram
+            "success": ctx.session.get("success") or ctx.session.get("status"),
             "error": ctx.session.get("error"),
             "warning": ctx.session.get("warning"),
         },
