@@ -207,8 +207,10 @@ def test_вход_с_возвратом(сайт):
         ("/\\evil.example", None),
         ("https://evil.example/", None),
     ):
-        _, итог = зайти(сайт, "/login?back=" + back.replace("?", "%3F").replace("&", "%26"), сессия())
-        сохранено = json.loads(итог["payload"]).get("url.intended")
+        адрес_входа = "/login?back=" + back.replace("?", "%3F").replace("&", "%26")
+        _, итог = зайти(сайт, адрес_входа, сессия())
+        # Ключ с точкой у Laravel — вложенный: {"url": {"intended": …}}
+        сохранено = (json.loads(итог["payload"]).get("url") or {}).get("intended")
 
         assert сохранено == (None if ждём is None else сайт + ждём), back
 

@@ -504,9 +504,9 @@ def test_автосохранение(сайт, body, ожидание, admin):
     [row] = база["listings"]
 
     if "errors" in ожидание:
-        # Проверка не прошла — назад с ошибками, черновик не тронут
-        assert итог["ответ"]["status"] == 302
-        assert ошибки(итог) == ожидание["errors"]
+        # Проверка не прошла — 422 с ошибками (fetch ждёт JSON), черновик не тронут
+        assert итог["ответ"]["status"] == 422
+        assert json.loads(итог["ответ"]["body"])["errors"] == ожидание["errors"]
         assert база["attributes"] == [ГРАДЕ, (1, "spec_voltage", "220"), ВЕС]
         assert row[2] == "" and база["tags"] == [(None, "supply", 1)]
         assert база["journal"] == []
