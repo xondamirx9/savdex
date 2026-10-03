@@ -2307,6 +2307,11 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
   /* Категорию на телефоне выбирают на странице каталога: селект в строке
      поиска обрезал «Все категории» до нечитаемого огрызка */
   .hd-search-cat{display:none}
+  /* Две плитки в ряд: миниатюра сверху, название — на всю ширину плитки;
+     рядом с миниатюрой «Construction» не помещалось и рвалось посередине */
+  .cat-card{flex-direction:column;align-items:flex-start;gap:8px}
+  .cat-thumb{width:44px;height:44px}
+  .cat-thumb svg{width:22px;height:22px}
 }
 
 @media (max-width:400px){
