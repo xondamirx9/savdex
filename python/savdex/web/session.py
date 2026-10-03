@@ -247,9 +247,14 @@ def _read(session_id: str) -> tuple[dict[str, Any], bool]:
 
 
 def _live_user(user_id: int) -> tuple[Any, ...] | None:
+    """
+    Учётка, под которой можно быть вошедшим: не в корзине и не
+    заблокирована — заблокированного выводит из всех открытых сессий.
+    """
     with connection.cursor() as cursor:
         cursor.execute(
-            "select id, remember_token from users where id = %s and deleted_at is null",
+            "select id, remember_token from users where id = %s and deleted_at is null "
+            "and status = 'active'",
             [user_id],
         )
         row: tuple[Any, ...] | None = cursor.fetchone()

@@ -26,7 +26,7 @@ from savdex.web.cabinet import _rows, company_of
 from savdex.web.chat_actions import _unverified
 from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.image_store import _random
-from savdex.web.listing_actions import _stamp
+from savdex.web.listing_actions import _stamp, refuse_blocked
 from savdex.web.search_text import index
 from savdex.web.shared import Context
 from savdex.web.validation import _strtotime, validate, validated
@@ -145,6 +145,9 @@ def reopen(request: HttpRequest, task_id: str) -> HttpResponse:
 
     if task is None:
         return not_found(ctx)
+
+    if (refused := refuse_blocked(ctx, task["company_id"])) is not None:
+        return refused
 
     if task["status"] != ACTIVE:
         _save(
@@ -390,6 +393,9 @@ def store(request: HttpRequest) -> HttpResponse:
 
     if company is None:
         return not_found(ctx)
+
+    if (refused := refuse_blocked(ctx, company["id"])) is not None:
+        return refused
 
     valid, errors = _validated(ctx, request)
 

@@ -30,7 +30,13 @@ from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.chat_actions import _unverified
 from savdex.web.company_contact_actions import _php_boolean
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, redirect
-from savdex.web.listing_actions import LIFETIME_DAYS, _notify_company, _search_text, _stamp
+from savdex.web.listing_actions import (
+    LIFETIME_DAYS,
+    _notify_company,
+    _search_text,
+    _stamp,
+    refuse_blocked,
+)
 from savdex.web.resume_actions import _exists
 from savdex.web.shared import Context
 from savdex.web.validation import validate
@@ -186,6 +192,9 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
 
         return back(ctx)
+
+    if (refused := refuse_blocked(ctx, listing["company_id"])) is not None:
+        return refused
 
     data = input_of(request)
     errors = validate(

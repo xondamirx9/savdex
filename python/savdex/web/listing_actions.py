@@ -248,6 +248,21 @@ def _notify_company(
             )
 
 
+def refuse_blocked(ctx: Context, company_id: int) -> HttpResponse | None:
+    """
+    Заблокированная компания ничего не выводит на витрину: ни объявлений,
+    ни задач, ни продвижения — отказ с причиной, иначе None.
+    """
+    rows = _rows("select status from companies where id = %s", [company_id])
+
+    if rows and rows[0]["status"] == "blocked":
+        flash(ctx, "error", ctx.t("messages.listing.company_blocked"))
+
+        return back(ctx)
+
+    return None
+
+
 def _as_id(value: Any) -> int:  # noqa: ANN401
     """Номер из ввода, прошедшего правило integer: 5, «5», 5.0, true."""
     if isinstance(value, bool | int | float):
@@ -272,6 +287,9 @@ def renew(request: HttpRequest, listing_id: str) -> HttpResponse:
         flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
 
         return back(ctx)
+
+    if (refused := refuse_blocked(ctx, row["company_id"])) is not None:
+        return refused
 
     plan = company_plan(row["company_id"])
     limit = plan.get("listings_limit")
@@ -334,6 +352,9 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
         flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
 
         return back(ctx)
+
+    if (refused := refuse_blocked(ctx, row["company_id"])) is not None:
+        return refused
 
     plan = company_plan(row["company_id"])
     limit = plan.get("listings_limit")
@@ -407,6 +428,9 @@ def bulk(request: HttpRequest) -> HttpResponse:
 
     what = data["action"]
     plan = company_plan(company["id"])
+
+    if what == "renew" and (refused := refuse_blocked(ctx, company["id"])) is not None:
+        return refused
 
     if what == "renew":
         # Отклонённые не продлеваются — иначе запрет обходился бы галочками
