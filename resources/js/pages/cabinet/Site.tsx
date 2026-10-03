@@ -11,6 +11,7 @@ import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 import { THEME_MESSAGE, type SiteTheme } from '@/pages/site/Show';
 import { routes } from '@/routes';
+import { unitLabel } from '@/lib/units';
 
 /**
  * Редактор мини-сайта.
@@ -632,7 +633,7 @@ function ProductsPanel({
                                 <small className="muted">
                                     {p.price === null
                                         ? t('site.products.negotiable')
-                                        : `${formatNumber(p.price)} ${p.currency}${p.unit ? ` / ${p.unit}` : ''}`}
+                                        : `${formatNumber(p.price)} ${p.currency}${p.unit ? ` / ${unitLabel(p.unit)}` : ''}`}
                                 </small>
                             </span>
                             <button

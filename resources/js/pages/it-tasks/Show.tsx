@@ -119,7 +119,7 @@ export default function ItTaskShow({ task, respond, similar }: { task: Task; res
                     </ol>
                 </nav>
 
-                <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: 32, alignItems: 'start' }}>
+                <div className="grid grid-sidebar" style={{ ['--aside' as string]: '340px', gap: 32, alignItems: 'start' }}>
                     <article style={{ maxWidth: '72ch' }}>
                         <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
                             <span className="badge badge-supply">{task.service_label}</span>

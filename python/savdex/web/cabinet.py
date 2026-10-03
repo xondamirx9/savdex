@@ -1386,7 +1386,7 @@ def promo_props(ctx: Context) -> dict[str, Any]:
             {
                 "id": p["id"],
                 "listing": p["l_title"],
-                "type": p["t_name"],
+                "type": translations.text(p["t_name"]) or p["t_name"],
                 "badge": translations.text(p["t_badge"]),
                 "ends_at": _date(p["ends_at"]),
                 "before": p["impressions_before"],
@@ -2234,6 +2234,11 @@ def _category_tree(locale: str) -> list[dict[str, Any]]:
     )
     fields: dict[int, list[dict[str, Any]]] = {}
     with_specs = specs.enabled()
+    # Подписи полей раздела заводятся по-русски — на языке мастера;
+    # варианты — как есть: они же сохраняются значением
+    from savdex.web import content
+
+    translations = content.Translations(locale)
 
     for f in _rows(
         "select category_id, key, label, type, options, unit from category_fields "
@@ -2243,7 +2248,7 @@ def _category_tree(locale: str) -> list[dict[str, Any]]:
         fields.setdefault(f["category_id"], []).append(
             {
                 "key": f["key"],
-                "label": f["label"],
+                "label": translations.text(f["label"]) or f["label"],
                 "type": f["type"],
                 "options": f["options"] or [],
                 "unit": f["unit"],

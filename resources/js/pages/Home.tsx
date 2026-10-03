@@ -129,6 +129,8 @@ interface SupplierRow {
 interface NewsCard {
     slug: string;
     category: string;
+    /** Рубрика на языке страницы; category — сырой ключ для обложки. */
+    category_label?: string;
     date: string;
     title: string;
     excerpt: string;
@@ -708,7 +710,7 @@ export default function Home({
                                         {/* Одна строка без переноса: перенос ломал бы
                                             выравнивание заголовков между карточками */}
                                         <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'nowrap', overflow: 'hidden' }}>
-                                            <span className="badge badge-neutral">{p.category}</span>
+                                            <span className="badge badge-neutral">{p.category_label ?? p.category}</span>
                                             <span className="t-caption muted" style={{ whiteSpace: 'nowrap' }}>{p.date}</span>
                                         </div>
                                         <h3 className="t-h4" style={{ marginBottom: 8 }}>{p.title}</h3>

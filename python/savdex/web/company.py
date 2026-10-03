@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import cabinet, content, inertia, platform, ui
+from savdex.web import cabinet, content, inertia, locales, platform, ui
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
@@ -425,7 +425,8 @@ def business_card(
         "logo": logo_url(ctx, c["logo_path"]),
         "cover": logo_url(ctx, c["cover_path"]),
         "slug": c["slug"],
-        "url": ctx.url(f"company/{c['slug']}"),
+        # Ссылкой делятся — на том же языке, что и страница
+        "url": locales.url(ctx.root, f"/company/{c['slug']}", ctx.locale),
     }
 
 

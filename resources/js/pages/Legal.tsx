@@ -1,5 +1,6 @@
 import { Link } from '@/components/ui/Link';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { DEFAULT_LOCALE, getLocale } from '@/lib/locale';
 import { useSupport } from '@/lib/support';
 import { routes } from '@/routes';
 import { t } from '@/lib/i18n';
@@ -95,6 +96,14 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
                                     <b>{t('legal_page.draft_title')}</b> {t('legal_page.draft_text')}
                                 </div>
                             </div>
+                        )}
+
+                        {/* Документы утверждены только по-русски: на других
+                            языках честно предупреждаем, какой текст имеет силу */}
+                        {getLocale() !== DEFAULT_LOCALE && (
+                            <p className="t-sm muted mt-16" lang={getLocale()}>
+                                {t('legal_page.russian_only')}
+                            </p>
                         )}
 
                         <div className="prose" style={{ maxWidth: '72ch' }}>

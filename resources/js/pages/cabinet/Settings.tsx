@@ -34,7 +34,7 @@ interface Props {
 // Языки названы на самих себе — переводить их нельзя
 const LOCALES = [
     ['ru', 'Русский'],
-    ['uz', 'Oʻzbekcha'],
+    ['uz', 'O‘zbekcha'],
     ['en', 'English'],
     ['zh', '中文'],
     ['tr', 'Türkçe'],

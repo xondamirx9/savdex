@@ -129,17 +129,23 @@ def render_bare(
 ) -> HttpResponse:
     """
     Страница, собранная без HandleInertiaRequests, — как ответ на
-    исключение, брошенное раньше него (429 у throttle): без общих
-    пропсов, без версии сборки и без проверки версии, адрес — без
-    языкового префикса, заголовков Vary и Link нет.
+    исключение, брошенное раньше него (404 несовпавшего адреса, 429):
+    без версии сборки и без её проверки, заголовков Vary и Link нет.
+    Общие пропсы (поддержка, шапка) — есть: без них страница ошибки
+    оставалась пустой; адрес — с языковым префиксом, как у браузера.
     """
-    url = phpquery.full_path(ctx.path, ctx.query) or "/"
+    url = page_url(ctx)
 
     if ctx.path.endswith("/") and ctx.path != "/" and not url.split("?")[0].endswith("/"):
         path, sep, query = url.partition("?")
         url = path + "/" + sep + query
 
-    page = {"component": component, "props": props, "url": url, "version": ""}
+    try:
+        common = shared(ctx)
+    except Exception:  # страница ошибки должна собраться всегда
+        common = {}
+
+    page = {"component": component, "props": {**common, **props}, "url": url, "version": ""}
 
     if ctx.inertia:
         response = HttpResponse(php_json(page), status=status, content_type="application/json")

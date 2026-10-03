@@ -300,8 +300,7 @@ export default function CompanyShow({
                                 </span>
                             ) : (
                                 <span className="badge badge-neutral">
-                                    <Lock aria-hidden className="size-3.5" /> {lockedCount}{' '}
-                                    {tChoice('company.locked', lockedCount)}
+                                    <Lock aria-hidden className="size-3.5" /> {tChoice('company.locked', lockedCount)}
                                 </span>
                             )}
                         </div>

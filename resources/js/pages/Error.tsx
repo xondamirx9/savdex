@@ -111,9 +111,11 @@ export default function ErrorPage({ status, reference }: { status: number; refer
                         </p>
                     )}
 
-                    <p className="t-sm muted mt-16">
-                        {t('error_page.help')} <a href={`mailto:${support.email}`}>{support.email}</a>
-                    </p>
+                    {support.email && (
+                        <p className="t-sm muted mt-16">
+                            {t('error_page.help')} <a href={`mailto:${support.email}`}>{support.email}</a>
+                        </p>
+                    )}
                 </div>
             </div>
         </PublicLayout>
