@@ -177,7 +177,12 @@ def test_почта(сайт, email, уходит):
     ("path", "lang", "тема", "вводная"),
     [
         ("/register/email", "ru", "Код подтверждения <код> — SAVDEX", "Ваш код для регистрации"),
-        ("/en/register/email", "en", "Confirmation code <код> — SAVDEX", "Your SAVDEX registration"),
+        (
+            "/en/register/email",
+            "en",
+            "Confirmation code <код> — SAVDEX",
+            "Your SAVDEX registration",
+        ),
         ("/uz/register/email", "uz", "Tasdiqlash kodi <код> — SAVDEX", "SAVDEX’da ro‘yxatdan"),
         ("/zh/register/email", "zh", "验证码 <код> — SAVDEX", "您的 SAVDEX 注册验证码"),
     ],

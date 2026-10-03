@@ -62,7 +62,9 @@ def test_письмо_на_каждом_языке(имя, lang):
     assert f'<html xmlns="http://www.w3.org/1999/xhtml" lang="{lang}">' in body_html
     # Ссылка в HTML экранирована, в тексте — как есть; в письме с кодом
     # регистрации ссылки нет
-    экранированная = "https://savdex.uz/verify-email/7/abc?expires=1&amp;signature=f&amp;x=&lt;y&gt;"
+    экранированная = (
+        "https://savdex.uz/verify-email/7/abc?expires=1&amp;signature=f&amp;x=&lt;y&gt;"
+    )
     assert (f'href="{экранированная}"' in body_html) is (имя != "register_code")
     assert (URL in body_text) is (имя != "register_code")
     assert f'<a href="{APP}"' in body_html and body_text.startswith(f"SAVDEX: {APP}\n")
@@ -84,13 +86,13 @@ def test_языки_различаются_разметка_одна(имя):
 
 
 def test_русское_письмо():
-    subject, body_html, body_text = _письмо("verify", "ru")
+    _, body_html, body_text = _письмо("verify", "ru")
 
     assert "Ваш код подтверждения почты на площадке SAVDEX:\n\n# 481516" in body_text
     assert f"Или подтвердите одним нажатием: {URL}" in body_text
     assert ">Здравствуйте!</h1>" in body_html
 
-    subject, body_html, body_text = _письмо("reset", "ru")
+    _, body_html, body_text = _письмо("reset", "ru")
     assert f"Сбросить пароль: {URL}" in body_text
     assert "Ссылка для сброса пароля действует 60 минут." in body_text
     assert ">Сбросить пароль</a>" in body_html
@@ -101,9 +103,7 @@ def test_английский_сброс_как_у_laravel():
 
     assert f"Reset Password: {URL}" in body_text
     assert "This password reset link will expire in 60 minutes." in body_text
-    assert "If you did not request a password reset, no further action is required." in (
-        body_text
-    )
+    assert "If you did not request a password reset, no further action is required." in body_text
     assert ">Reset Password</a>" in body_html
 
 
