@@ -173,6 +173,31 @@ def test_почта(сайт, email, уходит):
         assert итог["база"] == {"mail": [], "entry": None}
 
 
+@pytest.mark.parametrize(
+    ("path", "lang", "тема", "вводная"),
+    [
+        ("/register/email", "ru", "Код подтверждения <код> — SAVDEX", "Ваш код для регистрации"),
+        (
+            "/en/register/email",
+            "en",
+            "Confirmation code <код> — SAVDEX",
+            "Your SAVDEX registration",
+        ),
+        ("/uz/register/email", "uz", "Tasdiqlash kodi <код> — SAVDEX", "SAVDEX’da ro‘yxatdan"),
+        ("/zh/register/email", "zh", "验证码 <код> — SAVDEX", "您的 SAVDEX 注册验证码"),
+    ],
+)
+def test_письмо_на_языке_страницы(сайт, path, lang, тема, вводная):
+    """Письмо с кодом — на языке страницы регистрации."""
+    итог = шаг(сайт, path, body={"email": АДРЕС})
+
+    [m] = итог["база"]["mail"]
+    assert (m["subject"], m["to"]) == (тема, АДРЕС)
+    assert f"\n\n{вводная}" in m["text"] and "\n\n# <код>\n\n" in m["text"]
+    assert f' lang="{lang}">' in m["html"]
+    assert итог["база"]["entry"] == {"attempts": 0, "from_mail": True}
+
+
 @pytest.mark.parametrize("отключена", [False, True])
 def test_почта_занята(сайт, отключена):
     sql("delete from users where email = %s", [АДРЕС])

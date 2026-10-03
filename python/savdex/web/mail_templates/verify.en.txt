@@ -1,0 +1,20 @@
+SAVDEX: __APP_URL__
+
+# Hello!
+
+Your email confirmation code for SAVDEX:
+
+# __CODE__
+
+Enter it on the confirmation page. The code is valid for 15 minutes and can be used only once.
+
+Or confirm with one click: __URL__
+
+If you did not sign up for SAVDEX, simply delete this email — the account will not be activated without confirmation.
+
+The SAVDEX team
+
+If you're having trouble clicking the "Or confirm with one click" button, copy and paste the URL below
+into your web browser: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. All rights reserved.

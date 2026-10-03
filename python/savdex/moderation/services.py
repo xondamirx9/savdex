@@ -42,7 +42,7 @@ from savdex.moderation.models import (
 from savdex.web import ui
 from savdex.web.cabinet import _rows
 from savdex.web.chat_actions import str_limit
-from savdex.web.listing_actions import _notify_company
+from savdex.web.listing_actions import Text, _notify_company
 from savdex.web.review_actions import recalculate
 from savdex.web.shared import Context
 
@@ -104,12 +104,12 @@ def notify_company(
     ctx: Context,
     company_id: int,
     type_: str,
-    title: str,
+    title: Text,
     tone: str,
     url: str | None,
-    body: str | None,
+    body: Text | None,
 ) -> None:
-    """Notifier::company: лента кабинета и уведомление каждому сотруднику."""
+    """Notifier::company: лента кабинета и уведомление каждому сотруднику на его языке."""
     _notify_company(ctx, {"id": company_id}, type_, title, tone, cast(str, url), body)
 
 
@@ -219,7 +219,12 @@ def approve_review(request: HttpRequest, review: Review) -> None:
             ctx,
             review.company_id,
             "review",
-            f"Компания «{author['name']}» оставила отзыв: {review.rating} из 5",
+            lambda locale: ui.t(
+                "messages.review.notify_title",
+                locale,
+                company=author["name"],
+                rating=review.rating,
+            ),
             "success" if review.rating >= 4 else "warning",
             "/cabinet/reviews",
             str_limit(review.body, 140),
@@ -241,7 +246,7 @@ def reject_review(request: HttpRequest, review: Review, note: str) -> None:
             ctx,
             review.author_company_id,
             "moderation",
-            "Ваш отзыв не прошёл проверку",
+            lambda locale: ui.t("messages.moderation.review_rejected", locale),
             "warning",
             None,
             note,
@@ -264,7 +269,7 @@ def accept_dispute(request: HttpRequest, review: Review, note: str) -> None:
             ctx,
             review.company_id,
             "moderation",
-            "Спор по отзыву удовлетворён — отзыв скрыт",
+            lambda locale: ui.t("messages.moderation.dispute_accepted", locale),
             "success",
             "/cabinet/reviews",
             note,
@@ -275,7 +280,7 @@ def accept_dispute(request: HttpRequest, review: Review, note: str) -> None:
             ctx,
             review.author_company_id,
             "moderation",
-            "Ваш отзыв скрыт по результатам проверки",
+            lambda locale: ui.t("messages.moderation.review_hidden", locale),
             "warning",
             None,
             note,
@@ -295,7 +300,7 @@ def decline_dispute(request: HttpRequest, review: Review, note: str) -> None:
             ctx,
             review.company_id,
             "moderation",
-            "Спор по отзыву отклонён — отзыв остаётся",
+            lambda locale: ui.t("messages.moderation.dispute_declined", locale),
             "warning",
             "/cabinet/reviews",
             note,
@@ -435,7 +440,9 @@ def approve_document(request: HttpRequest, document: CompanyDocument) -> None:
             ctx,
             document.company_id,
             "moderation",
-            f"Документ «{document.title}» принят",
+            lambda locale: ui.t(
+                "messages.moderation.document_approved", locale, title=document.title
+            ),
             "success",
             "/cabinet/company",
             None,
@@ -458,7 +465,9 @@ def reject_document(request: HttpRequest, document: CompanyDocument, reason: str
             ctx,
             document.company_id,
             "moderation",
-            f"Документ «{document.title}» отклонён",
+            lambda locale: ui.t(
+                "messages.moderation.document_rejected", locale, title=document.title
+            ),
             "danger",
             "/cabinet/company",
             reason,

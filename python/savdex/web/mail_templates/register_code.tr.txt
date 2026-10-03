@@ -1,0 +1,15 @@
+SAVDEX: __APP_URL__
+
+# Merhaba!
+
+SAVDEX kayıt kodunuz:
+
+# __CODE__
+
+Kodu kayıt sayfasına girin. Kod 15 dakika geçerlidir ve yalnızca bir kez kullanılabilir.
+
+SAVDEX’e kaydolmadıysanız bu e-postayı silmeniz yeterli.
+
+SAVDEX ekibi
+
+© __YEAR__ SAVDEX. Tüm hakları saklıdır.

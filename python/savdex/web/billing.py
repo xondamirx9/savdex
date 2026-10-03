@@ -21,7 +21,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex.payments import checkout
-from savdex.web import content, inertia
+from savdex.web import content, inertia, locales, ui
 from savdex.web.cabinet import _rows, _seo, active_subscription, company_of, company_plan, page
 from savdex.web.currency import CurrencyRate, php_round
 from savdex.web.home import php_round as round_places
@@ -32,13 +32,8 @@ from savdex.web.shared import Context, setting, settings_values
 #: OrderService::EXPIRES_DAYS
 EXPIRES_DAYS = 14
 
-#: Payment::STATUSES
-STATUSES = {
-    "pending": "Ожидает оплаты",
-    "paid": "Оплачен",
-    "failed": "Отменён",
-    "refunded": "Возвращён",
-}
+#: Payment::STATUSES; подписи — invoice.status.* в словаре
+STATUSES = ("pending", "paid", "failed", "refunded")
 
 
 # ── Цены (Plan, CreditPack, PriceDisplay) ───────────────────────────
@@ -98,7 +93,7 @@ def number_format(value: int) -> str:
 
 
 def amount_label(payment: dict[str, Any], sum_label: str = "сум") -> str:
-    """Payment::amountLabel; sum_label — «сум» на языке страницы (печатный счёт — по-русски)."""
+    """Payment::amountLabel; sum_label — «сум» на нужном языке."""
     currency = payment["currency"]
 
     return (
@@ -133,19 +128,26 @@ def checkout_enabled() -> bool:
     return checkout.checkout_enabled()
 
 
-def requisites(ctx: Context) -> dict[str, str]:
-    """BillingController::requisites: реквизиты из настроек, пустые — прочь."""
+def requisite_items() -> list[tuple[str, str]]:
+    """Реквизиты из настроек: (ключ подписи, значение), пустые — прочь."""
     values = settings_values()
-    items = {
-        ctx.t("messages.billing.payee"): setting(values, "legal_full_name")
-        or setting(values, "legal_name"),
-        ctx.t("messages.billing.tin"): setting(values, "legal_tin"),
-        ctx.t("messages.billing.account"): setting(values, "legal_account"),
-        ctx.t("messages.billing.bank"): setting(values, "legal_bank"),
-        ctx.t("messages.billing.mfo"): setting(values, "legal_mfo"),
-    }
+    items = [
+        (
+            "messages.billing.payee",
+            setting(values, "legal_full_name") or setting(values, "legal_name"),
+        ),
+        ("messages.billing.tin", setting(values, "legal_tin")),
+        ("messages.billing.account", setting(values, "legal_account")),
+        ("messages.billing.bank", setting(values, "legal_bank")),
+        ("messages.billing.mfo", setting(values, "legal_mfo")),
+    ]
 
-    return {k: v for k, v in items.items() if v != ""}
+    return [(key, value) for key, value in items if value != ""]
+
+
+def requisites(ctx: Context) -> dict[str, str]:
+    """BillingController::requisites: подписи на языке страницы."""
+    return {ctx.t(key): value for key, value in requisite_items()}
 
 
 def promo_allowed(company_id: int) -> bool:
@@ -351,29 +353,52 @@ def billing_page(request: HttpRequest) -> HttpResponse:
 
 
 def _invoice_html(
-    payment: dict[str, Any], company: dict[str, Any] | None, req: dict[str, str]
+    payment: dict[str, Any],
+    company: dict[str, Any] | None,
+    items: list[tuple[str, str]],
+    locale: str,
+    back_url: str,
 ) -> str:
-    """resources/views/invoice.blade.php."""
+    """
+    Печатный счёт: основной язык — английский, второй — язык страницы
+    строкой ниже (с /en — только английский). Реквизиты, плательщик и
+    номер — как записаны: они должны совпасть с платёжкой.
+    """
     e = php_escape
-    created = _utc(payment["created_at"])
+
+    def en(key: str, **replace: object) -> str:
+        return ui.t(key, "en", **replace)
+
+    def both(key: str, **replace: object) -> str:
+        """Подпись на двух языках: английский и, ниже, язык страницы."""
+        main = e(en(key, **replace))
+
+        if locale == "en":
+            return main
+
+        alt = e(ui.t(key, locale, **replace))
+
+        return f'{main}<span class="alt" lang="{e(locale)}">{alt}</span>'
+
+    created = _date(_utc(payment["created_at"])) or ""
     until = expires_at(payment)
     paid = _utc(payment["paid_at"])
-    status = STATUSES.get(payment["status"], payment["status"])
+    status_key = f"invoice.status.{payment['status']}"
+    status = both(status_key) if payment["status"] in STATUSES else e(payment["status"])
 
-    # Пробелы — как их оставляет Blade вокруг @if и @foreach: счёт
-    # сверяется с Laravel побайтно
     if until is not None:
-        due = f"                            Оплатить до {_date(until)}\n"
+        due = f"                            {both('invoice.pay_by', date=_date(until))}\n"
     elif paid is not None:
-        due = f"                            Оплачен {_date(paid)}\n"
+        due = f"                            {both('invoice.paid_on', date=_date(paid))}\n"
     else:
         due = ""
 
     requisites_html = " " * 8
 
-    if req:
+    if items:
         rows = "".join(
-            f"{' ' * 36}<dt>{e(k)}</dt>\n{' ' * 20}<dd>{e(v)}</dd>\n" for k, v in req.items()
+            f"{' ' * 36}<dt>{both(key)}</dt>\n{' ' * 20}<dd>{e(value)}</dd>\n"
+            for key, value in items
         )
         requisites_html += f"            <dl>\n{rows}{' ' * 28}</dl>\n        "
 
@@ -383,32 +408,55 @@ def _invoice_html(
 
     if tin:
         tin_html += (
-            f"                <dt>ИНН плательщика</dt>\n                <dd>{e(tin)}</dd>\n"
-            + " " * 12
+            f"                <dt>{both('invoice.payer_tin')}</dt>\n"
+            f"                <dd>{e(tin)}</dd>\n" + " " * 12
         )
 
     note = ""
 
     if payment["status"] == "pending":
+        number = payment["number"]
         note = (
             '            <div class="note">\n'
-            "                <b>В назначении платежа укажите номер счёта "
-            f"{e(payment['number'])}.</b>\n"
-            "                По нему поступление находят и зачисляют — без него оплата ищется"
-            " вручную\n                и доступ открывается позже.\n            </div>\n        "
+            f"                <b>{both('invoice.note_title', number=number)}</b>\n"
+            f"                {both('invoice.note_text')}\n            </div>\n        "
         )
 
+    # Описание счёта хранится на языке заказа — английский и язык
+    # страницы берутся из переводов содержимого, второй — если отличается
+    description = str(payment["description"] or "")
+    main_description = content.Translations("en").text(description) or description
+    alt_description = content.Translations(locale).text(description) or description
+    description_html = e(main_description)
+
+    if locale != "en" and alt_description != main_description:
+        description_html += f'<span class="alt" lang="{e(locale)}">{e(alt_description)}</span>'
+
     values = {
+        "doc_title": e(en("invoice.doc_title", number=payment["number"])),
+        "back_url": e(back_url),
+        "back": e(ui.t("invoice.back", locale)),
+        "print": e(ui.t("invoice.print", locale)),
+        "tagline": both("invoice.tagline"),
+        "dated": both("invoice.dated", date=created),
         "number": e(payment["number"]),
-        "created": e(_date(created) or ""),
-        "status": e(status),
-        "due": e(due),
+        "status": status,
+        "heading": both("invoice.heading", number=payment["number"]),
+        "due": due,
         "requisites": requisites_html,
+        "payer_label": both("invoice.payer"),
         "payer": e(payer),
         "tin": tin_html,
-        "description": e(payment["description"] or ""),
-        "amount": e(amount_label(payment)),
+        "no": both("invoice.no"),
+        "item": both("invoice.item"),
+        "amount_label": both("invoice.amount"),
+        "description": description_html,
+        "amount": e(amount_label(payment, en("catalog.currency_uzs"))),
+        "total": both("invoice.total"),
         "note": note,
+        "director": both("invoice.director"),
+        "accountant": both("invoice.accountant"),
+        "signature": both("invoice.signature"),
     }
 
     # Одним проходом: подставленный текст не разбирается повторно
@@ -441,6 +489,12 @@ def invoice(request: HttpRequest, payment_id: str) -> HttpResponse:
     payer = _rows(
         "select * from companies where id = %s and deleted_at is null", [found[0]["company_id"]]
     )
-    html = _invoice_html(found[0], payer[0] if payer else None, requisites(ctx))
+    html = _invoice_html(
+        found[0],
+        payer[0] if payer else None,
+        requisite_items(),
+        ctx.locale,
+        locales.url(ctx.root, "/cabinet/billing", ctx.locale),
+    )
 
     return HttpResponse(html, content_type="text/html; charset=utf-8")

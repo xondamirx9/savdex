@@ -326,11 +326,33 @@ def test_счёт(сайт, number):
     assert "<b>Премиум</b>" not in д["body"]
 
 
-def test_счёт_на_английском(сайт):
-    д = счёт(сайт, f"/en/cabinet/billing/invoice/{_счёт('SVX-4')}", владелец(сайт))
+@pytest.mark.parametrize(
+    ("prefix", "второй", "подпись"),
+    [
+        ("", "ru", "Плательщик"),
+        ("/uz", "uz", "To‘lovchi"),
+        ("/tr", "tr", "Ödeyen"),
+        ("/zh", "zh", "付款方"),
+        ("/en", None, None),
+    ],
+)
+def test_счёт_на_двух_языках(сайт, prefix, второй, подпись):
+    """Основной язык счёта — английский, второй — язык страницы строкой ниже."""
+    д = счёт(сайт, f"{prefix}/cabinet/billing/invoice/{_счёт('SVX-4')}", владелец(сайт))
+    body = д["body"]
 
-    # Счёт — документ на русском при любом языке сайта
-    assert д["status"] == 200 and "<title>Счёт SVX-4 · SAVDEX</title>" in д["body"]
+    assert д["status"] == 200 and '<html lang="en">' in body
+    assert "<title>Invoice SVX-4 · SAVDEX</title>" in body
+    assert "Invoice for payment SVX-4" in body and "Payer" in body
+    # Реквизиты и плательщик — как записаны, на любом языке
+    assert "ООО «Касса &amp; Ко»" in body and "АКБ &lt;Капиталбанк&gt;" in body
+    # Назад — в кассу на том же языке
+    assert f'href="{сайт}{prefix}/cabinet/billing"' in body
+
+    if второй is None:
+        assert 'class="alt"' not in body
+    else:
+        assert f'<span class="alt" lang="{второй}">{подпись}</span>' in body
 
 
 @pytest.mark.parametrize("номер", ["чужой", "нет"])

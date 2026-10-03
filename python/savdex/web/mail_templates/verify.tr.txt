@@ -1,0 +1,20 @@
+SAVDEX: __APP_URL__
+
+# Merhaba!
+
+SAVDEX’te e-posta doğrulama kodunuz:
+
+# __CODE__
+
+Kodu doğrulama sayfasına girin. Kod 15 dakika geçerlidir ve yalnızca bir kez kullanılabilir.
+
+Ya da tek tıkla doğrulayın: __URL__
+
+SAVDEX’e kaydolmadıysanız bu e-postayı silmeniz yeterli — doğrulanmayan hesap etkinleştirilmez.
+
+SAVDEX ekibi
+
+«Ya da tek tıkla doğrulayın» düğmesi çalışmazsa aşağıdaki bağlantıyı kopyalayıp
+tarayıcınızın adres çubuğuna yapıştırın: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Tüm hakları saklıdır.

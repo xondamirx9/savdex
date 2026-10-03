@@ -200,7 +200,7 @@ def settle(
         ctx,
         company,
         "billing",
-        f"Оплата счёта {payment['number']} зачислена",
+        lambda locale: ui.t("messages.billing.paid_title", locale, number=payment["number"]),
         "success",
         "/cabinet/billing",
         payment["description"],
