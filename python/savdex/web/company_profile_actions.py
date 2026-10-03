@@ -202,9 +202,16 @@ def update(request: HttpRequest) -> HttpResponse:
     """CompanyProfileController::update."""
     ctx = action(request)
     assert ctx.user is not None
-    data = input_of(request)
+    data = dict(input_of(request))
     company = company_of(ctx)
     year = datetime.now(UTC).year
+
+    # «cement.uz» — тоже сайт: протокол дописывается, а «не сайт ###» не проходит
+    site = data.get("website")
+
+    if isinstance(site, str) and site.strip() and "://" not in site:
+        data["website"] = "https://" + site.strip()
+
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
         "name": ["required", "string", "min:2", "max:190"],
@@ -220,7 +227,7 @@ def update(request: HttpRequest) -> HttpResponse:
         "city_id": ["nullable", _exists("cities")],
         "address": ["nullable", "string", "max:255"],
         "description": ["nullable", "string", "max:5000"],
-        "website": ["nullable", "string", "max:190"],
+        "website": ["nullable", "string", "max:190", "url"],
         "founded_year": ["nullable", "integer", f"between:1850,{year}"],
         "employees_range": ["nullable", "string", "max:20"],
         "type": ["nullable", "string", "max:30"],
@@ -244,6 +251,10 @@ def update(request: HttpRequest) -> HttpResponse:
     # Текст ошибки правила Tin выбирает само правило
     if "tin" in errors and tin_messages:
         errors["tin"] = [tin_messages[0] if m == "validation.tin" else m for m in errors["tin"]]
+
+    # Одна причина на поле: два сообщения подряд под ИНН читались как дубль
+    if "tin" in errors:
+        errors["tin"] = errors["tin"][:1]
 
     if errors:
         return invalid(ctx, errors)

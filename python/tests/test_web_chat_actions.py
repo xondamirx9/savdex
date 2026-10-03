@@ -240,7 +240,7 @@ def ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
         ({}, None, ("Введите сообщение", "Enter a message")),
         ({"body": "   "}, None, ("Введите сообщение", "Enter a message")),
         ({"body": "x" * 2001}, None, ("Сообщение слишком длинное", "The message is too long")),
-        ({"body": ["массив"]}, None, ("Укажите текст.", "The body field must be a string.")),
+        ({"body": ["массив"]}, None, ("Укажите текст.", "This field must be a string.")),
     ],
 )
 @pytest.mark.parametrize("prefix", ["", "/en"])

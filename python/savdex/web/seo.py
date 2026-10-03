@@ -95,7 +95,8 @@ class Seo:
     # ── Для каркаса ──
 
     def get_title(self) -> str:
-        return self._title if self._title == "SAVDEX" else f"{self._title} · SAVDEX"
+        # «О площадке SAVDEX» — без второго «· SAVDEX»
+        return self._title if "SAVDEX" in self._title else f"{self._title} · SAVDEX"
 
     def _path(self) -> str:
         url = self._canonical or (self.root + self.current_path)
@@ -110,6 +111,17 @@ class Seo:
             locale = locales.DEFAULT
 
         return locales.url(self.root, self._path(), locale)
+
+    def link(self, url: str) -> str:
+        """Адрес страницы сайта (url('/…')) на языке этой страницы — для разметки."""
+        locale = self.locale
+
+        if self.locales is not None and locale not in self.locales:
+            locale = locales.DEFAULT
+
+        path = url[len(self.root) :] if url.startswith(self.root) else url
+
+        return locales.url(self.root, path or "/", locale)
 
     def get_alternates(self) -> dict[str, str]:
         path = self._path()

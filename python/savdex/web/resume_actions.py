@@ -163,8 +163,8 @@ CURRENCIES = ("UZS", "USD", "EUR", "CNY", "TRY", "RUB", "KZT")
 JSON_FIELDS = ("employment", "schedule", "skills", "jobs", "education", "languages")
 
 
-def _exists(table: str) -> Check:
-    """exists:<таблица>,id."""
+def _exists(table: str, where: str = "") -> Check:
+    """exists:<таблица>,id; where — дополнительное условие (например, is_active)."""
 
     def passes(value: Any) -> bool:  # noqa: ANN401
         if isinstance(value, dict | list) or value is None:
@@ -175,7 +175,9 @@ def _exists(table: str) -> Check:
         except ValueError:
             return False
 
-        return bool(_rows(f"select 1 from {table} where id = %s limit 1", [key]))
+        extra = f" and {where}" if where else ""
+
+        return bool(_rows(f"select 1 from {table} where id = %s{extra} limit 1", [key]))
 
     return Check("exists", passes)
 

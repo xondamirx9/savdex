@@ -175,6 +175,11 @@ def на_проверку(причина: str) -> str:
             {"rating": 5, "body": ТЕКСТ},
             ((5, None, None, None, None), ТЕКСТ, False, "published", None, ("4.25", 3)),
         ),
+        # Ноль звёзд у дополнительного критерия — «без оценки», а не ошибка
+        (
+            {"rating": 5, "rating_description": 0, "rating_quality": "0", "body": ТЕКСТ},
+            ((5, None, None, None, None), ТЕКСТ, False, "published", None, ("4.25", 3)),
+        ),
         # Текст обрезается по краям; оценка строкой — число
         (
             {"rating": "2", "body": "  " + ТЕКСТ + "  ", "deal_confirmed": True},
@@ -252,7 +257,7 @@ def на_проверку(причина: str) -> str:
         ({}, {"rating", "body"}),
         ({"rating": 6, "body": "коротко"}, {"rating", "body"}),
         (
-            {"rating": "x", "rating_quality": 0, "body": ТЕКСТ, "deal_confirmed": "yes"},
+            {"rating": "x", "rating_quality": 7, "body": ТЕКСТ, "deal_confirmed": "yes"},
             {"rating", "rating_quality", "deal_confirmed"},
         ),
         ({"rating": 5, "body": ["массив"]}, {"body"}),

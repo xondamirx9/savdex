@@ -363,6 +363,24 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:
+    """
+    Объявление на витрине правится вживую: правка, которую не пропустила бы
+    публикация (заголовок «x», пустое описание, ни цены, ни «договорной»),
+    не сохраняется — иначе её сразу видят покупатели.
+    """
+    if len(str(changes.get("title", "x" * 10)).strip()) < 10:
+        changes.pop("title")
+
+    if len(str(changes.get("description", "x" * 30)).strip()) < 30:
+        changes.pop("description")
+
+    negotiable = changes.get("price_negotiable", listing["price_negotiable"])
+
+    if not negotiable and changes.get("price", listing["price"]) is None:
+        changes.pop("price_negotiable", None)
+
+
 @form()
 def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     """ListingWizardController::autosave (verified, throttle:60,1): черновик без строгости."""
@@ -421,6 +439,9 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     # Очистка поля должна доехать до базы
     if "bundle_price" in data:
         changes["bundle_price"] = data["bundle_price"]
+
+    if listing["status"] == "active":
+        _keep_publishable(listing, changes)
 
     _save(ctx, listing, changes)
 

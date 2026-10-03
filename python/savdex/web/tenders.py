@@ -223,16 +223,13 @@ def _full(row: dict[str, Any], card_: dict[str, Any], parent: str | None) -> dic
 
 def _count_view(ctx: Context, row: dict[str, Any]) -> None:
     """
-    $tender->increment('views_count'): +1 и updated_at, без событий
-    сохранения. Администратор — ещё и строка журнала, как AuditObserver
-    на событии updated.
+    $tender->increment('views_count'): +1 без событий сохранения и без
+    updated_at — просмотр не правка (lastmod карты сайта). Администратор —
+    ещё и строка журнала, как AuditObserver на событии updated.
     """
-    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-
     with allowed_writes("tenders"), connection.cursor() as cursor:
         cursor.execute(
-            "update tenders set views_count = views_count + 1, updated_at = %s where id = %s",
-            [now, row["id"]],
+            "update tenders set views_count = views_count + 1 where id = %s", [row["id"]]
         )
 
     admin = _admin(ctx)
@@ -321,13 +318,13 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
                     "@type": "ListItem",
                     "position": 1,
                     "name": ctx.t("tenders.h1"),
-                    "item": ctx.url("catalog") + "?type=tender",
+                    "item": seo.link(ctx.url("catalog") + "?type=tender"),
                 },
                 {
                     "@type": "ListItem",
                     "position": 2,
                     "name": title,
-                    "item": ctx.url(f"tenders/{row['slug']}"),
+                    "item": seo.get_canonical(),
                 },
             ],
         }

@@ -17,7 +17,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import inertia
+from savdex.web import inertia, locales
 from savdex.web.request import context
 from savdex.web.seo import Seo
 from savdex.web.shared import setting, settings_values
@@ -92,6 +92,8 @@ def show(request: HttpRequest, doc: str) -> HttpResponse:
 
     seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
     seo.title(title(doc)).description(content["intro"]).canonical(ctx.url(doc))
+    # Текст документов только на русском: другие языковые версии не выдаются за переводы
+    seo.locales = [locales.DEFAULT]
 
     return inertia.render(
         ctx,

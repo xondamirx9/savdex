@@ -196,6 +196,25 @@ def test_тариф_из_регистрации_в_url_intended(сайт):
     assert ответ["status"] == 200 and "billing?plan=" not in итог["payload"]
 
 
+def test_вход_с_возвратом(сайт):
+    """?back= — гость шёл в избранное или к отклику: вернётся туда же, но только на свой сайт."""
+    import json
+
+    for back, ждём in (
+        ("/en/listing/cement-m500", "/en/listing/cement-m500"),
+        ("/catalog?category=3", "/catalog?category=3"),
+        ("//evil.example/x", None),
+        ("/\\evil.example", None),
+        ("https://evil.example/", None),
+    ):
+        адрес_входа = "/login?back=" + back.replace("?", "%3F").replace("&", "%26")
+        _, итог = зайти(сайт, адрес_входа, сессия())
+        # Ключ с точкой у Laravel — вложенный: {"url": {"intended": …}}
+        сохранено = (json.loads(итог["payload"]).get("url") or {}).get("intended")
+
+        assert сохранено == (None if ждём is None else сайт + ждём), back
+
+
 @pytest.mark.parametrize("path", ["/login", "/register", "/forgot-password", "/reset-password/x"])
 def test_вошедший_уходит_на_главную(сайт, path):
     uid = учётка("guest-in@savdex.uz")

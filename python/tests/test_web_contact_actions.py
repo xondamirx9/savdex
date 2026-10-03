@@ -150,9 +150,7 @@ def test_статус_и_заметка(сайт, body, строка, ошибк
         assert итог["база"][0][5] is False
 
     if body == {"note": ["массив"]} and prefix:
-        assert данные["errors"]["default"]["messages"]["note"] == [
-            "The note field must be a string."
-        ]
+        assert данные["errors"]["default"]["messages"]["note"] == ["This field must be a string."]
 
 
 @pytest.mark.parametrize(

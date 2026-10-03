@@ -389,10 +389,8 @@ def _адрес_нового(title: str) -> str:
         (
             "/en",
             {
-                "title": ["The title field must be at least 3 characters."],
-                "jobs.0.position": [
-                    "The jobs.0.position field is required when jobs.0.company is present."
-                ],
+                "title": ["This field must be at least 3 characters."],
+                "jobs.0.position": ["This field is required when jobs.0.company is present."],
             },
         ),
         # На узбекском — свои короткие тексты, без имени поля

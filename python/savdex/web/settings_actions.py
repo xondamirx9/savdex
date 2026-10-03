@@ -19,10 +19,10 @@ import string
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_cache
-from savdex.web import eloquent
+from savdex.web import eloquent, locales, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows
-from savdex.web.forms import _store, action, back, flash, input_of, invalid
+from savdex.web.forms import _store, action, back, flash, input_of, invalid, previous
 from savdex.web.validation import validate
 
 #: SettingsController::profile — тот же шаблон, что у регистрации
@@ -61,9 +61,23 @@ def profile(request: HttpRequest) -> HttpResponse:
 
     eloquent.save(ctx, "users", user, changes, section="users", model="User")
     _store(ctx).put("locale", data["locale"])
-    flash(ctx, "success", ctx.t("messages.settings.profile_saved"))
 
-    return back(ctx)
+    if data["locale"] == ctx.locale:
+        flash(ctx, "success", ctx.t("messages.settings.profile_saved"))
+
+        return back(ctx)
+
+    # Язык сменили — на ту же страницу, но на новом языке: back() вёл на
+    # старый префикс, и тот перезаписывал только что сохранённый язык
+    flash(ctx, "success", ui.t("messages.settings.profile_saved", data["locale"]))
+    came_from = previous(ctx)
+    path = came_from[len(ctx.root) :] if came_from.startswith(ctx.root) else "/cabinet/settings"
+    response = HttpResponseRedirect(locales.switch_url(ctx.root, path or "/", data["locale"]))
+
+    if ctx.request.headers.get("X-Inertia") and ctx.request.method in ("PUT", "PATCH", "DELETE"):
+        response.status_code = 303
+
+    return response
 
 
 # ── Telegram ─────────────────────────────────────────────────────────

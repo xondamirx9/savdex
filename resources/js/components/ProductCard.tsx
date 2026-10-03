@@ -105,7 +105,7 @@ function FavButton({ id }: { id: number }) {
                 e.stopPropagation();
 
                 if (!auth?.user) {
-                    router.visit(routes.login);
+                    router.visit(routes.loginBack());
 
                     return;
                 }

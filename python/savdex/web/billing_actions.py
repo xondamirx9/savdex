@@ -289,7 +289,9 @@ def order(request: HttpRequest) -> HttpResponse:
         return back(ctx)
 
     found = _rows(
-        f"select * from {'plans' if plan_order else 'credit_packs'} where id = %s", [target]
+        # Снятый с продажи тариф или пакет не продаётся и по прямой ссылке
+        f"select * from {'plans' if plan_order else 'credit_packs'} where id = %s and is_active",
+        [target],
     )
 
     if not found:

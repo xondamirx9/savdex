@@ -205,7 +205,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         "headline": card["title"],
         "description": card["excerpt"],
         "author": {"@type": "Organization", "name": "SAVDEX"},
-        "mainEntityOfPage": ctx.url(f"news/{slug}"),
+        "mainEntityOfPage": seo.get_canonical(),
     }
     seo.schema({k: v for k, v in article.items() if v})
 

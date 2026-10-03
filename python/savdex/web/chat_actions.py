@@ -130,6 +130,11 @@ def send_message(ctx: Context, thread: dict[str, Any], company: dict[str, Any], 
     if cid not in (thread["buyer_company_id"], thread["seller_company_id"]):
         raise ChatRejectedError(ctx.t("messages.chat.not_yours"))
 
+    # Заблокированная компания не пишет никому — ни в старых разговорах,
+    # ни новыми откликами (в транзакции: открытый разговор откатится)
+    if company.get("status") == "blocked":
+        raise ChatRejectedError(ctx.t("messages.chat.company_blocked"))
+
     body = mask_contacts(_php_trim(text))
 
     if body == "":

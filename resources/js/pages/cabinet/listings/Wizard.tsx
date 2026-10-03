@@ -85,12 +85,14 @@ const TIPS = ['brand', 'photos', 'quality', 'price'];
 export default function Wizard({ listing, categories, slots, tagOptions }: Props) {
     const [step, setStep] = useState(listing.step);
     const [savedAgo, setSavedAgo] = useState<string | null>(null);
+    // Автосохранение отклонено (ошибка ввода, сеть) — честно «не сохранено»
+    const [saveFailed, setSaveFailed] = useState(false);
     // Список вариантов обновляется с каждым автосохранением:
     // заголовок поменялся — предложения пересобрались
     const [tagChoices, setTagChoices] = useState<string[]>(tagOptions);
     const { confirm, dialog } = useConfirm();
 
-    const { data, setData, errors, processing, post } = useForm({
+    const { data, setData, errors, setError, clearErrors, processing, post } = useForm({
         type: listing.type,
         parent_id: listing.parent_id,
         category_id: listing.category_id,
@@ -126,28 +128,58 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
      * набора текста сбрасывала бы курсор и позицию прокрутки.
      */
     const payload = useRef(data);
-    payload.current = data;
+
+    /*
+     * Исправленное поле больше не красное: ошибка снимается, как только
+     * поле изменили, а не висит до следующей публикации.
+     */
+    useEffect(() => {
+        const changed = (Object.keys(data) as (keyof typeof data)[]).filter((k) => data[k] !== payload.current[k]);
+        if (changed.length) clearErrors(...changed);
+        payload.current = data;
+    }, [data, clearErrors]);
 
     const save = useCallback(async () => {
         const token = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1];
 
-        const res = await fetch(localize(`/cabinet/listings/${listing.id}/autosave`), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
-            },
-            body: JSON.stringify({ ...payload.current, step }),
-        });
+        let res: Response;
 
-        if (res.ok) {
-            setSavedAgo(new Date().toLocaleTimeString(numberLocale(), { hour: '2-digit', minute: '2-digit' }));
-
-            const body = (await res.json()) as { tag_options?: string[] };
-            if (body.tag_options) setTagChoices(body.tag_options);
+        try {
+            res = await fetch(localize(`/cabinet/listings/${listing.id}/autosave`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
+                },
+                body: JSON.stringify({ ...payload.current, step }),
+            });
+        } catch {
+            setSaveFailed(true);
+            return;
         }
-    }, [listing.id, step]);
+
+        const body = (await res.json().catch(() => ({}))) as {
+            tag_options?: string[];
+            errors?: Record<string, string[]>;
+        };
+
+        if (!res.ok) {
+            // Ошибки ввода — под полями, как при публикации
+            setSaveFailed(true);
+            if (body.errors) {
+                setError(
+                    Object.fromEntries(Object.entries(body.errors).map(([field, list]) => [field, list[0]])) as never,
+                );
+            }
+            return;
+        }
+
+        setSaveFailed(false);
+        setSavedAgo(new Date().toLocaleTimeString(numberLocale(), { hour: '2-digit', minute: '2-digit' }));
+        if (body.tag_options) setTagChoices(body.tag_options);
+    }, [listing.id, step, setError]);
 
     useEffect(() => {
         const id = setInterval(save, 20_000);
@@ -186,7 +218,11 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                становилось нечем — а именно этого от неё и ждут */
             actions={
                 <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-                    {savedAgo && (
+                    {saveFailed ? (
+                        <span className="badge badge-warning" role="status">
+                            {t('cabinet.wizard.save_failed')}
+                        </span>
+                    ) : savedAgo && (
                         <span className="badge badge-neutral">
                             <Check aria-hidden className="size-3.5" />{' '}
                             {t('cabinet.wizard.saved_at', { time: savedAgo })}
@@ -268,6 +304,10 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                     placeholder={t('cabinet.wizard.pick_category')}
                                     options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
                                 />
+                                {/* Раздел не выбран — подкатегории ещё нет, ошибка видна здесь */}
+                                {!parent && errors.category_id && (
+                                    <p className="hint" style={{ color: 'var(--danger)' }}>{errors.category_id}</p>
+                                )}
                             </div>
 
                             {parent && isOther && (

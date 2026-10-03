@@ -50,7 +50,8 @@ router.on('before', (event) => {
 });
 
 void createInertiaApp({
-    title: (title) => (title ? `${title} · ${appName}` : appName),
+    // «О площадке SAVDEX» — без второго «· SAVDEX», как в заголовке с сервера
+    title: (title) => (!title ? appName : title.includes(appName) ? title : `${title} · ${appName}`),
     resolve: resolvePage,
     setup({ el, App, props }) {
         if (!el) {

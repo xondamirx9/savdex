@@ -539,7 +539,7 @@ def test_английские_тексты_ошибок(сайт):
         method="PATCH",
     )
 
-    assert "The selected notifications.0.event is invalid." in итог["сессия"]["payload"]
+    assert "The selected value is invalid." in итог["сессия"]["payload"]
     assert "must be true or false" in итог["сессия"]["payload"]
 
 

@@ -325,7 +325,8 @@ def _save_review(ctx: Context, data: dict[str, Any]) -> tuple[bool, str]:
         return True, ctx.t("platform_reviews.published")
 
     if not flags:
-        return True, ctx.t("messages.review.sent_to_moderation")
+        # Отзыв о площадке — не на странице компании, а на /reviews
+        return True, ctx.t("messages.review.platform_sent_to_moderation")
 
     return True, ctx.t("messages.review.sent_flagged", reason=flags[0].lower())
 

@@ -20,6 +20,9 @@ from savdex.web import locales, phpquery, vite
 from savdex.web.seo import Seo, php_json
 from savdex.web.shared import Context, appearance_logo, settings_values, shared
 
+#: og:locale — язык_СТРАНА, как ждут Facebook и Telegram
+OG_LOCALES = {"ru": "ru_RU", "en": "en_US", "uz": "uz_UZ", "tr": "tr_TR", "zh": "zh_CN"}
+
 
 def php_escape(text: object) -> str:
     """{{ }} Blade — htmlspecialchars с ENT_QUOTES."""
@@ -197,7 +200,7 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
     head += [
         f'<meta property="og:type" content="{php_escape(seo.type)}">',
         '<meta property="og:site_name" content="SAVDEX">',
-        f'<meta property="og:locale" content="{php_escape(ctx.locale.replace("-", "_"))}">',
+        f'<meta property="og:locale" content="{OG_LOCALES.get(ctx.locale, ctx.locale)}">',
         f'<meta property="og:title" content="{title}">',
         f'<meta property="og:url" content="{php_escape(seo.get_canonical())}">',
     ]

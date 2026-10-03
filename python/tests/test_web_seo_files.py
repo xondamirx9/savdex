@@ -17,7 +17,7 @@ import pytest
 
 from .factories import it_задача, категория, компания, объявление
 from .pg_admin import sql, нужна_база, свежая_база
-from .web_site import адрес, открыть
+from .web_site import адрес, открыть, шапка
 
 pytestmark = нужна_база
 
@@ -79,6 +79,8 @@ def test_robots(сайт, path):
 
     assert "AhrefsBot" in текст_ and "Disallow: /cabinet" in текст_
     assert f"Sitemap: {сайт}/sitemap.xml" in текст_
+    # Служебные адреса закрыты и под префиксом языка
+    assert "Disallow: /en/cabinet" in текст_ and "Disallow: /uz/login" in текст_
 
 
 def test_карта_список(сайт):
@@ -121,6 +123,12 @@ def test_карта_статичные_страницы(сайт):
     assert found[:5] == ["", "/uz", "/en", "/zh", "/tr"]
     for path in ("/catalog", "/companies", "/about", "/it-services"):
         assert set(на_всех_языках(path)) <= set(found), path
+    # Документы только на русском — без чужих языковых версий
+    assert "/terms" in found and "/en/terms" not in found
+
+
+def test_документ_на_русском_канонический(сайт):
+    assert f'<link rel="canonical" href="{сайт}/terms">' in _мета(сайт, "/en/terms")
 
 
 def test_карта_время_изменения(сайт):
@@ -233,3 +241,63 @@ def test_превью_из_кэша(картинки, сайт):
         f"/storage/listings/{номер}/{файл.name}"
     )
     assert файл.read_bytes() == b"cached"
+
+
+# ── Шапка страниц ───────────────────────────────────────────────────
+
+
+def _мета(сайт: str, path: str) -> list[str]:
+    ответ = открыть(сайт, path)
+    assert ответ["status"] == 200, path
+
+    return шапка(ответ["body"])
+
+
+def test_рубрика_индексируется_под_своим_адресом(сайт):
+    """Страница рубрики из карты сайта — с собственным canonical и без noindex."""
+    cat = sql("select id from categories where slug = 'cement'")[0][0]
+    теги = _мета(сайт, f"/en/catalog?category={cat}")
+
+    assert f'<link rel="canonical" href="{сайт}/en/catalog?category={cat}">' in теги
+    assert not any('name="robots"' in t for t in теги)
+    # С другим фильтром — по-прежнему служебная выборка
+    assert '<meta name="robots" content="noindex, follow">' in _мета(
+        сайт, f"/en/catalog?category={cat}&verified=1"
+    )
+
+
+def test_вход_не_индексируется(сайт):
+    for path in ("/login", "/en/register", "/uz/forgot-password"):
+        assert '<meta name="robots" content="noindex, follow">' in _мета(сайт, path), path
+
+
+def test_og_locale_с_регионом(сайт):
+    assert '<meta property="og:locale" content="en_US">' in _мета(сайт, "/en/about")
+    assert '<meta property="og:locale" content="ru_RU">' in _мета(сайт, "/about")
+
+
+def test_заголовок_без_второго_savdex(сайт):
+    [заголовок] = [t for t in _мета(сайт, "/about") if t.startswith("<title")]
+
+    assert заголовок.count("SAVDEX") == 1, заголовок
+
+
+def test_разметка_объявления_на_языке_страницы(сайт):
+    """Ссылки JSON-LD — с префиксом языка; пустого списка картинок нет."""
+    sql("update listings set title_i18n = '{\"en\": \"Cement M500 wholesale\"}' where slug = 'l-1'")
+    ответ = открыть(сайт, "/en/listing/l-1")
+    [разметка] = re.findall(
+        r'<script type="application/ld\+json">(.*?)</script>', ответ["body"], re.S
+    )
+
+    assert f"{сайт}/en/listing/l-1" in разметка.replace("\\/", "/")
+    assert f'{сайт}/listing/l-1"' not in разметка.replace("\\/", "/")
+    assert "Cement M500 wholesale" in разметка
+    assert '"image":[]' not in разметка
+
+
+def test_просмотр_не_меняет_дату_изменения(сайт):
+    before = sql("select updated_at from listings where slug = 'l-3'")
+    открыть(сайт, "/listing/l-3")
+
+    assert sql("select updated_at from listings where slug = 'l-3'") == before

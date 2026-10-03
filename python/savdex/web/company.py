@@ -447,7 +447,9 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     )
     seo.canonical(url)
     seo.image(card["logo"])
-    seo.type = "profile"
+    # og:type profile — страница человека; у компании — website
+    seo.type = "website"
+    url = seo.link(url)
 
     schema: dict[str, Any] = {
         "@type": "Organization",
@@ -488,7 +490,7 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
                     "@type": "ListItem",
                     "position": 1,
                     "name": ctx.t("companies_page.title"),
-                    "item": ctx.url("companies"),
+                    "item": seo.link(ctx.url("companies")),
                 },
                 {"@type": "ListItem", "position": 2, "name": c["name"], "item": url},
             ],

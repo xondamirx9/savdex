@@ -4,7 +4,11 @@
  */
 export const EMPLOYEE_RANGES = ['1-10', '10-50', '50-100', '100-500', '500+'];
 
-export const COMPANY_TYPES = ['manufacturer', 'distributor', 'trader', 'retailer'];
+/**
+ * Как справочник company_types (Company::FALLBACK_TYPES). «retailer» — для
+ * компаний, заведённых до справочника: их тип не должен читаться «не указан».
+ */
+export const COMPANY_TYPES = ['manufacturer', 'importer', 'distributor', 'trader', 'service', 'retailer'];
 
 /**
  * Заполнено ли поле: Company::profileValue на сервере.

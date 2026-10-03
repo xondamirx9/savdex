@@ -25,7 +25,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 
 from savdex import laravel_session
 from savdex.web import locales, phpquery, session
@@ -374,6 +374,14 @@ def invalid(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
     ValidationException у Laravel: назад, ввод (без паролей) — в
     _old_input, ошибки — в сессию (ViewErrorBag в виде JSON).
     """
+    from savdex.web.request import _expects_json
+
+    # Запрос fetch за JSON (автосохранение мастера) — 422 с ошибками, как
+    # у Laravel: редирект на HTML отдавал «сохранено», ничего не сохранив
+    if _expects_json(ctx.request) and not ctx.request.headers.get("X-Inertia"):
+        first = next((m for messages in errors.values() for m in messages), "")
+        return JsonResponse({"message": first, "errors": errors}, status=422)
+
     store = _store(ctx)
     old = {k: v for k, v in input_of(ctx.request).items() if k not in DONT_FLASH}
     store.flash("_old_input", old)
