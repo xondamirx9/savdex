@@ -321,6 +321,8 @@ def laravel_input(qs: str) -> Array:
             if isinstance(value, dict):
                 out[key] = clean(value, name + ".")
             elif isinstance(value, str):
+                # Нулевой байт PostgreSQL в тексте не примет — прочь
+                value = value.replace("\x00", "")
                 trimmed = value if name in _NEVER_TRIM else str_trim(value)
                 out[key] = trimmed if trimmed != "" else None
             else:

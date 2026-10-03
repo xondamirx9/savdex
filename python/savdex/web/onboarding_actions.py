@@ -199,9 +199,7 @@ def _complete(ctx: Context, company: dict[str, Any]) -> HttpResponse:
             [company["id"]],
         )
     ]
-    merged = list(
-        dict.fromkeys([*current, *(int(float(str(c))) for c in fields.get("categories") or [])])
-    )[:5]
+    merged = list(dict.fromkeys([*current, *(_int(c) for c in fields.get("categories") or [])]))[:5]
     _sync_to(company["id"], current, merged)
     flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
 
@@ -265,8 +263,8 @@ REVIEW_RULES: dict[str, list[str | Check]] = {
 
 
 def _int(value: Any) -> int:  # noqa: ANN401
-    """(int) у PHP для прошедшего integer: «5», 5 или 5.0."""
-    return int(float(str(value)))
+    """(int) у PHP для прошедшего integer: «5», 5, 5.0 или true."""
+    return int(value) if isinstance(value, bool) else int(float(str(value)))
 
 
 def _save_review(ctx: Context, data: dict[str, Any]) -> tuple[bool, str]:

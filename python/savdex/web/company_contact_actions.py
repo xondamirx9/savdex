@@ -141,6 +141,11 @@ def store(request: HttpRequest) -> HttpResponse:
         "select count(*) as n from company_contacts where company_id = %s", [company["id"]]
     )[0]["n"]
     sort_order = valid.get("sort_order")
+
+    # integer пропускает true — в smallint идёт число
+    if isinstance(sort_order, bool):
+        sort_order = int(sort_order)
+
     fields = {
         "label": valid.get("label"),
         "contact_person": valid.get("contact_person"),
@@ -201,6 +206,12 @@ def update(request: HttpRequest, contact_id: str) -> HttpResponse:
 
     if "is_public" in valid:
         valid["is_public"] = bool(_php_boolean(valid["is_public"]))
+
+    # Пустой порядок — без изменений: в базе он обязателен (было 500)
+    if "sort_order" in valid and valid["sort_order"] is None:
+        del valid["sort_order"]
+    elif isinstance(valid.get("sort_order"), bool):
+        valid["sort_order"] = int(valid["sort_order"])
 
     eloquent.save(ctx, "company_contacts", contact, valid, section=None, model="")
     flash(ctx, "success", ctx.t("messages.contact.updated"))

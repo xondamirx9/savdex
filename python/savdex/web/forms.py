@@ -53,7 +53,10 @@ class RefusedError(Exception):
 
 
 def _clean(value: Any, name: str) -> Any:  # noqa: ANN401
-    """TrimStrings и ConvertEmptyStringsToNull над деревом ввода."""
+    """
+    TrimStrings и ConvertEmptyStringsToNull над деревом ввода; нулевой
+    байт выбрасывается — PostgreSQL не примет его в тексте (было 500).
+    """
     if isinstance(value, dict):
         return {k: _clean(v, f"{name}.{k}" if name else str(k)) for k, v in value.items()}
 
@@ -61,6 +64,7 @@ def _clean(value: Any, name: str) -> Any:  # noqa: ANN401
         return [_clean(v, f"{name}.{i}" if name else str(i)) for i, v in enumerate(value)]
 
     if isinstance(value, str):
+        value = value.replace("\x00", "")
         trimmed = value if name in NEVER_TRIM else _trim(value)
 
         return None if trimmed == "" else trimmed

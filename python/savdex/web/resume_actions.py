@@ -339,8 +339,16 @@ def update(request: HttpRequest) -> HttpResponse:
             fields[key] = _bool(fields[key])
 
     fields["experience_months"] = experience_months(fields["jobs"])
+
+    # Валюта в базе обязательна: пустая — прежняя (у нового — умолчание)
+    if "currency" in fields and fields["currency"] is None:
+        del fields["currency"]
+
     resume = _own(ctx)
     now = _stamp(eloquent.now())
+
+    if resume is None:
+        resume = _restore_trashed(ctx, now)
 
     if resume is None:
         _insert(ctx, fields, now)
@@ -359,6 +367,36 @@ def _value(key: str, value: Any) -> Any:  # noqa: ANN401
         if value is None and key in JSON_FIELDS
         else (_php_json(value) if key in JSON_FIELDS else value)
     )
+
+
+def _restore_trashed(ctx: Context, now: str) -> dict[str, Any] | None:
+    """
+    Резюме у человека одно (resumes_user_id_unique): удалённое прежде
+    возвращается из корзины и правится, а не вставляется второе — иначе
+    сохранение падало. Снова — черновиком; заблокированное модератором
+    остаётся заблокированным: удалением блокировку не обойти.
+    """
+    assert ctx.user is not None
+    rows = _rows(
+        "select * from resumes where user_id = %s and deleted_at is not null order by id limit 1",
+        [ctx.user["id"]],
+    )
+
+    if not rows:
+        return None
+
+    resume = rows[0]
+    status = BLOCKED if resume["status"] == BLOCKED else "draft"
+
+    with allowed_writes("resumes"), connection.cursor() as cursor:
+        cursor.execute(
+            # Фото удалено с диска вместе с резюме — ссылки на него не оставляем
+            "update resumes set deleted_at = null, status = %s, photo_path = null, "
+            "updated_at = %s where id = %s",
+            [status, now, resume["id"]],
+        )
+
+    return {**resume, "deleted_at": None, "status": status, "photo_path": None}
 
 
 def _insert(ctx: Context, fields: dict[str, Any], now: str) -> None:

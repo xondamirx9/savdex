@@ -19,7 +19,12 @@ import os
 from collections.abc import Callable
 from urllib.parse import urlsplit
 
-from django.http import HttpRequest, HttpResponse, HttpResponsePermanentRedirect
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponsePermanentRedirect,
+)
 from django.http import HttpResponseRedirect as Redirect
 
 log = logging.getLogger("savdex")
@@ -88,6 +93,22 @@ def server_error(request: HttpRequest) -> HttpResponse:
 
 def _canonical() -> str:
     return (os.environ.get("APP_URL") or "").rstrip("/")
+
+
+class NulPathMiddleware:
+    """
+    Нулевой байт в пути (/company/%00) — 400 сразу: адрес такой не бывает,
+    а дальше он дошёл бы до PostgreSQL и уронил бы запрос с 500.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if "\x00" in request.path_info:
+            return HttpResponseBadRequest("Bad Request", content_type="text/plain; charset=utf-8")
+
+        return self.get_response(request)
 
 
 class CanonicalHostMiddleware:

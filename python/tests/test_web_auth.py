@@ -17,7 +17,6 @@ status из сессии показывается один раз.
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from collections.abc import Callable, Iterator
@@ -33,7 +32,6 @@ from .web_site import (
     СЕССИЯ,
     адрес,
     завести,
-    из_django,
     кука,
     куки_ответа,
     открыть,
@@ -146,23 +144,11 @@ def test_гостевые_страницы(сайт, path, component, locale):
     assert ('"locale":"' + locale + '"' in итог["payload"]) is (locale != "ru")
 
 
-def ошибка_500(сайт: str, path: str) -> None:
-    """
-    «Array to string conversion», как у Laravel: страница 500 с кодом
-    обращения (md5 сообщения и секунды — первые 8 знаков).
-    """
-    сессия()()
-    ответ = из_django(сайт, path, {СЕССИЯ: кука(СЕССИЯ, SID)})
-    стр = страница(ответ["body"])
-
-    assert ответ["status"] == 500
-    assert стр["component"] == "Error"
-    assert стр["props"]["status"] == 500
-    assert re.fullmatch(r"[0-9a-f]{8}", стр["props"]["reference"])
-
-
 def test_сброс_пароля_почта_массивом(сайт):
-    ошибка_500(сайт, "/reset-password/abc123?email[]=x")
+    """Почта массивом (?email[]=…) — как пустая, а не страница 500."""
+    ответ, _ = зайти(сайт, "/reset-password/abc123?email[]=x", сессия())
+
+    assert ответ["status"] == 200 and пропсы(ответ)["email"] == ""
 
 
 def test_сброс_пароля_токен_и_почта(сайт):
@@ -205,8 +191,9 @@ def test_тариф_из_регистрации_в_url_intended(сайт):
         # json_encode экранирует «/»
         assert ("billing?plan=" in итог["payload"]) is ждём, path
 
-    # Массив вместо строки — у Laravel ошибка 500
-    ошибка_500(сайт, "/register?plan[]=x")
+    # Массив вместо строки — как без тарифа, а не страница 500
+    ответ, итог = зайти(сайт, "/register?plan[]=x", сессия())
+    assert ответ["status"] == 200 and "billing?plan=" not in итог["payload"]
 
 
 @pytest.mark.parametrize("path", ["/login", "/register", "/forgot-password", "/reset-password/x"])
@@ -363,8 +350,10 @@ def test_отзыв_о_площадке(сайт):
     sql("update users set email_verified_at = null where id = %s", [uid])
     assert пропсы(зайти(сайт, "/reviews/new", сессия(uid))[0])["blocked"]
 
+    # Заблокированного блокировка выводит из сессии — его уводят на вход
     sql("update users set email_verified_at = now(), status = 'blocked' where id = %s", [uid])
-    assert пропсы(зайти(сайт, "/reviews/new", сессия(uid))[0])["blocked"]
+    ответ = открыть(сайт, "/reviews/new", {СЕССИЯ: кука(СЕССИЯ, SID)})
+    assert ответ["status"] == 302 and ответ["headers"]["location"] == сайт + "/login"
 
     company = компания(status="blocked")
     sql("update users set status = 'active', company_id = %s where id = %s", [company, uid])

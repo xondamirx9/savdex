@@ -157,6 +157,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Нулевой байт в пути — 400, а не 500 из базы
+    "savdex.web.fallback.NulPathMiddleware",
     # «База отвечает медленно» — полсекунды запросов на странице (как у Laravel)
     "savdex.web.slowdb.SlowDatabaseMiddleware",
     # Служебный адрес Render — на свой домен (CanonicalHost, этап 8)

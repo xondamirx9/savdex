@@ -35,6 +35,10 @@ _LABELS = {
 }
 
 
+#: Самая дальняя страница, которую имеет смысл открыть
+MAX_PAGE = 1_000_000
+
+
 def current_page(ctx: Context, name: str = "page") -> int:
     """PaginationState: currentPageResolver."""
     value = laravel_input(ctx.query).get(name)
@@ -44,7 +48,9 @@ def current_page(ctx: Context, name: str = "page") -> int:
 
     page = int(value.strip())
 
-    return page if 1 <= page < 2**63 else 1
+    # Выше миллиона страниц не бывает, а (page − 1) × per_page не должен
+    # переполнить OFFSET в базе (bigint) — иначе 500
+    return page if 1 <= page <= MAX_PAGE else 1
 
 
 @dataclass

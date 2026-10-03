@@ -203,9 +203,15 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
             "category_id": ["required", _exists("categories")],
             "title": ["required", "string", "min:10", "max:90"],
             "description": ["required", "string", "min:30", "max:5000"],
-            "price": ["nullable", "numeric", "min:0"],
-            "bundle_price": ["nullable", "numeric", "min:0"],
+            "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+            "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
             "price_negotiable": ["boolean"],
+            # Как у автосохранения: без правил мусор доходил до базы (500)
+            "currency": ["nullable", "in:" + ",".join(CURRENCIES)],
+            "unit": ["nullable", "string", "max:20"],
+            "min_order": ["nullable", "integer", "min:0", "max:2147483647"],
+            "delivery_terms": ["nullable", "string", "max:500"],
+            "payment_terms": ["nullable", "string", "max:500"],
         },
         ctx.locale,
         {
@@ -242,6 +248,14 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     )  # fmt: skip
     now = eloquent.now()
     changes = {k: data[k] for k in fields if k in data}
+
+    # Валюта обязательна в базе: пустая — остаётся прежней
+    if changes.get("currency") is None:
+        changes.pop("currency", None)
+
+    if isinstance(changes.get("min_order"), bool):
+        changes["min_order"] = int(changes["min_order"])
+
     changes.update(
         price_negotiable=negotiable,
         status="active",
@@ -275,7 +289,17 @@ CURRENCIES = ("UZS", "USD", "EUR", "CNY", "TRY", "RUB", "KZT")
 
 
 def _attribute(listing_id: int, key: str, value: str | None) -> None:
-    """$listing->attributes(): updateOrCreate по ключу; None — удалить строку."""
+    """
+    $listing->attributes(): updateOrCreate по ключу; None — удалить строку.
+    Ключ и значение — до 255 символов (ширина колонок): длиннее ключ не
+    сохраняется, значение обрезается — иначе запись падала с 500.
+    """
+    if len(key) > 255:
+        return
+
+    if value is not None:
+        value = value[:255]
+
     found = _rows(
         "select * from listing_attributes where listing_id = %s and key = %s order by id limit 1",
         [listing_id, key],
@@ -368,7 +392,7 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
         "currency": ["nullable", "in:" + ",".join(CURRENCIES)],
         "unit": ["nullable", "string", "max:20"],
         "price_negotiable": ["nullable", "boolean"],
-        "min_order": ["nullable", "integer", "min:0"],
+        "min_order": ["nullable", "integer", "min:0", "max:2147483647"],
         "delivery_terms": ["nullable", "string", "max:500"],
         "payment_terms": ["nullable", "string", "max:500"],
         "step": ["nullable", "integer", "between:1,4"],

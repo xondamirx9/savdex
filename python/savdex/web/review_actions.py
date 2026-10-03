@@ -258,7 +258,8 @@ def _create(ctx: Context, target: dict[str, Any], data: dict[str, Any]) -> tuple
     body = _php_trim(str(data["body"]))
     flags = screening.reasons(body)
     needs_review = bool(flags) or _premoderation()
-    rating = int(float(str(data["rating"])))
+    raw = data["rating"]
+    rating = int(raw) if isinstance(raw, bool) else int(float(str(raw)))
 
     try:
         with transaction.atomic():
