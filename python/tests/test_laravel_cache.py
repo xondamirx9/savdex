@@ -45,3 +45,28 @@ def test_кэш_в_памяти_сбрасывать_нечего(monkeypatch):
     monkeypatch.setenv("CACHE_STORE", "array")
 
     assert laravel_cache.forget("settings.all") is True
+
+
+def test_код_из_письма_при_любом_кэше(settings, tmp_path, monkeypatch):
+    """
+    Код регистрации и подтверждения почты Django пишет файлом сам —
+    и читает так же, какой бы CACHE_STORE ни стоял: иначе при «database»
+    любой код из письма отклонялся бы как неверный.
+    """
+    from savdex.web import register_code, verification
+
+    settings.LARAVEL_ROOT = tmp_path
+    monkeypatch.setenv("CACHE_STORE", "database")
+
+    code = register_code.issue("aziz@reg.savdex.uz")
+    assert (
+        register_code.check("aziz@reg.savdex.uz", "000000" if code != "000000" else "111111")
+        is False
+    )
+    assert register_code.check("aziz@reg.savdex.uz", code) is True
+    # Одноразовый: второй раз тот же код не проходит
+    assert register_code.check("aziz@reg.savdex.uz", code) is False
+
+    code = verification.issue(7)
+    assert verification.check(7, code) is True
+    assert verification.check(7, code) is False

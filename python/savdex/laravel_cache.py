@@ -177,9 +177,14 @@ def _payload(raw: bytes) -> tuple[object, int] | None:
     return None if time.time() >= expire else (value, expire)
 
 
-def get(key: str) -> object:
-    """Cache::get($key): значение или None — нет, истёк, не файловое хранилище."""
-    if not is_file_store():
+def get(key: str, *, any_store: bool = False) -> object:
+    """
+    Cache::get($key): значение или None — нет, истёк, не файловое хранилище.
+
+    any_store — читать файл при любом CACHE_STORE: так читаются записи,
+    которые пишет сам Django (put пишет файл всегда), — коды из писем.
+    """
+    if not any_store and not is_file_store():
         return None
 
     try:
@@ -188,6 +193,14 @@ def get(key: str) -> object:
         return None
 
     return None if payload is None else payload[0]
+
+
+def forget_file(key: str) -> None:
+    """Удалить запись, которую Django сам положил файлом (put), при любом CACHE_STORE."""
+    try:
+        file_path(key).unlink(missing_ok=True)
+    except OSError:
+        log.exception("Запись кэша «%s» не удалена", key)
 
 
 def _write(path: Path, content: bytes) -> None:
