@@ -19,7 +19,7 @@ from django.db import IntegrityError, connection, transaction
 from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
-from savdex.web import eloquent
+from savdex.web import eloquent, ui
 from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
@@ -181,9 +181,11 @@ def store(request: HttpRequest) -> HttpResponse:
         ctx,
         company,
         "promotion",
-        ctx.t("messages.promo.started_notice", name=kind["name"], title=listing["title"]),
+        lambda locale: ui.t(
+            "messages.promo.started_notice", locale, name=kind["name"], title=listing["title"]
+        ),
         "success",
-        f"{ctx.root}/cabinet/promo",
+        "/cabinet/promo",
     )
     flash(
         ctx,

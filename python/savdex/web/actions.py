@@ -101,6 +101,10 @@ def notification_read(request: HttpRequest, notification_id: str) -> HttpRespons
 
     url = row["url"]
 
+    # Уведомления, записанные раньше полным адресом своего сайта, — тоже переход
+    if url is not None and url.startswith(ctx.root + "/"):
+        url = url[len(ctx.root) :]
+
     return redirect(ctx, url) if url is not None and url.startswith("/") else back(ctx)
 
 

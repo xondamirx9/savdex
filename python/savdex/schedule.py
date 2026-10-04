@@ -161,6 +161,9 @@ def ask_for_reviews(now: datetime, due: datetime, limit: int = 300) -> str:
         "select id, company_id, locale from users u where deleted_at is null "
         "and status = 'active' and is_admin = false and email_verified_at is not null "
         "and created_at <= %s "
+        # Сотрудника заблокированной компании об отзыве не просим
+        "and not exists (select 1 from companies c where c.id = u.company_id "
+        "and c.status = 'blocked') "
         "and not exists (select 1 from platform_reviews p where p.user_id = u.id) "
         "and not exists (select 1 from user_notifications n where n.user_id = u.id "
         "and n.type = 'platform_review_ask') order by id limit %s",
@@ -181,6 +184,8 @@ def ask_for_reviews(now: datetime, due: datetime, limit: int = 300) -> str:
         "select cu.user_id, cu.target_company_id, u.company_id, u.locale, t.slug, t.name "
         "from contact_unlocks cu "
         "join users u on u.id = cu.user_id and u.deleted_at is null and u.status = 'active' "
+        "and not exists (select 1 from companies c where c.id = u.company_id "
+        "and c.status = 'blocked') "
         "join companies t on t.id = cu.target_company_id and t.deleted_at is null "
         "and t.status = 'active' "
         "where cu.user_id is not null and cu.complaint_status is null "

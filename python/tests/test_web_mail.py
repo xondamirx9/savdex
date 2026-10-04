@@ -33,7 +33,7 @@ APP = "https://savdex.uz"
     ("register_code", "tr"): "Doğrulama kodu 481516 — SAVDEX",
     ("register_code", "zh"): "验证码 481516 — SAVDEX",
     ("reset", "ru"): "Восстановление пароля — SAVDEX",
-    ("reset", "en"): "Reset your password",
+    ("reset", "en"): "Reset your password — SAVDEX",
     ("reset", "uz"): "Parolni tiklash — SAVDEX",
     ("reset", "tr"): "Şifre sıfırlama — SAVDEX",
     ("reset", "zh"): "重置密码 — SAVDEX",

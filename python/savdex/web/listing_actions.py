@@ -90,6 +90,11 @@ def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, An
             [*(_stamp(v) for v in dirty.values()), _stamp(now), row["id"]],
         )
 
+    # Ушло с витрины — его продвижения завершаются: показывать уже нечего,
+    # а ограниченное место («ТОП категории») нужно другим
+    if "status" in dirty and row["status"] == ACTIVE:
+        _finish_promotions(row["id"], now)
+
     _journal(
         ctx,
         "updated",
@@ -114,7 +119,20 @@ def delete_listing(ctx: Context, row: dict[str, Any]) -> None:
             [now, now, row["id"]],
         )
 
+    _finish_promotions(row["id"], _now())
     _journal(ctx, "deleted", row, None)
+
+
+def _finish_promotions(listing_id: int, now: datetime) -> None:
+    """Как FinishPromotions, но сразу: показы на момент завершения — эффект за период."""
+    with allowed_writes("promotions"), connection.cursor() as cursor:
+        cursor.execute(
+            "update promotions p set status = 'finished', active_key = null, "
+            "impressions_after = coalesce(l.impressions_count, p.impressions_before), "
+            "updated_at = %s from listings l where l.id = p.listing_id "
+            "and p.listing_id = %s and p.status = 'active'",
+            [_stamp(now), listing_id],
+        )
 
 
 def _journal(
@@ -201,6 +219,21 @@ def _in(text: Text | None, locale: str) -> str | None:
     return text(locale) if callable(text) else text
 
 
+def relative_url(url: str) -> str:
+    """
+    Адрес уведомления — путь сайта («/cabinet/listings»), а не полный адрес:
+    переход по уведомлению принимает только пути и добавляет к ним язык
+    читателя, полный адрес вёл назад, никуда.
+    """
+    from urllib.parse import urlsplit
+
+    if url.startswith(("http://", "https://")):
+        parts = urlsplit(url)
+        return (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+
+    return url
+
+
 def _notify_company(
     ctx: Context | None,
     company: dict[str, Any],
@@ -218,10 +251,13 @@ def _notify_company(
 
     # $company->users()->get(): без сортировки — тот же запрос, что у
     # Laravel, отдаёт строки в том же порядке
+    # Заблокированному сотруднику уведомления ни к чему: войти он не может
     users = _rows(
-        "select id, company_id, locale from users where company_id = %s and deleted_at is null",
+        "select id, company_id, locale from users where company_id = %s and deleted_at is null "
+        "and status = 'active'",
         [company["id"]],
     )
+    url = relative_url(url)
     first = min(users, key=lambda u: u["id"]) if users else None
     feed = (first["locale"] if first else None) or "ru"
 
@@ -392,9 +428,9 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
         ctx,
         company,
         "moderation",
-        ctx.t("messages.listing.republished_notice", title=row["title"]),
+        lambda locale: ui.t("messages.listing.republished_notice", locale, title=row["title"]),
         "success",
-        ctx.url("/cabinet/listings"),
+        "/cabinet/listings",
     )
     flash(ctx, "success", ctx.t("messages.listing.republished"))
 

@@ -152,8 +152,22 @@ def approve(ctx: Context, actor: access.Admin, refund: dict[str, Any], note: str
         raise RefundError("Решение по этому возврату уже принято.")
 
     with transaction.atomic():
+        # Счёт под замком: два возврата по одному счёту одобряются по
+        # очереди, и второй видит первый — больше оплаченного не вернуть
+        payments = _rows("select * from payments where id = %s for update", [refund["payment_id"]])
+        fresh = _rows("select status from refunds where id = %s", [refund["id"]])
+
+        if not fresh or fresh[0]["status"] != REQUESTED:
+            raise RefundError("Решение по этому возврату уже принято.")
+
+        if payments and int(refund["amount"]) > refundable(payments[0]):
+            left = refundable(payments[0])
+            raise RefundError(
+                f"По счёту осталось вернуть {money(left, refund['currency']).strip()} — "
+                "этот возврат больше остатка. Отклоните его или заявите заново на остаток."
+            )
+
         _decide(ctx, actor, refund, DONE, note)
-        payments = _rows("select * from payments where id = %s", [refund["payment_id"]])
 
         if payments and refundable(payments[0]) == 0:
             eloquent.save(

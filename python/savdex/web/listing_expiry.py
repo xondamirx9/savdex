@@ -39,7 +39,12 @@ def _with_company(query: str, params: list[Any]) -> list[tuple[Row, Row | None]]
     ids = sorted({row["company_id"] for row in listings})
     companies = {
         c["id"]: c
-        for c in _rows("select * from companies where id = any(%s) and deleted_at is null", [ids])
+        # Заблокированной компании о сроках не пишем: её объявлений и так не видно
+        for c in _rows(
+            "select * from companies where id = any(%s) and deleted_at is null "
+            "and status = 'active'",
+            [ids],
+        )
     }
 
     return [(row, companies.get(row["company_id"])) for row in listings]
@@ -74,12 +79,25 @@ def warn(anchor: datetime) -> int:
     """ExpireListings::warn3DaysBefore: истекает через 3–4 суток от прохода."""
     found = _with_company(
         "select * from listings where deleted_at is null and status = 'active' "
-        "and expires_at is not null and expires_at between %s and %s order by id",
+        # Окно полуоткрытое: срок ровно на границе попадает в один проход, не в два
+        "and expires_at is not null and expires_at >= %s and expires_at < %s order by id",
         [anchor + timedelta(days=3), anchor + timedelta(days=4)],
     )
+    warned = 0
 
     for listing, company in found:
         if company is None:
+            continue
+
+        # Своя ссылка у каждого объявления — по ней видно, что о нём уже
+        # предупредили: повторный проход в тот же день второго не шлёт
+        url = f"/cabinet/listings?status=active#listing-{listing['id']}"
+
+        if _rows(
+            "select 1 from activity_events where company_id = %s and type = 'listing_expiring' "
+            "and url = %s and created_at > %s limit 1",
+            [company["id"], url, anchor - timedelta(days=2)],
+        ):
             continue
 
         _notify_company(
@@ -88,11 +106,12 @@ def warn(anchor: datetime) -> int:
             "listing_expiring",
             partial(ui.t, "messages.listing.expiring_title", title=listing["title"]),
             "warning",
-            "/cabinet/listings",
+            url,
             lambda locale: ui.t("messages.listing.expiring_body", locale),
         )
+        warned += 1
 
-    return len(found)
+    return warned
 
 
 def run(now: datetime | None = None, anchor: datetime | None = None) -> tuple[int, int]:

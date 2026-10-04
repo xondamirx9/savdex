@@ -107,14 +107,16 @@ def _issue_renewals(now: datetime) -> int:
     issued = 0
 
     for subscription in subscriptions:
+        # Заблокированной компании счёт на продление не выставляется
         companies = _rows(
-            "select * from companies where id = %s and deleted_at is null",
+            "select * from companies where id = %s and deleted_at is null and status = 'active'",
             [subscription["company_id"]],
         )
         plans = _rows("select * from plans where id = %s", [subscription["plan_id"]])
-        # $company->users->first(): без сортировки у Laravel — первый по номеру
+        # Первый по номеру сотрудник — из тех, кто может войти и оплатить
         users = _rows(
-            "select * from users where company_id = %s and deleted_at is null order by id limit 1",
+            "select * from users where company_id = %s and deleted_at is null "
+            "and status = 'active' order by id limit 1",
             [subscription["company_id"]],
         )
 

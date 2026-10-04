@@ -250,7 +250,16 @@ run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
 # Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
 # объявления, просьбы об отзыве, чистка «Кто смотрел», продвижения,
 # месячные периоды тарифов, курсы ЦБ, прозвон Uzum. Пройденное помнит
-# storage/app/schedule.json
+# файл состояния — на постоянном диске: в контейнере он пропадал с
+# каждым деплоем, и после перезапуска задачи, чей час уже прошёл,
+# считались выполненными и в тот день не шли вовсе
+if [ -d /var/data ] && [ -z "${SAVDEX_SCHEDULE_STATE:-}" ]; then
+    export SAVDEX_SCHEDULE_STATE=/var/data/storage/schedule.json
+    if [ -f storage/app/schedule.json ] && [ ! -f "$SAVDEX_SCHEDULE_STATE" ]; then
+        cp storage/app/schedule.json "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
+    fi
+    chown www-data:www-data "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
+fi
 run_forever 60 "Расписание Django" python/.venv/bin/python python/manage.py schedule
 
 # Машинный перевод: проход раз в минуту. Выключается переменной

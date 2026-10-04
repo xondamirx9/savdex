@@ -83,8 +83,10 @@ def _utc(moment: datetime | None) -> datetime | None:
 
 
 def _date(moment: datetime | None) -> str | None:
-    """translatedFormat('d.m.Y'): одни цифры."""
-    return None if moment is None else moment.strftime("%d.%m.%Y")
+    """translatedFormat('d.m.Y'): одни цифры, день — по часам площадки."""
+    from savdex.web.shared import local_time
+
+    return None if moment is None else local_time(moment).strftime("%d.%m.%Y")
 
 
 def number_format(value: int) -> str:
