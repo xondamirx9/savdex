@@ -25,7 +25,13 @@ class User(models.Model):
     company_role = models.CharField("роль в компании", max_length=32, null=True, blank=True)
     is_admin = models.BooleanField("администратор", default=False)
     admin_role = models.CharField("роль в админке", max_length=32, null=True, blank=True)
-    status = models.CharField("статус", max_length=32, default="active")
+    status = models.CharField(
+        "статус",
+        max_length=32,
+        default="active",
+        # Подписи в фильтре и карточке вместо «active» / «blocked»
+        choices=[("active", "Активен"), ("blocked", "Заблокирован")],
+    )
     email_verified_at = UTCDateTimeField("почта подтверждена", null=True, blank=True)
     last_login_at = UTCDateTimeField("последний вход", null=True, blank=True)
     created_at = UTCDateTimeField("зарегистрирован", null=True, blank=True)

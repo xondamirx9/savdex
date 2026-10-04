@@ -348,7 +348,7 @@ def test_забыли_пароль(сайт, body, шаг, ошибки_, пис
 @pytest.mark.parametrize(
     ("path", "данные", "lang", "тема", "кнопка"),
     [
-        ("/en/forgot-password", None, "en", "Reset your password", "Reset Password"),
+        ("/en/forgot-password", None, "en", "Reset your password — SAVDEX", "Reset Password"),
         ("/uz/forgot-password", None, "uz", "Parolni tiklash — SAVDEX", "Parolni tiklash"),
         ("/tr/forgot-password", None, "tr", "Şifre sıfırlama — SAVDEX", "Şifreyi sıfırla"),
         # Адрес без префикса — язык страницы из сессии
@@ -361,7 +361,9 @@ def test_забыли_пароль_на_языке_страницы(сайт, pa
 
     [m] = итог["база"]["mail"]
     assert (m["subject"], m["to"]) == (тема, ПОЧТА)
-    assert f"{кнопка}: <сайт>/reset-password/<токен>" in m["text"].replace("：", ": ")
+    # Ссылка — на языке письма (с префиксом), русская — без
+    префикс = "" if lang == "ru" else f"/{lang}"
+    assert f"{кнопка}: <сайт>{префикс}/reset-password/<токен>" in m["text"].replace("：", ": ")
     assert f' lang="{lang}">' in m["html"] and f">{кнопка}</a>" in m["html"]
     assert итог["база"]["tokens"] == [(ПОЧТА, True, True)]
 

@@ -317,9 +317,20 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                     ) : (
                         <p className="hint">{t('cabinet.it_task_form.files_full', { max: MAX_FILES })}</p>
                     )}
-                    {(err('files') || err('files.0')) && (
-                        <p className="hint" style={{ color: 'var(--danger)' }}>{err('files') ?? err('files.0')}</p>
-                    )}
+                    {/* Ошибка любого из файлов («files.3»), а не только первого */}
+                    {(() => {
+                        const message =
+                            err('files') ??
+                            Object.entries(form.errors as Record<string, string | undefined>).find(([key]) =>
+                                key.startsWith('files.'),
+                            )?.[1];
+
+                        return message ? (
+                            <p className="hint" style={{ color: 'var(--danger)' }}>
+                                {message}
+                            </p>
+                        ) : null;
+                    })()}
                 </div>
 
                 <div className="row" style={{ gap: 10, marginTop: 24 }}>

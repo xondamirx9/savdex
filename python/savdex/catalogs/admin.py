@@ -36,6 +36,7 @@ from savdex.catalogs.models import (
     CompanyType,
     CompanyTypeTranslation,
 )
+from savdex.text import numeric
 
 #: Код типа: как у пяти типов из миграции — manufacturer, importer, …
 CODE = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)*")
@@ -252,7 +253,7 @@ class SectionFilter(admin.SimpleListFilter):
         if value == "top":
             return queryset.filter(parent__isnull=True)
 
-        return queryset.filter(parent_id=value) if value else queryset
+        return queryset.filter(parent_id=int(value)) if value and numeric(value) else queryset
 
 
 @register(Category, section="catalogs")

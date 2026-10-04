@@ -38,6 +38,7 @@ from savdex import access, audit
 from savdex.accounts import editing
 from savdex.accounts.models import User
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.text import numeric
 
 
 class StaffMember(User):
@@ -316,7 +317,7 @@ class RolesAdmin(SavdexModelAdmin):
         # Только сотрудники, как таблица Filament: права клиента площадки
         # раздаются через «Выдать доступ», а не по прямому адресу
         user = User.objects.filter(
-            pk=int(object_id) if object_id.isdigit() else 0,
+            pk=int(object_id) if numeric(object_id) else 0,
             deleted_at__isnull=True,
             is_admin=True,
         ).first()
@@ -405,7 +406,7 @@ class RolesAdmin(SavdexModelAdmin):
         form_url: str = "",
         extra_context: Any = None,  # noqa: ANN401
     ) -> HttpResponse:
-        user = User.objects.filter(pk=int(object_id) if object_id.isdigit() else 0).first()
+        user = User.objects.filter(pk=int(object_id) if numeric(object_id) else 0).first()
         staff = _admin_of(request)
         extra = dict(extra_context or {})
 

@@ -579,6 +579,23 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
  * Появилось после того, как выяснилось, что выйти из аккаунта было
  * невозможно ни с одной страницы: кнопки выхода не существовало нигде.
  */
+/**
+ * Короткое имя для кнопки в шапке: первое слово названия, но не форма
+ * собственности — у «ООО «Стройбаза»» на кнопке было одно «ООО», и все
+ * компании выглядели одинаково.
+ */
+const LEGAL_FORMS = /^(ооо|оао|зао|пао|ао|ип|чп|мчж|mchj|mchj\.|aj|xk|llc|ltd|ooo|ip|чк)\.?$/i;
+
+function shortName(full: string): string {
+    const words = full
+        .replace(/[«»"'“”„]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+    const meaningful = words.filter((w) => !LEGAL_FORMS.test(w));
+
+    return (meaningful[0] ?? words[0] ?? '').trim();
+}
+
 function UserMenu({
     name,
     email,
@@ -600,7 +617,7 @@ function UserMenu({
      * компании, и «ООО Стройбаза» узнаётся, а «Анастасия» — нет.
      * Пока компании нет, кнопка живёт на имени человека.
      */
-    const short = (company?.name ?? name).split(' ')[0] || name;
+    const short = shortName(company?.name ?? name) || name;
     const initials = company
         ? company.initials
         : name

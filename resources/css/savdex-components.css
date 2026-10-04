@@ -2566,3 +2566,11 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
 
 /* Открытое меню телефона — кнопка «Фильтры» каталога не висит поверх него */
 body:has(.mobile-menu.open) .filter-fab{display:none}
+
+/* Чат на телефоне: поле ответа не уходит за нижнюю панель — прилипает
+   над ней, а лента сообщений короче, чтобы оба помещались на экране */
+@media (max-width:1024px){
+  .chat-scroll{max-height:45vh}
+  .chat-compose{position:sticky;bottom:calc(56px + 8px + env(safe-area-inset-bottom));
+    background:var(--white);padding:8px 0;z-index:5}
+}

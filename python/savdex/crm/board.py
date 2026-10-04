@@ -44,6 +44,7 @@ from savdex.crm.models import (
     Stage,
     Task,
 )
+from savdex.text import numeric
 
 if TYPE_CHECKING:
     from savdex.crm.admin import Scoped
@@ -247,7 +248,7 @@ def filtered(admin_: Scoped, request: HttpRequest) -> QuerySet[Any]:
         queryset = queryset.filter(owner_id=staff.id)
     elif who == "none":
         queryset = queryset.filter(owner__isnull=True)
-    elif who.isdigit() and not staff.scope_is_own(admin_.section):
+    elif numeric(who) and not staff.scope_is_own(admin_.section):
         queryset = queryset.filter(owner_id=int(who))
 
     query = request.GET.get("q", "").strip()

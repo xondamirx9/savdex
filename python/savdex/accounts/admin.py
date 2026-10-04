@@ -43,6 +43,7 @@ from savdex.accounts.models import STATUSES, User
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.catalog import now
 from savdex.guards import allowed_writes
+from savdex.text import numeric
 
 
 class StateFilter(admin.SimpleListFilter):
@@ -67,6 +68,7 @@ class StateFilter(admin.SimpleListFilter):
 @register(User, section="users")
 class UserAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\User"
+    title_add = "Новый пользователь"
     title_list = "Пользователи"
     title_change = "Пользователь"
 
@@ -418,7 +420,7 @@ class UserAdmin(SavdexModelAdmin):
         ]
 
     def act_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
-        user = User.objects.filter(pk=int(object_id) if object_id.isdigit() else 0).first()
+        user = User.objects.filter(pk=int(object_id) if numeric(object_id) else 0).first()
 
         # «Отключить» и «Восстановить» на странице пользователя — те же
         # действия, что над отмеченными в списке (себя не отключить, занятую
@@ -547,7 +549,7 @@ class UserAdmin(SavdexModelAdmin):
         form_url: str = "",
         extra_context: Any = None,  # noqa: ANN401
     ) -> HttpResponse:
-        user = User.objects.filter(pk=int(object_id) if object_id.isdigit() else 0).first()
+        user = User.objects.filter(pk=int(object_id) if numeric(object_id) else 0).first()
         extra = dict(extra_context or {})
 
         if user is not None and user.deleted_at is None:

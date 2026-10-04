@@ -38,7 +38,7 @@ from django.utils.timesince import timesince
 
 from savdex import audit
 from savdex.accounts.models import User
-from savdex.adminsite import _admin_of, register
+from savdex.adminsite import PerRequest, _admin_of, register
 from savdex.catalog import now
 from savdex.crm.admin import TONES, CrmAdmin, OpenFilter, _badge, employees, when
 from savdex.crm.models import Company
@@ -218,7 +218,7 @@ class TicketAdmin(CrmAdmin):
             timesince(obj.created_at, depth=1),
         )
 
-    _can_take = False
+    _can_take = PerRequest()
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         # Кнопка «Взять» в строке — только с правом правки

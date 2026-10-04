@@ -50,6 +50,7 @@ from savdex.site.models import (
     NewsPost,
     Setting,
 )
+from savdex.text import numeric
 
 #: Currencies::ALL
 CURRENCIES: dict[str, str] = {
@@ -331,7 +332,7 @@ class SettingAdmin(SavdexModelAdmin):
         form_url: str = "",
         extra_context: Any = None,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
-        setting = Setting.objects.filter(pk=object_id).first()
+        setting = Setting.objects.filter(pk=object_id).first() if numeric(object_id) else None
         context = dict(extra_context or {})
 
         if setting is not None and setting.type == "image" and setting.value:
@@ -693,7 +694,7 @@ class BannerAdmin(SavdexModelAdmin):
         form_url: str = "",
         extra_context: Any = None,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
-        banner = Banner.objects.filter(pk=object_id).first()
+        banner = Banner.objects.filter(pk=object_id).first() if numeric(object_id) else None
 
         return super().change_view(
             request,
@@ -982,7 +983,7 @@ class NewsPostAdmin(SavdexModelAdmin):
         from django.shortcuts import get_object_or_404, redirect
         from django.template.response import TemplateResponse
 
-        post = get_object_or_404(NewsPost, pk=object_id)
+        post = get_object_or_404(NewsPost, pk=object_id if numeric(object_id) else 0)
 
         if not self.has_change_permission(request, post):
             from django.core.exceptions import PermissionDenied

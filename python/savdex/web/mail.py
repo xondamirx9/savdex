@@ -84,7 +84,7 @@ def render(
 
 def _sender() -> str:
     address = os.environ.get("MAIL_FROM_ADDRESS") or "hello@example.com"
-    name = os.environ.get("MAIL_FROM_NAME") or os.environ.get("APP_NAME") or "Laravel"
+    name = os.environ.get("MAIL_FROM_NAME") or os.environ.get("APP_NAME") or "SAVDEX"
 
     return formataddr((name, address))
 

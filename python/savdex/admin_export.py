@@ -41,6 +41,18 @@ def _cell(value: Any) -> Any:  # noqa: ANN401
     return value
 
 
+#: Начало, с которого Excel читает ячейку как формулу
+_FORMULA = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> Any:  # noqa: ANN401
+    """
+    Текст, который Excel принял бы за формулу («=HYPERLINK(…)» в названии
+    компании), — с апострофом: открыть выгрузку не значит выполнить чужое.
+    """
+    return "'" + value if isinstance(value, str) and value.startswith(_FORMULA) else value
+
+
 def respond(
     request: HttpRequest,
     *,
@@ -90,7 +102,9 @@ def respond(
         writer.writerow(headers)
 
         for record in records:
-            writer.writerow(["" if (v := get(record)) is None else _cell(v) for _, get in columns])
+            writer.writerow(
+                ["" if (v := get(record)) is None else _csv_safe(_cell(v)) for _, get in columns]
+            )
 
         response = HttpResponse("﻿" + buffer.getvalue(), content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{filename}-{stamp}.csv"'
@@ -103,8 +117,20 @@ def respond(
     sheet = book.create_sheet()
     sheet.append(headers)
 
+    from openpyxl.cell import WriteOnlyCell
+
+    def xlsx(value: Any) -> Any:  # noqa: ANN401
+        # «=…» в тексте — строкой, а не живой формулой
+        if isinstance(value, str) and value.startswith("="):
+            cell = WriteOnlyCell(sheet, value=value)
+            cell.data_type = "s"
+
+            return cell
+
+        return value
+
     for record in records:
-        sheet.append([_cell(get(record)) for _, get in columns])
+        sheet.append([xlsx(_cell(get(record))) for _, get in columns])
 
     output = io.BytesIO()
     book.save(output)

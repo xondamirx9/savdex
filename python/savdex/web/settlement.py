@@ -16,7 +16,7 @@ from typing import Any
 from django.db import connection, transaction
 
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, orders, ui
+from savdex.web import content, eloquent, orders, ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.shared import Context
@@ -181,6 +181,13 @@ def settle(
     company = companies[0]
 
     with transaction.atomic():
+        # Счёт под замком и статус — заново: два подтверждения разом (двойной
+        # щелчок, две вкладки, шлюз и администратор) начисляли дважды
+        locked = _rows("select status from payments where id = %s for update", [payment["id"]])
+
+        if not locked or locked[0]["status"] == "paid":
+            return False, _t(ctx, "messages.order.already_paid")
+
         eloquent.save(
             ctx,
             "payments",
@@ -203,7 +210,11 @@ def settle(
         lambda locale: ui.t("messages.billing.paid_title", locale, number=payment["number"]),
         "success",
         "/cabinet/billing",
-        payment["description"],
+        # Описание счёта записано по-русски (или на языке заказчика) —
+        # остальным сотрудникам на их языке
+        lambda locale: (
+            content.Translations(locale).text(payment["description"]) or payment["description"]
+        ),
     )
 
     return True, _t(ctx, "messages.order.credited")

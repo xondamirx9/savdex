@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import slugify
-from savdex.web import eloquent
+from savdex.web import eloquent, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.chat_actions import _unverified
@@ -273,9 +273,10 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         ctx,
         company,
         "moderation",
-        ctx.t("messages.listing.published_notice", title=listing["title"]),
+        # Каждому сотруднику — на его языке
+        lambda locale: ui.t("messages.listing.published_notice", locale, title=listing["title"]),
         "success",
-        ctx.url("/cabinet/listings"),
+        "/cabinet/listings",
     )
     flash(ctx, "success", ctx.t("messages.listing.published"))
 

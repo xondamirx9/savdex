@@ -20,6 +20,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.laravel_storage import private_root
+from savdex.text import numeric
 from savdex.web import eloquent, filetype
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
@@ -262,7 +263,7 @@ def _uploads(request: HttpRequest) -> list[Any]:
 
     for key in sorted(
         indexed,
-        key=lambda k: (not k[6:-1].isdigit(), int(k[6:-1] or 0) if k[6:-1].isdigit() else 0, k),
+        key=lambda k: (not numeric(k[6:-1]), int(k[6:-1] or 0) if numeric(k[6:-1]) else 0, k),
     ):
         files += request.FILES.getlist(key)
 

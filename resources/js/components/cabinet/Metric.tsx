@@ -78,7 +78,8 @@ export function Metric({
                 <div className={cn('metric-delta', up ? 'delta-up' : down ? 'delta-down' : 'delta-flat')}>
                     <Icon aria-hidden className="size-3.5" />
                     {data.delta > 0 ? '+' : ''}
-                    {data.delta}
+                    {/* Разделитель дроби — по языку, как у самого значения («3,6 %») */}
+                    {Number.isInteger(data.delta) ? formatNumber(data.delta) : formatDecimal(data.delta)}
                     {deltaUnit} {suffix}
                 </div>
             )}

@@ -319,7 +319,9 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
 
     visitor = visitor_key(ctx)
 
-    if not preview:
+    # Свои просмотры владельца в статистику не идут: иначе каждое
+    # «посмотреть, как выглядит» добавляло объявлению просмотр
+    if not preview and not owner:
         _count_view(ctx, row, visitor)
 
     locale = ctx.locale

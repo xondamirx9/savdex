@@ -26,7 +26,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_session
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, mail, messaging, password_rule, verification
+from savdex.web import eloquent, guard, locales, mail, messaging, password_rule, verification
 from savdex.web.actions import form
 from savdex.web.auth_actions import _guest, _intended, _row, _session, _to
 from savdex.web.cabinet import _rows
@@ -151,7 +151,11 @@ def create_reset_token(email: str) -> str:
 
 def _reset_link(ctx: Context, token: str, email: str) -> str:
     """url(route('password.reset', ['token' => …, 'email' => …], false))."""
-    return ctx.url(f"/reset-password/{quote(token, safe='')}") + "?email=" + quote(email, safe="")
+    # На языке письма: англоязычное письмо открывает английскую страницу,
+    # а не русскую в новом браузере без сохранённого языка
+    path = f"/reset-password/{quote(token, safe='')}?email={quote(email, safe='')}"
+
+    return locales.url(ctx.root, path, ctx.locale)
 
 
 def _send_reset_mail(ctx: Context, email: str) -> None:

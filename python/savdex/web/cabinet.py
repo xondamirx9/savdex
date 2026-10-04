@@ -30,7 +30,7 @@ from savdex.web.home import _filled, completeness, php_round
 from savdex.web.phpquery import laravel_input, php_int, text
 from savdex.web.request import _expects_json, context
 from savdex.web.seo import Seo
-from savdex.web.shared import Context, ago
+from savdex.web.shared import Context, ago, local_time
 
 #: CabinetMetrics: окно показателей
 DAYS = 30
@@ -1046,7 +1046,9 @@ def settings_props(ctx: Context) -> dict[str, Any]:
         },
         "security": {
             "two_factor": user["two_factor_confirmed_at"] is not None,
-            "last_login_at": last_login.strftime("%d.%m.%Y, %H:%M") if last_login else None,
+            "last_login_at": local_time(last_login).strftime("%d.%m.%Y, %H:%M")
+            if last_login
+            else None,
             "last_login_ip": user["last_login_ip"],
         },
         "is_owner": user["company_role"] == "owner",
@@ -1096,7 +1098,7 @@ def notifications_props(ctx: Context) -> dict[str, Any]:
                 "is_broadcast": bool(n["is_broadcast"]),
                 "read": n["read_at"] is not None,
                 "ago": ago(n["created_at"], ctx.locale),
-                "date": n["created_at"].strftime("%d.%m.%Y, %H:%M"),
+                "date": local_time(n["created_at"]).strftime("%d.%m.%Y, %H:%M"),
             }
             for n in rows
         ],
@@ -2071,7 +2073,7 @@ def site_props(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
             "subdomain": site["subdomain"],
             "url": site_url(site["subdomain"]),
             "status": site["status"],
-            "published_at": site["published_at"].strftime("%d.%m.%Y %H:%M")
+            "published_at": local_time(site["published_at"]).strftime("%d.%m.%Y %H:%M")
             if site["published_at"]
             else None,
             # Черновик отличается от того, что видят посетители
@@ -2189,11 +2191,12 @@ def chat(request: HttpRequest, thread_id: str) -> HttpResponse:
                     "id": m["id"],
                     "mine": m["company_id"] == cid,
                     "body": m["body"],
-                    "at": m["created_at"].strftime("%d.%m.%Y %H:%M"),
+                    "at": local_time(m["created_at"]).strftime("%d.%m.%Y %H:%M"),
                 }
+                # Последние 500, а не первые: в долгом разговоре новые иначе пропадали
                 for m in _rows(
-                    "select id, company_id, body, created_at from messages where thread_id = %s "
-                    "order by id limit 500",
+                    "select * from (select id, company_id, body, created_at from messages "
+                    "where thread_id = %s order by id desc limit 500) last order by id",
                     [t["id"]],
                 )
             ],

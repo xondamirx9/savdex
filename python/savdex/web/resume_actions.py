@@ -483,7 +483,17 @@ def photo(request: HttpRequest) -> HttpResponse:
     data: dict[str, Any] = {**input_of(request), **request.FILES.dict()}
     # Правило image: файл-картинка по содержимому, текст ошибки — validation.image
     image = Check("image", lambda value: _passes("mimes", IMAGE_MIMES, value))
-    errors = validate(data, {"photo": ["required", image, "max:5120"]}, ctx.locale)
+    # Предел и тексты — как у остальных картинок: «Файл больше 8 МБ…», а не «5120 КБ»
+    errors = validate(
+        data,
+        {"photo": ["required", image, "max:8192"]},
+        ctx.locale,
+        {
+            "photo.required": ctx.t("messages.file.required"),
+            "photo.image": ctx.t("messages.image.mimes"),
+            "photo.max": ctx.t("messages.image.max"),
+        },
+    )
 
     if errors:
         return invalid(ctx, errors)

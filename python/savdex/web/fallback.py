@@ -105,10 +105,25 @@ class NulPathMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        if "\x00" in request.path_info:
+        if "\x00" in request.path_info or (
+            # В админке нулевой байт в поиске, фильтре или поле формы тоже
+            # доходил до базы (500); сайт свои поля чистит сам (forms._clean)
+            request.path_info.startswith("/py/admin/") and _nul_in_input(request)
+        ):
             return HttpResponseBadRequest("Bad Request", content_type="text/plain; charset=utf-8")
 
         return self.get_response(request)
+
+
+def _nul_in_input(request: HttpRequest) -> bool:
+    """Нулевой байт в строке запроса или в полях обычной формы."""
+    if "%00" in request.META.get("QUERY_STRING", "").lower():
+        return True
+
+    if request.method == "POST" and request.content_type == "application/x-www-form-urlencoded":
+        return any("\x00" in v for values in request.POST.lists() for v in values[1])
+
+    return False
 
 
 class CanonicalHostMiddleware:

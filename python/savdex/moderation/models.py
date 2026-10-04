@@ -136,7 +136,7 @@ class Review(Timestamped):
         ordering = ("-created_at", "-id")
 
     def __str__(self) -> str:
-        return f"Review #{self.pk}"
+        return f"Отзыв №{self.pk}"
 
 
 class PlatformReview(Timestamped):
@@ -163,7 +163,7 @@ class PlatformReview(Timestamped):
         ordering = ("-updated_at", "-id")
 
     def __str__(self) -> str:
-        return f"PlatformReview #{self.pk}"
+        return f"Отзыв о площадке №{self.pk}"
 
 
 #: CompanyDocument::VERIFICATION_TYPES — подтверждают статус, идут на проверку

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from savdex.text import numeric
 from savdex.web import ui
 
 
@@ -45,7 +46,7 @@ def _get(data: Any, path: list[str]) -> Any:  # noqa: ANN401
     for part in path:
         if isinstance(node, dict) and part in node:
             node = node[part]
-        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+        elif isinstance(node, list) and numeric(part) and int(part) < len(node):
             node = node[int(part)]
         else:
             return _MISSING
@@ -512,7 +513,7 @@ def _message(
 
     if param is not None and rule == "required_with":
         # replaceRequiredWith: поля-условия — как их показывает getDisplayableAttribute
-        names = [_displayable(p, "." in p and p.split(".")[1].isdigit()) for p in param.split(",")]
+        names = [_displayable(p, "." in p and numeric(p.split(".")[1])) for p in param.split(",")]
         text = text.replace(":values", " / ".join(names))
 
     if param is not None and rule == "required_if":

@@ -37,7 +37,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from savdex import access, audit
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.crm.admin import OpenFilter, _badge
 from savdex.finance.models import COMPLAINT_STATUSES, Complaint
 from savdex.finance.refunds_admin import _limit
@@ -77,6 +77,18 @@ def accept(ctx: Context, actor: access.Admin, unlock: dict[str, Any], note: str)
     company = _company(unlock["company_id"])
 
     with transaction.atomic():
+        # Жалоба под замком: два «Принять» разом возвращали списанное дважды
+        fresh = _rows(
+            "select complaint_status, refunded from contact_unlocks where id = %s for update",
+            [unlock["id"]],
+        )
+
+        if not fresh or fresh[0]["complaint_status"] != "pending":
+            return
+
+        # Уже возвращённое — без второго возврата, но решение записывается
+        unlock = {**unlock, "refunded": fresh[0]["refunded"]}
+
         wallets = (
             _rows("select * from wallets where company_id = %s limit 1", [company["id"]])
             if company is not None
@@ -194,6 +206,7 @@ class StatusFilter(admin.SimpleListFilter):
 class ComplaintAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\ContactUnlock"
     title_list = "Жалобы на контакты"
+    title_change = "Жалоба на контакт"
 
     list_display = ("who", "reason", "spent", "state", "filed")
     list_filter = (Pending, StatusFilter)
@@ -261,7 +274,7 @@ class ComplaintAdmin(SavdexModelAdmin):
 
         return timezone.localtime(moment).strftime("%d.%m.%Y %H:%M") if moment else ""
 
-    _can_decide = False
+    _can_decide = PerRequest()
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_decide = self.has_decide(request)
@@ -289,9 +302,13 @@ class ComplaintAdmin(SavdexModelAdmin):
         if not self.has_decide(request):
             raise PermissionDenied
 
-        rows = _rows(
-            "select * from contact_unlocks where id = %s and complaint_status = 'pending'",
-            [int(object_id)],
+        rows = (
+            _rows(
+                "select * from contact_unlocks where id = %s and complaint_status = 'pending'",
+                [int(object_id)],
+            )
+            if object_id.isascii() and object_id.isdecimal() and len(object_id) <= 18
+            else []
         )
         back = reverse("savdex_admin:finance_complaint_changelist")
 

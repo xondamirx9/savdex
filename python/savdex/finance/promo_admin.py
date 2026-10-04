@@ -34,12 +34,13 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.billing.models import Plan
 from savdex.crm.admin import _badge
 from savdex.finance.models import PromoCode
 from savdex.guards import allowed_writes
 from savdex.moderation.services import context_of
+from savdex.text import numeric
 from savdex.web import eloquent, orders
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _stamp
@@ -269,7 +270,7 @@ class PromoCodeAdmin(SavdexModelAdmin):
 
         return format_html("{}<br><small>{}</small>", date, who)
 
-    _can_edit = False
+    _can_edit = PerRequest()
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_edit = self.has_edit(request)
@@ -341,7 +342,7 @@ class PromoCodeAdmin(SavdexModelAdmin):
         if request.method != "POST" or not self.has_edit(request):
             raise PermissionDenied
 
-        if self._toggle(request, int(object_id)):
+        if numeric(object_id) and self._toggle(request, int(object_id)):
             self.message_user(request, "Сохранено.", messages.SUCCESS)
 
         return HttpResponseRedirect(request.headers.get("Referer") or self._list())

@@ -1,6 +1,7 @@
 import { router, useForm } from '@inertiajs/react';
 import { Eye, Plus, Trash2, Upload, X } from 'lucide-react';
 import { useRef } from 'react';
+import { FieldError } from '@/components/FieldError';
 import { Panel } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
@@ -212,6 +213,7 @@ export default function Resume({ resume, defaults, options, countries, cities }:
                                 <Upload aria-hidden className="size-4" /> {t('resume.photo')}
                             </button>
                             <p className="hint">{t('resume.photo_hint')}</p>
+                            <FieldError name="photo" />
                         </div>
                         <input
                             ref={photoInput}

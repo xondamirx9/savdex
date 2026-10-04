@@ -98,6 +98,7 @@ class MonthFilter(admin.SimpleListFilter):
 @register(WalletTransaction, section="refunds")
 class WalletTransactionAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\WalletTransaction"
+    title_change = "Финансовая операция"
     title_list = "Финансовые операции"
     change_list_template = "admin/finance/wallettransaction/change_list.html"
 

@@ -115,13 +115,12 @@ def impressions(listing_ids: list[int], visitor: str | None) -> None:
     if not listing_ids:
         return
 
-    stamp, _ = _now()
-
+    # updated_at не трогаем: показ — не правка (порядок «Моих объявлений», lastmod карты)
     with allowed_writes("listings"), connection.cursor() as cursor:
         cursor.execute(
-            "update listings set impressions_count = impressions_count + 1, updated_at = %s "
+            "update listings set impressions_count = impressions_count + 1 "
             "where id = any(%s) and deleted_at is null",
-            [stamp, listing_ids],
+            [listing_ids],
         )
 
     bump_daily(listing_ids, "impressions")

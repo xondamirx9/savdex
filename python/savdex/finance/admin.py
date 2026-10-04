@@ -35,7 +35,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.catalog import now
 from savdex.crm.admin import OpenFilter, _badge
 from savdex.finance.models import PURPOSES, STATUSES, Payment
@@ -176,7 +176,7 @@ class PaymentAdmin(SavdexModelAdmin):
     def paid(self, obj: Payment) -> str:
         return _date(obj.paid_at) or "—"
 
-    _can_edit = False
+    _can_edit = PerRequest()
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         self._can_edit = self.has_edit(request)

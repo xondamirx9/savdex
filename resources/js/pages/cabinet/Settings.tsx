@@ -71,7 +71,8 @@ export default function Settings({ profile, notifications, telegram, security, i
                                     <tr>
                                         <th>{t('cabinet.settings.event')}</th>
                                         <th className="center">{t('cabinet.settings.email')}</th>
-                                        <th className="center">Telegram</th>
+                                        {/* Бот не настроен — столбец обещал бы то, чего нет */}
+                                        {telegram.available && <th className="center">Telegram</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -86,14 +87,18 @@ export default function Settings({ profile, notifications, telegram, security, i
                                                     onChange={() => toggle(r.event, 'email')}
                                                 />
                                             </td>
-                                            <td className="center">
-                                                <input
-                                                    type="checkbox"
-                                                    aria-label={`${r.label} — Telegram`}
-                                                    checked={r.telegram}
-                                                    onChange={() => toggle(r.event, 'telegram')}
-                                                />
-                                            </td>
+                                            {telegram.available && (
+                                                <td className="center">
+                                                    {/* Пока Telegram не привязан, отмечать нечего — ниже кнопка привязки */}
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`${r.label} — Telegram`}
+                                                        checked={r.telegram && telegram.linked}
+                                                        disabled={!telegram.linked}
+                                                        onChange={() => toggle(r.event, 'telegram')}
+                                                    />
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

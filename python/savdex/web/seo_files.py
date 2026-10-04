@@ -339,7 +339,12 @@ def _part(ctx: Context, name: str) -> list[dict[str, Any]] | None:
     found = re.fullmatch(r"listings-(\d+)", name)
 
     if found:
-        return _listings(ctx, int(found.group(1)))
+        rows = _listings(ctx, int(found.group(1)))
+
+        # Части дальше последней нет: пустая карта под 200 выглядит как
+        # настоящая, и робот возвращается к ней снова и снова. Первая
+        # часть есть всегда — её перечисляет список частей
+        return rows if rows or found.group(1) == "1" else None
 
     return None
 

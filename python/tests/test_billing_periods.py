@@ -256,3 +256,72 @@ def test_задачи_расписания(мир, tmp_path):
             "/cabinet/billing",
         )
     ]
+
+
+#: Оплата тарифа компании c5 — как её проводит касса (orders.assign)
+ОПЛАТА = """
+import sys, django
+django.setup()
+from savdex.payments.periods import _console
+from savdex.web import orders
+from savdex.web.cabinet import _rows
+
+company = _rows("select * from companies where slug = 'c5'")[0]
+plan = _rows("select * from plans where code = %s", [sys.argv[1]])[0]
+orders.assign(_console(), company, plan)
+"""
+
+
+def оплатить(code: str) -> None:
+    subprocess.run(
+        [sys.executable, "-c", ОПЛАТА, code],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "DJANGO_SETTINGS_MODULE": "savdex.settings", "PYTHONPATH": str(PYTHON)},
+        check=True,
+        capture_output=True,
+    )
+
+
+@pytest.mark.parametrize(("тариф", "продление"), [("business", True), ("vip", False)])
+def test_досрочная_оплата_продления(мир, тариф, продление):
+    """
+    Счёт на продление приходит за неделю: оплата того же тарифа до конца
+    срока продлевает от конца оплаченного (дни не сгорают), счётчики
+    периода не обнуляются раньше времени. Другой тариф — с сегодняшнего дня.
+    """
+    подготовка(мир)
+    c5 = мир["companies"]["c5"]
+    # Прежняя подписка c5 из подготовки здесь ни к чему: одна, что истекает через 5 дней
+    sql("delete from subscriptions where company_id = %s", [c5])
+    sql(
+        "insert into subscriptions (company_id, plan_id, status, started_at, ends_at, auto_renew, "
+        "source, created_at, updated_at) values (%s, %s, 'active', now() - interval '25 days', "
+        "date_trunc('second', now() + interval '5 days'), true, 'payment', now(), now())",
+        [c5, мир["plans"]["business"]],
+    )
+    sql(
+        "insert into wallets (company_id, contacts_used_this_period, responses_used_this_period, "
+        "period_resets_at, created_at, updated_at) values (%s, 7, 9, now() + interval '5 days', "
+        "now(), now()) on conflict (company_id) do update set contacts_used_this_period = 7, "
+        "responses_used_this_period = 9, period_resets_at = excluded.period_resets_at",
+        [c5],
+    )
+    [(было,)] = sql("select ends_at from subscriptions where company_id = %s", [c5])
+
+    оплатить(тариф)
+
+    [(ends,)] = sql(
+        "select ends_at from subscriptions where company_id = %s and status = 'active'", [c5]
+    )
+    счётчики = sql(
+        "select contacts_used_this_period, responses_used_this_period from wallets "
+        "where company_id = %s",
+        [c5],
+    )
+
+    if продление:
+        assert (ends - было).days == 30
+        assert счётчики == [(7, 9)]
+    else:
+        assert (ends - было).days < 30
+        assert счётчики == [(0, 0)]

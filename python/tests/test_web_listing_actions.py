@@ -263,8 +263,14 @@ def test_опубликовать_заново(сайт, status, prefix):
             учётка("seller@savdex.uz"),
             учётка("colleague@savdex.uz"),
         }
-        заголовок = "The listing “Цемент 0” has been published again" if prefix else "Цемент 0"
-        assert all(заголовок in n[3] for n in итог["база"]["notifications"])
+        # На языке каждого получателя: продавец зашёл на /en — его язык теперь
+        # английский, коллега остался на русском
+        заголовки = {n[0]: n[3] for n in итог["база"]["notifications"]}
+        по_русски = "Объявление «Цемент 0» опубликовано заново"
+        assert заголовки[учётка("colleague@savdex.uz")] == по_русски
+        assert заголовки[учётка("seller@savdex.uz")] == (
+            "The listing “Цемент 0” has been published again" if prefix else по_русски
+        )
         assert [e[0] for e in итог["база"]["events"]] == ["moderation"]
     else:
         assert "error" in сессия(итог)

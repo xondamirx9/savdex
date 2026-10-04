@@ -436,6 +436,10 @@ def _styled(
     for value in values:
         cell = WriteOnlyCell(sheet, value=value)
 
+        # Текст «=…» из базы — строкой, а не формулой, которую Excel выполнит
+        if isinstance(value, str) and value.startswith("="):
+            cell.data_type = "s"
+
         if font is not None:
             cell.font = font
 

@@ -107,7 +107,8 @@ def test_снятие_истёкших(компании, tmp_path):
     вывод = django("--once", "expire_listings", state=tmp_path / "state")
     д = снимок()
 
-    assert "Снято с публикации: 3. Предупреждений отправлено: 2." in вывод
+    # Предупреждение — одно: у удалённой компании его некому получать
+    assert "Снято с публикации: 3. Предупреждений отправлено: 1." in вывод
     статусы = {title: status for title, status, *_ in д["listings"]}
     assert статусы == {
         "Цемент М500": "expired",
@@ -141,7 +142,8 @@ def test_снятие_истёкших(компании, tmp_path):
             "listing_expiring",
             "warning",
             "Объявление «Газоблок D500» истекает через 3 дня",
-            "/cabinet/listings",
+            # Своя ссылка у объявления: по ней видно, что о нём уже предупредили
+            "/cabinet/listings?status=active#listing-6",
         ),
         (
             a,
@@ -192,3 +194,37 @@ def test_день_не_повторяется(компании, tmp_path):
 
     assert sql("select count(*) from listings where status = 'expired'") == [(0,)]
     assert sql("select count(*) from user_notifications") == [(0,)]
+
+
+def test_второй_проход_не_повторяет_предупреждение(компании, tmp_path):
+    """Ручной повтор в тот же день: о сроке уже предупредили — второго нет."""
+    подготовка(компании)
+    django("--once", "expire_listings", state=tmp_path / "s1")
+    было = sql("select count(*) from user_notifications")
+    вывод = django("--once", "expire_listings", state=tmp_path / "s2")
+
+    assert "Предупреждений отправлено: 0." in вывод
+    assert sql("select count(*) from user_notifications") == было
+
+
+def test_снятое_освобождает_место_продвижения(компании, tmp_path):
+    """Продвижение истёкшего объявления завершается — ограниченное место не занято."""
+    подготовка(компании)
+    [(kind,)] = sql(
+        "insert into promotion_types (code, name, description, cost_units, duration_days, "
+        "slots, sort, is_active, created_at, updated_at) values ('top_x', 'ТОП', '', 1, 7, 1, "
+        "1, true, now(), now()) returning id"
+    )
+    sql(
+        "insert into promotions (listing_id, company_id, promotion_type_id, units_spent, status, "
+        "starts_at, ends_at, impressions_before, active_key, created_at, updated_at) "
+        "select id, company_id, %s, 1, 'active', now(), now() + interval '5 days', 0, "
+        "id || ':' || %s, now(), now() from listings where title = 'Цемент М500'",
+        [kind, kind],
+    )
+
+    django("--once", "expire_listings", state=tmp_path / "state")
+
+    assert sql("select status, active_key from promotions") == [("finished", None)]
+    sql("truncate promotions restart identity cascade")
+    sql("delete from promotion_types where id = %s", [kind])

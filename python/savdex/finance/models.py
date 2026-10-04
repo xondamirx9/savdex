@@ -47,10 +47,10 @@ class Payment(models.Model):
     external_id = models.CharField("номер у провайдера", max_length=255, null=True)
     status = models.CharField("статус", max_length=255, choices=list(STATUSES.items()))
     paid_at = UTCDateTimeField("оплачен", null=True)
-    plan_id = models.BigIntegerField(null=True)
-    credit_pack_id = models.BigIntegerField(null=True)
-    promo_code_id = models.BigIntegerField(null=True)
-    subscription_id = models.BigIntegerField(null=True)
+    plan_id = models.BigIntegerField("тариф", null=True)
+    credit_pack_id = models.BigIntegerField("пакет", null=True)
+    promo_code_id = models.BigIntegerField("промокод", null=True)
+    subscription_id = models.BigIntegerField("подписка", null=True)
     confirmed_by = models.ForeignKey(
         User,
         verbose_name="кто отметил",
@@ -62,7 +62,7 @@ class Payment(models.Model):
     )
     admin_note = models.TextField("отметка", null=True)
     created_at = UTCDateTimeField("выставлен", null=True)
-    updated_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False
@@ -104,15 +104,15 @@ class Subscription(models.Model):
     started_at = UTCDateTimeField("начало")
     ends_at = UTCDateTimeField("до", null=True)
     auto_renew = models.BooleanField("автопродление", default=True)
-    cancelled_at = UTCDateTimeField(null=True)
+    cancelled_at = UTCDateTimeField("отменена", null=True)
     source = models.CharField("откуда", max_length=255)
     granted_by = models.ForeignKey(
         User, verbose_name="кто выдал", null=True, on_delete=models.DO_NOTHING,
         db_constraint=False, db_column="granted_by", related_name="+",
     )  # fmt: skip
     grant_reason = models.CharField("основание", max_length=255, null=True)
-    created_at = UTCDateTimeField(null=True)
-    updated_at = UTCDateTimeField(null=True)
+    created_at = UTCDateTimeField("создано", null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False
@@ -145,13 +145,13 @@ class PromoCode(models.Model):
         Company, verbose_name="кем", null=True, on_delete=models.DO_NOTHING,
         db_constraint=False, related_name="+",
     )  # fmt: skip
-    subscription_id = models.BigIntegerField(null=True)
+    subscription_id = models.BigIntegerField("подписка", null=True)
     created_by = models.ForeignKey(
         User, verbose_name="кто выпустил", null=True, on_delete=models.DO_NOTHING,
         db_constraint=False, db_column="created_by", related_name="+",
     )  # fmt: skip
     created_at = UTCDateTimeField("выпущен", null=True)
-    updated_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False
@@ -181,7 +181,7 @@ class Refund(models.Model):
         db_constraint=False, related_name="+",
     )  # fmt: skip
     amount = models.BigIntegerField("сумма")
-    currency = models.CharField(max_length=3)
+    currency = models.CharField("валюта", max_length=3)
     reason = models.TextField("причина")
     status = models.CharField("решение", max_length=20)
     created_by = models.ForeignKey(
@@ -192,10 +192,10 @@ class Refund(models.Model):
         User, verbose_name="решил", null=True, on_delete=models.DO_NOTHING,
         db_constraint=False, db_column="decided_by", related_name="+",
     )  # fmt: skip
-    decided_at = UTCDateTimeField(null=True)
-    decision_note = models.TextField(null=True)
+    decided_at = UTCDateTimeField("решение принято", null=True)
+    decision_note = models.TextField("формулировка решения", null=True)
     created_at = UTCDateTimeField("заявлен", null=True)
-    updated_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False
@@ -236,15 +236,15 @@ class Complaint(models.Model):
     complaint_status = models.CharField("решение", max_length=255, null=True)
     complaint_reason = models.TextField("суть жалобы", null=True)
     complained_at = UTCDateTimeField("подана", null=True)
-    refunded = models.BooleanField(default=False)
-    moderator_note = models.TextField(null=True)
+    refunded = models.BooleanField("возвращено", default=False)
+    moderator_note = models.TextField("заметка модератора", null=True)
     moderated_by = models.ForeignKey(
         User, verbose_name="решил", null=True, on_delete=models.DO_NOTHING,
         db_constraint=False, db_column="moderated_by", related_name="+",
     )  # fmt: skip
-    moderated_at = UTCDateTimeField(null=True)
-    created_at = UTCDateTimeField(null=True)
-    updated_at = UTCDateTimeField(null=True)
+    moderated_at = UTCDateTimeField("проверено", null=True)
+    created_at = UTCDateTimeField("создано", null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False
@@ -286,11 +286,11 @@ class WalletTransaction(models.Model):
     amount = models.IntegerField("сколько")
     balance_after = models.IntegerField("остаток после")
     reason = models.CharField("основание", max_length=255)
-    subject_type = models.CharField(max_length=255, null=True)
-    subject_id = models.BigIntegerField(null=True)
+    subject_type = models.CharField("тип объекта", max_length=255, null=True)
+    subject_id = models.BigIntegerField("номер объекта", null=True)
     comment = models.CharField("комментарий", max_length=255, null=True)
     created_at = UTCDateTimeField("когда", null=True)
-    updated_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField("изменено", null=True)
 
     class Meta:
         managed = False

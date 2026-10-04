@@ -55,6 +55,7 @@ from django.http import HttpRequest, HttpResponse
 from savdex import laravel_session
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
+from savdex.text import numeric
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ def arr_get(data: dict[str, Any], key: str, default: Any = None) -> Any:  # noqa
     for part in key.split("."):
         if isinstance(current, dict) and part in current:
             current = current[part]
-        elif isinstance(current, list) and part.isdigit() and int(part) < len(current):
+        elif isinstance(current, list) and numeric(part) and int(part) < len(current):
             current = current[int(part)]
         else:
             return default

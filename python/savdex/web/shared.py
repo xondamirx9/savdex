@@ -153,6 +153,21 @@ def appearance_logo(values: dict[str, Any]) -> str:
 # ── «N минут назад» ─────────────────────────────────────────────────
 
 
+def local_time(moment: datetime) -> datetime:
+    """
+    Время для показа — по часам площадки (TIME_ZONE, Ташкент). В базе оно
+    в UTC без пояса: «20:30» на экране было бы на пять часов раньше, а
+    дата у позднего вечера — вчерашней.
+    """
+    from zoneinfo import ZoneInfo
+
+    from django.conf import settings
+
+    aware = moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+    return aware.astimezone(ZoneInfo(settings.TIME_ZONE))
+
+
 def _calendar_diff(earlier: datetime, later: datetime) -> tuple[int, int, int, int, int, int]:
     """DateTime::diff: годы, месяцы, дни, часы, минуты, секунды по календарю."""
     y, mo, d = later.year - earlier.year, later.month - earlier.month, later.day - earlier.day

@@ -23,11 +23,11 @@ from typing import Any
 from django.db import IntegrityError, connection, transaction
 
 from savdex.guards import allowed_writes
-from savdex.web import eloquent
+from savdex.web import content, eloquent, ui
 from savdex.web.billing import _date, price_uzs
 from savdex.web.cabinet import _rows, active_subscription
 from savdex.web.currency import CurrencyRate, php_round
-from savdex.web.listing_actions import _notify_company, _stamp
+from savdex.web.listing_actions import _notify_company, _stamp, relative_url
 from savdex.web.shared import Context
 
 #: OrderService::EXPIRES_DAYS
@@ -69,7 +69,7 @@ def _notify_user(user: dict[str, Any], title: str, body: str, url: str) -> None:
         cursor.execute(
             "insert into user_notifications (user_id, company_id, type, title, body, url, "
             "updated_at, created_at) values (%s, %s, 'billing', %s, %s, %s, %s, %s)",
-            [user["id"], user["company_id"], title, body, url, now, now],
+            [user["id"], user["company_id"], title, body, relative_url(url), now, now],
         )
 
 
@@ -114,10 +114,17 @@ def _create(
     )
     # Описание может само кончаться точкой («на 30 дн.») — вторую не ставим
     description = str(payment["description"]).removesuffix(".")
+    # На языке заказчика: счёт продления выставляет фоновая задача (русский
+    # контекст), а читает его англо- или узбекоязычный сотрудник
+    locale = str(user.get("locale") or ctx.locale)
+
+    if locale != ctx.locale and ctx.locale == "ru":
+        description = content.Translations(locale).text(description) or description
+
     _notify_user(
         user,
-        ctx.t("messages.order.issued_title", number=payment["number"]),
-        ctx.t("messages.order.issued_body", description=description, days=EXPIRES_DAYS),
+        ui.t("messages.order.issued_title", locale, number=payment["number"]),
+        ui.t("messages.order.issued_body", locale, description=description, days=EXPIRES_DAYS),
         "/cabinet/billing",
     )
 
@@ -271,6 +278,14 @@ def cancel(
 # ── Подписка ────────────────────────────────────────────────────────
 
 
+def _naive(moment: datetime) -> datetime:
+    """Время из базы — в UTC без пояса, как eloquent.now()."""
+    return moment.astimezone(UTC).replace(tzinfo=None) if moment.tzinfo is not None else moment
+
+
+# Одной транзакцией: прежняя подписка закрывается только вместе с
+# появлением новой — иначе ошибка посередине оставляла компанию без тарифа
+@transaction.atomic
 def assign(
     ctx: Context,
     company: dict[str, Any],
@@ -286,9 +301,11 @@ def assign(
 
     with allowed_writes("subscriptions"), connection.cursor() as cursor:
         cursor.execute(
-            "select id from subscriptions where company_id = %s and status = 'active' for update",
+            "select id, plan_id, ends_at from subscriptions where company_id = %s "
+            "and status = 'active' for update",
             [company["id"]],
         )
+        current = cursor.fetchall()
         # Построителем Eloquent: updated_at ставит он сам, событий и журнала нет
         cursor.execute(
             "update subscriptions set status = 'expired', cancelled_at = %s, updated_at = %s "
@@ -297,6 +314,19 @@ def assign(
         )
 
     days = plan["period_days"] if days is None else days
+
+    # Оплата продления того же тарифа до конца периода (счёт приходит за
+    # неделю) — продление, а не перезапуск: новый срок отсчитывается от
+    # конца оплаченного, иначе оставшиеся дни сгорали. Счётчики периода
+    # при этом не обнуляются раньше времени — их сбросит смена периода
+    still_paid = [
+        _naive(row[2])
+        for row in current
+        if row[1] == plan["id"] and row[2] is not None and _naive(row[2]) > now
+    ]
+    extends = source == SOURCE_PAYMENT and bool(still_paid) and days > 0
+    starts = max(still_paid) if extends else now
+
     subscription = _insert(
         "subscriptions",
         {
@@ -305,7 +335,7 @@ def assign(
             "status": "active",
             "started_at": now,
             # Бессрочная подписка — только вручную
-            "ends_at": now + timedelta(days=days) if days > 0 else None,
+            "ends_at": starts + timedelta(days=days) if days > 0 else None,
             # Автопродление у подарочной подписки — обещание, которого не давали
             "auto_renew": source == SOURCE_PAYMENT,
             "source": source,
@@ -334,36 +364,48 @@ def assign(
         )
 
     ends = subscription["ends_at"]
+    period: dict[str, Any] = (
+        {}
+        if extends
+        else {
+            # Новый период — с нуля и контакты, и отклики
+            "contacts_used_this_period": 0,
+            "responses_used_this_period": 0,
+            "period_resets_at": ends if ends is not None else now + timedelta(days=30),
+        }
+    )
     eloquent.save(
         ctx,
         "wallets",
         wallet,
         {
             "promo_units": int(wallet.get("promo_units") or 0) + int(plan["promo_units"] or 0),
-            "contacts_used_this_period": 0,
-            "period_resets_at": ends if ends is not None else now + timedelta(days=30),
+            **period,
         },
         section=None,
         model="Wallet",
-        casts={"promo_units": "int", "contacts_used_this_period": "int"},
+        casts={
+            "promo_units": "int",
+            "contacts_used_this_period": "int",
+            "responses_used_this_period": "int",
+        },
     )
 
     until = _date(ends)
+    title_key = "messages.order." + (
+        "plan_assigned" if source == SOURCE_MANUAL else "plan_activated"
+    )
+    # Каждому сотруднику — на его языке, а не на языке того, кто оплатил
     _notify_company(
         ctx,
         company,
         "billing",
-        ctx.t(
-            "messages.order.plan_assigned"
-            if source == SOURCE_MANUAL
-            else "messages.order.plan_activated",
-            plan=plan["name"],
-        ),
+        lambda locale: ui.t(title_key, locale, plan=plan["name"]),
         "success",
         "/cabinet/billing",
-        ctx.t("messages.order.plan_until", date=until)
+        (lambda locale: ui.t("messages.order.plan_until", locale, date=until))
         if until is not None
-        else ctx.t("messages.order.plan_forever"),
+        else (lambda locale: ui.t("messages.order.plan_forever", locale)),
     )
 
     return subscription
