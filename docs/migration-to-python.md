@@ -2741,6 +2741,15 @@ Python 3.13, что под `php:8.3-apache`) с Apache, Python и libmagic;
   в память, но не больше `2 × ядра + 1`; по `PYTHON_THREADS` (4) потоков
   в каждом. Переопределяются `PYTHON_WORKERS`, `PYTHON_THREADS`,
   `PYTHON_WORKER_MB`, `PYTHON_RESERVED_MB`;
+- админка — отдельный процесс gunicorn на `127.0.0.1:8002`
+  (`SAVDEX_ROLE=admin`): Apache передаёт туда `/py/admin/`, `/py/login`
+  и `/py/logout`. Упавшая или занятая выгрузкой админка отвечает 502/503
+  только на своих адресах, витрина работает дальше. Её запросы к базе
+  обрываются через 2 минуты (`SAVDEX_ADMIN_STATEMENT_TIMEOUT`, мс, 0 —
+  без лимита). Процессов и потоков — `PYTHON_ADMIN_WORKERS` (1)
+  и `PYTHON_ADMIN_THREADS` (4); её память вычитается до расчёта
+  процессов сайта. Это первый шаг переезда в Uztelecom Cloud, где сайт
+  и админка будут на разных машинах;
 - рядом, как раньше, — расписание (`manage.py schedule`), перевод
   (`translate`, всегда; выключается `MACHINE_TRANSLATION_ENABLED=false`)
   и сверка денег (`reconcile_billing`). `schedule:work` и `queue:work`

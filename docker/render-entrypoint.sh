@@ -4,7 +4,8 @@
 #
 # Этап 8 переноса (docs/migration-to-python.md): PHP в образе нет.
 # Apache отдаёт файлы из public/ и передаёт остальное Django (gunicorn
-# на 127.0.0.1:8001, docker/apache-python.conf); рядом живут фоновые
+# сайта на 127.0.0.1:8001, админки — на 127.0.0.1:8002,
+# docker/apache-python.conf); рядом живут фоновые
 # задачи Django — расписание, перевод, сверка денег.
 #
 # База — только PostgreSQL (DB_CONNECTION=pgsql). SQLite осталась
@@ -80,10 +81,16 @@ if [ -r /sys/fs/cgroup/cpu.max ]; then
 fi
 [ "$cpus" -lt 1 ] && cpus=1
 
+# Админка — свой процесс gunicorn (127.0.0.1:8002, ниже): тяжёлая
+# выгрузка или зависший запрос модератора занимают её потоки, а не
+# потоки сайта. Её место в памяти вычитается до расчёта процессов сайта.
+admin_workers="${PYTHON_ADMIN_WORKERS:-1}"
+admin_threads="${PYTHON_ADMIN_THREADS:-4}"
+
 if [ -n "${PYTHON_WORKERS:-}" ]; then
     workers="$PYTHON_WORKERS"
 else
-    workers=$(( (total_mb - reserved_mb) / worker_mb ))
+    workers=$(( (total_mb - reserved_mb - admin_workers * worker_mb) / worker_mb ))
     [ "$workers" -gt $(( 2 * cpus + 1 )) ] && workers=$(( 2 * cpus + 1 ))
     if [ "$workers" -lt 2 ]; then
         workers=2
@@ -100,7 +107,7 @@ ServerName ${server_name}
 Timeout 130
 CONF
 
-echo "Django: ${workers} процессов × ${threads} потоков при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
+echo "Django: сайт — ${workers} процессов × ${threads} потоков, админка — ${admin_workers} × ${admin_threads}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
 
 # ── Ключ ────────────────────────────────────────────────────────────
 #
@@ -245,6 +252,23 @@ run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
     --timeout 130 \
     --graceful-timeout 30 \
     --max-requests 1000 --max-requests-jitter 100 \
+    --error-logfile -
+
+# Админка (/py/admin/) — отдельный процесс на 127.0.0.1:8002, Apache
+# передаёт её адреса туда (docker/apache-python.conf). Упала, зависла
+# или выбрала всю очередь тяжёлыми запросами — сайт этого не замечает,
+# и наоборот. SAVDEX_ROLE=admin ограничивает её запросы к базе по
+# времени (savdex/settings.py): зависший отчёт не держит базу дольше,
+# чем gunicorn ждёт ответа.
+run_forever 5 "Админка Django (gunicorn)" env SAVDEX_ROLE=admin python/.venv/bin/gunicorn savdex.wsgi \
+    --chdir python \
+    --bind 127.0.0.1:8002 \
+    --workers "$admin_workers" \
+    --worker-class gthread \
+    --threads "$admin_threads" \
+    --timeout 130 \
+    --graceful-timeout 30 \
+    --max-requests 500 --max-requests-jitter 50 \
     --error-logfile -
 
 # Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
