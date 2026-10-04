@@ -269,7 +269,7 @@ def test_страница_задачи(сайт):
     assert (карточка["active"], карточка["completed"]) == (False, True)
     assert карточка["result_host"] == "Example.uz"
     assert карточка["contractor"]["name"] == "Заказчик 1"
-    assert карточка["completed_on"] == "1 九月 2026"
+    assert карточка["completed_on"] == "2026年9月1日"
 
     # Задачи заблокированной компании нет ни в ленте, ни по прямому адресу
     чужая = адрес("company_id = (select max(id) from companies)")

@@ -219,7 +219,7 @@ def _in(text: Text | None, locale: str) -> str | None:
     return text(locale) if callable(text) else text
 
 
-def relative_url(url: str) -> str:
+def relative_url(url: str | None) -> str | None:
     """
     Адрес уведомления — путь сайта («/cabinet/listings»), а не полный адрес:
     переход по уведомлению принимает только пути и добавляет к ним язык
@@ -227,7 +227,7 @@ def relative_url(url: str) -> str:
     """
     from urllib.parse import urlsplit
 
-    if url.startswith(("http://", "https://")):
+    if url is not None and url.startswith(("http://", "https://")):
         parts = urlsplit(url)
         return (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
 
@@ -257,7 +257,7 @@ def _notify_company(
         "and status = 'active'",
         [company["id"]],
     )
-    url = relative_url(url)
+    link = relative_url(url)
     first = min(users, key=lambda u: u["id"]) if users else None
     feed = (first["locale"] if first else None) or "ru"
 
@@ -265,7 +265,7 @@ def _notify_company(
         cursor.execute(
             "insert into activity_events (company_id, type, tone, message, url, created_at, "
             "updated_at) values (%s, %s, %s, %s, %s, %s, %s)",
-            [company["id"], type_, tone, _in(title, feed), url, now, now],
+            [company["id"], type_, tone, _in(title, feed), link, now, now],
         )
 
         for user in users:
@@ -280,7 +280,7 @@ def _notify_company(
                     _in(title, locale),
                     _in(body, locale),
                     tone,
-                    url,
+                    link,
                     now,
                     now,
                 ],

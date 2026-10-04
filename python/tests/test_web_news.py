@@ -82,7 +82,7 @@ def новости(сайт: str, path: str) -> dict[str, Any]:
         ("/news", "1 сентября 2026", "1 мин", "Тарифы и оплата", "Заголовок perevedennaya"),
         ("/uz/news", "1 sentabr 2026", "1 daq.", "Tariflar va to‘lov", "Tariflar yangilandi"),
         ("/en/news", "1 September 2026", "1 min", "Plans and payment", "Pricing updated"),
-        ("/zh/news", "1 九月 2026", "1 分钟", "资费与支付", "Заголовок perevedennaya"),
+        ("/zh/news", "2026年9月1日", "1 分钟", "资费与支付", "Заголовок perevedennaya"),
         ("/tr/news", "1 Eylül 2026", "1 dk", "Tarifeler ve ödeme", "Заголовок perevedennaya"),
     ],
 )

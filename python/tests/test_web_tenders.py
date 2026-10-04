@@ -202,7 +202,8 @@ def test_страница_закупки(сайт):
         (slugs[5], "", "Поставка цемента 6", None, "{d.day} {ru}", False),
         (slugs[5], "/en", "Cement supply 6", ["Cement."], "{d.day} {en}", False),
         (slugs[25], "/uz", None, None, None, False),
-        (slugs[30], "/zh", None, None, "{d.day}", True),
+        # По-китайски — год, месяц, день: «2026年10月6日»
+        (slugs[30], "/zh", None, None, "zh", True),
     ):
         д = открыть(сайт, f"{prefix}/tenders/{slug}")
         стр = страница(д["body"])
@@ -217,6 +218,11 @@ def test_страница_закупки(сайт):
         if месяц is None:
             # Без срока — ни даты, ни дней
             assert (закупка["deadline"], закупка["days_left"]) == (None, None)
+        elif месяц == "zh":
+            дни = (срок, срок + timedelta(hours=5))
+            китайские = {f"{d.year}年{d.month}月{d.day}日" for d in дни}
+            assert закупка["deadline"] in китайские, закупка["deadline"]
+            assert закупка["days_left"] < 0 if завершена else закупка["days_left"] == 5
         else:
             # Дата — по-человечески на языке страницы: «6 октября 2026»
             # (срок в базе — UTC; день берём и по UTC, и по Ташкенту)

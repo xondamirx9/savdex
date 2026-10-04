@@ -251,10 +251,8 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
         90,
     )
     assert row[14].startswith("цемент м400 в мешках по 50 кг портландцемент")
-    assert база["events"] == [("moderation", "success", сообщение, сайт + "/cabinet/listings")]
-    assert база["notifications"] == [
-        ("moderation", сообщение, "success", сайт + "/cabinet/listings")
-    ]
+    assert база["events"] == [("moderation", "success", сообщение, "/cabinet/listings")]
+    assert база["notifications"] == [("moderation", сообщение, "success", "/cabinet/listings")]
 
 
 @pytest.mark.parametrize(
