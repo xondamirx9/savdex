@@ -75,6 +75,7 @@ SECTIONS: dict[str, str] = {
     "catalogs": "Справочники",
     "broadcasts": "Рассылки",
     "settings": "Настройки площадки",
+    "integrations": "Интеграции",
     "backups": "Выгрузка базы",
 }
 
@@ -95,6 +96,8 @@ _MATRIX: dict[str, dict[str, str]] = {
         "leads": "w", "deals": "w", "contacts": "w", "tasks": "w", "communications": "w",
         # Этапы воронки: заводить, переименовывать, удалять
         "pipelines": "f",
+        # Интеграции: ссылка для MEYOS — включить, выключить, новый ключ
+        "integrations": "w",
         "support": "w",
         "content": "w", "catalogs": "w", "broadcasts": "r",
     },

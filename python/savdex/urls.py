@@ -16,6 +16,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
 from savdex import adminlogin, adminpanel, adminsite, visitor
+from savdex.data.meyos import feed as meyos_feed
 from savdex.web import (
     account_actions,
     actions,
@@ -516,6 +517,8 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?s/(?P<subdomain>[a-z0-9-]+)$", microsite.page, name="microsite.page"
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?robots\.txt$", seo_files.robots, name="robots"),
+    # Постоянная ссылка для MEYOS: мебельные объявления в JSON (savdex/data/meyos.py)
+    re_path(r"^feeds/meyos\.json$", meyos_feed, name="feeds.meyos"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?og/listing/(?P<listing_id>[0-9]{1,18})\.jpg$",
         og_image.listing,

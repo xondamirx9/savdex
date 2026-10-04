@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Ссылка для MEYOS (savdex/data/meyos.py): файл для отправки вручную и
+  постоянная ссылка, которую можно включить, выключить и заменить.
+{% endcomment %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Начало</a>
+  &rsaquo; <a href="{% url 'savdex_admin:data_listing_changelist' %}">Объявления</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .sx-meyos { max-width: 860px; }
+  .sx-meyos .module { padding: 20px 24px; margin-bottom: 20px; }
+  #content .sx-meyos h2 { margin: 0 0 8px; padding: 0; background: none; color: var(--sx-text-strong); font-size: 16px; text-transform: none; }
+  .sx-meyos p { margin: 0 0 10px; color: var(--sx-text); }
+  .sx-meyos .sx-muted { color: var(--sx-muted); font-size: 13px; }
+  .sx-meyos-state { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .sx-meyos-state.is-on { background: var(--sx-accent-soft); color: var(--sx-success-text, #15803d); }
+  .sx-meyos-state.is-off { background: var(--sx-surface-2); color: var(--sx-muted); }
+  .sx-meyos-link { display: flex; gap: 8px; margin: 12px 0; }
+  .sx-meyos-link input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 13px; }
+  .sx-meyos-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .sx-meyos-actions form { margin: 0; }
+  .sx-meyos pre { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid var(--sx-border); border-radius: var(--sx-control-radius); background: var(--sx-surface-2); font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<div id="content-main" class="sx-meyos">
+  <div class="module">
+    <h2>Что получает MEYOS</h2>
+    <p>Опубликованные мебельные объявления: раздел «Мебель» с подразделами и объявления других категорий, где в заголовке есть мебельные слова. Сейчас таких объявлений: <b>{{ count }}</b>.</p>
+    <p class="sx-muted">
+      Слова: {{ keywords }}.{% if keywords_url %} <a href="{{ keywords_url }}">Изменить список</a>{% endif %}<br>
+      В каждой записи — ссылка на объявление и страницу компании на SavdEx. Телефонов и почты продавцов нет: контакт открывается на площадке.
+    </p>
+  </div>
+
+  <div class="module">
+    <h2>Файл для отправки вручную</h2>
+    <p>Скачайте JSON и отправьте его MEYOS. Работает, даже когда постоянная ссылка выключена.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="act" value="download">
+      <button type="submit" class="button default">Скачать JSON</button>
+    </form>
+  </div>
+
+  <div class="module">
+    <h2>Постоянная ссылка
+      {% if state.enabled %}<span class="sx-meyos-state is-on">включена</span>{% else %}<span class="sx-meyos-state is-off">выключена</span>{% endif %}
+    </h2>
+    <p>По ссылке сайт MEYOS сам забирает свежий список — отправлять файлы больше не нужно.</p>
+    {% if state.enabled and state.url %}
+      <div class="sx-meyos-link">
+        <input type="text" readonly value="{{ state.url }}" id="sx-meyos-url" aria-label="Ссылка для MEYOS" onclick="this.select()">
+        <button type="button" class="button" onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('sx-meyos-url').value); this.textContent='Скопировано'">Копировать</button>
+      </div>
+      <p class="sx-muted">Ссылка — как пароль: передавайте её только MEYOS. Если она ушла не туда — выдайте новую, прежняя сразу перестанет работать.</p>
+    {% else %}
+      <p class="sx-muted">Пока ссылка выключена, по ней ничего не отдаётся.</p>
+    {% endif %}
+    {% if can_edit %}
+      <div class="sx-meyos-actions">
+        <form method="post">
+          {% csrf_token %}
+          {% if state.enabled %}
+            <input type="hidden" name="act" value="disable">
+            <button type="submit" class="button">Выключить ссылку</button>
+          {% else %}
+            <input type="hidden" name="act" value="enable">
+            <button type="submit" class="button default">Включить ссылку</button>
+          {% endif %}
+        </form>
+        {% if state.key %}
+          <form method="post" onsubmit="return confirm('Выдать новую ссылку? Прежняя сразу перестанет работать — MEYOS нужно будет отправить новую.')">
+            {% csrf_token %}
+            <input type="hidden" name="act" value="regenerate">
+            <button type="submit" class="button">Выдать новую ссылку</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if example %}
+    <div class="module">
+      <h2>Как выглядит одна запись</h2>
+      <pre>{{ example }}</pre>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1569,6 +1569,9 @@ class ListingAdmin(SavdexModelAdmin):
                 "export_formats": le.FORMATS,
                 "export_statuses": le.STATUSES,
                 "export_types": LISTING_TYPES,
+                "meyos_url": reverse("savdex_admin:integrations_meyos")
+                if _admin_of(request).can("integrations.view")
+                else "",
                 **(extra_context or {}),
             },
         )

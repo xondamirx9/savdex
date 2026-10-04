@@ -80,6 +80,9 @@
       <a href="{{ export_url }}{{ export_sep }}format=csv">CSV</a> ·
       <a href="{{ export_url }}{{ export_sep }}format=json">JSON</a>
     </p>
+    {% if meyos_url %}
+      <p class="sx-export-alt">Мебельные объявления для MEYOS — файлом или постоянной ссылкой: <a href="{{ meyos_url }}">Ссылка для MEYOS</a></p>
+    {% endif %}
   </form>
 </dialog>
 
