@@ -83,8 +83,11 @@ def accept(ctx: Context, actor: access.Admin, unlock: dict[str, Any], note: str)
             [unlock["id"]],
         )
 
-        if not fresh or fresh[0]["complaint_status"] != "pending" or fresh[0]["refunded"]:
+        if not fresh or fresh[0]["complaint_status"] != "pending":
             return
+
+        # Уже возвращённое — без второго возврата, но решение записывается
+        unlock = {**unlock, "refunded": fresh[0]["refunded"]}
 
         wallets = (
             _rows("select * from wallets where company_id = %s limit 1", [company["id"]])
