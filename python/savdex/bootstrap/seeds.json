@@ -24015,6 +24015,24 @@
    "type": "text",
    "value": "мебел, mebel, дсп, лдсп, мдф, хдф, фурнитур, столешниц, шкаф, shkaf, диван, divan, кресл, kreslo, стул, stul, кроват, матрас, комод, тумб, гарнитур",
    "sort": 0
+  },
+  {
+   "group": "integrations",
+   "key": "meyos_feed_enabled",
+   "label": "Ссылка для MEYOS включена",
+   "description": "Включается и выключается на странице «Ссылка для MEYOS».",
+   "type": "boolean",
+   "value": false,
+   "sort": 1
+  },
+  {
+   "group": "integrations",
+   "key": "meyos_feed_key",
+   "label": "Ключ ссылки для MEYOS",
+   "description": "Выдаётся на странице «Ссылка для MEYOS»; новый ключ отключает старую ссылку.",
+   "type": "string",
+   "value": "",
+   "sort": 2
   }
  ]
 }

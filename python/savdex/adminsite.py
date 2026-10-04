@@ -230,6 +230,7 @@ class SavdexAdminSite(admin.AdminSite):
     def get_urls(self) -> list[URLPattern | URLResolver]:
         from django.urls import path
 
+        from savdex.data import meyos
         from savdex.system import exports_view
 
         # «Выгрузка в Excel» (шаг 68) — страница админки, а не раздел
@@ -241,6 +242,9 @@ class SavdexAdminSite(admin.AdminSite):
                 self.admin_view(exports_view.download),
                 name="system_exports_download",
             ),
+            # Ссылка для MEYOS — страница, а не раздел модели: настройка
+            # в двух строках settings и файл по запросу
+            path("integrations/meyos/", self.admin_view(meyos.view), name="integrations_meyos"),
         ]
 
         # Смена пароля — на сайте: у Django своих паролей нет

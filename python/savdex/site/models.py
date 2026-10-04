@@ -94,6 +94,9 @@ SYSTEM_KEYS: frozenset[str] = frozenset(
         "display_currency_tr",
         # Выгрузка «Мебель и всё, что с ней связано» (savdex/data/listing_export.py)
         "furniture_keywords",
+        # Ссылка для MEYOS (savdex/data/meyos.py)
+        "meyos_feed_enabled",
+        "meyos_feed_key",
     }
 )
 
