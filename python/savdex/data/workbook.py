@@ -1379,7 +1379,6 @@ class _Import:
                 if not row.fields and row.number not in photos:
                     continue
 
-                result["rows"] += 1
                 texts = {
                     locale: sheet.rows[offset].fields
                     for locale, sheet in translations.items()
@@ -1390,39 +1389,54 @@ class _Import:
                     if named
                     else f"Строка {row.number}"
                 )
-                stored: list[str] = []
-                obsolete: list[str | None] = []
-                # Пропуски — свои у каждой строки: иначе заметка второй
-                # строки повторялась бы у всех следующих
-                self.skipped = []
-
-                try:
-                    with transaction.atomic():
-                        exists, saved = self._save_row(
-                            row.fields, texts, photos.get(row.number, []), stored, obsolete
-                        )
-                except _RowError as error:
-                    image_store.delete(*stored)
-                    result["errors"].append(f"{where}: {error}")
-
-                    continue
-                except Exception:
-                    log.exception("Строка книги товаров не загрузилась: %s", where)
-                    image_store.delete(*stored)
-                    result["errors"].append(f"{where}: строку не удалось загрузить")
-
-                    continue
-
-                # Прежние фотографии (replace) — с диска после записи строки
-                image_store.delete(*obsolete)
-                result["updated" if exists else "created"] += 1
-                result["photos"] += saved
-
-                # Что в строке пропущено — в отчёт: строка загружена,
-                # но человек должен знать, чего в ней не хватает
-                result["notes"].extend(f"{where}: {skip}" for skip in self.skipped)
+                self.row(where, row.fields, texts, photos.get(row.number, []), result)
 
         return result
+
+    def row(
+        self,
+        where: str,
+        fields: dict[str, str],
+        texts: dict[str, dict[str, str]],
+        files: list[Path],
+        result: WorkbookResult,
+        notes: Sequence[str] = (),
+    ) -> None:
+        """
+        Одна строка: своя точка сохранения, итог — в result. Так же
+        загружаются записи JSON (savdex/data/json_import.py); notes —
+        заметки, накопленные до записи (фото, которое не скачалось).
+        """
+        result["rows"] += 1
+        stored: list[str] = []
+        obsolete: list[str | None] = []
+        # Пропуски — свои у каждой строки: иначе заметка второй
+        # строки повторялась бы у всех следующих
+        self.skipped = list(notes)
+
+        try:
+            with transaction.atomic():
+                exists, saved = self._save_row(fields, texts, files, stored, obsolete)
+        except _RowError as error:
+            image_store.delete(*stored)
+            result["errors"].append(f"{where}: {error}")
+
+            return
+        except Exception:
+            log.exception("Строка книги товаров не загрузилась: %s", where)
+            image_store.delete(*stored)
+            result["errors"].append(f"{where}: строку не удалось загрузить")
+
+            return
+
+        # Прежние фотографии (replace) — с диска после записи строки
+        image_store.delete(*obsolete)
+        result["updated" if exists else "created"] += 1
+        result["photos"] += saved
+
+        # Что в строке пропущено — в отчёт: строка загружена,
+        # но человек должен знать, чего в ней не хватает
+        result["notes"].extend(f"{where}: {skip}" for skip in self.skipped)
 
     # ── Листы ────────────────────────────────────────────────────────
 

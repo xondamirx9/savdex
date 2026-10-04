@@ -163,13 +163,70 @@ def _journal(request: HttpRequest, row: int, before: str, after: str, note: str)
     )
 
 
+#: Файл JSON от MEYOS — не больше
+MAX_IMPORT_BYTES = 20 * 1024 * 1024
+
+
+def import_form() -> type[Any]:
+    """Окно загрузки из Excel без книг — вместо них файл JSON."""
+    from django import forms
+
+    from savdex.data.admin import WorkbooksForm
+
+    class ImportForm(WorkbooksForm):
+        workbooks = None
+        file = forms.FileField(
+            label="Файл JSON",
+            widget=forms.ClearableFileInput(attrs={"accept": ".json,application/json"}),
+        )
+        field_order = ("file", "default_company", "default_type", "publish", "replace")
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            # Подсказки окна Excel говорят о книге и столбцах — здесь записи
+            self.fields["default_company"].label = "Компания для записей без компании"
+            self.fields["default_company"].help_text = (
+                "Название или ИНН компании из раздела «Компании». Ей достанутся записи, где "
+                "компания не указана или её нет на площадке. Пусто — служебной компании "
+                "(Anjir Group); передать настоящему владельцу — действием «Передать "
+                "компании…» в списке объявлений."
+            )
+            self.fields["default_type"].help_text = (
+                "Когда в записи нет поля type, а заголовок не начинается с «Куплю», "
+                "«Требуется», «Продам»…"
+            )
+            self.fields["publish"].help_text = (
+                "Новые объявления из файла сразу появятся на сайте, без проверки. Ждавшие "
+                "проверки с прошлой загрузки тоже опубликуются; отклонённые — нет."
+            )
+            self.fields["replace"].help_text = (
+                "Обычно фотографии добавляются только объявлениям без фотографий — повторная "
+                "загрузка того же файла не плодит одинаковые."
+            )
+
+        def clean_file(self) -> Any:  # noqa: ANN401
+            upload = self.cleaned_data["file"]
+
+            if upload.size > MAX_IMPORT_BYTES:
+                raise forms.ValidationError("Файл больше 20 МБ — разбейте его на части.")
+
+            return upload
+
+    return ImportForm
+
+
 def view(request: HttpRequest) -> HttpResponse:
     staff = _admin_of(request)
 
     if not staff.can("integrations.view"):
         raise PermissionDenied
 
-    if request.method == "POST":
+    form = None
+    report = None
+
+    if request.method == "POST" and request.POST.get("act") == "import":
+        form, report = _import(request)
+    elif request.method == "POST":
         return _act(request)
 
     state = current()
@@ -187,10 +244,46 @@ def view(request: HttpRequest) -> HttpResponse:
             if data["items"]
             else "",
             "can_edit": staff.can("integrations.edit"),
+            "can_import": staff.can("listings.import"),
+            "import_form": form or import_form()(),
+            "report": report,
             "keywords": ", ".join(le.keywords()),
             "keywords_url": le.keywords_url(staff),
         },
     )
+
+
+def _import(request: HttpRequest) -> tuple[Any, dict[str, Any] | None]:
+    """«Принять объявления»: файл JSON — объявлениями, как книга Excel."""
+    from savdex.data import json_import
+
+    staff = _admin_of(request)
+
+    if not staff.can("listings.import"):
+        raise PermissionDenied
+
+    form = import_form()(request.POST, request.FILES)
+
+    if not form.is_valid():
+        return form, None
+
+    try:
+        result = json_import.import_json(
+            form.cleaned_data["file"].read(),
+            admin_id=staff.id,
+            replace=bool(form.cleaned_data.get("replace")),
+            ip=audit.client_ip(request),
+            default_company=form.cleaned_data.get("default_company"),
+            default_type=form.cleaned_data.get("default_type") or "supply",
+            publish=bool(form.cleaned_data.get("publish")),
+            source="MEYOS, JSON",
+        )
+    except json_import.UnreadableJsonError as error:
+        form.add_error("file", str(error))
+
+        return form, None
+
+    return import_form()(), dict(result)
 
 
 def _act(request: HttpRequest) -> HttpResponse:
