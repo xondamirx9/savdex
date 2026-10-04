@@ -219,6 +219,24 @@ jobs:
           for task in schedule translate reconcile_billing; do
             docker exec savdex sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat | tr '\\0' ' ' | grep -q 'manage.py $task'"
           done
+          # Админка — свой процесс gunicorn (127.0.0.1:8002). Убитая, она
+          # отвечает 502/503 только на своих адресах, сайт работает дальше,
+          # а через несколько секунд она поднимается снова. «800[2]» — чтобы
+          # под шаблон не попал сам этот sh и grep
+          docker exec savdex sh -c 'for p in /proc/[0-9]*; do
+            grep -qa "127.0.0.1:800[2]" "$p/cmdline" 2>/dev/null \
+              && [ "$(cat "$p/comm")" != runuser ] && kill -KILL "${p#/proc/}"
+          done; true'
+          # 502 — если Apache пробовал уже открытое соединение, 503 — новое
+          case "$(code http://127.0.0.1:18080/py/admin/login/)" in 502|503) ;; *) false ;; esac
+          test "$(curl -fsS http://127.0.0.1:18080/py/up)" = ok
+          curl -fsS -o /tmp/home.html http://127.0.0.1:18080/
+          grep -q '"component":"Home"' /tmp/home.html
+          for i in $(seq 1 30); do
+            test "$(code http://127.0.0.1:18080/py/admin/login/)" = 200 && break
+            sleep 2
+          done
+          test "$(code http://127.0.0.1:18080/py/admin/login/)" = 200
 
       - name: Журнал контейнера
         if: always()

@@ -118,6 +118,20 @@ def _database() -> dict[str, Any]:
 
 DATABASES = {"default": _database()}
 
+# Процесс админки (SAVDEX_ROLE=admin, docker/render-entrypoint.sh):
+# запрос к базе дольше двух минут обрывает сама база. gunicorn ждёт
+# ответа 130 секунд и убивает поток, но запрос в PostgreSQL после этого
+# идёт дальше и держит строки и соединение — у сайта та же база.
+# SAVDEX_ADMIN_STATEMENT_TIMEOUT — в миллисекундах, 0 выключает
+SAVDEX_ROLE = os.environ.get("SAVDEX_ROLE", "")
+if SAVDEX_ROLE == "admin":
+    _timeout = int(os.environ.get("SAVDEX_ADMIN_STATEMENT_TIMEOUT", "120000"))
+    if _timeout > 0:
+        _options = DATABASES["default"].setdefault("OPTIONS", {})
+        _options["options"] = (
+            f"{_options.get('options', '')} -c statement_timeout={_timeout}".strip()
+        )
+
 # Правило 4.2: схему базы меняет только Laravel
 DATABASE_ROUTERS = ["savdex.guards.LaravelOwnsSchema"]
 
