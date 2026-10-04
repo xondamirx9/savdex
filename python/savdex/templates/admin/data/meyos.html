@@ -24,6 +24,14 @@
   .sx-meyos-link input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 13px; }
   .sx-meyos-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .sx-meyos-actions form { margin: 0; }
+  .sx-meyos-report { margin: 12px 0 16px; padding: 12px 16px; border: 1px solid var(--sx-border); border-radius: var(--sx-control-radius); background: var(--sx-surface-2); }
+  .sx-meyos-report ul { margin: 4px 0 8px; padding-left: 20px; }
+  .sx-meyos-bad { color: var(--sx-danger, #dc2626); font-weight: 600; }
+  .sx-meyos-field { margin-bottom: 14px; }
+  .sx-meyos-field > label { display: block; margin-bottom: 6px; font-weight: 500; color: var(--sx-text-2, var(--sx-text)); }
+  .sx-meyos-field label:has(input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; }
+  .sx-meyos-field input[type="text"] { width: min(100%, 420px); box-sizing: border-box; }
+  .sx-meyos-field p { margin: 4px 0 0; }
   .sx-meyos pre { max-height: 360px; overflow: auto; padding: 12px; border: 1px solid var(--sx-border); border-radius: var(--sx-control-radius); background: var(--sx-surface-2); font-size: 12px; }
 </style>
 {% endblock %}
@@ -84,6 +92,43 @@
       </div>
     {% endif %}
   </div>
+
+  {% if can_import %}
+    <div class="module" id="import">
+      <h2>Принять объявления от MEYOS</h2>
+      <p>Файл JSON с товарами производителей — в том же виде, что запись ниже (подробно — docs/meyos.md, «Приём объявлений»). Записи загружаются, как строки книги Excel: уже загруженное обновляется, новое ждёт проверки, если не отмечено «Сразу опубликовать»; фотографии скачиваются по ссылкам.</p>
+      {% if report %}
+        <div class="sx-meyos-report">
+          <p><b>Записей: {{ report.rows }}, создано: {{ report.created }}, обновлено: {{ report.updated }}, фотографий: {{ report.photos }}</b></p>
+          {% if report.errors %}
+            <p class="sx-meyos-bad">Не загружено:</p>
+            <ul>{% for line in report.errors %}<li>{{ line }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if report.notes %}
+            <p class="sx-muted">Загружено с заметками:</p>
+            <ul class="sx-muted">{% for line in report.notes %}<li>{{ line }}</li>{% endfor %}</ul>
+          {% endif %}
+        </div>
+      {% endif %}
+      <form method="post" enctype="multipart/form-data" class="sx-meyos-form">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="import">
+        {% for field in import_form %}
+          <div class="sx-meyos-field{% if field.errors %} has-error{% endif %}">
+            {% if field.field.widget.input_type == "checkbox" %}
+              <label>{{ field }} {{ field.label }}</label>
+            {% else %}
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+            {% endif %}
+            {% for error in field.errors %}<p class="sx-meyos-bad">{{ error }}</p>{% endfor %}
+            {% if field.help_text %}<p class="sx-muted">{{ field.help_text }}</p>{% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="button default">Загрузить</button>
+      </form>
+    </div>
+  {% endif %}
 
   {% if example %}
     <div class="module">
