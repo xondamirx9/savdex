@@ -40,6 +40,7 @@ GROUPS: dict[str, str] = {
     "limits": "Ограничения",
     "moderation": "Модерация",
     "currency": "Валюты",
+    "integrations": "Интеграции",
 }
 
 #: Типы значения. «boolean» — так флаг премодерации отзывов завела
@@ -91,6 +92,8 @@ SYSTEM_KEYS: frozenset[str] = frozenset(
         "display_currency_en",
         "display_currency_zh",
         "display_currency_tr",
+        # Выгрузка «Мебель и всё, что с ней связано» (savdex/data/listing_export.py)
+        "furniture_keywords",
     }
 )
 

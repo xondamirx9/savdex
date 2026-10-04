@@ -46,6 +46,7 @@ from savdex.data.models import (
     LISTING_SOURCES,
     LISTING_STATUSES,
     LISTING_TEXTS,
+    LISTING_TYPES,
     SERVICE_TYPES,
     ItTask,
     Listing,
@@ -1311,48 +1312,105 @@ class ListingAdmin(SavdexModelAdmin):
 
     def export_view(self, request: HttpRequest) -> HttpResponse:
         """
-        ListingExporter: список с теми же отборами, что на экране, — в
-        XLSX или CSV; право listings.export, строка журнала «Выгрузка».
+        ListingExporter, право listings.export, строка журнала «Выгрузка».
+
+        Из окна «Выгрузка» (pick=1) — по категориям, мебельным словам,
+        статусу и типу (savdex/data/listing_export.py); иначе — список с
+        теми же отборами, что на экране. Формат — XLSX, CSV или JSON; в
+        каждой строке ссылки на объявление на сайте и в админке.
         """
         if not _admin_of(request).can("listings.export"):
             raise PermissionDenied
 
         from savdex import admin_export
+        from savdex.data import listing_export as le
 
         query = request.GET.copy()
         file_format = query.pop("format", ["xlsx"])[-1]
-        request.GET = query  # type: ignore[assignment]
-        records = (
-            self.get_changelist_instance(request)
-            .get_queryset(request)
-            .select_related("company")
-            .order_by("-created_at", "-id")
-        )
-        categories = _category_names()
+        file_format = file_format if file_format in le.FORMATS else "xlsx"
+
+        if query.get("pick") == "1":
+            categories = [int(i) for i in query.getlist("category") if i.isdigit()]
+            with_keywords = query.get("keywords") == "1"
+            status = "all" if query.get("status") == "all" else "active"
+            kind = query.get("type", "")
+            records = le.select(
+                categories=categories, with_keywords=with_keywords, status=status, kind=kind
+            )
+            labels = le.category_labels()
+            note = self._export_note(file_format, categories, labels, with_keywords, status, kind)
+        else:
+            request.GET = query  # type: ignore[assignment]
+            records = (
+                self.get_changelist_instance(request)
+                .get_queryset(request)
+                .select_related("company")
+                .order_by("-created_at", "-id")
+            )
+            labels = le.category_labels()
+            note = f"Формат: {le.FORMATS[file_format]}; отборы списка"
+
+        cities = le.city_names()
+        records = records.prefetch_related("images")
 
         return admin_export.respond(
             request,
             section="listings",
             filename="listings",
-            file_format="csv" if file_format == "csv" else "xlsx",
+            file_format=file_format,
+            note=note,
+            as_json=lambda r: le.as_json(r, categories=labels, cities=cities, internal=True),
             columns=[
                 ("Номер", lambda r: r.pk),
                 ("Заголовок", lambda r: r.title),
+                ("Ссылка на сайте", le.listing_url),
                 ("Компания", lambda r: r.company.name if r.company else None),
-                ("Категория", lambda r: categories.get(r.category_id)),
+                ("Категория", lambda r: le.category_path(labels.get(r.category_id))),
                 ("Тип", lambda r: "Запрос" if r.type == "demand" else "Предложение"),
                 ("Цена", lambda r: r.price),
                 ("Валюта", lambda r: r.currency),
                 ("Единица", lambda r: r.unit),
+                ("Город", lambda r: cities.get(r.city_id)),
                 ("Статус", lambda r: EXPORT_STATUSES.get(r.status, "Снято")),
                 ("Показы", lambda r: r.impressions_count),
                 ("Просмотры", lambda r: r.views_count),
                 ("Раскрытий контакта", lambda r: r.unlocks_count),
                 ("Опубликовано", lambda r: r.published_at),
                 ("Действует до", lambda r: r.expires_at),
+                ("Описание", lambda r: r.description),
+                ("Фото", lambda r: "\n".join(le.photo_urls(r))),
+                ("Ссылка в админке", le.admin_url),
             ],
-            records=records.iterator(),
+            records=records.iterator(chunk_size=500),
         )
+
+    @staticmethod
+    def _export_note(
+        file_format: str,
+        categories: list[int],
+        labels: dict[int, dict[str, Any]],
+        with_keywords: bool,
+        status: str,
+        kind: str,
+    ) -> str:
+        """Что выгрузили — строкой журнала: «Формат: JSON; категории: Мебель; …»."""
+        from savdex.data import listing_export as le
+
+        names = [le.category_path(labels.get(i)) or str(i) for i in categories]
+        parts = [
+            f"Формат: {le.FORMATS[file_format]}",
+            "категории: " + (", ".join(names) if names else "все"),
+        ]
+
+        if with_keywords:
+            parts.append("плюс мебельные слова")
+
+        parts.append(le.STATUSES[status].lower())
+
+        if kind in LISTING_TYPES:
+            parts.append(LISTING_TYPES[kind].lower())
+
+        return "; ".join(parts)
 
     # ── Загрузка книгами Excel ──
 
@@ -1486,7 +1544,10 @@ class ListingAdmin(SavdexModelAdmin):
         return chips
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
+        from savdex.data import listing_export as le
+
         query = request.GET.urlencode()
+        can_export = _admin_of(request).can("listings.export")
 
         return super().changelist_view(
             request,
@@ -1495,10 +1556,19 @@ class ListingAdmin(SavdexModelAdmin):
                 "filter_chips": self.filter_chips(request),
                 "can_import": _admin_of(request).can("listings.import"),
                 "import_url": reverse("savdex_admin:data_listing_import"),
-                "can_export": _admin_of(request).can("listings.export"),
+                "can_export": can_export,
                 "export_url": reverse("savdex_admin:data_listing_export")
                 + (f"?{query}" if query else ""),
                 "export_sep": "&" if query else "?",
+                # Окно «Выгрузка»: дерево категорий и мебельные слова
+                "export_base": reverse("savdex_admin:data_listing_export"),
+                "export_tree": le.category_tree() if can_export else [],
+                "export_furniture": le.furniture_ids() if can_export else [],
+                "export_keywords": ", ".join(le.keywords()) if can_export else "",
+                "export_keywords_url": le.keywords_url(_admin_of(request)) if can_export else "",
+                "export_formats": le.FORMATS,
+                "export_statuses": le.STATUSES,
+                "export_types": LISTING_TYPES,
                 **(extra_context or {}),
             },
         )

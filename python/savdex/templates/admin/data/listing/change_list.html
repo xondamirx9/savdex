@@ -9,17 +9,17 @@
     у таблицы 240 px.
   - Действия с отмеченными — кнопками, которые появляются, когда что-то
     отмечено, вместо «Действие: --------- Выполнить».
-  - «Скачать» — список с текущими отборами в XLSX или CSV (право
-    listings.export), «Загрузить из Excel» — книги с фотографиями
-    (право listings.import).
+  - «Выгрузка» — окно: формат (Excel, CSV, JSON), категории деревом,
+    «плюс мебельные слова», статус и тип; или список как на экране, с
+    текущими отборами (право listings.export, savdex/data/listing_export.py).
+    «Загрузить из Excel» — книги с фотографиями (право listings.import).
 {% endcomment %}
 {% block object-tools-items %}
   {% if can_import %}
     <li><a href="{{ import_url }}">Загрузить из Excel</a></li>
   {% endif %}
   {% if can_export %}
-    <li><a href="{{ export_url }}" class="sx-tool-secondary">Скачать XLSX</a></li>
-    <li><a href="{{ export_url }}{{ export_sep }}format=csv" class="sx-tool-secondary">Скачать CSV</a></li>
+    <li><a href="{{ export_url }}" class="sx-tool-secondary" data-export-open>Выгрузка</a></li>
   {% endif %}
   {{ block.super }}
 {% endblock %}
@@ -35,6 +35,11 @@
       {% endfor %}
     </div>
   {% endif %}
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  {% if can_export %}{% include "admin/data/listing/export_dialog.html" %}{% endif %}
 {% endblock %}
 
 {% block extrahead %}

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from collections.abc import Callable, Iterable
 from datetime import datetime
 from decimal import Decimal
@@ -48,17 +49,40 @@ def respond(
     columns: list[Column],
     records: Iterable[Any],
     file_format: str = "xlsx",
+    as_json: Callable[[Any], dict[str, Any]] | None = None,
+    note: str | None = None,
 ) -> HttpResponse:
-    """Книга (или CSV) со столбцами и строками; строка журнала «Выгрузка»."""
+    """
+    Книга, CSV или JSON со строками; строка журнала «Выгрузка» (note —
+    что именно выгрузили). JSON — только если раздел умеет записывать
+    строку целиком (as_json): столбцы таблицы для него слишком плоские.
+    """
     audit.record(
         connection,
         action="exported",
         section=section,
         actor=_admin_of(request),
+        note=note,
         ip=audit.client_ip(request),
     )
     stamp = timezone.localtime().strftime("%Y-%m-%d-%H%M")
     headers = [label for label, _ in columns]
+
+    if file_format == "json" and as_json is not None:
+        items = [as_json(record) for record in records]
+        body = json.dumps(
+            {
+                "generated_at": timezone.now().isoformat(),
+                "count": len(items),
+                "items": items,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        response = HttpResponse(body, content_type="application/json; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}-{stamp}.json"'
+
+        return response
 
     if file_format == "csv":
         buffer = io.StringIO()
