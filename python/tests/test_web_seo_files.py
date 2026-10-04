@@ -104,7 +104,6 @@ def test_карта_список(сайт):
         ("categories", на_всех_языках("/catalog?category=1")),
         ("companies", на_всех_языках("/company/mine")),
         ("listings-1", на_всех_языках("/listing/l-1", "/listing/l-2", "/listing/l-3")),
-        ("listings-2", []),
         ("it-tasks", на_всех_языках("/it-services/task-1")),
         ("news", []),
     ],
@@ -140,7 +139,7 @@ def test_карта_время_изменения(сайт):
 def test_нет_такой_части(сайт):
     assert открыть(сайт, "/sitemap-nope.xml")["status"] == 404
     # Часть объявлений дальше последней — тоже нет, а не пустая карта
-    assert открыть(сайт, "/sitemap-listings-7.xml")["status"] == 404
+    assert открыть(сайт, "/sitemap-listings-2.xml")["status"] == 404
 
 
 def test_импортированное_объявление_на_всех_языках(сайт):
