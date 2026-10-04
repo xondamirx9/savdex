@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { Image as ImageIcon, Star, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { FieldError } from '@/components/FieldError';
 import { useConfirm } from '@/components/useConfirm';
 import { t } from '@/lib/i18n';
 
@@ -84,6 +85,8 @@ export function PhotoUploader({
                     onChange={(e) => upload(e.target.files)}
                 />
             </div>
+
+            <FieldError name="images" />
 
             {photos.length === 0 ? (
                 <div className="card empty" style={{ padding: '40px 24px' }}>

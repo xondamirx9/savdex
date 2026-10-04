@@ -1,6 +1,7 @@
 import { router, useForm } from '@inertiajs/react';
 import { ExternalLink, ImagePlus, Monitor, Package, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { FieldError } from '@/components/FieldError';
 import { Panel, formatNumber } from '@/components/cabinet';
 import { Modal } from '@/components/Modal';
 import { useConfirm } from '@/components/useConfirm';
@@ -535,6 +536,7 @@ function HeroPanel({
                 )}
             </div>
             <p className="hint">{disabled ? t('cabinet.site.hero_save_first') : t('cabinet.site.hero_hint')}</p>
+            <FieldError name="hero" />
         </Panel>
     );
 }

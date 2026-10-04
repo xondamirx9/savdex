@@ -136,7 +136,7 @@ def test_лента(сайт, path, дата, время, рубрика, заг
                 "body": ["Первый абзац perevedennaya.", "Второй абзац — подробнее."],
             },
         ),
-        ("/zh/news/pervaya", {"date": "5 一月 2026", "category_label": "服务更新"}),
+        ("/zh/news/pervaya", {"date": "2026年1月5日", "category_label": "服务更新"}),
         # Неизвестная рубрика — как записана; 23:30 31 марта — ещё 31-е
         (
             "/tr/news/svoya-rubrika",

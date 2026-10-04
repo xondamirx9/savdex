@@ -15,7 +15,15 @@ export function useDismiss(onDismiss: () => void) {
             if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
         };
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onDismiss();
+            if (e.key !== 'Escape') return;
+
+            // Фокус был в меню — возвращается на кнопку, которая его открыла
+            // (первая в блоке), а не пропадает в начало страницы
+            if (ref.current && ref.current.contains(document.activeElement)) {
+                ref.current.querySelector<HTMLElement>('button, [href]')?.focus();
+            }
+
+            onDismiss();
         };
         document.addEventListener('click', onClick);
         document.addEventListener('keydown', onKey);

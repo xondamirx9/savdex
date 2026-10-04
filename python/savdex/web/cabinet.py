@@ -2193,9 +2193,10 @@ def chat(request: HttpRequest, thread_id: str) -> HttpResponse:
                     "body": m["body"],
                     "at": local_time(m["created_at"]).strftime("%d.%m.%Y %H:%M"),
                 }
+                # Последние 500, а не первые: в долгом разговоре новые иначе пропадали
                 for m in _rows(
-                    "select id, company_id, body, created_at from messages where thread_id = %s "
-                    "order by id limit 500",
+                    "select * from (select id, company_id, body, created_at from messages "
+                    "where thread_id = %s order by id desc limit 500) last order by id",
                     [t["id"]],
                 )
             ],

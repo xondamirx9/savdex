@@ -1,4 +1,5 @@
 import { router, useForm } from '@inertiajs/react';
+import { FieldError } from '@/components/FieldError';
 import { Link } from '@/components/ui/Link';
 import { Check, Eye, FileText, Info, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -276,6 +277,7 @@ export default function CompanyProfile({
                                     }}
                                 />
                                 <p className="hint">{t('cabinet.company.logo_hint')}</p>
+                                <FieldError name="logo" />
                             </div>
                         </div>
                     )}
@@ -339,6 +341,7 @@ export default function CompanyProfile({
                                 }}
                             />
                             <p className="hint">{t('cabinet.company.cover_hint')}</p>
+                            <FieldError name="cover" />
                         </div>
                     )}
 
