@@ -2751,8 +2751,12 @@ Python 3.13, что под `php:8.3-apache`) с Apache, Python и libmagic;
   процессов сайта. Это первый шаг переезда в Uztelecom Cloud, где сайт
   и админка будут на разных машинах;
 - рядом, как раньше, — расписание (`manage.py schedule`), перевод
-  (`translate`, всегда; выключается `MACHINE_TRANSLATION_ENABLED=false`)
-  и сверка денег (`reconcile_billing`). `schedule:work` и `queue:work`
+  (`translate`, всегда; выключается `MACHINE_TRANSLATION_ENABLED=false`),
+  сверка денег (`reconcile_billing`) и рассылка уведомлений (`notify`):
+  раз в минуту письмо и сообщение в Telegram по уведомлениям кабинета —
+  по галочкам «Настройки → Уведомления» (`savdex/deliveries.py`).
+  Почта — тот же почтовик `MAIL_*`; без `MAIL_MAILER=smtp` письма
+  только пишутся в журнал. `schedule:work` и `queue:work`
   Laravel больше нет: всё, что они делали, перенесено на шагах 62–72.
 
 **Схема после Laravel** (`savdex/schema.py`): изменения — файлы

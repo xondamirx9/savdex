@@ -215,8 +215,9 @@ jobs:
             test "$(code "http://127.0.0.1:18080/$page")" -lt 500
           done
           test "$(code -X POST http://127.0.0.1:18080/payments/uzum/callback/check)" -lt 500
-          # Фоновые задачи Django запущены: расписание, перевод, сверка денег
-          for task in schedule translate reconcile_billing; do
+          # Фоновые задачи Django запущены: расписание, перевод, сверка денег,
+          # рассылка уведомлений
+          for task in schedule translate reconcile_billing notify; do
             docker exec savdex sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat | tr '\\0' ' ' | grep -q 'manage.py $task'"
           done
           # Админка — свой процесс gunicorn (127.0.0.1:8002). Убитая, она

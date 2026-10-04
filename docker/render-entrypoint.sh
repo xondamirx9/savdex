@@ -54,7 +54,7 @@ server_name="${server_name%%/*}"    # снять путь, если он ест�
 #
 # Числа при желании переопределяются переменными окружения.
 worker_mb="${PYTHON_WORKER_MB:-120}"      # процесс Django с запасом на рост
-reserved_mb="${PYTHON_RESERVED_MB:-450}"  # Apache, расписание, перевод, сверка, ОС
+reserved_mb="${PYTHON_RESERVED_MB:-520}"  # Apache, расписание, перевод, сверка, рассылка, ОС
 
 # Сколько памяти у контейнера: cgroup v2, затем v1, затем вся машина.
 if [ -r /sys/fs/cgroup/memory.max ] && [ "$(cat /sys/fs/cgroup/memory.max)" != "max" ]; then
@@ -289,6 +289,10 @@ run_forever 60 "Расписание Django" python/.venv/bin/python python/mana
 # Машинный перевод: проход раз в минуту. Выключается переменной
 # MACHINE_TRANSLATION_ENABLED=false (savdex/translator.py)
 run_forever 30 "Перевод" python/.venv/bin/python python/manage.py translate
+
+# Письма и Telegram по уведомлениям кабинета — по галочкам в «Настройки →
+# Уведомления» (python/savdex/deliveries.py): проход раз в минуту
+run_forever 30 "Рассылка уведомлений" python/.venv/bin/python python/manage.py notify
 
 # Сверка денег (python/savdex/payments/reconcile.py): раз в час — что
 # должна была выдать каждая свежая оплата и что лежит в базе;

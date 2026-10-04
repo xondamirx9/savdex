@@ -26,6 +26,8 @@ from __future__ import annotations
 import html
 import logging
 import os
+import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from email.utils import formataddr
 from pathlib import Path
@@ -39,6 +41,7 @@ log = logging.getLogger("savdex.mail")
 
 _TEMPLATES = Path(__file__).with_name("mail_templates")
 _PARTS = ("subject", "html", "txt")
+_MARK = re.compile(r"__([A-Z][A-Z_]*[A-Z])__")
 
 
 def language(*candidates: object) -> str:
@@ -59,24 +62,50 @@ def _template_language(name: str, lang: str) -> str:
 
 
 def render(
-    name: str, *, url: str, app_url: str, lang: str | None, code: str = ""
+    name: str,
+    *,
+    url: str,
+    app_url: str,
+    lang: str | None,
+    code: str = "",
+    fields: Mapping[str, str] | None = None,
+    html_fields: Mapping[str, str] | None = None,
 ) -> tuple[str, str, str]:
-    """Тема, HTML и текст письма на языке lang (неизвестный — русский)."""
-    lang = _template_language(name, language(lang))
-    year = str(datetime.now(UTC).year)
+    """
+    Тема, HTML и текст письма на языке lang (неизвестный — русский).
 
-    def fill(text: str) -> str:
-        return (
-            text.replace("__URL_HTML__", html.escape(url, quote=True))
-            .replace("__URL__", url)
-            .replace("__APP_URL__", app_url)
-            .replace("__CODE__", code)
-            .replace("__YEAR__", year)
-            .replace("__LANG__", lang)
-        )
+    fields — свои метки письма: __ИМЯ__ в теме и тексте, в HTML —
+    экранированное значение (__ИМЯ_HTML__ и __ИМЯ__). html_fields —
+    готовая разметка, только для HTML; в тексте и теме — fields с тем же
+    именем. Подстановка в один проход: метка внутри подставленного
+    значения (текст отзыва «__URL__») так и остаётся текстом.
+    """
+    lang = _template_language(name, language(lang))
+    builtin = {
+        "URL": url,
+        "URL_HTML": html.escape(url, quote=True),
+        "APP_URL": app_url,
+        "CODE": code,
+        "YEAR": str(datetime.now(UTC).year),
+        "LANG": lang,
+    }
+    plain = {**builtin, **(fields or {})}
+    marked = {
+        **{key: html.escape(value, quote=True) for key, value in (fields or {}).items()},
+        **{f"{key}_HTML": html.escape(value, quote=True) for key, value in (fields or {}).items()},
+        **builtin,
+        **(html_fields or {}),
+    }
+
+    def fill(text: str, values: Mapping[str, str]) -> str:
+        return _MARK.sub(lambda m: values.get(m.group(1), m.group(0)), text)
 
     subject, body_html, body_text = (
-        fill((_TEMPLATES / f"{name}.{lang}.{ext}").read_text(encoding="utf-8")) for ext in _PARTS
+        fill(
+            (_TEMPLATES / f"{name}.{lang}.{ext}").read_text(encoding="utf-8"),
+            marked if ext == "html" else plain,
+        )
+        for ext in _PARTS
     )
 
     return subject, body_html, body_text

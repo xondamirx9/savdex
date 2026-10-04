@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Merhaba!
+
+SAVDEX hesabınızdaki yenilikler:
+
+__ITEMS__
+
+Aç: __URL__
+
+Bu e-postayı bildirim ayarlarınız nedeniyle aldınız. Hangi e-postaları alacağınızı hesabınızdan seçebilirsiniz: __SETTINGS_URL__.
+
+Saygılarımızla,
+SAVDEX
+
+«Aç» düğmesi çalışmazsa aşağıdaki bağlantıyı kopyalayıp
+tarayıcınızın adres çubuğuna yapıştırın: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Tüm hakları saklıdır.

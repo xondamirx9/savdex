@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Assalomu alaykum!
+
+SAVDEX kabinetingizda yangiliklar:
+
+__ITEMS__
+
+Ochish: __URL__
+
+Bu xat bildirishnoma sozlamalaringizga ko‘ra yuborildi. Pochtaga qaysi xabarlar kelishini kabinetda tanlashingiz mumkin: __SETTINGS_URL__.
+
+Hurmat bilan,
+SAVDEX
+
+«Ochish» tugmasi ishlamasa, quyidagi havolani nusxalang
+va brauzeringizning manzil satriga joylashtiring: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. Barcha huquqlar himoyalangan.

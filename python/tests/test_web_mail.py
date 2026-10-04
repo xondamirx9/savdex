@@ -140,7 +140,7 @@ def test_файлы_шаблонов():
     имена = {п.name for п in mail._TEMPLATES.iterdir()}
     ждём = {
         f"{имя}.{lang}.{ext}"
-        for имя in ПИСЬМА
+        for имя in (*ПИСЬМА, "notification")
         for lang in locales.CODES
         for ext in ("subject", "html", "txt")
     }

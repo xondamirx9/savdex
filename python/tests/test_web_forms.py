@@ -368,7 +368,7 @@ def _настройки(uid: int) -> Callable[[], None]:
         sql("delete from notification_preferences where user_id = %s", [uid])
         sql(
             "insert into notification_preferences (user_id, event, email, telegram, "
-            "created_at, updated_at) values (%s, 'digest', true, false, now(), now()), "
+            "created_at, updated_at) values (%s, 'chat', true, false, now(), now()), "
             "(%s, 'moderation', false, true, now() - interval '1 day', "
             "now() - interval '1 day')",
             [uid, uid],
@@ -391,7 +391,7 @@ def _снимок_настроек(uid: int) -> Callable[[], Any]:
         (
             {
                 "notifications": [
-                    {"event": "digest", "email": False, "telegram": True},
+                    {"event": "chat", "email": False, "telegram": True},
                     {"event": "moderation", "email": False, "telegram": True},
                     {"event": "new_review", "email": True, "telegram": "0"},
                     {"event": "contact_unlocked", "email": 1},
@@ -400,15 +400,15 @@ def _снимок_настроек(uid: int) -> Callable[[], Any]:
             # (событие, почта, телеграм, правилась ли строка сейчас):
             # «moderation» не изменилась — updateOrCreate её не трогает
             [
+                ("chat", False, True, True),
                 ("contact_unlocked", True, False, True),
-                ("digest", False, True, True),
                 ("moderation", False, True, False),
                 ("new_review", True, False, True),
             ],
         ),
         (
-            {"notifications": {"a": {"event": "digest", "email": "1", "telegram": 0}}},
-            [("digest", True, False, True), ("moderation", False, True, False)],
+            {"notifications": {"a": {"event": "chat", "email": "1", "telegram": 0}}},
+            [("chat", True, False, True), ("moderation", False, True, False)],
         ),
     ],
 )
@@ -437,7 +437,7 @@ def test_настройки_сохраняются(сайт, body, ожидан�
         {"notifications": "x"},
         {"notifications": []},
         {"notifications": [{"event": "nope", "email": "yes"}, {"email": True}, "x"]},
-        {"notifications": [{"event": ["digest"], "telegram": None}]},
+        {"notifications": [{"event": ["chat"], "telegram": None}]},
         {"notifications": [{"event": "  ", "email": 2}]},
     ],
 )
@@ -458,7 +458,7 @@ def test_настройки_с_ошибками(сайт, body, prefix):
     assert '"errors":' in итог["сессия"]["payload"]
     assert '"_old_input":' in итог["сессия"]["payload"]
     # Ничего не сохранено: строки — как до формы
-    assert итог["база"] == [("digest", True, False, True), ("moderation", False, True, False)]
+    assert итог["база"] == [("chat", True, False, True), ("moderation", False, True, False)]
 
 
 # ── Язык ────────────────────────────────────────────────────────────

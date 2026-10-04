@@ -996,13 +996,15 @@ def test_настройки(сайт):
         assert props["profile"]["phone"] == "+998901112233"
         assert props["security"]["last_login_ip"] == "10.1.2.3"
         assert props["is_owner"] is True
-        # Свои настройки поверх «всё по почте»; неизвестное событие не показывается
+        # Свои настройки поверх «всё по почте»; неизвестное и снятое событие
+        # (бывший «дайджест») не показывается
         assert [(n["event"], n["email"], n["telegram"]) for n in props["notifications"]] == [
             ("contact_unlocked", True, False),
             ("new_review", False, True),
+            ("chat", True, False),
             ("moderation", True, False),
             ("listing_expiring", True, False),
-            ("digest", True, False),
+            ("billing", True, False),
         ]
 
 
