@@ -57,6 +57,8 @@ class Company(models.Model):
     """Компания площадки — только для выбора и подписи (таблица этапа 5)."""
 
     name = models.CharField("название", max_length=190)
+    #: Адрес страницы компании на сайте — для ссылок в выгрузках
+    slug = models.CharField(max_length=190, null=True, editable=False)
     deleted_at = UTCDateTimeField(null=True, editable=False)
 
     class Meta:
