@@ -424,9 +424,16 @@ def register(request: HttpRequest) -> HttpResponse:
 
     errors = _ordered(errors, list(rules))
 
-    # after(): «пароли не совпадают» — и под вторым полем
+    # after(): «пароли не совпадают» — под вторым полем, а не под обоими:
+    # одна и та же фраза дважды подряд читалась как две разные ошибки
     if confirmed_failed:
         errors["password_confirmation"] = [custom["password.confirmed"]]
+        rest = [m for m in errors.get("password", []) if m != custom["password.confirmed"]]
+
+        if rest:
+            errors["password"] = rest
+        else:
+            errors.pop("password", None)
 
     # after(): почта без «@» или без точки после неё — своя подсказка
     email = data["email"]

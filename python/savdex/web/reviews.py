@@ -204,6 +204,8 @@ def index(request: HttpRequest) -> HttpResponse:
     seo = Seo(ctx.root, ctx.path.rstrip("/") or "/", ctx.locale)
     seo.title(ctx.t("seo.reviews_title")).description(ctx.t("seo.reviews_description"))
     seo.canonical(ctx.url("reviews"))
+    # Дальние страницы — как в каталоге: не индексируются, ведут на первую
+    seo.noindex = page > 1
 
     return inertia.render(
         ctx,
