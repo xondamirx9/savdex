@@ -978,13 +978,17 @@ def contacts_props(ctx: Context) -> dict[str, Any]:
 
 # ── Настройки /cabinet/settings (SettingsController::index) ─────────
 
-#: NotificationPreference::EVENTS — на странице подписи из словаря (ui.notification_events)
+#: События настроек уведомлений — на странице подписи из словаря
+#: (ui.notification_events). Какие виды уведомлений входят в событие и
+#: уходят по его галочкам на почту и в Telegram — savdex/deliveries.py.
+#: «Дайджест по подпискам» был обещанием без рассылки — убран
 NOTIFICATION_EVENTS = {
     "contact_unlocked": "Открыли мой контакт",
     "new_review": "Новый отзыв",
-    "moderation": "Модерация объявления",
+    "chat": "Новое сообщение в чате",
+    "moderation": "Решения модерации",
     "listing_expiring": "Объявление истекает",
-    "digest": "Дайджест по подпискам",
+    "billing": "Оплаты, тариф и продвижение",
 }
 
 

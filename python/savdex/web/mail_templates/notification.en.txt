@@ -1,0 +1,19 @@
+SAVDEX: __APP_URL__
+
+# Hello!
+
+Here is what's new in your SAVDEX account:
+
+__ITEMS__
+
+Open: __URL__
+
+You received this email because of your notification settings. To choose which emails you get, go to __SETTINGS_URL__.
+
+Regards,
+SAVDEX
+
+If you're having trouble clicking the "Open" button, copy and paste the URL below
+into your web browser: [__URL__](__URL__)
+
+© __YEAR__ SAVDEX. All rights reserved.
