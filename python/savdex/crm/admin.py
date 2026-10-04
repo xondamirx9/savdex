@@ -71,6 +71,7 @@ from savdex.crm.models import (
     Task,
     WithSubject,
 )
+from savdex.text import numeric, plural
 
 #: Цвета значков — как у бейджей Filament. Светлая тема: в плашках
 #: (.sx-pill) цвет берёт сама тема, здесь он остался для подписей,
@@ -651,7 +652,7 @@ class OnBoard(Scoped):
             raise PermissionDenied
 
         raw = request.POST.get("owner", "")
-        owner = board.owners(self.section).filter(pk=raw).first() if raw.isdigit() else None
+        owner = board.owners(self.section).filter(pk=raw).first() if numeric(raw) else None
 
         # Сделка без ответственного не бывает; лид — бывает (виден всем продавцам)
         if owner is None and (raw or self.model is Deal):
@@ -1264,8 +1265,8 @@ class StageAdmin(CrmAdmin):
 
         if count:
             return (
-                f"На этапе {count} карточек — сначала переведите их на другой этап "
-                "(кнопка ниже), потом удаляйте."
+                f"На этапе {plural(count, 'карточка', 'карточки', 'карточек')} — "
+                "сначала переведите их на другой этап (кнопка ниже), потом удаляйте."
             )
 
         return ""

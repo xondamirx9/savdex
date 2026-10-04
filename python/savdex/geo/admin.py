@@ -36,6 +36,7 @@ from django.http import HttpRequest
 from savdex.adminsite import register
 from savdex.catalog_admin import CatalogAdmin, TranslationsInline
 from savdex.geo.models import City, CityTranslation, Country, CountryTranslation
+from savdex.text import numeric
 
 
 class CountryForm(forms.ModelForm):  # type: ignore[type-arg]
@@ -219,7 +220,10 @@ class CountryFilter(admin.SimpleListFilter):
         ]
 
     def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
-        return queryset.filter(country_id=self.value()) if self.value() else queryset
+        # Не номер в адресе (?country=abc) — без фильтра, а не 500
+        value = self.value() or ""
+
+        return queryset.filter(country_id=int(value)) if numeric(value) else queryset
 
 
 @register(City, section="catalogs")

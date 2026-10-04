@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db import connection
+from django.db import connection, transaction
 from django.utils import timezone
 
 from savdex.guards import allowed_writes
@@ -64,8 +64,22 @@ def count_recipients(audience: str | None, value: str | None) -> int:
         return int(cursor.fetchone()[0])
 
 
-def send(broadcast: Broadcast, sender_id: int) -> int:
-    """Уведомления сегменту пачками по 500, потом — сколько и когда."""
+def send(broadcast: Broadcast, sender_id: int) -> int | None:
+    """
+    Уведомления сегменту пачками по 500, потом — сколько и когда. Всё в
+    одной транзакции под замком рассылки: два «Отправить» разом слали
+    каждому дважды. Уже отправленная — None, второй раз не уходит.
+    """
+    with transaction.atomic():
+        locked = Broadcast.objects.select_for_update().get(pk=broadcast.pk)
+
+        if locked.sent_at is not None:
+            return None
+
+        return _send(broadcast, sender_id)
+
+
+def _send(broadcast: Broadcast, sender_id: int) -> int:
     broadcast.sent_by_id = sender_id
     broadcast.save()
     where, params = _segment(broadcast.audience, broadcast.audience_value)

@@ -23,6 +23,7 @@ from django.utils.html import format_html
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.system import broadcasts
 from savdex.system.models import Broadcast
+from savdex.text import plural
 
 
 def _plans() -> list[tuple[str, str]]:
@@ -46,6 +47,9 @@ class BroadcastForm(forms.ModelForm):  # type: ignore[type-arg]
             assert isinstance(field, forms.ChoiceField)
             field.choices = [("", "—"), *_plans()]
             field.help_text = "Только для получателей «Компании на тарифе»"
+
+        # У отправленной рассылки и у роли «только чтение» текст — не поле формы
+        if "body" in self.fields:
             self.fields["body"].widget = forms.Textarea(attrs={"rows": 4})
 
     def clean(self) -> dict[str, Any]:
@@ -133,7 +137,23 @@ class BroadcastAdmin(SavdexModelAdmin):
             raise PermissionDenied
 
         sent = broadcasts.send(broadcast, _admin_of(request).id)
-        messages.success(request, f"Рассылка отправлена: {sent} получателей.")
+
+        if sent is None:
+            messages.warning(request, "Рассылка уже отправлена.")
+        else:
+            # Отправка — в журнал: кто, кому и сколько получили
+            self.journal(
+                request,
+                "sent",
+                broadcast,
+                {"after": {"получателей": sent, "аудитория": broadcast.audience}},
+            )
+            messages.success(
+                request,
+                "Рассылка отправлена: "
+                + plural(sent, "получатель", "получателя", "получателей")
+                + ".",
+            )
 
         return HttpResponseRedirect(reverse("savdex_admin:system_broadcast_changelist"))
 

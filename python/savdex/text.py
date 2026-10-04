@@ -24,3 +24,11 @@ def plural(count: int, one: str, few: str, many: str) -> str:
         word = many
 
     return f"{count} {word}"
+
+
+def numeric(value: str) -> bool:
+    """
+    Строка из цифр 0–9, которую int() примет и которая поместится в bigint.
+    str.isdigit() пропускает «²» и «٣» — а int() на них падает (500).
+    """
+    return value.isascii() and value.isdigit() and len(value) <= 18

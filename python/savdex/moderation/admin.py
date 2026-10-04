@@ -66,6 +66,7 @@ from savdex.moderation.models import (
     Review,
 )
 from savdex.tenders import importer
+from savdex.text import numeric
 from savdex.web import ui
 
 #: Формулировка решения — не отписка
@@ -142,7 +143,7 @@ class Stars(admin.SimpleListFilter):
     def queryset(self, request: HttpRequest, queryset: QuerySet[Any]) -> QuerySet[Any]:
         value = self.value()
 
-        return queryset.filter(rating=int(value)) if value and value.isdigit() else queryset
+        return queryset.filter(rating=int(value)) if value and numeric(value) else queryset
 
 
 class Origin(admin.SimpleListFilter):
@@ -1280,6 +1281,14 @@ class ResumeAdmin(SavdexModelAdmin):
                 request,
                 f"Напишите причину — не короче {MIN_RESUME_NOTE} знаков: её видит соискатель.",
                 messages.ERROR,
+            )
+
+            return HttpResponseRedirect(page)
+
+        # Причина блокировки резюме хранится в 255 знаках — длиннее не записать
+        if decision == "block" and len(note) > 255:
+            self.message_user(
+                request, "Причина — не длиннее 255 знаков: сократите формулировку.", messages.ERROR
             )
 
             return HttpResponseRedirect(page)

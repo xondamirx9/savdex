@@ -283,6 +283,9 @@ def _naive(moment: datetime) -> datetime:
     return moment.astimezone(UTC).replace(tzinfo=None) if moment.tzinfo is not None else moment
 
 
+# Одной транзакцией: прежняя подписка закрывается только вместе с
+# появлением новой — иначе ошибка посередине оставляла компанию без тарифа
+@transaction.atomic
 def assign(
     ctx: Context,
     company: dict[str, Any],

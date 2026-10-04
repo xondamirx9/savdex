@@ -29,11 +29,12 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.timesince import timesince
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.crm.admin import OpenFilter, _badge
 from savdex.finance import refunds
 from savdex.finance.models import REFUND_STATUSES, Refund
 from savdex.moderation.services import context_of
+from savdex.text import numeric
 from savdex.web.cabinet import _rows
 
 STATUS_TONES = {"done": "success", "rejected": "gray", "requested": "warning"}
@@ -186,7 +187,7 @@ class RefundAdmin(SavdexModelAdmin):
     def author(self, obj: Refund) -> str:
         return obj.created_by.name if obj.created_by is not None else "—"
 
-    _can_decide = False
+    _can_decide = PerRequest()
 
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         staff = _admin_of(request)
@@ -267,7 +268,12 @@ class RefundAdmin(SavdexModelAdmin):
         if not _admin_of(request).can("refunds.edit"):
             raise PermissionDenied
 
-        rows = _rows("select * from refunds where id = %s", [int(object_id)])
+        # Номер не числом («abc») — как нет такого, а не 500
+        rows = (
+            _rows("select * from refunds where id = %s", [int(object_id)])
+            if numeric(object_id)
+            else []
+        )
 
         if not rows:
             raise PermissionDenied

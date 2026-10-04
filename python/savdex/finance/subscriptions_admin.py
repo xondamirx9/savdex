@@ -39,6 +39,7 @@ from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.billing.models import Plan
 from savdex.finance.models import SOURCES, SUBSCRIPTION_STATUSES, Subscription
 from savdex.moderation.services import context_of
+from savdex.text import numeric
 from savdex.web import eloquent, orders
 from savdex.web.cabinet import _rows
 
@@ -79,6 +80,8 @@ class GrantForm(forms.Form):
         label="Срок, дней",
         required=False,
         min_value=0,
+        # Сто лет — больше не бывает; дальше дата не помещается в базу (500)
+        max_value=36500,
         help_text="Пусто — период тарифа. Ноль — бессрочно",
     )
     reason = forms.CharField(
@@ -156,6 +159,7 @@ class SourceFilter(admin.SimpleListFilter):
 @register(Subscription, section="subscriptions")
 class SubscriptionAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\Subscription"
+    title_change = "Подписка"
     title_list = "Подписки"
     change_list_template = "admin/finance/subscription/change_list.html"
 
@@ -365,7 +369,7 @@ class SubscriptionAdmin(SavdexModelAdmin):
         if not self.has_edit(request):
             raise PermissionDenied
 
-        found = Subscription.objects.filter(pk=object_id).first()
+        found = Subscription.objects.filter(pk=object_id).first() if numeric(object_id) else None
 
         if found is None:
             raise PermissionDenied

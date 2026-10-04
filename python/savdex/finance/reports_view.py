@@ -24,9 +24,13 @@ from savdex.finance import recon, reports
 
 def _day(value: str | None) -> date | None:
     try:
-        return date.fromisoformat(value) if value else None
+        day = date.fromisoformat(value) if value else None
     except ValueError:
         return None
+
+    # 0001-01-01 и 9999-12-31 при переводе в UTC и по месяцам выходят за
+    # пределы календаря (500); отчёту нужны разумные годы
+    return day if day is None or 2000 <= day.year <= 2100 else None
 
 
 def money(amount: int, currency: str) -> str:

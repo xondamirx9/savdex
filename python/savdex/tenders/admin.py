@@ -31,7 +31,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from savdex import audit
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.tenders import importer
 from savdex.tenders.models import STATUSES, Tender
 
@@ -156,7 +156,7 @@ class TenderAdmin(SavdexModelAdmin):
             reverse("savdex_admin:tenders_tender_publish", args=[obj.pk]),
         )
 
-    _can_publish = False
+    _can_publish = PerRequest()
 
     # ── Опубликовать, в архив, удалить ──
 

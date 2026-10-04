@@ -49,6 +49,7 @@ from savdex.data.models import (
     CompanyRecord,
 )
 from savdex.guards import allowed_writes
+from savdex.text import numeric
 from savdex.text import plural as _plural
 
 MIN_BLOCK_REASON = 10
@@ -137,7 +138,7 @@ class CompanyForm(forms.ModelForm):  # type: ignore[type-arg]
         assert isinstance(city, forms.TypedChoiceField)
         city.choices = [
             ("", "—"),
-            *_city_choices(int(str(chosen)) if str(chosen or "").isdigit() else None),
+            *_city_choices(int(str(chosen)) if numeric(str(chosen or "")) else None),
         ]
 
     def clean_type(self) -> str | None:
@@ -230,7 +231,10 @@ def _simple(title_: str, name: str, options: dict[Any, str], cast: Any = str) ->
         def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
             value = self.value()
 
-            return queryset.filter(**{name: cast(value)}) if value else queryset
+            # Значение не из списка (?verification_level=abc) — без фильтра, а не 500
+            known = value is not None and value in {str(k) for k in options}
+
+            return queryset.filter(**{name: cast(value)}) if known else queryset
 
     return Choice
 
@@ -588,7 +592,7 @@ class CompanyAdmin(SavdexModelAdmin):
         if todo == "verify":
             level = request.POST.get("level", "")
 
-            if not level.isdigit() or int(level) not in LEVELS:
+            if not numeric(level) or int(level) not in LEVELS:
                 messages.error(request, "Выберите уровень.")
 
                 return HttpResponseRedirect(page)
@@ -599,7 +603,10 @@ class CompanyAdmin(SavdexModelAdmin):
             tier = request.POST.get("tier", "none")
             sort = request.POST.get("sort", "0")
             company_actions.partner(
-                company, tier if tier in PARTNER_TIERS else None, int(sort) if sort.isdigit() else 0
+                company,
+                tier if tier in PARTNER_TIERS else None,
+                # Порядок — integer: больше не поместится (500)
+                min(int(sort), 2_147_483_647) if numeric(sort) else 0,
             )
             messages.success(
                 request,

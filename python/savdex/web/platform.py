@@ -15,6 +15,8 @@ from typing import Any
 
 from django.db import connection
 
+from savdex.text import numeric
+
 #: Как подписана заявка площадки вместо компании
 NAME = "SavdEx"
 
@@ -44,7 +46,7 @@ def service_company_id() -> int | None:
         rows = _rows(
             "select id from companies where deleted_at is null and "
             "(id = %s or tin = %s or name = %s) order by id limit 1",
-            [int(configured) if configured.isdigit() else -1, configured, configured],
+            [int(configured) if numeric(configured) else -1, configured, configured],
         )
     else:
         rows = _rows(

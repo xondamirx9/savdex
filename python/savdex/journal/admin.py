@@ -25,6 +25,7 @@ from savdex import access
 from savdex.adminsite import SavdexModelAdmin, register
 from savdex.crm.admin import _badge, when
 from savdex.journal.models import ACTIONS, AdminAction
+from savdex.text import numeric
 
 #: AdminActionsTable::TONE
 ACTION_TONES = {
@@ -45,6 +46,7 @@ ACTION_TONES = {
     "imported": "info",
     "refunded": "warning",
     "paid": "success",
+    "sent": "info",
 }
 
 
@@ -103,7 +105,7 @@ class StaffFilter(admin.SimpleListFilter):
     ) -> QuerySet[AdminAction]:
         value = self.value()
 
-        return queryset.filter(user_id=int(value)) if value and value.isdigit() else queryset
+        return queryset.filter(user_id=int(value)) if value and numeric(value) else queryset
 
 
 class Today(admin.SimpleListFilter):

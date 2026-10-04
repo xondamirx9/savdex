@@ -181,6 +181,13 @@ def settle(
     company = companies[0]
 
     with transaction.atomic():
+        # Счёт под замком и статус — заново: два подтверждения разом (двойной
+        # щелчок, две вкладки, шлюз и администратор) начисляли дважды
+        locked = _rows("select status from payments where id = %s for update", [payment["id"]])
+
+        if not locked or locked[0]["status"] == "paid":
+            return False, _t(ctx, "messages.order.already_paid")
+
         eloquent.save(
             ctx,
             "payments",

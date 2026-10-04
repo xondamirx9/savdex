@@ -37,7 +37,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.html import format_html
 
-from savdex.adminsite import SavdexModelAdmin, _admin_of, register, state_tabs
+from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register, state_tabs
 from savdex.crm.admin import _badge
 from savdex.data.models import (
     IT_STATUSES,
@@ -52,7 +52,7 @@ from savdex.data.models import (
     Listing,
 )
 from savdex.guards import allowed_writes
-from savdex.text import plural
+from savdex.text import numeric, plural
 from savdex.web import locales
 
 
@@ -292,7 +292,7 @@ class ItTaskAdmin(SavdexModelAdmin):
 
         return format_html('<span class="sx-row-actions">{}{}</span>', link, button)
 
-    _can_archive = False
+    _can_archive = PerRequest()
 
     def _tabs(self, request: HttpRequest) -> list[dict[str, Any]]:
         """Вкладки состояний: считается то, что откроется при нажатии."""
@@ -664,6 +664,34 @@ def _language_fields() -> dict[str, forms.Field]:
 ListingForm = type("ListingForm", (ListingFormBase,), _language_fields())
 
 
+def _readonly_displays(cls: type) -> type:
+    """
+    Поля формы, которых нет в модели (переводы, «Компания»), для роли без
+    права правки показываются только чтением — по имени поля. Без своих
+    подписей и значений там стояло «Title en:» и пусто.
+    """
+    for name in LISTING_TEXTS:
+        label = str(ListingFormBase.base_fields[name].label)
+
+        for code in OTHER_LOCALES:
+
+            def text(self: Any, obj: Listing, name: str = name, code: str = code) -> str:  # noqa: ANN401
+                return (getattr(obj, f"{name}_i18n", None) or {}).get(code) or "—"
+
+            setattr(
+                cls,
+                f"{name}_{code}",
+                admin.display(description=f"{label} ({code})")(text),
+            )
+
+    def owner(self: Any, obj: Listing) -> str:  # noqa: ANN401
+        return obj.company.name if obj.company_id is not None and obj.company else "—"
+
+    cls.owner = admin.display(description="Компания")(owner)  # type: ignore[attr-defined]
+
+    return cls
+
+
 #: ListingExporter — подписи статусов (прочее — «Снято»)
 EXPORT_STATUSES = {
     "active": "Активно",
@@ -869,6 +897,7 @@ class Trashed(admin.SimpleListFilter):
 
 
 @register(Listing, section="listings")
+@_readonly_displays
 class ListingAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\Listing"
     title_list = "Объявления"
@@ -1330,7 +1359,7 @@ class ListingAdmin(SavdexModelAdmin):
         file_format = file_format if file_format in le.FORMATS else "xlsx"
 
         if query.get("pick") == "1":
-            categories = [int(i) for i in query.getlist("category") if i.isdigit()]
+            categories = [int(i) for i in query.getlist("category") if numeric(i)]
             with_keywords = query.get("keywords") == "1"
             status = "all" if query.get("status") == "all" else "active"
             kind = query.get("type", "")
@@ -1645,18 +1674,24 @@ class ListingAdmin(SavdexModelAdmin):
         page = reverse("savdex_admin:data_listing_change", args=[listing.pk])
         todo = request.POST.get("photo_action", "")
 
+        # Фотографии — в журнал, как логотип и обложка компании: кто и что сделал
         if todo == "upload":
             saved = services.add_photos(listing.pk, request.FILES.getlist("photos"))
             (messages.success if saved else messages.warning)(
                 request, f"Загружено фотографий: {saved}"
             )
+
+            if saved:
+                self.journal(request, "updated", listing, {"after": {"фото добавлено": saved}})
         elif todo in ("cover", "remove"):
             image_id = request.POST.get("image", "")
 
-            if image_id.isdigit() and services.photo_action(listing.pk, int(image_id), todo):
+            if numeric(image_id) and services.photo_action(listing.pk, int(image_id), todo):
                 messages.success(
                     request, "Обложка обновлена." if todo == "cover" else "Фотография удалена."
                 )
+                change = "обложка" if todo == "cover" else "фото удалено"
+                self.journal(request, "updated", listing, {"after": {change: int(image_id)}})
 
         return HttpResponseRedirect(page)
 

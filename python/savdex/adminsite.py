@@ -657,13 +657,40 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
     def delete_model(self, request: HttpRequest, obj: models.Model) -> None:
         label = str(obj)
+        pk = obj.pk
         super().delete_model(request, obj)
+        # Model.delete() обнуляет pk — в журнал пошла бы строка без номера
+        obj.pk = pk
         self.journal(request, "deleted", obj)
         request._savdex_done = f"Удалено: {label}"  # type: ignore[attr-defined]
 
     def delete_queryset(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         for obj in queryset:
             self.delete_model(request, obj)
+
+
+class PerRequest:
+    """
+    Флаг страницы (может ли человек нажимать кнопки) — свой у каждого
+    потока. ModelAdmin один на всех, а gunicorn обслуживает запросы в
+    нескольких потоках: флаг в самом объекте подсматривал соседний запрос,
+    и роль «только чтение» видела чужие кнопки.
+    """
+
+    def __init__(self, default: bool = False) -> None:
+        import threading
+
+        self.default = default
+        self.local = threading.local()
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.name = name
+
+    def __get__(self, obj: object, owner: type | None = None) -> bool:
+        return bool(getattr(self.local, self.name, self.default))
+
+    def __set__(self, obj: object, value: bool) -> None:
+        setattr(self.local, self.name, value)
 
 
 def state_tabs(
