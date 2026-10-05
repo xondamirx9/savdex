@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.db import connections, transaction
-from django.db.models import Q, QuerySet
+from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
@@ -254,12 +254,14 @@ def filtered(admin_: Scoped, request: HttpRequest) -> QuerySet[Any]:
     query = request.GET.get("q", "").strip()
 
     if query:
-        found = Q(title__icontains=query) | Q(company__name__icontains=query)
+        from savdex import search
+
+        fields = ["title", "company__name"]
 
         if admin_.model is Lead:
-            found |= Q(contact_name__icontains=query) | Q(contact_phone__icontains=query)
+            fields += ["contact_name", "contact_phone", "contact__name"]
 
-        queryset = queryset.filter(found)
+        queryset = queryset.filter(search.match(fields, query))
 
     return queryset
 

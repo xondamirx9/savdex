@@ -546,6 +546,31 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     ) -> HttpResponse:
         raise Http404
 
+    def get_search_results(
+        self,
+        request: HttpRequest,
+        queryset: Any,
+        search_term: str,  # noqa: ANN401
+    ) -> tuple[Any, bool]:
+        """
+        Поиск без учёта регистра в любой локали базы (savdex/search.py):
+        icontains у Django в локали C не различает «мебель» и «Мебель» только
+        для латиницы. Каждое слово запроса — хотя бы в одном поле поиска;
+        число — ещё и номер записи.
+        """
+        from django.contrib.admin.utils import lookup_spawns_duplicates
+
+        from savdex import search
+
+        fields = [f.lstrip("^=@") for f in self.get_search_fields(request)]
+
+        if not search_term or not fields:
+            return queryset, False
+
+        duplicates = any(lookup_spawns_duplicates(self.opts, f) for f in fields)
+
+        return queryset.filter(search.match(fields, search_term)), duplicates
+
     def get_actions(self, request: HttpRequest) -> dict[str, Any]:
         # Массового удаления у справочников нет намеренно, как в Filament:
         # записей мало, а ошибка необратима
