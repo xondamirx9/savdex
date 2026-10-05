@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import admin
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, QuerySet
 from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
 
@@ -136,15 +136,14 @@ class CatalogAdmin(GuardedAdmin):
         self, request: HttpRequest, queryset: QuerySet[Any], search_term: str
     ) -> tuple[QuerySet[Any], bool]:
         """Поиск по коду (search_fields) и по названию на любом языке."""
+        from savdex import search
+
         if not search_term:
             return queryset, False
 
-        by_code = Q(**{f"{self.search_fields[0]}__icontains": search_term})
+        found = search.match([self.search_fields[0], "translations__name"], search_term)
 
-        return (
-            queryset.filter(by_code | Q(translations__name__icontains=search_term)).distinct(),
-            True,
-        )
+        return queryset.filter(found).distinct(), True
 
     @admin.display(description="Переводов")
     def translations_count(self, obj: Catalog) -> str:

@@ -302,7 +302,8 @@ class ItTaskAdmin(SavdexModelAdmin):
             rows = rows.filter(service_type=service)
 
         if term := request.GET.get(SEARCH_VAR):
-            rows = rows.filter(title__icontains=term)
+            # Тот же поиск, что у списка: число на вкладке — то, что откроется
+            rows = self.get_search_results(request, rows, term)[0]
 
         # order_by() обязателен: со списочной сортировкой Django кладёт
         # поле сортировки в GROUP BY, и каждый заказ считается отдельной

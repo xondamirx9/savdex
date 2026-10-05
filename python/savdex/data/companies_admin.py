@@ -337,7 +337,10 @@ class CompanyAdmin(SavdexModelAdmin):
         _simple("статус", "status", {"active": "Активна", "blocked": "Заблокирована"}),
         Trashed,
     )
-    search_fields = ("name",)
+    # Компанию ищут по тому, что о ней знают: название, юр. название,
+    # ИНН, телефон, почта, контактное лицо
+    search_fields = ("name", "legal_name", "tin", "phone", "email", "contact_person", "slug")
+    search_help_text = "Название, юридическое название, ИНН, телефон, почта или контактное лицо"
     ordering = ("-created_at", "-id")
     list_per_page = 50
     actions = ("emblems_selected", "delete_selected")
@@ -783,7 +786,8 @@ class CompanyAdmin(SavdexModelAdmin):
         rows = self.get_queryset(request)
 
         if term := request.GET.get(SEARCH_VAR):
-            rows = rows.filter(name__icontains=term)
+            # Тот же поиск, что у списка: число на вкладке — то, что откроется
+            rows = self.get_search_results(request, rows, term)[0]
 
         alive = rows.filter(deleted_at__isnull=True)
         waiting = alive.filter(verification_level=0, live_listings__gt=0).count()
