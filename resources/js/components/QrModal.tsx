@@ -99,11 +99,14 @@ export function QrModal({
     onClose,
     name,
     url,
+    hint,
 }: {
     open: boolean;
     onClose: () => void;
     name: string;
     url: string;
+    /** Своя подсказка под кодом — у визитки QR ведёт не на страницу компании */
+    hint?: string;
 }) {
     const svg = useMemo(() => (open ? toSvg(url) : ''), [open, url]);
     const [copied, setCopied] = useState(false);
@@ -252,7 +255,7 @@ export function QrModal({
                         aria-label={t('qr.code_aria', { name })}
                     />
                     <p className="t-caption muted" style={{ marginTop: 12, lineHeight: 1.5 }}>
-                        {t('qr.hint')}
+                        {hint ?? t('qr.hint')}
                     </p>
                 </div>
 

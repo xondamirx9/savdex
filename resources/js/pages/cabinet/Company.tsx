@@ -5,6 +5,7 @@ import { Check, Eye, FileText, Info, Pencil, Plus, Trash2, Upload, X } from 'luc
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/useConfirm';
 import { FileUploadModal } from '@/components/cabinet/FileUploadModal';
+import { ImageCropModal, type CropOutput } from '@/components/cabinet/ImageCropModal';
 import { SelectField } from '@/components/SelectField';
 import { Panel, Tabs } from '@/components/cabinet';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
@@ -64,6 +65,17 @@ interface Props {
 
 const TYPES = COMPANY_TYPES;
 
+/*
+ * Во что кадрируется картинка. Логотип — квадрат: на визитке и в
+ * каталоге он в квадратной плашке. Обложка — полоса 6 : 1: на визитке
+ * она во всю ширину страницы (1232 пикселя) и 200 пикселей высотой.
+ * Ширина — сколько сервер всё равно оставит (image_store.LOGO, .COVER).
+ */
+const CROPS: Record<'logo' | 'cover', CropOutput> = {
+    logo: { aspect: 1, width: 512, type: 'image/png' },
+    cover: { aspect: 6, width: 2000, type: 'image/jpeg' },
+};
+
 export default function CompanyProfile({
     company,
     serviceTypes,
@@ -80,6 +92,9 @@ export default function CompanyProfile({
     const [uploading, setUploading] = useState<string | null>(null);
     const logoInput = useRef<HTMLInputElement>(null);
     const coverInput = useRef<HTMLInputElement>(null);
+    /** Выбранная картинка ждёт кадрирования; null — окно закрыто */
+    const [cropping, setCropping] = useState<{ field: 'logo' | 'cover'; file: File } | null>(null);
+    const [croppedUploading, setCroppedUploading] = useState(false);
     const { confirm, dialog } = useConfirm();
 
     const form = useForm<{
@@ -187,6 +202,32 @@ export default function CompanyProfile({
         form.patch(routes.cabinetCompany, { preserveScroll: true });
     }
 
+    /* Файл сначала открывается в окне кадрирования, на сервер уходит
+       только выбранная часть */
+    function pickImage(field: 'logo' | 'cover', input: HTMLInputElement) {
+        const file = input.files?.[0];
+        input.value = '';
+        if (file) setCropping({ field, file });
+    }
+
+    function uploadCropped(file: File) {
+        if (!cropping) return;
+
+        const field = cropping.field;
+
+        setCroppedUploading(true);
+        router.post(`/cabinet/company/${field}`, { [field]: file }, {
+            preserveScroll: true,
+            forceFormData: true,
+            // Ошибку сервера («не тот формат») показывает FieldError
+            // под кнопкой — окно закрывается в любом случае
+            onFinish: () => {
+                setCroppedUploading(false);
+                setCropping(null);
+            },
+        });
+    }
+
     const tabs = [
         { key: 'main', label: t('cabinet.company.tab_main') },
         { key: 'docs', label: t('cabinet.company.tab_docs') },
@@ -213,6 +254,16 @@ export default function CompanyProfile({
             }
         >
             {dialog}
+
+            <ImageCropModal
+                file={cropping?.file ?? null}
+                output={CROPS[cropping?.field ?? 'logo']}
+                title={cropping?.field === 'cover' ? t('cabinet.crop.cover_title') : t('cabinet.crop.logo_title')}
+                hint={cropping?.field === 'cover' ? t('cabinet.crop.cover_hint') : undefined}
+                busy={croppedUploading}
+                onCancel={() => setCropping(null)}
+                onConfirm={uploadCropped}
+            />
 
             {company && (
                 <div className="progress" style={{ marginBottom: 24 }}>
@@ -265,16 +316,7 @@ export default function CompanyProfile({
                                     type="file"
                                     accept="image/jpeg,image/png,image/webp"
                                     hidden
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        router.post(
-                                            '/cabinet/company/logo',
-                                            { logo: file },
-                                            { preserveScroll: true, forceFormData: true },
-                                        );
-                                        e.target.value = '';
-                                    }}
+                                    onChange={(e) => pickImage('logo', e.target)}
                                 />
                                 <p className="hint">{t('cabinet.company.logo_hint')}</p>
                                 <FieldError name="logo" />
@@ -286,7 +328,7 @@ export default function CompanyProfile({
                         <div style={{ marginBottom: 24 }}>
                             <div
                                 style={{
-                                    height: 96,
+                                    aspectRatio: CROPS.cover.aspect,
                                     borderRadius: 12,
                                     marginBottom: 10,
                                     background: company.cover
@@ -329,16 +371,7 @@ export default function CompanyProfile({
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp"
                                 hidden
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    router.post(
-                                        '/cabinet/company/cover',
-                                        { cover: file },
-                                        { preserveScroll: true, forceFormData: true },
-                                    );
-                                    e.target.value = '';
-                                }}
+                                onChange={(e) => pickImage('cover', e.target)}
                             />
                             <p className="hint">{t('cabinet.company.cover_hint')}</p>
                             <FieldError name="cover" />

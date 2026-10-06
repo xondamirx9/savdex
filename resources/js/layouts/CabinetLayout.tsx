@@ -9,6 +9,7 @@ import {
     Eye,
     FileUser,
     Globe,
+    IdCard,
     LayoutDashboard,
     MailWarning,
     MessageSquareText,
@@ -90,6 +91,7 @@ function groups(person = false): NavGroup[] {
                 person
                     ? { href: routes.cabinetCompany, label: t('cabinet.nav.profile'), icon: CircleUserRound }
                     : { href: routes.cabinetCompany, label: t('cabinet.nav.company'), icon: Building2 },
+                { href: routes.cabinetCards, label: t('cabinet.nav.cards'), icon: IdCard },
                 { href: routes.cabinetSite, label: t('cabinet.nav.site'), icon: Globe },
                 { href: routes.cabinetBilling, label: t('cabinet.nav.billing'), icon: CreditCard },
                 { href: routes.cabinetSettings, label: t('cabinet.nav.settings'), icon: Settings },
