@@ -329,7 +329,7 @@ class EmailForm(forms.Form):
         required=False,
         max_length=190,
         widget=forms.EmailInput(attrs={"class": "vTextField"}),
-        help_text="Куда придут ответы клиентов. Письмо уходит с почты площадки",
+        help_text="Куда придут ответы клиентов; пусто — в ящик рассылки",
     )
     include_converted = forms.BooleanField(label="Писать и тем, кто уже в лидах", required=False)
 
@@ -772,7 +772,8 @@ class ProspectAdmin(CrmAdmin):
                 request,
                 "Письмо в очереди: "
                 + plural(audience.count, "получатель", "получателя", "получателей")
-                + f". Уходит фоном, по {prospects.PER_PASS} в минуту.",
+                + f". Уходит фоном: по {prospects.per_minute()} в минуту, "
+                f"не больше {prospects.per_day()} за сутки.",
                 messages.SUCCESS,
             )
 
@@ -789,7 +790,9 @@ class ProspectAdmin(CrmAdmin):
                 "audience": audience,
                 "ready": ready,
                 "again": self._again(request, "send_email"),
-                "per_pass": prospects.PER_PASS,
+                "per_minute": prospects.per_minute(),
+                "per_day": prospects.per_day(),
+                "sent_today": prospects.sent_today(),
             },
         )
 

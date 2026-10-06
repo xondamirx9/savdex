@@ -47,7 +47,8 @@ from .pg_admin import (
 )
 
 LIST = "/py/admin/crm/prospect/"
-SMTP = {"MAIL_MAILER": "smtp"}
+#: Свой почтовик рассылки задан (почтовик сайта MAIL_* — не её)
+SMTP = {"PROSPECT_MAIL_MAILER": "smtp"}
 
 # ── Без базы ────────────────────────────────────────────────────────
 
@@ -320,25 +321,21 @@ def test_письмо_очередь_и_отправка(люди, чисто, t
     ) == [(с_почтой, "queued"), (без_контакта, "queued")]
     assert журнал("sent")["subject_label"] == "Здравствуйте, {имя}"
 
-    # Фоновый проход: письма в файл журнала почты
-    почта = tmp_path / "mail.log"
-    проход = subprocess.run(
-        [sys.executable, "manage.py", "notify", "--once"],
-        cwd=PYTHON,
-        env={
-            **ОКРУЖЕНИЕ,
-            "DJANGO_SETTINGS_MODULE": "savdex.settings",
-            "MAIL_MAILER": "log",
-            "MAIL_LOG_PATH": str(почта),
-            "APP_URL": "https://savdex.uz",
-        },
-        capture_output=True,
-        text=True,
+    # Фоновый проход: письма — в файл журнала почтовика рассылки, а не сайта
+    почта = tmp_path / "prospects.log"
+    сайт = tmp_path / "site.log"
+    _проход(
+        PROSPECT_MAIL_MAILER="log",
+        PROSPECT_MAIL_LOG_PATH=str(почта),
+        PROSPECT_MAIL_FROM_ADDRESS="sales@team.savdex.uz",
+        MAIL_MAILER="log",
+        MAIL_LOG_PATH=str(сайт),
     )
-    assert проход.returncode == 0, проход.stderr[-2000:]
     письма = почта.read_text(encoding="utf-8")
 
+    assert not сайт.exists(), "почтовик писем сайта рассылка не трогает"
     assert "To: aziz@mebel.uz" in письма and "To: info@stroy.uz" in письма
+    assert "sales@team.savdex.uz" in письма
     assert "no@no.uz" not in письма and "lead@lead.uz" not in письма
     assert "Reply-To: sales@savdex.uz" in письма
     # Длинный заголовок почта переносит на следующую строку
@@ -389,12 +386,76 @@ def test_без_почтовика_не_отправить(люди, чисто)
     _, ответ = django(
         люди["sales"],
         ("post", LIST, {**выбор, "post": "yes", "subject": "Тема", "body": "Текст"}),
-        # На боевом почтовик «log» — не почта: письма легли бы в файл
-        env={"MAIL_MAILER": "log", "APP_ENV": "production"},
+        # Как на боевом сейчас: почта сайта (Brevo) настроена, своей у
+        # рассылки нет — через почту сайта рассылка не идёт
+        env={"MAIL_MAILER": "smtp", "APP_ENV": "production"},
     )
 
-    assert "Почта площадки ещё не настроена" in ответ["body"]
+    assert "Почта для рассылки ещё не настроена" in ответ["body"]
     assert sql("select count(*) from crm_prospect_mailings") == [(0,)]
+
+
+def _проход(**env: str) -> None:
+    """Один проход фонового обработчика (manage.py notify --once)."""
+    проход = subprocess.run(
+        [sys.executable, "manage.py", "notify", "--once"],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            "DJANGO_SETTINGS_MODULE": "savdex.settings",
+            "APP_URL": "https://savdex.uz",
+            **env,
+        },
+        capture_output=True,
+        text=True,
+    )
+    assert проход.returncode == 0, проход.stderr[-2000:]
+
+
+def _в_очереди(*emails: str) -> None:
+    [(mailing,)] = sql(
+        "insert into crm_prospect_mailings (channel, subject, body, total, created_at, "
+        "updated_at) values ('email', 'Тема', 'Текст', %s, now(), now()) returning id",
+        [len(emails)],
+    )
+
+    for email in emails:
+        pk = _завести(name=email, email=email)
+        sql(
+            "insert into crm_prospect_mailing_recipients (mailing_id, prospect_id, email, "
+            "status, created_at, updated_at) values (%s, %s, %s, 'queued', now(), now())",
+            [mailing, pk, email],
+        )
+
+
+@нужна_база
+def test_без_своего_почтовика_очередь_ждёт(люди, чисто, tmp_path):
+    """Письма в очереди есть, почта сайта настроена, своей нет — не уходит ничего."""
+    _в_очереди("a@a.uz")
+    сайт = tmp_path / "site.log"
+
+    _проход(APP_ENV="production", MAIL_MAILER="log", MAIL_LOG_PATH=str(сайт))
+
+    assert not сайт.exists()
+    assert sql("select status from crm_prospect_mailing_recipients") == [("queued",)]
+
+
+@нужна_база
+def test_лимиты_в_минуту_и_за_сутки(люди, чисто, tmp_path):
+    _в_очереди("a@a.uz", "b@b.uz", "c@c.uz", "d@d.uz")
+    почта = {"PROSPECT_MAIL_MAILER": "log", "PROSPECT_MAIL_LOG_PATH": str(tmp_path / "p.log")}
+
+    # По умолчанию — 2 в минуту
+    _проход(**почта)
+    assert sql(
+        "select status, count(*) from crm_prospect_mailing_recipients group by status order by 1"
+    ) == [("queued", 2), ("sent", 2)]
+
+    # За сутки — не больше 3: ушло 2, ещё одно — и стоп, хоть в минуту и 10
+    _проход(**почта, PROSPECT_MAIL_PER_MINUTE="10", PROSPECT_MAIL_PER_DAY="3")
+    assert sql(
+        "select status, count(*) from crm_prospect_mailing_recipients group by status order by 1"
+    ) == [("queued", 1), ("sent", 3)]
 
 
 @нужна_база

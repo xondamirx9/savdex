@@ -17,6 +17,10 @@ __URL_HTML__), __CODE__, __YEAR__. Разметка у языков одна, р
   storage/logs/python-mail.log), как log-почтовик Laravel;
 - прочее (array) — никуда.
 
+У рассылки потенциальным клиентам свой почтовик — те же настройки с
+приставкой PROSPECT_MAIL_ (prefix в send и configured), чтобы «холодные»
+письма не шли через сервис писем сайта (savdex/crm/prospects.py).
+
 Сбой отправки пишется в журнал и не роняет запрос — как
 User::sendEmailVerificationNotification.
 """
@@ -111,15 +115,20 @@ def render(
     return subject, body_html, body_text
 
 
-def _sender() -> str:
-    address = os.environ.get("MAIL_FROM_ADDRESS") or "hello@example.com"
-    name = os.environ.get("MAIL_FROM_NAME") or os.environ.get("APP_NAME") or "SAVDEX"
+def _env(prefix: str, name: str) -> str | None:
+    """Настройка почтовика: MAIL_HOST или, у своего почтовика, PROSPECT_MAIL_HOST."""
+    return os.environ.get(f"{prefix}_{name}") or None
+
+
+def _sender(prefix: str = "MAIL") -> str:
+    address = _env(prefix, "FROM_ADDRESS") or "hello@example.com"
+    name = _env(prefix, "FROM_NAME") or os.environ.get("APP_NAME") or "SAVDEX"
 
     return formataddr((name, address))
 
 
-def _log_path() -> Path:
-    configured = os.environ.get("MAIL_LOG_PATH")
+def _log_path(prefix: str = "MAIL") -> Path:
+    configured = _env(prefix, "LOG_PATH") or os.environ.get("MAIL_LOG_PATH")
 
     if configured:
         return Path(configured)
@@ -127,9 +136,14 @@ def _log_path() -> Path:
     return Path(settings.LARAVEL_ROOT) / "storage/logs/python-mail.log"
 
 
-def configured() -> bool:
+def mailer(prefix: str = "MAIL") -> str:
+    """smtp, log или прочее (никуда); не задан — log, как у Laravel."""
+    return _env(prefix, "MAILER") or "log"
+
+
+def configured(prefix: str = "MAIL") -> bool:
     """Письма уходят по-настоящему: почтовик — SMTP, а не файл журнала."""
-    return (os.environ.get("MAIL_MAILER") or "log") == "smtp"
+    return mailer(prefix) == "smtp"
 
 
 def send(
@@ -140,40 +154,43 @@ def send(
     *,
     reply_to: str | None = None,
     headers: Mapping[str, str] | None = None,
+    prefix: str = "MAIL",
 ) -> bool:
     """
     Отправить письмо (текст и HTML); сбой — в журнал, False. reply_to —
     куда уходит ответ (рассылка отдела продаж — на почту сотрудника),
-    headers — свои заголовки (List-Unsubscribe).
+    headers — свои заголовки (List-Unsubscribe). prefix — чей почтовик:
+    MAIL_* — письма сайта, PROSPECT_MAIL_* — рассылка потенциальным
+    клиентам со своего ящика (savdex/crm/prospects.py).
     """
     message = EmailMultiAlternatives(
         subject,
         body_text,
-        _sender(),
+        _sender(prefix),
         [to],
         reply_to=[reply_to] if reply_to else None,
         headers=dict(headers or {}),
     )
     message.attach_alternative(body_html, "text/html")
-    mailer = os.environ.get("MAIL_MAILER") or "log"
+    kind = mailer(prefix)
 
     try:
-        if mailer == "smtp":
-            port = int(os.environ.get("MAIL_PORT") or 587)
-            implicit = os.environ.get("MAIL_SCHEME") == "smtps" or port == 465
+        if kind == "smtp":
+            port = int(_env(prefix, "PORT") or 587)
+            implicit = _env(prefix, "SCHEME") == "smtps" or port == 465
             connection = get_connection(
                 "django.core.mail.backends.smtp.EmailBackend",
-                host=os.environ.get("MAIL_HOST") or "127.0.0.1",
+                host=_env(prefix, "HOST") or "127.0.0.1",
                 port=port,
-                username=os.environ.get("MAIL_USERNAME") or None,
-                password=os.environ.get("MAIL_PASSWORD") or None,
+                username=_env(prefix, "USERNAME"),
+                password=_env(prefix, "PASSWORD"),
                 use_ssl=implicit,
                 use_tls=not implicit,
-                timeout=int(os.environ.get("MAIL_TIMEOUT") or 30),
+                timeout=int(_env(prefix, "TIMEOUT") or 30),
             )
             connection.send_messages([message])
-        elif mailer == "log":
-            path = _log_path()
+        elif kind == "log":
+            path = _log_path(prefix)
             path.parent.mkdir(parents=True, exist_ok=True)
 
             with path.open("a", encoding="utf-8") as handle:

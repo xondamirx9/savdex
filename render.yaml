@@ -89,6 +89,16 @@ services:
       #   MAIL_MAILER=smtp, MAIL_HOST/PORT/USERNAME/PASSWORD — из панели
       #   сервиса, MAIL_FROM_ADDRESS=no-reply@savdex.uz,
       #   MAIL_FROM_NAME=SAVDEX.
+      #
+      #   Рассылка потенциальным клиентам (CRM) — НЕ через этот сервис:
+      #   Brevo и ему подобные запрещают письма тем, кто не давал
+      #   согласия, и закрыли бы аккаунт вместе с письмами сайта. У неё
+      #   свой ящик на поддомене (например sales@team.savdex.uz в Zoho
+      #   Mail или Яндекс 360) и свои переменные — тоже только в панели:
+      #   PROSPECT_MAIL_MAILER=smtp, PROSPECT_MAIL_HOST/PORT/USERNAME/
+      #   PASSWORD, PROSPECT_MAIL_FROM_ADDRESS, PROSPECT_MAIL_FROM_NAME;
+      #   по желанию PROSPECT_MAIL_PER_DAY (100) и _PER_MINUTE (2).
+      #   Без них письма рассылки не уходят. Подробно — docs/prospects.md.
       # Кэш — в файлах, а не в базе.
       #
       # Умолчание — database, и оно означает, что каждое

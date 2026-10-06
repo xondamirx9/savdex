@@ -15,9 +15,11 @@
 <div id="content-main">
   {% if not ready %}
     <ul class="messagelist"><li class="error">
-      Почта площадки ещё не настроена: письма не уйдут. Нужен почтовый сервис (Brevo, Resend,
-      SMTP2GO) и переменные MAIL_MAILER=smtp, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
-      на Render. Пока можно писать со своей почты и отмечать рассылку вручную.
+      Почта для рассылки ещё не настроена: письма не уйдут. Рассылка идёт со своего ящика, а не
+      через почту сайта (Brevo запрещает письма тем, кто не давал согласия): нужны переменные
+      PROSPECT_MAIL_MAILER=smtp, PROSPECT_MAIL_HOST, PROSPECT_MAIL_PORT, PROSPECT_MAIL_USERNAME,
+      PROSPECT_MAIL_PASSWORD, PROSPECT_MAIL_FROM_ADDRESS на Render — как настроить, в docs/prospects.md.
+      Пока можно писать со своей почты и отмечать рассылку вручную.
     </li></ul>
   {% endif %}
 
@@ -28,8 +30,9 @@
       {% if audience.missed %}
         <p class="help">Не получат: {{ audience.missed }}.{% if audience.converted %} Тем, кто уже в лидах, можно написать — галочка внизу.{% endif %}</p>
       {% endif %}
-      <p class="help">Письма уходят фоном, по {{ per_pass }} в минуту, с почты площадки. Ход — в «Рассылках по базе»;
-        счётчик растёт у тех, кому письмо ушло.</p>
+      <p class="help">Письма уходят фоном с почты рассылки: по {{ per_minute }} в минуту, не больше {{ per_day }}
+        за сутки (за последние сутки ушло {{ sent_today }}), остальные ждут своей очереди. Ход — в «Рассылках
+        по базе»; счётчик растёт у тех, кому письмо ушло.</p>
     </div>
   </fieldset>
 
