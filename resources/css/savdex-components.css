@@ -1747,10 +1747,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hd-badge{position:absolute;top:1px;right:12px;min-width:17px;height:17px;padding:0 4px;
   border-radius:var(--r-pill);background:var(--danger);color:#fff;font-size:10.5px;font-weight:700;
   line-height:17px;text-align:center;border:2px solid var(--white);box-sizing:content-box}
-/* Остаток контактов — баланс, а не «непрочитанное»: спокойный синий.
-   Красный остаётся только у непрочитанных сообщений */
-.hd-badge--balance{background:var(--primary-600)}
-.hd-badge--zero{background:var(--text-muted)}
 .hd-auth{display:flex;align-items:center;gap:8px;flex-shrink:0}
 
 /*
@@ -2577,6 +2573,39 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
   .chat-compose{position:sticky;bottom:calc(56px + 8px + env(safe-area-inset-bottom));
     background:var(--white);padding:8px 0;z-index:5}
 }
+
+/* ── Визитки для QR (кабинет «Визитки», страница /card/…) ─────────── */
+
+/* Рамка редактора фото: всё, что за ней, не попадёт на визитку */
+.card-cropper-frame{position:relative;overflow:hidden;margin:0 auto;border-radius:12px;background:var(--canvas,#f1f5f9);cursor:grab;touch-action:none;box-shadow:0 0 0 2px var(--primary-600) inset,var(--sh-sm)}
+.card-cropper-frame:active{cursor:grabbing}
+
+/* Фото настоящей визитки — целиком, без обрезки */
+.biz-card-photo{display:block;width:100%;height:auto;border-radius:14px;box-shadow:var(--sh-md);background:#fff}
+
+/* Собранная визитка: пропорции бумажной 90×50 мм */
+.biz-card{position:relative;aspect-ratio:9/5;width:100%;border-radius:14px;padding:7% 7.5%;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;color:#fff;background:linear-gradient(135deg,var(--navy-900,#0f172a) 0%,var(--primary-700,#1d4ed8) 100%);box-shadow:var(--sh-md);container-type:inline-size}
+.biz-card::after{content:"";position:absolute;right:-18%;top:-40%;width:60%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none}
+.biz-card-company{font-weight:700;font-size:clamp(14px,6.4cqi,26px);line-height:1.2;letter-spacing:.01em;overflow-wrap:anywhere}
+.biz-card-name{font-weight:600;font-size:clamp(13px,5.4cqi,22px);line-height:1.25;margin-bottom:4%;overflow-wrap:anywhere}
+.biz-card-contacts{display:flex;flex-direction:column;gap:4px;font-size:clamp(11px,3.9cqi,16px);opacity:.92}
+.biz-card-contacts a,.biz-card-contacts span{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;overflow-wrap:anywhere}
+.biz-card-contacts a:hover{text-decoration:underline}
+
+/* Список визиток в кабинете */
+.biz-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.biz-card-item{display:flex;flex-direction:column;gap:12px}
+.biz-card-item-photo{display:flex;align-items:center;justify-content:center;min-height:150px}
+.biz-card-item-photo .biz-card-photo{max-height:300px;width:auto;max-width:100%}
+
+/* Выбор вида новой визитки */
+.biz-card-kinds{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.biz-card-kinds{grid-template-columns:1fr}}
+.biz-card-kind{display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px;border:1px solid var(--border,#e2e8f0);border-radius:12px;background:var(--surface,#fff);cursor:pointer;transition:border-color var(--t-fast,.15s)}
+.biz-card-kind:hover,.biz-card-kind:focus-visible{border-color:var(--primary-600)}
+
+/* Страница визитки по QR */
+.biz-card-page{max-width:560px;margin:0 auto;padding:32px 16px 56px;display:flex;flex-direction:column;gap:20px}
 
 /* Кадрирование логотипа и обложки (ImageCropModal): фото двигается под
    рамкой, всё за рамкой притушено — видно, что в кадр не попадёт */

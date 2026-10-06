@@ -63,6 +63,7 @@ SECTIONS: dict[str, str] = {
     "tasks": "Задачи",
     "communications": "Коммуникации",
     "pipelines": "Этапы воронки",
+    "prospects": "Потенциальные клиенты",
     "support": "Обращения в поддержку",
     "payments": "Счета и оплаты",
     "subscriptions": "Подписки",
@@ -96,6 +97,8 @@ _MATRIX: dict[str, dict[str, str]] = {
         "leads": "w", "deals": "w", "contacts": "w", "tasks": "w", "communications": "w",
         # Этапы воронки: заводить, переименовывать, удалять
         "pipelines": "f",
+        # База рассылок: заливать, писать, переносить в лиды, удалять мусор
+        "prospects": "f",
         # Интеграции: ссылка для MEYOS — включить, выключить, новый ключ
         "integrations": "w",
         "support": "w",
@@ -105,6 +108,8 @@ _MATRIX: dict[str, dict[str, str]] = {
         "companies": "r", "listings": "r", "tenders": "r",
         "leads": "wo", "deals": "wo", "contacts": "w",
         "tasks": "wo", "communications": "wo",
+        # Потенциальные клиенты — общая база отдела, без «только свои»
+        "prospects": "w",
         "promocodes": "w",
     },
     "supplier_manager": {
@@ -112,12 +117,14 @@ _MATRIX: dict[str, dict[str, str]] = {
         "documents": "r",
         "leads": "w", "deals": "w", "contacts": "w",
         "tasks": "wo", "communications": "wo",
+        "prospects": "w",
     },
     "buyer_manager": {
         "companies": "w", "listings": "r", "tenders": "w",
         "documents": "r",
         "leads": "w", "deals": "w", "contacts": "w",
         "tasks": "wo", "communications": "wo",
+        "prospects": "w",
     },
     "moderator": {
         "companies": "m", "listings": "m", "tenders": "m", "ittasks": "m",
@@ -149,8 +156,12 @@ _EXTRAS: dict[str, tuple[str, ...]] = {
         "companies.export", "companies.import",
         "listings.export", "listings.import", "users.export",
         "tenders.export", "tenders.import",
-        "reviews.import",
+        "reviews.import", "prospects.import",
     ),
+    # Залить файл потенциальных клиентов — отделу продаж
+    "sales": ("prospects.import",),
+    "supplier_manager": ("prospects.import",),
+    "buyer_manager": ("prospects.import",),
     "finance": ("payments.export", "subscriptions.export", "finreports.export"),
 }  # fmt: skip
 

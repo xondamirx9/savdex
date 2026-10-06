@@ -1,0 +1,54 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Потенциальный клиент (savdex/crm/prospects_admin.py): «В лиды» — POST
+  с токеном формы; под формой — счётчик рассылок и история: что, когда,
+  как и кто отправил.
+{% endcomment %}
+{% block object-tools-items %}
+  {% if can_to_lead %}
+    <li>
+      <form method="post" action="{% url 'savdex_admin:crm_prospect_to_lead' original.pk %}" style="display:inline"
+            onsubmit="return confirm('Создать лид с контактами из этой записи? Запись останется в базе с отметкой «В лидах».')">
+        {% csrf_token %}
+        <button type="submit" class="button">Перенести в лиды</button>
+      </form>
+    </li>
+  {% endif %}
+  {% if sx_lead_url %}
+    <li><a href="{{ sx_lead_url }}">Открыть лид</a></li>
+  {% endif %}
+  {% if sx_company_url %}
+    <li><a href="{{ sx_company_url }}">Компания на SavdEx</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block after_field_sets %}
+  {{ block.super }}
+  {% if original %}
+    <fieldset class="module aligned">
+      <h2>Рассылки</h2>
+      {% for label, value in sx_facts %}
+        <div class="form-row"><div class="flex-container"><label>{{ label }}:</label><div class="readonly">{{ value }}</div></div></div>
+      {% endfor %}
+      {% if sx_history %}
+        <table style="width:100%">
+          <thead><tr><th>Когда</th><th>Как</th><th>Что</th><th>Кто</th><th>Итог</th></tr></thead>
+          <tbody>
+            {% for row in sx_history %}
+              <tr>
+                <td>{{ row.when }}</td>
+                <td>{{ row.how }}</td>
+                <td><a href="{{ row.url }}">{{ row.what }}</a></td>
+                <td>{{ row.who }}</td>
+                <td>{{ row.status }}{% if row.error %} <span class="sx-row-sub">{{ row.error }}</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="form-row"><p>Рассылок ещё не было.</p></div>
+      {% endif %}
+    </fieldset>
+  {% endif %}
+{% endblock %}

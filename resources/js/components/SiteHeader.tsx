@@ -479,10 +479,11 @@ function ContactsLeft({ wallet }: { wallet: SharedProps['contactsLeft'] }) {
             className="hd-action hd-action--wallet"
             title={t('header.contacts_title', { hint })}
         >
+            {/* Числа над кошельком нет: значок с цифрой читался как
+                непрочитанное уведомление, которое не гаснет. Остаток —
+                в подсказке при наведении, пустой кошелёк — подписью
+                «Пополнить» */}
             <Wallet aria-hidden />
-            {!unlimited && (
-                <span className={cn('hd-badge', 'hd-badge--balance', empty && 'hd-badge--zero')}>{wallet.total}</span>
-            )}
             {/* Подпись одна на все состояния — «Контакты», как
                 «Избранное» и «Сообщения» рядом. Число стоит в значке
                 над ней, и склонять его словом («3 контакта») значит

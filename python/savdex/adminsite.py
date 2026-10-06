@@ -159,6 +159,8 @@ ICONS = {
     "crm.Task": "check-circle",
     "crm.Communication": "chat-bubble-left-right",
     "crm.Stage": "view-columns",
+    "crm.Prospect": "user-plus",
+    "crm.ProspectMailing": "envelope",
     "support.Ticket": "lifebuoy",
     "journal.AdminAction": "clock",
     "moderation.Review": "star",
@@ -296,6 +298,7 @@ class SavdexAdminSite(admin.AdminSite):
 
         context["savdex_logo"] = shared.appearance_logo(shared.settings_values())
         context["savdex_theme_version"] = _theme_version()
+        context["savdex_combobox_version"] = static_version("savdex/combobox.js")
 
         return context
 
@@ -336,6 +339,8 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "crm.lead",
             "crm.deal",
+            "crm.prospect",
+            "crm.prospectmailing",
             "crm.contact",
             "crm.task",
             "crm.communication",
