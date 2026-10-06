@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Касание вне площадки (ProspectAdmin.mark_mailing): своя почта,
+  Telegram, звонок — у отмеченных счётчик рассылок +1 сразу.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:crm_prospect_changelist' %}">Потенциальные клиенты</a>
+    › Отметить рассылку
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <fieldset class="module aligned">
+    <h2>Кому</h2>
+    <div class="form-row">
+      <p>Отмечено: <b>{{ count }}</b>. У каждого счётчик рассылок станет на один больше,
+        а в истории появится строка «как» и «что».</p>
+    </div>
+  </fieldset>
+  <form method="post" action="{{ back_url }}">
+    {% csrf_token %}
+    {% include "admin/crm/prospect/_again.html" %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div class="flex-container">
+            {{ field.label_tag }} {{ field }}
+          </div>
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Отметить">
+      <a href="{{ back_url }}" class="button cancel-link">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

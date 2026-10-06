@@ -1,6 +1,7 @@
 """
 Письма и Telegram по уведомлениям кабинета (savdex/deliveries.py) —
-фоновый обработчик рядом с расписанием и переводом.
+фоновый обработчик рядом с расписанием и переводом. Тем же проходом
+уходят письма рассылки потенциальным клиентам (savdex/crm/prospects.py).
 
   manage.py notify --once      один проход
   manage.py notify             бесконечно, проход раз в минуту
@@ -16,6 +17,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import close_old_connections
 
 from savdex import deliveries
+from savdex.crm import prospects
 
 log = logging.getLogger("savdex.deliveries")
 
@@ -38,6 +40,14 @@ class Command(BaseCommand):
                     self.stdout.write(f"Уведомления: {report}.")
             except Exception:
                 log.exception("Проход рассылки уведомлений не удался")
+
+            try:
+                sent = prospects.run()
+
+                if sent:
+                    self.stdout.write(f"Рассылка по базе: {sent}.")
+            except Exception:
+                log.exception("Проход рассылки по базе не удался")
 
             if options["once"]:
                 return

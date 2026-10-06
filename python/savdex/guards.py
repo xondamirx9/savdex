@@ -107,6 +107,12 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Этапы воронок лидов и сделок (доски в админке): правит раздел
         # «Этапы воронки», savdex/crm/stages.py
         "crm_stages",
+        # База потенциальных клиентов для рассылок отдела продаж: правит
+        # раздел «Потенциальные клиенты», письма шлёт фоновый проход
+        # (manage.py notify) — savdex/crm/prospects.py
+        "crm_prospects",
+        "crm_prospect_mailings",
+        "crm_prospect_mailing_recipients",
         # Этап 6: задачи и коммуникации. Разделы Filament убраны, виджет
         # «Задачи на сегодня» и счётчик просроченных у пункта меню только
         # читают; запись разговора удаляется насовсем (DELETE)

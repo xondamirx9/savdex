@@ -1,0 +1,48 @@
+<!doctype html>
+{% comment %}
+  Отписка от писем SavdEx (savdex/crm/unsubscribe.py): кнопка, а не
+  отписка по открытию ссылки; по-русски и по-узбекски.
+{% endcomment %}
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% if done %}Вы отписаны{% else %}Отписка от писем{% endif %} — SavdEx</title>
+  <style>
+    :root { --bg: #f4f5f7; --card: #ffffff; --text: #1f2937; --muted: #6b7280; --accent: #1f4e79; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111827; --card: #1f2937; --text: #f3f4f6; --muted: #9ca3af; --accent: #60a5fa; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    main { max-width: 480px; margin: 12vh auto 0; padding: 32px 24px; background: var(--card);
+           border-radius: 12px; box-sizing: border-box; }
+    @media (max-width: 520px) { main { margin: 16px; } }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    p { line-height: 1.55; margin: 0 0 12px; }
+    .uz { color: var(--muted); font-size: 14px; }
+    button { margin-top: 8px; padding: 12px 20px; border: 0; border-radius: 8px; background: var(--accent);
+             color: #fff; font-size: 16px; cursor: pointer; }
+    a { color: var(--accent); }
+    .home { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <main>
+    {% if done %}
+      <h1>Готово, больше не напишем</h1>
+      <p>Письма от SavdEx на этот адрес больше не придут.</p>
+      <p class="uz">Tayyor, bu manzilga SavdEx xatlari endi kelmaydi.</p>
+    {% else %}
+      <h1>Больше не присылать письма?</h1>
+      <p>Нажмите кнопку — и письма от SavdEx на этот адрес приходить перестанут.</p>
+      <p class="uz">Tugmani bosing — SavdEx xatlari bu manzilga endi kelmaydi.</p>
+      <form method="post" action="{{ action }}">
+        <button type="submit">Отписаться / Obunadan chiqish</button>
+      </form>
+    {% endif %}
+    <p class="uz home"><a href="/">savdex.uz</a></p>
+  </main>
+</body>
+</html>

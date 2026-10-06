@@ -159,6 +159,8 @@ ICONS = {
     "crm.Task": "check-circle",
     "crm.Communication": "chat-bubble-left-right",
     "crm.Stage": "view-columns",
+    "crm.Prospect": "user-plus",
+    "crm.ProspectMailing": "envelope",
     "support.Ticket": "lifebuoy",
     "journal.AdminAction": "clock",
     "moderation.Review": "star",
@@ -336,6 +338,8 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "crm.lead",
             "crm.deal",
+            "crm.prospect",
+            "crm.prospectmailing",
             "crm.contact",
             "crm.task",
             "crm.communication",
@@ -549,8 +553,8 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     def get_search_results(
         self,
         request: HttpRequest,
-        queryset: Any,
-        search_term: str,  # noqa: ANN401
+        queryset: Any,  # noqa: ANN401
+        search_term: str,
     ) -> tuple[Any, bool]:
         """
         Поиск без учёта регистра в любой локали базы (savdex/search.py):

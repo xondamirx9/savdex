@@ -1893,3 +1893,7 @@ class CommunicationAdmin(WithSubjectAdmin):
         Communication.objects.filter(pk=obj.pk).delete()
         self.journal(request, "deleted", obj)
         request._savdex_done = f"Удалено: {label}"  # type: ignore[attr-defined]
+
+
+# Потенциальные клиенты и рассылки по базе — в своём модуле; импорт его регистрирует
+from savdex.crm import prospects_admin  # noqa: E402, F401

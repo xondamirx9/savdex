@@ -1,0 +1,9 @@
+{% comment %}
+  Выбор, с которым окно действия возвращается в список: то же действие,
+  «все по отбору» или отмеченные строки (savdex/crm/prospects_admin.py, _again).
+{% endcomment %}
+<input type="hidden" name="action" value="{{ again.action }}">
+<input type="hidden" name="index" value="0">
+<input type="hidden" name="select_across" value="{{ again.select_across }}">
+<input type="hidden" name="post" value="yes">
+{% for pk in again.selected %}<input type="hidden" name="_selected_action" value="{{ pk }}">{% endfor %}

@@ -127,9 +127,33 @@ def _log_path() -> Path:
     return Path(settings.LARAVEL_ROOT) / "storage/logs/python-mail.log"
 
 
-def send(to: str, subject: str, body_html: str, body_text: str) -> bool:
-    """Отправить письмо (текст и HTML); сбой — в журнал, False."""
-    message = EmailMultiAlternatives(subject, body_text, _sender(), [to])
+def configured() -> bool:
+    """Письма уходят по-настоящему: почтовик — SMTP, а не файл журнала."""
+    return (os.environ.get("MAIL_MAILER") or "log") == "smtp"
+
+
+def send(
+    to: str,
+    subject: str,
+    body_html: str,
+    body_text: str,
+    *,
+    reply_to: str | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> bool:
+    """
+    Отправить письмо (текст и HTML); сбой — в журнал, False. reply_to —
+    куда уходит ответ (рассылка отдела продаж — на почту сотрудника),
+    headers — свои заголовки (List-Unsubscribe).
+    """
+    message = EmailMultiAlternatives(
+        subject,
+        body_text,
+        _sender(),
+        [to],
+        reply_to=[reply_to] if reply_to else None,
+        headers=dict(headers or {}),
+    )
     message.attach_alternative(body_html, "text/html")
     mailer = os.environ.get("MAIL_MAILER") or "log"
 
