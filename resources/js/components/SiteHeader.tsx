@@ -481,7 +481,7 @@ function ContactsLeft({ wallet }: { wallet: SharedProps['contactsLeft'] }) {
         >
             <Wallet aria-hidden />
             {!unlimited && (
-                <span className={cn('hd-badge', empty && 'hd-badge--zero')}>{wallet.total}</span>
+                <span className={cn('hd-badge', 'hd-badge--balance', empty && 'hd-badge--zero')}>{wallet.total}</span>
             )}
             {/* Подпись одна на все состояния — «Контакты», как
                 «Избранное» и «Сообщения» рядом. Число стоит в значке
@@ -503,36 +503,69 @@ function ContactsLeft({ wallet }: { wallet: SharedProps['contactsLeft'] }) {
  */
 function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
     const [open, setOpen] = useState(false);
-    const ref = useDismiss(() => setOpen(false));
+    // Список, каким он был при открытии: непрочитанные в нём остаются
+    // выделенными, хотя на сервере уже отмечены прочитанными
+    const [shown, setShown] = useState<typeof data.latest | null>(null);
+    const ref = useDismiss(() => {
+        setOpen(false);
+        setShown(null);
+    });
+
+    /**
+     * Открыть список — значит посмотреть уведомления: красное число
+     * гаснет сразу, а на сервере всё отмечается прочитанным тихо, без
+     * всплывающего «Все уведомления прочитаны».
+     */
+    const toggle = () => {
+        if (open) {
+            setOpen(false);
+            setShown(null);
+
+            return;
+        }
+
+        setOpen(true);
+
+        if (data.unread > 0) {
+            setShown(data.latest);
+            router.post(
+                routes.notificationsReadAll,
+                { silent: '1' },
+                { preserveScroll: true, preserveState: true, only: ['bell'] },
+            );
+        }
+    };
+
+    const items = shown ?? data.latest;
+    const unread = shown ? 0 : data.unread;
 
     return (
         <div className="dropdown" ref={ref} data-dropdown-keep>
             <button
                 className="hd-action"
                 aria-label={
-                    data.unread > 0
-                        ? t('header.notifications_unread', { count: data.unread })
-                        : t('header.messages')
+                    unread > 0 ? t('header.notifications_unread', { count: unread }) : t('header.messages')
                 }
                 aria-expanded={open}
                 onClick={(e) => {
                     e.stopPropagation();
-                    setOpen((v) => !v);
+                    toggle();
                 }}
             >
                 <MessageSquareText aria-hidden />
-                {data.unread > 0 && <span className="hd-badge">{data.unread > 99 ? '99+' : data.unread}</span>}
+                {unread > 0 && <span className="hd-badge">{unread > 99 ? '99+' : unread}</span>}
                 <span>{t('header.messages')}</span>
             </button>
 
             <div className={cn('dropdown-menu dropdown-menu-wide', open && 'open')} role="menu">
                 <div className="dropdown-head row-between">
                     <b>{t('header.notifications')}</b>
-                    {data.unread > 0 && (
+                    {unread > 0 && (
                         <button
                             className="t-caption"
                             onClick={() => {
                                 setOpen(false);
+                                setShown(null);
                                 router.post(routes.notificationsReadAll, {}, { preserveScroll: true });
                             }}
                         >
@@ -541,12 +574,12 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
                     )}
                 </div>
 
-                {data.latest.length === 0 ? (
+                {items.length === 0 ? (
                     <p className="t-sm muted" style={{ padding: '12px 12px 14px' }}>
                         {t('header.notifications_empty')}
                     </p>
                 ) : (
-                    data.latest.map((n) => (
+                    items.map((n) => (
                         <Link
                             key={n.id}
                             href={routes.notificationRead(n.id)}
@@ -554,7 +587,10 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
                             as="button"
                             className={cn('dropdown-item notif-item', !n.read && 'is-unread')}
                             role="menuitem"
-                            onClick={() => setOpen(false)}
+                            onClick={() => {
+                                setOpen(false);
+                                setShown(null);
+                            }}
                         >
                             <span className={cn('notif-mark', `tone-${n.tone}`)} aria-hidden />
                             <span style={{ minWidth: 0 }}>
@@ -565,7 +601,14 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
                     ))
                 )}
 
-                <Link href={routes.notifications} className="dropdown-item dropdown-all" onClick={() => setOpen(false)}>
+                <Link
+                    href={routes.notifications}
+                    className="dropdown-item dropdown-all"
+                    onClick={() => {
+                        setOpen(false);
+                        setShown(null);
+                    }}
+                >
                     {t('header.notifications_all')}
                 </Link>
             </div>
