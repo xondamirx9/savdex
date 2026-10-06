@@ -1,12 +1,13 @@
 import { useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Send, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Panel } from '@/components/cabinet';
 import { CompanyInfoPanel } from '@/components/cabinet/CompanyInfoPanel';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { routes } from '@/routes';
 import { SelectField } from '@/components/SelectField';
+import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
 
 interface Notification {
@@ -29,6 +30,15 @@ interface Props {
     telegram: { available: boolean; linked: boolean; username: string | null };
     security: { two_factor: boolean; last_login_at: string | null; last_login_ip: string | null };
     is_owner: boolean;
+    /** Категории компании: по ним бот присылает новинки; null — компании ещё нет */
+    categories: {
+        options: { id: number; name: string }[];
+        selected: number[];
+        max: number;
+        editable: boolean;
+    } | null;
+    /** Новые объявления и тендеры в Telegram не на паузе */
+    feed: boolean;
 }
 
 // Языки названы на самих себе — переводить их нельзя
@@ -40,8 +50,10 @@ const LOCALES = [
     ['tr', 'Türkçe'],
 ];
 
-export default function Settings({ profile, notifications, telegram, security, is_owner }: Props) {
+export default function Settings({ profile, notifications, telegram, security, is_owner, categories, feed }: Props) {
     const [rows, setRows] = useState(notifications);
+    const [chosen, setChosen] = useState(categories?.selected ?? []);
+    const [feedOn, setFeedOn] = useState(feed);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
     const notify = useForm<{ notifications: Notification[] }>({ notifications });
@@ -49,6 +61,39 @@ export default function Settings({ profile, notifications, telegram, security, i
     const unlink = useForm({});
     const form = useForm({ name: profile.name, phone: profile.phone ?? '', locale: profile.locale });
     const remove = useForm({ password: '' });
+    const pick = useForm<{ categories: number[] }>({ categories: chosen });
+    const feedForm = useForm<{ on: boolean }>({ on: feed });
+
+    // Кнопка «Изменить категории» из бота ведёт на #categories: страница
+    // рисуется в браузере, и сам браузер до блока не докручивает
+    useEffect(() => {
+        if (window.location.hash === '#categories') {
+            document.getElementById('categories')?.scrollIntoView({ block: 'start' });
+        }
+    }, []);
+
+    function toggleCategory(id: number) {
+        if (!categories?.editable) return;
+
+        const next = chosen.includes(id) ? chosen.filter((c) => c !== id) : [...chosen, id];
+
+        if (next.length > categories.max) return;
+
+        setChosen(next);
+        pick.transform(() => ({ categories: next }));
+        pick.patch(routes.cabinetSettings + '/categories', {
+            preserveScroll: true,
+            // Сервер не принял — вернуть, как было
+            onError: () => setChosen(chosen),
+        });
+    }
+
+    function toggleFeed() {
+        const next = !feedOn;
+        setFeedOn(next);
+        feedForm.transform(() => ({ on: next }));
+        feedForm.patch(routes.cabinetSettings + '/telegram-feed', { preserveScroll: true });
+    }
 
     function toggle(event: string, channel: 'email' | 'telegram') {
         const next = rows.map((r) => (r.event === event ? { ...r, [channel]: !r[channel] } : r));
@@ -106,6 +151,46 @@ export default function Settings({ profile, notifications, telegram, security, i
                         </div>
                         <p className="t-sm muted mt-16">{t('cabinet.settings.saved_instantly')}</p>
                     </Panel>
+
+                    {/* Сюда ведёт кнопка «Изменить категории» из бота */}
+                    {categories && (
+                        <div id="categories">
+                            <Panel title={t('cabinet.settings.categories_title')}>
+                                <p className="t-sm muted" style={{ marginBottom: 12 }}>
+                                    {t('cabinet.settings.categories_lead')}
+                                </p>
+                                <div className="row wrap" style={{ gap: 6 }}>
+                                    {categories.options.map((c) => {
+                                        const active = chosen.includes(c.id);
+                                        const full = !active && chosen.length >= categories.max;
+
+                                        return (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                className={cn('chip', active && 'chip-active')}
+                                                aria-pressed={active}
+                                                disabled={!categories.editable || full || pick.processing}
+                                                onClick={() => toggleCategory(c.id)}
+                                            >
+                                                {c.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {pick.errors.categories && (
+                                    <p className="hint" style={{ color: 'var(--danger)' }}>{pick.errors.categories}</p>
+                                )}
+                                <p className="t-sm muted mt-16">
+                                    {chosen.length === 0
+                                        ? t('cabinet.settings.categories_empty')
+                                        : categories.editable
+                                          ? t('cabinet.settings.categories_hint', { max: categories.max })
+                                          : t('cabinet.settings.categories_owner_note')}
+                                </p>
+                            </Panel>
+                        </div>
+                    )}
 
                     {/* Данные компании меняет только владелец: сотрудник
                         видит их на странице «Компания» */}
@@ -190,6 +275,18 @@ export default function Settings({ profile, notifications, telegram, security, i
                             <p className="t-sm muted" style={{ marginBottom: 16 }}>
                                 {t('cabinet.settings.telegram_lead')}
                             </p>
+
+                            {telegram.linked && (
+                                <label className="row" style={{ gap: 8, marginBottom: 16 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={feedOn}
+                                        disabled={feedForm.processing}
+                                        onChange={toggleFeed}
+                                    />
+                                    <span>{t('cabinet.settings.feed_label')}</span>
+                                </label>
+                            )}
 
                             {telegram.linked ? (
                                 <div className="row-between" style={{ gap: 12 }}>

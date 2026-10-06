@@ -126,5 +126,5 @@ yubormaslik» и заголовок `List-Unsubscribe` (кнопка «Отпи�
 `python/savdex/crm/prospects.py` (загрузка, склейка, письма, отписка, в
 лиды), `python/savdex/crm/prospects_admin.py` (разделы админки),
 `python/savdex/crm/unsubscribe.py` (страница отписки), миграция
-`python/savdex/bootstrap/migrations/2026_10_15_100000_create_crm_prospects.sql`,
+`python/savdex/bootstrap/migrations/2026_10_16_100000_create_crm_prospects.sql`,
 проверки — `python/tests/test_prospects.py`.

@@ -1,0 +1,15 @@
+SAVDEX: __APP_URL__
+
+# Assalomu alaykum!
+
+SAVDEX Telegram-botini ulash uchun kodingiz:
+
+# __CODE__
+
+Uni bot bilan chatda kiriting. Kod 10 daqiqa amal qiladi va faqat bir marta ishlaydi.
+
+Agar Telegramni ulamagan bo‘lsangiz, bu xatni o‘chirib tashlang — kodsiz hech kim kira olmaydi.
+
+SAVDEX jamoasi
+
+© __YEAR__ SAVDEX. Barcha huquqlar himoyalangan.

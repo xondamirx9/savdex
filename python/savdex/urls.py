@@ -433,6 +433,16 @@ urlpatterns = [
         settings_actions.telegram,
         name="cabinet.settings.telegram",
     ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/categories$",
+        settings_actions.categories,
+        name="cabinet.settings.categories",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/telegram-feed$",
+        settings_actions.telegram_feed,
+        name="cabinet.settings.telegram_feed",
+    ),
     # Своё резюме (этап 5, шаг 28): опубликовать и скрыть, группа forms
     *[
         re_path(

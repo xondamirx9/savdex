@@ -122,7 +122,10 @@ def notifications_read_all(request: HttpRequest) -> HttpResponse:
             [stamp, stamp, ctx.user["id"]],
         )
 
-    flash(ctx, "success", ctx.t("messages.notifications.all_read"))
+    # Шапка помечает прочитанным само открытие списка (silent): там
+    # «Все уведомления прочитаны» никто не нажимал — и всплывать незачем
+    if str(input_of(request).get("silent", "")) not in ("1", "true", "True"):
+        flash(ctx, "success", ctx.t("messages.notifications.all_read"))
 
     return back(ctx)
 
