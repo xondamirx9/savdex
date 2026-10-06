@@ -475,7 +475,7 @@ PROSPECT_KINDS = {
 
 #: Как ушла рассылка: письмо с площадки или касание, отмеченное вручную
 MAILING_CHANNELS = {
-    "email": "Письмо с площадки",
+    "email": "Письмо из админки",
     "mail": "Письмо со своей почты",
     "telegram": "Telegram",
     "whatsapp": "WhatsApp",
