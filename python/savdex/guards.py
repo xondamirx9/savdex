@@ -205,6 +205,9 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # и тендеров по категориям (savdex/telegram_bot.py, telegram_feed.py)
         "telegram_bot_chats",
         "telegram_feed_items",
+        # Визитки компании для QR-кода (миграция 2026_10_17_100000):
+        # таблица появилась после ухода Laravel, ведёт её только Django
+        "company_cards",
     }
 )
 

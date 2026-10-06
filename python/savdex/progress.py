@@ -129,6 +129,7 @@ STAGES: tuple[Stage, ...] = (
             "company_attributes",
             "company_category",
             "company_contacts",
+            "company_cards",
             "company_documents",
             "company_invitations",
             "company_sites",

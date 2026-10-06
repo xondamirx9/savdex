@@ -89,6 +89,8 @@ export const routes = {
     cabinetReviews: '/cabinet/reviews',
     cabinetSettings: '/cabinet/settings',
     cabinetSite: '/cabinet/site',
+    cabinetCards: '/cabinet/cards',
+    cabinetCard: (id: number) => `/cabinet/cards/${id}`,
     cabinetSitePreview: '/cabinet/site/preview',
     cabinetSitePublish: '/cabinet/site/publish',
     cabinetSiteUnpublish: '/cabinet/site/unpublish',
