@@ -36,6 +36,7 @@ from savdex.web import (
     company_info_actions,
     company_profile_actions,
     contact_actions,
+    contact_request,
     directory,
     downloads,
     fallback,
@@ -99,7 +100,11 @@ urlpatterns = [
         for key in ("help", "guide", "rules")
     ],
     re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about, name="about"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts, name="contacts"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?contact$",
+        auth_actions.either(web.contacts, contact_request.submit),
+        name="contacts",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing, name="pricing"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index, name="reviews"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index, name="resumes"),

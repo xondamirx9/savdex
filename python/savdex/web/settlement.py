@@ -6,7 +6,8 @@ Wallet::grant.
 Единственное место на Django, где счёт превращается в доступ.
 Отметка об оплате и начисление — одной транзакцией и только если счёт
 ещё не оплачен: оплаченный счёт без начисления — претензия, начисление
-без отметки — двойная выдача при повторе колбэка.
+без отметки — двойная выдача при повторе колбэка. После — открытая
+сделка компании в CRM выигрывается (savdex/crm/automation.py).
 """
 
 from __future__ import annotations
@@ -215,6 +216,13 @@ def settle(
         lambda locale: (
             content.Translations(locale).text(payment["description"]) or payment["description"]
         ),
+    )
+
+    # Оплата → сделка: открытая сделка компании в CRM выиграна
+    from savdex.crm import automation
+
+    automation.close_deal_on_payment(
+        {**payment, "status": "paid"}, actor_id=admin["id"] if admin is not None else None
     )
 
     return True, _t(ctx, "messages.order.credited")
