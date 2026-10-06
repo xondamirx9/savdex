@@ -2606,3 +2606,27 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
 
 /* Страница визитки по QR */
 .biz-card-page{max-width:560px;margin:0 auto;padding:32px 16px 56px;display:flex;flex-direction:column;gap:20px}
+
+/* Кадрирование логотипа и обложки (ImageCropModal): фото двигается под
+   рамкой, всё за рамкой притушено — видно, что в кадр не попадёт */
+.crop-stage{position:relative;overflow:hidden;border-radius:12px;background:#0f172a;
+  touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.crop-stage.is-dragging{cursor:grabbing}
+.crop-stage:focus-visible{outline:2px solid var(--primary-500);outline-offset:2px}
+.crop-image{position:absolute;left:0;top:0;max-width:none;pointer-events:none;will-change:transform}
+.crop-frame{position:absolute;pointer-events:none;box-shadow:0 0 0 9999px rgba(15,23,42,.62);
+  outline:2px solid #fff;outline-offset:-1px}
+/* Логотип на визитке — в квадрате со скруглёнными углами, рамка той же формы */
+.crop-frame.is-square{border-radius:16%}
+.crop-grid{position:absolute;inset:0;opacity:0;transition:opacity var(--t-fast);
+  background:
+    linear-gradient(to right,transparent calc(33.333% - .5px),rgba(255,255,255,.55) calc(33.333% - .5px),rgba(255,255,255,.55) calc(33.333% + .5px),transparent calc(33.333% + .5px),
+      transparent calc(66.666% - .5px),rgba(255,255,255,.55) calc(66.666% - .5px),rgba(255,255,255,.55) calc(66.666% + .5px),transparent calc(66.666% + .5px)),
+    linear-gradient(to bottom,transparent calc(33.333% - .5px),rgba(255,255,255,.55) calc(33.333% - .5px),rgba(255,255,255,.55) calc(33.333% + .5px),transparent calc(33.333% + .5px),
+      transparent calc(66.666% - .5px),rgba(255,255,255,.55) calc(66.666% - .5px),rgba(255,255,255,.55) calc(66.666% + .5px),transparent calc(66.666% + .5px))}
+.crop-stage.is-dragging .crop-grid{opacity:1}
+/* Обложка на телефоне показывает середину кадра — граница пунктиром */
+.crop-phone{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);
+  border-left:1.5px dashed rgba(255,255,255,.85);border-right:1.5px dashed rgba(255,255,255,.85)}
+.crop-zoom{display:flex;align-items:center;gap:8px;margin-top:14px}
+.crop-zoom input[type=range]{flex:1;min-width:0;accent-color:var(--primary-600)}
