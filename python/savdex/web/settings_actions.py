@@ -167,3 +167,75 @@ def telegram_unlink(request: HttpRequest) -> HttpResponse:
     flash(ctx, "status", ctx.t("messages.auth.telegram_unlinked"))
 
     return back(ctx)
+
+
+# ── Категории компании и рассылка новинок в Telegram ─────────────────
+
+#: Сколько категорий у компании — как на втором шаге регистрации
+CATEGORIES_MAX = 5
+
+
+@form("PATCH")
+def categories(request: HttpRequest) -> HttpResponse:
+    """
+    Категории компании (company_category): по ним бот присылает новые
+    объявления и тендеры. Общие на компанию — меняет только владелец.
+    """
+    from savdex.web.onboarding_actions import _sync_to
+    from savdex.web.resume_actions import _exists
+
+    ctx = action(request, throttle=30, throttle_prefix="settings-categories")
+    assert ctx.user is not None
+    user = _rows("select company_id, company_role from users where id = %s", [ctx.user["id"]])[0]
+
+    if user["company_id"] is None or user["company_role"] != "owner":
+        return invalid(ctx, {"categories": [ctx.t("messages.settings.categories_owner_only")]})
+
+    data = input_of(request)
+    errors = validate(
+        data,
+        {
+            "categories": ["array", f"max:{CATEGORIES_MAX}"],
+            "categories.*": ["integer", _exists("categories")],
+        },
+        ctx.locale,
+        {"categories.max": ctx.t("messages.company.categories_max")},
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    raw = data.get("categories") or []
+    values = raw.values() if isinstance(raw, dict) else raw
+    wanted = list(dict.fromkeys(int(str(c)) for c in values))
+    current = [
+        r["category_id"]
+        for r in _rows(
+            "select category_id from company_category where company_id = %s order by id",
+            [user["company_id"]],
+        )
+    ]
+    _sync_to(user["company_id"], current, wanted)
+    flash(ctx, "success", ctx.t("messages.settings.categories_saved"))
+
+    return back(ctx)
+
+
+@form("PATCH")
+def telegram_feed(request: HttpRequest) -> HttpResponse:
+    """Новые объявления и тендеры в Telegram: включить или поставить на паузу."""
+    from savdex.telegram_bot import _set_feed
+    from savdex.web.actions import _php_bool
+
+    ctx = action(request)
+    assert ctx.user is not None
+    data = input_of(request)
+    errors = validate(data, {"on": ["required", "boolean"]}, ctx.locale)
+
+    if errors:
+        return invalid(ctx, errors)
+
+    _set_feed(int(ctx.user["id"]), _php_bool(data.get("on")))
+    flash(ctx, "success", ctx.t("messages.settings.notifications_saved"))
+
+    return back(ctx)

@@ -16,6 +16,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
 from savdex import adminlogin, adminpanel, adminsite, visitor
+from savdex.crm import unsubscribe as prospect_unsubscribe
 from savdex.data.meyos import feed as meyos_feed
 from savdex.web import (
     account_actions,
@@ -448,6 +449,16 @@ urlpatterns = [
         settings_actions.telegram,
         name="cabinet.settings.telegram",
     ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/categories$",
+        settings_actions.categories,
+        name="cabinet.settings.categories",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/telegram-feed$",
+        settings_actions.telegram_feed,
+        name="cabinet.settings.telegram_feed",
+    ),
     # Своё резюме (этап 5, шаг 28): опубликовать и скрыть, группа forms
     *[
         re_path(
@@ -535,6 +546,13 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?robots\.txt$", seo_files.robots, name="robots"),
     # Постоянная ссылка для MEYOS: мебельные объявления в JSON (savdex/data/meyos.py)
     re_path(r"^feeds/meyos\.json$", meyos_feed, name="feeds.meyos"),
+    # «Больше не присылать письма» из рассылки потенциальным клиентам
+    # (savdex/crm/unsubscribe.py)
+    re_path(
+        r"^unsubscribe/(?P<pk>[0-9]{1,18})/(?P<token>[0-9a-f]{32})$",
+        prospect_unsubscribe.view,
+        name="prospects.unsubscribe",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?og/listing/(?P<listing_id>[0-9]{1,18})\.jpg$",
         og_image.listing,

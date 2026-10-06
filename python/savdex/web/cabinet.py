@@ -1056,7 +1056,52 @@ def settings_props(ctx: Context) -> dict[str, Any]:
             "last_login_ip": user["last_login_ip"],
         },
         "is_owner": user["company_role"] == "owner",
+        "categories": _company_categories(user, ctx.locale),
+        "feed": _feed_on(user["id"]),
     }
+
+
+def _company_categories(user: dict[str, Any], locale: str) -> dict[str, Any] | None:
+    """
+    Категории компании: по ним бот присылает новые объявления и тендеры.
+    Выбор — разделы верхнего уровня; уже выбранные подразделы (услуги со
+    второго шага регистрации) — тоже в списке, чтобы не потерялись.
+    """
+    from savdex.web.directory import _named
+    from savdex.web.settings_actions import CATEGORIES_MAX
+
+    if user["company_id"] is None:
+        return None
+
+    names = _named("categories", locale)
+    selected = [
+        r["category_id"]
+        for r in _rows(
+            "select category_id from company_category where company_id = %s order by id",
+            [user["company_id"]],
+        )
+    ]
+    options = [
+        r["id"]
+        for r in _rows(
+            "select id from categories where parent_id is null and is_active order by sort, id",
+            [],
+        )
+    ]
+    options += [c for c in selected if c not in options]
+
+    return {
+        "options": [{"id": c, "name": names.get(c, str(c))} for c in options],
+        "selected": selected,
+        "max": CATEGORIES_MAX,
+        "editable": user["company_role"] == "owner",
+    }
+
+
+def _feed_on(user_id: object) -> bool:
+    from savdex.telegram_bot import feed_on
+
+    return feed_on(user_id)
 
 
 def _pref(row: dict[str, Any] | None, key: str, default: bool) -> bool:

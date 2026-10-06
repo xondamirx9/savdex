@@ -144,6 +144,9 @@ STAGES: tuple[Stage, ...] = (
             "user_notifications",
             "notification_preferences",
             "broadcasts",
+            # Telegram-бот кабинета: привязка по ИНН и новинки по категориям
+            "telegram_bot_chats",
+            "telegram_feed_items",
         ),
     ),
     Stage(
@@ -155,6 +158,9 @@ STAGES: tuple[Stage, ...] = (
             "crm_leads",
             "crm_deals",
             "crm_stages",
+            "crm_prospects",
+            "crm_prospect_mailings",
+            "crm_prospect_mailing_recipients",
             "crm_contacts",
             "crm_tasks",
             "crm_communications",

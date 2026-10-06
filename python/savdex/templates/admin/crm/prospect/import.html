@@ -1,0 +1,88 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Загрузка потенциальных клиентов из Excel или CSV
+  (savdex/crm/prospects.py, import_rows). Отчёт — сразу: новые,
+  обновлённые, без изменений и причина по каждой пропущенной строке
+  (номер — как в Excel).
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:crm_prospect_changelist' %}">Потенциальные клиенты</a>
+    › Загрузка из Excel
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div class="flex-container">
+            {{ field.label_tag }} {{ field }}
+          </div>
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Загрузить">
+      <a href="{{ sample_url }}" class="button">Скачать образец</a>
+    </div>
+  </form>
+
+  {% if report %}
+    <div class="module">
+      <h2>Итог загрузки</h2>
+      {% if report.missing %}
+        <p>{{ report.summary }}</p>
+      {% else %}
+        <p>
+          Новых: <b>{{ report.created }}</b>,
+          обновлено: <b>{{ report.updated }}</b>,
+          без изменений: <b>{{ report.unchanged }}</b>,
+          повторов внутри файла: <b>{{ report.merged }}</b>,
+          пропущено: <b>{{ report.failed|length }}</b>.
+          {% if report.on_savdex %}Уже есть на SavdEx: <b>{{ report.on_savdex }}</b>.{% endif %}
+        </p>
+      {% endif %}
+      {% if report.unknown_headers %}
+        <p>Столбцы, которые загрузка не узнала и пропустила: {{ report.unknown_headers|join:", " }}.</p>
+      {% endif %}
+      {% if report.failed or report.notes %}
+        <table>
+          <thead><tr><th>Строка</th><th>Что не так</th></tr></thead>
+          <tbody>
+            {% for number, reason in report.failed %}
+              <tr><td>{{ number }}</td><td>не загружена: {{ reason }}</td></tr>
+            {% endfor %}
+            {% for number, note in report.notes %}
+              <tr><td>{{ number }}</td><td>{{ note }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="module">
+    <h2>Какие столбцы понимает загрузка</h2>
+    <p>Заголовки — по-русски, по-узбекски или по-английски, порядок любой. Обязательных
+      столбцов нет: у физлица или фрилансера может быть только имя и телефон — запись всё равно
+      заведётся, а пустое в списке будет «—». Пропускается только строка, где нет ни названия,
+      ни контактного лица, ни телефона, ни почты, ни ИНН.</p>
+    <p>Повторы склеиваются: та же запись узнаётся по ИНН, телефону или почте и обновляется
+      непустыми ячейками — пустая ячейка ничего не стирает, счётчик рассылок не сбрасывается.</p>
+    <table>
+      <thead><tr><th>Столбец</th><th>Что в нём</th></tr></thead>
+      <tbody>
+        {% for column in columns %}
+          <tr><td>{{ column.label }}</td><td>{{ column.hint|default:"—" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

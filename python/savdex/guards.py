@@ -107,6 +107,12 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Этапы воронок лидов и сделок (доски в админке): правит раздел
         # «Этапы воронки», savdex/crm/stages.py
         "crm_stages",
+        # База потенциальных клиентов для рассылок отдела продаж: правит
+        # раздел «Потенциальные клиенты», письма шлёт фоновый проход
+        # (manage.py notify) — savdex/crm/prospects.py
+        "crm_prospects",
+        "crm_prospect_mailings",
+        "crm_prospect_mailing_recipients",
         # Этап 6: задачи и коммуникации. Разделы Filament убраны, виджет
         # «Задачи на сегодня» и счётчик просроченных у пункта меню только
         # читают; запись разговора удаляется насовсем (DELETE)
@@ -195,7 +201,11 @@ OWNED_TABLES: frozenset[str] = frozenset(
         "activity_events",
         "content_translations",
         "cache",
-        # Визитки компании для QR-кода (миграция 2026_10_15_100000):
+        # Telegram-бот: привязка по ИНН и рассылка новых объявлений
+        # и тендеров по категориям (savdex/telegram_bot.py, telegram_feed.py)
+        "telegram_bot_chats",
+        "telegram_feed_items",
+        # Визитки компании для QR-кода (миграция 2026_10_17_100000):
         # таблица появилась после ухода Laravel, ведёт её только Django
         "company_cards",
     }

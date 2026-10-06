@@ -30,6 +30,12 @@ DJANGO_DATABASE_URL=postgres://... APP_KEY=base64:... uv run python manage.py ru
 
 База — `DJANGO_DATABASE_URL`, иначе `DATABASE_URL`, иначе переменные
 `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
+Telegram-бот у себя без настоящего бота: `TELEGRAM_BOT_TOKEN` и
+`TELEGRAM_BOT_USERNAME` — любые, `TELEGRAM_TRANSPORT=log` — ответы бота
+пишутся строками JSON в `TELEGRAM_LOG_PATH` (как письма при
+`MAIL_MAILER=log`). Разговор с ботом — `savdex/telegram_bot.py`, рассылка
+новинок по категориям — `savdex/telegram_feed.py`.
+
 `APP_KEY` шифрует куку сессии (формат Laravel — старые сессии посетителей
 остались рабочими) и подписывает служебные ссылки.
 
@@ -46,6 +52,7 @@ DJANGO_DATABASE_URL=postgres://... APP_KEY=base64:... uv run python manage.py ru
 | `export_xlsx`, `run_export` | Выгрузка базы в Excel (кнопка «Выгрузить сейчас» в админке) |
 | `check_postgres`, `uzum_ping` | Проверка базы; прозвон платёжного шлюза без платежа |
 | `telegram_webhook` | Сообщить Telegram адрес бота (`--info`, `--delete`) |
+| `notify` | Раз в минуту: письма и Telegram по уведомлениям кабинета и новые объявления и тендеры в Telegram по категориям компании (`--once`) |
 
 Запускаются как `uv run python manage.py <команда>`; на сервере их
 запускает `docker/render-entrypoint.sh`.
