@@ -26,6 +26,7 @@ from savdex.web import (
     billing,
     billing_actions,
     cabinet,
+    card_actions,
     catalog,
     chat_actions,
     companies,
@@ -114,6 +115,12 @@ urlpatterns = [
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?companies$", companies.index, name="companies.index"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?company/(?P<slug>[^/]+)$", company.show, name="companies.show"),
+    # Визитка по QR-коду: случайный код, без входа
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?card/(?P<token>[A-Za-z0-9]{16})$",
+        card_actions.show,
+        name="cards.show",
+    ),
     # Скачивание файлов с приватного диска (этап 5, шаг 44)
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?files/(?P<document_id>[0-9]{1,18})$",
@@ -400,6 +407,15 @@ urlpatterns = [
     # Продвижение: GET — страница, POST — запуск (этап 5, шаг 44, группа forms)
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/promo$", promo_actions.page, name="cabinet.promo"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?cabinet/resume$", resume_actions.page, name="cabinet.resume"),
+    # Визитки для QR: GET — список, POST — новая, DELETE …/<id> — удалить
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/cards$", card_actions.page_or_store, name="cabinet.cards"
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/cards/(?P<card_id>[0-9]{1,18})$",
+        card_actions.destroy,
+        name="cabinet.cards.destroy",
+    ),
     # Файлы своей компании (этап 5, шаг 42): группа forms
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/files$",
