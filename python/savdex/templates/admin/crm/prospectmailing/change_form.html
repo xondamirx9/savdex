@@ -1,0 +1,55 @@
+{% extends "admin/change_form.html" %}
+{% comment %}
+  Рассылка по базе (savdex/crm/prospects_admin.py): итоги по получателям,
+  «Остановить» — тем, кому письмо ещё в очереди, и список получателей.
+{% endcomment %}
+{% block after_field_sets %}
+  {{ block.super }}
+  {% if original %}
+    <fieldset class="module aligned">
+      <h2>Получатели: {{ sx_total }}</h2>
+      <div class="form-row">
+        {% for label, count, tone in sx_counts %}
+          <span class="sx-pill sx-pill--{{ tone }}">{{ label }}: {{ count }}</span>
+        {% empty %}
+          <p>Получателей нет.</p>
+        {% endfor %}
+      </div>
+      {% if sx_recipients %}
+        <table style="width:100%">
+          <thead><tr><th>Кому</th><th>Почта</th><th>Итог</th><th>Когда</th></tr></thead>
+          <tbody>
+            {% for row in sx_recipients %}
+              <tr>
+                <td><a href="{{ row.url }}">{{ row.prospect }}</a></td>
+                <td>{{ row.email }}</td>
+                <td>{{ row.status }}{% if row.error %} <span class="sx-row-sub">{{ row.error }}</span>{% endif %}</td>
+                <td>{{ row.when }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if sx_total > 1000 %}<p class="help">Показаны первые 1000.</p>{% endif %}
+      {% endif %}
+    </fieldset>
+  {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+  {% if can_stop %}
+    <div class="submit-row">
+      <button type="submit" form="sx-stop" class="button"
+              onclick="return confirm('Остановить рассылку? Кому письмо ещё не ушло — не уйдёт.')">Остановить рассылку</button>
+    </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  {% if can_stop %}
+    <form id="sx-stop" method="post" action="{% url 'savdex_admin:crm_prospectmailing_stop' original.pk %}">
+      {% csrf_token %}
+    </form>
+  {% endif %}
+{% endblock %}

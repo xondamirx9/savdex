@@ -159,6 +159,8 @@ ICONS = {
     "crm.Task": "check-circle",
     "crm.Communication": "chat-bubble-left-right",
     "crm.Stage": "view-columns",
+    "crm.Prospect": "user-plus",
+    "crm.ProspectMailing": "envelope",
     "support.Ticket": "lifebuoy",
     "journal.AdminAction": "clock",
     "moderation.Review": "star",
@@ -337,6 +339,8 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "crm.lead",
             "crm.deal",
+            "crm.prospect",
+            "crm.prospectmailing",
             "crm.contact",
             "crm.task",
             "crm.communication",

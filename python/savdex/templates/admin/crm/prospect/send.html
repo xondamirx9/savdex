@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Письмо отмеченным потенциальным клиентам (ProspectAdmin.send_email):
+  сколько получат и почему остальные нет, тема и текст. Письма уходят
+  фоном (savdex/crm/prospects.py, run).
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:crm_prospect_changelist' %}">Потенциальные клиенты</a>
+    › Письмо
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  {% if not ready %}
+    <ul class="messagelist"><li class="error">
+      Почта площадки ещё не настроена: письма не уйдут. Нужен почтовый сервис (Brevo, Resend,
+      SMTP2GO) и переменные MAIL_MAILER=smtp, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
+      на Render. Пока можно писать со своей почты и отмечать рассылку вручную.
+    </li></ul>
+  {% endif %}
+
+  <fieldset class="module aligned">
+    <h2>Кому</h2>
+    <div class="form-row">
+      <p>Отмечено: <b>{{ audience.selected }}</b>. Письмо получат: <b>{{ audience.count }}</b>.</p>
+      {% if audience.missed %}
+        <p class="help">Не получат: {{ audience.missed }}.{% if audience.converted %} Тем, кто уже в лидах, можно написать — галочка внизу.{% endif %}</p>
+      {% endif %}
+      <p class="help">Письма уходят фоном, по {{ per_pass }} в минуту, с почты площадки. Ход — в «Рассылках по базе»;
+        счётчик растёт у тех, кому письмо ушло.</p>
+    </div>
+  </fieldset>
+
+  <form method="post" action="{{ back_url }}">
+    {% csrf_token %}
+    {% include "admin/crm/prospect/_again.html" %}
+    {% if form.non_field_errors %}{{ form.non_field_errors }}{% endif %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row">
+          {{ field.errors }}
+          <div class="flex-container">
+            {{ field.label_tag }} {{ field }}
+          </div>
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Отправить"{% if not ready %} disabled{% endif %}
+             onclick="return confirm('Отправить письмо? Отозвать ушедшие письма нельзя, остановить очередь — можно.')">
+      <a href="{{ back_url }}" class="button cancel-link">Отмена</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

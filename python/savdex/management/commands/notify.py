@@ -1,7 +1,8 @@
 """
-Письма и Telegram по уведомлениям кабинета (savdex/deliveries.py) и
+Письма и Telegram по уведомлениям кабинета (savdex/deliveries.py),
 рассылка новых объявлений и тендеров по категориям в Telegram
-(savdex/telegram_feed.py) — фоновый обработчик рядом с расписанием
+(savdex/telegram_feed.py) и письма рассылки потенциальным клиентам
+(savdex/crm/prospects.py) — фоновый обработчик рядом с расписанием
 и переводом.
 
   manage.py notify --once      один проход
@@ -18,6 +19,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import close_old_connections
 
 from savdex import deliveries, telegram_feed
+from savdex.crm import prospects
 
 log = logging.getLogger("savdex.deliveries")
 
@@ -49,6 +51,14 @@ class Command(BaseCommand):
                     self.stdout.write(f"Telegram, новинки: {feed}.")
             except Exception:
                 log.exception("Проход рассылки новинок в Telegram не удался")
+
+            try:
+                sent = prospects.run()
+
+                if sent:
+                    self.stdout.write(f"Рассылка по базе: {sent}.")
+            except Exception:
+                log.exception("Проход рассылки по базе не удался")
 
             if options["once"]:
                 return

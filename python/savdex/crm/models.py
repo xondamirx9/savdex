@@ -462,3 +462,159 @@ class Communication(Timestamped, WithSubject):
 
     def __str__(self) -> str:
         return self.summary
+
+
+# ── Потенциальные клиенты (база рассылок) ───────────────────────────
+
+#: Кто это: компания, физлицо, фрилансер; пусто — не указано
+PROSPECT_KINDS = {
+    "company": "Компания",
+    "person": "Физлицо",
+    "freelancer": "Фрилансер",
+}
+
+#: Как ушла рассылка: письмо с площадки или касание, отмеченное вручную
+MAILING_CHANNELS = {
+    "email": "Письмо с площадки",
+    "mail": "Письмо со своей почты",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "call": "Звонок",
+    "sms": "SMS",
+    "other": "Другое",
+}
+
+#: Получатель письма: в очереди, отправляется, ушло, не ушло, пропущено
+RECIPIENT_STATUSES = {
+    "queued": "в очереди",
+    "sending": "отправляется",
+    "sent": "отправлено",
+    "failed": "не ушло",
+    "skipped": "пропущено",
+}
+
+
+class Prospect(SoftDeleting):
+    """
+    Потенциальный клиент: компания, физлицо или фрилансер, которых отдел
+    продаж зовёт на площадку. Данные бывают неполными — обязательного
+    поля нет, раздел требует хотя бы одно из названия, имени, телефона,
+    почты или ИНН.
+    """
+
+    kind = models.CharField(
+        "кто это", max_length=20, null=True, blank=True, choices=list(PROSPECT_KINDS.items())
+    )
+    name = models.CharField(
+        "название", max_length=190, null=True, blank=True, help_text="Компании или ФИО физлица"
+    )
+    tin = models.CharField("ИНН", max_length=20, null=True, blank=True)
+    contact_person = models.CharField("контактное лицо", max_length=160, null=True, blank=True)
+    phone = models.CharField("телефон", max_length=100, null=True, blank=True)
+    email = models.EmailField("почта", max_length=190, null=True, blank=True)
+    city = models.CharField("город", max_length=120, null=True, blank=True)
+    industry = models.CharField(
+        "отрасль", max_length=190, null=True, blank=True, help_text="Чем занимается"
+    )
+    website = models.CharField("сайт", max_length=255, null=True, blank=True)
+    source = models.CharField(
+        "откуда в базе",
+        max_length=120,
+        null=True,
+        blank=True,
+        help_text="Например «Выставка UzBuild 2026» или имя файла",
+    )
+    note = models.TextField("заметка", null=True, blank=True)
+    #: Та же компания, уже зарегистрированная на площадке
+    company = _link(Company, "на SavdEx")
+    mailings_count = models.IntegerField("рассылок", default=0, editable=False)
+    last_mailed_at = UTCDateTimeField("последняя рассылка", null=True, editable=False)
+    lead = _link("Lead", "лид")
+    converted_at = UTCDateTimeField("в лидах с", null=True, editable=False)
+    unsubscribed_at = UTCDateTimeField("не писать с", null=True, editable=False)
+    created_by = models.BigIntegerField(null=True, editable=False)
+
+    class Meta:
+        managed = False
+        db_table = "crm_prospects"
+        verbose_name = "потенциальный клиент"
+        verbose_name_plural = "потенциальные клиенты"
+        ordering = ("-created_at", "-id")
+
+    def __str__(self) -> str:
+        return self.label()
+
+    def label(self) -> str:
+        """Как назвать запись: название, иначе контакт, телефон, почта — что есть."""
+        return (
+            self.name
+            or self.contact_person
+            or self.phone
+            or self.email
+            or (f"ИНН {self.tin}" if self.tin else "")
+            or f"Без названия №{self.pk}"
+        )
+
+
+class ProspectMailing(Timestamped):
+    """Рассылка по базе: письмо с площадки или касание, отмеченное вручную."""
+
+    channel = models.CharField(
+        "как", max_length=20, default="email", choices=list(MAILING_CHANNELS.items())
+    )
+    subject = models.CharField("тема", max_length=190, null=True, blank=True)
+    body = models.TextField("текст", null=True, blank=True)
+    reply_to = models.CharField("ответы на почту", max_length=190, null=True, blank=True)
+    note = models.CharField("заметка", max_length=255, null=True, blank=True)
+    sent_by = models.ForeignKey(
+        User,
+        verbose_name="кто",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        db_column="sent_by",
+        related_name="+",
+    )
+    total = models.IntegerField("получателей", default=0)
+    sent = models.IntegerField("отправлено", default=0)
+    failed = models.IntegerField("не ушло", default=0)
+    finished_at = UTCDateTimeField("закончена", null=True)
+
+    class Meta:
+        managed = False
+        db_table = "crm_prospect_mailings"
+        verbose_name = "рассылка по базе"
+        verbose_name_plural = "рассылки по базе"
+        ordering = ("-created_at", "-id")
+
+    def __str__(self) -> str:
+        if self.channel == "email":
+            return self.subject or f"Письмо №{self.pk}"
+
+        label = MAILING_CHANNELS.get(self.channel, self.channel)
+
+        return f"{label}: {self.note}" if self.note else label
+
+
+class ProspectRecipient(models.Model):
+    """Кому ушла рассылка — строка истории потенциального клиента."""
+
+    # Каскад — у базы; запись удаляется в корзину, и история при ней
+    mailing = models.ForeignKey(
+        ProspectMailing, on_delete=models.DO_NOTHING, related_name="recipients"
+    )
+    prospect = models.ForeignKey(
+        Prospect, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+    )
+    email = models.CharField(max_length=190, null=True)
+    status = models.CharField(max_length=10, default="queued")
+    error = models.CharField(max_length=255, null=True)
+    sent_at = UTCDateTimeField(null=True)
+    created_at = UTCDateTimeField(null=True)
+    updated_at = UTCDateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "crm_prospect_mailing_recipients"
+        ordering = ("id",)
