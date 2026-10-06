@@ -1747,10 +1747,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
 .hd-badge{position:absolute;top:1px;right:12px;min-width:17px;height:17px;padding:0 4px;
   border-radius:var(--r-pill);background:var(--danger);color:#fff;font-size:10.5px;font-weight:700;
   line-height:17px;text-align:center;border:2px solid var(--white);box-sizing:content-box}
-/* Остаток контактов — баланс, а не «непрочитанное»: спокойный синий.
-   Красный остаётся только у непрочитанных сообщений */
-.hd-badge--balance{background:var(--primary-600)}
-.hd-badge--zero{background:var(--text-muted)}
 .hd-auth{display:flex;align-items:center;gap:8px;flex-shrink:0}
 
 /*
