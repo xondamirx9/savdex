@@ -1,0 +1,15 @@
+SAVDEX: __APP_URL__
+
+# Hello!
+
+Your code to connect the SAVDEX Telegram bot:
+
+# __CODE__
+
+Enter it in the chat with the bot. The code is valid for 10 minutes and can be used only once.
+
+If you did not connect Telegram, simply delete this email — no one can get access without the code.
+
+The SAVDEX team
+
+© __YEAR__ SAVDEX. All rights reserved.

@@ -549,8 +549,8 @@ class SavdexModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     def get_search_results(
         self,
         request: HttpRequest,
-        queryset: Any,
-        search_term: str,  # noqa: ANN401
+        queryset: Any,  # noqa: ANN401
+        search_term: str,
     ) -> tuple[Any, bool]:
         """
         Поиск без учёта регистра в любой локали базы (savdex/search.py):

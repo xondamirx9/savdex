@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,10 @@ def group_t(key: str, locale: str) -> str:
     return node if isinstance(node, str) else key
 
 
+def _literal(value: str) -> Callable[[re.Match[str]], str]:
+    return lambda _match: value
+
+
 def t(key: str, locale: str, **replace: object) -> str:
     """
     __('ui.<key>'): строка словаря по пути через точку, с подстановкой
@@ -97,7 +102,8 @@ def t(key: str, locale: str, **replace: object) -> str:
     text: str = node
 
     for name, value in sorted(replace.items(), key=lambda kv: -len(kv[0])):
-        text = re.sub(rf":{re.escape(name)}\b", str(value), text)
+        # Функцией, а не строкой: «\1» в названии компании — текст, а не ссылка на группу
+        text = re.sub(rf":{re.escape(name)}\b", _literal(str(value)), text)
 
     return text
 

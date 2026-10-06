@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+from dataclasses import dataclass
 
 import httpx
 
@@ -26,6 +28,23 @@ def telegram_configured() -> bool:
     return _env("TELEGRAM_BOT_TOKEN") != "" and _env("TELEGRAM_BOT_USERNAME").lstrip("@") != ""
 
 
+def _logged(payload: dict[str, object]) -> bool:
+    """
+    TELEGRAM_TRANSPORT=log — сообщения бота пишутся строками JSON в
+    TELEGRAM_LOG_PATH, а не уходят в Telegram: для запуска у себя
+    и проверок (как MAIL_MAILER=log у почты).
+    """
+    if _env("TELEGRAM_TRANSPORT") != "log":
+        return False
+
+    path = _env("TELEGRAM_LOG_PATH") or "storage/logs/telegram.log"
+
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    return True
+
+
 def whatsapp_configured() -> bool:
     return _env("WHATSAPP_TOKEN") != "" and _env("WHATSAPP_PHONE_NUMBER_ID") != ""
 
@@ -34,6 +53,9 @@ def telegram(chat_id: str, text: str) -> bool:
     """sendMessage без разметки и без превью ссылки."""
     if not telegram_configured() or str(chat_id).strip() == "":
         return False
+
+    if _logged({"chat_id": chat_id, "text": text}):
+        return True
 
     try:
         response = httpx.post(
@@ -52,6 +74,93 @@ def telegram(chat_id: str, text: str) -> bool:
     log.warning("telegram.send_failed: %s %s", response.status_code, response.text[:500])
 
     return False
+
+
+@dataclass(frozen=True)
+class Sent:
+    """Итог sendMessage для рассылки: ушло, человек заблокировал бота, ждать N секунд."""
+
+    ok: bool
+    blocked: bool = False
+    retry_after: int = 0
+
+
+@dataclass(frozen=True)
+class Button:
+    """Кнопка под сообщением: ссылка (url) или действие (data — callback_data)."""
+
+    text: str
+    url: str | None = None
+    data: str | None = None
+
+
+def _keyboard(rows: list[list[Button]]) -> dict[str, object]:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": b.text, "url": b.url}
+                if b.url is not None
+                else {"text": b.text, "callback_data": b.data or b.text}
+                for b in row
+            ]
+            for row in rows
+        ]
+    }
+
+
+def telegram_send(chat_id: str, text: str, buttons: list[list[Button]] | None = None) -> Sent:
+    """
+    sendMessage с разметкой HTML и кнопками — сообщения бота и рассылка.
+
+    403 — человек заблокировал бота или удалил чат: писать ему больше
+    некуда. 429 — Telegram просит подождать retry_after секунд.
+    """
+    if not telegram_configured() or str(chat_id).strip() == "":
+        return Sent(False)
+
+    payload: dict[str, object] = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+
+    if buttons:
+        payload["reply_markup"] = _keyboard(buttons)
+
+    if _logged(payload):
+        return Sent(True)
+
+    try:
+        response = httpx.post(_api("sendMessage"), json=payload, timeout=TIMEOUT)
+    except httpx.HTTPError as e:
+        log.warning("telegram.send_error: %s", e)
+
+        return Sent(False)
+
+    if response.is_success:
+        return Sent(True)
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+
+    params = body.get("parameters") if isinstance(body, dict) else None
+    retry = params.get("retry_after") if isinstance(params, dict) else None
+
+    if response.status_code == 403:
+        return Sent(False, blocked=True)
+
+    log.warning("telegram.send_failed: %s %s", response.status_code, response.text[:500])
+
+    return Sent(False, retry_after=int(retry) if isinstance(retry, int) else 0)
+
+
+def telegram_answer(callback_id: str) -> None:
+    """answerCallbackQuery: убрать часики с нажатой кнопки."""
+    if telegram_configured() and callback_id and not _logged({"callback": callback_id}):
+        _call("answerCallbackQuery", {"callback_query_id": callback_id})
 
 
 # ── Адрес бота у Telegram (команда telegram_webhook) ──────────────────
