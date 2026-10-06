@@ -296,6 +296,7 @@ class SavdexAdminSite(admin.AdminSite):
 
         context["savdex_logo"] = shared.appearance_logo(shared.settings_values())
         context["savdex_theme_version"] = _theme_version()
+        context["savdex_combobox_version"] = static_version("savdex/combobox.js")
 
         return context
 

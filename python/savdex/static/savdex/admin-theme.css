@@ -2072,3 +2072,120 @@ a.sx-row-btn.is-danger:visited {
         navigation: none;
     }
 }
+
+/*
+ * Поиск в длинных выпадающих списках (static/savdex/combobox.js):
+ * поле ввода со стрелкой вместо <select>, под ним — подходящие варианты
+ */
+.sx-combo-native {
+    display: none !important;
+}
+
+.sx-combo {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    width: min(100%, 32rem);
+}
+
+.sx-combo-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 40px !important;
+}
+
+.sx-combo-toggle {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
+    width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--sx-border);
+    border-radius: 0 var(--sx-control-radius) var(--sx-control-radius) 0;
+    background: transparent;
+    color: var(--sx-muted);
+    cursor: pointer;
+}
+
+.sx-combo-toggle:hover {
+    color: var(--sx-text);
+    background: var(--sx-accent-soft);
+}
+
+.sx-combo-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+.sx-combo-list {
+    position: absolute;
+    z-index: 50;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 320px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--sx-surface);
+    border: 1px solid var(--sx-input-border);
+    border-radius: var(--sx-control-radius);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .18);
+}
+
+.sx-combo-list[hidden] {
+    display: none;
+}
+
+.sx-combo-option,
+.sx-combo-note {
+    margin: 0;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 20px;
+    list-style: none;
+}
+
+.sx-combo-option {
+    color: var(--sx-text);
+    cursor: pointer;
+}
+
+.sx-combo-option.is-active,
+.sx-combo-option:hover {
+    background: var(--sx-accent-soft);
+}
+
+.sx-combo-option.is-selected {
+    font-weight: 600;
+    color: var(--sx-accent-text);
+}
+
+.sx-combo-option[aria-disabled="true"] {
+    opacity: .5;
+    cursor: default;
+}
+
+.sx-combo-note {
+    color: var(--sx-muted);
+    font-size: 13px;
+    cursor: default;
+}
+
+/*
+ * Блоки под карточкой (решение модератора и т. п.): #content-main у Django
+ * прижат влево на всю ширину, и .module (overflow: hidden) рядом с ним
+ * сжимался до нулевой ширины — кнопок «Опубликовать», «Отклонить» не
+ * было видно вовсе. С новой строки, на всю ширину
+ */
+#content-main ~ .module,
+#content-main ~ form.module {
+    clear: both;
+}

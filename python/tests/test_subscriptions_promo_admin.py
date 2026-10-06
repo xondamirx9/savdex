@@ -168,6 +168,17 @@ def test_список_и_права(люди):
     assert продажи["status"] == 403
 
 
+def test_выбор_компании_с_поиском(люди):
+    """Список компаний на сотни строк — поле с поиском (static/savdex/combobox.js)."""
+    сброс()
+
+    _, страница = django(люди["finance"], ("get", SUBS + "grant/", None))
+
+    assert страница["status"] == 200
+    assert "savdex/combobox.js?v=" in страница["body"]
+    assert 'name="company"' in страница["body"]
+
+
 @pytest.mark.parametrize(("дни", "кошелёк"), [("", False), ("0", False), ("14", True)])
 def test_назначить(люди, дни, кошелёк):
     uid = люди["finance"]
