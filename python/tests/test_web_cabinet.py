@@ -1006,6 +1006,13 @@ def test_настройки(сайт):
             ("listing_expiring", True, False),
             ("billing", True, False),
         ]
+        # Категории компании для бота: владелец меняет, рассылка не на паузе
+        assert props["categories"]["editable"] is True
+        assert props["categories"]["max"] == 5
+        assert set(props["categories"]["selected"]) <= {
+            o["id"] for o in props["categories"]["options"]
+        }
+        assert props["feed"] is True
 
 
 def test_настройки_без_компании(сайт):
@@ -1013,6 +1020,7 @@ def test_настройки_без_компании(сайт):
     props = стр["props"]
 
     assert props["counts"] is None and props["profile"]["email"] == "nocompany6@savdex.uz"
+    assert props["categories"] is None
 
 
 # ── Уведомления ─────────────────────────────────────────────────────

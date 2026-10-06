@@ -195,6 +195,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         "activity_events",
         "content_translations",
         "cache",
+        # Telegram-бот: привязка по ИНН и рассылка новых объявлений
+        # и тендеров по категориям (savdex/telegram_bot.py, telegram_feed.py)
+        "telegram_bot_chats",
+        "telegram_feed_items",
     }
 )
 
