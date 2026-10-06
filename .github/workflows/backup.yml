@@ -1,0 +1,136 @@
+# Ночная резервная копия боевой базы (docs/backups.md).
+#
+# Каждую ночь в 03:30 по Ташкенту (22:30 UTC) — копия базы savdex-db
+# с Render: pg_dump только читает и ничего не блокирует, сайт её не
+# замечает. Копия проверяется восстановлением в пустую базу, шифруется
+# паролем и хранится 30 дней как артефакт этого запуска.
+#
+# Репозиторий публичный: артефакт может скачать кто угодно, поэтому
+# без шифрования копия не выкладывается. Пароль — секрет
+# BACKUP_PASSPHRASE (не короче 20 знаков); без него копию не открыть
+# никому, в том числе нам — хранить его отдельно, не только в GitHub.
+#
+# В журнал запуска не пишется ничего из базы — ни списка таблиц, ни
+# числа записей: журнал публичного репозитория тоже виден всем.
+#
+# Секреты (Settings → Secrets and variables → Actions):
+#   BACKUP_DATABASE_URL — External Database URL базы savdex-db из Render
+#   BACKUP_PASSPHRASE   — пароль шифрования копий
+name: backup
+
+on:
+  schedule:
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      # pg_dump новее сервера снимает копию с любой версии PostgreSQL
+      # не старше себя — Render может поднять версию базы без нас
+      PG_IMAGE: postgres:18
+
+    # Пустая база для проверки: копия, которая не восстанавливается, —
+    # не копия
+    services:
+      check:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: check
+          POSTGRES_DB: restore_check
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Секреты на месте
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$PASSPHRASE" ]; then
+            echo "::error::Нет секретов BACKUP_DATABASE_URL и BACKUP_PASSPHRASE — копия не снята (docs/backups.md)."
+            exit 1
+          fi
+          if [ "${#PASSPHRASE}" -lt 20 ]; then
+            echo "::error::BACKUP_PASSPHRASE короче 20 знаков — для копии в публичном репозитории это слишком слабо."
+            exit 1
+          fi
+
+      - name: Копия базы
+        id: dump
+        run: |
+          set -euo pipefail
+          # Render принимает внешние подключения только по TLS
+          url="$DATABASE_URL"
+          case "$url" in
+            *sslmode=*) ;;
+            *\?*) url="$url&sslmode=require" ;;
+            *) url="$url?sslmode=require" ;;
+          esac
+
+          docker run --rm -e URL="$url" -v "$PWD:/out" "$PG_IMAGE" \
+            sh -c 'pg_dump --format=custom --compress=9 --file=/out/savdex.dump "$URL"'
+          # Контейнер пишет от root — файл отдать пользователю задачи
+          sudo chown "$(id -u):$(id -g)" savdex.dump
+
+          size=$(stat -c %s savdex.dump)
+          tables=$(docker run --rm -v "$PWD:/out" "$PG_IMAGE" \
+            pg_restore --list /out/savdex.dump | grep -c 'TABLE DATA' || true)
+          echo "Копия: $((size / 1024)) КБ."
+
+          # Пустая или обрезанная копия — ошибка, а не тихий успех
+          if [ "$size" -lt 50000 ] || [ "$tables" -lt 20 ]; then
+            echo "::error::Копия подозрительно мала — проверьте BACKUP_DATABASE_URL."
+            exit 1
+          fi
+
+          echo "stamp=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Проверка восстановлением
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -v "$PWD:/out" "$PG_IMAGE" \
+            pg_restore --no-owner --no-acl --exit-on-error \
+            --dbname=postgres://postgres:check@127.0.0.1:15432/restore_check /out/savdex.dump
+
+          # Главные таблицы на месте и не пусты; сами числа в журнал не идут
+          for table in users companies; do
+            n=$(docker run --rm --network host "$PG_IMAGE" psql -Atq \
+              postgres://postgres:check@127.0.0.1:15432/restore_check \
+              -c "select count(*) from $table")
+            if [ "$n" -lt 1 ]; then
+              echo "::error::После восстановления таблица $table пуста."
+              exit 1
+            fi
+          done
+          echo "Копия восстанавливается."
+
+      - name: Шифрование
+        run: |
+          set -euo pipefail
+          gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+            --passphrase-fd 3 --output "savdex-${{ steps.dump.outputs.stamp }}.dump.gpg" \
+            savdex.dump 3<<<"$PASSPHRASE"
+          shred -u savdex.dump
+
+      - name: Сохранение на 30 дней
+        uses: actions/upload-artifact@v4
+        with:
+          name: savdex-db-${{ steps.dump.outputs.stamp }}
+          path: savdex-${{ steps.dump.outputs.stamp }}.dump.gpg
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
