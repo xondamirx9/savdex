@@ -23,6 +23,19 @@ from .pg_admin import PYTHON, АДРЕС, ОКРУЖЕНИЕ, sql, нужна_б
 
 pytestmark = нужна_база
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _роль_django() -> None:
+    """
+    Роль savdex_django, как на Render: снимок и миграции выдают ей права.
+    На машине разработчика она обычно уже есть, в чистой базе CI — нет.
+    """
+    sql(
+        "do $$ begin if not exists (select from pg_roles where rolname = 'savdex_django') "
+        "then create role savdex_django; end if; end $$"
+    )
+
+
 ВЛАДЕЛЕЦ = {**ОКРУЖЕНИЕ, "DJANGO_DATABASE_URL": ОКРУЖЕНИЕ["DB_URL"], "PYTHONPATH": str(PYTHON)}
 
 

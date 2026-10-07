@@ -99,6 +99,12 @@ services:
       #   PASSWORD, PROSPECT_MAIL_FROM_ADDRESS, PROSPECT_MAIL_FROM_NAME;
       #   по желанию PROSPECT_MAIL_PER_DAY (100) и _PER_MINUTE (2).
       #   Без них письма рассылки не уходят. Подробно — docs/prospects.md.
+      #
+      #   Ящик поддержки → обращения (docs/support-mail.md) — тоже только в
+      #   панели: SUPPORT_IMAP_HOST, SUPPORT_IMAP_USERNAME,
+      #   SUPPORT_IMAP_PASSWORD (порт 993 и папка INBOX — по умолчанию).
+      #   Ответы клиентам уходят через почту сайта (MAIL_*) от адреса
+      #   поддержки из настроек площадки.
       # Кэш — в файлах, а не в базе.
       #
       # Умолчание — database, и оно означает, что каждое
