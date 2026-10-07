@@ -152,10 +152,14 @@ def сброс(*, неудач: int = 0, **поля: Any) -> Callable[[], None]:
         sql("delete from admin_actions")
         пользователь(**поля)
 
+        # Полторы минуты назад, а не минуту: до разблокировки 13,5 минуты,
+        # и «через 14 мин.» не зависит от того, как быстро пришёл запрос.
+        # Ровно минута давала 840 с плюс доли секунды (база округляет
+        # время до секунды, сайт — отбрасывает) — на быстром CI «15 мин.»
         for _ in range(неудач):
             sql(
                 "insert into login_attempts (email, ip, successful, created_at) "
-                "values (%s, '127.0.0.1', false, now() - interval '1 minute')",
+                "values (%s, '127.0.0.1', false, now() - interval '90 seconds')",
                 [ПОЧТА],
             )
 
