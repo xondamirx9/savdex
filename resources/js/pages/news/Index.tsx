@@ -1,8 +1,10 @@
 import { Link } from '@/components/ui/Link';
 import { ArrowRight, CalendarDays, Clock } from 'lucide-react';
+import { useState } from 'react';
 import { NewsCover } from '@/components/NewsCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
+import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
 
 interface Post {
@@ -20,8 +22,36 @@ interface Post {
 
 type Rubric = { value: string; label: string };
 
+/** Рубрика из адреса (?rubric=…): ссылку на подборку можно переслать. */
+function initialRubric(categories: Rubric[]): string {
+    if (typeof window === 'undefined') return '';
+
+    const value = new URLSearchParams(window.location.search).get('rubric') ?? '';
+
+    return categories.some((c) => c.value === value) ? value : '';
+}
+
 export default function NewsIndex({ posts, categories }: { posts: Post[]; categories: Rubric[] }) {
-    const [lead, ...rest] = posts;
+    const [rubric, setRubric] = useState(() => initialRubric(categories));
+
+    /*
+     * Фильтр — на месте, без запроса: все публикации уже на странице.
+     * Адрес меняется без новой записи в истории — «назад» уводит
+     * со страницы новостей, а не перебирает нажатые рубрики.
+     */
+    function pick(value: string) {
+        setRubric(value);
+
+        const url = new URL(window.location.href);
+
+        if (value) url.searchParams.set('rubric', value);
+        else url.searchParams.delete('rubric');
+
+        window.history.replaceState(window.history.state, '', url);
+    }
+
+    const shown = rubric ? posts.filter((p) => p.category === rubric) : posts;
+    const [lead, ...rest] = shown;
 
     return (
         <PublicLayout
@@ -48,9 +78,22 @@ export default function NewsIndex({ posts, categories }: { posts: Post[]; catego
                 </div>
 
                 <div className="row wrap" style={{ gap: 8, marginBottom: 32 }}>
-                    <button className="chip chip-active">{t('news.all')}</button>
+                    <button
+                        type="button"
+                        className={cn('chip', rubric === '' && 'chip-active')}
+                        aria-pressed={rubric === ''}
+                        onClick={() => pick('')}
+                    >
+                        {t('news.all')}
+                    </button>
                     {categories.map((c) => (
-                        <button key={c.value} className="chip">
+                        <button
+                            key={c.value}
+                            type="button"
+                            className={cn('chip', rubric === c.value && 'chip-active')}
+                            aria-pressed={rubric === c.value}
+                            onClick={() => pick(c.value)}
+                        >
                             {c.label}
                         </button>
                     ))}

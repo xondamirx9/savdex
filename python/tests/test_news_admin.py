@@ -263,3 +263,20 @@ def test_обложка_не_копится(люди):
     )
     assert удалена["status"] == 302
     assert not (PUBLIC / second).exists()
+
+
+def test_фото_с_редактором(люди):
+    """Поле «Фото новости» — с кнопкой «Загрузить фото» и редактором (news-cover.js)."""
+    _, ответ = django(люди["content_manager"], ("get", ADD, None))
+
+    assert ответ["status"] == 200
+    assert "Фото новости" in ответ["body"]
+    assert "savdex/news-cover.js" in ответ["body"]
+    assert "savdex/news-cover.css" in ответ["body"]
+
+
+def test_текущее_фото_в_превью(люди):
+    post = _создать(люди, "s-foto", cover_upload=файл("a.jpg", _jpeg((1600, 1000))))
+    _, ответ = django(люди["content_manager"], ("get", f"{LIST}{post['id']}/change/", None))
+
+    assert f'data-src="/storage/{post["image"]}"' in ответ["body"]

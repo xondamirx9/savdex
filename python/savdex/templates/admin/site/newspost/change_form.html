@@ -4,7 +4,12 @@
   Адрес новости подставляется из заголовка, пока новость заводится, —
   как в Filament. У готовой новости адрес сам не меняется: внешние
   ссылки перестали бы работать. «Открыть» — у опубликованной.
+  Обложка — кнопка «Загрузить фото» с редактором (news-cover.js).
 {% endcomment %}
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'savdex/news-cover.css' %}">
+{% endblock %}
 {% block object-tools-items %}
   {% if original and original.is_published %}
     <li><a href="/news/{{ original.slug }}" target="_blank" rel="noopener">Открыть на сайте ↗</a></li>
@@ -13,5 +18,7 @@
 {% endblock %}
 {% block admin_change_form_document_ready %}
   {{ block.super }}
+  {% if original and original.image_path %}<template id="news-cover-current" data-src="/storage/{{ original.image_path }}"></template>{% endif %}
   {% if add %}<script src="{% static 'savdex/news-slug.js' %}"></script>{% endif %}
+  <script src="{% static 'savdex/news-cover.js' %}"></script>
 {% endblock %}
