@@ -1,6 +1,15 @@
 """
 Свои тендеры в кабинете: список «Мои тендеры», форма «Создать тендер»,
-правка, закрыть, открыть снова и удалить.
+правка, продлить, завершить, открыть снова и удалить.
+
+Тендер, заведённый в кабинете (source = cabinet), живёт LIFETIME дней:
+срок — «Приём заявок до», по умолчанию и не дальше чем через 30 дней.
+«Продлить» — на 7, 14 или 30 дней, в любой момент, в том числе после
+«Истёк». «Завершить» — в архив с итогом: договор заключён (с кем и на
+какую сумму — по желанию), не договорились или закупку отменили. За три
+дня до срока — предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
+Тендеры администратора (source = admin: админка и загрузка из Excel)
+живут по своему сроку из источника.
 
 Тендер заводит компания: заказчик по умолчанию — её название, автор —
 вошедший (author_id). Как и IT-задача, новый тендер сразу на витрине
@@ -15,6 +24,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.db import connection
@@ -35,10 +46,21 @@ from savdex.web.shared import Context
 from savdex.web.validation import Check, _strtotime, validate, validated
 from savdex.web.views import not_found
 
-PUBLISHED, ARCHIVED, DRAFT = "published", "archived", "draft"
+PUBLISHED, ARCHIVED, DRAFT, EXPIRED = "published", "archived", "draft", "expired"
 
 #: Tender::STATUSES — подписи в кабинете: cabinet.tenders.statuses
-STATUSES = (DRAFT, PUBLISHED, ARCHIVED)
+STATUSES = (DRAFT, PUBLISHED, ARCHIVED, EXPIRED)
+
+#: Сколько дней живёт тендер из кабинета — и самый дальний срок при создании
+LIFETIME = 30
+
+#: На сколько дней можно продлить
+EXTEND_DAYS = (7, 14, 30)
+
+#: Чем закончился тендер: подписи — cabinet.tenders.outcomes
+OUTCOMES = ("contract", "no_deal", "cancelled")
+
+CABINET = "cabinet"
 
 #: Tender::CURRENCIES
 CURRENCIES = ["UZS", "USD", "EUR", "RUB", "CNY", "KZT"]
@@ -94,7 +116,24 @@ def _category() -> Check:
     return Check("exists", passes)
 
 
-def _validated(ctx: Context, request: HttpRequest) -> tuple[dict[str, Any], dict[str, list[str]]]:
+def _end_of_day(moment: datetime) -> datetime:
+    return moment.replace(hour=23, minute=59, second=59, microsecond=0)
+
+
+def _default_deadline() -> datetime:
+    """Срок нового тендера: конец дня через LIFETIME дней."""
+    return _end_of_day(eloquent.now() + timedelta(days=LIFETIME))
+
+
+def _validated(
+    ctx: Context,
+    request: HttpRequest,
+    latest: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, list[str]]]:
+    """
+    Поля формы. latest — самый дальний срок «Приём заявок до» у тендера
+    из кабинета: дальше — только через «Продлить».
+    """
     data: dict[str, Any] = {**input_of(request)}
     rules: dict[str, list[str | Any]] = {
         "title": ["required", "string", "min:10", "max:190"],
@@ -143,6 +182,12 @@ def _validated(ctx: Context, request: HttpRequest) -> tuple[dict[str, Any], dict
         # Приём заявок — до конца выбранного дня
         row["deadline_at"] = parsed[0].strftime("%Y-%m-%d 23:59:59")
 
+        if latest is not None and row["deadline_at"] > latest.strftime("%Y-%m-%d %H:%M:%S"):
+            limit = _date(latest, ctx.locale)
+            message = ctx.t("messages.tender.deadline_max", days=LIFETIME, date=limit)
+
+            return {}, {"deadline_at": [message]}
+
     return row, {}
 
 
@@ -173,12 +218,26 @@ def _categories(ctx: Context) -> list[dict[str, Any]]:
 
 
 def _budget(ctx: Context, row: dict[str, Any]) -> str | None:
-    if row["budget"] is None:
+    return _money(ctx, row["budget"], row["currency"])
+
+
+def _money(ctx: Context, amount: Any, currency: Any) -> str | None:  # noqa: ANN401
+    if amount is None:
         return None
 
-    currency = ctx.t("catalog.currency_uzs") if row["currency"] == "UZS" else row["currency"]
+    label = ctx.t("catalog.currency_uzs") if (currency or "UZS").strip() == "UZS" else currency
 
-    return f"{number_format(float(row['budget']), 0)} {currency}"
+    return f"{number_format(float(amount), 0)} {label}"
+
+
+def _days_left(row: dict[str, Any]) -> int | None:
+    """Сколько дней до срока у тендера на витрине; иначе None."""
+    if row["status"] != PUBLISHED or row["deadline_at"] is None:
+        return None
+
+    left: int = (row["deadline_at"].date() - eloquent.now().date()).days
+
+    return max(0, left)
 
 
 def _no_company(ctx: Context) -> HttpResponse:
@@ -205,6 +264,7 @@ def index_page(ctx: Context) -> HttpResponse:
         "cabinet/tenders/Index",
         {
             "hasCompany": company_of(ctx) is not None,
+            "extendDays": list(EXTEND_DAYS),
             "tenders": [
                 {
                     "id": r["id"],
@@ -213,7 +273,14 @@ def index_page(ctx: Context) -> HttpResponse:
                     "customer": r["customer"],
                     "budget": _budget(ctx, r),
                     "deadline": _date(r["deadline_at"], ctx.locale),
+                    "days_left": _days_left(r),
                     "status": r["status"],
+                    "outcome": r["outcome"],
+                    "outcome_label": (
+                        ctx.t(f"cabinet.tenders.outcomes.{r['outcome']}") if r["outcome"] else None
+                    ),
+                    "outcome_party": r["outcome_party"],
+                    "outcome_amount": _money(ctx, r["outcome_amount"], r["currency"]),
                     "status_label": (
                         ctx.t(f"cabinet.tenders.statuses.{r['status']}")
                         if r["status"] in STATUSES
@@ -315,7 +382,8 @@ def store(request: HttpRequest) -> HttpResponse:
     if (refused := refuse_blocked(ctx, company["id"])) is not None:
         return refused
 
-    valid, errors = _validated(ctx, request)
+    latest = _default_deadline()
+    valid, errors = _validated(ctx, request, latest)
 
     if errors:
         return invalid(ctx, errors)
@@ -323,9 +391,12 @@ def store(request: HttpRequest) -> HttpResponse:
     now = _stamp(eloquent.now())
     row: dict[str, Any] = {
         **valid,
+        # Срок не выбран — 30 дней
+        "deadline_at": valid["deadline_at"] or latest.strftime("%Y-%m-%d %H:%M:%S"),
         "author_id": ctx.user["id"],
         "status": PUBLISHED,
         "published_at": now,
+        "source": CABINET,
     }
     row.update(_search_text(row))
     row.update(updated_at=now, created_at=now)
@@ -357,10 +428,22 @@ def update(request: HttpRequest, tender_id: str) -> HttpResponse:
     if tender is None:
         return not_found(ctx)
 
-    valid, errors = _validated(ctx, request)
+    cabinet = tender["source"] == CABINET
+    latest = None
+
+    if cabinet:
+        # Правкой срок не уходит дальше 30 дней от сегодня или уже продлённого
+        current = tender["deadline_at"]
+        latest = max(_default_deadline(), current) if current else _default_deadline()
+
+    valid, errors = _validated(ctx, request, latest)
 
     if errors:
         return invalid(ctx, errors)
+
+    # Срок стёрли — у кабинетного тендера остаётся прежний
+    if cabinet and valid["deadline_at"] is None:
+        valid["deadline_at"] = tender["deadline_at"] or latest
 
     for field, column in _TRANSLATED.items():
         if valid[field] != tender[field]:
@@ -399,20 +482,104 @@ def destroy(request: HttpRequest, tender_id: str) -> HttpResponse:
 
 
 @form()
-def close(request: HttpRequest, tender_id: str) -> HttpResponse:
-    """Снять с витрины: только опубликованный."""
+def finish(request: HttpRequest, tender_id: str) -> HttpResponse:
+    """
+    «Завершить»: тендер в архив с итогом — договор заключён (с кем и на
+    какую сумму — по желанию), не договорились или закупку отменили.
+    """
     ctx = action(request)
     tender = _owned(ctx, int(tender_id))
 
     if tender is None:
         return not_found(ctx)
 
-    if tender["status"] == PUBLISHED:
+    data = input_of(request)
+    errors = validate(
+        data,
+        {
+            "outcome": ["required", "in:" + ",".join(OUTCOMES)],
+            "party": ["nullable", "string", "max:190"],
+            "amount": ["nullable", "numeric", "min:0", "max:99999999999999"],
+        },
+        ctx.locale,
+        {"outcome.required": ctx.t("messages.tender.outcome_required")},
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    if tender["status"] in (PUBLISHED, EXPIRED):
+        contract = data["outcome"] == "contract"
+        party = str(data.get("party") or "").strip()
+        amount = data.get("amount")
         eloquent.save(
-            ctx, "tenders", tender, {"status": ARCHIVED}, section="tenders", model="Tender"
+            ctx,
+            "tenders",
+            tender,
+            {
+                "status": ARCHIVED,
+                "outcome": data["outcome"],
+                "outcome_party": (party or None) if contract else None,
+                "outcome_amount": (
+                    Decimal(str(amount)) if contract and amount not in (None, "") else None
+                ),
+                "finished_at": eloquent.now(),
+            },
+            section="tenders",
+            model="Tender",
+            casts={"outcome_amount": "decimal:2"},
         )
 
-    flash(ctx, "success", ctx.t("messages.tender.closed"))
+    flash(ctx, "success", ctx.t("messages.tender.finished"))
+
+    return back(ctx)
+
+
+@form()
+def extend(request: HttpRequest, tender_id: str) -> HttpResponse:
+    """
+    «Продлить» на 7, 14 или 30 дней: от прежнего срока, а если он уже
+    прошёл — от сегодня. Истёкший тендер возвращается на витрину.
+    """
+    ctx = action(request)
+    tender = _owned(ctx, int(tender_id))
+
+    if tender is None:
+        return not_found(ctx)
+
+    company = company_of(ctx)
+
+    if company is not None and (refused := refuse_blocked(ctx, company["id"])) is not None:
+        return refused
+
+    data = input_of(request)
+    errors = validate(
+        data, {"days": ["required", "in:" + ",".join(str(d) for d in EXTEND_DAYS)]}, ctx.locale
+    )
+
+    if errors:
+        return invalid(ctx, errors)
+
+    if tender["status"] not in (PUBLISHED, EXPIRED):
+        return back(ctx)
+
+    now = eloquent.now()
+    start = tender["deadline_at"] if tender["deadline_at"] and tender["deadline_at"] > now else now
+    deadline = _end_of_day(start + timedelta(days=int(str(data["days"]))))
+    eloquent.save(
+        ctx,
+        "tenders",
+        tender,
+        {
+            "status": PUBLISHED,
+            "deadline_at": deadline,
+            "expiry_warned_at": None,
+            "extended_at": now,
+        },
+        section="tenders",
+        model="Tender",
+    )
+    flash(ctx, "success", ctx.t("messages.tender.extended", date=_date(deadline, ctx.locale)))
 
     return back(ctx)
 
@@ -435,14 +602,22 @@ def reopen(request: HttpRequest, tender_id: str) -> HttpResponse:
         return refused
 
     if tender["status"] == ARCHIVED:
-        eloquent.save(
-            ctx,
-            "tenders",
-            tender,
-            {"status": PUBLISHED, "published_at": eloquent.now()},
-            section="tenders",
-            model="Tender",
-        )
+        changes: dict[str, Any] = {
+            "status": PUBLISHED,
+            "published_at": eloquent.now(),
+            "outcome": None,
+            "outcome_party": None,
+            "outcome_amount": None,
+            "finished_at": None,
+        }
+
+        # Срок кабинетного тендера уже прошёл — снова 30 дней
+        deadline = tender["deadline_at"]
+
+        if tender["source"] == CABINET and (deadline is None or deadline <= eloquent.now()):
+            changes.update(deadline_at=_default_deadline(), expiry_warned_at=None)
+
+        eloquent.save(ctx, "tenders", tender, changes, section="tenders", model="Tender")
 
     flash(ctx, "success", ctx.t("messages.tender.reopened"))
 

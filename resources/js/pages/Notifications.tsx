@@ -38,6 +38,7 @@ const ICONS: Record<string, ComponentType<{ className?: string; 'aria-hidden'?: 
     platform_review_ask: Star,
     moderation: FileText,
     listing_expiring: Clock,
+    tender_expiring: Clock,
     payment: CreditCard,
     promotion: Megaphone,
     broadcast: Bell,

@@ -50,6 +50,7 @@ EVENT_OF_TYPE = {
     "review": "new_review",
     "moderation": "moderation",
     "listing_expiring": "listing_expiring",
+    "tender_expiring": "tender_expiring",
     "chat": "chat",
     "billing": "billing",
     "payment": "billing",

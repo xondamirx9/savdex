@@ -28,13 +28,37 @@ from savdex.guards import allowed_writes
 from savdex.tenders.slug import make_slug
 from savdex.web.search_text import index
 
-STATUSES = {"draft": "Черновик", "published": "Опубликован", "archived": "В архиве"}
+STATUSES = {
+    "draft": "Черновик",
+    "published": "Опубликован",
+    "archived": "Завершён / в архиве",
+    "expired": "Истёк",
+}
+
+#: Чем закончился тендер — отмечает владелец кнопкой «Завершить» в кабинете
+OUTCOMES = {
+    "contract": "Договор заключён",
+    "no_deal": "Не договорились",
+    "cancelled": "Закупка отменена",
+}
+
+#: Откуда тендер: из кабинета компании (живёт 30 дней) или от администратора
+SOURCES = {"cabinet": "Компания (кабинет)", "admin": "Администратор / Excel"}
 
 #: Tender::CURRENCIES
 CURRENCIES = ("UZS", "USD", "EUR", "RUB", "CNY", "KZT")
 
 #: Кто пишет эти столбцы помимо админки — обычное сохранение их не трогает
-FOREIGN_COLUMNS = ("title_i18n", "description_i18n", "views_count")
+FOREIGN_COLUMNS = (
+    "title_i18n",
+    "description_i18n",
+    "views_count",
+    # Пишут кабинет и проход сроков (savdex/tender_expiry.py)
+    "source",
+    "finished_at",
+    "expiry_warned_at",
+    "extended_at",
+)
 
 
 class Tender(Timestamped):
@@ -85,6 +109,19 @@ class Tender(Timestamped):
     search_text = models.TextField(null=True, blank=True, editable=False)
     # Ссылка на users без модели: таблица пользователей — Laravel
     author_id = models.BigIntegerField(null=True, blank=True, editable=False)
+    source = models.CharField(
+        "откуда", max_length=16, default="admin", choices=list(SOURCES.items()), editable=False
+    )
+    outcome = models.CharField(
+        "итог", max_length=16, null=True, blank=True, choices=list(OUTCOMES.items())
+    )
+    outcome_party = models.CharField("договор с кем", max_length=255, null=True, blank=True)
+    outcome_amount = models.DecimalField(
+        "сумма договора", max_digits=16, decimal_places=2, null=True, blank=True
+    )
+    finished_at = UTCDateTimeField("завершён", null=True, blank=True, editable=False)
+    expiry_warned_at = UTCDateTimeField(null=True, blank=True, editable=False)
+    extended_at = UTCDateTimeField("продлён", null=True, blank=True, editable=False)
 
     class Meta:
         managed = False

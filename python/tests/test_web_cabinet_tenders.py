@@ -1,6 +1,7 @@
 """
 Свои тендеры в кабинете: «Мои тендеры», «Создать тендер», правка,
-закрыть, открыть снова и удалить. Тендер заводит компания: заказчик по
+продлить, завершить, открыть снова и удалить. Тендер из кабинета живёт
+30 дней: срок не дальше, продлить — на 7, 14 или 30 дней. Тендер заводит компания: заказчик по
 умолчанию — её название, автор — вошедший; новый тендер сразу на
 витрине. Чужой тендер — 404.
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -58,7 +60,17 @@ def _свой() -> int:
     return int(found[0][0]) if found else заказчик()
 
 
-def тендеры(*статусы: str, автор: Callable[[], int] = _свой) -> Callable[[], None]:
+def день(n: int) -> str:
+    """Дата через n дней (UTC), как в поле формы."""
+    return (datetime.now(UTC) + timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+def тендеры(
+    *статусы: str,
+    автор: Callable[[], int] = _свой,
+    source: str = "admin",
+    deadline: str | None = None,
+) -> Callable[[], None]:
     """Подготовка: тендеры 1, 2… автора с этими статусами."""
 
     def run() -> None:
@@ -70,11 +82,13 @@ def тендеры(*статусы: str, автор: Callable[[], int] = _сво
         for status in статусы:
             sql(
                 "insert into tenders (slug, title, title_i18n, description, customer, currency, "
-                "status, published_at, author_id, created_at, updated_at) values "
+                "status, published_at, author_id, created_at, updated_at, source, deadline_at, "
+                "expiry_warned_at) values "
                 "(null, 'Поставка цемента М400', '{\"en\": \"Cement supply\"}', "
                 "'Двести тонн цемента с доставкой на объект', 'ООО «Стройзаказ»', 'UZS', %s, "
-                "now() - interval '1 day', %s, now() - interval '1 day', now() - interval '1 day')",
-                [status, uid],
+                "now() - interval '1 day', %s, now() - interval '1 day', now() - interval '1 day', "
+                "%s, %s, now())",
+                [status, uid, source, deadline],
             )
 
     return run
@@ -115,7 +129,7 @@ def сессия(итог: dict[str, Any]) -> dict[str, Any]:
     "location": "Ташкент",
     "budget": "150000000",
     "currency": "UZS",
-    "deadline_at": "2099-06-30",
+    "deadline_at": день(10),
     "contact_name": "Алишер",
     "contact_phone": "+998901234567",
     "contact_email": "buyer@savdex.uz",
@@ -135,7 +149,7 @@ def test_новый(сайт, admin):
     # Адрес — из заголовка и номера, сразу на витрине, автор — вошедший
     assert строка[1].endswith("-1") and строка[1].startswith("postavka-tsementa")
     assert строка[13] == "published" and строка[14] == заказчик() and строка[15]
-    assert (строка[7], строка[8], строка[9]) == ("150000000.00", "UZS", "2099-06-30 23:59:59")
+    assert (строка[7], строка[8], строка[9]) == ("150000000.00", "UZS", f"{день(10)} 23:59:59")
     assert строка[5] is None and "цемент" in строка[16]
     assert итог["база"]["journal"] == (["created"] if admin else [])
 
@@ -247,17 +261,15 @@ def test_чужой_404(сайт, path, method):
 
 
 @pytest.mark.parametrize(
-    ("было", "путь", "стало"),
+    ("было", "стало"),
     [
-        ("published", "close", "archived"),
-        ("archived", "close", "archived"),
-        ("archived", "reopen", "published"),
+        ("archived", "published"),
         # Черновик снят модерацией — автору его не вернуть
-        ("draft", "reopen", "draft"),
+        ("draft", "draft"),
     ],
 )
-def test_закрыть_открыть(сайт, было, путь, стало):
-    итог = отправить(сайт, f"/cabinet/tenders/1/{путь}", тендеры(было), снимок, uid=заказчик())
+def test_открыть_снова(сайт, было, стало):
+    итог = отправить(сайт, "/cabinet/tenders/1/reopen", тендеры(было), снимок, uid=заказчик())
 
     assert итог["ответ"]["status"] == 302
     assert итог["база"]["tenders"][0][13] == стало
@@ -291,7 +303,7 @@ def test_список_только_свои(сайт):
     assert страница(ответ["body"])["component"] == "cabinet/tenders/Index"
     assert props["hasCompany"] is True
     assert [(t["id"], t["status"], t["status_label"]) for t in props["tenders"]] == [
-        (2, "archived", "Закрыт"),
+        (2, "archived", "Завершён"),
         (1, "published", "Опубликован"),
     ]
     assert all(t["title"] != "Чужая закупка бумаги" for t in props["tenders"])
@@ -334,3 +346,180 @@ def test_форма_правки(сайт):
     чужая = открыть(сайт, "/cabinet/tenders/1/edit", cookies=вход(заказчик()))
 
     assert чужая["status"] == 404
+
+
+# ── Срок: 30 дней, продлить, завершить ─────────────────────────────
+
+
+def итог_тендера() -> Any:
+    return sql(
+        "select status, source, deadline_at::text, outcome, outcome_party, outcome_amount::text, "
+        "finished_at is not null, expiry_warned_at is not null from tenders order by id"
+    )
+
+
+def test_новый_срок_по_умолчанию(сайт):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders",
+        тендеры(),
+        итог_тендера,
+        uid=заказчик(),
+        body={**ФОРМА, "deadline_at": ""},
+    )
+
+    assert итог["база"] == [
+        ("published", "cabinet", f"{день(30)} 23:59:59", None, None, None, False, False)
+    ]
+
+
+def test_новый_срок_дальше_30_дней(сайт):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders",
+        тендеры(),
+        итог_тендера,
+        uid=заказчик(),
+        body={**ФОРМА, "deadline_at": день(31)},
+    )
+
+    assert list(сессия(итог)["errors"]) == ["deadline_at"]
+    assert "Продлить" in сессия(итог)["errors"]["deadline_at"][0]
+    assert итог["база"] == []
+
+
+@pytest.mark.parametrize(
+    ("срок", "ошибка", "стало"),
+    [
+        # Дальше 30 дней — только «Продлить»
+        (день(40), True, None),
+        # Стёрли срок — у кабинетного тендера остаётся прежний
+        ("", False, f"{день(25)} 23:59:59"),
+        (день(20), False, f"{день(20)} 23:59:59"),
+    ],
+)
+def test_правка_срока_кабинетного(сайт, срок, ошибка, стало):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders/1",
+        тендеры("published", source="cabinet", deadline=f"{день(25)} 23:59:59"),
+        итог_тендера,
+        uid=заказчик(),
+        body={**ФОРМА, "deadline_at": срок},
+        method="PATCH",
+    )
+
+    assert ("deadline_at" in сессия(итог)["errors"]) is ошибка
+    assert итог["база"][0][2] == (стало or f"{день(25)} 23:59:59")
+
+
+@pytest.mark.parametrize(
+    ("было", "body", "стало"),
+    [
+        (
+            "published",
+            {"outcome": "contract", "party": " ООО «Цемент» ", "amount": "120000000"},
+            ("archived", "contract", "ООО «Цемент»", "120000000.00", True),
+        ),
+        # С кем и сумма — только у договора
+        (
+            "published",
+            {"outcome": "no_deal", "party": "ООО «Цемент»", "amount": "5"},
+            ("archived", "no_deal", None, None, True),
+        ),
+        ("expired", {"outcome": "cancelled"}, ("archived", "cancelled", None, None, True)),
+        ("published", {}, ("published", None, None, None, False)),
+        ("published", {"outcome": "won"}, ("published", None, None, None, False)),
+        # Уже завершён — второй раз не переписывается
+        ("archived", {"outcome": "contract"}, ("archived", None, None, None, False)),
+    ],
+)
+def test_завершить(сайт, было, body, стало):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders/1/finish",
+        тендеры(было, source="cabinet", deadline=f"{день(5)} 23:59:59"),
+        итог_тендера,
+        uid=заказчик(),
+        body=body,
+    )
+    status, _, _, outcome, party, amount, finished, _ = итог["база"][0]
+
+    assert (status, outcome, party, amount, finished) == стало
+
+    if стало[1] is None and было != "archived":
+        assert "outcome" in сессия(итог)["errors"]
+
+
+@pytest.mark.parametrize(
+    ("было", "срок", "дней", "стало"),
+    [
+        # От прежнего срока, предупреждение сброшено
+        ("published", 2, "14", ("published", f"{день(16)} 23:59:59", False)),
+        # Срок прошёл — от сегодня, тендер снова на витрине
+        ("expired", -3, "7", ("published", f"{день(7)} 23:59:59", False)),
+        # Не из списка 7/14/30 — отказ
+        ("published", 2, "5", ("published", f"{день(2)} 23:59:59", True)),
+        # Завершённый не продлевается — его открывают снова
+        ("archived", 2, "30", ("archived", f"{день(2)} 23:59:59", True)),
+    ],
+)
+def test_продлить(сайт, было, срок, дней, стало):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders/1/extend",
+        тендеры(было, source="cabinet", deadline=f"{день(срок)} 23:59:59"),
+        итог_тендера,
+        uid=заказчик(),
+        body={"days": дней},
+    )
+    status, _, deadline, _, _, _, _, warned = итог["база"][0]
+
+    assert (status, deadline, warned) == стало
+
+
+def test_продлить_чужой_404(сайт):
+    итог = отправить(
+        сайт,
+        "/cabinet/tenders/1/extend",
+        тендеры("published", автор=чужой, source="cabinet", deadline=f"{день(2)} 23:59:59"),
+        итог_тендера,
+        uid=заказчик(),
+        body={"days": "30"},
+    )
+
+    assert итог["ответ"]["status"] == 404
+    assert итог["база"][0][2] == f"{день(2)} 23:59:59"
+
+
+def test_открыть_снова_кабинетный(сайт):
+    def подготовка() -> None:
+        тендеры("archived", source="cabinet", deadline=f"{день(-5)} 23:59:59")()
+        sql("update tenders set outcome = 'no_deal', finished_at = now()")
+
+    итог = отправить(сайт, "/cabinet/tenders/1/reopen", подготовка, итог_тендера, uid=заказчик())
+
+    # Итог снят, срок прошёл — снова 30 дней
+    assert итог["база"] == [
+        ("published", "cabinet", f"{день(30)} 23:59:59", None, None, None, False, False)
+    ]
+
+
+def test_список_сроки_и_итоги(сайт):
+    тендеры("published", "archived", "expired", source="cabinet", deadline=f"{день(2)} 23:59:59")()
+    sql(
+        "update tenders set outcome = 'contract', outcome_party = 'ООО «Цемент»', "
+        "outcome_amount = 120000000 where id = 2"
+    )
+    ответ = открыть(сайт, "/cabinet/tenders", cookies=вход(заказчик()))
+    props = страница(ответ["body"])["props"]
+    по_номеру = {t["id"]: t for t in props["tenders"]}
+
+    assert props["extendDays"] == [7, 14, 30]
+    assert по_номеру[1]["days_left"] == 2
+    assert (по_номеру[2]["outcome_label"], по_номеру[2]["outcome_party"]) == (
+        "Договор заключён",
+        "ООО «Цемент»",
+    )
+    assert по_номеру[2]["outcome_amount"].startswith("120 000 000")
+    assert (по_номеру[3]["status_label"], по_номеру[3]["days_left"]) == ("Истёк", None)

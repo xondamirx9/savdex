@@ -988,6 +988,7 @@ NOTIFICATION_EVENTS = {
     "chat": "Новое сообщение в чате",
     "moderation": "Решения модерации",
     "listing_expiring": "Объявление истекает",
+    "tender_expiring": "Тендер истекает",
     "billing": "Оплаты, тариф и продвижение",
 }
 

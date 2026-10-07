@@ -17,6 +17,7 @@ ImportAction::before.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -33,7 +34,7 @@ from django.utils.html import format_html
 from savdex import audit
 from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.tenders import importer
-from savdex.tenders.models import STATUSES, Tender
+from savdex.tenders.models import OUTCOMES, SOURCES, STATUSES, Tender
 
 #: Файл больше — не загрузка закупок, а ошибка (или не тот файл)
 MAX_UPLOAD = 10 * 1024 * 1024
@@ -49,6 +50,29 @@ class ImportForm(forms.Form):
         required=False,
         help_text="Иначе — по столбцу «Госзакупка» (да/нет), если он есть.",
     )
+
+
+class ExpiringFilter(admin.SimpleListFilter):
+    """Сроки: истекают за 3 дня — им уже ушло предупреждение; истёкшие не продлённые."""
+
+    title = "срок"
+    parameter_name = "term"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("soon", "Истекают за 3 дня"), ("past", "Срок прошёл, на витрине")]
+
+    def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
+        now = timezone.now()
+
+        if self.value() == "soon":
+            return queryset.filter(
+                status="published", deadline_at__gt=now, deadline_at__lte=now + timedelta(days=3)
+            )
+
+        if self.value() == "past":
+            return queryset.filter(status="published", deadline_at__lte=now)
+
+        return queryset
 
 
 @register(Tender, section="tenders")
@@ -68,6 +92,7 @@ class TenderAdmin(SavdexModelAdmin):
         ),
         ("Контакты заказчика", {"fields": ("contact_name", "contact_phone", "contact_email")}),
         ("Публикация", {"fields": ("status", "published_at")}),
+        ("Итог", {"fields": ("outcome", "outcome_party", "outcome_amount")}),
     )
     list_display = (
         "tender",
@@ -76,11 +101,20 @@ class TenderAdmin(SavdexModelAdmin):
         "deadline",
         "government",
         "state",
+        "result",
+        "origin",
         "published",
         "row_actions",
     )
     list_select_related = ("category", "country")
-    list_filter = ("is_government", "status", "currency")
+    list_filter = (
+        "status",
+        "outcome",
+        "source",
+        ExpiringFilter,
+        "is_government",
+        "currency",
+    )
     actions = ("publish_selected", "archive_selected", "delete_selected")
     ordering = ("-created_at", "-id")
     search_fields = ("title", "customer", "source_url")
@@ -126,11 +160,40 @@ class TenderAdmin(SavdexModelAdmin):
 
     @admin.display(description="статус", ordering="status")
     def state(self, obj: Tender) -> str:
-        color = {"published": "#15803d", "archived": "#6b7280"}.get(obj.status, "#b45309")
+        color = {"published": "#15803d", "archived": "#6b7280", "expired": "#b91c1c"}.get(
+            obj.status, "#b45309"
+        )
 
         return format_html(
             '<b style="color:{}">{}</b>', color, STATUSES.get(obj.status, obj.status)
         )
+
+    @admin.display(description="итог", ordering="outcome")
+    def result(self, obj: Tender) -> str:
+        """Чем закончился: договор — с кем и на какую сумму."""
+        if not obj.outcome:
+            return "—"
+
+        color = {"contract": "#15803d", "no_deal": "#b45309"}.get(obj.outcome, "#6b7280")
+        details = []
+
+        if obj.outcome_party:
+            details.append(obj.outcome_party)
+
+        if obj.outcome_amount is not None:
+            amount = f"{int(obj.outcome_amount + Decimal('0.5')):,}".replace(",", " ")
+            details.append(f"{amount} {obj.currency}")
+
+        return format_html(
+            '<b style="color:{}">{}</b><br><small>{}</small>',
+            color,
+            OUTCOMES.get(obj.outcome, obj.outcome),
+            " · ".join(details),
+        )
+
+    @admin.display(description="откуда", ordering="source")
+    def origin(self, obj: Tender) -> str:
+        return SOURCES.get(obj.source, obj.source)
 
     @admin.display(description="опубликован", ordering="published_at")
     def published(self, obj: Tender) -> str:

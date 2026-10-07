@@ -29,6 +29,14 @@ interface Props {
 }
 
 /** Новый тендер и правка своего — одна форма, как у IT-задачи */
+/** Дата через n дней в формате поля date (по часам браузера) */
+function dayAfter(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function TenderForm({ tender, defaults, categories, currencies }: Props) {
     const form = useForm<Fields>({
         title: tender?.title ?? '',
@@ -175,8 +183,12 @@ export default function TenderForm({ tender, defaults, categories, currencies }:
                         type="date"
                         style={{ maxWidth: 220 }}
                         value={form.data.deadline_at}
+                        min={dayAfter(1)}
+                        // Новый тендер — не дальше 30 дней; дальше — кнопкой «Продлить»
+                        max={tender ? undefined : dayAfter(30)}
                         onChange={(e) => form.setData('deadline_at', e.target.value)}
                     />
+                    <p className="hint">{t('cabinet.tender_form.deadline_hint')}</p>
                     {error('deadline_at')}
                 </div>
 

@@ -111,6 +111,7 @@ export const routes = {
     tenderCreate: '/cabinet/tenders/create',
     tenderEdit: (id: number) => `/cabinet/tenders/${id}/edit`,
     tenderUpdate: (id: number) => `/cabinet/tenders/${id}`,
-    tenderClose: (id: number) => `/cabinet/tenders/${id}/close`,
+    tenderFinish: (id: number) => `/cabinet/tenders/${id}/finish`,
+    tenderExtend: (id: number) => `/cabinet/tenders/${id}/extend`,
     tenderReopen: (id: number) => `/cabinet/tenders/${id}/reopen`,
 } as const;
