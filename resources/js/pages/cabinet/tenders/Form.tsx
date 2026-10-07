@@ -26,10 +26,20 @@ interface Props {
     defaults: Pick<Fields, 'customer' | 'contact_name' | 'contact_phone' | 'contact_email'> | null;
     categories: { value: string; label: string }[];
     currencies: string[];
+    /** Сколько дней живёт тендер — самый дальний срок нового */
+    lifetime: number;
 }
 
 /** Новый тендер и правка своего — одна форма, как у IT-задачи */
-export default function TenderForm({ tender, defaults, categories, currencies }: Props) {
+/** Дата через n дней в формате поля date (по часам браузера) */
+function dayAfter(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export default function TenderForm({ tender, defaults, categories, currencies, lifetime }: Props) {
     const form = useForm<Fields>({
         title: tender?.title ?? '',
         description: tender?.description ?? '',
@@ -175,8 +185,12 @@ export default function TenderForm({ tender, defaults, categories, currencies }:
                         type="date"
                         style={{ maxWidth: 220 }}
                         value={form.data.deadline_at}
+                        min={dayAfter(1)}
+                        // Новый тендер — не дальше срока жизни; дальше — кнопкой «Продлить»
+                        max={tender ? undefined : dayAfter(lifetime)}
                         onChange={(e) => form.setData('deadline_at', e.target.value)}
                     />
+                    <p className="hint">{t('cabinet.tender_form.deadline_hint')}</p>
                     {error('deadline_at')}
                 </div>
 

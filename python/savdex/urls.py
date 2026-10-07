@@ -512,7 +512,7 @@ urlpatterns = [
             getattr(tender_actions, verb),
             name=f"cabinet.tenders.{verb}",
         )
-        for verb in ("close", "reopen")
+        for verb in ("finish", "extend", "reopen")
     ],
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders/(?P<tender_id>[0-9]{1,18})$",
