@@ -4,8 +4,8 @@
 
 Тендер, заведённый в кабинете (source = cabinet), живёт LIFETIME дней:
 срок — «Приём заявок до», по умолчанию и не дальше чем через 120 дней.
-«Продлить» — на сколько дней захочет владелец (1–365), в любой момент, в том числе после
-«Истёк». «Завершить» — в архив с итогом: компания, с которой
+«Продлить» — на сколько дней захочет владелец (1–365), в любой момент,
+в том числе после «Истёк». «Завершить» — в архив с итогом: компания, с которой
 договорились, или галочка «Сделка не состоялась». За три дня до срока —
 предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
 Тендеры администратора (source = admin: админка и загрузка из Excel)
@@ -323,6 +323,7 @@ def create(request: HttpRequest) -> HttpResponse:
             "defaults": _contacts(ctx, company),
             "categories": _categories(ctx),
             "currencies": CURRENCIES,
+            "lifetime": LIFETIME,
         },
         _seo(ctx),
     )
@@ -364,6 +365,7 @@ def edit(request: HttpRequest, tender_id: str) -> HttpResponse:
             "defaults": None,
             "categories": _categories(ctx),
             "currencies": CURRENCIES,
+            "lifetime": LIFETIME,
         },
         _seo(ctx),
     )
@@ -398,7 +400,7 @@ def store(request: HttpRequest) -> HttpResponse:
     now = _stamp(eloquent.now())
     row: dict[str, Any] = {
         **valid,
-        # Срок не выбран — 30 дней
+        # Срок не выбран — LIFETIME дней
         "deadline_at": valid["deadline_at"] or latest.strftime("%Y-%m-%d %H:%M:%S"),
         "author_id": ctx.user["id"],
         "status": PUBLISHED,
@@ -439,7 +441,7 @@ def update(request: HttpRequest, tender_id: str) -> HttpResponse:
     latest = None
 
     if cabinet:
-        # Правкой срок не уходит дальше 30 дней от сегодня или уже продлённого
+        # Правкой срок не уходит дальше LIFETIME дней от сегодня или уже продлённого
         current = tender["deadline_at"]
         latest = max(_default_deadline(), current) if current else _default_deadline()
 
@@ -451,6 +453,14 @@ def update(request: HttpRequest, tender_id: str) -> HttpResponse:
     # Срок стёрли — у кабинетного тендера остаётся прежний
     if cabinet and valid["deadline_at"] is None:
         valid["deadline_at"] = tender["deadline_at"] or latest
+
+    # Срок сдвинули — предупреждение «через 3 дня истекает» снова к новому сроку
+    before = tender["deadline_at"].strftime("%Y-%m-%d %H:%M:%S") if tender["deadline_at"] else None
+    after = valid["deadline_at"]
+    after = after.strftime("%Y-%m-%d %H:%M:%S") if isinstance(after, datetime) else after
+
+    if after != before:
+        valid["expiry_warned_at"] = None
 
     for field, column in _TRANSLATED.items():
         if valid[field] != tender[field]:
@@ -552,8 +562,9 @@ def finish(request: HttpRequest, tender_id: str) -> HttpResponse:
 @form()
 def extend(request: HttpRequest, tender_id: str) -> HttpResponse:
     """
-    «Продлить» на 7, 14 или 30 дней: от прежнего срока, а если он уже
-    прошёл — от сегодня. Истёкший тендер возвращается на витрину.
+    «Продлить» на сколько дней захочет владелец (1–EXTEND_MAX): от прежнего
+    срока, а если он уже прошёл — от сегодня. Истёкший тендер возвращается
+    на витрину.
     """
     ctx = action(request)
     tender = _owned(ctx, int(tender_id))
@@ -631,7 +642,7 @@ def reopen(request: HttpRequest, tender_id: str) -> HttpResponse:
             "finished_at": None,
         }
 
-        # Срок кабинетного тендера уже прошёл — снова 30 дней
+        # Срок кабинетного тендера уже прошёл — снова LIFETIME дней
         deadline = tender["deadline_at"]
 
         if tender["source"] == CABINET and (deadline is None or deadline <= eloquent.now()):
