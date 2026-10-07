@@ -122,26 +122,30 @@ def свежая_база() -> None:
         соединение.execute("drop schema public cascade")
         соединение.execute("create schema public")
         соединение.execute("grant usage, create on schema public to public")
-        роль = соединение.execute(
-            "select 1 from pg_roles where rolname = 'savdex_django'"
-        ).fetchone()
+        # Роль Django есть на любом сервере площадки (на Render её заводят
+        # руками, docs/migration-to-python.md); на чистом PostgreSQL — CI,
+        # новая машина разработчика — её нет, а без неё снимок прав и
+        # миграции SQL не проверить. Входа у неё в проверках нет: Django
+        # ходит владельцем, если не задан SAVDEX_PARITY_DJANGO_URL
+        соединение.execute(
+            "do $$ begin if not exists (select from pg_roles where rolname = 'savdex_django') "
+            "then create role savdex_django nologin; end if; end $$"
+        )
 
         # Права по умолчанию живут в схеме и уходят вместе с ней — вернуть,
         # как их настраивают на Render (docs/migration-to-python.md, роль
         # savdex_django): новые таблицы Django видит на чтение
-        if роль:
-            соединение.execute("grant usage on schema public to savdex_django")
-            соединение.execute(
-                "alter default privileges in schema public grant select on tables to savdex_django"
-            )
+        соединение.execute("grant usage on schema public to savdex_django")
+        соединение.execute(
+            "alter default privileges in schema public grant select on tables to savdex_django"
+        )
 
         соединение.execute(СНИМОК.read_text(encoding="utf-8"))
         соединение.execute(
             "select pg_catalog.set_config('search_path', '\"$user\", public', false)"
         )
 
-        if роль:
-            соединение.execute(ПРАВА.read_text(encoding="utf-8"))
+        соединение.execute(ПРАВА.read_text(encoding="utf-8"))
 
         for миграция in sorted((PYTHON / "savdex/bootstrap/migrations").glob("*.sql")):
             соединение.execute(миграция.read_text(encoding="utf-8"))

@@ -24,11 +24,13 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
+from .web_site import _манифест
 
 pytestmark = нужна_база
 
@@ -79,7 +81,14 @@ print(json.dumps(out, ensure_ascii=False))
 
 
 @pytest.fixture(scope="module")
-def люди() -> dict[str, int]:
+def люди() -> Iterator[dict[str, int]]:
+    # Отказ «слишком часто» — страница сайта (forms._throttle), ей нужен
+    # манифест сборки фронта; в CI фронт не собирается — подставной
+    with _манифест():
+        yield _люди()
+
+
+def _люди() -> dict[str, int]:
     свежая_база()
     import bcrypt
 
