@@ -1,7 +1,8 @@
 {% extends "admin/change_form.html" %}
 {% comment %}
   Обращение (savdex/support/admin.py, TicketAdmin): кнопки «Взять» и
-  «Закрыть» / «Открыть снова», под формой — переписка и ответ. Ответ и
+  «Закрыть» / «Открыть снова», под формой — переписка (с вложениями и
+  отметкой, ушёл ли ответ клиенту на почту) и ответ. Ответ и
   внутренняя заметка — одна форма с галочкой: раздельные кнопки означали
   бы, что однажды нажмут не ту и заметка уедет клиенту.
 {% endcomment %}
@@ -38,6 +39,22 @@
             {% if message.is_internal %}· <b style="color:var(--sx-status-warning, #b45309)">внутренняя заметка — клиент её не видит</b>{% endif %}
           </p>
           <div>{{ message.body|linebreaksbr }}</div>
+          {% if message.files %}
+            <p class="sx-row-sub">Вложения:
+              {% for file in message.files %}
+                <a href="{{ file.url }}">{{ file.name }}</a>{% if file.size %} ({{ file.size }}){% endif %}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </p>
+          {% endif %}
+          {% if message.from_staff and not message.is_internal %}
+            {% if message.emailed_at %}
+              <p class="sx-row-sub">✉ Ушло клиенту на почту {{ message.emailed_at|date:"d.m.Y H:i" }}</p>
+            {% elif message.email_error %}
+              <p class="sx-row-sub" style="color:var(--sx-status-danger, #b91c1c)">✉ Письмо клиенту не ушло: {{ message.email_error }}</p>
+            {% endif %}
+          {% elif not message.from_staff and message.email_message_id %}
+            <p class="sx-row-sub">✉ Пришло письмом</p>
+          {% endif %}
         </div>
       {% empty %}
         <div class="form-row"><p>Сообщений нет.</p></div>
@@ -47,6 +64,12 @@
       <form method="post" action="{% url 'savdex_admin:support_ticket_reply' original.pk %}" class="module aligned" id="ticket-reply">
         {% csrf_token %}
         <h2>Ответить</h2>
+        <div class="form-row">
+          <p class="help">
+            {% if client_email %}Ответ уйдёт клиенту письмом на <b>{{ client_email }}</b>; его ответ на это письмо вернётся сюда.
+            {% else %}У обращения нет почты клиента — ответ сохранится только здесь. Впишите почту в «Кто обратился», чтобы он ушёл письмом.{% endif %}
+          </p>
+        </div>
         <div class="form-row">
           <label for="reply-body" class="required">Текст:</label>
           <textarea name="body" id="reply-body" rows="6" cols="80" required></textarea>

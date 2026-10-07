@@ -291,7 +291,9 @@ run_forever 60 "Расписание Django" python/.venv/bin/python python/mana
 run_forever 30 "Перевод" python/.venv/bin/python python/manage.py translate
 
 # Письма и Telegram по уведомлениям кабинета — по галочкам в «Настройки →
-# Уведомления» (python/savdex/deliveries.py): проход раз в минуту
+# Уведомления» (python/savdex/deliveries.py): проход раз в минуту. Тем же
+# проходом — новинки в Telegram, рассылка по базе потенциальных клиентов и
+# чтение ящика поддержки в обращения (python/savdex/support/mail.py)
 run_forever 30 "Рассылка уведомлений" python/.venv/bin/python python/manage.py notify
 
 # Сверка денег (python/savdex/payments/reconcile.py): раз в час — что

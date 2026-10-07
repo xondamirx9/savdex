@@ -939,26 +939,6 @@ def personalize(text: str, prospect: Prospect) -> str:
     )
 
 
-_URL = re.compile(r"https?://[^\s<>\"']+")
-
-
-def _paragraphs(text: str) -> str:
-    """Текст письма → абзацы HTML: экранирование, ссылки, переносы строк."""
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", text.replace("\r\n", "\n")) if b.strip()]
-    out = []
-
-    for block in blocks:
-        escaped = html.escape(block)
-        linked = _URL.sub(lambda m: f'<a href="{m.group(0)}">{m.group(0)}</a>', escaped)
-        out.append(
-            '<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#1f2937;">'
-            + linked.replace("\n", "<br>")
-            + "</p>"
-        )
-
-    return "".join(out)
-
-
 def render(mailing: ProspectMailing, prospect: Prospect) -> tuple[str, str, str]:
     """Тема, HTML и текст письма этому получателю."""
     subject = personalize(mailing.subject or "", prospect).strip() or "SavdEx"
@@ -973,7 +953,7 @@ def render(mailing: ProspectMailing, prospect: Prospect) -> tuple[str, str, str]
         '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;'
         "padding:28px 32px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,"
         'Helvetica,Arial,sans-serif;">'
-        + _paragraphs(body)
+        + mail.paragraphs(body)
         + '</div><p style="max-width:600px;margin:16px auto 0;font-family:Arial,sans-serif;'
         'font-size:12px;line-height:1.5;color:#6b7280;text-align:center;">'
         f'SavdEx — B2B-площадка Узбекистана · <a href="{html.escape(_app_url())}" '
