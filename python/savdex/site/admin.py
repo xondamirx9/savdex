@@ -765,13 +765,14 @@ _STATUS = {"draft": "Черновик", "scheduled": "Выйдет", "published"
 
 class NewsPostForm(forms.ModelForm):  # type: ignore[type-arg]
     cover_upload = forms.FileField(
-        label="Обложка",
+        label="Фото новости",
         required=False,
-        help_text="Необязательно: без картинки покажем градиент по рубрике. "
-        "От 1200 px по ширине, до 4 МБ",
+        help_text="Необязательно: без фото покажем градиент по рубрике. "
+        "«Загрузить фото» открывает редактор — обрезка под обложку 16:10, "
+        "масштаб и поворот. Лучше от 1200 px по ширине",
         widget=forms.ClearableFileInput(attrs={"accept": "image/jpeg,image/png,image/webp"}),
     )
-    cover_clear = forms.BooleanField(label="Убрать обложку", required=False)
+    cover_clear = forms.BooleanField(label="Убрать фото", required=False)
     category = forms.ChoiceField(
         label="Рубрика",
         choices=[(c, c) for c in NEWS_CATEGORIES],
