@@ -3,11 +3,11 @@
 правка, продлить, завершить, открыть снова и удалить.
 
 Тендер, заведённый в кабинете (source = cabinet), живёт LIFETIME дней:
-срок — «Приём заявок до», по умолчанию и не дальше чем через 30 дней.
+срок — «Приём заявок до», по умолчанию и не дальше чем через 120 дней.
 «Продлить» — на 7, 14 или 30 дней, в любой момент, в том числе после
-«Истёк». «Завершить» — в архив с итогом: договор заключён (с кем и на
-какую сумму — по желанию), не договорились или закупку отменили. За три
-дня до срока — предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
+«Истёк». «Завершить» — в архив с итогом: компания, с которой
+договорились, или галочка «Сделка не состоялась». За три дня до срока —
+предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
 Тендеры администратора (source = admin: админка и загрузка из Excel)
 живут по своему сроку из источника.
 
@@ -52,13 +52,16 @@ PUBLISHED, ARCHIVED, DRAFT, EXPIRED = "published", "archived", "draft", "expired
 STATUSES = (DRAFT, PUBLISHED, ARCHIVED, EXPIRED)
 
 #: Сколько дней живёт тендер из кабинета — и самый дальний срок при создании
-LIFETIME = 30
+LIFETIME = 120
 
 #: На сколько дней можно продлить
 EXTEND_DAYS = (7, 14, 30)
 
 #: Чем закончился тендер: подписи — cabinet.tenders.outcomes
 OUTCOMES = ("contract", "no_deal", "cancelled")
+
+#: Что можно выбрать в «Завершить»: договорились с компанией или «Сделка не состоялась»
+FINISH_OUTCOMES = ("contract", "no_deal")
 
 CABINET = "cabinet"
 
@@ -484,8 +487,9 @@ def destroy(request: HttpRequest, tender_id: str) -> HttpResponse:
 @form()
 def finish(request: HttpRequest, tender_id: str) -> HttpResponse:
     """
-    «Завершить»: тендер в архив с итогом — договор заключён (с кем и на
-    какую сумму — по желанию), не договорились или закупку отменили.
+    «Завершить»: тендер в архив с итогом. Сначала — компания, с которой
+    договорились (outcome = contract, party обязательна), или галочка
+    «Сделка не состоялась» (outcome = no_deal, компания не нужна).
     """
     ctx = action(request)
     tender = _owned(ctx, int(tender_id))
@@ -497,13 +501,19 @@ def finish(request: HttpRequest, tender_id: str) -> HttpResponse:
     errors = validate(
         data,
         {
-            "outcome": ["required", "in:" + ",".join(OUTCOMES)],
-            "party": ["nullable", "string", "max:190"],
+            "outcome": ["required", "in:" + ",".join(FINISH_OUTCOMES)],
+            "party": ["required_if:outcome,contract", "nullable", "string", "max:190"],
             "amount": ["nullable", "numeric", "min:0", "max:99999999999999"],
         },
         ctx.locale,
-        {"outcome.required": ctx.t("messages.tender.outcome_required")},
+        {
+            "outcome.required": ctx.t("messages.tender.outcome_required"),
+            "party.required_if": ctx.t("messages.tender.party_required"),
+        },
     )
+
+    if not errors and data["outcome"] == "contract" and not str(data.get("party") or "").strip():
+        errors = {"party": [ctx.t("messages.tender.party_required")]}
 
     if errors:
         return invalid(ctx, errors)

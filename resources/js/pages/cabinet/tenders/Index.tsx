@@ -30,8 +30,6 @@ interface Row {
 
 type Outcome = 'contract' | 'no_deal' | 'cancelled';
 
-const OUTCOMES: Outcome[] = ['contract', 'no_deal', 'cancelled'];
-
 const STATUS_BADGE: Record<Row['status'], string> = {
     draft: 'badge-neutral',
     published: 'badge-verified',
@@ -68,82 +66,57 @@ function ExtendModal({ tender, days, onClose }: { tender: Row; days: number[]; o
     );
 }
 
-/** «Завершить»: чем закончился тендер — в архив с итогом */
+/**
+ * «Завершить»: сначала компания, с которой договорились, — или галочка
+ * «Сделка не состоялась». Без одного из двух кнопка не нажимается.
+ */
 function FinishModal({ tender, onClose }: { tender: Row; onClose: () => void }) {
-    const form = useForm<{ outcome: Outcome | ''; party: string; amount: string }>({
-        outcome: '',
-        party: '',
-        amount: '',
-    });
+    const form = useForm<{ outcome: Outcome; party: string }>({ outcome: 'contract', party: '' });
+    const noDeal = form.data.outcome === 'no_deal';
+    const ready = noDeal || form.data.party.trim() !== '';
 
     function submit() {
         form.post(routes.tenderFinish(tender.id), { preserveScroll: true, onSuccess: onClose });
     }
 
     return (
-        <Modal
-            open
-            onClose={onClose}
-            title={t('cabinet.tenders.finish_title')}
-            description={t('cabinet.tenders.finish_text')}
-            width={460}
-        >
-            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
-                {OUTCOMES.map((o) => (
-                    <label key={o} className="row" style={{ gap: 8 }}>
-                        <input
-                            type="radio"
-                            name="outcome"
-                            checked={form.data.outcome === o}
-                            onChange={() => form.setData('outcome', o)}
-                        />
-                        <span>{t(`cabinet.tenders.outcomes.${o}`)}</span>
-                    </label>
-                ))}
-                {form.errors.outcome && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.outcome}</p>}
+        <Modal open onClose={onClose} title={t('cabinet.tenders.finish_title')} description={tender.title} width={460}>
+            <p className="t-sm muted" style={{ marginBottom: 12 }}>
+                {t('cabinet.tenders.finish_text')}
+            </p>
+
+            <div className="field">
+                <label className="label" htmlFor="fin-party">
+                    {t('cabinet.tenders.deal_company')}
+                </label>
+                <input
+                    id="fin-party"
+                    className="input"
+                    maxLength={190}
+                    autoFocus
+                    disabled={noDeal}
+                    value={noDeal ? '' : form.data.party}
+                    onChange={(e) => form.setData('party', e.target.value)}
+                />
+                <p className="hint">{t('cabinet.tenders.deal_company_hint')}</p>
+                {form.errors.party && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.party}</p>}
             </div>
 
-            {form.data.outcome === 'contract' && (
-                <>
-                    <div className="field">
-                        <label className="label" htmlFor="fin-party">
-                            {t('cabinet.tenders.outcome_party')}
-                        </label>
-                        <input
-                            id="fin-party"
-                            className="input"
-                            maxLength={190}
-                            value={form.data.party}
-                            onChange={(e) => form.setData('party', e.target.value)}
-                        />
-                        <p className="hint">{t('cabinet.tenders.outcome_party_hint')}</p>
-                    </div>
-                    <div className="field">
-                        <label className="label" htmlFor="fin-amount">
-                            {t('cabinet.tenders.outcome_amount')}
-                        </label>
-                        <input
-                            id="fin-amount"
-                            className="input"
-                            inputMode="decimal"
-                            value={form.data.amount}
-                            onChange={(e) => form.setData('amount', e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
-                        />
-                        {form.errors.amount && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.amount}</p>}
-                    </div>
-                </>
-            )}
+            <label className="row" style={{ gap: 8, marginTop: 8 }}>
+                <input
+                    type="checkbox"
+                    checked={noDeal}
+                    onChange={(e) => form.setData('outcome', e.target.checked ? 'no_deal' : 'contract')}
+                />
+                <span>{t('cabinet.tenders.no_deal')}</span>
+            </label>
+            {form.errors.outcome && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.outcome}</p>}
 
             <div className="row" style={{ gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                     {t('common.cancel')}
                 </button>
-                <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={form.data.outcome === '' || form.processing}
-                    onClick={submit}
-                >
+                <button type="button" className="btn btn-primary" disabled={!ready || form.processing} onClick={submit}>
                     {t('cabinet.tenders.finish')}
                 </button>
             </div>

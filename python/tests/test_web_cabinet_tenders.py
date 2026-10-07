@@ -1,9 +1,11 @@
 """
 Свои тендеры в кабинете: «Мои тендеры», «Создать тендер», правка,
 продлить, завершить, открыть снова и удалить. Тендер из кабинета живёт
-30 дней: срок не дальше, продлить — на 7, 14 или 30 дней. Тендер заводит компания: заказчик по
-умолчанию — её название, автор — вошедший; новый тендер сразу на
-витрине. Чужой тендер — 404.
+120 дней: срок не дальше, продлить — на 7, 14 или 30 дней; завершить —
+с компанией, с которой договорились, или «Сделка не состоялась».
+
+Тендер заводит компания: заказчик по умолчанию — её название, автор —
+вошедший; новый тендер сразу на витрине. Чужой тендер — 404.
 
 Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая часть — в web_site.py.
 """
@@ -369,18 +371,18 @@ def test_новый_срок_по_умолчанию(сайт):
     )
 
     assert итог["база"] == [
-        ("published", "cabinet", f"{день(30)} 23:59:59", None, None, None, False, False)
+        ("published", "cabinet", f"{день(120)} 23:59:59", None, None, None, False, False)
     ]
 
 
-def test_новый_срок_дальше_30_дней(сайт):
+def test_новый_срок_дальше_120_дней(сайт):
     итог = отправить(
         сайт,
         "/cabinet/tenders",
         тендеры(),
         итог_тендера,
         uid=заказчик(),
-        body={**ФОРМА, "deadline_at": день(31)},
+        body={**ФОРМА, "deadline_at": день(121)},
     )
 
     assert list(сессия(итог)["errors"]) == ["deadline_at"]
@@ -391,8 +393,8 @@ def test_новый_срок_дальше_30_дней(сайт):
 @pytest.mark.parametrize(
     ("срок", "ошибка", "стало"),
     [
-        # Дальше 30 дней — только «Продлить»
-        (день(40), True, None),
+        # Дальше 120 дней — только «Продлить»
+        (день(125), True, None),
         # Стёрли срок — у кабинетного тендера остаётся прежний
         ("", False, f"{день(25)} 23:59:59"),
         (день(20), False, f"{день(20)} 23:59:59"),
@@ -416,22 +418,34 @@ def test_правка_срока_кабинетного(сайт, срок, ош
 @pytest.mark.parametrize(
     ("было", "body", "стало"),
     [
+        # Договорились — с компанией
         (
             "published",
             {"outcome": "contract", "party": " ООО «Цемент» ", "amount": "120000000"},
             ("archived", "contract", "ООО «Цемент»", "120000000.00", True),
         ),
-        # С кем и сумма — только у договора
+        # «Сделка не состоялась» — компания не нужна и не пишется
         (
             "published",
             {"outcome": "no_deal", "party": "ООО «Цемент»", "amount": "5"},
             ("archived", "no_deal", None, None, True),
         ),
-        ("expired", {"outcome": "cancelled"}, ("archived", "cancelled", None, None, True)),
+        ("expired", {"outcome": "no_deal"}, ("archived", "no_deal", None, None, True)),
+        # Ни компании, ни галочки — не завершается
+        (
+            "published",
+            {"outcome": "contract", "party": "  "},
+            ("published", None, None, None, False),
+        ),
+        ("published", {"outcome": "contract"}, ("published", None, None, None, False)),
         ("published", {}, ("published", None, None, None, False)),
-        ("published", {"outcome": "won"}, ("published", None, None, None, False)),
+        ("published", {"outcome": "cancelled"}, ("published", None, None, None, False)),
         # Уже завершён — второй раз не переписывается
-        ("archived", {"outcome": "contract"}, ("archived", None, None, None, False)),
+        (
+            "archived",
+            {"outcome": "contract", "party": "ООО «Цемент»"},
+            ("archived", None, None, None, False),
+        ),
     ],
 )
 def test_завершить(сайт, было, body, стало):
@@ -448,7 +462,7 @@ def test_завершить(сайт, было, body, стало):
     assert (status, outcome, party, amount, finished) == стало
 
     if стало[1] is None and было != "archived":
-        assert "outcome" in сессия(итог)["errors"]
+        assert {"outcome", "party"} & set(сессия(итог)["errors"])
 
 
 @pytest.mark.parametrize(
@@ -501,7 +515,7 @@ def test_открыть_снова_кабинетный(сайт):
 
     # Итог снят, срок прошёл — снова 30 дней
     assert итог["база"] == [
-        ("published", "cabinet", f"{день(30)} 23:59:59", None, None, None, False, False)
+        ("published", "cabinet", f"{день(120)} 23:59:59", None, None, None, False, False)
     ]
 
 
@@ -518,7 +532,7 @@ def test_список_сроки_и_итоги(сайт):
     assert props["extendDays"] == [7, 14, 30]
     assert по_номеру[1]["days_left"] == 2
     assert (по_номеру[2]["outcome_label"], по_номеру[2]["outcome_party"]) == (
-        "Договор заключён",
+        "Сделка состоялась",
         "ООО «Цемент»",
     )
     assert по_номеру[2]["outcome_amount"].startswith("120 000 000")
