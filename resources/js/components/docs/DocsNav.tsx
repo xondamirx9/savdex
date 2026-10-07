@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 
@@ -33,14 +35,35 @@ function hrefFor(href: string, onAbout: boolean): string {
 }
 
 export function DocsNav({ items, active, onAbout = false }: { items: DocsNavItem[]; active: string; onAbout?: boolean }) {
+    const nav = useRef<HTMLElement>(null);
+
+    /* На узком экране оглавление — лента с прокруткой вбок: активный
+       пункт плавно подъезжает в видимую часть. Прокручиваем только
+       саму ленту — scrollIntoView дёргал бы ещё и страницу */
+    useEffect(() => {
+        const strip = nav.current;
+        const link = strip?.querySelector<HTMLElement>('a[aria-current="true"]');
+
+        if (!strip || !link || strip.scrollWidth <= strip.clientWidth) return;
+
+        // Положение пункта — от края ленты: у ленты нет position, и
+        // offsetLeft считался бы от другого предка
+        const box = link.getBoundingClientRect();
+        const left = strip.scrollLeft + box.left - strip.getBoundingClientRect().left - (strip.clientWidth - box.width) / 2;
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        strip.scrollTo({ left: Math.max(0, left), behavior: reduce ? 'auto' : 'smooth' });
+    }, [active]);
+
     return (
         <aside>
-            <nav className="doc-nav card" style={{ padding: 10 }} aria-label={t('about.sections')}>
+            <nav ref={nav} className="doc-nav card" style={{ padding: 10 }} aria-label={t('about.sections')}>
                 {items.map((item) => (
                     <a
                         key={item.key}
                         href={hrefFor(item.href, onAbout)}
                         aria-current={active === item.key ? 'true' : undefined}
+                        data-label={item.label}
                     >
                         {item.label}
                     </a>

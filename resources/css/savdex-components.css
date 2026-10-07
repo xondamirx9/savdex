@@ -1140,16 +1140,23 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .grid-docs>aside{align-self:stretch}
 .doc-nav{position:sticky;top:var(--sticky-top)}
 .doc-nav a{display:block;position:relative;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
-  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
-  color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
+  color:var(--text-muted);
+  transition:background var(--t-mid),color var(--t-mid),
+    transform var(--t-mid)}
+/* Ширина пункта — по жирному начертанию: невидимая копия подписи
+   держит место заранее. Иначе при смене раздела активный пункт
+   становился шире на пару пикселей и сдвигал соседей — текст
+   ленты дёргался на каждом шаге прокрутки */
+.doc-nav a::after{content:attr(data-label);display:block;height:0;overflow:hidden;
+  visibility:hidden;font-weight:600;pointer-events:none;user-select:none}
 .doc-nav a:hover{background:var(--primary-50);color:var(--primary-600);text-decoration:none;transform:translateX(3px)}
 .doc-nav a[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
 /* Полоска у активного пункта вырастает из нуля — видно, что оглавление
    следит за прокруткой, а не просто подсветилось при клике */
-.doc-nav a::before{content:'';position:absolute;left:3px;top:50%;width:3px;height:0;
-  border-radius:999px;background:var(--primary-700);transform:translateY(-50%);
-  transition:height var(--t-mid)}
-.doc-nav a[aria-current="true"]::before{height:18px}
+.doc-nav a::before{content:'';position:absolute;left:3px;top:50%;width:3px;height:18px;
+  border-radius:999px;background:var(--primary-700);transform:translateY(-50%) scaleY(0);
+  transition:transform var(--t-mid)}
+.doc-nav a[aria-current="true"]::before{transform:translateY(-50%) scaleY(1)}
 
 .doc-section{scroll-margin-top:calc(var(--sticky-top) + 4px)}
 
@@ -1192,7 +1199,14 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
      из пяти пунктов отодвигает текст за пределы экрана */
   .doc-nav{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
   .doc-nav::-webkit-scrollbar{display:none}
-  .doc-nav a{white-space:nowrap}
+  .doc-nav a{white-space:nowrap;flex-shrink:0;text-align:center}
+  /* В ленте пункты стоят в ряд: сдвиг вбок при наведении толкал
+     подпись к соседу — только подсветка */
+  .doc-nav a:hover{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .doc-nav a,.doc-nav a::before{transition:none}
+  .doc-nav a:hover{transform:none}
 }
 
 /* ============================================================
