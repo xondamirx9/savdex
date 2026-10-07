@@ -125,6 +125,8 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # обращения» и счётчик у пункта меню только читают
         "support_tickets",
         "support_messages",
+        # Спам-фильтр поддержки — свой, Django (savdex/support/spam.py)
+        "support_blocked_senders",
         # Этап 4 (шаг 62): каталог. Все формы и страницы — на Django (группы
         # catalog, tenders, services, cabinet, forms); снятие истёкших
         # объявлений — manage.py expire_listings вместо listings:expire.

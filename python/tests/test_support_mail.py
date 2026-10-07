@@ -11,7 +11,11 @@
 - автоответ пропускается, отказ доставки — внутренняя заметка;
 - вложение — в закрытое хранилище, скачивается из админки, мелкая
   картинка подписи пропускается;
-- ящик по IMAP: прочитанное помечается, сбой разбора — флажком.
+- ящик по IMAP: прочитанное помечается, сбой разбора — флажком;
+- письма с адресов no-reply не становятся обращениями;
+- «Спам» в обращении и над отмеченными: обращение в корзину, отправитель
+  в спам-фильтр, его новые письма пропускаются; «Вернуть» в спам-фильтре —
+  письма снова принимаются, убранные обращения возвращаются.
 
 Нужен PostgreSQL (SAVDEX_PARITY_PG_URL) — кроме проверок разбора.
 """
@@ -141,13 +145,14 @@ def test_автоответ_и_отказ():
 def люди() -> dict[str, int]:
     свежая_база()
 
-    return {role: сотрудник(role) for role in ("superadmin", "support")}
+    return {role: сотрудник(role) for role in ("superadmin", "support", "sales")}
 
 
 @pytest.fixture
 def чисто(люди, tmp_path) -> Path:
     sql("delete from support_messages")
     sql("delete from support_tickets")
+    sql("delete from support_blocked_senders")
     sql("delete from admin_actions")
     sql("delete from users where email = 'aziz@mebel.uz'")
 
@@ -389,3 +394,124 @@ def test_без_почты_клиента(люди, чисто):
 
     assert письма == "", "письма нет — некому"
     assert sql("select status from support_tickets") == [("waiting",)]
+
+
+def test_no_reply_по_адресу():
+    assert mail._NO_REPLY.match("no-reply")
+    assert mail._NO_REPLY.match("noreply-dmarc-support")
+    assert mail._NO_REPLY.match("do_not_reply")
+    assert not mail._NO_REPLY.match("noreplyer")
+    assert not mail._NO_REPLY.match("info")
+
+
+@нужна_база
+def test_no_reply_не_обращение(люди, чисто):
+    google, _ = _письмо(от="Google <no-reply@accounts.google.com>", тема="Новый вход в аккаунт")
+    zoho, _ = _письмо(от="Zoho <noreply@zohoaccounts.com>", тема="Пароль изменён")
+
+    итог = _загрузить(чисто, google, zoho)
+
+    assert all("no-reply" in строка for строка in итог), итог
+    assert sql("select count(*) from support_tickets") == [(0,)]
+
+
+def _спам(uid: int, ticket: int) -> dict:
+    _, ответ = django(uid, ("post", f"/py/admin/support/ticket/{ticket}/spam/", {}))
+
+    return ответ
+
+
+@нужна_база
+def test_спам_и_вернуть(люди, чисто):
+    raw, _ = _письмо(от="Реклама <promo@spam.uz>", тема="Продвижение сайта")
+    _загрузить(чисто, raw)
+    [(ticket,)] = sql("select id from support_tickets")
+
+    _, страница = django(
+        люди["support"], ("get", f"/py/admin/support/ticket/{ticket}/change/", None)
+    )
+    assert "/spam/" in страница["body"] and "promo@spam.uz" in страница["body"]
+
+    ответ = _спам(люди["support"], ticket)
+
+    assert ответ["status"] == 302 and ответ["location"].endswith("/support/ticket/")
+    [(spam_at, deleted_at)] = sql(
+        "select spam_at, deleted_at from support_tickets where id = %s", [ticket]
+    )
+    assert spam_at is not None and deleted_at == spam_at
+    assert sql("select email from support_blocked_senders") == [("promo@spam.uz",)]
+    assert журнал("deleted")["subject_label"] == "Продвижение сайта"
+    [(note,)] = sql(
+        "select note from admin_actions where action = 'deleted' and subject_id = %s", [ticket]
+    )
+    assert "promo@spam.uz" in note
+
+    # Новое письмо того же отправителя (в другом регистре) — пропуск
+    ещё, _ = _письмо(от="Реклама <Promo@Spam.uz>", тема="Последний шанс")
+    итог = _загрузить(чисто, ещё)
+
+    assert "спам-фильтре" in итог[0]
+    assert sql("select count(*) from support_tickets") == [(1,)]
+
+    # Спам-фильтр: адрес виден, «Вернуть» — письма снова принимаются,
+    # убранное обращение вернулось
+    _, фильтр, вернуть, после = django(
+        люди["support"],
+        ("get", "/py/admin/support/ticket/spam/", None),
+        ("post", "/py/admin/support/ticket/spam/release/", {"email": "promo@spam.uz"}),
+        ("get", "/py/admin/support/ticket/", None),
+    )
+
+    assert фильтр["status"] == 200 and "promo@spam.uz" in фильтр["body"]
+    assert вернуть["status"] == 302
+    assert sql("select count(*) from support_blocked_senders") == [(0,)]
+    assert sql("select spam_at, deleted_at from support_tickets where id = %s", [ticket]) == [
+        (None, None)
+    ]
+    assert "Продвижение сайта" in после["body"]
+    assert журнал("restored")["subject_label"] == "promo@spam.uz"
+
+    снова, _ = _письмо(от="Реклама <promo@spam.uz>", тема="Ещё раз")
+    assert "created" in _загрузить(чисто, снова)[0]
+
+
+@нужна_база
+def test_спам_над_отмеченными(люди, чисто):
+    первое, _ = _письмо(от="a@spam.uz", тема="Раз")
+    второе, _ = _письмо(от="b@spam.uz", тема="Два")
+    _загрузить(чисто, первое, второе)
+    [(звонок,)] = sql(
+        "insert into support_tickets (subject, status, channel, priority, created_at, updated_at) "
+        "values ('Звонок', 'open', 'phone', 'normal', now(), now()) returning id"
+    )
+    ids = [str(pk) for (pk,) in sql("select id from support_tickets order by id")]
+
+    _, ответ = django(
+        люди["support"],
+        (
+            "post",
+            "/py/admin/support/ticket/",
+            {"action": "spam_selected", "_selected_action": ids},
+        ),
+    )
+
+    assert ответ["status"] == 302
+    assert sql("select email from support_blocked_senders order by email") == [
+        ("a@spam.uz",),
+        ("b@spam.uz",),
+    ]
+    # Обращение без почты не тронуто: блокировать некого
+    assert sql("select id from support_tickets where deleted_at is null") == [(звонок,)]
+
+
+@нужна_база
+def test_спам_без_права(люди, чисто):
+    raw, _ = _письмо(от="client@mebel.uz")
+    _загрузить(чисто, raw)
+    [(ticket,)] = sql("select id from support_tickets")
+
+    ответ = _спам(люди["sales"], ticket)
+
+    assert ответ["status"] in (302, 403)
+    assert sql("select deleted_at from support_tickets") == [(None,)]
+    assert sql("select count(*) from support_blocked_senders") == [(0,)]

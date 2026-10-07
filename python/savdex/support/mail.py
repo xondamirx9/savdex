@@ -19,9 +19,10 @@ IMAP (SUPPORT_IMAP_HOST, _PORT, _USERNAME, _PASSWORD, _FOLDER) и по кажд�
 - вложения — в закрытое хранилище (storage/app/private/support/…),
   скачиваются из админки;
 - одно письмо дважды не заводится (Message-ID в support_messages);
-- автоответы, рассылки и письма самому себе пропускаются; отказ доставки
-  нашего ответа («адрес не существует») — внутренней заметкой в его
-  обращение.
+- автоответы, рассылки, письма самому себе и с адресов no-reply
+  пропускаются, как и письма отправителей из спам-фильтра
+  (savdex/support/spam.py); отказ доставки нашего ответа («адрес не
+  существует») — внутренней заметкой в его обращение.
 
 Письмо помечается прочитанным, когда записано; письмо, на котором разбор
 упал, — ещё и флажком: его видно в ящике.
@@ -56,6 +57,7 @@ from django.utils import timezone
 from savdex import audit
 from savdex.catalog import now
 from savdex.laravel_storage import private_root
+from savdex.support import spam
 from savdex.support.models import (
     STATUS_CLOSED,
     STATUS_OPEN,
@@ -92,6 +94,10 @@ _OUR_ID = re.compile(r"<support-(\d{1,18})-(\d{1,18})\.[0-9a-f]+@[^>]+>")
 
 #: Отправители отказов доставки
 _DAEMONS = ("mailer-daemon", "postmaster")
+
+#: Адреса, на которые не отвечают: no-reply, noreply, do-not-reply,
+#: donotreply… — уведомления сервисов, а не вопросы клиентов
+_NO_REPLY = re.compile(r"^(?:no|do[-_.]?not)[-_.]?reply(?:[-_.+\d].*)?$")
 
 
 # ── Настройки ──────────────────────────────────────────────────────
@@ -453,6 +459,12 @@ def accept(raw: bytes) -> Outcome:
 
     if letter.automatic:
         return Outcome("skipped", reason="автоответ или рассылка")
+
+    if _NO_REPLY.match(letter.from_email.split("@", 1)[0]):
+        return Outcome("skipped", reason="адрес без ответа (no-reply)")
+
+    if spam.is_blocked(letter.from_email):
+        return Outcome("skipped", reason="отправитель в спам-фильтре")
 
     stamp = now()
 

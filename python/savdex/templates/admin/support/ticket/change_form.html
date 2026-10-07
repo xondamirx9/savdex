@@ -1,7 +1,8 @@
 {% extends "admin/change_form.html" %}
 {% comment %}
-  Обращение (savdex/support/admin.py, TicketAdmin): кнопки «Взять» и
-  «Закрыть» / «Открыть снова», под формой — переписка (с вложениями и
+  Обращение (savdex/support/admin.py, TicketAdmin): кнопки «Взять»,
+  «Закрыть» / «Открыть снова» и «Спам» (в корзину, отправитель — в
+  спам-фильтр), под формой — переписка (с вложениями и
   отметкой, ушёл ли ответ клиенту на почту) и ответ. Ответ и
   внутренняя заметка — одна форма с галочкой: раздельные кнопки означали
   бы, что однажды нажмут не ту и заметка уедет клиенту.
@@ -20,6 +21,15 @@
       <form method="post" action="{% url 'savdex_admin:support_ticket_toggle' original.pk %}" style="display:inline">
         {% csrf_token %}
         <button type="submit" class="button">{% if ticket_closed %}Открыть снова{% else %}Закрыть{% endif %}</button>
+      </form>
+    </li>
+  {% endif %}
+  {% if can_spam %}
+    <li>
+      <form method="post" action="{% url 'savdex_admin:support_ticket_spam' original.pk %}" style="display:inline"
+            onsubmit="return confirm('Убрать обращение в спам? Письма с {{ client_email|escapejs }} больше не будут становиться обращениями. Вернуть можно в «Спам-фильтре».')">
+        {% csrf_token %}
+        <button type="submit" class="button">Спам</button>
       </form>
     </li>
   {% endif %}
