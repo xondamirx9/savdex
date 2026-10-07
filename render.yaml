@@ -15,8 +15,9 @@ services:
     healthCheckPath: /up
     # Постоянный диск: на нём живут загрузки — логотипы компаний, фото
     # объявлений, документы. Контейнер пересоздаётся при каждом деплое,
-    # и без диска всё загруженное пропадало бы. Здесь же лежит старый
-    # файл SQLite, с которого площадка переехала в PostgreSQL.
+    # и без диска всё загруженное пропадало бы. Здесь же может лежать
+    # старый файл SQLite (database.sqlite), с которого площадка переехала
+    # в PostgreSQL: сайт его не читает.
     disk:
       name: savdex-data
       mountPath: /var/data
@@ -26,11 +27,9 @@ services:
       #
       # Площадка работает на PostgreSQL (блок databases ниже): в панели
       # Render заданы DB_CONNECTION=pgsql и DB_URL, без них контейнер не
-      # стартует (docker/render-entrypoint.sh). Две строки ниже — память
-      # о переезде с SQLite (TARGET_DB_URL была приёмником переноса);
-      # Django их не читает, пока задан DJANGO_DATABASE_URL.
-      - key: DB_DATABASE
-        value: /var/data/database.sqlite
+      # стартует (docker/render-entrypoint.sh). TARGET_DB_URL — та же
+      # база (была приёмником переезда с SQLite); Django берёт её, только
+      # если не задан DJANGO_DATABASE_URL (savdex/settings.py).
       - key: TARGET_DB_URL
         fromDatabase:
           name: savdex-db
