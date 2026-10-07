@@ -37,31 +37,75 @@ const STATUS_BADGE: Record<Row['status'], string> = {
     expired: 'badge-warning',
 };
 
-/** «Продлить»: на сколько дней — кнопками, без лишнего шага */
-function ExtendModal({ tender, days, onClose }: { tender: Row; days: number[]; onClose: () => void }) {
-    const [busy, setBusy] = useState(false);
+/** «Продлить»: любое число дней — вписать или нажать готовый вариант */
+function ExtendModal({
+    tender,
+    days,
+    max,
+    onClose,
+}: {
+    tender: Row;
+    days: number[];
+    max: number;
+    onClose: () => void;
+}) {
+    const form = useForm<{ days: string }>({ days: '' });
+    const value = Number(form.data.days);
+    const ready = Number.isInteger(value) && value >= 1 && value <= max;
 
     function extend(n: number) {
-        setBusy(true);
-        router.post(
-            routes.tenderExtend(tender.id),
-            { days: n },
-            { preserveScroll: true, onFinish: () => setBusy(false), onSuccess: onClose },
-        );
+        form.transform(() => ({ days: String(n) }));
+        form.post(routes.tenderExtend(tender.id), { preserveScroll: true, onSuccess: onClose });
     }
 
     return (
-        <Modal open onClose={onClose} title={t('cabinet.tenders.extend_title')} description={tender.title} width={420}>
+        <Modal open onClose={onClose} title={t('cabinet.tenders.extend_title')} description={tender.title} width={440}>
             <p className="t-sm muted" style={{ marginBottom: 12 }}>
                 {t('cabinet.tenders.extend_text')}
             </p>
-            <div className="row wrap" style={{ gap: 8 }}>
+            <div className="row wrap" style={{ gap: 8, marginBottom: 16 }}>
                 {days.map((n) => (
-                    <button key={n} type="button" className="btn btn-secondary" disabled={busy} onClick={() => extend(n)}>
+                    <button
+                        key={n}
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={form.processing}
+                        onClick={() => extend(n)}
+                    >
                         {t('cabinet.tenders.extend_days', { days: n })}
                     </button>
                 ))}
             </div>
+            <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
+                <div className="field" style={{ margin: 0, flex: 1 }}>
+                    <label className="label" htmlFor="ext-days">
+                        {t('cabinet.tenders.extend_input')}
+                    </label>
+                    <input
+                        id="ext-days"
+                        className="input"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={max}
+                        autoFocus
+                        value={form.data.days}
+                        onChange={(e) => form.setData('days', e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && ready) extend(value);
+                        }}
+                    />
+                </div>
+                <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!ready || form.processing}
+                    onClick={() => extend(value)}
+                >
+                    {t('cabinet.tenders.extend_submit')}
+                </button>
+            </div>
+            {form.errors.days && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.days}</p>}
         </Modal>
     );
 }
@@ -132,10 +176,12 @@ export default function TendersIndex({
     tenders,
     hasCompany,
     extendDays,
+    extendMax,
 }: {
     tenders: Row[];
     hasCompany: boolean;
     extendDays: number[];
+    extendMax: number;
 }) {
     const { confirm, dialog } = useConfirm();
     const [extending, setExtending] = useState<Row | null>(null);
@@ -155,7 +201,7 @@ export default function TendersIndex({
             }
         >
             {dialog}
-            {extending && <ExtendModal tender={extending} days={extendDays} onClose={() => setExtending(null)} />}
+            {extending && <ExtendModal tender={extending} days={extendDays} max={extendMax} onClose={() => setExtending(null)} />}
             {finishing && <FinishModal tender={finishing} onClose={() => setFinishing(null)} />}
 
             {tenders.length === 0 ? (

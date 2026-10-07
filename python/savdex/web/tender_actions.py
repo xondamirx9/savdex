@@ -4,7 +4,7 @@
 
 Тендер, заведённый в кабинете (source = cabinet), живёт LIFETIME дней:
 срок — «Приём заявок до», по умолчанию и не дальше чем через 120 дней.
-«Продлить» — на 7, 14 или 30 дней, в любой момент, в том числе после
+«Продлить» — на сколько дней захочет владелец (1–365), в любой момент, в том числе после
 «Истёк». «Завершить» — в архив с итогом: компания, с которой
 договорились, или галочка «Сделка не состоялась». За три дня до срока —
 предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
@@ -54,8 +54,11 @@ STATUSES = (DRAFT, PUBLISHED, ARCHIVED, EXPIRED)
 #: Сколько дней живёт тендер из кабинета — и самый дальний срок при создании
 LIFETIME = 120
 
-#: На сколько дней можно продлить
-EXTEND_DAYS = (7, 14, 30)
+#: Быстрые кнопки в окне «Продлить»; можно вписать и своё число дней
+EXTEND_DAYS = (30, 60, 120)
+
+#: Самое большое продление за раз
+EXTEND_MAX = 365
 
 #: Чем закончился тендер: подписи — cabinet.tenders.outcomes
 OUTCOMES = ("contract", "no_deal", "cancelled")
@@ -268,6 +271,7 @@ def index_page(ctx: Context) -> HttpResponse:
         {
             "hasCompany": company_of(ctx) is not None,
             "extendDays": list(EXTEND_DAYS),
+            "extendMax": EXTEND_MAX,
             "tenders": [
                 {
                     "id": r["id"],
@@ -564,7 +568,13 @@ def extend(request: HttpRequest, tender_id: str) -> HttpResponse:
 
     data = input_of(request)
     errors = validate(
-        data, {"days": ["required", "in:" + ",".join(str(d) for d in EXTEND_DAYS)]}, ctx.locale
+        data,
+        {"days": ["required", "integer", "min:1", f"max:{EXTEND_MAX}"]},
+        ctx.locale,
+        {
+            f"days.{rule}": ctx.t("messages.tender.extend_days_invalid", max=EXTEND_MAX)
+            for rule in ("required", "integer", "min", "max")
+        },
     )
 
     if errors:
