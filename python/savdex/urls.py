@@ -36,6 +36,7 @@ from savdex.web import (
     company_info_actions,
     company_profile_actions,
     contact_actions,
+    contact_request,
     directory,
     downloads,
     fallback,
@@ -63,6 +64,7 @@ from savdex.web import (
     settings_actions,
     site_actions,
     telegram_webhook,
+    tender_actions,
     tenders,
     unlock_actions,
     wizard_actions,
@@ -99,7 +101,11 @@ urlpatterns = [
         for key in ("help", "guide", "rules")
     ],
     re_path(r"^(?:(?:uz|en|zh|tr)/)?about$", web.about, name="about"),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?contact$", web.contacts, name="contacts"),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?contact$",
+        auth_actions.either(web.contacts, contact_request.submit),
+        name="contacts",
+    ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?pricing$", pricing.pricing, name="pricing"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?reviews$", reviews.index, name="reviews"),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?resumes$", resumes.index, name="resumes"),
@@ -483,6 +489,35 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/company/cover$",
         company_profile_actions.cover,
         name="cabinet.company.cover",
+    ),
+    # Свои тендеры: GET — список, POST — новый; правка, закрыть, открыть, удалить
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders$",
+        tender_actions.tenders,
+        name="cabinet.tenders",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders/create$",
+        tender_actions.create,
+        name="cabinet.tenders.create",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders/(?P<tender_id>[0-9]{1,18})/edit$",
+        tender_actions.edit,
+        name="cabinet.tenders.edit",
+    ),
+    *[
+        re_path(
+            rf"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders/(?P<tender_id>[0-9]{{1,18}})/{verb}$",
+            getattr(tender_actions, verb),
+            name=f"cabinet.tenders.{verb}",
+        )
+        for verb in ("close", "reopen")
+    ],
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/tenders/(?P<tender_id>[0-9]{1,18})$",
+        tender_actions.tender,
+        name="cabinet.tenders.update",
     ),
     # IT-задачи: GET — список, POST — новая задача (этап 5, шаг 43, группа forms)
     re_path(

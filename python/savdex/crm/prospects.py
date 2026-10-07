@@ -19,10 +19,15 @@
 
 Рассылка — двух видов:
 
-- письмо с площадки (queue_email): получатели с почтой, не отписавшиеся
-  и (по умолчанию) не перенесённые в лиды ставятся в очередь, письма
-  уходят фоном — manage.py notify, по PER_PASS за проход (run); счётчик
-  растёт у тех, кому письмо ушло. В письме — ссылка «отписаться»
+- письмо (queue_email): получатели с почтой, не отписавшиеся и (по
+  умолчанию) не перенесённые в лиды ставятся в очередь, письма уходят
+  фоном — manage.py notify (run), не больше per_minute() за проход и
+  per_day() за сутки; счётчик растёт у тех, кому письмо ушло.
+  Почтовик — свой (PROSPECT_MAIL_*), а не почтовик писем сайта (MAIL_*):
+  сервисы вроде Brevo запрещают письма тем, кто не давал согласия, и за
+  жалобы на «холодную» рассылку закрыли бы весь аккаунт — вместе с
+  подтверждением регистрации и сбросом пароля. Не задан свой почтовик —
+  письма не уходят, очередь ждёт. В письме — ссылка «отписаться»
   (и заголовок List-Unsubscribe): отписавшемуся письма больше не идут;
 - касание вручную (mark): продавец написал в Telegram, позвонил — и
   отмечает это у выделенных, счётчик +1 сразу.
@@ -87,9 +92,31 @@ FIELDS = (
 #: Без хотя бы одного из них записи нет: не за что зацепиться
 IDENTITY = ("name", "contact_person", "phone", "email", "tin")
 
-#: Писем за проход фонового обработчика (раз в минуту): почтовые сервисы
-#: режут тех, кто шлёт тысячи разом, и письма уходят в спам
-PER_PASS = int(os.environ.get("SAVDEX_PROSPECT_MAILS_PER_MINUTE") or 30)
+#: Почтовик рассылки: PROSPECT_MAIL_MAILER, _HOST, _PORT, _USERNAME,
+#: _PASSWORD, _FROM_ADDRESS, _FROM_NAME (как MAIL_* у писем сайта)
+PREFIX = "PROSPECT_MAIL"
+
+
+def _setting(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.environ.get(f"{PREFIX}_{name}") or default))
+    except ValueError:
+        return default
+
+
+def per_minute() -> int:
+    """
+    Писем за проход фонового обработчика (раз в минуту). Немного и
+    равномерно: почтовый ящик, который выстреливает десятками писем в
+    минуту, почтовые службы считают рассыльщиком спама.
+    """
+    return _setting("PER_MINUTE", 2)
+
+
+def per_day() -> int:
+    """Писем за сутки (скользящие 24 часа) — лимит ящика с запасом."""
+    return _setting("PER_DAY", 100)
+
 
 #: «Отправляется» дольше этого — проход упал посреди письма. Повторять
 #: нельзя (письмо могло уйти), строка — «не ушло»
@@ -688,10 +715,18 @@ def sample_workbook() -> bytes:
 
 
 def mail_ready() -> bool:
-    """Почта площадки настроена — письма уйдут, а не лягут в файл журнала."""
-    mailer = os.environ.get("MAIL_MAILER") or "log"
+    """
+    Свой почтовик рассылки настроен (PROSPECT_MAIL_MAILER=smtp) — письма
+    уйдут. На своей машине (DEBUG) — и в файл журнала.
+    """
+    return mail.configured(PREFIX) or (settings.DEBUG and mail.mailer(PREFIX) == "log")
 
-    return mail.configured() or (settings.DEBUG and mailer == "log")
+
+def sent_today(stamp: datetime | None = None) -> int:
+    """Писем ушло за последние сутки."""
+    since = (stamp or now()) - timedelta(days=1)
+
+    return ProspectRecipient.objects.filter(status="sent", sent_at__gte=since).count()
 
 
 @dataclass
@@ -904,26 +939,6 @@ def personalize(text: str, prospect: Prospect) -> str:
     )
 
 
-_URL = re.compile(r"https?://[^\s<>\"']+")
-
-
-def _paragraphs(text: str) -> str:
-    """Текст письма → абзацы HTML: экранирование, ссылки, переносы строк."""
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", text.replace("\r\n", "\n")) if b.strip()]
-    out = []
-
-    for block in blocks:
-        escaped = html.escape(block)
-        linked = _URL.sub(lambda m: f'<a href="{m.group(0)}">{m.group(0)}</a>', escaped)
-        out.append(
-            '<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#1f2937;">'
-            + linked.replace("\n", "<br>")
-            + "</p>"
-        )
-
-    return "".join(out)
-
-
 def render(mailing: ProspectMailing, prospect: Prospect) -> tuple[str, str, str]:
     """Тема, HTML и текст письма этому получателю."""
     subject = personalize(mailing.subject or "", prospect).strip() or "SavdEx"
@@ -938,7 +953,7 @@ def render(mailing: ProspectMailing, prospect: Prospect) -> tuple[str, str, str]
         '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;'
         "padding:28px 32px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,"
         'Helvetica,Arial,sans-serif;">'
-        + _paragraphs(body)
+        + mail.paragraphs(body)
         + '</div><p style="max-width:600px;margin:16px auto 0;font-family:Arial,sans-serif;'
         'font-size:12px;line-height:1.5;color:#6b7280;text-align:center;">'
         f'SavdEx — B2B-площадка Узбекистана · <a href="{html.escape(_app_url())}" '
@@ -997,10 +1012,20 @@ def _finish(stamp: datetime) -> None:
         )
 
 
-def run(stamp: datetime | None = None, limit: int = PER_PASS) -> Pass:
-    """Проход: до limit писем из очереди, счётчики — тем, кому ушло."""
+def run(stamp: datetime | None = None, limit: int | None = None) -> Pass:
+    """
+    Проход: до limit писем из очереди (по умолчанию per_minute()), но не
+    сверх per_day() за сутки; счётчики — тем, кому ушло. Свой почтовик не
+    настроен — очередь ждёт: письма не уходят ни в файл, ни через
+    почтовик сайта.
+    """
     stamp = stamp or now()
     report = Pass()
+
+    if not mail_ready():
+        return report
+
+    limit = min(per_minute() if limit is None else limit, per_day() - sent_today(stamp))
 
     # Прерванные посреди письма: повторить нельзя — могло и уйти
     with transaction.atomic():
@@ -1010,7 +1035,7 @@ def run(stamp: datetime | None = None, limit: int = PER_PASS) -> Pass:
 
     mailings: dict[int, ProspectMailing] = {}
 
-    for pk, mailing_id, prospect_id in _claim(stamp, limit):
+    for pk, mailing_id, prospect_id in _claim(stamp, limit) if limit > 0 else ():
         mailing = mailings.get(mailing_id) or ProspectMailing.objects.get(pk=mailing_id)
         mailings[mailing_id] = mailing
         prospect = Prospect.everything.filter(pk=prospect_id).first()
@@ -1042,6 +1067,7 @@ def run(stamp: datetime | None = None, limit: int = PER_PASS) -> Pass:
                 "List-Unsubscribe": f"<{link}>",
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             },
+            prefix=PREFIX,
         )
         sent_at = now()
 

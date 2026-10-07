@@ -20,7 +20,7 @@ from typing import Any
 from django.db import models
 
 from savdex.accounts.models import User
-from savdex.catalog import Timestamped, UTCDateTimeField, now
+from savdex.catalog import LaravelJSONField, Timestamped, UTCDateTimeField, now
 from savdex.crm.models import Company, SoftDeleting
 
 STATUS_OPEN = "open"
@@ -137,6 +137,13 @@ class Message(Timestamped):
     from_staff = models.BooleanField(default=False)
     is_internal = models.BooleanField("внутренняя заметка", default=False)
     body = models.TextField("текст")
+    #: Вложения письма: [{"name", "path" (в storage/app/private), "size", "type"}]
+    attachments = LaravelJSONField(null=True, blank=True)
+    #: Message-ID письма: входящего — от дублей, ответа — для цепочки
+    email_message_id = models.CharField(max_length=255, null=True, blank=True)
+    #: Ответ ушёл клиенту письмом — когда; не ушёл — почему
+    emailed_at = UTCDateTimeField(null=True, blank=True)
+    email_error = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False

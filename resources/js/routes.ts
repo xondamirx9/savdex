@@ -107,4 +107,10 @@ export const routes = {
     itTaskComplete: (id: number) => `/cabinet/it-tasks/${id}/complete`,
     itTaskFileDelete: (id: number, fileId: number) => `/cabinet/it-tasks/${id}/files/${fileId}`,
     listingEdit: (id: number) => `/cabinet/listings/${id}/edit`,
+    cabinetTenders: '/cabinet/tenders',
+    tenderCreate: '/cabinet/tenders/create',
+    tenderEdit: (id: number) => `/cabinet/tenders/${id}/edit`,
+    tenderUpdate: (id: number) => `/cabinet/tenders/${id}`,
+    tenderClose: (id: number) => `/cabinet/tenders/${id}/close`,
+    tenderReopen: (id: number) => `/cabinet/tenders/${id}/reopen`,
 } as const;

@@ -15,8 +15,9 @@ services:
     healthCheckPath: /up
     # Постоянный диск: на нём живут загрузки — логотипы компаний, фото
     # объявлений, документы. Контейнер пересоздаётся при каждом деплое,
-    # и без диска всё загруженное пропадало бы. Здесь же лежит старый
-    # файл SQLite, с которого площадка переехала в PostgreSQL.
+    # и без диска всё загруженное пропадало бы. Здесь же может лежать
+    # старый файл SQLite (database.sqlite), с которого площадка переехала
+    # в PostgreSQL: сайт его не читает.
     disk:
       name: savdex-data
       mountPath: /var/data
@@ -26,11 +27,9 @@ services:
       #
       # Площадка работает на PostgreSQL (блок databases ниже): в панели
       # Render заданы DB_CONNECTION=pgsql и DB_URL, без них контейнер не
-      # стартует (docker/render-entrypoint.sh). Две строки ниже — память
-      # о переезде с SQLite (TARGET_DB_URL была приёмником переноса);
-      # Django их не читает, пока задан DJANGO_DATABASE_URL.
-      - key: DB_DATABASE
-        value: /var/data/database.sqlite
+      # стартует (docker/render-entrypoint.sh). TARGET_DB_URL — та же
+      # база (была приёмником переезда с SQLite); Django берёт её, только
+      # если не задан DJANGO_DATABASE_URL (savdex/settings.py).
       - key: TARGET_DB_URL
         fromDatabase:
           name: savdex-db
@@ -89,6 +88,22 @@ services:
       #   MAIL_MAILER=smtp, MAIL_HOST/PORT/USERNAME/PASSWORD — из панели
       #   сервиса, MAIL_FROM_ADDRESS=no-reply@savdex.uz,
       #   MAIL_FROM_NAME=SAVDEX.
+      #
+      #   Рассылка потенциальным клиентам (CRM) — НЕ через этот сервис:
+      #   Brevo и ему подобные запрещают письма тем, кто не давал
+      #   согласия, и закрыли бы аккаунт вместе с письмами сайта. У неё
+      #   свой ящик на поддомене (например sales@team.savdex.uz в Zoho
+      #   Mail или Яндекс 360) и свои переменные — тоже только в панели:
+      #   PROSPECT_MAIL_MAILER=smtp, PROSPECT_MAIL_HOST/PORT/USERNAME/
+      #   PASSWORD, PROSPECT_MAIL_FROM_ADDRESS, PROSPECT_MAIL_FROM_NAME;
+      #   по желанию PROSPECT_MAIL_PER_DAY (100) и _PER_MINUTE (2).
+      #   Без них письма рассылки не уходят. Подробно — docs/prospects.md.
+      #
+      #   Ящик поддержки → обращения (docs/support-mail.md) — тоже только в
+      #   панели: SUPPORT_IMAP_HOST, SUPPORT_IMAP_USERNAME,
+      #   SUPPORT_IMAP_PASSWORD (порт 993 и папка INBOX — по умолчанию).
+      #   Ответы клиентам уходят через почту сайта (MAIL_*) от адреса
+      #   поддержки из настроек площадки.
       # Кэш — в файлах, а не в базе.
       #
       # Умолчание — database, и оно означает, что каждое

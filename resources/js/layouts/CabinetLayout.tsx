@@ -7,7 +7,9 @@ import {
     Code2,
     CreditCard,
     Eye,
+    FilePlus2,
     FileUser,
+    Gavel,
     Globe,
     IdCard,
     LayoutDashboard,
@@ -67,6 +69,8 @@ function groups(person = false): NavGroup[] {
                 { href: routes.cabinetResume, label: t('cabinet.nav.resume'), icon: FileUser },
                 { href: routes.listingCreate, label: t('cabinet.nav.create'), icon: Plus },
                 { href: routes.cabinetItTasks, label: t('cabinet.nav.it_tasks'), icon: Code2 },
+                { href: routes.cabinetTenders, label: t('cabinet.nav.tenders'), icon: Gavel },
+                { href: routes.tenderCreate, label: t('cabinet.nav.tender_create'), icon: FilePlus2 },
             ],
         },
         {
@@ -125,7 +129,14 @@ export function CabinetLayout({
     const path = typeof window !== 'undefined' ? stripLocale(window.location.pathname) : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
 
-    const isActive = (href: string) => (href === routes.cabinet ? path === href : path.startsWith(href));
+    /* Подсвечен один пункт — с самым длинным подходящим адресом: на
+       /cabinet/tenders/create это «Создать тендер», а не ещё и «Мои тендеры» */
+    const matches = (href: string) =>
+        href === routes.cabinet ? path === href : path === href || path.startsWith(`${href}/`);
+    const current = GROUPS.flatMap((group) => group.items.map((item) => item.href))
+        .filter(matches)
+        .sort((a, b) => b.length - a.length)[0];
+    const isActive = (href: string) => href === current;
 
     return (
         <>
