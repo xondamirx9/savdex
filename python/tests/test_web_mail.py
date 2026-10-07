@@ -136,14 +136,11 @@ def test_выбор_языка():
 
 
 def test_файлы_шаблонов():
-    """
-    Ровно письма × языки × части — без прежних одноязычных файлов.
-    notification — письмо уведомлений (savdex/deliveries.py),
-    telegram_code — код привязки Telegram-бота (savdex/telegram_bot.py).
-    """
+    """Ровно письма × языки × части — без прежних одноязычных файлов."""
     имена = {п.name for п in mail._TEMPLATES.iterdir()}
     ждём = {
         f"{имя}.{lang}.{ext}"
+        # telegram_code — код привязки Telegram-бота (savdex/telegram_bot.py)
         for имя in (*ПИСЬМА, "notification", "telegram_code")
         for lang in locales.CODES
         for ext in ("subject", "html", "txt")

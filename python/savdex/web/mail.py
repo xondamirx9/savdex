@@ -136,6 +136,26 @@ def _log_path(prefix: str = "MAIL") -> Path:
     return Path(settings.LARAVEL_ROOT) / "storage/logs/python-mail.log"
 
 
+_URL = re.compile(r"https?://[^\s<>\"']+")
+
+
+def paragraphs(text: str) -> str:
+    """Текст письма → абзацы HTML: экранирование, ссылки, переносы строк."""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", text.replace("\r\n", "\n")) if b.strip()]
+    out = []
+
+    for block in blocks:
+        escaped = html.escape(block)
+        linked = _URL.sub(lambda m: f'<a href="{m.group(0)}">{m.group(0)}</a>', escaped)
+        out.append(
+            '<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#1f2937;">'
+            + linked.replace("\n", "<br>")
+            + "</p>"
+        )
+
+    return "".join(out)
+
+
 def mailer(prefix: str = "MAIL") -> str:
     """smtp, log или прочее (никуда); не задан — log, как у Laravel."""
     return _env(prefix, "MAILER") or "log"
@@ -155,18 +175,20 @@ def send(
     reply_to: str | None = None,
     headers: Mapping[str, str] | None = None,
     prefix: str = "MAIL",
+    sender: str | None = None,
 ) -> bool:
     """
     Отправить письмо (текст и HTML); сбой — в журнал, False. reply_to —
     куда уходит ответ (рассылка отдела продаж — на почту сотрудника),
     headers — свои заголовки (List-Unsubscribe). prefix — чей почтовик:
     MAIL_* — письма сайта, PROSPECT_MAIL_* — рассылка потенциальным
-    клиентам со своего ящика (savdex/crm/prospects.py).
+    клиентам со своего ящика (savdex/crm/prospects.py). sender — свой
+    «От кого» («Поддержка <support@…>»), иначе — из настроек почтовика.
     """
     message = EmailMultiAlternatives(
         subject,
         body_text,
-        _sender(prefix),
+        sender or _sender(prefix),
         [to],
         reply_to=[reply_to] if reply_to else None,
         headers=dict(headers or {}),

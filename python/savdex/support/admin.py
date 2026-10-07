@@ -10,8 +10,11 @@
 - «Взять» — ничьё обращение мне, открытое — сразу «В работе»;
 - «Ответить» — ответ клиенту или внутренняя заметка одной формой с
   галочкой (раздельные кнопки означали бы, что однажды нажмут не ту и
-  заметка уедет клиенту); ответ ставит «Ждёт ответа клиента», заметка
-  статус не трогает — клиент ничего не получил;
+  заметка уедет клиенту); ответ ставит «Ждёт ответа клиента» и уходит
+  клиенту письмом (savdex/support/mail.py), заметка статус не трогает и
+  никуда не уходит;
+- письма на ящик поддержки становятся обращениями (тот же модуль),
+  вложения скачиваются со страницы обращения;
 - «Закрыть» и «Открыть снова»; дата закрытия — сама (Ticket::saving);
 - удаление — в корзину, только суперадмин.
 
@@ -30,7 +33,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import connections, transaction
 from django.db.models import Count, Q, QuerySet
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -42,6 +45,8 @@ from savdex.adminsite import PerRequest, _admin_of, register
 from savdex.catalog import now
 from savdex.crm.admin import TONES, CrmAdmin, OpenFilter, _badge, employees, when
 from savdex.crm.models import Company
+from savdex.laravel_storage import private_root
+from savdex.support import mail as support_mail
 from savdex.support.models import (
     CHANNELS,
     PRIORITIES,
@@ -63,6 +68,19 @@ STATUS_TONES = {
 }
 
 PRIORITY_TONES = {"high": "danger", "low": "gray"}
+
+
+def _size(value: Any) -> str:  # noqa: ANN401
+    """Размер вложения: «340 КБ», «2,4 МБ»."""
+    try:
+        size = int(value)
+    except (TypeError, ValueError):
+        return ""
+
+    if size < 1024 * 1024:
+        return f"{max(1, round(size / 1024))} КБ"
+
+    return f"{size / 1024 / 1024:.1f} МБ".replace(".", ",")
 
 
 class TicketForm(forms.ModelForm):  # type: ignore[type-arg]
@@ -282,21 +300,25 @@ class TicketAdmin(CrmAdmin):
         ticket.save()
         self._changed(request, ticket, before)
 
-    def reply(self, request: HttpRequest, ticket: Ticket, body: str, *, internal: bool) -> None:
+    def reply(
+        self, request: HttpRequest, ticket: Ticket, body: str, *, internal: bool
+    ) -> tuple[bool, str] | None:
         """
-        Сообщение от поддержки. Ответ — «Ждёт ответа клиента»; внутренняя
-        заметка статус не меняет: клиент ничего не получил.
+        Сообщение от поддержки. Ответ — «Ждёт ответа клиента» и письмо
+        клиенту (savdex/support/mail.py): ушло ли и кому или почему нет.
+        Внутренняя заметка статус не меняет и никуда не уходит — None.
         """
         before = self.snapshot(ticket)
 
         with transaction.atomic():
-            Message(
+            message = Message(
                 ticket_id=ticket.pk,
                 author_id=_admin_of(request).id,
                 from_staff=True,
                 is_internal=internal,
                 body=body,
-            ).save()
+            )
+            message.save()
             ticket.last_reply_at = now()
 
             if not internal:
@@ -307,6 +329,11 @@ class TicketAdmin(CrmAdmin):
         self._changed(
             request, ticket, before, note="Внутренняя заметка" if internal else "Ответ клиенту"
         )
+
+        if internal:
+            return None
+
+        return support_mail.reply(ticket, message)
 
     @admin.action(description="Взять себе", permissions=["take"])
     def take_selected(self, request: HttpRequest, queryset: QuerySet[Ticket]) -> None:
@@ -333,6 +360,11 @@ class TicketAdmin(CrmAdmin):
                 "<path:object_id>/reply/",
                 self.admin_site.admin_view(self.reply_view),
                 name="support_ticket_reply",
+            ),
+            path(
+                "<path:object_id>/file/<int:message_id>/<int:number>/",
+                self.admin_site.admin_view(self.file_view),
+                name="support_ticket_file",
             ),
             *super().get_urls(),
         ]
@@ -386,12 +418,49 @@ class TicketAdmin(CrmAdmin):
                 reverse("savdex_admin:support_ticket_change", args=[ticket.pk])
             )
 
-        self.reply(request, ticket, body, internal=internal)
-        self.message_user(
-            request, "Заметка сохранена." if internal else "Ответ записан.", messages.SUCCESS
-        )
+        sent = self.reply(request, ticket, body, internal=internal)
+
+        if sent is None:
+            self.message_user(request, "Заметка сохранена.", messages.SUCCESS)
+        elif sent[0]:
+            self.message_user(request, f"Ответ отправлен клиенту на {sent[1]}.", messages.SUCCESS)
+        else:
+            self.message_user(
+                request,
+                f"Ответ записан, но письмо клиенту не ушло: {sent[1]}.",
+                messages.WARNING,
+            )
 
         return HttpResponseRedirect(reverse("savdex_admin:support_ticket_change", args=[ticket.pk]))
+
+    def file_view(
+        self, request: HttpRequest, object_id: str, message_id: int, number: int
+    ) -> FileResponse:
+        """Вложение письма клиента — скачивается, в браузере не открывается."""
+        ticket = self.get_object(request, object_id)
+
+        if not isinstance(ticket, Ticket) or not self.has_view_permission(request, ticket):
+            raise PermissionDenied
+
+        message = Message.objects.filter(pk=message_id, ticket_id=ticket.pk).first()
+        files = message.attachments if message is not None else None
+
+        if not isinstance(files, list) or not 0 <= number < len(files):
+            raise Http404
+
+        item = files[number]
+        root = (private_root() / "support").resolve()
+        target = (private_root() / str(item.get("path", ""))).resolve()
+
+        if not target.is_relative_to(root) or not target.is_file():
+            raise Http404
+
+        return FileResponse(
+            target.open("rb"),
+            as_attachment=True,
+            filename=str(item.get("name") or target.name),
+            content_type="application/octet-stream",
+        )
 
     def change_view(
         self,
@@ -410,6 +479,22 @@ class TicketAdmin(CrmAdmin):
                 .select_related("author")
                 .order_by("created_at", "id")
             )
+
+            for message in extra["ticket_messages"]:
+                files = message.attachments if isinstance(message.attachments, list) else []
+                message.files = [
+                    {
+                        "name": item.get("name") or "файл",
+                        "size": _size(item.get("size")),
+                        "url": reverse(
+                            "savdex_admin:support_ticket_file", args=[ticket.pk, message.pk, n]
+                        ),
+                    }
+                    for n, item in enumerate(files)
+                    if isinstance(item, dict)
+                ]
+
+            extra["client_email"] = support_mail.recipient(ticket)
             extra["can_take"] = editable and ticket.assignee_id is None
             extra["can_reply"] = editable
             extra["can_toggle"] = editable

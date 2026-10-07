@@ -82,7 +82,9 @@ def _лид(title: str, owner: int | None, status: str = "new", days: int = 0, *
     [(pk,)] = sql(
         f"insert into crm_leads ({', '.join(columns)}, created_at, updated_at, "
         f"stage_changed_at) values ({', '.join(['%s'] * len(columns))}, now(), now(), "
-        "now() - make_interval(days => %s)) returning id",
+        # Столбец до секунды округляет, бывает и вверх: «10 дней назад» на
+        # полсекунды позже — это 9 дней, если доска ответила быстро
+        "date_trunc('second', now()) - make_interval(days => %s)) returning id",
         [title, owner, status, *поля.values(), days],
     )
 

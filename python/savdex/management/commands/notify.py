@@ -1,8 +1,9 @@
 """
 Письма и Telegram по уведомлениям кабинета (savdex/deliveries.py),
 рассылка новых объявлений и тендеров по категориям в Telegram
-(savdex/telegram_feed.py) и письма рассылки потенциальным клиентам
-(savdex/crm/prospects.py) — фоновый обработчик рядом с расписанием
+(savdex/telegram_feed.py), письма рассылки потенциальным клиентам
+(savdex/crm/prospects.py) и чтение ящика поддержки в обращения
+(savdex/support/mail.py) — фоновый обработчик рядом с расписанием
 и переводом.
 
   manage.py notify --once      один проход
@@ -20,6 +21,7 @@ from django.db import close_old_connections
 
 from savdex import deliveries, telegram_feed
 from savdex.crm import prospects
+from savdex.support import mail as support_mail
 
 log = logging.getLogger("savdex.deliveries")
 
@@ -59,6 +61,14 @@ class Command(BaseCommand):
                     self.stdout.write(f"Рассылка по базе: {sent}.")
             except Exception:
                 log.exception("Проход рассылки по базе не удался")
+
+            try:
+                inbox = support_mail.run()
+
+                if inbox:
+                    self.stdout.write(f"Почта поддержки: {inbox}.")
+            except Exception:
+                log.exception("Проход по ящику поддержки не удался")
 
             if options["once"]:
                 return

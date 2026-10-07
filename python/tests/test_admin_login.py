@@ -24,13 +24,12 @@ import json
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
-from .web_site import _манифест
+from .web_site import адрес
 
 pytestmark = нужна_база
 
@@ -81,14 +80,7 @@ print(json.dumps(out, ensure_ascii=False))
 
 
 @pytest.fixture(scope="module")
-def люди() -> Iterator[dict[str, int]]:
-    # Отказ «слишком часто» — страница сайта (forms._throttle), ей нужен
-    # манифест сборки фронта; в CI фронт не собирается — подставной
-    with _манифест():
-        yield _люди()
-
-
-def _люди() -> dict[str, int]:
+def люди() -> dict[str, int]:
     свежая_база()
     import bcrypt
 
@@ -241,12 +233,16 @@ def test_выход_из_админки_и_с_сайта(люди):
 
 def test_частота_попыток(люди):
     sql("truncate login_attempts")
-    ответы = браузер(
-        ["get", "/py/admin/login/", None],
-        *[вход("admin@savdex.uz", f"wrong-{n}") for n in range(6)],
-        # Свой адрес на каждый запуск: счётчик живёт минуту в общем кэше
-        ip=f"198.51.100.{int(time.time()) % 250 + 1}",
-    )
+
+    # Отказ 429 — страница ошибки с манифестом сборки фронта: без сборки
+    # (CI) он подставной
+    with адрес():
+        ответы = браузер(
+            ["get", "/py/admin/login/", None],
+            *[вход("admin@savdex.uz", f"wrong-{n}") for n in range(6)],
+            # Свой адрес на каждый запуск: счётчик живёт минуту в общем кэше
+            ip=f"198.51.100.{int(time.time()) % 250 + 1}",
+        )
 
     assert [r["status"] for r in ответы[1:6]] == [422] * 5
     assert ответы[6]["status"] == 429
