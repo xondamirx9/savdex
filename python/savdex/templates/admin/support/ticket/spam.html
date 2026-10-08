@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Спам-фильтр поддержки (savdex/support/spam.py): адреса, чьи письма на
+  ящик поддержки не становятся обращениями. «Вернуть» — адрес снова
+  пропускается, его обращения, убранные как спам, возвращаются в очередь.
+{% endcomment %}
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'savdex_admin:index' %}">Разделы</a>
+    › <a href="{% url 'savdex_admin:support_ticket_changelist' %}">Обращения</a>
+    › Спам-фильтр
+  </div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p class="help">
+    Письма с этих адресов не становятся обращениями. Адрес попадает сюда кнопкой
+    «Спам» в обращении. «Вернуть» снова пропускает его письма и возвращает в очередь
+    обращения, убранные как спам.
+  </p>
+  {% if senders %}
+    <div class="module">
+      <table style="width:100%">
+        <thead>
+          <tr>
+            <th>Адрес</th>
+            <th>Кто заблокировал</th>
+            <th>Когда</th>
+            <th>Убрано обращений</th>
+            {% if can_release %}<th></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in senders %}{% with sender=row.sender %}
+            <tr>
+              <td>{{ sender.email }}</td>
+              <td>{% if sender.blocked_by %}{{ sender.blocked_by.name }}{% else %}—{% endif %}</td>
+              <td>{{ sender.created_at|date:"d.m.Y H:i" }}</td>
+              <td>{{ row.removed }}</td>
+              {% if can_release %}
+                <td>
+                  <form method="post" action="{% url 'savdex_admin:support_ticket_spam_release' %}" style="display:inline"
+                        onsubmit="return confirm('Снова принимать письма с {{ sender.email|escapejs }} и вернуть убранные обращения?')">
+                    {% csrf_token %}
+                    <input type="hidden" name="email" value="{{ sender.email }}">
+                    <button type="submit" class="button">Вернуть</button>
+                  </form>
+                </td>
+              {% endif %}
+            </tr>
+          {% endwith %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p>Спам-фильтр пуст.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -118,7 +118,15 @@ def сайт() -> Iterator[str]:
         reply="Спасибо!",
         deal_confirmed=True,
     )
-    отзыв(company_id=c, author_company_id=ушедшая, status="published", rating=3)
+    # Раньше первого: отзывы — новые сверху, а в одну секунду порядок не определён
+    отзыв(
+        company_id=c,
+        author_company_id=ушедшая,
+        status="published",
+        rating=3,
+        created_at="2026-01-15 10:00:00",
+        updated_at="2026-01-15 10:00:00",
+    )
     отзыв(company_id=c, author_company_id=новая(), status="moderation")
     sql("update companies set deleted_at = now() where id = %s", [ушедшая])
 

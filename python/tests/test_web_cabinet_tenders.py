@@ -268,6 +268,8 @@ def test_чужой_404(сайт, path, method):
         ("archived", "published"),
         # Черновик снят модерацией — автору его не вернуть
         ("draft", "draft"),
+        # «Архив» — убрал администратор: автору тоже не вернуть
+        ("archive", "archive"),
     ],
 )
 def test_открыть_снова(сайт, было, стало):
@@ -290,6 +292,15 @@ def test_удалить(сайт):
     assert итог["ответ"]["headers"]["location"] == сайт + "/cabinet/tenders"
     assert [r[0] for r in итог["база"]["tenders"]] == [2]
     assert итог["база"]["journal"] == ["deleted"]
+
+
+def test_список_архив(сайт):
+    """«Архив» администратора — в кабинете «В архиве», без «Продлить» и «Завершить»."""
+    тендеры("archive")()
+    ответ = открыть(сайт, "/cabinet/tenders", cookies=вход(заказчик()))
+    [тендер] = страница(ответ["body"])["props"]["tenders"]
+
+    assert (тендер["status"], тендер["status_label"]) == ("archive", "В архиве")
 
 
 def test_список_только_свои(сайт):
@@ -449,6 +460,12 @@ def test_правка_срока_кабинетного(сайт, срок, ош
             {"outcome": "contract", "party": "ООО «Цемент»"},
             ("archived", None, None, None, False),
         ),
+        # В архиве у администратора — не завершается
+        (
+            "archive",
+            {"outcome": "contract", "party": "ООО «Цемент»"},
+            ("archive", None, None, None, False),
+        ),
     ],
 )
 def test_завершить(сайт, было, body, стало):
@@ -464,7 +481,7 @@ def test_завершить(сайт, было, body, стало):
 
     assert (status, outcome, party, amount, finished) == стало
 
-    if стало[1] is None and было != "archived":
+    if стало[1] is None and было not in ("archived", "archive"):
         assert {"outcome", "party"} & set(сессия(итог)["errors"])
 
 
@@ -484,6 +501,8 @@ def test_завершить(сайт, было, body, стало):
         ("published", 2, "две недели", ("published", f"{день(2)} 23:59:59", True)),
         # Завершённый не продлевается — его открывают снова
         ("archived", 2, "30", ("archived", f"{день(2)} 23:59:59", True)),
+        # В архиве у администратора — тоже нет
+        ("archive", 2, "30", ("archive", f"{день(2)} 23:59:59", True)),
     ],
 )
 def test_продлить(сайт, было, срок, дней, стало):

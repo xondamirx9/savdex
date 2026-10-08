@@ -166,6 +166,7 @@ STAGES: tuple[Stage, ...] = (
             "crm_communications",
             "support_tickets",
             "support_messages",
+            "support_blocked_senders",
             "imports",
             "exports",
             "failed_import_rows",
