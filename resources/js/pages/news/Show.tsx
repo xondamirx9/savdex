@@ -1,5 +1,6 @@
 import { Link } from '@/components/ui/Link';
-import { ArrowLeft, CalendarDays, Clock } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Maximize2, X } from 'lucide-react';
+import { useRef } from 'react';
 import { NewsCover } from '@/components/NewsCover';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { routes } from '@/routes';
@@ -20,6 +21,8 @@ interface Post {
 }
 
 export default function NewsShow({ post, related }: { post: Post; related: Post[] }) {
+    const zoom = useRef<HTMLDialogElement>(null);
+
     return (
         <PublicLayout title={post.title} description={post.excerpt}>
             <div className="container" style={{ paddingBlock: '24px 96px' }}>
@@ -45,7 +48,34 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                     складываются: сначала картинка, потом текст. */}
                 <div className="news-detail">
                     <div className="news-detail-media" data-reveal>
-                        <NewsCover category={post.category} image={post.image} size={72} />
+                        {post.image ? (
+                            <>
+                                {/* Снимок целиком, без рамки 16:10: на обложке
+                                    бывает инфографика, и обрезанные края съедали
+                                    текст. Нажатие открывает его на весь экран */}
+                                <button type="button" className="news-photo" onClick={() => zoom.current?.showModal()}>
+                                    <img src={post.image} alt={post.title} className="news-photo-img" />
+                                    <span className="news-photo-hint">
+                                        <Maximize2 aria-hidden className="size-4" /> {t('news.zoom')}
+                                    </span>
+                                </button>
+                                {/* <dialog> сам закрывается по Esc и держит фокус
+                                    внутри; нажатие в любом месте тоже закрывает */}
+                                <dialog
+                                    ref={zoom}
+                                    className="news-zoom"
+                                    aria-label={post.title}
+                                    onClick={(e) => e.currentTarget.close()}
+                                >
+                                    <img src={post.image} alt={post.title} className="news-zoom-img" />
+                                    <button type="button" className="news-zoom-close" aria-label={t('common.close')}>
+                                        <X aria-hidden className="size-5" />
+                                    </button>
+                                </dialog>
+                            </>
+                        ) : (
+                            <NewsCover category={post.category} image={null} size={72} />
+                        )}
                     </div>
 
                     <article className="news-detail-body">

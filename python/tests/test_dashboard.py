@@ -424,7 +424,10 @@ def test_обращения_свои_ничьи_чужие(люди):
         priority="low",
         assignee_id=я,
         author_name="Пётр",
-        created_at=назад(minutes=30),
+        # Давность — в часах: подпись округляется вниз, и с минутами
+        # («30 минут») тест падал, если между вставкой и выдачей прошло
+        # больше минуты — на загруженном раннере так и было
+        created_at=назад(hours=5),
     )
     _вставить("support_tickets", subject="Моё закрытое", assignee_id=я, status="closed")
     _вставить("support_tickets", subject="Моё удалённое", assignee_id=я, deleted_at=_время())
@@ -436,7 +439,7 @@ def test_обращения_свои_ничьи_чужие(люди):
     assert "никто" in обращения and "Вторая поддержка" in обращения and "Пётр" in обращения
     # Сутки и дольше — красным
     assert '<span class="savdex-tone-danger">2 дня</span>' in обращения
-    assert '<span class="savdex-tone-gray">30 минут</span>' in обращения
+    assert '<span class="savdex-tone-gray">5 часов</span>' in обращения
     assert '<span class="savdex-badge savdex-tone-danger">Срочный</span>' in обращения
 
 
@@ -474,7 +477,10 @@ def test_очередь_на_проверку_и_два_часа(люди):
         type="license",
         title="Лицензия",
         file_path="docs/x.pdf",
-        created_at=назад(minutes=30, seconds=10),
+        # Полтора часа: подпись «1 час» держится полчаса, и до двух часов
+        # (срок проверки) плитка остаётся жёлтой. С «30 минутами» запаса
+        # было меньше минуты
+        created_at=назад(hours=1, minutes=30),
     )
     _вставить(
         "contact_unlocks",
@@ -494,7 +500,7 @@ def test_очередь_на_проверку_и_два_часа(люди):
     assert плитка(body, "Документы") == {
         "value": "1",
         "tone": "warning",
-        "description": "самое старое ждёт 30 минут",
+        "description": "самое старое ждёт 1 час",
     }
     assert плитка(body, "Споры по отзывам") == {
         "value": "0",
