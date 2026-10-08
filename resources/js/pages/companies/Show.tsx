@@ -49,6 +49,8 @@ interface BusinessCard {
     /** Пометка «данные из открытых источников»; null — блок скрыт */
     source_note: string | null;
     website: string | null;
+    /** Мини-сайт компании на SavdEx; null — его нет или он не открывается */
+    microsite: string | null;
     url: string;
 }
 
@@ -201,16 +203,11 @@ export default function CompanyShow({
                             {/* Раньше здесь была кнопка-иконка QR. Иконка не объясняла,
                                 что произойдёт, и мало кто её нажимал. Теперь понятная
                                 надпись, а QR-код показывается внутри вместе со ссылкой. */}
-                            {/* Кнопка сайта — всегда, когда сайт заполнен:
-                                и для карточек площадки, и для своих */}
-                            {company.website && (
-                                <a
-                                    href={company.website}
-                                    target="_blank"
-                                    rel="noopener nofollow"
-                                    className="btn btn-secondary"
-                                >
-                                    <Globe aria-hidden className="size-4" /> {t('company.website')}
+                            {/* Мини-сайт компании на SavdEx — только когда он открывается:
+                                опубликован и входит в тариф. Нет мини-сайта — нет кнопки */}
+                            {company.microsite && (
+                                <a href={company.microsite} className="btn btn-secondary">
+                                    <Globe aria-hidden className="size-4" /> {t('company.microsite')}
                                 </a>
                             )}
                             <Button variant="secondary" onClick={() => setQrOpen(true)}>
