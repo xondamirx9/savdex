@@ -71,6 +71,15 @@ def expire_listings(now: datetime, due: datetime) -> str:
     return f"Снято с публикации: {expired}. Предупреждений отправлено: {warned}."
 
 
+def expire_tenders(now: datetime, due: datetime) -> str:
+    """Каждый час: тендеры из кабинета — предупредить за три дня, по сроку — «Истёк»."""
+    from savdex import tender_expiry
+
+    expired, warned = tender_expiry.run(now)
+
+    return f"Тендеров истекло: {expired}. Предупреждений: {warned}."
+
+
 def prune_audience_views(now: datetime, due: datetime) -> str:
     """
     audience-views:prune (04:00): «Кто смотрел» старше 90 дней — прочь.
@@ -283,6 +292,7 @@ JOBS: tuple[Job, ...] = (
     Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
     Job("expire_listings", time(6, 0), expire_listings),
+    Job("expire_tenders", time(0, 5), expire_tenders, every=1),
     Job("reviews_ask", time(6, 0), ask_for_reviews),
     # Деньги (шаг 72) и курсы с прозвоном (шаг 71) — вместо routes/console.php
     Job("billing_reset_periods", time(0, 30), reset_billing_periods),

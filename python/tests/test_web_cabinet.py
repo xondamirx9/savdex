@@ -1004,6 +1004,7 @@ def test_настройки(сайт):
             ("chat", True, False),
             ("moderation", True, False),
             ("listing_expiring", True, False),
+            ("tender_expiring", True, False),
             ("billing", True, False),
         ]
         # Категории компании для бота: владелец меняет, рассылка не на паузе
