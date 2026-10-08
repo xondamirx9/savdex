@@ -7,7 +7,7 @@
 {% block breadcrumbs %}
   <div class="breadcrumbs">
     <a href="{% url 'savdex_admin:index' %}">Разделы</a>
-    › <a href="{% url 'savdex_admin:tenders_tender_changelist' %}">Закупки</a>
+    › <a href="{% url 'savdex_admin:tenders_tender_changelist' %}">Тендеры</a>
     › Загрузка из файла
   </div>
 {% endblock %}
@@ -60,7 +60,7 @@
   <div class="module">
     <h2>Какие столбцы понимает загрузка</h2>
     <p>Заголовки — на любом языке площадки, порядок столбцов любой.
-      Незнакомая категория, страна или прочерк вместо телефона пропускаются, а закупка загружается.</p>
+      Незнакомая категория, страна или прочерк вместо телефона пропускаются, а тендер загружается.</p>
     <table>
       <tbody>
         {% for name, hint in columns %}

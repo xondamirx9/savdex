@@ -5,7 +5,7 @@
 Тендер, заведённый в кабинете (source = cabinet), живёт LIFETIME дней:
 срок — «Приём заявок до», по умолчанию и не дальше чем через 120 дней.
 «Продлить» — на сколько дней захочет владелец (1–365), в любой момент,
-в том числе после «Истёк». «Завершить» — в архив с итогом: компания, с которой
+в том числе после «Истёк». «Завершить» — «Завершён» с итогом: компания, с которой
 договорились, или галочка «Сделка не состоялась». За три дня до срока —
 предупреждение, по сроку — «Истёк» (savdex/tender_expiry.py).
 Тендеры администратора (source = admin: админка и загрузка из Excel)
@@ -48,8 +48,12 @@ from savdex.web.views import not_found
 
 PUBLISHED, ARCHIVED, DRAFT, EXPIRED = "published", "archived", "draft", "expired"
 
+#: «Архив» — тендер убрал с сайта администратор (savdex/tenders/admin.py):
+#: не продлевается, не завершается и не открывается снова из кабинета
+ARCHIVE = "archive"
+
 #: Tender::STATUSES — подписи в кабинете: cabinet.tenders.statuses
-STATUSES = (DRAFT, PUBLISHED, ARCHIVED, EXPIRED)
+STATUSES = (DRAFT, PUBLISHED, ARCHIVED, EXPIRED, ARCHIVE)
 
 #: Сколько дней живёт тендер из кабинета — и самый дальний срок при создании
 LIFETIME = 120
@@ -501,7 +505,7 @@ def destroy(request: HttpRequest, tender_id: str) -> HttpResponse:
 @form()
 def finish(request: HttpRequest, tender_id: str) -> HttpResponse:
     """
-    «Завершить»: тендер в архив с итогом. Сначала — компания, с которой
+    «Завершить»: тендер — «Завершён» с итогом. Сначала — компания, с которой
     договорились (outcome = contract, party обязательна), или галочка
     «Сделка не состоялась» (outcome = no_deal, компания не нужна).
     """
