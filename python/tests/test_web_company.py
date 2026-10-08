@@ -342,3 +342,46 @@ def test_повтор_отсеивает_кэш(сайт):
     sql("delete from audience_views")
     открыть(сайт, "/company/bare", куки, env=файловый)
     assert просмотры(цель) == 0
+
+
+@pytest.mark.parametrize(
+    ("статус", "тариф", "ждём"),
+    [
+        # Опубликован и входит в тариф — кнопка ведёт на мини-сайт
+        ("published", True, "/s/stroybaza"),
+        # Черновик или тариф без мини-сайта — кнопки нет: страница была бы 404
+        ("draft", True, None),
+        ("published", False, None),
+    ],
+)
+def test_кнопка_мини_сайта(сайт, статус, тариф, ждём):
+    if not sql("select 1 from plans where code = 'free'"):
+        справочники("plans")
+
+    было = sql("select has_microsite from plans where code = 'free'")[0][0]
+    sql("delete from company_sites")
+    sql("update plans set has_microsite = %s where code = 'free'", [тариф])
+    sql(
+        "insert into company_sites (company_id, subdomain, status, created_at, updated_at) "
+        "select id, 'stroybaza', %s, now(), now() from companies where slug = 'stroybaza'",
+        [статус],
+    )
+
+    try:
+        адрес_сайта = визитка(сайт, "/company/stroybaza")["company"]["microsite"]
+    finally:
+        sql("delete from company_sites")
+        sql("update plans set has_microsite = %s where code = 'free'", [было])
+
+    if ждём is None:
+        assert адрес_сайта is None
+    else:
+        assert адрес_сайта == сайт + ждём
+
+
+def test_без_мини_сайта_кнопки_нет(сайт):
+    # Свой сайт компании в профиле есть, а мини-сайта нет — кнопки нет
+    props = визитка(сайт, "/company/stroybaza")
+
+    assert props["company"]["website"] == "https://stroybaza.uz"
+    assert props["company"]["microsite"] is None

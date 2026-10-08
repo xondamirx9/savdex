@@ -415,6 +415,8 @@ def business_card(
         "description": translations.text(c["description"]),
         "source_note": translations.text(c["source_note"]),
         "website": website_url(c["website"]),
+        # Кнопка «Мини-сайт компании» — только когда мини-сайт открывается
+        "microsite": microsite_url(c),
         "founded_year": c["founded_year"],
         "employees_range": c["employees_range"],
         "verification_level": c["verification_level"],
@@ -498,6 +500,27 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     )
 
     return seo
+
+
+def microsite_url(company: dict[str, Any]) -> str | None:
+    """
+    Адрес мини-сайта компании — если посетитель его увидит: сайт
+    опубликован, компания не заблокирована, в тарифе есть мини-сайт (как
+    microsite._live). Иначе None, и кнопки в профиле нет.
+    """
+    if company.get("status") == "blocked" or company.get("deleted_at") is not None:
+        return None
+
+    sites = _rows(
+        "select subdomain from company_sites where company_id = %s and status = 'published' "
+        "order by id limit 1",
+        [company["id"]],
+    )
+
+    if not sites or not cabinet.company_plan(company["id"]).get("has_microsite"):
+        return None
+
+    return cabinet.site_url(sites[0]["subdomain"])
 
 
 def show(request: HttpRequest, slug: str) -> HttpResponse:
