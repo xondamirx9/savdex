@@ -254,11 +254,20 @@ def test_выручка_только_с_финансовыми_отчётами(
 
 
 def test_лиды_свои_и_ничьи_старые_сверху(люди):
+    # Запас в два часа от границы «ровно 4 дня»: время в базе округляется
+    # до секунды, и впритык к границе тест однажды упал на машине CI
     мой = _вставить(
-        "crm_leads", title="Мой старый лид", owner_id=люди["sales"], created_at=назад(days=4)
+        "crm_leads",
+        title="Мой старый лид",
+        owner_id=люди["sales"],
+        created_at=назад(days=4, hours=2),
     )
     ничей = _вставить(
-        "crm_leads", title="Ничей лид", source="call", contact_name="Пётр", created_at=назад(days=1)
+        "crm_leads",
+        title="Ничей лид",
+        source="call",
+        contact_name="Пётр",
+        created_at=назад(days=1, hours=2),
     )
     _вставить("crm_leads", title="Чужой лид", owner_id=люди["sales2"], created_at=назад(days=2))
     _вставить("crm_leads", title="Закрытый лид", owner_id=люди["sales"], status="converted")
