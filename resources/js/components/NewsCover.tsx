@@ -36,7 +36,7 @@ export function NewsCover({
 
     if (image) {
         return (
-            <div className={cn('cover-art', tall && 'cover-art-tall')}>
+            <div className={cn('cover-art cover-art-photo', tall && 'cover-art-tall')}>
                 <img src={image} alt="" className="size-full object-cover" loading="lazy" />
             </div>
         );
