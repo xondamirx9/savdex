@@ -45,7 +45,7 @@ FAKE_TINS = ("123456789", "987654321", "123123123")
 CASTS = {"is_it_provider": "bool", "it_specializations": "json", "founded_year": "int"}
 
 
-#: Company::PROFILE_FIELDS — сведения, которые меняются раз в полгода
+#: Company::PROFILE_FIELDS — сведения о компании из блока в настройках
 PROFILE_FIELDS = (
     "name",
     "legal_name",
@@ -60,6 +60,19 @@ PROFILE_FIELDS = (
     "is_it_provider",
     "it_specializations",
 )
+
+
+#: Реквизиты: заполненные меняются только в настройках и раз в полгода.
+#: Остальные сведения меняются когда угодно
+LOCKED_FIELDS = ("name", "legal_name", "tin", "address")
+
+#: Физлицо и фрилансер: ограничений на смену сведений нет
+FREE_FORMS = ("individual", "freelancer")
+
+
+def locked_fields(company: dict[str, Any]) -> tuple[str, ...]:
+    """Какие заполненные сведения меняются только раз в полгода."""
+    return () if company.get("legal_form") in FREE_FORMS else LOCKED_FIELDS
 
 
 def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
@@ -84,10 +97,10 @@ def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
 
 
 def changed_profile_fields(company: dict[str, Any], data: dict[str, Any]) -> list[str]:
-    """Company::changedProfileFields: какие из заполненных сведений запрос меняет."""
+    """Company::changedProfileFields: какие из заполненных реквизитов запрос меняет."""
     changed = []
 
-    for field in PROFILE_FIELDS:
+    for field in locked_fields(company):
         if field not in data:
             continue
 
@@ -270,10 +283,13 @@ def update(request: HttpRequest) -> HttpResponse:
 
     # Заполненные сведения здесь не меняются — только из настроек
     # профиля и раз в полгода (CompanyInfoController у Laravel)
-    locked = changed_profile_fields(company, fields) if company is not None else []
-
-    if locked:
-        return invalid(ctx, {f: [ctx.t("messages.company.change_in_settings")] for f in locked})
+    # Заполненные реквизиты здесь не меняются (только в настройках и раз в
+    # полгода): в форме они только для чтения. Пришли другими — остаются
+    # прежними, а остальное сохраняется: раньше из-за одного такого поля не
+    # сохранялось ничего
+    if company is not None:
+        for field in changed_profile_fields(company, fields):
+            del fields[field]
 
     if company is None:
         _create(ctx, fields)

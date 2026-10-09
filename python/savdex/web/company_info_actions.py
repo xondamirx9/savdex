@@ -32,6 +32,7 @@ from savdex.web.company_profile_actions import (
     _tin,
     _unique_tin,
     changed_profile_fields,
+    locked_fields,
 )
 from savdex.web.forms import action, input_of
 from savdex.web.listing_actions import _stamp
@@ -63,7 +64,8 @@ def locked_until(company: dict[str, Any]) -> datetime | None:
     """Company::profileLockedUntil: до какого момента заполненное менять нельзя."""
     changed = company.get("profile_changed_at")
 
-    if changed is None:
+    # Физлицо и фрилансер меняют сведения когда угодно
+    if changed is None or not locked_fields(company):
         return None
 
     # Время в столбце — UTC без пояса, как и eloquent.now()
@@ -147,6 +149,7 @@ def _payload(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
             "it_specializations": specializations or [],
         },
         "locked_until": _date(locked_until(company)),
+        "locked_fields": list(locked_fields(company)),
         "changed_at": _date(company.get("profile_changed_at")),
         "cooldown_months": COOLDOWN_MONTHS,
         **_cooldown(company),
