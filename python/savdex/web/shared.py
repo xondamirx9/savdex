@@ -137,17 +137,35 @@ def public_url(path: str) -> str:
     return os.environ.get("APP_URL", "http://localhost").rstrip("/") + "/storage/" + path
 
 
+#: Знак из коробки: шапка, подвал, админка
+DEFAULT_LOGO = "/images/logo-mark.svg"
+#: Тот же знак с полями — значок вкладки и выдачи Google
+DEFAULT_ICON = "/images/favicon.svg"
+
+
 def appearance_logo(values: dict[str, Any]) -> str:
     """Appearance::logo()."""
     path = setting(values, "logo_image").strip()
 
     if path == "":
-        return "/images/logo-mark.svg"
+        return DEFAULT_LOGO
 
     if path.startswith(("http://", "https://", "/")):
         return path
 
     return public_url(path)
+
+
+def appearance_icon(logo: str) -> str:
+    """
+    Значок сайта для <link rel="icon">.
+
+    Свой логотип из админки — как есть: подсказка «Оформления» обещает его
+    и на вкладке браузера. Знак из коробки — в варианте с полями: Google
+    и соцсети обрезают значок кругом, а знак занимает квадрат до краёв,
+    и у него срезались самолёт и росчерк.
+    """
+    return DEFAULT_ICON if logo == DEFAULT_LOGO else logo
 
 
 # ── «N минут назад» ─────────────────────────────────────────────────
