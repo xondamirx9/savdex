@@ -101,6 +101,9 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 /* ---------- 6. Формы ---------- */
 .field{display:block}
 .field+.field{margin-top:20px}
+/* В сетке поля стоят рядом, отступ даёт сама сетка: отступ «поле за
+   полем» опускал второе поле ряда на 20px ниже первого */
+.grid>.field+.field{margin-top:0}
 .label{display:block;font-size:14px;font-weight:500;margin-bottom:6px}
 .label .req{color:var(--danger)}
 .hint{font-size:13px;color:var(--text-muted);margin-top:6px}

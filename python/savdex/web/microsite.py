@@ -58,6 +58,14 @@ FONTS = {
     "playfair-display": ("Playfair Display", "serif"),
     "lora": ("Lora", "serif"),
     "pt-serif": ("PT Serif", "serif"),
+    "roboto": ("Roboto", "sans-serif"),
+    "open-sans": ("Open Sans", "sans-serif"),
+    "raleway": ("Raleway", "sans-serif"),
+    "ubuntu": ("Ubuntu", "sans-serif"),
+    "exo-2": ("Exo 2", "sans-serif"),
+    "comfortaa": ("Comfortaa", "sans-serif"),
+    "roboto-slab": ("Roboto Slab", "serif"),
+    "merriweather": ("Merriweather", "serif"),
 }
 SURFACES = {
     "light": {
