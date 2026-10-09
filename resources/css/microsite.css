@@ -686,8 +686,8 @@ a.ms-contact:hover {
    рядами, подписи не разъезжаются по ширине */
 .site-presets {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-    gap: 12px 6px;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 12px 8px;
 }
 
 .site-preset {
@@ -704,14 +704,17 @@ a.ms-contact:hover {
     cursor: pointer;
 }
 
-/* Длинное название («Королевский», «Gün batımı») переносится на
-   вторую строку, а не обрезается многоточием */
+/* Название из двух слов («Gün batımı») переносится по пробелу.
+   Одно слово не рвётся никогда: с overflow-wrap: anywhere выходило
+   «Королевски / й». Слово длиннее ячейки чуть выступает за её края
+   поровну — на это и рассчитан зазор между ячейками */
 .site-preset small {
-    max-width: 100%;
     font-size: inherit;
     line-height: 1.25;
     text-align: center;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    hyphens: manual;
 }
 
 .site-swatch {
