@@ -1603,6 +1603,7 @@ def company_page(request: HttpRequest) -> HttpResponse:
 def company_props(ctx: Context) -> dict[str, Any]:
     from savdex import laravel_storage
     from savdex.web.company import _file_size
+    from savdex.web.company_profile_actions import locked_fields
     from savdex.web.directory import _named, listed_countries, logo_url
     from savdex.web.shared import initials
 
@@ -1674,6 +1675,7 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "completeness": completeness(company, bool(approved)),
             "missing": _missing(ctx, company, bool(approved)),
             "verification_level": company["verification_level"],
+            "locked_fields": list(locked_fields(company)),
         },
         "serviceTypes": service_types(ctx),
         "contacts": [

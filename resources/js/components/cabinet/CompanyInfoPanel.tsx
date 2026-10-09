@@ -27,6 +27,8 @@ interface Payload {
     company: CompanyInfo;
     /** До какой даты заполненное менять нельзя; null — можно сейчас */
     locked_until: string | null;
+    /** Реквизиты со сроком смены; у физлица и фрилансера — пусто */
+    locked_fields: string[];
     changed_at: string | null;
     cooldown_months: number;
     /** Дней до конца срока; null — менять можно сейчас */
@@ -114,13 +116,16 @@ export function CompanyInfoPanel() {
 
     const original = payload.company;
     const cooling = payload.locked_until !== null;
-    // В срок блокировки заполненное только читается, пустое — можно заполнить
-    const locked = (field: keyof CompanyInfo) => cooling && isFilled(original[field]);
+    // В срок блокировки заполненные реквизиты только читаются, пустые — можно
+    // заполнить; остальные сведения меняются когда угодно
+    const limited = payload.locked_fields.length > 0;
+    const isLockedField = (field: keyof CompanyInfo) => payload.locked_fields.includes(field);
+    const locked = (field: keyof CompanyInfo) => cooling && isLockedField(field) && isFilled(original[field]);
     const set = <K extends keyof CompanyInfo>(field: K, value: CompanyInfo[K]) =>
         setData((d) => (d ? { ...d, [field]: value } : d));
     const cities = payload.cities.filter((c) => c.country_id === data.country_id);
     const changesFilled = (Object.keys(original) as (keyof CompanyInfo)[]).some(
-        (f) => isFilled(original[f]) && JSON.stringify(original[f]) !== JSON.stringify(data[f]),
+        (f) => isLockedField(f) && isFilled(original[f]) && JSON.stringify(original[f]) !== JSON.stringify(data[f]),
     );
 
     async function save() {
@@ -175,12 +180,15 @@ export function CompanyInfoPanel() {
 
     return (
         <Panel title={t('cabinet.settings.company_title')}>
-            <p className="t-sm muted" style={{ marginBottom: 16 }}>
-                {t('cabinet.settings.company_lead')}
-            </p>
+            {/* У физлица и фрилансера срока смены нет — и плашек о нём тоже */}
+            {limited && (
+                <p className="t-sm muted" style={{ marginBottom: 16 }}>
+                    {t('cabinet.settings.company_lead')}
+                </p>
+            )}
 
             {/* Срок смены данных: сколько осталось или что будет после сохранения */}
-            {cooling ? (
+            {!limited ? null : cooling ? (
                 <div className="cooldown-card is-locked" role="status">
                     <div className="cooldown-card-head">
                         <Clock aria-hidden className="size-5" />

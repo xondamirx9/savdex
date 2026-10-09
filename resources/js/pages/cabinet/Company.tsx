@@ -38,6 +38,8 @@ interface Company {
     completeness: number;
     missing: string[];
     verification_level: number;
+    /** Заполненные из них меняются только в настройках и раз в полгода; у физлица и фрилансера — пусто */
+    locked_fields: string[];
 }
 
 interface Props {
@@ -192,11 +194,13 @@ export default function CompanyProfile({
     const availableCities = cities.filter((c) => c.country_id === form.data.country_id);
 
     /*
-     * Заполненные сведения здесь только читаются: меняются они в
-     * настройках профиля и раз в полгода. Пустое можно заполнить сразу.
+     * Заполненные реквизиты (название, юр. название, ИНН, юр. адрес) здесь
+     * только читаются: меняются они в настройках профиля и раз в полгода.
+     * Остальное — и всё у физлица и фрилансера — меняется здесь когда угодно.
      */
-    const locked = (field: keyof Company) => company !== null && isFilled(company[field]);
-    const anyLocked = company !== null && (['name', 'tin', 'country_id', 'address'] as const).some(locked);
+    const locked = (field: keyof Company) =>
+        company !== null && company.locked_fields.includes(field) && isFilled(company[field]);
+    const anyLocked = company !== null && (company.locked_fields as (keyof Company)[]).some(locked);
 
     function submit() {
         form.patch(routes.cabinetCompany, { preserveScroll: true });
