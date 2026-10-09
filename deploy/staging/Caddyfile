@@ -1,0 +1,21 @@
+# Тестовый сайт: HTTPS, пароль на всё и передача приложению.
+#
+# Сертификат Let's Encrypt Caddy выпускает сам, когда A-запись домена
+# указывает на эту машину и снаружи открыты порты 80 и 443.
+
+{$SITE_DOMAIN} {
+	# Пароль на весь тестовый сайт: поисковики и случайные люди его
+	# не видят. Логин и хеш — /opt/savdex/env/auth.caddy (deploy.sh)
+	import /etc/caddy/auth.caddy
+
+	encode zstd gzip
+
+	# Заголовки X-Forwarded-For/-Proto/-Host от посетителя Caddy
+	# отбрасывает и ставит свои (trusted_proxies не задан)
+	reverse_proxy app:10000
+
+	log {
+		output stdout
+		format console
+	}
+}
