@@ -29,6 +29,7 @@ from savdex.tenders.slug import slugify
 from savdex.web import eloquent
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
+from savdex.web.companies import has_domain
 from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.listing_actions import _stamp
 from savdex.web.resume_actions import _exists
@@ -227,7 +228,7 @@ def update(request: HttpRequest) -> HttpResponse:
         "city_id": ["nullable", _exists("cities")],
         "address": ["nullable", "string", "max:255"],
         "description": ["nullable", "string", "max:5000"],
-        "website": ["nullable", "string", "max:190", "url"],
+        "website": ["nullable", "string", "max:190", "url", Check("url", has_domain)],
         "founded_year": ["nullable", "integer", f"between:1850,{year}"],
         "employees_range": ["nullable", "string", "max:20"],
         "type": ["nullable", "string", "max:30"],
