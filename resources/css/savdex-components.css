@@ -140,7 +140,27 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 .select-field--auto .select-option{white-space:nowrap}
 .select-option.is-cursor{background:var(--bg)}
 .select-option[aria-selected="true"]{color:var(--primary-700);font-weight:600}
+.select-option-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Приписка справа — бледнее подписи и мельче: это пояснение, а не
+   второй заголовок */
+.select-option-hint{flex-shrink:0;font-size:13px;font-weight:400;color:var(--text-muted)}
 .select-option-mark{flex-shrink:0;color:var(--primary-700)}
+
+/* ── Выбор шрифта ──
+   Каждая строка набрана тем шрифтом, который предлагает, поэтому
+   ей нужен кегль, по которому шрифт вообще видно: в 14 px разница
+   между Lora и PT Serif пропадает. Выбранный пункт не делаем
+   жирнее — начертание шрифта важнее, чем отметка о выборе, её
+   держит галочка. */
+.select-field--font .select-field-value{font-size:16px}
+/* Список шире поля: поле стоит в колонке на 190 px, а «Playfair
+   Display» с образцом в неё не помещается — название обрывалось
+   на «Playf…», то есть именно на том, ради чего список и открыли */
+.select-field--font .select-menu{right:auto;width:max-content;min-width:100%;max-width:min(320px,92vw)}
+.select-field--font .select-option{min-height:46px;padding-top:10px;padding-bottom:10px}
+.select-field--font .select-option-label{font-size:16px;line-height:24px}
+.select-field--font .select-option[aria-selected="true"]{font-weight:inherit}
+.select-field--font .select-option-hint{font-size:14px;line-height:20px}
 
 .input::placeholder,.textarea::placeholder{color:#94A3B8}
 .input:hover,.select:hover,.textarea:hover{border-color:var(--border-strong)}
