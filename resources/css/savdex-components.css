@@ -1347,15 +1347,14 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .news-lead .cover-art{border-radius:var(--r-card) var(--r-card) 0 0;min-height:180px}
 }
 
-/* Страница новости: обложка слева, текст справа.
-   Раньше текст шёл под обложкой узкой колонкой и половина экрана
-   пустовала. Картинка — главное на странице новости, поэтому ей
-   отдана большая доля, описанию — боковая колонка. */
-.news-detail{display:grid;grid-template-columns:minmax(0,72fr) minmax(0,28fr);
-  gap:clamp(20px,2.4vw,32px);align-items:start}
+/* Страница новости: одна колонка по центру — картинка, под ней текст.
+   Решение заказчика: рядом с обложкой текст шёл узкой боковой колонкой,
+   и страница выглядела перекошенной. Теперь картинка и текст стоят на
+   одной оси; текст уже картинки — строка в 760px удобна для чтения. */
+.news-detail{display:flex;flex-direction:column;align-items:center;gap:clamp(24px,3vw,40px)}
 /* Заглушка без снимка — в рамке 16/10, как в ленте. Снимок
    показывается целиком, в своих пропорциях (.news-photo ниже) */
-.news-detail-media{border-radius:var(--r-card);overflow:hidden;min-width:0}
+.news-detail-media{width:100%;max-width:1080px;border-radius:var(--r-card);overflow:hidden;min-width:0}
 .news-detail-media .cover-art{border-radius:var(--r-card)}
 /* Снимок новости — целиком, в своих пропорциях. В рамке 16:10
    с object-fit:cover картинку шире рамки обрезало по бокам, и у
@@ -1369,6 +1368,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   gap:6px;padding:6px 12px;border-radius:999px;background:rgba(8,18,40,.78);color:#fff;
   font-size:13px;font-weight:600;line-height:20px;transition:background var(--t-fast)}
 .news-photo:hover .news-photo-hint{background:rgba(8,18,40,.92)}
+@media(max-width:639px){.news-photo-hint{right:8px;bottom:8px;padding:8px}}
 .news-zoom{width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:24px;
   border:0;background:transparent;box-sizing:border-box}
 .news-zoom[open]{display:grid;place-items:center}
@@ -1381,11 +1381,13 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .news-zoom-close:focus-visible{outline:3px solid #fff;outline-offset:2px}
 @media(max-width:560px){.news-zoom{padding:8px}.news-zoom-img{max-height:calc(100vh - 16px);border-radius:8px}}
 
-/* Длинное слово или ссылка в узкой колонке иначе вылезают за карточку */
-.news-detail-body{min-width:0;max-width:none;overflow-wrap:break-word}
-.news-detail-body .t-h1{font-size:clamp(24px,2vw,30px);line-height:1.22}
+/* Длинное слово или ссылка иначе вылезают за колонку */
+.news-detail-body{width:100%;max-width:760px;min-width:0;overflow-wrap:break-word}
+/* Шапка — по центру, как и колонка; абзацы — по левому краю: текст,
+   выровненный по центру, читать тяжело */
+.news-detail-head{text-align:center;margin-bottom:8px}
+.news-detail-body .t-h1{font-size:clamp(28px,3vw,40px);line-height:1.2}
 @media(max-width:900px){
-  .news-detail{grid-template-columns:1fr}
   .news-detail-body .t-h1{font-size:28px;line-height:36px}
 }
 
