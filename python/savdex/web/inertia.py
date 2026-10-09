@@ -18,7 +18,7 @@ from django.http import HttpResponse, JsonResponse
 
 from savdex.web import locales, phpquery, vite
 from savdex.web.seo import Seo, php_json
-from savdex.web.shared import Context, appearance_logo, settings_values, shared
+from savdex.web.shared import Context, appearance_icon, appearance_logo, settings_values, shared
 
 #: og:locale — язык_СТРАНА, как ждут Facebook и Telegram
 OG_LOCALES = {"ru": "ru_RU", "en": "en_US", "uz": "uz_UZ", "tr": "tr_TR", "zh": "zh_CN"}
@@ -168,7 +168,8 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
     """resources/views/app.blade.php."""
     values = settings_values()
     logo = appearance_logo(values)
-    logo_type = ' type="image/svg+xml" ' if logo.lower().endswith(".svg") else " "
+    icon = appearance_icon(logo)
+    icon_type = ' type="image/svg+xml" ' if icon.lower().endswith(".svg") else " "
     touch = logo if logo.lower().endswith((".png", ".jpg", ".jpeg")) else "/images/logo-touch.png"
     description = seo.description_text
     title = php_escape(seo.get_title())
@@ -178,8 +179,8 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
         f'<meta name="csrf-token" content="{php_escape(token)}">',
-        '<link rel="icon" href="/favicon.ico" sizes="32x32">',
-        f'<link rel="icon" {logo_type} href="{php_escape(logo)}">'.replace("  ", " "),
+        '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">',
+        f'<link rel="icon" {icon_type} href="{php_escape(icon)}">'.replace("  ", " "),
         f'<link rel="apple-touch-icon" href="{php_escape(touch)}">',
         f"<title inertia>{title}</title>",
     ]

@@ -63,6 +63,9 @@ def test_гость_без_сессии(сайт, path):
     теги = шапка(д["body"])
     assert f"<title inertia>{title} · SAVDEX</title>" in теги
     assert f'<link rel="alternate" hreflang="uz" href="{сайт}/uz/{key}">' in теги
+    # Значок — вариант знака с полями: Google обрезает его кругом
+    assert '<link rel="icon" type="image/svg+xml" href="/images/favicon.svg">' in теги
+    assert '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">' in теги
 
 
 def test_гость_с_сессией_и_языком_браузера(сайт):
