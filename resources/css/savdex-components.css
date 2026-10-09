@@ -1724,21 +1724,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    ============================================================ */
 
 /* ── Полоса тестового режима ── */
-.topbar{background:#fef9c3;border-bottom:1px solid #fde68a;color:#713f12}
-.topbar-inner{display:flex;align-items:center;justify-content:center;gap:16px;
-  padding:8px 0;font-size:13px;line-height:1.45;position:relative}
-.topbar-text{text-align:center;min-width:0}
-.topbar-text b{display:block;font-size:13.5px;color:#854d0e}
-.topbar-text b svg{display:inline-block;vertical-align:-3px;margin-right:6px;color:#d97706}
-.topbar-note{color:#a16207}
-.topbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.topbar-more{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
-  border:1px solid #facc15;border-radius:var(--r-btn);background:rgba(255,255,255,.6);
-  font-size:12.5px;font-weight:600;color:#854d0e;white-space:nowrap}
-.topbar-more:hover{background:#fff;text-decoration:none}
-.topbar-close{width:30px;height:30px;display:grid;place-items:center;border-radius:var(--r-btn);
-  color:#a16207;flex-shrink:0}
-.topbar-close:hover{background:rgba(255,255,255,.7);color:#713f12}
 
 /* ── Тёмная кнопка («Каталог товаров») ── */
 .btn-dark{background:var(--navy-900);color:#fff;border-color:var(--navy-900)}
@@ -1888,7 +1873,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   box-shadow:0 6px 20px rgba(8,18,40,.28)}
 /* Полоса тестового режима с прокруткой уезжает — как и на остальных
    страницах, где она лежит над прилипающей шапкой, а не внутри неё */
-.chrome-overlay.is-solid .topbar{display:none}
 .chrome-overlay .hd{position:static;background:transparent;border-bottom:1px solid rgba(255,255,255,.14);box-shadow:none}
 .chrome-overlay .hd-logo-name{color:#fff}
 .chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
@@ -2325,9 +2309,6 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
 }
 
 @media (max-width:768px){
-  .topbar-inner{gap:8px}
-  .topbar-note,.topbar-more{display:none}
-  .topbar-text{text-align:left}
   /* На узких экранах фиксированные минимумы не помещаются: поле сжимается
      свободно, подпись категории ужимается, кнопка уступает место полю */
   .hd-search input{min-width:0}
@@ -2531,7 +2512,7 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
      они стоят в потоке вплотную к краю экрана, и зона, вылезающая
      за половину своей ширины, добавляла документу горизонтальный
      скролл (крестик плашки давал +7 px на 375 px) */
-  .burger,.topbar-close,.btn-icon{width:44px;height:44px}
+  .burger,.btn-icon{width:44px;height:44px}
 
   /* Остальным зона расширяется только по вертикали: по горизонтали
      эти элементы либо достаточно широки, либо прижаты к краю */
@@ -2545,7 +2526,7 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
      Отступ между пунктами подвала убирается: его заменяет
      сама высота ссылки */
   .footer li{margin-bottom:0}
-  .footer li a,.contact-value,.pay-note,.topbar-more,.logo,
+  .footer li a,.contact-value,.pay-note,.logo,
   .subnav-inner a,.subnav-post,.section-bar-link{
     display:inline-flex;align-items:center;min-height:44px}
   /* Подсказки популярных запросов на первом экране: 28 пикселей
