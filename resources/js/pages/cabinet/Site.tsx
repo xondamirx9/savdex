@@ -8,6 +8,7 @@ import { useConfirm } from '@/components/useConfirm';
 import { Alert } from '@/components/ui';
 import { Link } from '@/components/ui/Link';
 import { CabinetLayout } from '@/layouts/CabinetLayout';
+import { SelectField } from '@/components/SelectField';
 import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 import { THEME_MESSAGE, type SiteTheme } from '@/pages/site/Show';
@@ -442,26 +443,30 @@ function FontField({
     fonts: { key: string; name: string }[];
     onChange: (value: string) => void;
 }) {
-    const current = fonts.find((f) => f.key === value);
-
     return (
         <div className="field">
             <label className="label" htmlFor={id}>
                 {label}
             </label>
-            <select
+            {/* Не системный <select>: браузер рисует его сам — прямые
+                углы, своя синяя подсветка, и шрифт в пунктах он
+                показывает не везде. А выбирают здесь как раз шрифт,
+                и увидеть его до выбора важнее всего: каждая строка
+                набрана тем начертанием, которое предлагает, а рядом
+                образец кириллицы — латинское название о ней молчит. */}
+            <SelectField
                 id={id}
-                className="input"
+                className="select-field--font"
+                ariaLabel={label}
                 value={value}
-                style={{ fontFamily: current ? `'${current.name}'` : undefined }}
-                onChange={(e) => onChange(e.target.value)}
-            >
-                {fonts.map((f) => (
-                    <option key={f.key} value={f.key} style={{ fontFamily: `'${f.name}'` }}>
-                        {f.name}
-                    </option>
-                ))}
-            </select>
+                onChange={onChange}
+                options={fonts.map((font) => ({
+                    value: font.key,
+                    label: font.name,
+                    font: font.name,
+                    hint: 'Аа Бб 123',
+                }))}
+            />
         </div>
     );
 }
