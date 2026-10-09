@@ -385,3 +385,24 @@ def test_без_мини_сайта_кнопки_нет(сайт):
 
     assert props["company"]["website"] == "https://stroybaza.uz"
     assert props["company"]["microsite"] is None
+
+
+@pytest.mark.parametrize(
+    ("значение", "ждём"),
+    [
+        ("stroybaza.uz", "https://stroybaza.uz"),
+        ("http://сайт.рф/о-нас", "http://сайт.рф/о-нас"),
+        (None, None),
+        ("", None),
+        # Мусор из старых анкет — кнопки «Сайт компании» нет
+        ("fwfwfef", None),
+        ("https://fwfwfef", None),
+    ],
+)
+def test_кнопка_своего_сайта(сайт, значение, ждём):
+    sql("update companies set website = %s where slug = 'stroybaza'", [значение])
+
+    try:
+        assert визитка(сайт, "/company/stroybaza")["company"]["website"] == ждём
+    finally:
+        sql("update companies set website = 'stroybaza.uz' where slug = 'stroybaza'")

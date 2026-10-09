@@ -210,6 +210,13 @@ export default function CompanyShow({
                                     <Globe aria-hidden className="size-4" /> {t('company.microsite')}
                                 </a>
                             )}
+                            {/* Собственный сайт компании из поля «Сайт» профиля — в новой
+                                вкладке. Не заполнено — нет кнопки */}
+                            {company.website && (
+                                <a href={company.website} target="_blank" rel="noopener nofollow" className="btn btn-secondary">
+                                    <ExternalLink aria-hidden className="size-4" /> {t('company.website')}
+                                </a>
+                            )}
                             <Button variant="secondary" onClick={() => setQrOpen(true)}>
                                 <QrCode aria-hidden className="size-4" /> {t('company.qr')}
                             </Button>
