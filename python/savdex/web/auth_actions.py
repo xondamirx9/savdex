@@ -318,7 +318,8 @@ def register(request: HttpRequest) -> HttpResponse:
     savdex/web/register_code.py.
     """
     from savdex.web import password_rule
-    from savdex.web.company_profile_actions import _tin, _unique_tin
+    from savdex.web.company_profile_actions import _country_code, _country_id, _tin, _unique_tin
+    from savdex.web.resume_actions import _exists
     from savdex.web.resumes import SERVICE_SECTIONS
 
     ctx = action(request, auth=False, throttle=20, throttle_minutes=10, throttle_prefix="register")
@@ -343,7 +344,7 @@ def register(request: HttpRequest) -> HttpResponse:
     data["company_name"] = _php_string(data.get("company_name")).strip(" \t\n\r\0\x0b")
 
     for key in ("tin", "pinfl"):
-        number = re.sub(r"[\s\-]+", "", _php_string(data.get(key)))
+        number = re.sub(r"[\s\-]+", "", _php_string(data.get(key))).upper()
         data[key] = number if number not in ("", "0") else None
 
     custom = {
@@ -362,6 +363,7 @@ def register(request: HttpRequest) -> HttpResponse:
         "company_name.required": ctx.t("messages.company.name_required"),
         "company_name.min": ctx.t("messages.company.name_required"),
         "tin.unique": ctx.t("messages.company.tin_unique"),
+        "country_id.required": ctx.t("messages.company.country_required"),
         "categories.required": ctx.t("messages.register.categories_required"),
         "categories.min": ctx.t("messages.register.categories_required"),
         "categories.max": ctx.t("messages.company.categories_max"),
@@ -383,13 +385,15 @@ def register(request: HttpRequest) -> HttpResponse:
 
     # Набор полей — по тому, кто регистрируется; остальное — exclude
     if legal:
+        # Страна — до номера: номер проверяется по правилам её страны (ТЗ-02)
+        rules["country_id"] = ["required", _exists("countries")]
         rules["company_name"] = ["required", "string", "min:2", "max:190"]
         rules["tin"] = [
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, "uz", tin_messages),
-            _unique_tin(None),
+            _tin(ctx, _country_code(data, None), tin_messages),
+            _unique_tin(None, _country_id(data, None)),
         ]
         rules["categories"] = ["required", "array", "min:1", "max:5"]
         rules["categories.*"] = ["integer", _top_category()]
@@ -587,7 +591,9 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     row: dict[str, Any] = {"legal_form": kind, "status": "active", "primary_role": "both"}
 
     if kind == "legal":
-        row.update(name=data["company_name"], tin=data.get("tin"))
+        row.update(
+            name=data["company_name"], tin=data.get("tin"), country_id=int(data["country_id"])
+        )
     else:
         row.update(name=data["name"], tin=data.get("pinfl"))
 

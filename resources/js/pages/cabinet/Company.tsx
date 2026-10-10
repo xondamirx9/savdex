@@ -12,6 +12,7 @@ import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
+import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
 
 interface Company {
@@ -59,7 +60,7 @@ interface Props {
         missing: boolean;
     }[];
     employees: { id: number; name: string; email: string; role: string; verified: boolean }[];
-    countries: { id: number; name: string }[];
+    countries: CountryOption[];
     cities: { id: number; name: string; country_id: number }[];
     verification: { label: string; done: boolean; hint: string | null }[];
     plan: { name: string; verification_days: number; has_microsite: boolean } | null;
@@ -119,7 +120,8 @@ export default function CompanyProfile({
         name: company?.name ?? '',
         legal_name: company?.legal_name ?? '',
         tin: company?.tin ?? '',
-        country_id: company?.country_id ?? countries[0]?.id ?? null,
+        // Без молчаливого «Узбекистана»: страну выбирает человек (ТЗ-02)
+        country_id: company?.country_id ?? null,
         city_id: company?.city_id ?? null,
         address: company?.address ?? '',
         description: company?.description ?? '',
@@ -423,7 +425,7 @@ export default function CompanyProfile({
                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-tin">
-                                {t('cabinet.company.tin')}
+                                {tinLabel(countryCode(countries, form.data.country_id))}
                             </label>
                             <input
                                 id="p-tin"

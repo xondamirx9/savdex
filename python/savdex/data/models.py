@@ -275,7 +275,11 @@ class CompanyRecord(Timestamped):
     )
     legal_name = models.CharField("юридическое название", max_length=190, null=True, blank=True)
     tin = models.CharField(
-        "ИНН", max_length=20, null=True, blank=True, help_text="9 цифр для Узбекистана"
+        "ИНН / номер компании",
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="По стране: Узбекистан — 9 цифр, Китай — 18 знаков, Индия — GSTIN или PAN",
     )
     type = models.CharField(
         "тип",

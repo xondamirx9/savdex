@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
 import { t, tChoice } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
+import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
 
 interface CompanyInfo {
@@ -37,7 +38,7 @@ interface Payload {
     cooldown_progress: number | null;
     /** С какого дня откроется следующая смена, если сохранить сейчас */
     next_if_changed: string;
-    countries: { id: number; name: string }[];
+    countries: CountryOption[];
     cities: { id: number; name: string; country_id: number }[];
     serviceTypes: Record<string, string>;
 }
@@ -264,7 +265,7 @@ export function CompanyInfoPanel() {
             <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                 <div className="field" style={{ margin: 0 }}>
                     <label className="label" htmlFor="ci-tin">
-                        {t('cabinet.company.tin')}
+                        {tinLabel(countryCode(payload.countries, data.country_id))}
                     </label>
                     <input
                         id="ci-tin"

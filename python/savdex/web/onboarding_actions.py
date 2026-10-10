@@ -32,7 +32,14 @@ from savdex.web.auth import (
 from savdex.web.auth_actions import _row, _to
 from savdex.web.cabinet import _rows
 from savdex.web.chat_actions import _php_trim
-from savdex.web.company_profile_actions import _country_code, _create, _tin, _unique_tin
+from savdex.web.company_profile_actions import (
+    _country_code,
+    _country_id,
+    _create,
+    _tin,
+    _unique_tin,
+    normalize_tin,
+)
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
 from savdex.web.resume_actions import _exists
@@ -68,7 +75,8 @@ def company(request: HttpRequest) -> HttpResponse:
 
     legal_form = _account_type(user)
     person = legal_form != "legal"
-    data = input_of(request)
+    data = dict(input_of(request))
+    normalize_tin(data)
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
         "name": ["required", "string", "min:2", "max:190"],
@@ -80,7 +88,7 @@ def company(request: HttpRequest) -> HttpResponse:
             "string",
             "max:20",
             _tin(ctx, _country_code(data, None), tin_messages, person=person),
-            _unique_tin(None),
+            _unique_tin(None, _country_id(data, None)),
         ],
         "primary_role": ["required", "in:supplier,buyer,both"],
         "categories": ["array", "max:5"],

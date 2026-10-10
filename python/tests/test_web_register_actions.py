@@ -27,7 +27,7 @@ import pytest
 from savdex import laravel_session
 
 from .factories import категория, компания
-from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база
+from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база, страна
 from .test_web_forms import SID, ТОКЕН, inertia
 from .test_web_session import СЕССИЯ, завести, кука, строка
 from .web_site import адрес, открыть
@@ -51,7 +51,9 @@ def сайт() -> Iterator[str]:
     cement = категория(slug="cement", parent_id=None)
     категория(slug="metal", parent_id=None)
     категория(slug="child", parent_id=cement)
-    компания(slug="taken", tin="305123456")
+    uz = страна("uz", {"ru": "Узбекистан"})
+    страна("cn", {"ru": "Китай"})
+    компания(slug="taken", tin="305123456", country_id=uz)
 
     try:
         with адрес() as root:
@@ -260,8 +262,11 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     ("body", "ошибки"),
     [
         (ВЕРНО, None),
-        # Без вида — юрлицо: нужны название и разделы
-        ({**ВЕРНО, "account_type": None, "locale": None}, {"company_name", "categories"}),
+        # Без вида — юрлицо: нужны страна, название и разделы
+        (
+            {**ВЕРНО, "account_type": None, "locale": None},
+            {"country_id", "company_name", "categories"},
+        ),
         (
             {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
             {"password", "password_confirmation"},
@@ -290,7 +295,7 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
         ),
         (
             {**ВЕРНО, "phone": "12", "terms": False, "account_type": "robot"},
-            {"phone", "terms", "account_type", "company_name", "categories"},
+            {"phone", "terms", "account_type", "country_id", "company_name", "categories"},
         ),
         # Имя из одних пробелов — пустое
         ({**ВЕРНО, "name": " ", "locale": "fr"}, {"name", "locale"}),
@@ -343,6 +348,10 @@ def test_регистрация(сайт, body, ошибки):
         assert ввод["name"] == body["name"].strip()
 
 
+def _страна(code: str) -> int:
+    return int(sql("select id from countries where code = %s", [code])[0][0])
+
+
 def _раздел(slug: str) -> int:
     return int(sql("select id from categories where slug = %s", [slug])[0][0])
 
@@ -350,6 +359,7 @@ def _раздел(slug: str) -> int:
 ЮРЛИЦО = {
     **ВЕРНО,
     "account_type": "legal",
+    "country_id": "uz",
     "company_name": "  ООО «Цемент Плюс» ",
     "tin": "302 345-678",
     "categories": "cement,metal",
@@ -363,8 +373,12 @@ def _раздел(slug: str) -> int:
         ({"tin": None, "company_name": ""}, {"company_name": ["Укажите название компании"]}),
         (
             {"tin": "305123456"},
-            {"tin": ["Компания с таким ИНН уже зарегистрирована на площадке"]},
+            {"tin": ["Компания с таким номером из этой страны уже зарегистрирована на площадке"]},
         ),
+        # Узбекский номер у китайской компании не проходит: у Китая 18 знаков
+        ({"tin": "305123456", "country_id": "cn"}, {"tin"}),
+        # Страна обязательна: без неё номер не проверить
+        ({"country_id": None}, {"country_id": ["Выберите страну"]}),
         ({"tin": "30234567"}, {"tin": ["ИНН (СТИР) в Узбекистане — ровно 9 цифр."]}),
         ({"categories": []}, {"categories": ["Выберите хотя бы одну категорию"]}),
         # Повтор раздела — один раз
@@ -377,6 +391,9 @@ def _раздел(slug: str) -> int:
 )
 def test_регистрация_юрлица(сайт, правка, итог_):
     body = {**ЮРЛИЦО, **правка}
+
+    if body.get("country_id"):
+        body["country_id"] = _страна(body["country_id"])
 
     if isinstance(body["categories"], str):
         body["categories"] = [_раздел(s) for s in body["categories"].split(",")]
@@ -398,6 +415,25 @@ def test_регистрация_юрлица(сайт, правка, итог_):
         assert итог["users"] == [] and итог["companies"] == []
         найдено = _ошибки(итог)
         assert (найдено if isinstance(итог_, dict) else set(найдено)) == итог_
+
+
+def test_китайская_компания(сайт):
+    # Приёмка ТЗ-02: 18-значный код сохраняется целиком, страна — Китай
+    body = {
+        **ЮРЛИЦО,
+        "country_id": _страна("cn"),
+        "tin": "91510107ma6-xxxxxxx",
+        "categories": [_раздел("cement")],
+    }
+    итог = регистрация(сайт, body)
+
+    assert итог["status"] == 302 and итог["location"].endswith("/onboarding/company")
+    [компания_] = итог["companies"]
+    assert компания_[3] == "91510107MA6XXXXXXX"
+    assert sql(
+        "select c.code from companies k join countries c on c.id = k.country_id "
+        "where k.slug <> 'taken'"
+    ) == [("cn",)]
 
 
 @pytest.mark.parametrize(

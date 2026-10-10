@@ -141,6 +141,14 @@ class CompanyForm(forms.ModelForm):  # type: ignore[type-arg]
             *_city_choices(int(str(chosen)) if numeric(str(chosen or "")) else None),
         ]
 
+    def clean_tin(self) -> str | None:
+        """Как на сайте: без пробелов и дефисов, буквы заглавные (ТЗ-02)."""
+        from savdex.web.tin import normalize
+
+        value = normalize(self.cleaned_data.get("tin"))
+
+        return value or None
+
     def clean_type(self) -> str | None:
         return self.cleaned_data.get("type") or None
 
@@ -262,6 +270,30 @@ class Waiting(admin.SimpleListFilter):
         return queryset.filter(verification_level=0, live_listings__gt=0)
 
 
+class TinSuspect(admin.SimpleListFilter):
+    """
+    Номер, похожий на обрезанный (ТЗ-02): компания не из Узбекистана, а
+    номер — ровно 9 цифр, как узбекский ИНН. Так записалась первая
+    китайская компания: её 18-значный код сайт не принимал целиком.
+    """
+
+    title = "номер компании"
+    parameter_name = "tin_suspect"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
+        return [("1", "Похож на обрезанный: не Узбекистан, 9 цифр")]
+
+    def queryset(self, request: HttpRequest, queryset: Any) -> Any:  # noqa: ANN401
+        if self.value() != "1":
+            return queryset
+
+        from savdex.geo.models import Country
+
+        return queryset.filter(tin__regex=r"^[0-9]{9}$", country_id__isnull=False).exclude(
+            country_id__in=Country.objects.filter(code="uz").values("pk")
+        )
+
+
 class Trashed(admin.SimpleListFilter):
     title = "корзина"
     parameter_name = "trashed"
@@ -335,6 +367,7 @@ class CompanyAdmin(SavdexModelAdmin):
         _simple("партнёрство", "partner_tier", PARTNER_TIERS),
         _simple("форма", "legal_form", LEGAL_FORMS),
         _simple("статус", "status", {"active": "Активна", "blocked": "Заблокирована"}),
+        TinSuspect,
         Trashed,
     )
     # Компанию ищут по тому, что о ней знают: название, юр. название,
