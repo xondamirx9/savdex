@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
+from .factories import Выражение, объявление, отзыв
 from .factories import компания as новая
-from .factories import объявление, отзыв
 from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_catalog import ГЕО, справочники
 from .web_site import адрес, вход, открыть, пользователь, страница
@@ -118,7 +118,15 @@ def сайт() -> Iterator[str]:
         reply="Спасибо!",
         deal_confirmed=True,
     )
-    отзыв(company_id=c, author_company_id=ушедшая, status="published", rating=3)
+    # Отзывы идут от новых к старым; created_at — до секунды, и два отзыва
+    # подряд в одну секунду давали порядок на усмотрение базы
+    отзыв(
+        company_id=c,
+        author_company_id=ушедшая,
+        status="published",
+        rating=3,
+        created_at=Выражение("now() - interval '1 day'"),
+    )
     отзыв(company_id=c, author_company_id=новая(), status="moderation")
     sql("update companies set deleted_at = now() where id = %s", [ушедшая])
 
