@@ -320,6 +320,23 @@ def test_цена_в_валюте_языка(сайт):
     assert listing["bundle_converted"] == {"price": 71.1, "currency": "USD"}
 
 
+def test_цена_диапазоном(сайт):
+    """Диапазон «от – до»: оба конца в валюте языка, для Google — AggregateOffer."""
+    sql("update listings set price_to = 150000 where slug = 'cement'")
+
+    try:
+        ответ = показать(сайт, "/en/listing/cement")
+    finally:
+        sql("update listings set price_to = null where slug = 'cement'")
+
+    listing = страница(ответ["body"])["props"]["listing"]
+
+    assert (listing["price"], listing["price_to"], listing["price_from"]) == (102000, 150000, False)
+    assert listing["converted_to"] == {"price": 11.9, "currency": "USD"}
+    assert '"@type":"AggregateOffer"' in ответ["body"].replace(" ", "")
+    assert '"lowPrice":102000' in ответ["body"].replace(" ", "")
+
+
 def test_детали_товара(сайт):
     """ProductSpecs: детали после полей раздела, на языке посетителя, без пустых."""
     for path, вес, цвет in (

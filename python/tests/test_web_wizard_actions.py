@@ -286,6 +286,48 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
 
 
 @pytest.mark.parametrize(
+    ("правка", "стало", "ошибка"),
+    [
+        # Диапазон «от – до»
+        ({"price_to": "60000"}, ("52000.00", "60000.00", False), None),
+        # «От»: верхней границы нет, даже если пришла
+        ({"price_from": True, "price_to": "60000"}, ("52000.00", None, True), None),
+        # Договорная — ни «от», ни диапазона
+        (
+            {"price": None, "price_negotiable": True, "price_from": True, "price_to": "60000"},
+            (None, None, False),
+            None,
+        ),
+        # Верхняя граница не больше нижней — ошибка
+        ({"price_to": "52000"}, None, "Верхняя граница цены должна быть больше нижней"),
+    ],
+)
+def test_цена_от_и_диапазон(сайт, правка, стало, ошибка):
+    тело = {**ВЕРНО, "category_id": _категория(), **правка}
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/publish",
+        объявления(("draft", "")),
+        снимок,
+        uid=владелец(),
+        env=БЕЗ_ПЕРЕВОДА,
+        body=тело,
+        headers=inertia(),
+    )
+
+    if ошибка is not None:
+        assert ошибки(итог) == {"price_to": [ошибка]}
+        assert sql("select status from listings where id = 1") == [("draft",)]
+
+        return
+
+    assert сессия(итог)["success"] == ОПУБЛИКОВАНО
+    assert sql("select price::text, price_to::text, price_from from listings where id = 1") == [
+        стало
+    ]
+
+
+@pytest.mark.parametrize(
     ("body", "ошибки_"),
     [
         ("верно", None),

@@ -1278,6 +1278,8 @@ def listings_props(ctx: Context) -> dict[str, Any]:
                 "type": r["type"],
                 "category": categories.get(r["category_id"]) if r["category_id"] else None,
                 "price": float(r["price"]) if r["price"] is not None else None,
+                "price_from": bool(r["price_from"]),
+                "price_to": float(r["price_to"]) if r["price_to"] is not None else None,
                 "currency": r["currency"],
                 "unit": r["unit"],
                 "negotiable": bool(r["price_negotiable"]),
@@ -2542,6 +2544,8 @@ def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
                 "title": row["title"],
                 "description": row["description"],
                 "price": float(row["price"]) if row["price"] is not None else None,
+                "price_from": bool(row["price_from"]),
+                "price_to": float(row["price_to"]) if row["price_to"] is not None else None,
                 "bundle_price": float(row["bundle_price"])
                 if row["bundle_price"] is not None
                 else None,

@@ -195,8 +195,14 @@ def _price_text(ctx: Context, row: dict[str, Any]) -> str:
         return ctx.t("cabinet.listings.negotiable")
 
     unit = ctx.t("catalog.currency_uzs") if row["currency"] == "UZS" else row["currency"]
+    price = number_format(float(row["price"]), 0)
 
-    return f"{number_format(float(row['price']), 0)} {unit}"
+    if row.get("price_to") is not None:
+        return f"{price} – {number_format(float(row['price_to']), 0)} {unit}"
+
+    text = f"{price} {unit}"
+
+    return ctx.t("catalog.price_from", price=text) if row.get("price_from") else text
 
 
 def _seo(
@@ -247,6 +253,18 @@ def _seo(
             "url": url,
             "seller": {"@type": "Organization", "name": company_name},
         }
+
+        # Диапазон — AggregateOffer с нижней и верхней ценой
+        if row.get("price_to") is not None:
+            offers = product["offers"]
+            del offers["price"]
+            offers.update(
+                {
+                    "@type": "AggregateOffer",
+                    "lowPrice": float(row["price"]),
+                    "highPrice": float(row["price_to"]),
+                }
+            )
 
     seo.schema(product)
     crumbs = [
@@ -443,6 +461,11 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 "type": row["type"],
                 "category": category,
                 "price": float(row["price"]) if row["price"] is not None else None,
+                "price_from": bool(row["price_from"]),
+                "price_to": float(row["price_to"]) if row["price_to"] is not None else None,
+                "converted_to": None
+                if row["price_negotiable"]
+                else cards.prices.convert(row["price_to"], row["currency"]),
                 "bundle_price": float(row["bundle_price"])
                 if row["bundle_price"] is not None
                 else None,

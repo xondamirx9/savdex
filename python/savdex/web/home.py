@@ -239,10 +239,16 @@ class Cards:
             if listing["category_id"]
             else None,
             "price": float(listing["price"]) if listing["price"] is not None else None,
+            # Цена «от» и диапазон «price – price_to»
+            "price_from": bool(listing.get("price_from")),
+            "price_to": float(listing["price_to"]) if listing.get("price_to") is not None else None,
             "currency": listing["currency"],
             "converted": None
             if listing["price_negotiable"]
             else self.prices.convert(listing["price"], listing["currency"]),
+            "converted_to": None
+            if listing["price_negotiable"]
+            else self.prices.convert(listing.get("price_to"), listing["currency"]),
             "unit": listing["unit"],
             "negotiable": listing["price_negotiable"],
             "min_order": listing["min_order"],

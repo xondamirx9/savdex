@@ -17,7 +17,7 @@ import {
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { formatNumber } from '@/components/cabinet';
-import { type Money, sellerPrice, shownPrice } from '@/components/ProductCard';
+import { type Money, priceLabel, sellerPrice, sellerPriceLabel, shownPrice } from '@/components/ProductCard';
 import { Gallery } from '@/components/Gallery';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
@@ -41,10 +41,14 @@ interface Listing {
     type: 'supply' | 'demand';
     category: string | null;
     price: number | null;
+    /** Цена «от» и диапазон «price – price_to» */
+    price_from: boolean;
+    price_to: number | null;
     bundle_price: number | null;
     currency: string;
     /** Приблизительно в валюте языка; null — пересчитывать нечего */
     converted: Money | null;
+    converted_to: Money | null;
     bundle_converted: Money | null;
     unit: string | null;
     negotiable: boolean;
@@ -123,7 +127,7 @@ export default function ListingShow({
 
     const price = !priced
         ? t('catalog.price_negotiable')
-        : `${shownPrice(listing.price!, listing.currency, listing.converted)}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
+        : `${priceLabel({ ...listing, price: listing.price! })}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
 
     return (
         <PublicLayout
@@ -188,7 +192,7 @@ export default function ListingShow({
                             {/* Пересчёт приблизителен — цена продавца
                                 остаётся рядом: договор заключают по ней */}
                             {priced && listing.converted && (
-                                <p className="t-sm muted mt-8">{sellerPrice(listing.price!, listing.currency, listing.converted)}</p>
+                                <p className="t-sm muted mt-8">{sellerPriceLabel({ ...listing, price: listing.price! })}</p>
                             )}
 
                             {/* Цена комплекта — под ценой единицы; при
