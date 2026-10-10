@@ -6,6 +6,8 @@ export interface CountryOption {
     id: number;
     name: string;
     code: string;
+    /** Телефонный код страны: «+998», «+86» */
+    phone_code?: string | null;
 }
 
 /** Страны, у которых номер компании проверяется своим правилом (python/savdex/web/tin.py). */

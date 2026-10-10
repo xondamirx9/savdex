@@ -97,18 +97,19 @@ def _demo() -> bool:
     return env_flag("DEMO_AUTO_VERIFY")
 
 
-def _mail_code(ctx: Context, email: str) -> None:
+def _mail_code(ctx: Context, email: str) -> bool:
     """
     RegisteredUserController::mailCode. На демо-стенде без почты код не
     уходит, а подставляется на втором шаге (demo_code). Сбой почты — не
-    500: «Отправить ещё раз» остаётся под рукой.
+    500, а False: человек видит, что письмо не ушло. Раньше сайт молча
+    говорил «код отправлен», и человек ждал письмо, которого не будет.
     """
     code = issue(email)
 
     if _demo():
         flash(ctx, "demo_code", code)
 
-        return
+        return True
 
     subject, body_html, body_text = mail.render(
         "register_code",
@@ -117,7 +118,8 @@ def _mail_code(ctx: Context, email: str) -> None:
         lang=ctx.locale,
         code=code,
     )
-    mail.send(email, subject, body_html, body_text)
+
+    return mail.send(email, subject, body_html, body_text)
 
 
 # ── Шаг 1 → 2: почта ────────────────────────────────────────────────
@@ -173,10 +175,13 @@ def send_code(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
+    # Письмо не ушло — остаёмся на первом шаге с понятной ошибкой
+    if not _mail_code(ctx, email):
+        return invalid(ctx, {"email": [ctx.t("messages.register.email_send_failed")]})
+
     store = _session(ctx)
     store.put(SESSION_EMAIL, email)
     store.forget(SESSION_VERIFIED)
-    _mail_code(ctx, email)
     analytics.queue(ctx, "sign_up_start", {"plan_param": analytics.intended_plan(ctx)})
 
     return _to(ctx, "/register/code")
@@ -214,6 +219,14 @@ def code_page(request: HttpRequest) -> HttpResponse:
             "status": _flash(ctx, "status"),
             # Только на демо-стенде без почты (_mail_code)
             "demoCode": _flash(ctx, "demo_code"),
+            # Китайский ящик (qq.com, 163.com…): письма идут дольше и чаще
+            # в «Спам» — своя подсказка и адрес отправителя для белого списка
+            "chinaMailbox": mail.is_chinese_mailbox(email),
+            "sender": mail.sender_address(
+                "CN_MAIL"
+                if mail.is_chinese_mailbox(email) and mail.configured("CN_MAIL")
+                else "MAIL"
+            ),
         },
         _seo(ctx),
     )
@@ -273,8 +286,10 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     if email is None:
         return _to(ctx, "/register")
 
-    _mail_code(ctx, email)
-    flash(ctx, "status", ctx.t("messages.auth.mail_resent"))
+    if _mail_code(ctx, email):
+        flash(ctx, "status", ctx.t("messages.auth.mail_resent"))
+    else:
+        flash(ctx, "error", ctx.t("messages.register.email_send_failed"))
 
     return back(ctx)
 
@@ -301,6 +316,8 @@ def details(request: HttpRequest) -> HttpResponse:
         return _to(ctx, "/register/code" if store.get(SESSION_EMAIL) is not None else "/register")
 
     names = _named("categories", ctx.locale)
+    # Код страны для телефона: выбрал страну — в поле сразу «+86 »
+    phones = {r["id"]: r["phone_code"] for r in _rows("select id, phone_code from countries")}
     categories: list[dict[str, Any]] = [
         {"id": row["id"], "name": names[row["id"]]}
         for row in _rows(
@@ -317,7 +334,12 @@ def details(request: HttpRequest) -> HttpResponse:
             "categories": categories,
             # Страна юрлица — до номера: по ней номер проверяется (ТЗ-02)
             "countries": [
-                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                {
+                    "id": c["id"],
+                    "name": c["name"],
+                    "code": c["code"],
+                    "phone_code": phones.get(c["id"]),
+                }
                 for c in listed_countries(ctx.locale)
             ],
             # Фрилансер — направление «Доп. услуг», на заказы которого откликается

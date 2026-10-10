@@ -98,6 +98,9 @@ export default function Register({ email = '', categories = [], serviceSections 
     }
 
     const legal = data.account_type === 'legal';
+    const code = countryCode(countries, data.country_id);
+    const uzOrUnknown = code === null || code === 'uz';
+    const phoneCode = countries.find((c) => c.id === data.country_id)?.phone_code ?? null;
     const freelancer = data.account_type === 'freelancer';
 
     function toggleCategory(id: number) {
@@ -202,17 +205,27 @@ export default function Register({ email = '', categories = [], serviceSections 
 
                 {/* Порядок полей — свой у каждого типа: юрлицо начинает
                     с компании, физлицо и фрилансер — с себя */}
+                {/* Страна — у всех: по ней проверяется номер (у иностранного
+                    фрилансера нет узбекского ПИНФЛ) */}
+                <CountryField
+                    id="r-country"
+                    countries={countries}
+                    value={data.country_id}
+                    onChange={(id) => {
+                        update('country_id', id);
+                        // Код страны — сразу в телефон: без него короткие иностранные
+                        // номера не набирают 9 цифр и не проходят проверку
+                        const dial = countries.find((c) => c.id === id)?.phone_code;
+                        const typed = data.phone.trim();
+                        const onlyCode = typed === '' || countries.some((c) => c.phone_code && typed === c.phone_code);
+                        if (dial && onlyCode) update('phone', `${dial} `);
+                    }}
+                    error={errors.country_id}
+                    hint={t('auth.country_first_hint')}
+                />
+
                 {legal && (
                     <>
-                        <CountryField
-                            id="r-country"
-                            countries={countries}
-                            value={data.country_id}
-                            onChange={(id) => update('country_id', id)}
-                            error={errors.country_id}
-                            hint={t('auth.country_first_hint')}
-                        />
-
                         <TextInput
                             label={t('auth.company_name_label')}
                             name="company_name"
@@ -226,11 +239,11 @@ export default function Register({ email = '', categories = [], serviceSections 
                         />
 
                         <TextInput
-                            label={tinLabel(countryCode(countries, data.country_id))}
+                            label={tinLabel(code)}
                             name="tin"
-                            inputMode={tinInputMode(countryCode(countries, data.country_id))}
+                            inputMode={tinInputMode(code)}
                             placeholder={
-                                countryCode(countries, data.country_id) === 'uz' ? t('auth.tin_placeholder') : undefined
+                                code === 'uz' ? t('auth.tin_placeholder') : undefined
                             }
                             value={data.tin}
                             onChange={(e) => update('tin', e.target.value)}
@@ -253,17 +266,20 @@ export default function Register({ email = '', categories = [], serviceSections 
                 />
 
                 {!legal && (
+                    /* ПИНФЛ — только в Узбекистане; у других стран — свой номер, по желанию */
                     <TextInput
-                        label={t('auth.pinfl_label')}
+                        label={uzOrUnknown ? t('auth.pinfl_label') : tinLabel(code)}
                         name="pinfl"
-                        inputMode="numeric"
+                        inputMode={uzOrUnknown ? 'numeric' : tinInputMode(code)}
                         maxLength={20}
-                        required={freelancer}
-                        placeholder={t('auth.pinfl_placeholder')}
+                        required={freelancer && uzOrUnknown}
+                        placeholder={uzOrUnknown ? t('auth.pinfl_placeholder') : undefined}
                         value={data.pinfl}
                         onChange={(e) => update('pinfl', e.target.value)}
                         error={errors.pinfl}
-                        hint={freelancer ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')}
+                        hint={
+                            freelancer && uzOrUnknown ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')
+                        }
                     />
                 )}
 
@@ -273,7 +289,9 @@ export default function Register({ email = '', categories = [], serviceSections 
                     name="phone"
                     autoComplete="tel"
                     required
-                    placeholder={t('auth.phone_placeholder')}
+                    placeholder={
+                        phoneCode && phoneCode !== '+998' ? `${phoneCode} …` : t('auth.phone_placeholder')
+                    }
                     value={data.phone}
                     onChange={(e) => update('phone', e.target.value)}
                     error={errors.phone}
