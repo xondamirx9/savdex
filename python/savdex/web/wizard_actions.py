@@ -219,6 +219,8 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
             "title": ["required", "string", "min:10", "max:90"],
             "description": ["required", "string", "min:30", "max:5000"],
             "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+            "price_to": ["nullable", "numeric", "min:0", "max:99999999999"],
+            "price_from": ["nullable", "boolean"],
             "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
             "price_negotiable": ["boolean"],
             # Как у автосохранения: без правил мусор доходил до базы (500)
@@ -247,6 +249,9 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         # ValidationException::withMessages — как ошибка проверки
         return invalid(ctx, {"price": [ctx.t("messages.listing.price_required")]})
 
+    if (refused := _price_range_error(ctx, data, negotiable)) is not None:
+        return refused
+
     company = company_of(ctx)
     assert company is not None
     plan = company_plan(company["id"])
@@ -259,11 +264,12 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         return back(ctx)
 
     fields = (
-        "category_id", "title", "description", "price", "bundle_price", "currency",
+        "category_id", "title", "description", "price", "price_to", "bundle_price", "currency",
         "unit", "min_order", "delivery_terms", "payment_terms",
     )  # fmt: skip
     now = eloquent.now()
     changes = {k: data[k] for k in fields if k in data}
+    changes.update(_price_kind(data, negotiable))
 
     # Валюта обязательна в базе: пустая — остаётся прежней
     if changes.get("currency") is None:
@@ -381,6 +387,31 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
+    """
+    Вид цены: точная, «от» (price_from) или диапазон «price – price_to».
+    У договорной и у «от» верхней границы нет; у диапазона нет «от».
+    """
+    price_from = _php_boolean(data.get("price_from")) if "price_from" in data else False
+    upper = data.get("price_to")
+    upper = None if upper in (None, "") or negotiable or price_from else upper
+
+    return {"price_from": price_from and not negotiable, "price_to": upper}
+
+
+def _price_range_error(ctx: Context, data: dict[str, Any], negotiable: bool) -> HttpResponse | None:
+    """Диапазон «от – до»: верхняя граница больше нижней."""
+    upper = _price_kind(data, negotiable)["price_to"]
+
+    if upper is None:
+        return None
+
+    if data.get("price") is None or float(upper) <= float(data["price"]):
+        return invalid(ctx, {"price_to": [ctx.t("messages.listing.price_to_min")]})
+
+    return None
+
+
 def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:
     """
     Объявление на витрине правится вживую: правка, которую не пропустила бы
@@ -424,6 +455,8 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
         "title": ["nullable", "string", "max:90"],
         "description": ["nullable", "string", "max:5000"],
         "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "price_to": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "price_from": ["nullable", "boolean"],
         "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
         "currency": ["nullable", "in:" + ",".join(CURRENCIES)],
         "unit": ["nullable", "string", "max:20"],
@@ -457,6 +490,19 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     # Очистка поля должна доехать до базы
     if "bundle_price" in data:
         changes["bundle_price"] = data["bundle_price"]
+
+    # Вид цены: «от» и диапазон — как при публикации; неверный диапазон в
+    # черновике не сохраняется (верхняя граница не меньше нижней)
+    if "price_from" in data or "price_to" in data:
+        negotiable = changes.get("price_negotiable", listing["price_negotiable"])
+        kind = _price_kind(data, bool(negotiable))
+        price = changes.get("price", listing["price"])
+        upper = kind["price_to"]
+
+        if upper is not None and (price is None or float(upper) <= float(price)):
+            kind.pop("price_to")
+
+        changes.update(kind)
 
     if listing["status"] == "active":
         _keep_publishable(listing, changes)

@@ -24,9 +24,14 @@ export interface ProductRow {
     type: 'supply' | 'demand';
     category: string | null;
     price: number | null;
+    /** Цена «от»: price — нижняя, верхней нет */
+    price_from?: boolean;
+    /** Диапазон: верхняя граница, price — нижняя */
+    price_to?: number | null;
     currency: string;
     /** Приблизительно в валюте языка; null — пересчитывать нечего */
     converted: Money | null;
+    converted_to?: Money | null;
     unit: string | null;
     negotiable: boolean;
     min_order: number | null;
@@ -82,6 +87,47 @@ export function shownPrice(price: number, currency: string, converted: Money | n
 /** Подпись «Цена продавца: …» — только когда показан пересчёт. */
 export function sellerPrice(price: number, currency: string, converted: Money | null): string | null {
     return converted ? t('catalog.seller_price', { price: money(price, currency) }) : null;
+}
+
+/** Диапазон в одной валюте: «$95 – $120», «100 000 – 150 000 сум». */
+export function moneyRange(from: number, to: number, currency: string): string {
+    const symbol = SYMBOLS[currency];
+
+    if (symbol) return `${symbol}${formatNumber(from)} – ${symbol}${formatNumber(to)}`;
+
+    return `${formatNumber(from)} – ${formatNumber(to)} ${currency === 'UZS' ? t('catalog.currency_uzs') : currency}`;
+}
+
+/** Цена объявления с её видом: точная, «от …» или «… – …». */
+export interface PricedRow {
+    price: number;
+    price_from?: boolean;
+    price_to?: number | null;
+    currency: string;
+    converted: Money | null;
+    converted_to?: Money | null;
+}
+
+/** На витрине: в валюте языка, если пересчитано (≈), иначе как у продавца. */
+export function priceLabel(row: PricedRow): string {
+    if (row.price_to != null) {
+        return row.converted && row.converted_to
+            ? `≈ ${moneyRange(row.converted.price, row.converted_to.price, row.converted.currency)}`
+            : moneyRange(row.price, row.price_to, row.currency);
+    }
+
+    const shown = shownPrice(row.price, row.currency, row.converted);
+
+    return row.price_from ? t('catalog.price_from', { price: shown }) : shown;
+}
+
+/** «Цена продавца: …» к пересчитанной цене — с тем же видом цены. */
+export function sellerPriceLabel(row: PricedRow): string | null {
+    if (!row.converted) return null;
+
+    const own = priceLabel({ ...row, converted: null, converted_to: null });
+
+    return t('catalog.seller_price', { price: own });
 }
 
 /**
@@ -162,7 +208,7 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         <small>{t('catalog.price_negotiable')}</small>
                     ) : (
                         <>
-                            {shownPrice(row.price, row.currency, row.converted)}
+                            {priceLabel({ ...row, price: row.price })}
                             {row.unit && <small> / {unitLabel(row.unit)}</small>}
                         </>
                     )}
@@ -172,7 +218,7 @@ export function ProductCard({ row }: { row: ProductRow }) {
                     на карточке: договор заключают по ней */}
                 {!row.negotiable && row.price !== null && row.converted && (
                     <span className="product-seller-price">
-                        {sellerPrice(row.price, row.currency, row.converted)}
+                        {sellerPriceLabel({ ...row, price: row.price })}
                     </span>
                 )}
 

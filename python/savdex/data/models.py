@@ -163,6 +163,10 @@ class Listing(Timestamped):
     title = models.CharField("заголовок", max_length=255)
     description = models.TextField("описание", null=True, blank=True)
     price = models.DecimalField("цена", max_digits=16, decimal_places=2, null=True, blank=True)
+    price_from = models.BooleanField("цена «от»", default=False)
+    price_to = models.DecimalField(
+        "цена до (диапазон)", max_digits=16, decimal_places=2, null=True, blank=True
+    )
     bundle_price = models.DecimalField(
         "цена за весь комплект", max_digits=16, decimal_places=2, null=True, blank=True
     )
