@@ -32,6 +32,7 @@ from savdex.web.auth import (
 from savdex.web.auth_actions import _row, _to
 from savdex.web.cabinet import _rows
 from savdex.web.chat_actions import _php_trim
+from savdex.web.city_choice import city_in_country, resolve_other
 from savdex.web.company_profile_actions import (
     _country_code,
     _country_id,
@@ -77,12 +78,13 @@ def company(request: HttpRequest) -> HttpResponse:
     person = legal_form != "legal"
     data = dict(input_of(request))
     normalize_tin(data)
+    resolve_other(data)
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
         "name": ["required", "string", "min:2", "max:190"],
         "type": ["nullable" if person else "required", "string", "max:30"],
         "country_id": ["required", _exists("countries")],
-        "city_id": ["required", _exists("cities")],
+        "city_id": ["required", _exists("cities"), city_in_country(data)],
         "tin": [
             "nullable",
             "string",
@@ -108,6 +110,7 @@ def company(request: HttpRequest) -> HttpResponse:
             "type.required": ctx.t("messages.company.type_required"),
             "country_id.required": ctx.t("messages.company.country_required"),
             "city_id.required": ctx.t("messages.company.city_required"),
+            "city_id.city_country": ctx.t("messages.company.city_country"),
             "categories.max": ctx.t("messages.company.categories_max"),
             "tin.unique": ctx.t("messages.company.tin_unique"),
         },
@@ -153,11 +156,12 @@ def _complete(ctx: Context, company: dict[str, Any]) -> HttpResponse:
     from savdex.web import eloquent
     from savdex.web.company_profile_actions import CASTS, _search_text
 
-    data = input_of(ctx.request)
+    data = dict(input_of(ctx.request))
+    resolve_other(data)
     rules: dict[str, list[str | Check]] = {
         "type": ["required", "string", "max:30"],
         "country_id": ["required", _exists("countries")],
-        "city_id": ["required", _exists("cities")],
+        "city_id": ["required", _exists("cities"), city_in_country(data)],
         "primary_role": ["required", "in:supplier,buyer,both"],
         "categories": ["array", "max:5"],
         "categories.*": ["integer", _exists("categories")],
@@ -171,6 +175,7 @@ def _complete(ctx: Context, company: dict[str, Any]) -> HttpResponse:
             "type.required": ctx.t("messages.company.type_required"),
             "country_id.required": ctx.t("messages.company.country_required"),
             "city_id.required": ctx.t("messages.company.city_required"),
+            "city_id.city_country": ctx.t("messages.company.city_country"),
             "categories.max": ctx.t("messages.company.categories_max"),
         },
     )

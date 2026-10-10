@@ -203,6 +203,14 @@ def _инн(текст: str) -> dict[str, list[str]]:
         ),
         ({"tin": "12345", "country_id": "kz"}, {}, _инн("БИН/ИИН в Казахстане — 12 цифр.")),
         ({"tin": "1234-5678 9012", "country_id": "kz"}, {}, ("legal", "123456789012")),
+        # Город — только из выбранной страны (ТЗ-02): Казахстан + Ташкент — нет
+        (
+            {"tin": "123456789012", "country_id": "kz", "city_id": "tashkent"},
+            {},
+            {"city_id": ["Город не из выбранной страны — выберите город заново"]},
+        ),
+        # «Другой город» без названия — город не выбран
+        ({"city_id": "other", "city_name": "  "}, {}, {"city_id": ["Выберите город"]}),
         # Неизвестный вид учётки — юрлицо; ИНН необязателен
         ({"tin": None}, {"account_type": "robot"}, ("legal", None)),
         # Нечисловой город у Laravel был ошибкой 500 (exists сравнивал строку
@@ -256,6 +264,13 @@ def test_второй_шаг(сайт, правка, поля, ждём):
     if body.get("country_id") == "kz":
         body["country_id"] = _страна("kz")
 
+        # У Казахстана в справочнике городов нет — «Другой город»
+        if "city_id" not in правка:
+            body.update(city_id="other", city_name="Алматы")
+
+    if body.get("city_id") == "tashkent":
+        body["city_id"] = _город()
+
     if body.get("categories") == ["all6"]:
         body["categories"] = [_номер("categories", s) for s in ("cement", "metal", "wood")] + [
             _номер("categories", s) for s in ("glass", "paint", "tiles")
@@ -289,6 +304,38 @@ def test_второй_шаг(сайт, правка, поля, ждём):
     assert база["user"] == [(True, "owner")]
     # Не сотрудник — журнал администратора пуст
     assert база["journal"] == []
+
+
+def test_другой_город(сайт):
+    # Нет города в справочнике — пишется текстом и становится скрытым
+    # городом этой страны; то же название второй раз — та же запись
+    sql("delete from city_translations where name = 'Алматы'")
+    sql("delete from cities where slug = 'almaty'")
+    body = {
+        **верно(),
+        "country_id": _страна("kz"),
+        "city_id": "other",
+        "city_name": " Алматы ",
+        "tin": None,
+    }
+    итог = отправить(
+        сайт,
+        "/onboarding/company",
+        сброс_компаний(),
+        снимок_компаний,
+        uid=пользователь(),
+        body=body,
+    )
+
+    assert итог["ответ"]["headers"]["location"] == сайт + "/verify-email"
+    [(город, страна_, активен)] = sql(
+        "select c.id, c.country_id, c.is_active from cities c where c.slug = 'almaty'"
+    )
+    assert (страна_, активен) == (_страна("kz"), False)
+    assert sql("select city_id from companies where slug = 'tsement-plius'") == [(город,)]
+    assert sql(
+        "select locale, name from city_translations where city_id = %s order by locale", [город]
+    ) == [(loc, "Алматы") for loc in ("en", "ru", "tr", "uz", "zh")]
 
 
 @pytest.mark.parametrize("admin", [False, True])

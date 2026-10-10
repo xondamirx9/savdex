@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
 import { t, tChoice } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
+import { CityField, type CityValue } from '@/components/CityField';
 import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
 
@@ -14,7 +15,9 @@ interface CompanyInfo {
     legal_name: string | null;
     tin: string | null;
     country_id: number | null;
-    city_id: number | null;
+    city_id: CityValue;
+    /** «Другой город»: название текстом (python/savdex/web/city_choice.py). */
+    city_name?: string;
     address: string | null;
     employees_range: string | null;
     founded_year: number | null;
@@ -310,21 +313,18 @@ export function CompanyInfoPanel() {
                     />
                     {error('country_id')}
                 </div>
-                <div className="field" style={{ margin: 0 }}>
-                    <label className="label" htmlFor="ci-city">
-                        {t('cabinet.company.city')}
-                    </label>
-                    <SelectField
-                        id="ci-city"
-                        ariaLabel={t('cabinet.company.city')}
-                        value={String(data.city_id ?? '')}
-                        disabled={locked('city_id')}
-                        onChange={(value) => set('city_id', value ? Number(value) : null)}
-                        placeholder={t('cabinet.company.city_none')}
-                        options={cities.map((c) => ({ value: String(c.id), label: c.name }))}
-                    />
-                    {error('city_id')}
-                </div>
+                <CityField
+                    id="ci-city"
+                    label={t('cabinet.company.city')}
+                    cities={cities}
+                    value={data.city_id}
+                    name={data.city_name ?? ''}
+                    onChange={(value) => set('city_id', value)}
+                    onNameChange={(name) => set('city_name', name)}
+                    placeholder={t('cabinet.company.city_none')}
+                    error={errors.city_id?.[0]}
+                    disabled={locked('city_id') || data.country_id === null}
+                />
             </div>
 
             <div className="field mt-16">

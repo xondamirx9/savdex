@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Button, TextInput } from '@/components/ui';
+import { CityField, type CityValue } from '@/components/CityField';
 import { CountryField } from '@/components/CountryField';
 import { SelectField } from '@/components/SelectField';
 import { countryCode, tinInputMode, tinLabel, type CountryOption } from '@/lib/countries';
@@ -70,7 +71,8 @@ export default function CompanyStep({
         name: string;
         type: string;
         country_id: number | null;
-        city_id: number | null;
+        city_id: CityValue;
+        city_name: string;
         tin: string;
         primary_role: string;
         categories: number[];
@@ -82,6 +84,7 @@ export default function CompanyStep({
         // Без молчаливого «Узбекистана»: страну выбирает человек (ТЗ-02)
         country_id: countryId,
         city_id: null,
+        city_name: '',
         tin: '',
         primary_role: 'both',
         categories: [],
@@ -145,20 +148,19 @@ export default function CompanyStep({
                         error={errors.country_id}
                     />
 
-                    <div className="field" style={{ margin: 0 }}>
-                        <label className="label" htmlFor="c-city">
-                            {t('auth.city_label')} <span className="req">*</span>
-                        </label>
-                        <SelectField
-                            id="c-city"
-                            ariaLabel={t('auth.city_label')}
-                            value={String(data.city_id ?? '')}
-                            onChange={(value) => setData('city_id', value ? Number(value) : null)}
-                            placeholder={t('auth.city_choose')}
-                            options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
-                        />
-                        {errors.city_id && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.city_id}</p>}
-                    </div>
+                    <CityField
+                        id="c-city"
+                        label={t('auth.city_label')}
+                        required
+                        cities={availableCities}
+                        value={data.city_id}
+                        name={data.city_name}
+                        onChange={(value) => setData('city_id', value)}
+                        onNameChange={(name) => setData('city_name', name)}
+                        placeholder={t('auth.city_choose')}
+                        error={errors.city_id}
+                        disabled={data.country_id === null}
+                    />
                 </div>
 
                 {!completing && (

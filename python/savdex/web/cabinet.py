@@ -1724,7 +1724,11 @@ def company_props(ctx: Context) -> dict[str, Any]:
         ],
         "cities": [
             {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
-            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+            # Свой «другой город» (скрытый, city_choice.py) — тоже в списке
+            for c in _rows(
+                "select id, country_id from cities where is_active or id = %s order by sort, id",
+                [company["city_id"] if company else None],
+            )
         ],
         "verification": [
             check("verify_email", user["email_verified_at"] is not None),

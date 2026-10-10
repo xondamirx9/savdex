@@ -230,6 +230,104 @@
    "currency_code": "EUR",
    "sort": 100,
    "is_active": true
+  },
+  {
+   "code": "az",
+   "phone_code": "+994",
+   "currency_code": "AZN",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "ge",
+   "phone_code": "+995",
+   "currency_code": "GEL",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "am",
+   "phone_code": "+374",
+   "currency_code": "AMD",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "tm",
+   "phone_code": "+993",
+   "currency_code": "TMT",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "by",
+   "phone_code": "+375",
+   "currency_code": "BYN",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "de",
+   "phone_code": "+49",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "my",
+   "phone_code": "+60",
+   "currency_code": "MYR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "pk",
+   "phone_code": "+92",
+   "currency_code": "PKR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "vn",
+   "phone_code": "+84",
+   "currency_code": "VND",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "kr",
+   "phone_code": "+82",
+   "currency_code": "KRW",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "jp",
+   "phone_code": "+81",
+   "currency_code": "JPY",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "id",
+   "phone_code": "+62",
+   "currency_code": "IDR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "th",
+   "phone_code": "+66",
+   "currency_code": "THB",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "it",
+   "phone_code": "+39",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
   }
  ],
  "country_translations": [
@@ -1387,6 +1485,496 @@
    ],
    "locale": "tr",
    "name": "Estonya"
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "locale": "ru",
+   "name": "Азербайджан"
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "locale": "uz",
+   "name": "Ozarbayjon"
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "locale": "en",
+   "name": "Azerbaijan"
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "locale": "zh",
+   "name": "阿塞拜疆"
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "locale": "tr",
+   "name": "Azerbaycan"
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "locale": "ru",
+   "name": "Грузия"
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "locale": "uz",
+   "name": "Gruziya"
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "locale": "en",
+   "name": "Georgia"
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "locale": "zh",
+   "name": "格鲁吉亚"
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "locale": "tr",
+   "name": "Gürcistan"
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "locale": "ru",
+   "name": "Армения"
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "locale": "uz",
+   "name": "Armaniston"
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "locale": "en",
+   "name": "Armenia"
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "locale": "zh",
+   "name": "亚美尼亚"
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "locale": "tr",
+   "name": "Ermenistan"
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "locale": "ru",
+   "name": "Туркменистан"
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "locale": "uz",
+   "name": "Turkmaniston"
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "locale": "en",
+   "name": "Turkmenistan"
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "locale": "zh",
+   "name": "土库曼斯坦"
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "locale": "tr",
+   "name": "Türkmenistan"
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "locale": "ru",
+   "name": "Беларусь"
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "locale": "uz",
+   "name": "Belarus"
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "locale": "en",
+   "name": "Belarus"
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "locale": "zh",
+   "name": "白俄罗斯"
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "locale": "tr",
+   "name": "Belarus"
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "locale": "ru",
+   "name": "Германия"
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "locale": "uz",
+   "name": "Germaniya"
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "locale": "en",
+   "name": "Germany"
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "locale": "zh",
+   "name": "德国"
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "locale": "tr",
+   "name": "Almanya"
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "locale": "ru",
+   "name": "Малайзия"
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "locale": "uz",
+   "name": "Malayziya"
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "locale": "en",
+   "name": "Malaysia"
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "locale": "zh",
+   "name": "马来西亚"
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "locale": "tr",
+   "name": "Malezya"
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "locale": "ru",
+   "name": "Пакистан"
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "locale": "uz",
+   "name": "Pokiston"
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "locale": "en",
+   "name": "Pakistan"
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "locale": "zh",
+   "name": "巴基斯坦"
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "locale": "tr",
+   "name": "Pakistan"
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "locale": "ru",
+   "name": "Вьетнам"
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "locale": "uz",
+   "name": "Vyetnam"
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "locale": "en",
+   "name": "Vietnam"
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "locale": "zh",
+   "name": "越南"
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "locale": "tr",
+   "name": "Vietnam"
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "locale": "ru",
+   "name": "Южная Корея"
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "locale": "uz",
+   "name": "Janubiy Koreya"
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "locale": "en",
+   "name": "South Korea"
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "locale": "zh",
+   "name": "韩国"
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "locale": "tr",
+   "name": "Güney Kore"
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "locale": "ru",
+   "name": "Япония"
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "locale": "uz",
+   "name": "Yaponiya"
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "locale": "en",
+   "name": "Japan"
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "locale": "zh",
+   "name": "日本"
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "locale": "tr",
+   "name": "Japonya"
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "locale": "ru",
+   "name": "Индонезия"
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "locale": "uz",
+   "name": "Indoneziya"
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "locale": "en",
+   "name": "Indonesia"
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "locale": "zh",
+   "name": "印度尼西亚"
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "locale": "tr",
+   "name": "Endonezya"
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "locale": "ru",
+   "name": "Таиланд"
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "locale": "uz",
+   "name": "Tailand"
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "locale": "en",
+   "name": "Thailand"
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "locale": "zh",
+   "name": "泰国"
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "locale": "tr",
+   "name": "Tayland"
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "locale": "ru",
+   "name": "Италия"
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "locale": "uz",
+   "name": "Italiya"
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "locale": "en",
+   "name": "Italy"
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "locale": "zh",
+   "name": "意大利"
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "locale": "tr",
+   "name": "İtalya"
   }
  ],
  "cities": [
@@ -4728,6 +5316,506 @@
    "lat": "59.3986000",
    "lng": "27.2731000",
    "sort": 4,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "slug": "baku",
+   "lat": "40.4093000",
+   "lng": "49.8671000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "slug": "ganja",
+   "lat": "40.6828000",
+   "lng": "46.3606000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "az"
+   ],
+   "slug": "sumgait",
+   "lat": "40.5897000",
+   "lng": "49.6686000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "slug": "tbilisi",
+   "lat": "41.7151000",
+   "lng": "44.8271000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "slug": "batumi",
+   "lat": "41.6168000",
+   "lng": "41.6367000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ge"
+   ],
+   "slug": "kutaisi",
+   "lat": "42.2679000",
+   "lng": "42.6946000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "slug": "yerevan",
+   "lat": "40.1872000",
+   "lng": "44.5152000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "am"
+   ],
+   "slug": "gyumri",
+   "lat": "40.7894000",
+   "lng": "43.8475000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "slug": "ashgabat",
+   "lat": "37.9601000",
+   "lng": "58.3261000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "slug": "turkmenabat",
+   "lat": "39.0733000",
+   "lng": "63.5786000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "slug": "dashoguz",
+   "lat": "41.8363000",
+   "lng": "59.9666000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "tm"
+   ],
+   "slug": "mary",
+   "lat": "37.5936000",
+   "lng": "61.8303000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "slug": "minsk",
+   "lat": "53.9006000",
+   "lng": "27.5590000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "slug": "gomel",
+   "lat": "52.4412000",
+   "lng": "30.9878000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "by"
+   ],
+   "slug": "brest",
+   "lat": "52.0976000",
+   "lng": "23.7341000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "slug": "berlin",
+   "lat": "52.5200000",
+   "lng": "13.4050000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "slug": "hamburg",
+   "lat": "53.5511000",
+   "lng": "9.9937000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "slug": "munich",
+   "lat": "48.1351000",
+   "lng": "11.5820000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "slug": "frankfurt",
+   "lat": "50.1109000",
+   "lng": "8.6821000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "de"
+   ],
+   "slug": "cologne",
+   "lat": "50.9375000",
+   "lng": "6.9603000",
+   "sort": 4,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "slug": "kuala-lumpur",
+   "lat": "3.1390000",
+   "lng": "101.6869000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "slug": "george-town",
+   "lat": "5.4141000",
+   "lng": "100.3288000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "slug": "johor-bahru",
+   "lat": "1.4927000",
+   "lng": "103.7414000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "my"
+   ],
+   "slug": "shah-alam",
+   "lat": "3.0733000",
+   "lng": "101.5185000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "slug": "karachi",
+   "lat": "24.8607000",
+   "lng": "67.0011000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "slug": "lahore",
+   "lat": "31.5204000",
+   "lng": "74.3587000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "slug": "islamabad",
+   "lat": "33.6844000",
+   "lng": "73.0479000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "pk"
+   ],
+   "slug": "faisalabad",
+   "lat": "31.4504000",
+   "lng": "73.1350000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "slug": "hanoi",
+   "lat": "21.0278000",
+   "lng": "105.8342000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "slug": "ho-chi-minh-city",
+   "lat": "10.8231000",
+   "lng": "106.6297000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "slug": "haiphong",
+   "lat": "20.8449000",
+   "lng": "106.6881000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "vn"
+   ],
+   "slug": "da-nang",
+   "lat": "16.0544000",
+   "lng": "108.2022000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "slug": "seoul",
+   "lat": "37.5665000",
+   "lng": "126.9780000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "slug": "busan",
+   "lat": "35.1796000",
+   "lng": "129.0756000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "kr"
+   ],
+   "slug": "incheon",
+   "lat": "37.4563000",
+   "lng": "126.7052000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "slug": "tokyo",
+   "lat": "35.6762000",
+   "lng": "139.6503000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "slug": "osaka",
+   "lat": "34.6937000",
+   "lng": "135.5023000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "slug": "yokohama",
+   "lat": "35.4437000",
+   "lng": "139.6380000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "jp"
+   ],
+   "slug": "nagoya",
+   "lat": "35.1815000",
+   "lng": "136.9066000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "slug": "jakarta",
+   "lat": "-6.2088000",
+   "lng": "106.8456000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "slug": "surabaya",
+   "lat": "-7.2575000",
+   "lng": "112.7521000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "slug": "medan",
+   "lat": "3.5952000",
+   "lng": "98.6722000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "id"
+   ],
+   "slug": "bandung",
+   "lat": "-6.9175000",
+   "lng": "107.6191000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "slug": "bangkok",
+   "lat": "13.7563000",
+   "lng": "100.5018000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "slug": "chiang-mai",
+   "lat": "18.7883000",
+   "lng": "98.9853000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "th"
+   ],
+   "slug": "pattaya",
+   "lat": "12.9236000",
+   "lng": "100.8825000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "slug": "rome",
+   "lat": "41.9028000",
+   "lng": "12.4964000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "slug": "milan",
+   "lat": "45.4642000",
+   "lng": "9.1900000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "slug": "naples",
+   "lat": "40.8518000",
+   "lng": "14.2681000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "it"
+   ],
+   "slug": "turin",
+   "lat": "45.0703000",
+   "lng": "7.6869000",
+   "sort": 3,
    "is_active": true
   }
  ],
@@ -21431,6 +22519,2506 @@
    ],
    "locale": "tr",
    "name": "Kohtla-Järve"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "baku"
+   ],
+   "locale": "ru",
+   "name": "Баку"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "baku"
+   ],
+   "locale": "uz",
+   "name": "Boku"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "baku"
+   ],
+   "locale": "en",
+   "name": "Baku"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "baku"
+   ],
+   "locale": "zh",
+   "name": "巴库"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "baku"
+   ],
+   "locale": "tr",
+   "name": "Bakü"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "ganja"
+   ],
+   "locale": "ru",
+   "name": "Гянджа"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "ganja"
+   ],
+   "locale": "uz",
+   "name": "Ganja"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "ganja"
+   ],
+   "locale": "en",
+   "name": "Ganja"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "ganja"
+   ],
+   "locale": "zh",
+   "name": "占贾"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "ganja"
+   ],
+   "locale": "tr",
+   "name": "Gence"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "sumgait"
+   ],
+   "locale": "ru",
+   "name": "Сумгаит"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "sumgait"
+   ],
+   "locale": "uz",
+   "name": "Sumgait"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "sumgait"
+   ],
+   "locale": "en",
+   "name": "Sumgait"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "sumgait"
+   ],
+   "locale": "zh",
+   "name": "苏姆盖特"
+  },
+  {
+   "city_id": [
+    [
+     "az"
+    ],
+    "sumgait"
+   ],
+   "locale": "tr",
+   "name": "Sumgayıt"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "tbilisi"
+   ],
+   "locale": "ru",
+   "name": "Тбилиси"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "tbilisi"
+   ],
+   "locale": "uz",
+   "name": "Tbilisi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "tbilisi"
+   ],
+   "locale": "en",
+   "name": "Tbilisi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "tbilisi"
+   ],
+   "locale": "zh",
+   "name": "第比利斯"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "tbilisi"
+   ],
+   "locale": "tr",
+   "name": "Tiflis"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "batumi"
+   ],
+   "locale": "ru",
+   "name": "Батуми"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "batumi"
+   ],
+   "locale": "uz",
+   "name": "Batumi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "batumi"
+   ],
+   "locale": "en",
+   "name": "Batumi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "batumi"
+   ],
+   "locale": "zh",
+   "name": "巴统"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "batumi"
+   ],
+   "locale": "tr",
+   "name": "Batum"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "kutaisi"
+   ],
+   "locale": "ru",
+   "name": "Кутаиси"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "kutaisi"
+   ],
+   "locale": "uz",
+   "name": "Kutaisi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "kutaisi"
+   ],
+   "locale": "en",
+   "name": "Kutaisi"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "kutaisi"
+   ],
+   "locale": "zh",
+   "name": "库塔伊西"
+  },
+  {
+   "city_id": [
+    [
+     "ge"
+    ],
+    "kutaisi"
+   ],
+   "locale": "tr",
+   "name": "Kutaisi"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "yerevan"
+   ],
+   "locale": "ru",
+   "name": "Ереван"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "yerevan"
+   ],
+   "locale": "uz",
+   "name": "Yerevan"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "yerevan"
+   ],
+   "locale": "en",
+   "name": "Yerevan"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "yerevan"
+   ],
+   "locale": "zh",
+   "name": "埃里温"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "yerevan"
+   ],
+   "locale": "tr",
+   "name": "Erivan"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "gyumri"
+   ],
+   "locale": "ru",
+   "name": "Гюмри"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "gyumri"
+   ],
+   "locale": "uz",
+   "name": "Gyumri"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "gyumri"
+   ],
+   "locale": "en",
+   "name": "Gyumri"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "gyumri"
+   ],
+   "locale": "zh",
+   "name": "久姆里"
+  },
+  {
+   "city_id": [
+    [
+     "am"
+    ],
+    "gyumri"
+   ],
+   "locale": "tr",
+   "name": "Gümrü"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "ashgabat"
+   ],
+   "locale": "ru",
+   "name": "Ашхабад"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "ashgabat"
+   ],
+   "locale": "uz",
+   "name": "Ashxobod"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "ashgabat"
+   ],
+   "locale": "en",
+   "name": "Ashgabat"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "ashgabat"
+   ],
+   "locale": "zh",
+   "name": "阿什哈巴德"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "ashgabat"
+   ],
+   "locale": "tr",
+   "name": "Aşkabat"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "turkmenabat"
+   ],
+   "locale": "ru",
+   "name": "Туркменабад"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "turkmenabat"
+   ],
+   "locale": "uz",
+   "name": "Turkmanobod"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "turkmenabat"
+   ],
+   "locale": "en",
+   "name": "Turkmenabat"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "turkmenabat"
+   ],
+   "locale": "zh",
+   "name": "土库曼纳巴德"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "turkmenabat"
+   ],
+   "locale": "tr",
+   "name": "Türkmenabat"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "dashoguz"
+   ],
+   "locale": "ru",
+   "name": "Дашогуз"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "dashoguz"
+   ],
+   "locale": "uz",
+   "name": "Dashog‘uz"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "dashoguz"
+   ],
+   "locale": "en",
+   "name": "Dashoguz"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "dashoguz"
+   ],
+   "locale": "zh",
+   "name": "达沙古兹"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "dashoguz"
+   ],
+   "locale": "tr",
+   "name": "Daşoguz"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "mary"
+   ],
+   "locale": "ru",
+   "name": "Мары"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "mary"
+   ],
+   "locale": "uz",
+   "name": "Mari"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "mary"
+   ],
+   "locale": "en",
+   "name": "Mary"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "mary"
+   ],
+   "locale": "zh",
+   "name": "马雷"
+  },
+  {
+   "city_id": [
+    [
+     "tm"
+    ],
+    "mary"
+   ],
+   "locale": "tr",
+   "name": "Mary"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "minsk"
+   ],
+   "locale": "ru",
+   "name": "Минск"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "minsk"
+   ],
+   "locale": "uz",
+   "name": "Minsk"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "minsk"
+   ],
+   "locale": "en",
+   "name": "Minsk"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "minsk"
+   ],
+   "locale": "zh",
+   "name": "明斯克"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "minsk"
+   ],
+   "locale": "tr",
+   "name": "Minsk"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "gomel"
+   ],
+   "locale": "ru",
+   "name": "Гомель"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "gomel"
+   ],
+   "locale": "uz",
+   "name": "Gomel"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "gomel"
+   ],
+   "locale": "en",
+   "name": "Gomel"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "gomel"
+   ],
+   "locale": "zh",
+   "name": "戈梅利"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "gomel"
+   ],
+   "locale": "tr",
+   "name": "Gomel"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "brest"
+   ],
+   "locale": "ru",
+   "name": "Брест"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "brest"
+   ],
+   "locale": "uz",
+   "name": "Brest"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "brest"
+   ],
+   "locale": "en",
+   "name": "Brest"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "brest"
+   ],
+   "locale": "zh",
+   "name": "布列斯特"
+  },
+  {
+   "city_id": [
+    [
+     "by"
+    ],
+    "brest"
+   ],
+   "locale": "tr",
+   "name": "Brest"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "berlin"
+   ],
+   "locale": "ru",
+   "name": "Берлин"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "berlin"
+   ],
+   "locale": "uz",
+   "name": "Berlin"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "berlin"
+   ],
+   "locale": "en",
+   "name": "Berlin"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "berlin"
+   ],
+   "locale": "zh",
+   "name": "柏林"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "berlin"
+   ],
+   "locale": "tr",
+   "name": "Berlin"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "hamburg"
+   ],
+   "locale": "ru",
+   "name": "Гамбург"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "hamburg"
+   ],
+   "locale": "uz",
+   "name": "Gamburg"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "hamburg"
+   ],
+   "locale": "en",
+   "name": "Hamburg"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "hamburg"
+   ],
+   "locale": "zh",
+   "name": "汉堡"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "hamburg"
+   ],
+   "locale": "tr",
+   "name": "Hamburg"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "munich"
+   ],
+   "locale": "ru",
+   "name": "Мюнхен"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "munich"
+   ],
+   "locale": "uz",
+   "name": "Myunxen"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "munich"
+   ],
+   "locale": "en",
+   "name": "Munich"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "munich"
+   ],
+   "locale": "zh",
+   "name": "慕尼黑"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "munich"
+   ],
+   "locale": "tr",
+   "name": "Münih"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "frankfurt"
+   ],
+   "locale": "ru",
+   "name": "Франкфурт-на-Майне"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "frankfurt"
+   ],
+   "locale": "uz",
+   "name": "Frankfurt"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "frankfurt"
+   ],
+   "locale": "en",
+   "name": "Frankfurt am Main"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "frankfurt"
+   ],
+   "locale": "zh",
+   "name": "法兰克福"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "frankfurt"
+   ],
+   "locale": "tr",
+   "name": "Frankfurt"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "cologne"
+   ],
+   "locale": "ru",
+   "name": "Кёльн"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "cologne"
+   ],
+   "locale": "uz",
+   "name": "Kyoln"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "cologne"
+   ],
+   "locale": "en",
+   "name": "Cologne"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "cologne"
+   ],
+   "locale": "zh",
+   "name": "科隆"
+  },
+  {
+   "city_id": [
+    [
+     "de"
+    ],
+    "cologne"
+   ],
+   "locale": "tr",
+   "name": "Köln"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "kuala-lumpur"
+   ],
+   "locale": "ru",
+   "name": "Куала-Лумпур"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "kuala-lumpur"
+   ],
+   "locale": "uz",
+   "name": "Kuala-Lumpur"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "kuala-lumpur"
+   ],
+   "locale": "en",
+   "name": "Kuala Lumpur"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "kuala-lumpur"
+   ],
+   "locale": "zh",
+   "name": "吉隆坡"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "kuala-lumpur"
+   ],
+   "locale": "tr",
+   "name": "Kuala Lumpur"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "george-town"
+   ],
+   "locale": "ru",
+   "name": "Джорджтаун"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "george-town"
+   ],
+   "locale": "uz",
+   "name": "Jorjtaun"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "george-town"
+   ],
+   "locale": "en",
+   "name": "George Town"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "george-town"
+   ],
+   "locale": "zh",
+   "name": "乔治市"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "george-town"
+   ],
+   "locale": "tr",
+   "name": "George Town"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "johor-bahru"
+   ],
+   "locale": "ru",
+   "name": "Джохор-Бару"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "johor-bahru"
+   ],
+   "locale": "uz",
+   "name": "Johor-Bahru"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "johor-bahru"
+   ],
+   "locale": "en",
+   "name": "Johor Bahru"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "johor-bahru"
+   ],
+   "locale": "zh",
+   "name": "新山"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "johor-bahru"
+   ],
+   "locale": "tr",
+   "name": "Johor Bahru"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "shah-alam"
+   ],
+   "locale": "ru",
+   "name": "Шах-Алам"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "shah-alam"
+   ],
+   "locale": "uz",
+   "name": "Shoh-Alam"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "shah-alam"
+   ],
+   "locale": "en",
+   "name": "Shah Alam"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "shah-alam"
+   ],
+   "locale": "zh",
+   "name": "莎阿南"
+  },
+  {
+   "city_id": [
+    [
+     "my"
+    ],
+    "shah-alam"
+   ],
+   "locale": "tr",
+   "name": "Shah Alam"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "karachi"
+   ],
+   "locale": "ru",
+   "name": "Карачи"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "karachi"
+   ],
+   "locale": "uz",
+   "name": "Karachi"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "karachi"
+   ],
+   "locale": "en",
+   "name": "Karachi"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "karachi"
+   ],
+   "locale": "zh",
+   "name": "卡拉奇"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "karachi"
+   ],
+   "locale": "tr",
+   "name": "Karaçi"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "lahore"
+   ],
+   "locale": "ru",
+   "name": "Лахор"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "lahore"
+   ],
+   "locale": "uz",
+   "name": "Lohur"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "lahore"
+   ],
+   "locale": "en",
+   "name": "Lahore"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "lahore"
+   ],
+   "locale": "zh",
+   "name": "拉合尔"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "lahore"
+   ],
+   "locale": "tr",
+   "name": "Lahor"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "islamabad"
+   ],
+   "locale": "ru",
+   "name": "Исламабад"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "islamabad"
+   ],
+   "locale": "uz",
+   "name": "Islomobod"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "islamabad"
+   ],
+   "locale": "en",
+   "name": "Islamabad"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "islamabad"
+   ],
+   "locale": "zh",
+   "name": "伊斯兰堡"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "islamabad"
+   ],
+   "locale": "tr",
+   "name": "İslamabad"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "faisalabad"
+   ],
+   "locale": "ru",
+   "name": "Фейсалабад"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "faisalabad"
+   ],
+   "locale": "uz",
+   "name": "Faysalobod"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "faisalabad"
+   ],
+   "locale": "en",
+   "name": "Faisalabad"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "faisalabad"
+   ],
+   "locale": "zh",
+   "name": "费萨拉巴德"
+  },
+  {
+   "city_id": [
+    [
+     "pk"
+    ],
+    "faisalabad"
+   ],
+   "locale": "tr",
+   "name": "Faysalabad"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "hanoi"
+   ],
+   "locale": "ru",
+   "name": "Ханой"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "hanoi"
+   ],
+   "locale": "uz",
+   "name": "Xanoy"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "hanoi"
+   ],
+   "locale": "en",
+   "name": "Hanoi"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "hanoi"
+   ],
+   "locale": "zh",
+   "name": "河内"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "hanoi"
+   ],
+   "locale": "tr",
+   "name": "Hanoi"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "ho-chi-minh-city"
+   ],
+   "locale": "ru",
+   "name": "Хошимин"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "ho-chi-minh-city"
+   ],
+   "locale": "uz",
+   "name": "Xoshimin"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "ho-chi-minh-city"
+   ],
+   "locale": "en",
+   "name": "Ho Chi Minh City"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "ho-chi-minh-city"
+   ],
+   "locale": "zh",
+   "name": "胡志明市"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "ho-chi-minh-city"
+   ],
+   "locale": "tr",
+   "name": "Ho Chi Minh Kenti"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "haiphong"
+   ],
+   "locale": "ru",
+   "name": "Хайфон"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "haiphong"
+   ],
+   "locale": "uz",
+   "name": "Xayfon"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "haiphong"
+   ],
+   "locale": "en",
+   "name": "Haiphong"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "haiphong"
+   ],
+   "locale": "zh",
+   "name": "海防"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "haiphong"
+   ],
+   "locale": "tr",
+   "name": "Haiphong"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "da-nang"
+   ],
+   "locale": "ru",
+   "name": "Дананг"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "da-nang"
+   ],
+   "locale": "uz",
+   "name": "Danang"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "da-nang"
+   ],
+   "locale": "en",
+   "name": "Da Nang"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "da-nang"
+   ],
+   "locale": "zh",
+   "name": "岘港"
+  },
+  {
+   "city_id": [
+    [
+     "vn"
+    ],
+    "da-nang"
+   ],
+   "locale": "tr",
+   "name": "Da Nang"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "seoul"
+   ],
+   "locale": "ru",
+   "name": "Сеул"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "seoul"
+   ],
+   "locale": "uz",
+   "name": "Seul"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "seoul"
+   ],
+   "locale": "en",
+   "name": "Seoul"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "seoul"
+   ],
+   "locale": "zh",
+   "name": "首尔"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "seoul"
+   ],
+   "locale": "tr",
+   "name": "Seul"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "busan"
+   ],
+   "locale": "ru",
+   "name": "Пусан"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "busan"
+   ],
+   "locale": "uz",
+   "name": "Pusan"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "busan"
+   ],
+   "locale": "en",
+   "name": "Busan"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "busan"
+   ],
+   "locale": "zh",
+   "name": "釜山"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "busan"
+   ],
+   "locale": "tr",
+   "name": "Busan"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "incheon"
+   ],
+   "locale": "ru",
+   "name": "Инчхон"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "incheon"
+   ],
+   "locale": "uz",
+   "name": "Inchxon"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "incheon"
+   ],
+   "locale": "en",
+   "name": "Incheon"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "incheon"
+   ],
+   "locale": "zh",
+   "name": "仁川"
+  },
+  {
+   "city_id": [
+    [
+     "kr"
+    ],
+    "incheon"
+   ],
+   "locale": "tr",
+   "name": "İncheon"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "tokyo"
+   ],
+   "locale": "ru",
+   "name": "Токио"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "tokyo"
+   ],
+   "locale": "uz",
+   "name": "Tokio"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "tokyo"
+   ],
+   "locale": "en",
+   "name": "Tokyo"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "tokyo"
+   ],
+   "locale": "zh",
+   "name": "东京"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "tokyo"
+   ],
+   "locale": "tr",
+   "name": "Tokyo"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "osaka"
+   ],
+   "locale": "ru",
+   "name": "Осака"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "osaka"
+   ],
+   "locale": "uz",
+   "name": "Osaka"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "osaka"
+   ],
+   "locale": "en",
+   "name": "Osaka"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "osaka"
+   ],
+   "locale": "zh",
+   "name": "大阪"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "osaka"
+   ],
+   "locale": "tr",
+   "name": "Osaka"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "yokohama"
+   ],
+   "locale": "ru",
+   "name": "Иокогама"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "yokohama"
+   ],
+   "locale": "uz",
+   "name": "Yokogama"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "yokohama"
+   ],
+   "locale": "en",
+   "name": "Yokohama"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "yokohama"
+   ],
+   "locale": "zh",
+   "name": "横滨"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "yokohama"
+   ],
+   "locale": "tr",
+   "name": "Yokohama"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "nagoya"
+   ],
+   "locale": "ru",
+   "name": "Нагоя"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "nagoya"
+   ],
+   "locale": "uz",
+   "name": "Nagoya"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "nagoya"
+   ],
+   "locale": "en",
+   "name": "Nagoya"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "nagoya"
+   ],
+   "locale": "zh",
+   "name": "名古屋"
+  },
+  {
+   "city_id": [
+    [
+     "jp"
+    ],
+    "nagoya"
+   ],
+   "locale": "tr",
+   "name": "Nagoya"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "jakarta"
+   ],
+   "locale": "ru",
+   "name": "Джакарта"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "jakarta"
+   ],
+   "locale": "uz",
+   "name": "Jakarta"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "jakarta"
+   ],
+   "locale": "en",
+   "name": "Jakarta"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "jakarta"
+   ],
+   "locale": "zh",
+   "name": "雅加达"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "jakarta"
+   ],
+   "locale": "tr",
+   "name": "Cakarta"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "surabaya"
+   ],
+   "locale": "ru",
+   "name": "Сурабая"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "surabaya"
+   ],
+   "locale": "uz",
+   "name": "Surabaya"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "surabaya"
+   ],
+   "locale": "en",
+   "name": "Surabaya"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "surabaya"
+   ],
+   "locale": "zh",
+   "name": "泗水"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "surabaya"
+   ],
+   "locale": "tr",
+   "name": "Surabaya"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "medan"
+   ],
+   "locale": "ru",
+   "name": "Медан"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "medan"
+   ],
+   "locale": "uz",
+   "name": "Medan"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "medan"
+   ],
+   "locale": "en",
+   "name": "Medan"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "medan"
+   ],
+   "locale": "zh",
+   "name": "棉兰"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "medan"
+   ],
+   "locale": "tr",
+   "name": "Medan"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "bandung"
+   ],
+   "locale": "ru",
+   "name": "Бандунг"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "bandung"
+   ],
+   "locale": "uz",
+   "name": "Bandung"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "bandung"
+   ],
+   "locale": "en",
+   "name": "Bandung"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "bandung"
+   ],
+   "locale": "zh",
+   "name": "万隆"
+  },
+  {
+   "city_id": [
+    [
+     "id"
+    ],
+    "bandung"
+   ],
+   "locale": "tr",
+   "name": "Bandung"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "bangkok"
+   ],
+   "locale": "ru",
+   "name": "Бангкок"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "bangkok"
+   ],
+   "locale": "uz",
+   "name": "Bangkok"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "bangkok"
+   ],
+   "locale": "en",
+   "name": "Bangkok"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "bangkok"
+   ],
+   "locale": "zh",
+   "name": "曼谷"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "bangkok"
+   ],
+   "locale": "tr",
+   "name": "Bangkok"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "chiang-mai"
+   ],
+   "locale": "ru",
+   "name": "Чиангмай"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "chiang-mai"
+   ],
+   "locale": "uz",
+   "name": "Chiangmay"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "chiang-mai"
+   ],
+   "locale": "en",
+   "name": "Chiang Mai"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "chiang-mai"
+   ],
+   "locale": "zh",
+   "name": "清迈"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "chiang-mai"
+   ],
+   "locale": "tr",
+   "name": "Chiang Mai"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "pattaya"
+   ],
+   "locale": "ru",
+   "name": "Паттайя"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "pattaya"
+   ],
+   "locale": "uz",
+   "name": "Pattayya"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "pattaya"
+   ],
+   "locale": "en",
+   "name": "Pattaya"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "pattaya"
+   ],
+   "locale": "zh",
+   "name": "芭提雅"
+  },
+  {
+   "city_id": [
+    [
+     "th"
+    ],
+    "pattaya"
+   ],
+   "locale": "tr",
+   "name": "Pattaya"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "rome"
+   ],
+   "locale": "ru",
+   "name": "Рим"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "rome"
+   ],
+   "locale": "uz",
+   "name": "Rim"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "rome"
+   ],
+   "locale": "en",
+   "name": "Rome"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "rome"
+   ],
+   "locale": "zh",
+   "name": "罗马"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "rome"
+   ],
+   "locale": "tr",
+   "name": "Roma"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "milan"
+   ],
+   "locale": "ru",
+   "name": "Милан"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "milan"
+   ],
+   "locale": "uz",
+   "name": "Milan"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "milan"
+   ],
+   "locale": "en",
+   "name": "Milan"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "milan"
+   ],
+   "locale": "zh",
+   "name": "米兰"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "milan"
+   ],
+   "locale": "tr",
+   "name": "Milano"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "naples"
+   ],
+   "locale": "ru",
+   "name": "Неаполь"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "naples"
+   ],
+   "locale": "uz",
+   "name": "Neapol"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "naples"
+   ],
+   "locale": "en",
+   "name": "Naples"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "naples"
+   ],
+   "locale": "zh",
+   "name": "那不勒斯"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "naples"
+   ],
+   "locale": "tr",
+   "name": "Napoli"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "turin"
+   ],
+   "locale": "ru",
+   "name": "Турин"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "turin"
+   ],
+   "locale": "uz",
+   "name": "Turin"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "turin"
+   ],
+   "locale": "en",
+   "name": "Turin"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "turin"
+   ],
+   "locale": "zh",
+   "name": "都灵"
+  },
+  {
+   "city_id": [
+    [
+     "it"
+    ],
+    "turin"
+   ],
+   "locale": "tr",
+   "name": "Torino"
   }
  ],
  "plans": [

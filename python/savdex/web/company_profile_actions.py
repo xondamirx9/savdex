@@ -29,6 +29,7 @@ from savdex.web import eloquent
 from savdex.web import tin as tin_rules
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
+from savdex.web.city_choice import city_in_country, resolve_other
 from savdex.web.companies import has_domain
 from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.listing_actions import _stamp
@@ -251,6 +252,7 @@ def update(request: HttpRequest) -> HttpResponse:
             data[field] = company[field]
 
     normalize_tin(data, company)
+    resolve_other(data)
 
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
@@ -264,7 +266,7 @@ def update(request: HttpRequest) -> HttpResponse:
             _unique_tin(ctx.user["company_id"], _country_id(data, company)),
         ],
         "country_id": ["nullable", _exists("countries")],
-        "city_id": ["nullable", _exists("cities")],
+        "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],
         "address": ["nullable", "string", "max:255"],
         "description": ["nullable", "string", "max:5000"],
         "website": ["nullable", "string", "max:190", "url", Check("url", has_domain)],
@@ -285,6 +287,7 @@ def update(request: HttpRequest) -> HttpResponse:
             "name.required": ctx.t("messages.company.name_required"),
             "founded_year.between": ctx.t("messages.company.founded_between", year=year),
             "tin.unique": ctx.t("messages.company.tin_unique"),
+            "city_id.city_country": ctx.t("messages.company.city_country"),
         },
     )
 

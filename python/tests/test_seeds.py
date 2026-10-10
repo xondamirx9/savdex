@@ -67,7 +67,7 @@ def test_пустая_база_номер_в_номер(снимок_seeds, tmp_
     for table in seeds.TABLES:
         assert [r["id"] for r in база[table]] == list(range(1, len(снимок_seeds[table]) + 1)), table
 
-    assert "countries 33" in вывод and "settings" in вывод
+    assert "countries 47" in вывод and "settings" in вывод
     assert [r["code"] for r in база["countries"]][:2] == ["uz", "kz"]
 
     # Снимок с заведённой базы — тот же seeds.json: ничего не потеряно и не добавлено
