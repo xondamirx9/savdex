@@ -60,7 +60,22 @@ def _saving(listing: dict[str, Any]) -> dict[str, Any]:
     return {"search_text": _search_text(listing)}
 
 
+#: Тексты объявления с машинным переводом: сменился текст — перевод заново
+_TRANSLATED = ("title", "description", "delivery_terms", "payment_terms")
+
+
 def _save(ctx: Context, listing: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    # Перевод делается один раз: без сброса после правки посетитель на другом
+    # языке видел старый текст (М400 вместо М500). Пустой перевод фоновая
+    # задача (manage.py translate) заполнит заново — как у тендеров и резюме
+    for field in _TRANSLATED:
+        if (
+            field in changes
+            and str(changes[field] or "") != str(listing.get(field) or "")
+            and listing.get(f"{field}_i18n")
+        ):
+            changes[f"{field}_i18n"] = None
+
     return eloquent.save(
         ctx,
         "listings",

@@ -19,6 +19,7 @@ array_filter убирает несложившееся — его доберёт
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -170,6 +171,7 @@ def _fill(
     current: dict[str, Any],
     text: Any,  # noqa: ANN401
     when: bool = True,
+    extra: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """$map[$locale] ??= translate(text): по недостающим языкам, по порядку TARGETS."""
     result = dict(current)
@@ -177,7 +179,7 @@ def _fill(
     if not when:
         return result
 
-    for locale in TARGETS:
+    for locale in (*TARGETS, *extra):
         if result.get(locale) is None:
             result[locale] = translator.translate(str(text or ""), locale)
 
@@ -192,6 +194,17 @@ def _search_text(parts: list[Any]) -> str:
 # ── Задачи ───────────────────────────────────────────────────────────
 
 
+#: Кириллица в заголовке — объявление по-русски; иначе нужен перевод и на
+#: русский: китайская компания пишет по-китайски, а посетитель русской
+#: версии видел иероглифы (то же условие — в запросе добора, CATCHUP)
+_CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+
+
+def needs_russian(title: Any) -> bool:  # noqa: ANN401
+    """Заголовок не по-русски — переводим и на русский."""
+    return _CYRILLIC.search(str(title or "")) is None
+
+
 def translate_listing(listing_id: int, translator: Translator) -> None:
     """TranslateListing: заголовок и описание; save() — search_text заново."""
     columns = "title, description, title_i18n, description_i18n, search_text"
@@ -200,12 +213,14 @@ def translate_listing(listing_id: int, translator: Translator) -> None:
     if listing is None:
         return
 
-    titles = _fill(translator, _array(listing["title_i18n"]), listing["title"])
+    extra = ("ru",) if needs_russian(listing["title"]) else ()
+    titles = _fill(translator, _array(listing["title_i18n"]), listing["title"], extra=extra)
     descriptions = _fill(
         translator,
         _array(listing["description_i18n"]),
         listing["description"],
         _filled(listing["description"]),
+        extra=extra,
     )
     fresh = _row("listings", columns, listing_id, soft=True)
 
@@ -384,8 +399,13 @@ _LACKING = " or ".join(f"not coalesce(({{col}})::jsonb ? '{locale}', false)" for
 CATCHUP: dict[str, tuple[Callable[[int, Translator], None], str, int]] = {
     "listings": (
         translate_listing,
+        # Не хватает перевода заголовка или описания (после правки владельцем
+        # перевод стирается), а у объявления не по-русски — ещё и русского
         "select id from listings where status = 'active' and deleted_at is null and ("
         + _LACKING.format(col="title_i18n")
+        + " or (coalesce(description, '') <> '' and ("
+        + _LACKING.format(col="description_i18n")
+        + ")) or (title !~ '[А-Яа-яЁё]' and not coalesce((title_i18n)::jsonb ? 'ru', false))"
         + ") order by id limit %s",
         20,
     ),
