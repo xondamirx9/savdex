@@ -209,7 +209,7 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # таблица появилась после ухода Laravel, ведёт её только Django
         "company_cards",
         # Старые адреса компаний и объявлений — 301 на новые (миграция
-        # 2026_10_20_100000, savdex/reslug.py)
+        # 2026_10_21_100000, savdex/reslug.py)
         "slug_redirects",
     }
 )
