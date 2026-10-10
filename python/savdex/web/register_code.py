@@ -31,13 +31,17 @@ from savdex import laravel_cache
 from savdex.web import analytics, guard, inertia, mail
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
+    SESSION_COUNTRY,
     SESSION_EMAIL,
+    SESSION_SKIPPED,
     SESSION_VERIFIED,
     _guest,
     _php_string,
     _session,
     _to,
     _unique_email,
+    code_optional,
+    registration_email,
 )
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.shared import Context
@@ -125,6 +129,18 @@ def _mail_code(ctx: Context, email: str) -> bool:
 # ── Шаг 1 → 2: почта ────────────────────────────────────────────────
 
 
+def _country_id(raw: Any) -> int | None:  # noqa: ANN401
+    """Страна из списка регистрации (включённая) — номер, иначе None."""
+    from savdex.web.cabinet import _rows
+
+    try:
+        key = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+
+    return key if _rows("select 1 from countries where id = %s and is_active", [key]) else None
+
+
 def _email_errors(ctx: Context, email: str) -> dict[str, list[str]]:
     """
     RegisterRequest::emailRules, emailMessages и refineEmailError: «нет
@@ -172,6 +188,13 @@ def send_code(request: HttpRequest) -> HttpResponse:
     data["email"] = email
     errors = _email_errors(ctx, email)
 
+    # Страна — первой: от неё зависит, можно ли пропустить код (галочка
+    # «Регистрация без кода» в справочнике стран)
+    country = _country_id(data.get("country_id"))
+
+    if country is None:
+        errors["country_id"] = [ctx.t("messages.company.country_required")]
+
     if errors:
         return invalid(ctx, errors)
 
@@ -181,7 +204,9 @@ def send_code(request: HttpRequest) -> HttpResponse:
 
     store = _session(ctx)
     store.put(SESSION_EMAIL, email)
+    store.put(SESSION_COUNTRY, country)
     store.forget(SESSION_VERIFIED)
+    store.forget(SESSION_SKIPPED)
     analytics.queue(ctx, "sign_up_start", {"plan_param": analytics.intended_plan(ctx)})
 
     return _to(ctx, "/register/code")
@@ -219,6 +244,8 @@ def code_page(request: HttpRequest) -> HttpResponse:
             "status": _flash(ctx, "status"),
             # Только на демо-стенде без почты (_mail_code)
             "demoCode": _flash(ctx, "demo_code"),
+            # Страна с галочкой «Регистрация без кода» — «Продолжить без кода»
+            "canSkip": code_optional(_session(ctx).get(SESSION_COUNTRY)),
             # Китайский ящик (qq.com, 163.com…): письма идут дольше и чаще
             # в «Спам» — своя подсказка и адрес отправителя для белого списка
             "chinaMailbox": mail.is_chinese_mailbox(email),
@@ -294,6 +321,34 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     return back(ctx)
 
 
+@form()
+def skip_code(request: HttpRequest) -> HttpResponse:
+    """
+    «Продолжить без кода» — только для стран с галочкой «Регистрация без
+    кода»: к анкете без подтверждения. Учётка будет с пометкой «Не
+    подтверждено», пока человек не подтвердит почту кодом из кабинета.
+    """
+    ctx = action(
+        request, auth=False, throttle=10, throttle_minutes=10, throttle_prefix="register-skip"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    store = _session(ctx)
+    email = _email(ctx)
+
+    if email is None:
+        return _to(ctx, "/register")
+
+    if not code_optional(store.get(SESSION_COUNTRY)):
+        return _to(ctx, "/register/code")
+
+    store.put(SESSION_SKIPPED, email)
+
+    return _to(ctx, "/register/details")
+
+
 # ── Шаг 3: анкета ───────────────────────────────────────────────────
 
 
@@ -310,9 +365,9 @@ def details(request: HttpRequest) -> HttpResponse:
         return ctx
 
     store = _session(ctx)
-    verified = store.get(SESSION_VERIFIED)
+    verified, skipped = registration_email(store)
 
-    if not (isinstance(verified, str) and verified != "" and verified == store.get(SESSION_EMAIL)):
+    if verified is None:
         return _to(ctx, "/register/code" if store.get(SESSION_EMAIL) is not None else "/register")
 
     names = _named("categories", ctx.locale)
@@ -330,6 +385,9 @@ def details(request: HttpRequest) -> HttpResponse:
         "auth/Register",
         {
             "email": verified,
+            # Страна с первого шага; код пропущен — сменить её нельзя
+            "countryId": store.get(SESSION_COUNTRY),
+            "skipped": skipped,
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": categories,
             # Страна юрлица — до номера: по ней номер проверяется (ТЗ-02)

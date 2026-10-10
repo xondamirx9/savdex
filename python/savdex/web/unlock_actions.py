@@ -33,7 +33,7 @@ from savdex.web.chat_actions import _unverified
 from savdex.web.forms import action, back, flash, input_of
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.phpquery import php_int
-from savdex.web.shared import Context
+from savdex.web.shared import Context, email_ok
 from savdex.web.tenders import _admin
 from savdex.web.views import not_found
 
@@ -220,7 +220,8 @@ def _unlock(
         return False, ctx.t("messages.unlock.own_company")
 
     # Причина отказа называется точно
-    if user.get("email_verified_at") is None:
+    # Код пропущен при регистрации — открывать контакты можно
+    if not email_ok(user):
         return False, ctx.t("messages.unlock.verify_email")
 
     if user.get("must_change_password"):

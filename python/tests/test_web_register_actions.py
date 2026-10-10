@@ -142,6 +142,7 @@ def регистрация(
     лимит: bool = False,
     отключена: bool = True,
     подтверждена: bool = True,
+    без_кода: str | None = None,
 ) -> dict[str, Any]:
     sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
     sql("delete from companies where slug <> 'taken'")
@@ -179,6 +180,15 @@ def регистрация(
     if подтверждена and isinstance(body.get("email"), str):
         адрес_ = body["email"].strip().lower()
         данные["register"] = {"email": адрес_, "verified_email": адрес_}
+
+    # Код пропущен (страна с «Регистрация без кода»): страна — с первого шага
+    if без_кода is not None and isinstance(body.get("email"), str):
+        адрес_ = body["email"].strip().lower()
+        данные["register"] = {
+            "email": адрес_,
+            "skipped_email": адрес_,
+            "country_id": _страна(без_кода),
+        }
 
     завести(SID, данные)
 
@@ -558,3 +568,37 @@ def test_без_подтверждённой_почты_анкета_не_при
 
     assert итог["location"].endswith("/register") and итог["users"] == []
     assert "errors" not in _сессия(итог)
+
+
+def _без_кода(code: str = "cn") -> None:
+    sql("update countries set email_code_optional = (code = %s)", [code])
+
+
+def test_регистрация_без_кода(сайт):
+    """Китай: код пропущен — аккаунт есть, почта не подтверждена, компания «Не подтверждено»."""
+    _без_кода()
+    # Страна из формы не в счёт — та, что выбрана на первом шаге
+    body = {
+        **ЮРЛИЦО,
+        "country_id": _страна("uz"),
+        "tin": "91510107MA6XXXXXXX",
+        "categories": [_раздел("cement")],
+    }
+    итог = регистрация(сайт, body, без_кода="cn")
+
+    assert итог["status"] == 302 and итог["location"].endswith("/onboarding/company")
+    assert итог["users"][0][-2] is False  # email_verified_at пуст
+    assert sql(
+        "select u.email_code_skipped, k.email_unconfirmed, c.code from users u "
+        "join companies k on k.id = u.company_id join countries c on c.id = k.country_id "
+        "where u.email like '%%@reg.savdex.uz'"
+    ) == [(True, True, "cn")]
+    assert "skipped_email" not in итог["session"]["payload"]
+
+
+def test_без_кода_страна_без_галочки(сайт):
+    """Узбекистан без галочки: пропуск кода не принимается — назад к первому шагу."""
+    _без_кода()
+    итог = регистрация(сайт, ЮРЛИЦО, подтверждена=False, без_кода="uz")
+
+    assert итог["location"].endswith("/register") and итог["users"] == []

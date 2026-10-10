@@ -133,12 +133,26 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    # «Изменить почту» со второго шага — адрес уже в поле
+    from savdex.web.directory import listed_countries
+
+    # «Изменить почту» со второго шага — адрес и страна уже в полях
     store = _store(ctx)
     email = store.get("register.email") if store is not None else None
+    country_id = store.get("register.country_id") if store is not None else None
 
     return inertia.render(
-        ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx).title(ctx.t("auth.register_title"))
+        ctx,
+        "auth/RegisterEmail",
+        {
+            "email": email,
+            "countryId": country_id,
+            # Страна — первым полем: от неё зависит, можно ли пропустить код
+            "countries": [
+                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                for c in listed_countries(ctx.locale)
+            ],
+        },
+        _seo(ctx).title(ctx.t("auth.register_title")),
     )
 
 

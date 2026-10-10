@@ -325,7 +325,8 @@ def store(request: HttpRequest, slug: str) -> HttpResponse:
     """ReviewController::store (verified, throttle:20,60)."""
     ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="company-review")
 
-    if (refused := _unverified(ctx)) is not None:
+    # Отзыв — только с подтверждённой почтой, пропуск кода не в счёт
+    if (refused := _unverified(ctx, strict=True)) is not None:
         return refused
 
     targets = _rows(

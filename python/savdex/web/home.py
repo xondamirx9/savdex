@@ -144,7 +144,8 @@ _LISTING_COMPANY = (
     "c.city_id as c_city_id, c.country_id as c_country_id, "
     "c.type as c_type, c.legal_form as c_legal_form, c.phone as c_phone, c.email as c_email, "
     "c.tin as c_tin, c.address as c_address, c.description as c_description, "
-    "c.logo_path as c_logo_path, exists (select 1 from company_documents d where "
+    "c.logo_path as c_logo_path, c.email_unconfirmed as c_email_unconfirmed, "
+    "exists (select 1 from company_documents d where "
     "d.company_id = c.id and d.moderation_status = 'approved') as c_has_documents"
 )
 
@@ -279,6 +280,8 @@ class Cards:
                 "trust": completeness(company, bool(company["has_documents"])),
                 "response_hours": company["response_time_hours"],
                 "platform": False,
+                # Код из письма пропущен при регистрации — «Не подтверждено»
+                "unconfirmed": bool(company.get("email_unconfirmed")),
             },
             "badges": [b for b in badges if b],
             "promoted": promoted,

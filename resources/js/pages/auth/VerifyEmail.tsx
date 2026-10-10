@@ -22,6 +22,8 @@ import type { SharedProps } from '@/types';
  */
 export default function VerifyEmail({ email, status }: { email: string; status?: string }) {
     const { auth } = usePage<SharedProps>().props;
+    // Код пропущен при регистрации — письма ещё не было: сначала «Отправить код»
+    const skipped = Boolean(auth?.user?.email_skipped) && !status;
     const { post, processing } = useForm({});
     const logout = useForm({});
     const codeForm = useForm({ code: '' });
@@ -46,8 +48,9 @@ export default function VerifyEmail({ email, status }: { email: string; status?:
                 <div className="bg-primary-50 rounded-card flex gap-3.5 p-4">
                     <MailCheck aria-hidden className="text-primary-700 mt-0.5 size-6 shrink-0" />
                     <div className="text-sm leading-relaxed">
-                        {t('auth.verify_sent_to')}{' '}
-                        <b className="break-all">{email ?? auth?.user?.email}</b>. {t('auth.verify_enter_code')}
+                        {skipped ? t('auth.verify_skipped_intro') : t('auth.verify_sent_to')}{' '}
+                        <b className="break-all">{email ?? auth?.user?.email}</b>.{' '}
+                        {skipped ? t('auth.verify_skipped_send') : t('auth.verify_enter_code')}
                     </div>
                 </div>
 

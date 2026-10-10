@@ -356,8 +356,27 @@ _FREE_DEFAULT = {
 }
 
 
+#: Пока почта не подтверждена (код пропущен при регистрации) — не больше
+#: стольких активных объявлений, какой бы ни был тариф
+UNCONFIRMED_LISTINGS = 3
+
+
 def company_plan(company_id: int) -> dict[str, Any]:
-    """Company::plan: тариф действующей подписки, иначе Free."""
+    """
+    Company::plan: тариф действующей подписки, иначе Free. Компания
+    с меткой «Не подтверждено» — не больше UNCONFIRMED_LISTINGS объявлений.
+    """
+    plan = _plan_of(company_id)
+    unconfirmed = _rows("select 1 from companies where id = %s and email_unconfirmed", [company_id])
+    limit = plan.get("listings_limit")
+
+    if unconfirmed and (limit is None or limit > UNCONFIRMED_LISTINGS):
+        plan = {**plan, "listings_limit": UNCONFIRMED_LISTINGS, "unconfirmed_cap": True}
+
+    return plan
+
+
+def _plan_of(company_id: int) -> dict[str, Any]:
     subscription = active_subscription(company_id)
 
     if subscription is not None:
@@ -369,6 +388,16 @@ def company_plan(company_id: int) -> dict[str, Any]:
     rows = _rows("select * from plans where code = 'free' limit 1")
 
     return rows[0] if rows else dict(_FREE_DEFAULT)
+
+
+def listing_limit_message(ctx: Context, plan: dict[str, Any], hint: bool = True) -> str:
+    """«Достигнут лимит тарифа…» — или лимит до подтверждения почты."""
+    if plan.get("unconfirmed_cap"):
+        return ctx.t("messages.listing.limit_unconfirmed", limit=plan["listings_limit"])
+
+    message = ctx.t("messages.listing.limit", plan=plan["name"], limit=plan["listings_limit"])
+
+    return message + " " + ctx.t("messages.listing.limit_hint") if hint else message
 
 
 # ── Показатели (CabinetMetrics) ─────────────────────────────────────
@@ -2391,9 +2420,11 @@ def _require_verified(ctx: Context) -> HttpResponse | None:
     verified (EnsureEmailIsVerified): почта не подтверждена — на экран
     подтверждения, адрес страницы — в url.intended; XHR, ждущий JSON, — 403.
     """
+    from savdex.web.shared import email_ok
     from savdex.web.views import error
 
-    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+    # Код пропущен при регистрации — мастер открыт (объявление с меткой)
+    if ctx.user is None or email_ok(ctx.user):
         return None
 
     if _expects_json(ctx.request):

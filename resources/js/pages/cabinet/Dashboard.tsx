@@ -53,7 +53,8 @@ const TONE_CLASS: Record<string, string> = {
 
 export default function Dashboard({ company, metrics, series, events, limits, plan, expiring, drafts }: Props) {
     const { auth } = usePage<SharedProps>().props;
-    const verified = Boolean(auth?.user?.email_verified);
+    // Код пропущен при регистрации — публиковать можно (с меткой «Не подтверждено»)
+    const verified = Boolean(auth?.user?.email_verified || auth?.user?.email_skipped);
     const firstName = auth?.user?.name?.split(' ')[0] ?? '';
 
     if (!company) {

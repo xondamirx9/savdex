@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { CompanyReviews, type CompanyReview } from '@/components/CompanyReviews';
 import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { track, unlockState } from '@/lib/analytics';
@@ -100,6 +101,7 @@ export default function CompanyShow({
     review_blocked: reviewBlocked,
     criteria,
     listings_count: listingsCount,
+    unconfirmed = false,
 }: {
     company: BusinessCard;
     initials: string;
@@ -117,6 +119,8 @@ export default function CompanyShow({
     /** Контакты открыты: своя компания либо кредит уже списан */
     unlocked: boolean;
     is_own: boolean;
+    /** Регистрация без кода из письма — метка «Не подтверждено» */
+    unconfirmed?: boolean;
     /** Остаток покупателя. null для гостя и для своей же визитки */
     wallet: { contacts_left: number; credits: number } | null;
 }) {
@@ -186,6 +190,7 @@ export default function CompanyShow({
                                 {company.is_it_provider && (
                                     <span className="badge badge-supply">{t('company.it_provider')}</span>
                                 )}
+                                {unconfirmed && <UnconfirmedBadge />}
                             </div>
                             {company.is_it_provider && company.it_specializations.length > 0 && (
                                 <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>

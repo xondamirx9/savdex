@@ -371,3 +371,20 @@ def test_детали_товара(сайт):
         assert вес in rows.values() and цвет in rows.values()
         assert "spec_unknown" in rows and "spec_grade" not in rows
         assert "25 kg" not in props["listing"]["tags"]
+
+
+def test_метка_не_подтверждено(сайт):
+    """Код пропущен при регистрации — метка на странице и в похожих карточках."""
+    sql("update companies set email_unconfirmed = true where slug = 'stroy'")
+
+    try:
+        props = страница(показать(сайт, "/listing/cement")["body"])["props"]
+    finally:
+        sql("update companies set email_unconfirmed = false where slug = 'stroy'")
+
+    assert props["company"]["unconfirmed"] is True
+    stroy = sql(
+        "select id from listings where company_id = (select id from companies where slug = 'stroy')"
+    )
+    своих = {r[0] for r in stroy}
+    assert all(s["company"]["unconfirmed"] is (s["id"] in своих) for s in props["similar"])

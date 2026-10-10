@@ -19,6 +19,7 @@ import { Modal } from '@/components/Modal';
 import { formatNumber } from '@/components/cabinet';
 import { type Money, priceLabel, sellerPrice, sellerPriceLabel, shownPrice } from '@/components/ProductCard';
 import { Gallery } from '@/components/Gallery';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { unitLabel } from '@/lib/units';
@@ -109,6 +110,8 @@ export default function ListingShow({
         country: string | null;
         /** Заявка площадки: продавцом подписан SavdEx, контактов нет */
         platform?: boolean;
+        /** Регистрация без кода из письма — метка «Не подтверждено» */
+        unconfirmed?: boolean;
     };
     contacts: Contact[];
     unlocked: boolean;
@@ -177,6 +180,7 @@ export default function ListingShow({
                                     <span key={b} className="badge badge-top">{b}</span>
                                 ))}
                                 {listing.promoted && <span className="badge badge-promoted">{t('catalog.badge_promoted')}</span>}
+                                {company.unconfirmed && <UnconfirmedBadge />}
                             </div>
 
                             <h1 className="t-h1">{listing.title}</h1>
@@ -328,6 +332,12 @@ export default function ListingShow({
                             {company.platform && (
                                 <p className="t-sm muted" style={{ marginBottom: 12 }}>
                                     {t('catalog.platform_note')}
+                                </p>
+                            )}
+
+                            {company.unconfirmed && (
+                                <p className="t-sm" style={{ marginBottom: 12 }}>
+                                    <UnconfirmedBadge />
                                 </p>
                             )}
 

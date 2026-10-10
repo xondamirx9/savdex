@@ -634,3 +634,43 @@ def test_правка_сбрасывает_перевод(сайт, правка
     )
 
     assert (заголовки is None, описания is None) == сброшено
+
+
+# ── Код пропущен при регистрации («Не подтверждено») ────────────────
+
+
+@pytest.mark.parametrize(
+    ("активных", "куда"),
+    [(2, "/cabinet/listings/3/edit"), (3, "/cabinet/listings")],
+)
+def test_без_кода_не_больше_трёх(сайт, активных, куда):
+    # Почта не подтверждена, но код пропущен: мастер открыт, а объявлений —
+    # не больше трёх, какой бы ни был тариф
+    uid = владелец(verified=False)
+    sql("update users set email_code_skipped = true where id = %s", [uid])
+
+    def подготовка() -> None:
+        sql("update plans set listings_limit = null where code = 'free'")
+        sql("update companies set email_unconfirmed = true where id = %s", [_компания()])
+        объявления(*[("active", f"Цемент {n}") for n in range(активных)])()
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/create",
+            подготовка,
+            снимок,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            method="GET",
+            headers={},
+        )
+    finally:
+        sql("update companies set email_unconfirmed = false where id = %s", [_компания()])
+
+    assert итог["ответ"]["headers"]["location"] == сайт + куда
+
+    if куда == "/cabinet/listings":
+        assert сессия(итог)["error"].startswith(
+            "Пока почта не подтверждена, можно держать не больше 3 активных объявлений."
+        )

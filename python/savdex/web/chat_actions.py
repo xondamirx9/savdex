@@ -260,16 +260,21 @@ def _open_thread(
 # ── Посредник verified ───────────────────────────────────────────────
 
 
-def _unverified(ctx: Context) -> HttpResponse | None:
+def _unverified(ctx: Context, strict: bool = False) -> HttpResponse | None:
     """
     EnsureEmailIsVerified: ждущему JSON — 403 (страница ошибки: JSON
     Laravel отдаёт только для api/*), иначе Redirect::guest на
-    подтверждение почты.
+    подтверждение почты. Пропустившего код при регистрации пускает
+    (email_ok); strict — только подтвердившего почту (отзывы).
     """
     from savdex.web.forms import _store
+    from savdex.web.shared import email_ok
     from savdex.web.views import error
 
     if ctx.user is None or ctx.user["email_verified_at"] is not None:
+        return None
+
+    if not strict and email_ok(ctx.user):
         return None
 
     if _expects_json(ctx.request):

@@ -79,12 +79,24 @@ class Context:
             return None
 
         rows = _rows(
-            "select id, name, email, locale, email_verified_at, must_change_password, "
-            "is_admin, company_id from users where id = %s and deleted_at is null",
+            "select id, name, email, locale, email_verified_at, email_code_skipped, "
+            "must_change_password, is_admin, company_id from users "
+            "where id = %s and deleted_at is null",
             [self.visitor.user_id],
         )
 
         return rows[0] if rows else None
+
+
+def email_ok(user: dict[str, Any] | None) -> bool:
+    """
+    Почта подтверждена кодом — или код пропущен при регистрации (страна
+    с галочкой «Регистрация без кода»). Такому можно публиковать,
+    отвечать, платить и открывать контакты — с пометкой «Не подтверждено».
+    """
+    return user is not None and (
+        user.get("email_verified_at") is not None or bool(user.get("email_code_skipped"))
+    )
 
 
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
@@ -539,6 +551,9 @@ def shared(ctx: Context) -> dict[str, Any]:
                 "email": user["email"],
                 "locale": user["locale"],
                 "email_verified": user["email_verified_at"] is not None,
+                # Код из письма пропущен при регистрации («Не подтверждено»)
+                "email_skipped": bool(user.get("email_code_skipped"))
+                and user["email_verified_at"] is None,
                 "must_change_password": bool(user["must_change_password"]),
                 "is_admin": bool(user["is_admin"]),
             }
