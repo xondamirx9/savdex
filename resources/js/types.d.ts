@@ -6,6 +6,8 @@ export interface AuthUser {
     email: string;
     locale: string;
     email_verified: boolean;
+    /** Код из письма пропущен при регистрации: всё открыто, но с меткой «Не подтверждено» */
+    email_skipped?: boolean;
     must_change_password: boolean;
     is_admin: boolean;
 }

@@ -42,8 +42,12 @@ from savdex.text import numeric
 class CountryForm(forms.ModelForm):  # type: ignore[type-arg]
     class Meta:
         model = Country
-        fields = ("code", "phone_code", "currency_code", "sort", "is_active")
+        fields = ("code", "phone_code", "currency_code", "sort", "is_active", "email_code_optional")
         help_texts: ClassVar[dict[str, str]] = {
+            "email_code_optional": "Регистрация без кода из письма: человек из этой страны "
+            "может продолжить без подтверждения почты. Над его компанией, объявлениями и "
+            "тендерами — «Не подтверждено», пока он не подтвердит почту. Для стран, куда "
+            "письма не доходят (Китай)",
             "code": "Две буквы по ISO 3166-1: uz, kz, cn. Участвует в проверке ИНН",
             "phone_code": "Со знаком плюс: +998",
             "currency_code": "Три буквы по ISO 4217: UZS, KZT, USD",
@@ -100,6 +104,7 @@ class CountryAdmin(CatalogAdmin):
     inlines = (CountryTranslationsInline,)
     fieldsets = (
         ("Страна", {"fields": ("code", "phone_code", "currency_code", "sort", "is_active")}),
+        ("Регистрация", {"fields": ("email_code_optional",)}),
         ("Удаление", {"fields": ("held",)}),
     )
     list_display = (

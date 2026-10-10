@@ -189,11 +189,9 @@ def _active_count(company_id: int, exclude: list[int]) -> int:
 
 
 def _limit_message(ctx: Context, plan: dict[str, Any]) -> str:
-    return (
-        ctx.t("messages.listing.limit", plan=plan["name"], limit=plan["listings_limit"])
-        + " "
-        + ctx.t("messages.listing.limit_hint")
-    )
+    from savdex.web.cabinet import listing_limit_message
+
+    return listing_limit_message(ctx, plan)
 
 
 def _activate(ctx: Context, row: dict[str, Any], plan: dict[str, Any]) -> None:
@@ -408,7 +406,7 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
     limit = plan.get("listings_limit")
 
     if limit is not None and _active_count(row["company_id"], [row["id"]]) >= limit:
-        flash(ctx, "error", ctx.t("messages.listing.limit", plan=plan["name"], limit=limit))
+        flash(ctx, "error", _limit_message(ctx, plan))
         analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return back(ctx)

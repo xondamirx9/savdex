@@ -5,413 +5,472 @@
    "phone_code": "+998",
    "currency_code": "UZS",
    "sort": 0,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "kz",
    "phone_code": "+7",
    "currency_code": "KZT",
    "sort": 1,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "kg",
    "phone_code": "+996",
    "currency_code": "KGS",
    "sort": 2,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "tj",
    "phone_code": "+992",
    "currency_code": "TJS",
    "sort": 3,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "cn",
    "phone_code": "+86",
    "currency_code": "CNY",
    "sort": 4,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": true
   },
   {
    "code": "tr",
    "phone_code": "+90",
    "currency_code": "TRY",
    "sort": 5,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ru",
    "phone_code": "+7",
    "currency_code": "RUB",
    "sort": 6,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ae",
    "phone_code": "+971",
    "currency_code": "AED",
    "sort": 7,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "in",
    "phone_code": "+91",
    "currency_code": "INR",
    "sort": 8,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "sa",
    "phone_code": "+966",
    "currency_code": "SAR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "qa",
    "phone_code": "+974",
    "currency_code": "QAR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "kw",
    "phone_code": "+965",
    "currency_code": "KWD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "bh",
    "phone_code": "+973",
    "currency_code": "BHD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "om",
    "phone_code": "+968",
    "currency_code": "OMR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "iq",
    "phone_code": "+964",
    "currency_code": "IQD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "jo",
    "phone_code": "+962",
    "currency_code": "JOD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "lb",
    "phone_code": "+961",
    "currency_code": "LBP",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "il",
    "phone_code": "+972",
    "currency_code": "ILS",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "eg",
    "phone_code": "+20",
    "currency_code": "EGP",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "pl",
    "phone_code": "+48",
    "currency_code": "PLN",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "cz",
    "phone_code": "+420",
    "currency_code": "CZK",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "sk",
    "phone_code": "+421",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "hu",
    "phone_code": "+36",
    "currency_code": "HUF",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ro",
    "phone_code": "+40",
    "currency_code": "RON",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "bg",
    "phone_code": "+359",
    "currency_code": "BGN",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "rs",
    "phone_code": "+381",
    "currency_code": "RSD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "hr",
    "phone_code": "+385",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "si",
    "phone_code": "+386",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ua",
    "phone_code": "+380",
    "currency_code": "UAH",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "md",
    "phone_code": "+373",
    "currency_code": "MDL",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "lt",
    "phone_code": "+370",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "lv",
    "phone_code": "+371",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ee",
    "phone_code": "+372",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "az",
    "phone_code": "+994",
    "currency_code": "AZN",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ge",
    "phone_code": "+995",
    "currency_code": "GEL",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "am",
    "phone_code": "+374",
    "currency_code": "AMD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "tm",
    "phone_code": "+993",
    "currency_code": "TMT",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "by",
    "phone_code": "+375",
    "currency_code": "BYN",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "de",
    "phone_code": "+49",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "my",
    "phone_code": "+60",
    "currency_code": "MYR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "pk",
    "phone_code": "+92",
    "currency_code": "PKR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "vn",
    "phone_code": "+84",
    "currency_code": "VND",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "kr",
    "phone_code": "+82",
    "currency_code": "KRW",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "jp",
    "phone_code": "+81",
    "currency_code": "JPY",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "id",
    "phone_code": "+62",
    "currency_code": "IDR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "th",
    "phone_code": "+66",
    "currency_code": "THB",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "it",
    "phone_code": "+39",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "us",
    "phone_code": "+1",
    "currency_code": "USD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "gb",
    "phone_code": "+44",
    "currency_code": "GBP",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "fr",
    "phone_code": "+33",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "es",
    "phone_code": "+34",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "nl",
    "phone_code": "+31",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "be",
    "phone_code": "+32",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ch",
    "phone_code": "+41",
    "currency_code": "CHF",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "at",
    "phone_code": "+43",
    "currency_code": "EUR",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "se",
    "phone_code": "+46",
    "currency_code": "SEK",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "ca",
    "phone_code": "+1",
    "currency_code": "CAD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "au",
    "phone_code": "+61",
    "currency_code": "AUD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   },
   {
    "code": "sg",
    "phone_code": "+65",
    "currency_code": "SGD",
    "sort": 100,
-   "is_active": true
+   "is_active": true,
+   "email_code_optional": false
   }
  ],
  "country_translations": [

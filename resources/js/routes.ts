@@ -59,6 +59,7 @@ export const routes = {
     registerEmail: '/register/email',
     registerCode: '/register/code',
     registerCodeResend: '/register/code/resend',
+    registerCodeSkip: '/register/code/skip',
     registerDetails: '/register/details',
     passwordRequest: '/forgot-password',
     passwordForced: '/password/change',

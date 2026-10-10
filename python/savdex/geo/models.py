@@ -56,6 +56,7 @@ class Country(Catalog):
     currency_code = models.CharField("валюта", max_length=3)
     sort = models.PositiveSmallIntegerField("порядок", default=0)
     is_active = models.BooleanField("показывать при регистрации", default=True)
+    email_code_optional = models.BooleanField("регистрация без кода", default=False)
 
     class Meta:
         managed = False

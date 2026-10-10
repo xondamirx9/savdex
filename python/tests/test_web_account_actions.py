@@ -651,3 +651,26 @@ def test_ссылка_подтверждения(сайт, вариант, ит�
     assert куда(сайт, итог) == (status, location)
     assert сессия(итог).get("success") == success
     assert итог["база"]["users"][0][5] is (status == 302)
+
+
+def test_код_снимает_метку_не_подтверждено(сайт):
+    """Код пропущен при регистрации — подтверждение почты снимает «Не подтверждено»."""
+    from .factories import компания
+
+    def шаг() -> None:
+        _код()()
+        cid = компания(email_unconfirmed=True)
+        sql(
+            "update users set email_code_skipped = true, company_id = %s where email = %s",
+            [cid, ПОЧТА],
+        )
+
+    uid = пользователь()
+    итог = форма(сайт, "/verify-email/code", шаг, uid=uid, body={"code": "123456"})
+
+    assert куда(сайт, итог) == (302, "/cabinet")
+    assert sql(
+        "select u.email_code_skipped, c.email_unconfirmed from users u "
+        "join companies c on c.id = u.company_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(False, False)]

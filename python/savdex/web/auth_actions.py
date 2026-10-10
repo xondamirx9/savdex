@@ -328,9 +328,9 @@ def register(request: HttpRequest) -> HttpResponse:
         return refused
 
     store = _session(ctx)
-    verified = store.get(SESSION_VERIFIED)
+    verified, skipped = registration_email(store)
 
-    if not (isinstance(verified, str) and verified != "" and verified == store.get(SESSION_EMAIL)):
+    if verified is None:
         return _to(ctx, "/register")
 
     data = input_of(request)
@@ -388,6 +388,12 @@ def register(request: HttpRequest) -> HttpResponse:
     # (ТЗ-02). Раньше физлицо и фрилансер страну не выбирали и получали
     # узбекский ПИНФЛ — иностранный фрилансер не мог зарегистрироваться
     rules["country_id"] = ["required", _exists("countries")]
+
+    # Код пропущен — страна та, что на первом шаге: без кода пускают только
+    # страны с галочкой «Регистрация без кода», сменить её здесь нельзя
+    if skipped:
+        data["country_id"] = store.get(SESSION_COUNTRY)
+
     country = _country_code(data, None)
 
     if legal:
@@ -500,8 +506,10 @@ def register(request: HttpRequest) -> HttpResponse:
             "company_role": "owner",
             "updated_at": now,
             "created_at": now,
-            # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified)
-            "email_verified_at": now,
+            # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified);
+            # код пропущен — подтвердит позже, а пока «Не подтверждено»
+            "email_verified_at": None if skipped else now,
+            "email_code_skipped": skipped,
         }
 
         columns = list(row)
@@ -514,12 +522,20 @@ def register(request: HttpRequest) -> HttpResponse:
             )
             row["id"] = cursor.fetchone()[0]
 
+        if skipped:
+            with allowed_writes("companies"), connection.cursor() as cursor:
+                cursor.execute(
+                    "update companies set email_unconfirmed = true where id = %s", [company_id]
+                )
+
     if counted:
         throttle.hit(limit, 3600)
 
     user = _row(row["id"])
     store.forget(SESSION_EMAIL)
     store.forget(SESSION_VERIFIED)
+    store.forget(SESSION_SKIPPED)
+    store.forget(SESSION_COUNTRY)
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
@@ -543,6 +559,44 @@ MAX_REGISTRATIONS_PER_HOUR = 20
 #: RegisteredUserController::SESSION_EMAIL и SESSION_VERIFIED
 SESSION_EMAIL = "register.email"
 SESSION_VERIFIED = "register.verified_email"
+
+#: Страна с первого шага и адрес, для которого код пропущен (страна с
+#: галочкой «Регистрация без кода» — countries.email_code_optional)
+SESSION_COUNTRY = "register.country_id"
+SESSION_SKIPPED = "register.skipped_email"
+
+
+def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
+    """
+    Адрес, с которым открыта анкета (третий шаг), и пропущен ли код. Код
+    верный — (адрес, False); пропущен — (адрес, True); иначе (None, False).
+    """
+    email = store.get(SESSION_EMAIL)
+
+    if not (isinstance(email, str) and email != ""):
+        return None, False
+
+    if store.get(SESSION_VERIFIED) == email:
+        return email, False
+
+    if store.get(SESSION_SKIPPED) == email and code_optional(store.get(SESSION_COUNTRY)):
+        return email, True
+
+    return None, False
+
+
+def code_optional(country_id: Any) -> bool:  # noqa: ANN401
+    """Страна с галочкой «Регистрация без кода»."""
+    try:
+        key = int(str(country_id))
+    except (TypeError, ValueError):
+        return False
+
+    from savdex.web.cabinet import _rows
+
+    return bool(
+        _rows("select 1 from countries where id = %s and email_code_optional and is_active", [key])
+    )
 
 
 def _account_type(value: Any) -> str:  # noqa: ANN401

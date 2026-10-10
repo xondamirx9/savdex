@@ -1,18 +1,32 @@
 import { useForm } from '@inertiajs/react';
 import type { FormEvent } from 'react';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
+import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
 import { Link } from '@/components/ui/Link';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import type { CountryOption } from '@/lib/countries';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 
 /**
- * Регистрация, шаг 1 из 3: только почта.
- * «Продолжить» отправляет на адрес код и ведёт на второй шаг.
+ * Регистрация, шаг 1 из 3: страна и почта.
+ * «Продолжить» отправляет на адрес код и ведёт на второй шаг. Для стран
+ * с галочкой «Регистрация без кода» там можно продолжить без кода.
  */
-export default function RegisterEmail({ email }: { email?: string | null }) {
-    const { data, setData, post, processing, errors, clearErrors } = useForm({ email: email ?? '' });
+export default function RegisterEmail({
+    email,
+    countryId = null,
+    countries = [],
+}: {
+    email?: string | null;
+    countryId?: number | null;
+    countries?: CountryOption[];
+}) {
+    const { data, setData, post, processing, errors, clearErrors } = useForm<{
+        email: string;
+        country_id: number | null;
+    }>({ email: email ?? '', country_id: countryId });
 
     function submit(e: FormEvent) {
         e.preventDefault();
@@ -28,6 +42,17 @@ export default function RegisterEmail({ email }: { email?: string | null }) {
             <RegisterSteps current={1} />
 
             <form onSubmit={submit} className="space-y-5" noValidate>
+                <CountryField
+                    id="register-country"
+                    countries={countries}
+                    value={data.country_id}
+                    onChange={(id) => {
+                        setData('country_id', id);
+                        if (errors.country_id) clearErrors('country_id');
+                    }}
+                    error={errors.country_id}
+                />
+
                 <TextInput
                     label={t('auth.reg_email_label')}
                     type="email"
@@ -37,7 +62,6 @@ export default function RegisterEmail({ email }: { email?: string | null }) {
                     name="email"
                     autoComplete="email"
                     required
-                    autoFocus
                     placeholder={t('auth.email_placeholder')}
                     value={data.email}
                     onChange={(e) => {
@@ -48,7 +72,13 @@ export default function RegisterEmail({ email }: { email?: string | null }) {
                     hint={t('auth.reg_email_hint')}
                 />
 
-                <Button type="submit" size="lg" block loading={processing} disabled={data.email.trim() === ''}>
+                <Button
+                    type="submit"
+                    size="lg"
+                    block
+                    loading={processing}
+                    disabled={data.email.trim() === '' || data.country_id === null}
+                >
                     {t('auth.continue')}
                 </Button>
             </form>

@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { BadgeCheck, Building2, Clock, Heart, MapPin, Package, ShoppingCart, Star } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { formatNumber } from '@/components/cabinet';
 import { cn } from '@/lib/cn';
 import { formatDecimal, t } from '@/lib/i18n';
@@ -51,6 +52,8 @@ export interface ProductRow {
         response_hours: number | null;
         /** Заявка площадки: подписана SavdEx, а не служебной компанией */
         platform?: boolean;
+        /** Регистрация без кода из письма — метка «Не подтверждено» */
+        unconfirmed?: boolean;
     };
     badges: string[];
     promoted: boolean;
@@ -246,6 +249,12 @@ export function ProductCard({ row }: { row: ProductRow }) {
                         <li className="is-verified">
                             <BadgeCheck aria-hidden className="size-4" />
                             {t('catalog.verified_seller')}
+                        </li>
+                    )}
+
+                    {row.company.unconfirmed && (
+                        <li>
+                            <UnconfirmedBadge />
                         </li>
                     )}
 

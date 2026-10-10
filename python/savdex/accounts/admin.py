@@ -506,14 +506,19 @@ class UserAdmin(SavdexModelAdmin):
         раскрытие контактов — событие в ленте компании и уведомление человеку.
         """
         from savdex.moderation.services import notify_user
+        from savdex.web.account_actions import CONFIRM_SKIPPED
 
         stamp = timezone.now().replace(microsecond=0)
         naive = stamp.replace(tzinfo=None)
 
         with (
-            allowed_writes("users", "activity_events"),
+            allowed_writes("users", "activity_events", "companies"),
             connections["default"].cursor() as cursor,
         ):
+            # Метка «Не подтверждено» (код пропущен при регистрации) — прочь
+            for query in CONFIRM_SKIPPED:
+                cursor.execute(query, [user.pk])
+
             cursor.execute(
                 "update users set email_verified_at = %s, updated_at = %s where id = %s",
                 [naive, naive, user.pk],

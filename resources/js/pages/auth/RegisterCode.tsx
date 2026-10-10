@@ -18,6 +18,7 @@ export default function RegisterCode({
     demoCode,
     chinaMailbox = false,
     sender = '',
+    canSkip = false,
 }: {
     email: string;
     status?: string | null;
@@ -26,9 +27,12 @@ export default function RegisterCode({
     chinaMailbox?: boolean;
     /** Адрес отправителя — для белого списка почты */
     sender?: string;
+    /** Страна с галочкой «Регистрация без кода» — можно продолжить без кода */
+    canSkip?: boolean;
 }) {
     const form = useForm({ code: demoCode ?? '' });
     const resend = useForm({});
+    const skip = useForm({});
 
     function submit(e: FormEvent) {
         e.preventDefault();
@@ -38,6 +42,11 @@ export default function RegisterCode({
     function sendAgain(e: FormEvent) {
         e.preventDefault();
         resend.post(routes.registerCodeResend, { preserveScroll: true, onSuccess: () => form.reset() });
+    }
+
+    function skipCode(e: FormEvent) {
+        e.preventDefault();
+        skip.post(routes.registerCodeSkip);
     }
 
     return (
@@ -99,6 +108,17 @@ export default function RegisterCode({
                         {t('auth.reg_code_resend')}
                     </Button>
                 </form>
+
+                {/* Письмо не дошло (китайские ящики) — можно и без кода: учётка
+                    будет с пометкой «Не подтверждено», пока почту не подтвердят */}
+                {canSkip && (
+                    <form onSubmit={skipCode} className="space-y-2">
+                        <Button type="submit" variant="ghost" size="lg" block loading={skip.processing}>
+                            {t('auth.reg_code_skip')}
+                        </Button>
+                        <p className="text-muted text-center text-xs leading-relaxed">{t('auth.reg_code_skip_hint')}</p>
+                    </form>
+                )}
             </div>
         </AuthLayout>
     );

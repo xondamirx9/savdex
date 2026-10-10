@@ -532,6 +532,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 if company and company["country_id"]
                 else None,
                 "platform": False,
+                # Код из письма пропущен при регистрации — «Не подтверждено»
+                "unconfirmed": bool(company and company.get("email_unconfirmed")),
             },
             "contacts": contacts,
             "unlocked": unlocked,

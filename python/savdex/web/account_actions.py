@@ -333,8 +333,25 @@ def _mark_verified(ctx: Context, user: dict[str, Any]) -> bool:
         section="users",
         model="User",
     )
+    confirm_skipped(user["id"])
 
     return True
+
+
+#: Код пропущен при регистрации — почта подтверждена: метка «Не
+#: подтверждено» снимается с человека и его компании
+CONFIRM_SKIPPED = (
+    "update companies set email_unconfirmed = false where email_unconfirmed and id = "
+    "(select company_id from users where id = %s and email_code_skipped)",
+    "update users set email_code_skipped = false where id = %s and email_code_skipped",
+)
+
+
+def confirm_skipped(user_id: int) -> None:
+    """Снимает «Не подтверждено» — только подтверждение почты кодом (или админом)."""
+    with allowed_writes("companies", "users"), connection.cursor() as cursor:
+        for query in CONFIRM_SKIPPED:
+            cursor.execute(query, [user_id])
 
 
 @form()

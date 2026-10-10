@@ -582,6 +582,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
             "files": _files(ctx, c["id"]),
             "unlocked": unlocked,
             "is_own": viewer == c["id"],
+            # Код из письма пропущен при регистрации — «Не подтверждено»
+            "unconfirmed": bool(c.get("email_unconfirmed")),
             "reviews": _reviews(ctx, c["id"]),
             "review_blocked": review_blocked(ctx, c["id"]),
             "criteria": cabinet.review_criteria(ctx.locale),
