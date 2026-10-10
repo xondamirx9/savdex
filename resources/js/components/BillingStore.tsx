@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { TextInput } from '@/components/ui';
+import { track } from '@/lib/analytics';
 import { t } from '@/lib/i18n';
 
 export interface PlanOffer {
@@ -309,7 +310,10 @@ export function BillingStore({
                                         {p.orderable && (
                                             <button
                                                 className="btn btn-primary btn-sm"
-                                                onClick={() => order('plan', p.id)}
+                                                onClick={() => {
+                                                    track('plan_selected', { plan_code: p.code, source: 'cabinet' });
+                                                    order('plan', p.id);
+                                                }}
                                             >
                                                 {orderLabel}
                                             </button>

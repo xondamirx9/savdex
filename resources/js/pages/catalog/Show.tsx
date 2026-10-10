@@ -22,6 +22,7 @@ import { Gallery } from '@/components/Gallery';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { unitLabel } from '@/lib/units';
+import { track, unlockState } from '@/lib/analytics';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -370,11 +371,21 @@ export default function ListingShow({
                             {lockedCount > 0 && (
                                 <>
                                     {auth?.user ? (
-                                        <button className="btn btn-primary btn-block mt-16" onClick={() => setUnlockOpen(true)}>
+                                        <button
+                                            className="btn btn-primary btn-block mt-16"
+                                            onClick={() => {
+                                                track('contact_unlock_clicked', { state: unlockState(auth) });
+                                                setUnlockOpen(true);
+                                            }}
+                                        >
                                             <Lock aria-hidden className="size-4" /> {t('listing.show_contacts')}
                                         </button>
                                     ) : (
-                                        <Link href={routes.register} className="btn btn-primary btn-block mt-16">
+                                        <Link
+                                            href={routes.register}
+                                            className="btn btn-primary btn-block mt-16"
+                                            onClick={() => track('contact_unlock_clicked', { state: 'guest' })}
+                                        >
                                             <Lock aria-hidden className="size-4" /> {t('listing.show_contacts')}
                                         </Link>
                                     )}

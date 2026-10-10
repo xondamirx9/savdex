@@ -162,6 +162,46 @@ def confirm(
     return settle(ctx, payment, {"confirmed_by": admin["id"], "admin_note": note}, admin)
 
 
+def _record_payment(payment: dict[str, Any], admin: dict[str, Any] | None) -> None:
+    """
+    ТЗ-03: payment_succeeded (а для пакетов — ещё credits_purchased) в
+    product_events; в GA4 как purchase его отправит задача расписания.
+    """
+    from savdex import product_events
+
+    plans = (
+        _rows("select code from plans where id = %s", [payment["plan_id"]])
+        if payment.get("plan_id")
+        else []
+    )
+    props = {
+        "number": payment["number"],
+        "amount": payment["amount"],
+        "currency": payment.get("currency") or "UZS",
+        "purpose": payment["purpose"],
+        "provider": payment.get("provider"),
+        "by_admin": admin is not None,
+        "promo": payment.get("promo_code_id") is not None,
+    }
+    product_events.record(
+        "payment_succeeded",
+        company_id=payment["company_id"],
+        plan=plans[0]["code"] if plans else product_events.plan_code(payment["company_id"]),
+        props=props,
+    )
+
+    if payment["purpose"] == "credits":
+        packs = _rows(
+            "select credits from credit_packs where id = %s", [payment.get("credit_pack_id")]
+        )
+        product_events.record(
+            "credits_purchased",
+            company_id=payment["company_id"],
+            plan=product_events.plan_code(payment["company_id"]),
+            props={**props, "credits": int(packs[0]["credits"]) if packs else None},
+        )
+
+
 def settle(
     ctx: Context,
     payment: dict[str, Any],
@@ -203,6 +243,8 @@ def settle(
             _grant_plan(ctx, payment, company, admin)
         elif payment["purpose"] == "credits":
             _grant_credits(payment, company, admin)
+
+    _record_payment(payment, admin)
 
     _notify_company(
         ctx,

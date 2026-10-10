@@ -211,6 +211,9 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Старые адреса компаний и объявлений — 301 на новые (миграция
         # 2026_10_22_100000, savdex/reslug.py)
         "slug_redirects",
+        # События продукта для аналитики (ТЗ-03, миграция 2026_10_21_100000,
+        # savdex/product_events.py)
+        "product_events",
     }
 )
 

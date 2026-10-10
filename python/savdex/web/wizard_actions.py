@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import numbered_slug
-from savdex.web import eloquent, ui
+from savdex.web import analytics, eloquent, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.chat_actions import _unverified
@@ -115,6 +115,7 @@ def create(request: HttpRequest) -> HttpResponse:
             + " "
             + ctx.t("messages.listing.limit_hint"),
         )
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return redirect(ctx, ctx.url("/cabinet/listings"))
 
@@ -253,6 +254,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if limit is not None and _active(company["id"], listing["id"]) >= limit:
         flash(ctx, "error", ctx.t("messages.listing.limit", plan=plan["name"], limit=limit))
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return back(ctx)
 
@@ -292,6 +294,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         "success",
         "/cabinet/listings",
     )
+    analytics.listing_published(ctx, listing)
     flash(ctx, "success", ctx.t("messages.listing.published"))
 
     return redirect(ctx, ctx.url("/cabinet/listings"))

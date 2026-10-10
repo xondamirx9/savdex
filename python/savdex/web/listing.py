@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, platform, specs
+from savdex.web import analytics, content, inertia, platform, specs
 from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
@@ -368,6 +368,15 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     # Заявка площадки (PlatformListings): продавцом подписан SavdEx,
     # контактов служебной компании нет — отклик приходит в её кабинет
     own = platform.owns(row, platform.service_company_id())
+
+    if not preview and not owner:
+        analytics.queue(
+            ctx,
+            "listing_viewed",
+            {"listing_id": row["id"], "type": row["type"], "is_platform": own},
+            now=True,
+        )
+
     shown_city = (cities.get(row["city_id"]) if row["city_id"] else None) if own else city
 
     unlocked = (

@@ -169,6 +169,8 @@ def test_почта(сайт, email, уходит):
             "from_mail": True,
         }
         assert '"register":{"email":"aziz@reg.savdex.uz"}' in итог["сессия"]["payload"]
+        # ТЗ-03: событие GA4 ждёт следующую страницу — в сессии, без почты
+        assert '"name":"sign_up_start","params":{"plan_param":"free"}' in итог["сессия"]["payload"]
     else:
         assert итог["база"] == {"mail": [], "entry": None}
 

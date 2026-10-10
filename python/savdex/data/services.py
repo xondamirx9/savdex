@@ -63,6 +63,19 @@ def approve_listing(request: HttpRequest, listing: Listing) -> None:
     )
 
 
+def _rejected(listing: Listing, status: str) -> None:
+    """ТЗ-03: listing_rejected в product_events — без текста причины."""
+    from savdex import product_events
+
+    row = _row(listing)
+    product_events.record(
+        "listing_rejected",
+        company_id=row["company_id"],
+        plan=product_events.plan_code(row["company_id"]),
+        props={"listing_id": row["id"], "type": row["type"], "status": status},
+    )
+
+
 def return_listing(request: HttpRequest, listing: Listing, reason: str) -> None:
     """Вернуть на исправление: автор правит это же объявление и публикует снова."""
     _decide(
@@ -74,6 +87,7 @@ def return_listing(request: HttpRequest, listing: Listing, reason: str) -> None:
         "/cabinet/listings?status=needs_changes",
         reason,
     )
+    _rejected(listing, "needs_changes")
 
 
 def reject_listing(request: HttpRequest, listing: Listing, reason: str) -> None:
@@ -87,6 +101,7 @@ def reject_listing(request: HttpRequest, listing: Listing, reason: str) -> None:
         "/cabinet/listings?status=rejected",
         reason,
     )
+    _rejected(listing, "rejected")
 
 
 def add_photos(listing_id: int, files: list[UploadedFile[bytes]]) -> int:
