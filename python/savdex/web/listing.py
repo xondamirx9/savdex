@@ -136,12 +136,14 @@ def tags(listing: dict[str, Any], suggested: list[str]) -> list[str]:
 
 
 def _localized(row: dict[str, Any], field: str, locale: str) -> str | None:
-    """Listing::localized: перевод есть и не пустой — он, иначе оригинал."""
-    if locale != "ru":
-        value = (row[f"{field}_i18n"] or {}).get(locale)
+    """
+    Listing::localized: перевод есть и не пустой — он, иначе оригинал. Русский
+    перевод бывает у объявления не по-русски (translation_jobs.needs_russian).
+    """
+    value = (row[f"{field}_i18n"] or {}).get(locale)
 
-        if str(value or "").strip(_TRIM) != "":
-            return str(value)
+    if str(value or "").strip(_TRIM) != "":
+        return str(value)
 
     original = row[field]
 

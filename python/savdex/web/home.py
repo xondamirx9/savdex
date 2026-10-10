@@ -168,12 +168,11 @@ class Cards:
         self.service = platform.service_company_id()
 
     def _localized(self, listing: dict[str, Any], field: str) -> str | None:
-        """Listing::localized: перевод есть и не пустой — он, иначе оригинал."""
-        if self.locale != "ru":
-            value = (listing[f"{field}_i18n"] or {}).get(self.locale)
+        """Listing::localized: перевод есть и не пустой — он, иначе оригинал (и для ru)."""
+        value = (listing[f"{field}_i18n"] or {}).get(self.locale)
 
-            if str(value or "").strip() != "":
-                return str(value)
+        if str(value or "").strip() != "":
+            return str(value)
 
         original = listing[field]
 

@@ -597,3 +597,40 @@ def test_автосохранение(сайт, body, ожидание, admin):
     )
     # Администратору — строка журнала о правке черновика
     assert bool(база["journal"]) == admin
+
+
+@pytest.mark.parametrize(
+    ("правка", "сброшено"),
+    [
+        # Заголовок сменился — его перевод заново; описание то же — перевод остаётся
+        ({"title": "Цемент М500 в мешках по 50 кг"}, (True, False)),
+        ({"description": "Новое описание: доставка по всему Узбекистану."}, (False, True)),
+        # Ничего не поменялось — переводы на месте
+        ({"title": "Цемент"}, (False, False)),
+    ],
+)
+def test_правка_сбрасывает_перевод(сайт, правка, сброшено):
+    # Посетитель на другом языке не должен видеть старый текст после правки
+    def подготовка() -> None:
+        объявления(("draft", "Цемент"))()
+        sql(
+            "update listings set description = 'Описание', "
+            'title_i18n = \'{"en":"Cement"}\'::json, '
+            'description_i18n = \'{"en":"Description"}\'::json where id = 1'
+        )
+
+    отправить(
+        сайт,
+        "/cabinet/listings/1/autosave",
+        подготовка,
+        снимок,
+        uid=владелец(),
+        env=БЕЗ_ПЕРЕВОДА,
+        body=правка,
+        headers={"Accept": "application/json", "X-XSRF-TOKEN": inertia()["X-XSRF-TOKEN"]},
+    )
+    [(заголовки, описания)] = sql(
+        "select title_i18n::text, description_i18n::text from listings where id = 1"
+    )
+
+    assert (заголовки is None, описания is None) == сброшено

@@ -337,6 +337,25 @@ def test_цена_диапазоном(сайт):
     assert '"lowPrice":102000' in ответ["body"].replace(" ", "")
 
 
+def test_русский_перевод_объявления_не_по_русски(сайт):
+    """Заголовок по-китайски — на русской странице русский перевод, на китайской — оригинал."""
+    sql(
+        "update listings set title = '水泥', title_i18n = '{\"ru\":\"Цемент\"}'::json "
+        "where slug = 'cement'"
+    )
+
+    try:
+        ru = страница(показать(сайт, "/listing/cement")["body"])["props"]["listing"]
+        zh = страница(показать(сайт, "/zh/listing/cement")["body"])["props"]["listing"]
+    finally:
+        sql(
+            "update listings set title = 'Цемент М400 оптом для стройки', "
+            "title_i18n = '{\"en\":\"Cement M400 wholesale\"}'::json where slug = 'cement'"
+        )
+
+    assert (ru["title"], zh["title"]) == ("Цемент", "水泥")
+
+
 def test_детали_товара(сайт):
     """ProductSpecs: детали после полей раздела, на языке посетителя, без пустых."""
     for path, вес, цвет in (
