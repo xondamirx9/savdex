@@ -239,6 +239,16 @@ LEGAL_FORMS = {"legal": "Юрлицо", "individual": "Физлицо", "freelan
 #: CompaniesTable::LEVELS
 LEVELS = {0: "Не проверена", 1: "Контакты подтверждены", 2: "Проверена", 3: "Проверена+"}
 
+#: Статусы компании. «Скрыта» — тестовая или пустая карточка убрана с
+#: витрины (ТЗ-01, п.4): сайт показывает только active, а вход в кабинет
+#: закрывает только blocked
+COMPANY_HIDDEN = "hidden"
+COMPANY_STATUSES = {
+    "active": "Активна",
+    "blocked": "Заблокирована",
+    COMPANY_HIDDEN: "Скрыта с витрины",
+}
+
 #: Company::PARTNER_TIERS
 PARTNER_TIERS = {"general": "Генеральный партнёр", "partner": "Партнёр", "multi": "Мультипартнёр"}
 

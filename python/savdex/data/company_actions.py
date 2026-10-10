@@ -1,7 +1,7 @@
 """
 Решения по компании из админки — копия действий CompaniesTable: уровень
 проверки, партнёрство, логотип и обложка (ImageStore), блокировка,
-корзина; столбцы выгрузки — CompanyExporter.
+скрытие с витрины, корзина; столбцы выгрузки — CompanyExporter.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from savdex.adminsite import _admin_of
-from savdex.data.models import LEVELS, CompanyRecord
+from savdex.data.models import COMPANY_HIDDEN, LEVELS, CompanyRecord
 from savdex.guards import allowed_writes
 from savdex.moderation.services import context_of, notify_company
 from savdex.web import image_store
@@ -104,6 +104,21 @@ def block(company: CompanyRecord, reason: str) -> None:
 
 def unblock(company: CompanyRecord) -> None:
     _save(company, status="active", blocked_reason=None, blocked_at=None)
+
+
+def hide(company: CompanyRecord) -> None:
+    """
+    Скрыть с витрины — тестовую или пустую компанию (ТЗ-01, п.4). Витрина
+    показывает только status = 'active', поэтому компания и её объявления
+    пропадают из каталога, поиска и с главной. Объявления не трогаются, а
+    вход в кабинет не закрывается: это не блокировка, и вернуть всё можно
+    одной кнопкой.
+    """
+    _save(company, status=COMPANY_HIDDEN)
+
+
+def show(company: CompanyRecord) -> None:
+    _save(company, status="active")
 
 
 def restore(company: CompanyRecord) -> None:

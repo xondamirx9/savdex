@@ -322,6 +322,24 @@ def latest_products(cards: Cards, shown: list[int]) -> list[dict[str, Any]]:
     )
 
 
+#: Пока живых предложений меньше — «Запросы» на главной стоят выше «Товаров»:
+#: свежий посетитель видит наполненный раздел, а не три карточки (ТЗ-01, п.2.3)
+FEW_OFFERS = 20
+
+
+def offers_count(locale: str) -> int:
+    """Сколько предложений (supply) видно на витрине этого языка."""
+    visible, params = visible_in(locale)
+    rows = _rows(
+        "select count(*) as n from listings l join companies c on c.id = l.company_id "
+        "where l.status = 'active' and l.deleted_at is null and c.status = 'active' "
+        f"and c.deleted_at is null {visible} and l.type = 'supply'",
+        params,
+    )
+
+    return int(rows[0]["n"]) if rows else 0
+
+
 def latest_requests(cards: Cards) -> list[dict[str, Any]]:
     """PageController::latestRequests: запросы на закупку."""
     visible, params = visible_in(cards.locale)
@@ -560,7 +578,13 @@ def popular_services(locale: str) -> list[dict[str, Any]]:
 
 
 def top_suppliers(ctx: Context) -> list[dict[str, Any]]:
-    """PageController::topSuppliers: лучшие по проверке и рейтингу."""
+    """
+    Блок «Поставщики»: только компании, у которых есть что купить, —
+    хотя бы одно живое предложение. Карточки, заведённые площадкой из
+    открытых источников (source_note), сюда не попадают, пока владелец
+    не решил, как их показывать (ТЗ-01, п.4). Порядок: проверенные,
+    затем с логотипом, затем новые.
+    """
     options = type_options(ctx.locale)
     cities = _named("cities", ctx.locale)
 
@@ -581,7 +605,11 @@ def top_suppliers(ctx: Context) -> list[dict[str, Any]]:
             "select m.*, (select count(*) from listings l where l.company_id = m.id and "
             "l.status = 'active' and l.deleted_at is null) as listings_count from companies m "
             "where m.status = 'active' and m.deleted_at is null "
-            "order by m.verification_level desc, m.rating desc, m.id limit 4"
+            "and coalesce(m.source_note, '') = '' "
+            "and exists (select 1 from listings s where s.company_id = m.id "
+            "and s.type = 'supply' and s.status = 'active' and s.deleted_at is null) "
+            "order by m.verification_level desc, coalesce(m.logo_path, '') <> '' desc, "
+            "m.created_at desc nulls last, m.id desc limit 4"
         )
     ]
 
@@ -667,6 +695,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "latest": latest,
             "products": latest_products(cards, [row["id"] for row in latest]),
             "requests": latest_requests(cards),
+            "requestsFirst": offers_count(ctx.locale) < FEW_OFFERS,
             "suppliers": top_suppliers(ctx),
             "countries": [
                 {"code": c["code"], "name": c["name"]} for c in listed_countries(ctx.locale)
