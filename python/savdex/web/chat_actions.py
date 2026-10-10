@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any
 
 from django.db import connection, transaction
@@ -360,6 +361,7 @@ def send(request: HttpRequest, thread_id: str) -> HttpResponse:
     if first_reply:
         from savdex import product_events
 
+        # created_at и _now() — UTC без пояса, как пишет площадка
         started = thread.get("created_at")
         product_events.record(
             "response_replied",
@@ -370,8 +372,8 @@ def send(request: HttpRequest, thread_id: str) -> HttpResponse:
             props={
                 "thread_id": thread["id"],
                 "listing_id": thread.get("listing_id"),
-                "hours_to_reply": round((_stamp(_now()) - started).total_seconds() / 3600, 1)
-                if started is not None
+                "hours_to_reply": round((_now() - started).total_seconds() / 3600, 1)
+                if isinstance(started, datetime)
                 else None,
             },
         )

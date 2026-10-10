@@ -293,6 +293,23 @@ def test_сообщение_продавца(сайт):
     assert уведомление[0] == покупатель() and уведомление[1] == _компания("buyer")
 
 
+def test_первый_ответ_продавца_в_аналитике(сайт):
+    """ТЗ-03: первый ответ продавца — response_replied с часами до ответа; второй — нет."""
+    sql("delete from product_events")
+
+    for подготовка, текст in ((сброс(), "Доставляем"), (lambda: None, "И ещё вопрос")):
+        отправить(
+            сайт, "/cabinet/chats/1", подготовка, снимок, uid=продавец(), body={"body": текст}
+        )
+
+    [(компания, часы)] = sql(
+        "select company_id, (props->>'hours_to_reply')::float from product_events "
+        "where event = 'response_replied'"
+    )
+    # Отклик пришёл сутки назад; пояс сервера базы на точность часа не влияет
+    assert компания == _компания("seller") and часы is not None and часы > 0
+
+
 @pytest.mark.parametrize("path", ["/cabinet/chats/1", "/cabinet/chats/999"])
 def test_чужой_разговор_404(сайт, path):
     чужой = учётка(
