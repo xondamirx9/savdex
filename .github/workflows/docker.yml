@@ -103,7 +103,10 @@ jobs:
               .venv/bin/python manage.py schema | tee /tmp/schema.txt
               grep -q "Схема создана" /tmp/schema.txt
               .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt
-              grep -q "countries 33" /tmp/seed.txt
+              grep -q "countries 47" /tmp/seed.txt
+              # Адреса страниц латиницей (ТЗ-02) — на пустой базе трогать нечего
+              .venv/bin/python manage.py reslug | tee /tmp/reslug.txt
+              grep -q "компаний 0, объявлений 0" /tmp/reslug.txt
               # Повторный запуск (каждый деплой) ничего не ломает
               .venv/bin/python manage.py schema | tee /tmp/schema.txt
               grep -q "снимок не нужен" /tmp/schema.txt
