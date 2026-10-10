@@ -83,7 +83,6 @@ def office(values: dict[str, Any]) -> dict[str, Any] | None:
         "lat": lat,
         "lng": lng,
         "zoom": 16 if zoom == 0 else max(3, min(19, zoom)),
-        "hours": setting(values, "support_hours").strip(),
     }
 
 

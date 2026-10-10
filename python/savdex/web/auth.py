@@ -101,7 +101,12 @@ def login(request: HttpRequest) -> HttpResponse:
     ):
         store.put("url.intended", ctx.root + back_to)
 
-    return inertia.render(ctx, "auth/Login", {"status": _flash(ctx, "status")}, _seo(ctx))
+    return inertia.render(
+        ctx,
+        "auth/Login",
+        {"status": _flash(ctx, "status")},
+        _seo(ctx).title(ctx.t("auth.login_title")),
+    )
 
 
 def register(request: HttpRequest) -> HttpResponse:
@@ -132,7 +137,9 @@ def register(request: HttpRequest) -> HttpResponse:
     store = _store(ctx)
     email = store.get("register.email") if store is not None else None
 
-    return inertia.render(ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx))
+    return inertia.render(
+        ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx).title(ctx.t("auth.register_title"))
+    )
 
 
 def _whatsapp_configured() -> bool:

@@ -65,8 +65,7 @@ export interface WalletSummary {
 export interface SupportContacts {
     email: string;
     phone: string;
-    hours: string;
-    /** Полная ссылка вида https://t.me/savdex. */
+    /** Полная ссылка вида https://t.me/savdex_admin. */
     telegram: string;
     legal_name: string;
     legal_tin: string;
