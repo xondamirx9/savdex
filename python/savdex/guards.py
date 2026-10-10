@@ -208,6 +208,9 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Визитки компании для QR-кода (миграция 2026_10_17_100000):
         # таблица появилась после ухода Laravel, ведёт её только Django
         "company_cards",
+        # События продукта для аналитики (ТЗ-03, миграция 2026_10_21_100000,
+        # savdex/product_events.py)
+        "product_events",
     }
 )
 

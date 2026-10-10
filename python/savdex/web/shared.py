@@ -575,4 +575,27 @@ def shared(ctx: Context) -> dict[str, Any]:
         "translations": None if ctx.inertia else ui.translations(ctx.locale),
         "localeLinks": locale_links(ctx),
         "localeSuggest": suggest,
+        "analytics": _analytics(ctx, company),
     }
+
+
+def _analytics(ctx: Context, company: dict[str, Any] | None) -> dict[str, Any]:
+    """
+    GA4 (ТЗ-03): номер потока (пусто — тега нет), тариф для user_properties
+    и события, подтверждённые сервером (savdex/web/analytics.py).
+    """
+    from savdex.web import analytics
+
+    ga = analytics.measurement_id()
+
+    if not ga:
+        return {"id": "", "plan": None, "events": []}
+
+    plan = None
+
+    if company is not None:
+        from savdex.web.cabinet import company_plan
+
+        plan = company_plan(company["id"]).get("code")
+
+    return {"id": ga, "plan": plan, "events": analytics.events(ctx)}

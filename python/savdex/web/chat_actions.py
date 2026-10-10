@@ -28,7 +28,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import ui
+from savdex.web import analytics, platform, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.forms import action, back, flash, input_of, invalid, previous, redirect
@@ -176,7 +176,8 @@ def send_message(ctx: Context, thread: dict[str, Any], company: dict[str, Any], 
 
 def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
     """ChatService::spendResponse: условный update, а не проверка с записью."""
-    limit = company_plan(company["id"]).get("responses_limit")
+    plan = company_plan(company["id"])
+    limit = plan.get("responses_limit")
 
     if limit is None:
         return
@@ -208,6 +209,8 @@ def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
         spent = cursor.rowcount
 
     if spent != 1:
+        analytics.limit_reached(ctx, "replies", plan.get("code"))
+
         raise ChatRejectedError(ctx.t("messages.chat.replies_used_up", limit=limit))
 
 
@@ -341,11 +344,37 @@ def send(request: HttpRequest, thread_id: str) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
+    thread = found[0]
+    # Первый ответ продавца на отклик — до вставки, иначе он уже «не первый»
+    first_reply = company["id"] == thread["seller_company_id"] and not _rows(
+        "select 1 from messages where thread_id = %s and company_id = %s limit 1",
+        [thread["id"], company["id"]],
+    )
+
     try:
         with transaction.atomic():
-            send_message(ctx, found[0], company, data["body"])
+            send_message(ctx, thread, company, data["body"])
     except ChatRejectedError as e:
         return _rejected(ctx, str(e))
+
+    if first_reply:
+        from savdex import product_events
+
+        started = thread.get("created_at")
+        product_events.record(
+            "response_replied",
+            company_id=company["id"],
+            user_id=ctx.user["id"] if ctx.user else None,
+            plan=product_events.plan_code(company["id"]),
+            locale=ctx.locale,
+            props={
+                "thread_id": thread["id"],
+                "listing_id": thread.get("listing_id"),
+                "hours_to_reply": round((_stamp(_now()) - started).total_seconds() / 3600, 1)
+                if started is not None
+                else None,
+            },
+        )
 
     return back(ctx)
 
@@ -396,6 +425,14 @@ def respond(request: HttpRequest, listing_id: str) -> HttpResponse:
     except ChatRejectedError as e:
         return _rejected(ctx, str(e))
 
+    analytics.queue(
+        ctx,
+        "response_sent",
+        {
+            "listing_id": listing["id"],
+            "is_platform_listing": platform.owns(listing, platform.service_company_id()),
+        },
+    )
     flash(ctx, "success", ctx.t("messages.chat.reply_sent"))
 
     return redirect(ctx, ctx.url(f"/cabinet/chats/{thread['id']}"))

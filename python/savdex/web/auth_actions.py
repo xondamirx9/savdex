@@ -27,7 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, locales, throttle
+from savdex.web import analytics, eloquent, guard, locales, throttle
 from savdex.web.actions import form
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -503,6 +503,7 @@ def register(request: HttpRequest) -> HttpResponse:
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
+    analytics.queue(ctx, "sign_up_completed", {"legal_form": kind})
 
     # Второй шаг — данные компании — только у юрлица; остальным —
     # туда, куда шли (оплата тарифа), иначе в кабинет
