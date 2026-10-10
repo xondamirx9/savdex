@@ -328,6 +328,90 @@
    "currency_code": "EUR",
    "sort": 100,
    "is_active": true
+  },
+  {
+   "code": "us",
+   "phone_code": "+1",
+   "currency_code": "USD",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "gb",
+   "phone_code": "+44",
+   "currency_code": "GBP",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "fr",
+   "phone_code": "+33",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "es",
+   "phone_code": "+34",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "nl",
+   "phone_code": "+31",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "be",
+   "phone_code": "+32",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "ch",
+   "phone_code": "+41",
+   "currency_code": "CHF",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "at",
+   "phone_code": "+43",
+   "currency_code": "EUR",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "se",
+   "phone_code": "+46",
+   "currency_code": "SEK",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "ca",
+   "phone_code": "+1",
+   "currency_code": "CAD",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "au",
+   "phone_code": "+61",
+   "currency_code": "AUD",
+   "sort": 100,
+   "is_active": true
+  },
+  {
+   "code": "sg",
+   "phone_code": "+65",
+   "currency_code": "SGD",
+   "sort": 100,
+   "is_active": true
   }
  ],
  "country_translations": [
@@ -1975,6 +2059,426 @@
    ],
    "locale": "tr",
    "name": "İtalya"
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "locale": "ru",
+   "name": "США"
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "locale": "uz",
+   "name": "AQSh"
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "locale": "en",
+   "name": "United States"
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "locale": "zh",
+   "name": "美国"
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "locale": "tr",
+   "name": "ABD"
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "locale": "ru",
+   "name": "Великобритания"
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "locale": "uz",
+   "name": "Buyuk Britaniya"
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "locale": "en",
+   "name": "United Kingdom"
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "locale": "zh",
+   "name": "英国"
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "locale": "tr",
+   "name": "Birleşik Krallık"
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "locale": "ru",
+   "name": "Франция"
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "locale": "uz",
+   "name": "Fransiya"
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "locale": "en",
+   "name": "France"
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "locale": "zh",
+   "name": "法国"
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "locale": "tr",
+   "name": "Fransa"
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "locale": "ru",
+   "name": "Испания"
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "locale": "uz",
+   "name": "Ispaniya"
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "locale": "en",
+   "name": "Spain"
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "locale": "zh",
+   "name": "西班牙"
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "locale": "tr",
+   "name": "İspanya"
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "locale": "ru",
+   "name": "Нидерланды"
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "locale": "uz",
+   "name": "Niderlandiya"
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "locale": "en",
+   "name": "Netherlands"
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "locale": "zh",
+   "name": "荷兰"
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "locale": "tr",
+   "name": "Hollanda"
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "locale": "ru",
+   "name": "Бельгия"
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "locale": "uz",
+   "name": "Belgiya"
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "locale": "en",
+   "name": "Belgium"
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "locale": "zh",
+   "name": "比利时"
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "locale": "tr",
+   "name": "Belçika"
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "locale": "ru",
+   "name": "Швейцария"
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "locale": "uz",
+   "name": "Shveytsariya"
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "locale": "en",
+   "name": "Switzerland"
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "locale": "zh",
+   "name": "瑞士"
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "locale": "tr",
+   "name": "İsviçre"
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "locale": "ru",
+   "name": "Австрия"
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "locale": "uz",
+   "name": "Avstriya"
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "locale": "en",
+   "name": "Austria"
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "locale": "zh",
+   "name": "奥地利"
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "locale": "tr",
+   "name": "Avusturya"
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "locale": "ru",
+   "name": "Швеция"
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "locale": "uz",
+   "name": "Shvetsiya"
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "locale": "en",
+   "name": "Sweden"
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "locale": "zh",
+   "name": "瑞典"
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "locale": "tr",
+   "name": "İsveç"
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "locale": "ru",
+   "name": "Канада"
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "locale": "uz",
+   "name": "Kanada"
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "locale": "en",
+   "name": "Canada"
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "locale": "zh",
+   "name": "加拿大"
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "locale": "tr",
+   "name": "Kanada"
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "locale": "ru",
+   "name": "Австралия"
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "locale": "uz",
+   "name": "Avstraliya"
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "locale": "en",
+   "name": "Australia"
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "locale": "zh",
+   "name": "澳大利亚"
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "locale": "tr",
+   "name": "Avustralya"
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "locale": "ru",
+   "name": "Сингапур"
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "locale": "uz",
+   "name": "Singapur"
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "locale": "en",
+   "name": "Singapore"
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "locale": "zh",
+   "name": "新加坡"
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "locale": "tr",
+   "name": "Singapur"
   }
  ],
  "cities": [
@@ -5816,6 +6320,296 @@
    "lat": "45.0703000",
    "lng": "7.6869000",
    "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "slug": "new-york",
+   "lat": "40.7128000",
+   "lng": "-74.0060000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "slug": "los-angeles",
+   "lat": "34.0522000",
+   "lng": "-118.2437000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "slug": "chicago",
+   "lat": "41.8781000",
+   "lng": "-87.6298000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "slug": "houston",
+   "lat": "29.7604000",
+   "lng": "-95.3698000",
+   "sort": 3,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "us"
+   ],
+   "slug": "miami",
+   "lat": "25.7617000",
+   "lng": "-80.1918000",
+   "sort": 4,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "slug": "london",
+   "lat": "51.5074000",
+   "lng": "-0.1278000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "slug": "manchester",
+   "lat": "53.4808000",
+   "lng": "-2.2426000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "gb"
+   ],
+   "slug": "birmingham",
+   "lat": "52.4862000",
+   "lng": "-1.8904000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "slug": "paris",
+   "lat": "48.8566000",
+   "lng": "2.3522000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "slug": "marseille",
+   "lat": "43.2965000",
+   "lng": "5.3698000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "fr"
+   ],
+   "slug": "lyon",
+   "lat": "45.7640000",
+   "lng": "4.8357000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "slug": "madrid",
+   "lat": "40.4168000",
+   "lng": "-3.7038000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "slug": "barcelona",
+   "lat": "41.3874000",
+   "lng": "2.1686000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "es"
+   ],
+   "slug": "valencia",
+   "lat": "39.4699000",
+   "lng": "-0.3763000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "slug": "amsterdam",
+   "lat": "52.3676000",
+   "lng": "4.9041000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "nl"
+   ],
+   "slug": "rotterdam",
+   "lat": "51.9244000",
+   "lng": "4.4777000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "slug": "brussels",
+   "lat": "50.8503000",
+   "lng": "4.3517000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "be"
+   ],
+   "slug": "antwerp",
+   "lat": "51.2194000",
+   "lng": "4.4025000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "slug": "zurich",
+   "lat": "47.3769000",
+   "lng": "8.5417000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ch"
+   ],
+   "slug": "geneva",
+   "lat": "46.2044000",
+   "lng": "6.1432000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "at"
+   ],
+   "slug": "vienna",
+   "lat": "48.2082000",
+   "lng": "16.3738000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "slug": "stockholm",
+   "lat": "59.3293000",
+   "lng": "18.0686000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "se"
+   ],
+   "slug": "gothenburg",
+   "lat": "57.7089000",
+   "lng": "11.9746000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "slug": "toronto",
+   "lat": "43.6532000",
+   "lng": "-79.3832000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "slug": "montreal",
+   "lat": "45.5019000",
+   "lng": "-73.5674000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "ca"
+   ],
+   "slug": "vancouver",
+   "lat": "49.2827000",
+   "lng": "-123.1207000",
+   "sort": 2,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "slug": "sydney",
+   "lat": "-33.8688000",
+   "lng": "151.2093000",
+   "sort": 0,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "au"
+   ],
+   "slug": "melbourne",
+   "lat": "-37.8136000",
+   "lng": "144.9631000",
+   "sort": 1,
+   "is_active": true
+  },
+  {
+   "country_id": [
+    "sg"
+   ],
+   "slug": "singapore",
+   "lat": "1.3521000",
+   "lng": "103.8198000",
+   "sort": 0,
    "is_active": true
   }
  ],
@@ -25019,6 +25813,1456 @@
    ],
    "locale": "tr",
    "name": "Torino"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "new-york"
+   ],
+   "locale": "ru",
+   "name": "Нью-Йорк"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "new-york"
+   ],
+   "locale": "uz",
+   "name": "Nyu-York"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "new-york"
+   ],
+   "locale": "en",
+   "name": "New York"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "new-york"
+   ],
+   "locale": "zh",
+   "name": "纽约"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "new-york"
+   ],
+   "locale": "tr",
+   "name": "New York"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "los-angeles"
+   ],
+   "locale": "ru",
+   "name": "Лос-Анджелес"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "los-angeles"
+   ],
+   "locale": "uz",
+   "name": "Los-Anjeles"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "los-angeles"
+   ],
+   "locale": "en",
+   "name": "Los Angeles"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "los-angeles"
+   ],
+   "locale": "zh",
+   "name": "洛杉矶"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "los-angeles"
+   ],
+   "locale": "tr",
+   "name": "Los Angeles"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "chicago"
+   ],
+   "locale": "ru",
+   "name": "Чикаго"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "chicago"
+   ],
+   "locale": "uz",
+   "name": "Chikago"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "chicago"
+   ],
+   "locale": "en",
+   "name": "Chicago"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "chicago"
+   ],
+   "locale": "zh",
+   "name": "芝加哥"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "chicago"
+   ],
+   "locale": "tr",
+   "name": "Şikago"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "houston"
+   ],
+   "locale": "ru",
+   "name": "Хьюстон"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "houston"
+   ],
+   "locale": "uz",
+   "name": "Xyuston"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "houston"
+   ],
+   "locale": "en",
+   "name": "Houston"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "houston"
+   ],
+   "locale": "zh",
+   "name": "休斯敦"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "houston"
+   ],
+   "locale": "tr",
+   "name": "Houston"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "miami"
+   ],
+   "locale": "ru",
+   "name": "Майами"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "miami"
+   ],
+   "locale": "uz",
+   "name": "Mayami"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "miami"
+   ],
+   "locale": "en",
+   "name": "Miami"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "miami"
+   ],
+   "locale": "zh",
+   "name": "迈阿密"
+  },
+  {
+   "city_id": [
+    [
+     "us"
+    ],
+    "miami"
+   ],
+   "locale": "tr",
+   "name": "Miami"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "london"
+   ],
+   "locale": "ru",
+   "name": "Лондон"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "london"
+   ],
+   "locale": "uz",
+   "name": "London"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "london"
+   ],
+   "locale": "en",
+   "name": "London"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "london"
+   ],
+   "locale": "zh",
+   "name": "伦敦"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "london"
+   ],
+   "locale": "tr",
+   "name": "Londra"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "manchester"
+   ],
+   "locale": "ru",
+   "name": "Манчестер"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "manchester"
+   ],
+   "locale": "uz",
+   "name": "Manchester"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "manchester"
+   ],
+   "locale": "en",
+   "name": "Manchester"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "manchester"
+   ],
+   "locale": "zh",
+   "name": "曼彻斯特"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "manchester"
+   ],
+   "locale": "tr",
+   "name": "Manchester"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "birmingham"
+   ],
+   "locale": "ru",
+   "name": "Бирмингем"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "birmingham"
+   ],
+   "locale": "uz",
+   "name": "Birmingem"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "birmingham"
+   ],
+   "locale": "en",
+   "name": "Birmingham"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "birmingham"
+   ],
+   "locale": "zh",
+   "name": "伯明翰"
+  },
+  {
+   "city_id": [
+    [
+     "gb"
+    ],
+    "birmingham"
+   ],
+   "locale": "tr",
+   "name": "Birmingham"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "paris"
+   ],
+   "locale": "ru",
+   "name": "Париж"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "paris"
+   ],
+   "locale": "uz",
+   "name": "Parij"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "paris"
+   ],
+   "locale": "en",
+   "name": "Paris"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "paris"
+   ],
+   "locale": "zh",
+   "name": "巴黎"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "paris"
+   ],
+   "locale": "tr",
+   "name": "Paris"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "marseille"
+   ],
+   "locale": "ru",
+   "name": "Марсель"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "marseille"
+   ],
+   "locale": "uz",
+   "name": "Marsel"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "marseille"
+   ],
+   "locale": "en",
+   "name": "Marseille"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "marseille"
+   ],
+   "locale": "zh",
+   "name": "马赛"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "marseille"
+   ],
+   "locale": "tr",
+   "name": "Marsilya"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "lyon"
+   ],
+   "locale": "ru",
+   "name": "Лион"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "lyon"
+   ],
+   "locale": "uz",
+   "name": "Lion"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "lyon"
+   ],
+   "locale": "en",
+   "name": "Lyon"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "lyon"
+   ],
+   "locale": "zh",
+   "name": "里昂"
+  },
+  {
+   "city_id": [
+    [
+     "fr"
+    ],
+    "lyon"
+   ],
+   "locale": "tr",
+   "name": "Lyon"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "madrid"
+   ],
+   "locale": "ru",
+   "name": "Мадрид"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "madrid"
+   ],
+   "locale": "uz",
+   "name": "Madrid"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "madrid"
+   ],
+   "locale": "en",
+   "name": "Madrid"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "madrid"
+   ],
+   "locale": "zh",
+   "name": "马德里"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "madrid"
+   ],
+   "locale": "tr",
+   "name": "Madrid"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "barcelona"
+   ],
+   "locale": "ru",
+   "name": "Барселона"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "barcelona"
+   ],
+   "locale": "uz",
+   "name": "Barselona"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "barcelona"
+   ],
+   "locale": "en",
+   "name": "Barcelona"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "barcelona"
+   ],
+   "locale": "zh",
+   "name": "巴塞罗那"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "barcelona"
+   ],
+   "locale": "tr",
+   "name": "Barselona"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "valencia"
+   ],
+   "locale": "ru",
+   "name": "Валенсия"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "valencia"
+   ],
+   "locale": "uz",
+   "name": "Valensiya"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "valencia"
+   ],
+   "locale": "en",
+   "name": "Valencia"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "valencia"
+   ],
+   "locale": "zh",
+   "name": "瓦伦西亚"
+  },
+  {
+   "city_id": [
+    [
+     "es"
+    ],
+    "valencia"
+   ],
+   "locale": "tr",
+   "name": "Valensiya"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "amsterdam"
+   ],
+   "locale": "ru",
+   "name": "Амстердам"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "amsterdam"
+   ],
+   "locale": "uz",
+   "name": "Amsterdam"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "amsterdam"
+   ],
+   "locale": "en",
+   "name": "Amsterdam"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "amsterdam"
+   ],
+   "locale": "zh",
+   "name": "阿姆斯特丹"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "amsterdam"
+   ],
+   "locale": "tr",
+   "name": "Amsterdam"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "rotterdam"
+   ],
+   "locale": "ru",
+   "name": "Роттердам"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "rotterdam"
+   ],
+   "locale": "uz",
+   "name": "Rotterdam"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "rotterdam"
+   ],
+   "locale": "en",
+   "name": "Rotterdam"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "rotterdam"
+   ],
+   "locale": "zh",
+   "name": "鹿特丹"
+  },
+  {
+   "city_id": [
+    [
+     "nl"
+    ],
+    "rotterdam"
+   ],
+   "locale": "tr",
+   "name": "Rotterdam"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "brussels"
+   ],
+   "locale": "ru",
+   "name": "Брюссель"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "brussels"
+   ],
+   "locale": "uz",
+   "name": "Bryussel"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "brussels"
+   ],
+   "locale": "en",
+   "name": "Brussels"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "brussels"
+   ],
+   "locale": "zh",
+   "name": "布鲁塞尔"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "brussels"
+   ],
+   "locale": "tr",
+   "name": "Brüksel"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "antwerp"
+   ],
+   "locale": "ru",
+   "name": "Антверпен"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "antwerp"
+   ],
+   "locale": "uz",
+   "name": "Antverpen"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "antwerp"
+   ],
+   "locale": "en",
+   "name": "Antwerp"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "antwerp"
+   ],
+   "locale": "zh",
+   "name": "安特卫普"
+  },
+  {
+   "city_id": [
+    [
+     "be"
+    ],
+    "antwerp"
+   ],
+   "locale": "tr",
+   "name": "Anvers"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "zurich"
+   ],
+   "locale": "ru",
+   "name": "Цюрих"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "zurich"
+   ],
+   "locale": "uz",
+   "name": "Syurix"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "zurich"
+   ],
+   "locale": "en",
+   "name": "Zurich"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "zurich"
+   ],
+   "locale": "zh",
+   "name": "苏黎世"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "zurich"
+   ],
+   "locale": "tr",
+   "name": "Zürih"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "geneva"
+   ],
+   "locale": "ru",
+   "name": "Женева"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "geneva"
+   ],
+   "locale": "uz",
+   "name": "Jeneva"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "geneva"
+   ],
+   "locale": "en",
+   "name": "Geneva"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "geneva"
+   ],
+   "locale": "zh",
+   "name": "日内瓦"
+  },
+  {
+   "city_id": [
+    [
+     "ch"
+    ],
+    "geneva"
+   ],
+   "locale": "tr",
+   "name": "Cenevre"
+  },
+  {
+   "city_id": [
+    [
+     "at"
+    ],
+    "vienna"
+   ],
+   "locale": "ru",
+   "name": "Вена"
+  },
+  {
+   "city_id": [
+    [
+     "at"
+    ],
+    "vienna"
+   ],
+   "locale": "uz",
+   "name": "Vena"
+  },
+  {
+   "city_id": [
+    [
+     "at"
+    ],
+    "vienna"
+   ],
+   "locale": "en",
+   "name": "Vienna"
+  },
+  {
+   "city_id": [
+    [
+     "at"
+    ],
+    "vienna"
+   ],
+   "locale": "zh",
+   "name": "维也纳"
+  },
+  {
+   "city_id": [
+    [
+     "at"
+    ],
+    "vienna"
+   ],
+   "locale": "tr",
+   "name": "Viyana"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "stockholm"
+   ],
+   "locale": "ru",
+   "name": "Стокгольм"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "stockholm"
+   ],
+   "locale": "uz",
+   "name": "Stokgolm"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "stockholm"
+   ],
+   "locale": "en",
+   "name": "Stockholm"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "stockholm"
+   ],
+   "locale": "zh",
+   "name": "斯德哥尔摩"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "stockholm"
+   ],
+   "locale": "tr",
+   "name": "Stockholm"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "gothenburg"
+   ],
+   "locale": "ru",
+   "name": "Гётеборг"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "gothenburg"
+   ],
+   "locale": "uz",
+   "name": "Gyoteborg"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "gothenburg"
+   ],
+   "locale": "en",
+   "name": "Gothenburg"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "gothenburg"
+   ],
+   "locale": "zh",
+   "name": "哥德堡"
+  },
+  {
+   "city_id": [
+    [
+     "se"
+    ],
+    "gothenburg"
+   ],
+   "locale": "tr",
+   "name": "Göteborg"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "toronto"
+   ],
+   "locale": "ru",
+   "name": "Торонто"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "toronto"
+   ],
+   "locale": "uz",
+   "name": "Toronto"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "toronto"
+   ],
+   "locale": "en",
+   "name": "Toronto"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "toronto"
+   ],
+   "locale": "zh",
+   "name": "多伦多"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "toronto"
+   ],
+   "locale": "tr",
+   "name": "Toronto"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "montreal"
+   ],
+   "locale": "ru",
+   "name": "Монреаль"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "montreal"
+   ],
+   "locale": "uz",
+   "name": "Monreal"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "montreal"
+   ],
+   "locale": "en",
+   "name": "Montreal"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "montreal"
+   ],
+   "locale": "zh",
+   "name": "蒙特利尔"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "montreal"
+   ],
+   "locale": "tr",
+   "name": "Montreal"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "vancouver"
+   ],
+   "locale": "ru",
+   "name": "Ванкувер"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "vancouver"
+   ],
+   "locale": "uz",
+   "name": "Vankuver"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "vancouver"
+   ],
+   "locale": "en",
+   "name": "Vancouver"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "vancouver"
+   ],
+   "locale": "zh",
+   "name": "温哥华"
+  },
+  {
+   "city_id": [
+    [
+     "ca"
+    ],
+    "vancouver"
+   ],
+   "locale": "tr",
+   "name": "Vancouver"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "sydney"
+   ],
+   "locale": "ru",
+   "name": "Сидней"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "sydney"
+   ],
+   "locale": "uz",
+   "name": "Sidney"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "sydney"
+   ],
+   "locale": "en",
+   "name": "Sydney"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "sydney"
+   ],
+   "locale": "zh",
+   "name": "悉尼"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "sydney"
+   ],
+   "locale": "tr",
+   "name": "Sidney"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "melbourne"
+   ],
+   "locale": "ru",
+   "name": "Мельбурн"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "melbourne"
+   ],
+   "locale": "uz",
+   "name": "Melburn"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "melbourne"
+   ],
+   "locale": "en",
+   "name": "Melbourne"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "melbourne"
+   ],
+   "locale": "zh",
+   "name": "墨尔本"
+  },
+  {
+   "city_id": [
+    [
+     "au"
+    ],
+    "melbourne"
+   ],
+   "locale": "tr",
+   "name": "Melbourne"
+  },
+  {
+   "city_id": [
+    [
+     "sg"
+    ],
+    "singapore"
+   ],
+   "locale": "ru",
+   "name": "Сингапур"
+  },
+  {
+   "city_id": [
+    [
+     "sg"
+    ],
+    "singapore"
+   ],
+   "locale": "uz",
+   "name": "Singapur"
+  },
+  {
+   "city_id": [
+    [
+     "sg"
+    ],
+    "singapore"
+   ],
+   "locale": "en",
+   "name": "Singapore"
+  },
+  {
+   "city_id": [
+    [
+     "sg"
+    ],
+    "singapore"
+   ],
+   "locale": "zh",
+   "name": "新加坡"
+  },
+  {
+   "city_id": [
+    [
+     "sg"
+    ],
+    "singapore"
+   ],
+   "locale": "tr",
+   "name": "Singapur"
   }
  ],
  "plans": [
