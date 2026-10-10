@@ -91,7 +91,7 @@ def company(request: HttpRequest) -> HttpResponse:
             "string",
             "max:20",
             _tin(ctx, _country_code(data, None), tin_messages, person=person),
-            _unique_tin(None, _country_id(data, None)),
+            _unique_tin(None, _country_id(data, None), ctx=ctx),
         ],
         "primary_role": ["required", "in:supplier,buyer,both"],
         "categories": ["array", "max:5"],

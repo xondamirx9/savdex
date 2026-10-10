@@ -25,7 +25,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import slugify
-from savdex.web import eloquent
+from savdex.web import analytics, eloquent
 from savdex.web import tin as tin_rules
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
@@ -125,6 +125,8 @@ def _tin(ctx: Context, country: str | None, messages: list[str], *, person: bool
 
         if key is not None:
             messages.append(ctx.t(f"messages.tin.{key}"))
+            # GA4 (ТЗ-02): где номер не проходит — по стране и причине, без номера
+            analytics.tin_validation_failed(ctx, country, key)
 
         return key is None
 
@@ -170,7 +172,12 @@ def _country_code(data: dict[str, Any], company: dict[str, Any] | None) -> str |
     return None
 
 
-def _unique_tin(company_id: int | None, country_id: Any = None) -> Check:  # noqa: ANN401
+def _unique_tin(
+    company_id: int | None,
+    country_id: Any = None,  # noqa: ANN401
+    *,
+    ctx: Context | None = None,
+) -> Check:
     """
     Одна компания на номер — в паре со страной (ТЗ-02): у китайской и
     узбекской компании номера могут совпасть. Без удалённых и без своей.
@@ -191,7 +198,12 @@ def _unique_tin(company_id: int | None, country_id: Any = None) -> Check:  # noq
             sql += " and id <> %s"
             params.append(company_id)
 
-        return int(_rows(sql, params)[0]["n"]) == 0
+        free = int(_rows(sql, params)[0]["n"]) == 0
+
+        if not free and ctx is not None:
+            analytics.tin_validation_failed(ctx, analytics.country_code(country), "taken")
+
+        return free
 
     return Check("unique", passes)
 
@@ -263,7 +275,7 @@ def update(request: HttpRequest) -> HttpResponse:
             "string",
             "max:20",
             _tin(ctx, _country_code(data, company), tin_messages),
-            _unique_tin(ctx.user["company_id"], _country_id(data, company)),
+            _unique_tin(ctx.user["company_id"], _country_id(data, company), ctx=ctx),
         ],
         "country_id": ["nullable", _exists("countries")],
         "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],
