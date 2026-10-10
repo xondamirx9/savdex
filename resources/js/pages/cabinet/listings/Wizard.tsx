@@ -459,6 +459,8 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         onChange={(e) => setData('price', e.target.value ? Number(e.target.value) : null)}
                                         placeholder="1200000"
                                     />
+                                    {/* Объявление без цены пролистывают: подсказка — у самого поля (ТЗ-02) */}
+                                    <p className="hint">{t('cabinet.wizard.tip_price')}</p>
                                 </div>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-cur">

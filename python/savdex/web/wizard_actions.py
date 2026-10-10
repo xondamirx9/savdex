@@ -129,17 +129,31 @@ def create(request: HttpRequest) -> HttpResponse:
     return redirect(ctx, ctx.url(f"/cabinet/listings/{listing_id}/edit"))
 
 
+def default_currency(company: dict[str, Any]) -> str:
+    """
+    Валюта нового объявления (ТЗ-02 §5): компания из Узбекистана (или без
+    страны) — сумы, иностранная — доллары. Человек может сменить в мастере.
+    """
+    if company.get("country_id") is None:
+        return "UZS"
+
+    rows = _rows("select code from countries where id = %s", [company["country_id"]])
+
+    return "UZS" if not rows or rows[0]["code"] == "uz" else "USD"
+
+
 def _insert_draft(ctx: Context, company: dict[str, Any]) -> int:
     """$company->listings()->create([...]): черновик с пустым заголовком."""
     assert ctx.user is not None
     now = _stamp(eloquent.now())
     row: dict[str, Any] = {
         "user_id": ctx.user["id"],
+        # Город объявления — город компании; валюта — по её стране
         "city_id": company["city_id"],
         "status": "draft",
         "type": "supply",
         "title": "",
-        "currency": "UZS",
+        "currency": default_currency(company),
         "wizard_step": 1,
         "company_id": company["id"],
     }

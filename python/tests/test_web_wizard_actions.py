@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from .factories import категория, компания
-from .pg_admin import sql, нужна_база, свежая_база
+from .pg_admin import sql, нужна_база, свежая_база, страна
 from .test_web_forms import inertia, отправить, учётка
 from .web_site import адрес
 
@@ -179,6 +179,36 @@ def test_новый_черновик(сайт, было, лимит, куда, �
     assert [(a, label) for a, label, _ in база["journal"]] == (
         [("created", f"Listing #{len(стало)}")] if новый and admin else []
     )
+
+
+@pytest.mark.parametrize(("код", "валюта"), [("cn", "USD"), ("uz", "UZS")])
+def test_валюта_по_стране_компании(сайт, код, валюта):
+    # ТЗ-02: иностранная компания — новое объявление сразу в долларах
+    uid = владелец()
+    есть = sql("select id from countries where code = %s", [код])
+    страна_ = есть[0][0] if есть else страна(код, {"ru": код})
+    [(было_страна,)] = sql("select country_id from companies where id = %s", [_компания()])
+
+    def подготовка() -> None:
+        sql("update plans set listings_limit = null where code = 'free'")
+        объявления()()
+        sql("update companies set country_id = %s where id = %s", [страна_, _компания()])
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/create",
+            подготовка,
+            снимок,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            method="GET",
+            headers={},
+        )
+    finally:
+        sql("update companies set country_id = %s where id = %s", [было_страна, _компания()])
+
+    assert [r[7] for r in итог["база"]["listings"]] == [валюта]
 
 
 @pytest.mark.parametrize(
