@@ -28,7 +28,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import guard, inertia, mail
+from savdex.web import analytics, guard, inertia, mail
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_EMAIL,
@@ -177,6 +177,7 @@ def send_code(request: HttpRequest) -> HttpResponse:
     store.put(SESSION_EMAIL, email)
     store.forget(SESSION_VERIFIED)
     _mail_code(ctx, email)
+    analytics.queue(ctx, "sign_up_start", {"plan_param": analytics.intended_plan(ctx)})
 
     return _to(ctx, "/register/code")
 

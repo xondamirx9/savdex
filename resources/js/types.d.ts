@@ -71,6 +71,18 @@ export interface SupportContacts {
     legal_tin: string;
 }
 
+export interface AnalyticsEvent {
+    name: string;
+    params: Record<string, string | number | boolean | null>;
+}
+
+export interface AnalyticsProps {
+    id: string;
+    /** Код тарифа компании; null — гость или без компании */
+    plan: string | null;
+    events: AnalyticsEvent[];
+}
+
 export interface SharedProps extends InertiaPageProps {
     auth: { user: AuthUser | null; company: AuthCompany | null };
     flash: { success?: string; error?: string; warning?: string };
@@ -93,6 +105,8 @@ export interface SharedProps extends InertiaPageProps {
     navCategories?: { id: number; name: string }[];
     /** Контакты поддержки и реквизиты — правятся в админке. */
     support: SupportContacts;
+    /** GA4 (ТЗ-03): id пуст — тега на странице нет; события подтвердил сервер. */
+    analytics?: AnalyticsProps;
     /**
      * Адрес логотипа площадки — из настроек админки, раздел
      * «Оформление». Всегда заполнен: пустая настройка отдаёт знак

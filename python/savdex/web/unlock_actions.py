@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, ui
+from savdex.web import analytics, eloquent, ui
 from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
@@ -132,6 +132,21 @@ def _charge(
                     now,
                 ],
             )
+
+    from savdex import product_events
+
+    product_events.record(
+        "contact_unlocked",
+        company_id=company["id"],
+        user_id=ctx.user["id"],
+        plan=plan.get("code"),
+        locale=ctx.locale,
+        props={
+            "paid_from": "credit" if spent else "limit",
+            "target_company_id": target["id"],
+            "listing_id": None if listing is None else listing["id"],
+        },
+    )
 
     return ctx.t("messages.unlock.opened"), "success"
 
@@ -244,6 +259,7 @@ def _unlock(
         raise
 
     if charged is None:
+        analytics.limit_reached(ctx, "unlock", company_plan(company["id"]).get("code"))
         resets = wallet["period_resets_at"]
         message = ctx.t("messages.unlock.no_credits")
 

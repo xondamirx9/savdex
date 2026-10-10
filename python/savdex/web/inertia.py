@@ -16,7 +16,7 @@ from typing import Any
 
 from django.http import HttpResponse, JsonResponse
 
-from savdex.web import locales, phpquery, vite
+from savdex.web import analytics, locales, phpquery, vite
 from savdex.web.seo import Seo, php_json
 from savdex.web.shared import Context, appearance_icon, appearance_logo, settings_values, shared
 
@@ -177,6 +177,9 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
 
     head = [
         '<meta charset="utf-8">',
+        # GA4 — в начале <head>, как велит инструкция тега (ТЗ-03);
+        # кодировка остаётся первой строкой, её браузер ищет в начале файла
+        *analytics.head_tags(ctx.path),
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
         f'<meta name="csrf-token" content="{php_escape(token)}">',
         '<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">',

@@ -24,7 +24,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import ui
+from savdex.web import analytics, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.forms import action, back, flash, input_of, invalid
@@ -343,6 +343,7 @@ def renew(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if limit is not None and _active_count(row["company_id"], [row["id"]]) >= limit:
         flash(ctx, "error", _limit_message(ctx, plan))
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return back(ctx)
 
@@ -408,6 +409,7 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if limit is not None and _active_count(row["company_id"], [row["id"]]) >= limit:
         flash(ctx, "error", ctx.t("messages.listing.limit", plan=plan["name"], limit=limit))
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return back(ctx)
 

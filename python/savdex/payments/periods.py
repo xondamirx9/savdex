@@ -136,6 +136,19 @@ def _issue_renewals(now: datetime) -> int:
     return issued
 
 
+def _plan_expired(subscription: dict[str, Any]) -> None:
+    """ТЗ-03: истёк тариф — product_events (компания переходит на Free)."""
+    from savdex import product_events
+
+    plans = _rows("select code from plans where id = %s", [subscription["plan_id"]])
+    product_events.record(
+        "plan_expired",
+        company_id=subscription["company_id"],
+        plan=plans[0]["code"] if plans else None,
+        props={"subscription_id": subscription["id"], "auto_renew": subscription.get("auto_renew")},
+    )
+
+
 def _expire_subscriptions(now: datetime) -> int:
     """
     Подписка с истёкшим сроком закрывается; компания не блокируется —
@@ -159,6 +172,7 @@ def _expire_subscriptions(now: datetime) -> int:
             model="Subscription",
             casts={"auto_renew": "bool"},
         )
+        _plan_expired(subscription)
         companies = _rows(
             "select * from companies where id = %s and deleted_at is null",
             [subscription["company_id"]],

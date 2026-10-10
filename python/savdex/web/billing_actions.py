@@ -30,6 +30,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
+from savdex import product_events
 from savdex.guards import allowed_writes
 from savdex.payments import checkout as cashier
 from savdex.web import eloquent, locales, orders
@@ -71,6 +72,14 @@ def cancel(request: HttpRequest) -> HttpResponse:
         section="subscriptions",
         model="Subscription",
         casts=SUBSCRIPTION_CASTS,
+    )
+    product_events.record(
+        "subscription_cancelled",
+        company_id=subscription["company_id"],
+        user_id=ctx.user["id"] if ctx.user else None,
+        plan=product_events.plan_code(subscription["company_id"]),
+        locale=ctx.locale,
+        props={"ends_at": subscription["ends_at"]},
     )
 
     until = _date(subscription["ends_at"])
@@ -232,6 +241,18 @@ def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
         log.warning(
             "payment.checkout.failed",
             extra={"payment": payment["number"], "error": str(error)},
+        )
+        product_events.record(
+            "payment_failed",
+            company_id=payment["company_id"],
+            user_id=ctx.user["id"] if ctx.user else None,
+            plan=product_events.plan_code(payment["company_id"]),
+            props={
+                "number": payment["number"],
+                "amount": payment["amount"],
+                "purpose": payment["purpose"],
+                "reason": "gateway_error",
+            },
         )
         flash(
             ctx,

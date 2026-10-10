@@ -31,7 +31,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, paginator, search_text
+from savdex.web import analytics, content, inertia, paginator, search_text
 from savdex.web.directory import _named
 from savdex.web.home import _LISTING_COMPANY, Cards, banner, visible_in
 from savdex.web.phpquery import Array, laravel_input, php_int, text
@@ -252,6 +252,23 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
 
         if term != "":
             search_hits([int(r["company_id"]) for r in rows], term)
+
+    # GA4: поиск — запрос или любой фильтр; сам текст запроса не уходит,
+    # только его письменность (поиски без результата — отдельный отчёт)
+    filtered = bool(kind or category or city or verified or with_price)
+
+    if term.strip() != "" or filtered:
+        analytics.queue(
+            ctx,
+            "search_performed",
+            {
+                "q_script": analytics.script_of(term),
+                "type": kind or "all",
+                "results_count": int(total),
+                "has_filters": filtered,
+            },
+            now=True,
+        )
 
     translations = content.Translations(ctx.locale)
     cards = Cards(ctx, settings_values(), translations)

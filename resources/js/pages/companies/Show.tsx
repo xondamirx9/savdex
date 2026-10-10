@@ -10,6 +10,7 @@ import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { track, unlockState } from '@/lib/analytics';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { renderRichText } from '@/lib/richtext';
 import { routes } from '@/routes';
@@ -225,11 +226,20 @@ export default function CompanyShow({
                                    Кнопка, которая ничего не делает, хуже её отсутствия:
                                    человек решает, что сайт сломан. */
                                 (auth?.user ? (
-                                    <Button onClick={() => setUnlockOpen(true)}>
+                                    <Button
+                                        onClick={() => {
+                                            track('contact_unlock_clicked', { state: unlockState(auth) });
+                                            setUnlockOpen(true);
+                                        }}
+                                    >
                                         <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Button>
                                 ) : (
-                                    <Link href={routes.register} className="btn btn-primary">
+                                    <Link
+                                        href={routes.register}
+                                        className="btn btn-primary"
+                                        onClick={() => track('contact_unlock_clicked', { state: 'guest' })}
+                                    >
                                         <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Link>
                                 ))}

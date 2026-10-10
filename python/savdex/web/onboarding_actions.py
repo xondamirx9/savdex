@@ -19,6 +19,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
+from savdex.web import analytics
 from savdex.web import review_screening as screening
 from savdex.web.actions import form
 from savdex.web.auth import (
@@ -131,6 +132,7 @@ def company(request: HttpRequest) -> HttpResponse:
         ),
     )
     assert company_id
+    _profile_completed(ctx, fields)
     flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
 
     return _to(ctx, "/verify-email")
@@ -201,9 +203,24 @@ def _complete(ctx: Context, company: dict[str, Any]) -> HttpResponse:
     ]
     merged = list(dict.fromkeys([*current, *(_int(c) for c in fields.get("categories") or [])]))[:5]
     _sync_to(company["id"], current, merged)
+    _profile_completed(ctx, {**fields, "tin": company.get("tin")})
     flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
 
     return _to(ctx, "/verify-email")
+
+
+def _profile_completed(ctx: Context, fields: dict[str, Any]) -> None:
+    """GA4: данные компании сохранены — страна, тип и роль, без названия и ИНН."""
+    analytics.queue(
+        ctx,
+        "company_profile_completed",
+        {
+            "country": analytics.country_code(fields.get("country_id")),
+            "company_type": fields.get("type"),
+            "role": fields.get("primary_role"),
+            "tin_filled": bool(fields.get("tin")),
+        },
+    )
 
 
 def _sync_to(company_id: int, current: list[int], wanted: list[int]) -> None:
