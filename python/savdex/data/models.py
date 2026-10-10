@@ -285,7 +285,11 @@ class CompanyRecord(Timestamped):
     )
     legal_name = models.CharField("юридическое название", max_length=190, null=True, blank=True)
     tin = models.CharField(
-        "ИНН", max_length=20, null=True, blank=True, help_text="9 цифр для Узбекистана"
+        "ИНН / номер компании",
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="По стране: Узбекистан — 9 цифр, Китай — 18 знаков, Индия — GSTIN или PAN",
     )
     type = models.CharField(
         "тип",
@@ -364,10 +368,15 @@ class CompanyRecord(Timestamped):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Company::creating — адрес; Company::saving — search_text."""
-        from savdex.web.company_profile_actions import _search_text, _slug
+        from savdex.web.company_profile_actions import _search_text, slug_fields
 
         if self._state.adding and not self.slug:
-            self.slug = _slug(self.name)
+            fields = slug_fields(self.name)
+            self.slug = fields["slug"]
+
+            # Номер взят заранее — он же в адресе: «company-<номер>»
+            if "id" in fields:
+                self.pk = fields["id"]
 
         self.search_text = _search_text({"name": self.name, "legal_name": self.legal_name})[
             "search_text"

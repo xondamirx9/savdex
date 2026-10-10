@@ -4,7 +4,9 @@ import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
 import { Button, PasswordInput, TextInput } from '@/components/ui';
+import { CountryField } from '@/components/CountryField';
 import { SelectField } from '@/components/SelectField';
+import { countryCode, tinInputMode, tinLabel, type CountryOption } from '@/lib/countries';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
@@ -49,6 +51,8 @@ interface Props {
     categories?: { id: number; name: string }[];
     /** Направления «Доп. услуг» — «Категория» фрилансера. */
     serviceSections?: { code: string; label: string }[];
+    /** Страна юрлица — от неё зависит, как проверяется номер компании. */
+    countries?: CountryOption[];
 }
 
 /** Больше пяти категорий — профиль перестаёт что-либо говорить о компании. */
@@ -57,9 +61,10 @@ const MAX_CATEGORIES = 5;
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
-export default function Register({ email = '', categories = [], serviceSections = [] }: Props) {
+export default function Register({ email = '', categories = [], serviceSections = [], countries = [] }: Props) {
     const { data, setData, post, processing, errors, clearErrors } = useForm({
-        // Юрлицо: компания и её категории
+        // Юрлицо: страна, компания и её категории
+        country_id: null as number | null,
         company_name: '',
         tin: '',
         categories: [] as number[],
@@ -199,6 +204,15 @@ export default function Register({ email = '', categories = [], serviceSections 
                     с компании, физлицо и фрилансер — с себя */}
                 {legal && (
                     <>
+                        <CountryField
+                            id="r-country"
+                            countries={countries}
+                            value={data.country_id}
+                            onChange={(id) => update('country_id', id)}
+                            error={errors.country_id}
+                            hint={t('auth.country_first_hint')}
+                        />
+
                         <TextInput
                             label={t('auth.company_name_label')}
                             name="company_name"
@@ -212,10 +226,12 @@ export default function Register({ email = '', categories = [], serviceSections 
                         />
 
                         <TextInput
-                            label={t('auth.tin_label')}
+                            label={tinLabel(countryCode(countries, data.country_id))}
                             name="tin"
-                            inputMode="numeric"
-                            placeholder={t('auth.tin_placeholder')}
+                            inputMode={tinInputMode(countryCode(countries, data.country_id))}
+                            placeholder={
+                                countryCode(countries, data.country_id) === 'uz' ? t('auth.tin_placeholder') : undefined
+                            }
                             value={data.tin}
                             onChange={(e) => update('tin', e.target.value)}
                             error={errors.tin}

@@ -12,6 +12,8 @@ import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
+import { CityField, type CityValue } from '@/components/CityField';
+import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
 
 interface Company {
@@ -59,7 +61,7 @@ interface Props {
         missing: boolean;
     }[];
     employees: { id: number; name: string; email: string; role: string; verified: boolean }[];
-    countries: { id: number; name: string }[];
+    countries: CountryOption[];
     cities: { id: number; name: string; country_id: number }[];
     verification: { label: string; done: boolean; hint: string | null }[];
     plan: { name: string; verification_days: number; has_microsite: boolean } | null;
@@ -104,7 +106,8 @@ export default function CompanyProfile({
         legal_name: string;
         tin: string;
         country_id: number | null;
-        city_id: number | null;
+        city_id: CityValue;
+        city_name: string;
         address: string;
         description: string;
         website: string;
@@ -119,8 +122,10 @@ export default function CompanyProfile({
         name: company?.name ?? '',
         legal_name: company?.legal_name ?? '',
         tin: company?.tin ?? '',
-        country_id: company?.country_id ?? countries[0]?.id ?? null,
+        // Без молчаливого «Узбекистана»: страну выбирает человек (ТЗ-02)
+        country_id: company?.country_id ?? null,
         city_id: company?.city_id ?? null,
+        city_name: '',
         address: company?.address ?? '',
         description: company?.description ?? '',
         website: company?.website ?? '',
@@ -423,7 +428,7 @@ export default function CompanyProfile({
                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-tin">
-                                {t('cabinet.company.tin')}
+                                {tinLabel(countryCode(countries, form.data.country_id))}
                             </label>
                             <input
                                 id="p-tin"
@@ -469,20 +474,18 @@ export default function CompanyProfile({
                                 options={countries.map((c) => ({ value: String(c.id), label: c.name }))}
                             />
                         </div>
-                        <div className="field" style={{ margin: 0 }}>
-                            <label className="label" htmlFor="p-city">
-                                {t('cabinet.company.city')}
-                            </label>
-                            <SelectField
-                                id="p-city"
-                                ariaLabel={t('cabinet.company.city')}
-                                value={String(form.data.city_id ?? '')}
-                                disabled={locked('city_id')}
-                                onChange={(value) => form.setData('city_id', value ? Number(value) : null)}
-                                placeholder={t('cabinet.company.city_none')}
-                                options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
-                            />
-                        </div>
+                        <CityField
+                            id="p-city"
+                            label={t('cabinet.company.city')}
+                            cities={availableCities}
+                            value={form.data.city_id}
+                            name={form.data.city_name}
+                            onChange={(value) => form.setData('city_id', value)}
+                            onNameChange={(name) => form.setData('city_name', name)}
+                            placeholder={t('cabinet.company.city_none')}
+                            error={form.errors.city_id}
+                            disabled={locked('city_id') || form.data.country_id === null}
+                        />
                     </div>
 
                     <div className="field mt-16">

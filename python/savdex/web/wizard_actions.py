@@ -23,7 +23,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
-from savdex.tenders.slug import slugify
+from savdex.tenders.slug import numbered_slug
 from savdex.web import analytics, eloquent, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
@@ -130,17 +130,31 @@ def create(request: HttpRequest) -> HttpResponse:
     return redirect(ctx, ctx.url(f"/cabinet/listings/{listing_id}/edit"))
 
 
+def default_currency(company: dict[str, Any]) -> str:
+    """
+    Валюта нового объявления (ТЗ-02 §5): компания из Узбекистана (или без
+    страны) — сумы, иностранная — доллары. Человек может сменить в мастере.
+    """
+    if company.get("country_id") is None:
+        return "UZS"
+
+    rows = _rows("select code from countries where id = %s", [company["country_id"]])
+
+    return "UZS" if not rows or rows[0]["code"] == "uz" else "USD"
+
+
 def _insert_draft(ctx: Context, company: dict[str, Any]) -> int:
     """$company->listings()->create([...]): черновик с пустым заголовком."""
     assert ctx.user is not None
     now = _stamp(eloquent.now())
     row: dict[str, Any] = {
         "user_id": ctx.user["id"],
+        # Город объявления — город компании; валюта — по её стране
         "city_id": company["city_id"],
         "status": "draft",
         "type": "supply",
         "title": "",
-        "currency": "UZS",
+        "currency": default_currency(company),
         "wizard_step": 1,
         "company_id": company["id"],
     }
@@ -268,7 +282,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     if not listing["slug"]:
-        slug = slugify(str(listing["title"]))[:60].rstrip() + f"-{listing['id']}"
+        slug = numbered_slug(str(listing["title"]), listing["id"])
         _save(ctx, listing, {"slug": slug})
 
     _notify_company(

@@ -116,6 +116,8 @@ STAGES: tuple[Stage, ...] = (
             "it_tasks",
             "it_task_files",
             "resumes",
+            # Старые адреса компаний и объявлений — 301 на новые (ТЗ-02)
+            "slug_redirects",
         ),
     ),
     Stage(

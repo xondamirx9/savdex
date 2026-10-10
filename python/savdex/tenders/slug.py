@@ -4,9 +4,9 @@
 
 Транслитерация — по таблицам voku/portable-ascii, которыми пользуется
 Laravel (кириллица: ё → io, й → i, ю → iu, я → ia; узбекские и турецкие
-буквы), остальное латинское — без диакритики. Знаков, которых таблица
-не знает (иероглифы), в адресе нет: заголовок из одних иероглифов даёт
-«tender-<номер>», как у Laravel пустая основа.
+буквы), остальное латинское — без диакритики. Иероглифы — пиньинем без
+тонов (ТЗ-02): «测试公司» → «ce-shi-gong-si»; раньше их в адресе не было
+вовсе, и китайская компания получала адрес /company/company.
 """
 
 from __future__ import annotations
@@ -27,10 +27,24 @@ _CYRILLIC = {
 _SIGNS = {"—": "-", "–": "-", "−": "-", "№": "No.", "@": "-at-", "ı": "i", "ß": "ss"}
 
 
+#: Иероглифы CJK — пиньинем (основной блок и расширение A)
+_HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
+
+
+def _pinyin(text: str) -> str:
+    """Каждый иероглиф — слогом пиньиня без тонов, слоги через пробел."""
+    from pypinyin import Style, lazy_pinyin
+
+    def syllables(match: re.Match[str]) -> str:
+        return " " + " ".join(lazy_pinyin(match.group(), style=Style.NORMAL)) + " "
+
+    return _HAN.sub(syllables, text)
+
+
 def _ascii(text: str) -> str:
     out = []
 
-    for char in text:
+    for char in _pinyin(text) if _HAN.search(text) else text:
         lower = char.lower()
 
         if lower in _CYRILLIC:
@@ -52,6 +66,16 @@ def slugify(title: str) -> str:
     text = re.sub(r"[-\s_]+", "-", text)
 
     return text.strip("-")
+
+
+def numbered_slug(title: str, key: int) -> str:
+    """
+    «<заголовок латиницей>-<номер>», не длиннее 60 знаков до номера.
+    Латиницы не вышло — один номер (ТЗ-02): раньше получалось «-864».
+    """
+    base = slugify(title)[:60].strip("-")
+
+    return f"{base}-{key}" if base else str(key)
 
 
 def make_slug(title: str, key: int) -> str:

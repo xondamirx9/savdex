@@ -1534,7 +1534,10 @@ def resume_props(ctx: Context) -> dict[str, Any]:
             "education_levels": options.labels(ctx, "education_level", options.EDUCATION_LEVELS),
             "currencies": CURRENCY_LABELS,
         },
-        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "countries": [
+            {"id": c["id"], "name": c["name"], "code": c["code"]}
+            for c in listed_countries(ctx.locale)
+        ],
         "cities": [
             {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
             for c in _rows("select id, country_id from cities where is_active order by sort, id")
@@ -1715,10 +1718,17 @@ def company_props(ctx: Context) -> dict[str, Any]:
         ]
         if cid
         else [],
-        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "countries": [
+            {"id": c["id"], "name": c["name"], "code": c["code"]}
+            for c in listed_countries(ctx.locale)
+        ],
         "cities": [
             {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
-            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+            # Свой «другой город» (скрытый, city_choice.py) — тоже в списке
+            for c in _rows(
+                "select id, country_id from cities where is_active or id = %s order by sort, id",
+                [company["city_id"] if company else None],
+            )
         ],
         "verification": [
             check("verify_email", user["email_verified_at"] is not None),

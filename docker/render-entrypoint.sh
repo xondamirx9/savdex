@@ -175,6 +175,10 @@ else
     py_owner seed
 fi
 
+# Адреса /company/company и /listing/-N — на латиницу, старые — в 301
+# (ТЗ-02, python/savdex/reslug.py). Трогает только ещё плохие адреса
+py_owner reslug
+
 # Демо-наполнение (выдуманные компании и объявления) было сидерами
 # Laravel и ушло вместе с ним
 if [ "${SEED_DEMO:-false}" = "true" ] || [ "${SEED_SHOWCASE:-false}" = "true" ]; then

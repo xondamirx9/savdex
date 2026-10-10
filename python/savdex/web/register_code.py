@@ -286,7 +286,7 @@ def details(request: HttpRequest) -> HttpResponse:
     """RegisteredUserController::details: только после верного кода."""
     from savdex.web.auth import guest
     from savdex.web.cabinet import _rows, _seo
-    from savdex.web.directory import _named
+    from savdex.web.directory import _named, listed_countries
     from savdex.web.resumes import section_tree
 
     ctx = guest(request)
@@ -315,6 +315,11 @@ def details(request: HttpRequest) -> HttpResponse:
             "email": verified,
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": categories,
+            # Страна юрлица — до номера: по ней номер проверяется (ТЗ-02)
+            "countries": [
+                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                for c in listed_countries(ctx.locale)
+            ],
             # Фрилансер — направление «Доп. услуг», на заказы которого откликается
             "serviceSections": section_tree(ctx),
         },

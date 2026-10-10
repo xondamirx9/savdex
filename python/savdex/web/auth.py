@@ -303,7 +303,10 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
         ctx,
         "auth/CompanyStep",
         {
-            "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(locale)],
+            "countries": [
+                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                for c in listed_countries(locale)
+            ],
             "cities": [
                 {"id": c["id"], "name": cities[c["id"]], "country_id": c["country_id"]}
                 for c in _rows(
@@ -324,6 +327,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             "personName": ctx.user["name"],
             # Компания заведена при регистрации — спрашиваем только недостающее
             "completing": ctx.user["company_id"] is not None,
+            # Страна, выбранная при регистрации: молча Узбекистан не ставится
+            "countryId": company["country_id"] if company is not None else None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(
