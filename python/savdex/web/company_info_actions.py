@@ -205,7 +205,7 @@ def _rules(
             "string",
             "max:20",
             _tin(ctx, _country_code(data, company), tin_messages),
-            _unique_tin(company["id"], _country_id(data, company)),
+            _unique_tin(company["id"], _country_id(data, company), ctx=ctx),
         ],
         "country_id": ["nullable", _exists("countries")],
         "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],

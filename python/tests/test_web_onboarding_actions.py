@@ -306,6 +306,36 @@ def test_второй_шаг(сайт, правка, поля, ждём):
     assert база["journal"] == []
 
 
+@pytest.mark.parametrize(
+    ("правка", "событие"),
+    [
+        ({"tin": "30234567"}, {"country": "uz", "reason": "uz_length"}),
+        ({"tin": "12345", "country_id": "kz"}, {"country": "kz", "reason": "kz_length"}),
+        # Номер занят компанией «mine» той же страны
+        ({"tin": "301234567"}, {"country": "uz", "reason": "taken"}),
+    ],
+)
+def test_аналитика_номера(сайт, правка, событие):
+    # GA4 (ТЗ-02): номер не прошёл проверку — страна и причина, без номера
+    body = {**верно(), **правка}
+
+    if body.get("country_id") == "kz":
+        body.update(country_id=_страна("kz"), city_id="other", city_name="Алматы")
+
+    итог = отправить(
+        сайт,
+        "/onboarding/company",
+        сброс_компаний(),
+        снимок_компаний,
+        uid=пользователь(),
+        body=body,
+    )
+
+    assert _сессия(итог)["analytics_events"] == [
+        {"name": "tin_validation_failed", "params": событие}
+    ]
+
+
 def test_другой_город(сайт):
     # Нет города в справочнике — пишется текстом и становится скрытым
     # городом этой страны; то же название второй раз — та же запись

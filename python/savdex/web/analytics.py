@@ -150,6 +150,15 @@ def intended_plan(ctx: Context) -> str:
     return found.group(1) if found else "free"
 
 
+def tin_validation_failed(ctx: Context, country: str | None, reason: str) -> None:
+    """
+    GA4 (ТЗ-02): номер компании не прошёл проверку — страна (код) и причина
+    (uz_length, cn_format, digits_only, taken…). Самого номера в событии нет.
+    Много cn_format — китайцам непонятно, что вводить, и подсказку пора менять.
+    """
+    queue(ctx, "tin_validation_failed", {"country": country or "uz", "reason": reason})
+
+
 def limit_reached(ctx: Context, limit_type: str, plan: str | None) -> None:
     """GA4: человек упёрся в лимит тарифа — listing, unlock или replies."""
     queue(ctx, "limit_reached", {"limit_type": limit_type, "plan": plan or "free"})

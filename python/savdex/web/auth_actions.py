@@ -393,7 +393,7 @@ def register(request: HttpRequest) -> HttpResponse:
             "string",
             "max:20",
             _tin(ctx, _country_code(data, None), tin_messages),
-            _unique_tin(None, _country_id(data, None)),
+            _unique_tin(None, _country_id(data, None), ctx=ctx),
         ]
         rules["categories"] = ["required", "array", "min:1", "max:5"]
         rules["categories.*"] = ["integer", _top_category()]
