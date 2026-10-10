@@ -234,8 +234,13 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
         f'<script type="application/ld+json">{seo.get_json_ld()}</script>',
         '<link rel="preconnect" href="https://fonts.bunny.net">',
         '<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>',
+        # Шрифт — без ожидания: media="print" не держит отрисовку, после
+        # загрузки — all. Из Китая fonts.bunny.net бывает медленным, и
+        # страница стояла пустой, пока браузер ждал стили шрифта
         '<link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700,800&display=swap"'
-        ' rel="stylesheet">',
+        ' rel="stylesheet" media="print" onload="this.media=\'all\'">',
+        '<noscript><link href="https://fonts.bunny.net/css?family=manrope:400,500,600,700,800'
+        '&display=swap" rel="stylesheet"></noscript>',
         vite_tags,
     ]
 

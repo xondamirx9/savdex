@@ -16,10 +16,16 @@ export default function RegisterCode({
     email,
     status,
     demoCode,
+    chinaMailbox = false,
+    sender = '',
 }: {
     email: string;
     status?: string | null;
     demoCode?: string | null;
+    /** Ящик у китайского почтовика (qq.com, 163.com…) — своя подсказка */
+    chinaMailbox?: boolean;
+    /** Адрес отправителя — для белого списка почты */
+    sender?: string;
 }) {
     const form = useForm({ code: demoCode ?? '' });
     const resend = useForm({});
@@ -82,6 +88,10 @@ export default function RegisterCode({
                 </form>
 
                 <p className="text-muted text-sm leading-relaxed">{t('auth.verify_spam_hint')}</p>
+
+                {/* qq.com, 163.com: письма идут дольше и уходят в «垃圾邮件» —
+                    без этой подсказки китайские клиенты бросали регистрацию */}
+                {chinaMailbox && <Alert tone="info">{t('auth.reg_code_cn_hint', { sender })}</Alert>}
 
                 <form onSubmit={sendAgain}>
                     <Button type="submit" variant="secondary" size="lg" block loading={resend.processing}>

@@ -418,7 +418,9 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
         f"<style>:root{{ {view['css']} }}</style>",
         '<link rel="preconnect" href="https://fonts.bunny.net">',
         '<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>',
-        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet">',
+        # Шрифт — без ожидания отрисовки (как на сайте, inertia.py)
+        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet" media="print" '
+        "onload=\"this.media='all'\">",
         tags,
     ]
     lang = e(ctx.locale.replace("_", "-"))

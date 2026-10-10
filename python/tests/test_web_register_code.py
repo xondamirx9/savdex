@@ -362,3 +362,31 @@ def test_вошедшему_шаги_не_нужны(сайт):
         )
 
         assert итог["ответ"]["status"] == 302
+
+
+def test_письмо_не_ушло(сайт):
+    # Почтовик недоступен — не «код отправлен», а ошибка на первом шаге
+    # (раньше сайт молча вёл ко второму шагу, а письма не было)
+    итог = отправить(
+        сайт,
+        "/register/email",
+        подготовка(),
+        снимок(сайт),
+        body={"email": АДРЕС},
+        env={**ОКРУЖЕНИЕ_DJANGO, "MAIL_MAILER": "smtp", "MAIL_HOST": "127.0.0.1", "MAIL_PORT": "9"},
+        headers=inertia(Referer=сайт + "/register"),
+    )
+
+    assert итог["ответ"]["headers"]["location"].endswith("/register")
+    ошибки = json.loads(итог["сессия"]["payload"])["errors"]["default"]["messages"]
+    assert ошибки["email"][0].startswith("Не удалось отправить письмо")
+    assert '"register":{"email"' not in итог["сессия"]["payload"]
+
+
+@pytest.mark.parametrize(("email", "китайский"), [("wang@qq.com", True), (АДРЕС, False)])
+def test_подсказка_китайской_почты(сайт, email, китайский):
+    итог = шаг(сайт, "/zh/register/code", данные=_ждёт(email), method="GET")
+    props = страница(итог["ответ"]["body"])["props"]
+
+    assert props["chinaMailbox"] is китайский
+    assert props["sender"]

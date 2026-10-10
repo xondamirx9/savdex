@@ -150,15 +150,20 @@ def регистрация(
     _ЖУРНАЛ.parent.mkdir(parents=True, exist_ok=True)
     _ЖУРНАЛ.write_text("")
 
+    if isinstance(body.get("country_id"), str):
+        body = {**body, "country_id": _страна(body["country_id"])}
+
     if лимит:
-        # Пять созданных аккаунтов с этого адреса — полчаса назад
+        # Предел созданных аккаунтов с этого адреса — полчаса назад
         import os
         import time
 
         from savdex import laravel_cache
 
         os.environ["CACHE_STORE"] = "file"
-        laravel_cache.put(f"register:{IP}", 5, 3600)
+        from savdex.web.auth_actions import MAX_REGISTRATIONS_PER_HOUR
+
+        laravel_cache.put(f"register:{IP}", MAX_REGISTRATIONS_PER_HOUR, 3600)
         laravel_cache.put(f"register:{IP}:timer", int(time.time()) + 1800, 3600)
 
     if занята:
@@ -255,6 +260,8 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     "terms": True,
     "account_type": "individual",
     "locale": "uz",
+    # Страна — у всех видов учёток (физлицу ПИНФЛ — только в Узбекистане)
+    "country_id": "uz",
 }
 
 
@@ -262,11 +269,10 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     ("body", "ошибки"),
     [
         (ВЕРНО, None),
-        # Без вида — юрлицо: нужны страна, название и разделы
-        (
-            {**ВЕРНО, "account_type": None, "locale": None},
-            {"country_id", "company_name", "categories"},
-        ),
+        # Без вида — юрлицо: нужны название и разделы
+        ({**ВЕРНО, "account_type": None, "locale": None}, {"company_name", "categories"}),
+        # Страна обязательна у всех: без неё номер не проверить
+        ({**ВЕРНО, "country_id": None}, {"country_id"}),
         (
             {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
             {"password", "password_confirmation"},
@@ -295,7 +301,7 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
         ),
         (
             {**ВЕРНО, "phone": "12", "terms": False, "account_type": "robot"},
-            {"phone", "terms", "account_type", "country_id", "company_name", "categories"},
+            {"phone", "terms", "account_type", "company_name", "categories"},
         ),
         # Имя из одних пробелов — пустое
         ({**ВЕРНО, "name": " ", "locale": "fr"}, {"name", "locale"}),
@@ -415,6 +421,40 @@ def test_регистрация_юрлица(сайт, правка, итог_):
         assert итог["users"] == [] and итог["companies"] == []
         найдено = _ошибки(итог)
         assert (найдено if isinstance(итог_, dict) else set(найдено)) == итог_
+
+
+@pytest.mark.parametrize(
+    ("правка", "итог_"),
+    [
+        # Иностранный фрилансер: ПИНФЛ (Узбекистан) не нужен — свой номер по желанию
+        ({"pinfl": None}, ("freelancer", None)),
+        ({"pinfl": "91510107-ma6xxxxxxx"}, ("freelancer", "91510107MA6XXXXXXX")),
+        ({"pinfl": "12345"}, {"pinfl"}),
+    ],
+)
+def test_иностранный_фрилансер(сайт, правка, итог_):
+    body = {
+        **ВЕРНО,
+        "account_type": "freelancer",
+        "service_section": "it",
+        "country_id": "cn",
+        **правка,
+    }
+    итог = регистрация(сайт, body)
+
+    if isinstance(итог_, set):
+        assert set(_ошибки(итог)) == итог_
+        assert итог["users"] == []
+
+        return
+
+    assert итог["location"].endswith("/cabinet")
+    [компания_] = итог["companies"]
+    assert (компания_[2], компания_[3]) == итог_
+    assert sql(
+        "select c.code from companies k join countries c on c.id = k.country_id "
+        "where k.slug <> 'taken'"
+    ) == [("cn",)]
 
 
 def test_китайская_компания(сайт):

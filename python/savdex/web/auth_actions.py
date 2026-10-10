@@ -384,9 +384,13 @@ def register(request: HttpRequest) -> HttpResponse:
     }
 
     # Набор полей — по тому, кто регистрируется; остальное — exclude
+    # Страна — у всех и до номера: номер проверяется по правилам её страны
+    # (ТЗ-02). Раньше физлицо и фрилансер страну не выбирали и получали
+    # узбекский ПИНФЛ — иностранный фрилансер не мог зарегистрироваться
+    rules["country_id"] = ["required", _exists("countries")]
+    country = _country_code(data, None)
+
     if legal:
-        # Страна — до номера: номер проверяется по правилам её страны (ТЗ-02)
-        rules["country_id"] = ["required", _exists("countries")]
         rules["company_name"] = ["required", "string", "min:2", "max:190"]
         rules["tin"] = [
             "nullable",
@@ -397,12 +401,21 @@ def register(request: HttpRequest) -> HttpResponse:
         ]
         rules["categories"] = ["required", "array", "min:1", "max:5"]
         rules["categories.*"] = ["integer", _top_category()]
-    else:
+    elif country in (None, "uz"):
         rules["pinfl"] = [
             "required" if freelancer else "nullable",
             "string",
             _pinfl(ctx, tin_messages),
             _unique_tin(None),
+        ]
+    else:
+        # Не Узбекистан: ПИНФЛ там нет — свой номер по правилам страны, по желанию
+        rules["pinfl"] = [
+            "nullable",
+            "string",
+            "max:20",
+            _tin(ctx, country, tin_messages, person=True),
+            _unique_tin(None, _country_id(data, None), ctx=ctx),
         ]
 
     if freelancer:
@@ -422,9 +435,12 @@ def register(request: HttpRequest) -> HttpResponse:
             errors["password"] = merged
 
     # Текст ошибки правил Tin и Pinfl выбирает само правило
-    for key, rule in (("tin", "validation.tin"), ("pinfl", "validation.pinfl")):
+    for key in ("tin", "pinfl"):
         if key in errors and tin_messages:
-            errors[key] = [tin_messages[0] if m == rule else m for m in errors[key]]
+            errors[key] = [
+                tin_messages[0] if m in ("validation.tin", "validation.pinfl") else m
+                for m in errors[key]
+            ]
 
     errors = _ordered(errors, list(rules))
 
@@ -519,8 +535,10 @@ def register(request: HttpRequest) -> HttpResponse:
     return _intended(ctx, "/cabinet")
 
 
-#: RegisteredUserController::MAX_PER_HOUR: созданные аккаунты, не отправки формы
-MAX_REGISTRATIONS_PER_HOUR = 5
+#: Созданные аккаунты с одного адреса сети в час (не отправки формы). Было
+#: 5: китайские клиенты выходят через общие VPN, а менеджер заводит
+#: нескольких клиентов из одного офиса — лимит кончался на чужих регистрациях
+MAX_REGISTRATIONS_PER_HOUR = 20
 
 #: RegisteredUserController::SESSION_EMAIL и SESSION_VERIFIED
 SESSION_EMAIL = "register.email"
@@ -592,11 +610,11 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     row: dict[str, Any] = {"legal_form": kind, "status": "active", "primary_role": "both"}
 
     if kind == "legal":
-        row.update(
-            name=data["company_name"], tin=data.get("tin"), country_id=int(data["country_id"])
-        )
+        row.update(name=data["company_name"], tin=data.get("tin"))
     else:
         row.update(name=data["name"], tin=data.get("pinfl"))
+
+    row["country_id"] = int(data["country_id"])
 
     if kind == "freelancer":
         # $base += [...]: primary_role уже есть — остаётся «both»
