@@ -155,6 +155,8 @@ STAGES: tuple[Stage, ...] = (
         tables=(
             "admin_actions",
             "activity_events",
+            # События продукта для аналитики (ТЗ-03): появилась после ухода Laravel
+            "product_events",
             "crm_leads",
             "crm_deals",
             "crm_stages",
