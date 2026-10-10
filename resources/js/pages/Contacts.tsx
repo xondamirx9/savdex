@@ -25,7 +25,7 @@ export default function Contacts() {
         [Phone, t('contacts.phone_title'), support.phone, support.telHref],
         [Mail, t('contacts.email_title'), support.email, `mailto:${support.email}`],
         [MessageCircle, t('contacts.tg_title'), support.tgHandle, support.telegram],
-        [Clock, t('contacts.hours_title'), support.hours || t('contacts.hours_value'), null],
+        [Clock, t('contacts.hours_title'), t('contacts.hours_value'), null],
     ];
 
     return (

@@ -259,3 +259,57 @@ def test_вошедший(сайт):
 
         assert д["status"] == 409
         assert д["headers"]["x-inertia-location"] == сайт + куда
+
+
+def test_поставщики_только_с_предложениями(сайт):
+    """
+    ТЗ-01, п.4: в «Поставщиках» нет компаний без предложений, скрытых и
+    заведённых из открытых источников — даже проверенных; порядок —
+    проверенные, затем с логотипом, затем новые.
+    """
+    компания(name="ООО «Без объявлений»", verification_level=3)
+    только_запросы = компания(name="ООО «Только запросы»", verification_level=3)
+    объявление(company_id=только_запросы, type="demand")
+    скрытая = компания(name="ооо ромашка", verification_level=3, status="hidden")
+    объявление(company_id=скрытая)
+    из_источников = компания(
+        name="ООО «Из реестра»",
+        verification_level=3,
+        source_note="Данные компании взяты из открытых источников.",
+    )
+    объявление(company_id=из_источников)
+    без_логотипа = компания(name="ООО «Без логотипа»", verification_level=3)
+    объявление(company_id=без_логотипа)
+    с_логотипом = компания(name="ООО «С логотипом»", verification_level=3, logo_path="logos/a.png")
+    объявление(company_id=с_логотипом)
+
+    props = страница(открыть(сайт, "/", env=ФАЙЛОВЫЙ)["body"])["props"]
+    имена = [s["name"] for s in props["suppliers"]]
+    лишние = {"ООО «Без объявлений»", "ООО «Только запросы»", "ооо ромашка", "ООО «Из реестра»"}
+
+    assert имена[:2] == ["ООО «С логотипом»", "ООО «Без логотипа»"]
+    assert not лишние & set(имена)
+    assert all(s["listings_count"] > 0 for s in props["suppliers"])
+
+
+def test_запросы_выше_товаров_пока_предложений_мало(сайт):
+    [(предложений,)] = sql(
+        "select count(*) from listings l join companies c on c.id = l.company_id "
+        "where l.type = 'supply' and l.status = 'active' and l.deleted_at is null "
+        "and c.status = 'active' and c.deleted_at is null"
+    )
+    props = страница(открыть(сайт, "/", env=ФАЙЛОВЫЙ)["body"])["props"]
+
+    assert props["requestsFirst"] is (предложений < 20)
+
+    снятые = [
+        r[0] for r in sql("select id from listings where type = 'supply' and status = 'active'")
+    ]
+    sql("update listings set status = 'archived' where id = any(%s)", [снятые])
+
+    try:
+        props = страница(открыть(сайт, "/", env=ФАЙЛОВЫЙ)["body"])["props"]
+        assert props["requestsFirst"] is True
+        assert props["requests"]
+    finally:
+        sql("update listings set status = 'active' where id = any(%s)", [снятые])

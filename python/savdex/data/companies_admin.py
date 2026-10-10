@@ -41,6 +41,8 @@ from savdex import audit
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register, state_tabs
 from savdex.crm.admin import _badge
 from savdex.data.models import (
+    COMPANY_HIDDEN,
+    COMPANY_STATUSES,
     FALLBACK_TYPES,
     LEGAL_FORMS,
     LEVELS,
@@ -366,7 +368,7 @@ class CompanyAdmin(SavdexModelAdmin):
         _simple("верификация", "verification_level", LEVELS, int),
         _simple("партнёрство", "partner_tier", PARTNER_TIERS),
         _simple("форма", "legal_form", LEGAL_FORMS),
-        _simple("статус", "status", {"active": "Активна", "blocked": "Заблокирована"}),
+        _simple("статус", "status", COMPANY_STATUSES),
         TinSuspect,
         Trashed,
     )
@@ -537,9 +539,12 @@ class CompanyAdmin(SavdexModelAdmin):
 
     @admin.display(description="что сейчас", ordering="status")
     def state(self, obj: CompanyRecord) -> str:
-        """Активна или заблокирована — и за что заблокирована."""
+        """Активна, скрыта с витрины или заблокирована — и за что заблокирована."""
         if obj.status == "active":
             return _badge("Активна", "success")
+
+        if obj.status == COMPANY_HIDDEN:
+            return _badge("Скрыта с витрины", "warning")
 
         return format_html(
             "{}{}",
@@ -676,9 +681,16 @@ class CompanyAdmin(SavdexModelAdmin):
 
                 company_actions.block(company, reason)
                 messages.success(request, "Компания заблокирована.")
-            else:
+            elif company.status == "blocked":
                 company_actions.unblock(company)
                 messages.success(request, "Компания разблокирована.")
+        elif todo == "hide":
+            if company.status == "active":
+                company_actions.hide(company)
+                messages.success(request, "Компания скрыта с витрины.")
+            elif company.status == COMPANY_HIDDEN:
+                company_actions.show(company)
+                messages.success(request, "Компания снова на витрине.")
         elif todo in ("restore", "force") and company.deleted_at is not None:
             if not self.has_delete_permission(request, company):
                 raise PermissionDenied
@@ -831,6 +843,7 @@ class CompanyAdmin(SavdexModelAdmin):
             "suppliers": alive.exclude(primary_role="buyer").count(),
             "buyers": alive.exclude(primary_role="supplier").count(),
             "blocked": alive.filter(status="blocked").count(),
+            "hidden": alive.filter(status=COMPANY_HIDDEN).count(),
             "trashed": rows.filter(deleted_at__isnull=False).count(),
         }
 
@@ -842,6 +855,7 @@ class CompanyAdmin(SavdexModelAdmin):
                 ("tab", "buyers", "Покупатели", counts["buyers"]),
                 ("waiting", "1", "Ждут проверки", waiting),
                 ("status", "blocked", "Заблокированы", counts["blocked"]),
+                ("status", COMPANY_HIDDEN, "Скрыты с витрины", counts["hidden"]),
                 ("trashed", "1", "Корзина", counts["trashed"]),
             ],
             alert=("1",),

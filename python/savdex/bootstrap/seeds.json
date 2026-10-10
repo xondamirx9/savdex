@@ -27520,16 +27520,16 @@
    "label": "Телефон поддержки",
    "description": null,
    "type": "string",
-   "value": "+998 71 200-00-00",
+   "value": "+998 77 188 48 80",
    "sort": 5
   },
   {
    "group": "contacts",
    "key": "support_hours",
    "label": "Часы работы",
-   "description": null,
+   "description": "На сайте не показывается: часы поддержки на пяти языках — в переводах (contacts.hours_value)",
    "type": "string",
-   "value": "Пн–Пт, 9:00–18:00 (Ташкент)",
+   "value": "",
    "sort": 6
   },
   {
@@ -27556,7 +27556,7 @@
    "label": "Telegram",
    "description": null,
    "type": "string",
-   "value": "https://t.me/savdex",
+   "value": "https://t.me/savdex_admin",
    "sort": 22
   },
   {
