@@ -209,16 +209,22 @@ def _search_text(company: dict[str, Any]) -> dict[str, Any]:
     return {"search_text": index(text)}
 
 
-def _slug(name: str) -> str:
-    """Company::makeSlug: свободный адрес, в том числе среди удалённых."""
-    base = slugify(name) or "company"
-    slug, i = base, 2
+def slug_fields(name: str) -> dict[str, Any]:
+    """
+    Адрес новой компании (ТЗ-02 §4): название латиницей (кириллица, пиньинь,
+    турецкие буквы — savdex/tenders/slug.py), до 60 знаков. Адрес занят (в том
+    числе удалённой) или короче 3 знаков — с номером компании через дефис:
+    «ce-shi-gong-si-<номер>», «company-<номер>». Номер для этого берётся из
+    последовательности заранее — тогда его и нужно записать как id.
+    """
+    base = slugify(name)[:60].strip("-")
 
-    while _rows("select 1 from companies where slug = %s limit 1", [slug]):
-        slug = f"{base}-{i}"
-        i += 1
+    if len(base) >= 3 and not _rows("select 1 from companies where slug = %s limit 1", [base]):
+        return {"slug": base}
 
-    return slug
+    key = int(_rows("select nextval(pg_get_serial_sequence('companies', 'id')) as id")[0]["id"])
+
+    return {"id": key, "slug": f"{base if len(base) >= 3 else 'company'}-{key}"}
 
 
 @form("PATCH")
@@ -337,7 +343,7 @@ def _create(
     assert ctx.user is not None
     row: dict[str, Any] = {**fields, "status": "active"}
     row.update(_search_text(row))
-    row["slug"] = fields.get("slug") or _slug(str(fields["name"]))
+    row.update({"slug": fields["slug"]} if fields.get("slug") else slug_fields(str(fields["name"])))
     now = _stamp(eloquent.now())
     row.update(updated_at=now, created_at=now)
     columns = list(row)

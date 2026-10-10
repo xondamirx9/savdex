@@ -534,7 +534,10 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     found = _rows("select * from companies where slug = %s and deleted_at is null limit 1", [slug])
 
     if not found:
-        return not_found(ctx)
+        # Прежний адрес (/company/company) — 301 на нынешний (ТЗ-02)
+        from savdex.reslug import redirect_for
+
+        return redirect_for(ctx, "company", slug) or not_found(ctx)
 
     c = found[0]
     user = ctx.user

@@ -23,7 +23,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
-from savdex.tenders.slug import slugify
+from savdex.tenders.slug import numbered_slug
 from savdex.web import eloquent, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
@@ -266,7 +266,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     if not listing["slug"]:
-        slug = slugify(str(listing["title"]))[:60].rstrip() + f"-{listing['id']}"
+        slug = numbered_slug(str(listing["title"]), listing["id"])
         _save(ctx, listing, {"slug": slug})
 
     _notify_company(

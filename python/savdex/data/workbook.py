@@ -101,7 +101,7 @@ from django.db import connection, transaction
 from savdex import access, audit
 from savdex.guards import allowed_writes
 from savdex.tenders import importer
-from savdex.tenders.slug import slugify
+from savdex.tenders.slug import numbered_slug
 from savdex.web import image_store, locales
 from savdex.web.cabinet import _rows
 from savdex.web.eloquent import _cast_same, _written
@@ -2055,5 +2055,5 @@ def _attributes(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _make_slug(title: str, key: int) -> str:
-    """Listing::makeSlug: хвост из заголовка (не длиннее 60) и номер."""
-    return slugify(title)[:60].rstrip() + f"-{key}"
+    """Listing::makeSlug: хвост из заголовка (не длиннее 60) и номер; без латиницы — один номер."""
+    return numbered_slug(title, key)

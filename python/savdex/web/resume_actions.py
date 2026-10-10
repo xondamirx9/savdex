@@ -31,7 +31,7 @@ from django.http import HttpRequest, HttpResponse
 from savdex.audit import _php_json
 from savdex.guards import allowed_writes
 from savdex.laravel_storage import public_root
-from savdex.tenders.slug import slugify
+from savdex.tenders.slug import numbered_slug
 from savdex.web import eloquent
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows
@@ -414,7 +414,7 @@ def _insert(ctx: Context, fields: dict[str, Any], now: str) -> None:
             [*(_value(c, row[c]) for c in columns), now, now],
         )
         resume_id = cursor.fetchone()[0]
-        slug = slugify(str(fields["title"]))[:60].rstrip() + f"-{resume_id}"
+        slug = numbered_slug(str(fields["title"]), resume_id)
         cursor.execute(
             "update resumes set slug = %s, updated_at = %s where id = %s",
             [slug, now, resume_id],
@@ -453,7 +453,7 @@ def _update(resume: dict[str, Any], fields: dict[str, Any], now: str) -> None:
 
     # Адрес — и когда правок нет: save() без изменений, затем saveQuietly
     if not resume["slug"]:
-        slug = slugify(str(fields["title"]))[:60].rstrip() + f"-{resume['id']}"
+        slug = numbered_slug(str(fields["title"]), resume["id"])
 
         with allowed_writes("resumes"), connection.cursor() as cursor:
             cursor.execute(

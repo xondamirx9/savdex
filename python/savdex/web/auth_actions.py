@@ -585,7 +585,7 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     RegisteredUserController::companyData и Company::create: профиль
     заводится вместе с человеком; у юрлица — и выбранные разделы каталога.
     """
-    from savdex.web.company_profile_actions import CASTS, _search_text, _slug
+    from savdex.web.company_profile_actions import CASTS, _search_text, slug_fields
     from savdex.web.it_tasks import types_under
 
     row: dict[str, Any] = {"legal_form": kind, "status": "active", "primary_role": "both"}
@@ -605,7 +605,7 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
         )
 
     row.update(_search_text(row))
-    row["slug"] = _slug(str(row["name"]))
+    row.update(slug_fields(str(row["name"])))
     now = _stamp(eloquent.now())
     row.update(updated_at=now, created_at=now)
     columns = list(row)
