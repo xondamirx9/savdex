@@ -203,7 +203,7 @@ export default function About({
                                             <span>
                                                 <b>{support.phone}</b>
                                                 <br />
-                                                <span className="t-caption muted">{support.hours}</span>
+                                                <span className="t-caption muted">{t('contacts.hours_value')}</span>
                                             </span>
                                         </a>
                                         <a href={`mailto:${support.email}`} className="row contact-link" style={{ gap: 12 }}>
@@ -212,8 +212,6 @@ export default function About({
                                             </span>
                                             <span>
                                                 <b>{support.email}</b>
-                                                <br />
-                                                <span className="t-caption muted">{t('about.support_hint')}</span>
                                             </span>
                                         </a>
                                         <a href={support.telegram} className="row contact-link" style={{ gap: 12 }}>

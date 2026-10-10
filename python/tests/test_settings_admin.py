@@ -260,12 +260,12 @@ def test_картинку_можно_убрать(люди, картинки):
 
 def test_сайт_сразу_видит_правку(люди):
     """Сайт читает настройки из базы на каждый запрос — правка видна сразу."""
-    assert _витрина()["support"]["hours"] == _value("support_hours")
+    assert _витрина()["support"]["phone"] == _value("support_phone")
 
-    _, ответ = django(люди["superadmin"], _правка("support_hours", "Пн–Сб, 9:00–19:00"))
+    _, ответ = django(люди["superadmin"], _правка("support_phone", "+998 77 000 00 00"))
 
     assert ответ["status"] == 302, ответ["body"][:3000]
-    assert _витрина()["support"]["hours"] == "Пн–Сб, 9:00–19:00"
+    assert _витрина()["support"]["phone"] == "+998 77 000 00 00"
 
 
 def test_системные_не_удаляются_свои_удаляются(люди):

@@ -119,17 +119,19 @@ def test_вкладки_со_счётчиками(люди):
     _компания("Заблокированная", primary_role="supplier", status="blocked", verification_level=2)
     ждёт = _компания("Без проверки", primary_role="supplier")
     _компания("Без проверки и без витрины", primary_role="supplier")
+    _компания("Тестовая", primary_role="buyer", status="hidden")
     _объявление(поставщик)
     _объявление(ждёт)
 
     _, все, очередь = django(люди["admin"], ("get", LIST, None), ("get", LIST + "?waiting=1", None))
 
     assert _вкладки(все["body"]) == {
-        "Все": 5,
+        "Все": 6,
         "Поставщики": 4,
-        "Покупатели": 1,
+        "Покупатели": 2,
         "Ждут проверки": 1,
         "Заблокированы": 1,
+        "Скрыты с витрины": 1,
         "Корзина": 0,
     }
     # Вкладка показывает ровно то, что обещал счётчик: непроверенную
@@ -270,6 +272,27 @@ def test_блокировка(люди):
     assert sql("select status, blocked_reason, blocked_at from companies") == [
         ("active", None, None)
     ]
+
+
+def test_скрытие_с_витрины(люди):
+    """ТЗ-01, п.4: тестовую компанию скрывают, а не блокируют — объявления остаются."""
+    pk = _компания("ооо ромашка")
+    sql(
+        "insert into listings (company_id, type, title, status, currency, created_at, "
+        "updated_at) values (%s, 'supply', 'Цемент', 'active', 'UZS', now(), now())",
+        [pk],
+    )
+
+    _действие(люди["admin"], pk, act="hide")
+    assert sql("select status, blocked_at from companies") == [("hidden", None)]
+    assert sql("select status from listings") == [("active",)]
+
+    # Скрытую не блокируют поверх: сначала вернуть на витрину
+    _действие(люди["admin"], pk, act="block", reason="Продавал чужой товар под своим именем")
+    assert sql("select status from companies") == [("hidden",)]
+
+    _действие(люди["admin"], pk, act="hide")
+    assert sql("select status from companies") == [("active",)]
 
 
 def test_продажи_смотрят_но_не_решают(люди):

@@ -566,7 +566,6 @@ def shared(ctx: Context) -> dict[str, Any]:
         "support": {
             "email": setting(values, "support_email"),
             "phone": setting(values, "support_phone"),
-            "hours": setting(values, "support_hours"),
             "telegram": setting(values, "telegram"),
             "legal_name": setting(values, "legal_name"),
             "legal_tin": setting(values, "legal_tin"),

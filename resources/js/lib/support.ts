@@ -4,7 +4,6 @@ import type { SharedProps, SupportContacts } from '@/types';
 const EMPTY: SupportContacts = {
     email: '',
     phone: '',
-    hours: '',
     telegram: '',
     legal_name: '',
     legal_tin: '',
