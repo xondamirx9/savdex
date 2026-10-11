@@ -2,8 +2,10 @@
 #
 # Каждое слияние в основную ветку выкладывается и сюда: Render — боевой
 # сайт, эта машина — тестовый. Вручную (Actions → staging → Run workflow)
-# можно выложить любую ветку, чтобы проверить её до слияния, и один раз —
-# подготовить чистую машину (галочка «bootstrap»).
+# можно выложить любую ветку, чтобы проверить её до слияния, один раз —
+# подготовить чистую машину (галочка «bootstrap»), а галочкой «копия
+# боевой базы» — залить на тестовый свежую копию данных с Render
+# (deploy/server/load-db.sh; база тестового при этом стирается).
 #
 # Образ собирается на самой машине (deploy/server/deploy.sh): так с
 # GitHub уходит только код, а не образ в сотни мегабайт.
@@ -14,6 +16,8 @@
 # Секреты и переменные (Settings → Secrets and variables → Actions):
 #   secrets.DEPLOY_SSH_KEY     закрытый SSH-ключ, открытая часть — в машине
 #   secrets.STAGING_PASSWORD   пароль на тестовый сайт (логин savdex)
+#   secrets.BACKUP_DATABASE_URL  адрес боевой базы — для галочки «копия
+#                              боевой базы» (тот же, что у ночных копий)
 #   vars.STAGING_HOST          публичный IP машины
 #   vars.STAGING_HOST_KEY      ключ машины («ssh-ed25519 AAAA…») — защищает
 #                              от подмены сервера; первая выкладка подскажет его
@@ -39,6 +43,10 @@ on:
         default: ''
       bootstrap:
         description: 'Сначала подготовить чистую машину (один раз)'
+        type: boolean
+        default: false
+      prod_db:
+        description: 'Загрузить копию боевой базы (база тестового стирается)'
         type: boolean
         default: false
 
@@ -134,3 +142,42 @@ jobs:
         run: |
           printf '%s\n' "$STAGING_PASSWORD" \
             | ssh -l deploy staging "SITE_DOMAIN='$SITE_DOMAIN' bash /opt/savdex/src/deploy/server/deploy.sh --password-stdin"
+
+      - name: Копия боевой базы
+        if: inputs.prod_db
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Нет секрета BACKUP_DATABASE_URL (docs/backups.md)"
+            exit 1
+          fi
+          url="$DATABASE_URL"
+          case "$url" in
+            *sslmode=*) ;;
+            *\?*) url="$url&sslmode=require" ;;
+            *) url="$url?sslmode=require" ;;
+          esac
+          # База тестового — PostgreSQL 16: копия должна быть снята pg_dump 16,
+          # иначе pg_restore 16 её не прочитает
+          major=$(docker run --rm -e URL="$url" postgres:16 sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
+          echo "Боевая база: PostgreSQL $major"
+          if [ "$major" != "16" ]; then
+            echo "::error::Боевая база — PostgreSQL $major, а тестовая — 16. Нужно поднять версию базы тестового (deploy/staging/compose.yml)."
+            exit 1
+          fi
+          umask 077
+          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" postgres:16 \
+            sh -c 'pg_dump --format=custom --compress=9 --file=/out/prod.dump "$URL"'
+          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/prod.dump"
+          size=$(stat -c %s "$RUNNER_TEMP/prod.dump")
+          echo "Копия: $((size / 1024)) КБ"
+          if [ "$size" -lt 50000 ]; then
+            echo "::error::Копия подозрительно мала — проверьте BACKUP_DATABASE_URL."
+            exit 1
+          fi
+          ssh -l deploy staging 'install -d -m 700 /opt/savdex/restore'
+          scp -o User=deploy "$RUNNER_TEMP/prod.dump" staging:/opt/savdex/restore/prod.dump
+          rm -f "$RUNNER_TEMP/prod.dump"
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-db.sh /opt/savdex/restore/prod.dump'
