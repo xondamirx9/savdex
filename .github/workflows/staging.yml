@@ -1,0 +1,121 @@
+# Тестовый сервер staging.savdex.uz в Uztelecom Cloud (deploy/README.md).
+#
+# Каждое слияние в основную ветку выкладывается и сюда: Render — боевой
+# сайт, эта машина — тестовый. Вручную (Actions → staging → Run workflow)
+# можно выложить любую ветку, чтобы проверить её до слияния, и один раз —
+# подготовить чистую машину (галочка «bootstrap»).
+#
+# Образ собирается на самой машине (deploy/server/deploy.sh): так с
+# GitHub уходит только код, а не образ в сотни мегабайт.
+#
+# Пока сервер не заведён (нет переменной STAGING_HOST), workflow
+# пропускается и не краснеет.
+#
+# Секреты и переменные (Settings → Secrets and variables → Actions):
+#   secrets.DEPLOY_SSH_KEY     закрытый SSH-ключ, открытая часть — в машине
+#   secrets.STAGING_PASSWORD   пароль на тестовый сайт (логин savdex)
+#   vars.STAGING_HOST          публичный IP машины
+#   vars.STAGING_HOST_KEY      ключ машины («ssh-ed25519 AAAA…») — защищает
+#                              от подмены сервера; первая выкладка подскажет его
+#   vars.STAGING_DOMAIN        адрес сайта, по умолчанию staging.savdex.uz
+#   vars.STAGING_BOOTSTRAP_USER  пользователь образа ОС для подготовки
+#                              машины (root или ubuntu), по умолчанию root
+#
+# Репозиторий публичный, журналы Actions видят все: пароли и ключи
+# в журнал не выводятся — пароль уходит на сервер через stdin.
+name: staging
+
+on:
+  push:
+    branches: [claude/website-copy-new-design-xaxsr0]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ветка или коммит (пусто — основная ветка)'
+        required: false
+        default: ''
+      bootstrap:
+        description: 'Сначала подготовить чистую машину (один раз)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: vars.STAGING_HOST != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HOST: ${{ vars.STAGING_HOST }}
+      HOST_KEY: ${{ vars.STAGING_HOST_KEY }}
+      SITE_DOMAIN: ${{ vars.STAGING_DOMAIN || 'staging.savdex.uz' }}
+      BOOTSTRAP_USER: ${{ vars.STAGING_BOOTSTRAP_USER || 'root' }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::error::Нет секрета DEPLOY_SSH_KEY (deploy/README.md)"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "$HOST_KEY" ]; then
+            printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -t ed25519 "$HOST" > ~/.ssh/known_hosts 2>/dev/null
+            echo "::warning::Ключ сервера не закреплён. Добавьте переменную STAGING_HOST_KEY = $(cut -d' ' -f2- ~/.ssh/known_hosts)"
+          fi
+          cat > ~/.ssh/config <<CONF
+          Host staging
+            HostName $HOST
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          CONF
+
+      - name: Подготовить машину
+        if: inputs.bootstrap
+        run: |
+          scp -o User="$BOOTSTRAP_USER" deploy/server/bootstrap.sh staging:/tmp/savdex-bootstrap.sh
+          if [ "$BOOTSTRAP_USER" = root ]; then
+            ssh -l root staging 'bash /tmp/savdex-bootstrap.sh && rm -f /tmp/savdex-bootstrap.sh'
+          else
+            ssh -l "$BOOTSTRAP_USER" staging 'sudo -n bash /tmp/savdex-bootstrap.sh && rm -f /tmp/savdex-bootstrap.sh'
+          fi
+
+      - name: Код на сервере
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "Коммит $sha"
+          ssh -l deploy staging "set -e
+            test -d /opt/savdex/src/.git || git clone --no-checkout --filter=blob:none '$REPO_URL' /opt/savdex/src
+            git -C /opt/savdex/src fetch --depth 1 origin '$sha'
+            git -C /opt/savdex/src checkout --force --detach FETCH_HEAD"
+
+      - name: Сборка и запуск
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          printf '%s\n' "$STAGING_PASSWORD" \
+            | ssh -l deploy staging "SITE_DOMAIN='$SITE_DOMAIN' bash /opt/savdex/src/deploy/server/deploy.sh --password-stdin"

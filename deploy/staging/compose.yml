@@ -1,0 +1,83 @@
+# Тестовый сервер (staging.savdex.uz) — всё на одной машине Uztelecom.
+#
+# caddy — HTTPS (сертификат Let's Encrypt выпускает и продлевает сам),
+#   пароль на весь сайт и передача запросов приложению. Заголовки
+#   X-Forwarded-* от посетителя Caddy не пропускает, а ставит свои:
+#   адрес посетителя и хост в ссылках из писем подделать нельзя.
+# app — тот же образ, что на Render (Dockerfile): Apache, сайт, админка
+#   и фоновые задачи; собирается на этой же машине (deploy/server/deploy.sh).
+# db — своя PostgreSQL 16 с тестовыми данными; наружу не открыта,
+#   её видит только app по внутренней сети Docker.
+#
+# Пароли и ключи — в /opt/savdex/env (права 600), не в репозитории:
+# их создаёт deploy.sh при первой выкладке.
+#
+#   SAVDEX_TAG=<версия> docker compose -f deploy/staging/compose.yml \
+#       --env-file /opt/savdex/env/compose.env up -d
+
+name: savdex-staging
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?адрес тестового сайта, например staging.savdex.uz}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Пароль сайта (basic_auth с хешем) — файл, который пишет deploy.sh
+      - ${SAVDEX_HOME:-/opt/savdex}/env/auth.caddy:/etc/caddy/auth.caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    image: savdex:${SAVDEX_TAG:?версия образа}
+    restart: unless-stopped
+    env_file:
+      - ${SAVDEX_HOME:-/opt/savdex}/env/app.env
+    volumes:
+      # Постоянный диск, как /var/data на Render: загрузки, ключ, состояние расписания
+      - ${SAVDEX_HOME:-/opt/savdex}/data:/var/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # /up — Django за Apache жив. Первый запуск на пустой базе создаёт
+      # схему и справочники до старта Apache, поэтому запас большой
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:10000/up', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+      start_period: 300s
+    # Apache и gunicorn дорабатывают начатые запросы (--graceful-timeout 30)
+    stop_grace_period: 40s
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: savdex
+      POSTGRES_USER: savdex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?пароль владельца базы}
+      # Роль Django с правами из python/savdex/bootstrap/grants.sql —
+      # создаётся один раз, при первом запуске на пустом каталоге (initdb/)
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:?пароль роли savdex_django}
+    volumes:
+      - ${SAVDEX_HOME:-/opt/savdex}/db:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "savdex", "-d", "savdex"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  caddy_data:
+  caddy_config:
