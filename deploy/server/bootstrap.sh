@@ -10,7 +10,7 @@
 # Что делает:
 # - обновления: всё сейчас и дальше автоматически (только исправления
 #   безопасности, без перезагрузки);
-# - Docker и docker compose из пакетов Ubuntu; журналы контейнеров
+# - Docker, docker compose и buildx (сборка образа) из пакетов Ubuntu; журналы контейнеров
 #   с ротацией, иначе они однажды съедят диск;
 # - файрвол: снаружи открыты только SSH, HTTP и HTTPS;
 # - SSH только по ключу, root — только по ключу; fail2ban банит
@@ -34,7 +34,7 @@ timedatectl set-timezone Asia/Tashkent 2>/dev/null || true
 apt-get update -q
 apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
 apt-get -y -q install --no-install-recommends \
-    docker.io docker-compose-v2 git ufw fail2ban unattended-upgrades ca-certificates
+    docker.io docker-compose-v2 docker-buildx git ufw fail2ban unattended-upgrades ca-certificates
 
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'CONF'
 APT::Periodic::Update-Package-Lists "1";
