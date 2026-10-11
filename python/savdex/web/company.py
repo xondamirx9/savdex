@@ -534,7 +534,10 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     found = _rows("select * from companies where slug = %s and deleted_at is null limit 1", [slug])
 
     if not found:
-        return not_found(ctx)
+        # Прежний адрес (/company/company) — 301 на нынешний (ТЗ-02)
+        from savdex.reslug import redirect_for
+
+        return redirect_for(ctx, "company", slug) or not_found(ctx)
 
     c = found[0]
     user = ctx.user
@@ -579,6 +582,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
             "files": _files(ctx, c["id"]),
             "unlocked": unlocked,
             "is_own": viewer == c["id"],
+            # Код из письма пропущен при регистрации — «Не подтверждено»
+            "unconfirmed": bool(c.get("email_unconfirmed")),
             "reviews": _reviews(ctx, c["id"]),
             "review_blocked": review_blocked(ctx, c["id"]),
             "criteria": cabinet.review_criteria(ctx.locale),

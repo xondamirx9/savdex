@@ -23,10 +23,10 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
-from savdex.tenders.slug import slugify
-from savdex.web import eloquent, ui
+from savdex.tenders.slug import numbered_slug
+from savdex.web import analytics, eloquent, ui
 from savdex.web.actions import form
-from savdex.web.cabinet import _rows, company_of, company_plan
+from savdex.web.cabinet import _rows, company_of, company_plan, listing_limit_message
 from savdex.web.chat_actions import _unverified
 from savdex.web.company_contact_actions import _php_boolean
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, redirect
@@ -60,7 +60,22 @@ def _saving(listing: dict[str, Any]) -> dict[str, Any]:
     return {"search_text": _search_text(listing)}
 
 
+#: Тексты объявления с машинным переводом: сменился текст — перевод заново
+_TRANSLATED = ("title", "description", "delivery_terms", "payment_terms")
+
+
 def _save(ctx: Context, listing: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    # Перевод делается один раз: без сброса после правки посетитель на другом
+    # языке видел старый текст (М400 вместо М500). Пустой перевод фоновая
+    # задача (manage.py translate) заполнит заново — как у тендеров и резюме
+    for field in _TRANSLATED:
+        if (
+            field in changes
+            and str(changes[field] or "") != str(listing.get(field) or "")
+            and listing.get(f"{field}_i18n")
+        ):
+            changes[f"{field}_i18n"] = None
+
     return eloquent.save(
         ctx,
         "listings",
@@ -108,13 +123,8 @@ def create(request: HttpRequest) -> HttpResponse:
     limit = plan.get("listings_limit")
 
     if limit is not None and _active(company["id"]) >= limit:
-        flash(
-            ctx,
-            "error",
-            ctx.t("messages.listing.limit", plan=plan["name"], limit=limit)
-            + " "
-            + ctx.t("messages.listing.limit_hint"),
-        )
+        flash(ctx, "error", listing_limit_message(ctx, plan))
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return redirect(ctx, ctx.url("/cabinet/listings"))
 
@@ -129,17 +139,31 @@ def create(request: HttpRequest) -> HttpResponse:
     return redirect(ctx, ctx.url(f"/cabinet/listings/{listing_id}/edit"))
 
 
+def default_currency(company: dict[str, Any]) -> str:
+    """
+    Валюта нового объявления (ТЗ-02 §5): компания из Узбекистана (или без
+    страны) — сумы, иностранная — доллары. Человек может сменить в мастере.
+    """
+    if company.get("country_id") is None:
+        return "UZS"
+
+    rows = _rows("select code from countries where id = %s", [company["country_id"]])
+
+    return "UZS" if not rows or rows[0]["code"] == "uz" else "USD"
+
+
 def _insert_draft(ctx: Context, company: dict[str, Any]) -> int:
     """$company->listings()->create([...]): черновик с пустым заголовком."""
     assert ctx.user is not None
     now = _stamp(eloquent.now())
     row: dict[str, Any] = {
         "user_id": ctx.user["id"],
+        # Город объявления — город компании; валюта — по её стране
         "city_id": company["city_id"],
         "status": "draft",
         "type": "supply",
         "title": "",
-        "currency": "UZS",
+        "currency": default_currency(company),
         "wizard_step": 1,
         "company_id": company["id"],
     }
@@ -204,6 +228,8 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
             "title": ["required", "string", "min:10", "max:90"],
             "description": ["required", "string", "min:30", "max:5000"],
             "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+            "price_to": ["nullable", "numeric", "min:0", "max:99999999999"],
+            "price_from": ["nullable", "boolean"],
             "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
             "price_negotiable": ["boolean"],
             # Как у автосохранения: без правил мусор доходил до базы (500)
@@ -232,22 +258,27 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         # ValidationException::withMessages — как ошибка проверки
         return invalid(ctx, {"price": [ctx.t("messages.listing.price_required")]})
 
+    if (refused := _price_range_error(ctx, data, negotiable)) is not None:
+        return refused
+
     company = company_of(ctx)
     assert company is not None
     plan = company_plan(company["id"])
     limit = plan.get("listings_limit")
 
     if limit is not None and _active(company["id"], listing["id"]) >= limit:
-        flash(ctx, "error", ctx.t("messages.listing.limit", plan=plan["name"], limit=limit))
+        flash(ctx, "error", listing_limit_message(ctx, plan, hint=False))
+        analytics.limit_reached(ctx, "listing", plan.get("code"))
 
         return back(ctx)
 
     fields = (
-        "category_id", "title", "description", "price", "bundle_price", "currency",
+        "category_id", "title", "description", "price", "price_to", "bundle_price", "currency",
         "unit", "min_order", "delivery_terms", "payment_terms",
     )  # fmt: skip
     now = eloquent.now()
     changes = {k: data[k] for k in fields if k in data}
+    changes.update(_price_kind(data, negotiable))
 
     # Валюта обязательна в базе: пустая — остаётся прежней
     if changes.get("currency") is None:
@@ -266,7 +297,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     if not listing["slug"]:
-        slug = slugify(str(listing["title"]))[:60].rstrip() + f"-{listing['id']}"
+        slug = numbered_slug(str(listing["title"]), listing["id"])
         _save(ctx, listing, {"slug": slug})
 
     _notify_company(
@@ -278,6 +309,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         "success",
         "/cabinet/listings",
     )
+    analytics.listing_published(ctx, listing)
     flash(ctx, "success", ctx.t("messages.listing.published"))
 
     return redirect(ctx, ctx.url("/cabinet/listings"))
@@ -364,6 +396,31 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
+    """
+    Вид цены: точная, «от» (price_from) или диапазон «price – price_to».
+    У договорной и у «от» верхней границы нет; у диапазона нет «от».
+    """
+    price_from = _php_boolean(data.get("price_from")) if "price_from" in data else False
+    upper = data.get("price_to")
+    upper = None if upper in (None, "") or negotiable or price_from else upper
+
+    return {"price_from": price_from and not negotiable, "price_to": upper}
+
+
+def _price_range_error(ctx: Context, data: dict[str, Any], negotiable: bool) -> HttpResponse | None:
+    """Диапазон «от – до»: верхняя граница больше нижней."""
+    upper = _price_kind(data, negotiable)["price_to"]
+
+    if upper is None:
+        return None
+
+    if data.get("price") is None or float(upper) <= float(data["price"]):
+        return invalid(ctx, {"price_to": [ctx.t("messages.listing.price_to_min")]})
+
+    return None
+
+
 def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:
     """
     Объявление на витрине правится вживую: правка, которую не пропустила бы
@@ -407,6 +464,8 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
         "title": ["nullable", "string", "max:90"],
         "description": ["nullable", "string", "max:5000"],
         "price": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "price_to": ["nullable", "numeric", "min:0", "max:99999999999"],
+        "price_from": ["nullable", "boolean"],
         "bundle_price": ["nullable", "numeric", "min:0", "max:99999999999"],
         "currency": ["nullable", "in:" + ",".join(CURRENCIES)],
         "unit": ["nullable", "string", "max:20"],
@@ -440,6 +499,19 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     # Очистка поля должна доехать до базы
     if "bundle_price" in data:
         changes["bundle_price"] = data["bundle_price"]
+
+    # Вид цены: «от» и диапазон — как при публикации; неверный диапазон в
+    # черновике не сохраняется (верхняя граница не меньше нижней)
+    if "price_from" in data or "price_to" in data:
+        negotiable = changes.get("price_negotiable", listing["price_negotiable"])
+        kind = _price_kind(data, bool(negotiable))
+        price = changes.get("price", listing["price"])
+        upper = kind["price_to"]
+
+        if upper is not None and (price is None or float(upper) <= float(price)):
+            kind.pop("price_to")
+
+        changes.update(kind)
 
     if listing["status"] == "active":
         _keep_publishable(listing, changes)

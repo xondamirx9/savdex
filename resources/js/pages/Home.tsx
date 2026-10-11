@@ -314,6 +314,7 @@ export default function Home({
     latest,
     products,
     requests,
+    requestsFirst,
     suppliers,
     countries,
     cities,
@@ -331,6 +332,8 @@ export default function Home({
     /** Лента «Товары»: свежие предложения всех компаний, без карточек витрины VIP */
     products: ProductRow[];
     requests: ProductRow[];
+    /** Предложений пока мало — «Запросы» стоят выше «Товаров» */
+    requestsFirst: boolean;
     suppliers: SupplierRow[];
     countries: CountryOption[];
     cities: CityOption[];
@@ -388,6 +391,52 @@ export default function Home({
         );
     };
 
+    /*
+     * Товары: свежие предложения всех компаний. Витрина VIP
+     * выше только для высшего тарифа и бывает пуста — без этой
+     * ленты между категориями и поставщиками товаров не было
+     */
+    const productsSection = shown('products') && products.length > 0 && (
+        <section className="section--tight">
+            <div className="container">
+                <div className="section-bar">
+                    <h2>{block('products').heading}</h2>
+                    <Link href={routes.catalog} className="section-bar-link">
+                        {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                    </Link>
+                </div>
+                <CardRow>
+                    {products.map((row) => (
+                        <ProductCard key={row.id} row={row} />
+                    ))}
+                </CardRow>
+            </div>
+        </section>
+    );
+
+    /*
+     * Запросы (RFQ): другая сторона площадки — «куплю».
+     * Лента горизонтальной прокруткой в один ряд, чтобы
+     * не спорить с сеткой товаров выше
+     */
+    const requestsSection = shown('requests') && requests.length > 0 && (
+        <section className="section--tight">
+            <div className="container">
+                <div className="section-bar">
+                    <h2>{block('requests').heading}</h2>
+                    <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
+                        {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
+                    </Link>
+                </div>
+                <CardRow>
+                    {requests.map((row) => (
+                        <ProductCard key={row.id} row={row} />
+                    ))}
+                </CardRow>
+            </div>
+        </section>
+    );
+
     return (
         <PublicLayout
             /*
@@ -417,14 +466,18 @@ export default function Home({
                         <div className="hero-b2b-copy" data-reveal>
                             <h1>{hero.heading}</h1>
                             {hero.subheading !== '' && <p className="hero-b2b-lead">{hero.subheading}</p>}
-                            {/* «Продавцы» — предложения товаров, «Покупатели» —
-                                запросы на закупку: две стороны площадки */}
+                            {/* Две стороны площадки — глазами посетителя: продавцу
+                                нужны заявки покупателей, покупателю — товары
+                                поставщиков. Главная кнопка — разместить */}
                             <div className="hero-b2b-cta">
-                                <Link href={routes.catalog} className="btn btn-primary btn-lg">
-                                    {t('home.cta_products')}
-                                </Link>
                                 <Link href={`${routes.catalog}?type=demand`} className="btn btn-secondary btn-lg">
-                                    {t('home.cta_companies')}
+                                    {t('home.cta_sell')}
+                                </Link>
+                                <Link href={`${routes.catalog}?type=supply`} className="btn btn-secondary btn-lg">
+                                    {t('home.cta_buy')}
+                                </Link>
+                                <Link href={routes.register} className="btn btn-primary btn-lg">
+                                    {t('home.cta_post')}
                                 </Link>
                             </div>
                         </div>
@@ -532,46 +585,18 @@ export default function Home({
                 </section>
             )}
 
-            {/* ── Товары: свежие предложения всех компаний. Витрина VIP
-                 выше только для высшего тарифа и бывает пуста — без этой
-                 ленты между категориями и поставщиками товаров не было ── */}
-            {shown('products') && products.length > 0 && (
-                <section className="section--tight">
-                    <div className="container">
-                        <div className="section-bar">
-                            <h2>{block('products').heading}</h2>
-                            <Link href={routes.catalog} className="section-bar-link">
-                                {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
-                            </Link>
-                        </div>
-                        <CardRow>
-                            {products.map((row) => (
-                                <ProductCard key={row.id} row={row} />
-                            ))}
-                        </CardRow>
-                    </div>
-                </section>
-            )}
-
-            {/* ── Запросы (RFQ): другая сторона площадки — «куплю».
-                 Лента горизонтальной прокруткой в один ряд, чтобы
-                 не спорить с сеткой товаров выше ── */}
-            {shown('requests') && requests.length > 0 && (
-                <section className="section--tight">
-                    <div className="container">
-                        <div className="section-bar">
-                            <h2>{block('requests').heading}</h2>
-                            <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
-                                {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
-                            </Link>
-                        </div>
-                        <CardRow>
-                            {requests.map((row) => (
-                                <ProductCard key={row.id} row={row} />
-                            ))}
-                        </CardRow>
-                    </div>
-                </section>
+            {/* Пока предложений мало, первыми идут «Запросы»: свежий
+                 посетитель видит наполненный раздел (ТЗ-01, п.2.3) */}
+            {requestsFirst ? (
+                <>
+                    {requestsSection}
+                    {productsSection}
+                </>
+            ) : (
+                <>
+                    {productsSection}
+                    {requestsSection}
+                </>
             )}
 
             {/* ── Поставщики: покупатель фильтруется по блокам — кто ищет

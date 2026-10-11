@@ -1,5 +1,19 @@
 import { router, useForm } from '@inertiajs/react';
-import { ExternalLink, ImagePlus, Monitor, Package, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react';
+import {
+    ArrowLeftRight,
+    Check,
+    ExternalLink,
+    ImagePlus,
+    Monitor,
+    Moon,
+    Package,
+    Pencil,
+    Plus,
+    Shuffle,
+    Smartphone,
+    Sun,
+    Trash2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { FieldError } from '@/components/FieldError';
 import { Panel, formatNumber } from '@/components/cabinet';
@@ -191,29 +205,9 @@ export default function Site({
                     </Panel>
 
                     <Panel title={t('cabinet.site.style')}>
-                        <p className="label">{t('cabinet.site.presets')}</p>
-                        <div className="site-presets">
-                            {Object.entries(options.presets).map(([key, preset]) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    className="site-preset"
-                                    title={t(`cabinet.site.preset_names.${key}`)}
-                                    onClick={() => setTheme(preset)}
-                                >
-                                    <span
-                                        className="site-swatch"
-                                        style={{
-                                            background: `linear-gradient(135deg, ${preset.primary} 0 50%, ${preset.accent} 50% 100%)`,
-                                            outline: preset.mode === 'dark' ? '3px solid #0b1120' : undefined,
-                                        }}
-                                    />
-                                    <small>{t(`cabinet.site.preset_names.${key}`)}</small>
-                                </button>
-                            ))}
-                        </div>
+                        <PresetPicker presets={options.presets} current={current} onPick={(preset) => setTheme(preset)} />
 
-                        <div className="grid grid-2 mt-16">
+                        <div className="site-colors mt-16">
                             <ColorField
                                 id="site-primary"
                                 label={t('cabinet.site.primary')}
@@ -228,6 +222,22 @@ export default function Site({
                                 onChange={(accent) => setTheme({ accent })}
                                 error={form.errors['theme.accent' as keyof FormData]}
                             />
+                            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() => setTheme({ primary: current.accent, accent: current.primary })}
+                                >
+                                    <ArrowLeftRight aria-hidden className="size-4" /> {t('cabinet.site.swap_colors')}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() => setTheme(randomColors())}
+                                >
+                                    <Shuffle aria-hidden className="size-4" /> {t('cabinet.site.random_colors')}
+                                </button>
+                            </div>
                         </div>
 
                         <p className="label mt-16">{t('cabinet.site.mode')}</p>
@@ -240,6 +250,7 @@ export default function Site({
                                     aria-pressed={current.mode === mode}
                                     onClick={() => setTheme({ mode })}
                                 >
+                                    {mode === 'dark' ? <Moon aria-hidden className="size-4" /> : <Sun aria-hidden className="size-4" />}{' '}
                                     {t(`cabinet.site.modes.${mode}`)}
                                 </button>
                             ))}
@@ -261,6 +272,7 @@ export default function Site({
                                 onChange={(body_font) => setTheme({ body_font })}
                             />
                         </div>
+                        <FontPreview theme={current} fonts={options.fonts} />
 
                         <p className="label mt-16">{t('cabinet.site.radius')}</p>
                         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
@@ -376,6 +388,122 @@ export default function Site({
     );
 }
 
+/** Быстрые цвета под полем: насыщенные, на белом и на тёмном читаются */
+const PALETTE = [
+    '#1a56db', '#2563eb', '#0369a1', '#0891b2', '#0d9488', '#0f6e56',
+    '#16a34a', '#4d7c0f', '#ca8a04', '#f59e0b', '#ea580c', '#dc2626',
+    '#e11d74', '#db2777', '#9333ea', '#5b3cc4', '#334155', '#0f172a',
+];
+
+/** «1a56db», «#15d», « #1A56DB » → «#1a56db»; не цвет — null */
+function normalizeHex(input: string): string | null {
+    const raw = input.trim().replace(/^#/, '').toLowerCase();
+
+    if (/^[0-9a-f]{6}$/.test(raw)) return `#${raw}`;
+    if (/^[0-9a-f]{3}$/.test(raw)) return `#${raw.replace(/./g, (c) => c + c)}`;
+
+    return null;
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+    const a = s * Math.min(l, 1 - l);
+    const channel = (n: number) => {
+        const k = (n + h / 30) % 12;
+        const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+
+        return Math.round(c * 255)
+            .toString(16)
+            .padStart(2, '0');
+    };
+
+    return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
+/**
+ * Случайная, но гармоничная пара: насыщенный фирменный цвет средней
+ * светлоты и акцент с противоположной стороны круга. Совсем случайные
+ * цвета давали грязь и пары без контраста
+ */
+function randomColors(): Pick<SiteTheme, 'primary' | 'accent'> {
+    const hue = Math.floor(Math.random() * 360);
+    const accentHue = (hue + 150 + Math.floor(Math.random() * 60)) % 360;
+
+    return {
+        primary: hslToHex(hue, 0.65 + Math.random() * 0.2, 0.36 + Math.random() * 0.1),
+        accent: hslToHex(accentHue, 0.8 + Math.random() * 0.15, 0.5 + Math.random() * 0.08),
+    };
+}
+
+type Preset = Omit<SiteTheme, 'template' | 'hero_image'>;
+
+const PRESET_KEYS: (keyof Preset)[] = ['primary', 'accent', 'mode', 'heading_font', 'body_font', 'radius'];
+
+/**
+ * Готовые сочетания: светлые, затем тёмные. Выбранное отмечено
+ * галочкой — раньше рамкой обводились тёмные, и тёмное сочетание
+ * выглядело выбранным, хотя выбрано было другое
+ */
+function PresetPicker({
+    presets,
+    current,
+    onPick,
+}: {
+    presets: Record<string, Preset>;
+    current: SiteTheme;
+    onPick: (preset: Preset) => void;
+}) {
+    const entries = Object.entries(presets);
+    const groups = (['light', 'dark'] as const)
+        .map((mode) => ({ mode, items: entries.filter(([, p]) => p.mode === mode) }))
+        .filter((g) => g.items.length > 0);
+
+    return (
+        <>
+            <p className="label">{t('cabinet.site.presets')}</p>
+            {groups.map((group) => (
+                <div key={group.mode} className="site-preset-group">
+                    <span className="site-preset-group-title">
+                        {group.mode === 'dark' ? <Moon aria-hidden className="size-3" /> : <Sun aria-hidden className="size-3" />}
+                        {t(`cabinet.site.${group.mode}_presets`)}
+                    </span>
+                    <div className="site-presets">
+                        {group.items.map(([key, preset]) => {
+                            const name = t(`cabinet.site.preset_names.${key}`);
+                            const active = PRESET_KEYS.every((k) => current[k] === preset[k]);
+
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    className={active ? 'site-preset is-active' : 'site-preset'}
+                                    aria-pressed={active}
+                                    title={name}
+                                    onClick={() => onPick(preset)}
+                                >
+                                    <span
+                                        className="site-swatch"
+                                        style={{
+                                            background: `linear-gradient(135deg, ${preset.primary} 0 50%, ${preset.accent} 50% 100%)`,
+                                        }}
+                                    >
+                                        {active && <Check aria-label={t('cabinet.site.preset_active')} className="size-4" />}
+                                    </span>
+                                    <small>{name}</small>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+        </>
+    );
+}
+
+/**
+ * Цвет: образец с системной палитрой, поле для кода и быстрые цвета.
+ * Код принимается и без решётки, и коротким (#15d); недописанный код
+ * не уходит в тему, а при уходе с поля возвращается к действующему
+ */
 function ColorField({
     id,
     label,
@@ -389,14 +517,15 @@ function ColorField({
     onChange: (value: string) => void;
     error?: string;
 }) {
-    // Текстовое поле держит набираемое значение само: промежуточное
-    // «#1a5» не цвет, и отправлять его в тему нельзя
     const [text, setText] = useState(value);
+    const [touched, setTouched] = useState(false);
 
     useEffect(() => setText(value), [value]);
 
+    const invalid = touched && normalizeHex(text) === null;
+
     return (
-        <div className="field">
+        <div className={invalid || error ? 'field is-error' : 'field'}>
             <label className="label" htmlFor={id}>
                 {label}
             </label>
@@ -411,21 +540,68 @@ function ColorField({
                     id={id}
                     className="input"
                     value={text}
-                    maxLength={7}
+                    maxLength={9}
                     spellCheck={false}
+                    autoComplete="off"
+                    aria-invalid={invalid || undefined}
                     onChange={(e) => {
-                        const next = e.target.value.trim();
-                        setText(next);
+                        setText(e.target.value);
+                        setTouched(false);
 
-                        if (/^#[0-9a-fA-F]{6}$/.test(next)) onChange(next.toLowerCase());
+                        const next = normalizeHex(e.target.value);
+                        if (next && e.target.value.replace(/^\s*#?/, '').trim().length === 6) onChange(next);
+                    }}
+                    onBlur={() => {
+                        const next = normalizeHex(text);
+
+                        if (next) {
+                            setText(next);
+                            if (next !== value) onChange(next);
+                        } else {
+                            setTouched(true);
+                        }
                     }}
                 />
             </div>
-            {error && (
+            <div className="site-palette" role="group" aria-label={label}>
+                {PALETTE.map((color) => (
+                    <button
+                        key={color}
+                        type="button"
+                        className={color === value ? 'is-active' : undefined}
+                        style={{ background: color }}
+                        aria-label={t('cabinet.site.pick_color', { color })}
+                        aria-pressed={color === value}
+                        title={color}
+                        onClick={() => {
+                            setTouched(false);
+                            onChange(color);
+                        }}
+                    />
+                ))}
+            </div>
+            {(invalid || error) && (
                 <p className="hint" style={{ color: 'var(--danger)' }}>
-                    {error}
+                    {invalid ? t('cabinet.site.hex_invalid') : error}
                 </p>
             )}
+        </div>
+    );
+}
+
+/** Образец выбранных шрифтов и углов — видно сразу, без поиска в предпросмотре */
+function FontPreview({ theme, fonts }: { theme: SiteTheme; fonts: { key: string; name: string }[] }) {
+    const family = (key: string) => {
+        const font = fonts.find((f) => f.key === key);
+
+        return font ? `'${font.name}', system-ui, sans-serif` : undefined;
+    };
+
+    return (
+        <div className="site-font-preview" aria-label={t('cabinet.site.font_preview')}>
+            <span className="site-font-preview-bar" style={{ background: theme.primary }} />
+            <b style={{ fontFamily: family(theme.heading_font) }}>{t('cabinet.site.font_sample_heading')}</b>
+            <p style={{ fontFamily: family(theme.body_font) }}>{t('cabinet.site.font_sample_body')}</p>
         </div>
     );
 }

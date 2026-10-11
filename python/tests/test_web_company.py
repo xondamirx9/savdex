@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
+from .factories import Выражение, объявление, отзыв
 from .factories import компания as новая
-from .factories import объявление, отзыв
 from .pg_admin import КОРЕНЬ, sql, нужна_база, свежая_база
 from .test_web_catalog import ГЕО, справочники
 from .web_site import адрес, вход, открыть, пользователь, страница
@@ -118,7 +118,15 @@ def сайт() -> Iterator[str]:
         reply="Спасибо!",
         deal_confirmed=True,
     )
-    отзыв(company_id=c, author_company_id=ушедшая, status="published", rating=3)
+    # Отзывы идут от новых к старым; created_at — до секунды, и два отзыва
+    # подряд в одну секунду давали порядок на усмотрение базы
+    отзыв(
+        company_id=c,
+        author_company_id=ушедшая,
+        status="published",
+        rating=3,
+        created_at=Выражение("now() - interval '1 day'"),
+    )
     отзыв(company_id=c, author_company_id=новая(), status="moderation")
     sql("update companies set deleted_at = now() where id = %s", [ушедшая])
 
@@ -385,3 +393,49 @@ def test_без_мини_сайта_кнопки_нет(сайт):
 
     assert props["company"]["website"] == "https://stroybaza.uz"
     assert props["company"]["microsite"] is None
+
+
+@pytest.mark.parametrize(
+    ("значение", "ждём"),
+    [
+        ("stroybaza.uz", "https://stroybaza.uz"),
+        ("http://сайт.рф/о-нас", "http://сайт.рф/о-нас"),
+        (None, None),
+        ("", None),
+        # Мусор из старых анкет — кнопки «Сайт компании» нет
+        ("fwfwfef", None),
+        ("https://fwfwfef", None),
+    ],
+)
+def test_кнопка_своего_сайта(сайт, значение, ждём):
+    sql("update companies set website = %s where slug = 'stroybaza'", [значение])
+
+    try:
+        assert визитка(сайт, "/company/stroybaza")["company"]["website"] == ждём
+    finally:
+        sql("update companies set website = 'stroybaza.uz' where slug = 'stroybaza'")
+
+
+def test_метка_не_подтверждено(сайт):
+    """Код пропущен при регистрации — «Не подтверждено» видят все."""
+    assert визитка(сайт, "/company/stroybaza")["unconfirmed"] is False
+
+    sql("update companies set email_unconfirmed = true where slug = 'stroybaza'")
+
+    try:
+        assert визитка(сайт, "/company/stroybaza")["unconfirmed"] is True
+    finally:
+        sql("update companies set email_unconfirmed = false where slug = 'stroybaza'")
+
+
+def test_без_кода_отзыв_нельзя(сайт):
+    """Пропуск кода открывает публикацию и контакты, но не отзывы."""
+    куки = вошедший(сайт, "skipped@savdex.uz", новая_компания())
+    sql(
+        "update users set email_verified_at = null, email_code_skipped = true where email = %s",
+        ["skipped@savdex.uz"],
+    )
+
+    props = визитка(сайт, "/company/stroybaza", куки)
+
+    assert props["review_blocked"] == "Подтвердите почту, чтобы оставлять отзывы."

@@ -1,5 +1,6 @@
 import { Building2, CalendarDays, MapPin, Wallet } from 'lucide-react';
 import { Link } from '@/components/ui/Link';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { formatNumber } from '@/components/cabinet';
@@ -26,6 +27,8 @@ export interface TenderRow {
     published: string | null;
     /** Госзакупка — значок «Госзакупка» (загружается из админки) */
     government?: boolean;
+    /** Автор зарегистрировался без кода из письма — «Не подтверждено» */
+    unconfirmed?: boolean;
 }
 
 /** «250 000 000 сум» — бюджет в формате языка витрины. */
@@ -70,6 +73,7 @@ export function TenderCard({ row }: { row: TenderRow }) {
             <div className="row wrap" style={{ gap: 8 }}>
                 {deadlineBadge(row)}
                 {row.government && <span className="badge badge-verified">{t('tenders.government')}</span>}
+                {row.unconfirmed && <UnconfirmedBadge />}
                 {row.category && <span className="badge badge-neutral">{row.category}</span>}
             </div>
 

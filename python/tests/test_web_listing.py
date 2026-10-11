@@ -320,6 +320,42 @@ def test_цена_в_валюте_языка(сайт):
     assert listing["bundle_converted"] == {"price": 71.1, "currency": "USD"}
 
 
+def test_цена_диапазоном(сайт):
+    """Диапазон «от – до»: оба конца в валюте языка, для Google — AggregateOffer."""
+    sql("update listings set price_to = 150000 where slug = 'cement'")
+
+    try:
+        ответ = показать(сайт, "/en/listing/cement")
+    finally:
+        sql("update listings set price_to = null where slug = 'cement'")
+
+    listing = страница(ответ["body"])["props"]["listing"]
+
+    assert (listing["price"], listing["price_to"], listing["price_from"]) == (102000, 150000, False)
+    assert listing["converted_to"] == {"price": 11.9, "currency": "USD"}
+    assert '"@type":"AggregateOffer"' in ответ["body"].replace(" ", "")
+    assert '"lowPrice":102000' in ответ["body"].replace(" ", "")
+
+
+def test_русский_перевод_объявления_не_по_русски(сайт):
+    """Заголовок по-китайски — на русской странице русский перевод, на китайской — оригинал."""
+    sql(
+        "update listings set title = '水泥', title_i18n = '{\"ru\":\"Цемент\"}'::json "
+        "where slug = 'cement'"
+    )
+
+    try:
+        ru = страница(показать(сайт, "/listing/cement")["body"])["props"]["listing"]
+        zh = страница(показать(сайт, "/zh/listing/cement")["body"])["props"]["listing"]
+    finally:
+        sql(
+            "update listings set title = 'Цемент М400 оптом для стройки', "
+            "title_i18n = '{\"en\":\"Cement M400 wholesale\"}'::json where slug = 'cement'"
+        )
+
+    assert (ru["title"], zh["title"]) == ("Цемент", "水泥")
+
+
 def test_детали_товара(сайт):
     """ProductSpecs: детали после полей раздела, на языке посетителя, без пустых."""
     for path, вес, цвет in (
@@ -335,3 +371,20 @@ def test_детали_товара(сайт):
         assert вес in rows.values() and цвет in rows.values()
         assert "spec_unknown" in rows and "spec_grade" not in rows
         assert "25 kg" not in props["listing"]["tags"]
+
+
+def test_метка_не_подтверждено(сайт):
+    """Код пропущен при регистрации — метка на странице и в похожих карточках."""
+    sql("update companies set email_unconfirmed = true where slug = 'stroy'")
+
+    try:
+        props = страница(показать(сайт, "/listing/cement")["body"])["props"]
+    finally:
+        sql("update companies set email_unconfirmed = false where slug = 'stroy'")
+
+    assert props["company"]["unconfirmed"] is True
+    stroy = sql(
+        "select id from listings where company_id = (select id from companies where slug = 'stroy')"
+    )
+    своих = {r[0] for r in stroy}
+    assert all(s["company"]["unconfirmed"] is (s["id"] in своих) for s in props["similar"])

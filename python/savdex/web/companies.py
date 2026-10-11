@@ -10,8 +10,10 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
@@ -137,14 +139,27 @@ def month_year(moment: datetime | None, locale: str) -> str | None:
     return ui.date_template(locale, "month_year", moment.month).replace("{y}", str(moment.year))
 
 
+#: Домен с зоной из букв: «cement.uz», «сайт.рф», «xn--80aswg.xn--p1ai»
+_DOMAIN = re.compile(r"^(?:[^\W_](?:[\w-]*[^\W_])?\.)+(?:[^\W\d_]{2,}|xn--[a-z0-9-]+)\.?$")
+
+
+def has_domain(url: str | None) -> bool:
+    """Адрес ведёт на настоящий домен: «https://fwfwfef» прошёл бы правило url, а не откроется."""
+    host = urlsplit(url or "").hostname or ""
+
+    return bool(_DOMAIN.match(host))
+
+
 def website_url(site: str | None) -> str | None:
-    """Company::websiteUrl."""
+    """Company::websiteUrl. Без настоящего домена — None: кнопка «Сайт компании» не появится."""
     site = (site or "").strip(_TRIM)
 
     if site == "":
         return None
 
-    return site if site.startswith(("http://", "https://")) else "https://" + site
+    url = site if site.startswith(("http://", "https://")) else "https://" + site
+
+    return url if has_domain(url) else None
 
 
 def card(

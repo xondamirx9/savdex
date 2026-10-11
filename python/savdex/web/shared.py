@@ -79,12 +79,24 @@ class Context:
             return None
 
         rows = _rows(
-            "select id, name, email, locale, email_verified_at, must_change_password, "
-            "is_admin, company_id from users where id = %s and deleted_at is null",
+            "select id, name, email, locale, email_verified_at, email_code_skipped, "
+            "must_change_password, is_admin, company_id from users "
+            "where id = %s and deleted_at is null",
             [self.visitor.user_id],
         )
 
         return rows[0] if rows else None
+
+
+def email_ok(user: dict[str, Any] | None) -> bool:
+    """
+    Почта подтверждена кодом — или код пропущен при регистрации (страна
+    с галочкой «Регистрация без кода»). Такому можно публиковать,
+    отвечать, платить и открывать контакты — с пометкой «Не подтверждено».
+    """
+    return user is not None and (
+        user.get("email_verified_at") is not None or bool(user.get("email_code_skipped"))
+    )
 
 
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
@@ -137,17 +149,35 @@ def public_url(path: str) -> str:
     return os.environ.get("APP_URL", "http://localhost").rstrip("/") + "/storage/" + path
 
 
+#: Знак из коробки: шапка, подвал, админка
+DEFAULT_LOGO = "/images/logo-mark.svg"
+#: Тот же знак с полями — значок вкладки и выдачи Google
+DEFAULT_ICON = "/images/favicon.svg"
+
+
 def appearance_logo(values: dict[str, Any]) -> str:
     """Appearance::logo()."""
     path = setting(values, "logo_image").strip()
 
     if path == "":
-        return "/images/logo-mark.svg"
+        return DEFAULT_LOGO
 
     if path.startswith(("http://", "https://", "/")):
         return path
 
     return public_url(path)
+
+
+def appearance_icon(logo: str) -> str:
+    """
+    Значок сайта для <link rel="icon">.
+
+    Свой логотип из админки — как есть: подсказка «Оформления» обещает его
+    и на вкладке браузера. Знак из коробки — в варианте с полями: Google
+    и соцсети обрезают значок кругом, а знак занимает квадрат до краёв,
+    и у него срезались самолёт и росчерк.
+    """
+    return DEFAULT_ICON if logo == DEFAULT_LOGO else logo
 
 
 # ── «N минут назад» ─────────────────────────────────────────────────
@@ -521,6 +551,9 @@ def shared(ctx: Context) -> dict[str, Any]:
                 "email": user["email"],
                 "locale": user["locale"],
                 "email_verified": user["email_verified_at"] is not None,
+                # Код из письма пропущен при регистрации («Не подтверждено»)
+                "email_skipped": bool(user.get("email_code_skipped"))
+                and user["email_verified_at"] is None,
                 "must_change_password": bool(user["must_change_password"]),
                 "is_admin": bool(user["is_admin"]),
             }
@@ -548,7 +581,6 @@ def shared(ctx: Context) -> dict[str, Any]:
         "support": {
             "email": setting(values, "support_email"),
             "phone": setting(values, "support_phone"),
-            "hours": setting(values, "support_hours"),
             "telegram": setting(values, "telegram"),
             "legal_name": setting(values, "legal_name"),
             "legal_tin": setting(values, "legal_tin"),
@@ -558,4 +590,27 @@ def shared(ctx: Context) -> dict[str, Any]:
         "translations": None if ctx.inertia else ui.translations(ctx.locale),
         "localeLinks": locale_links(ctx),
         "localeSuggest": suggest,
+        "analytics": _analytics(ctx, company),
     }
+
+
+def _analytics(ctx: Context, company: dict[str, Any] | None) -> dict[str, Any]:
+    """
+    GA4 (ТЗ-03): номер потока (пусто — тега нет), тариф для user_properties
+    и события, подтверждённые сервером (savdex/web/analytics.py).
+    """
+    from savdex.web import analytics
+
+    ga = analytics.measurement_id()
+
+    if not ga:
+        return {"id": "", "plan": None, "events": []}
+
+    plan = None
+
+    if company is not None:
+        from savdex.web.cabinet import company_plan
+
+        plan = company_plan(company["id"]).get("code")
+
+    return {"id": ga, "plan": plan, "events": analytics.events(ctx)}

@@ -101,6 +101,9 @@ h1,h2,h3,h4{font-weight:600;line-height:1.28;color:var(--text);letter-spacing:-.
 /* ---------- 6. Формы ---------- */
 .field{display:block}
 .field+.field{margin-top:20px}
+/* В сетке поля стоят рядом, отступ даёт сама сетка: отступ «поле за
+   полем» опускал второе поле ряда на 20px ниже первого */
+.grid>.field+.field{margin-top:0}
 .label{display:block;font-size:14px;font-weight:500;margin-bottom:6px}
 .label .req{color:var(--danger)}
 .hint{font-size:13px;color:var(--text-muted);margin-top:6px}
@@ -1160,16 +1163,23 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .grid-docs>aside{align-self:stretch}
 .doc-nav{position:sticky;top:var(--sticky-top)}
 .doc-nav a{display:block;position:relative;padding:9px 12px;border-radius:var(--r-btn);font-size:14.5px;
-  transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);
-  color:var(--text-muted);transition:background var(--t-fast),color var(--t-fast)}
+  color:var(--text-muted);
+  transition:background var(--t-mid),color var(--t-mid),
+    transform var(--t-mid)}
+/* Ширина пункта — по жирному начертанию: невидимая копия подписи
+   держит место заранее. Иначе при смене раздела активный пункт
+   становился шире на пару пикселей и сдвигал соседей — текст
+   ленты дёргался на каждом шаге прокрутки */
+.doc-nav a::after{content:attr(data-label);display:block;height:0;overflow:hidden;
+  visibility:hidden;font-weight:600;pointer-events:none;user-select:none}
 .doc-nav a:hover{background:var(--primary-50);color:var(--primary-600);text-decoration:none;transform:translateX(3px)}
 .doc-nav a[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
 /* Полоска у активного пункта вырастает из нуля — видно, что оглавление
    следит за прокруткой, а не просто подсветилось при клике */
-.doc-nav a::before{content:'';position:absolute;left:3px;top:50%;width:3px;height:0;
-  border-radius:999px;background:var(--primary-700);transform:translateY(-50%);
-  transition:height var(--t-mid)}
-.doc-nav a[aria-current="true"]::before{height:18px}
+.doc-nav a::before{content:'';position:absolute;left:3px;top:50%;width:3px;height:18px;
+  border-radius:999px;background:var(--primary-700);transform:translateY(-50%) scaleY(0);
+  transition:transform var(--t-mid)}
+.doc-nav a[aria-current="true"]::before{transform:translateY(-50%) scaleY(1)}
 
 .doc-section{scroll-margin-top:calc(var(--sticky-top) + 4px)}
 
@@ -1212,7 +1222,14 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
      из пяти пунктов отодвигает текст за пределы экрана */
   .doc-nav{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
   .doc-nav::-webkit-scrollbar{display:none}
-  .doc-nav a{white-space:nowrap}
+  .doc-nav a{white-space:nowrap;flex-shrink:0;text-align:center}
+  /* В ленте пункты стоят в ряд: сдвиг вбок при наведении толкал
+     подпись к соседу — только подсветка */
+  .doc-nav a:hover{transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .doc-nav a,.doc-nav a::before{transition:none}
+  .doc-nav a:hover{transform:none}
 }
 
 /* ============================================================
@@ -1367,15 +1384,14 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   .news-lead .cover-art{border-radius:var(--r-card) var(--r-card) 0 0;min-height:180px}
 }
 
-/* Страница новости: обложка слева, текст справа.
-   Раньше текст шёл под обложкой узкой колонкой и половина экрана
-   пустовала. Картинка — главное на странице новости, поэтому ей
-   отдана большая доля, описанию — боковая колонка. */
-.news-detail{display:grid;grid-template-columns:minmax(0,72fr) minmax(0,28fr);
-  gap:clamp(20px,2.4vw,32px);align-items:start}
+/* Страница новости: одна колонка по центру — картинка, под ней текст.
+   Решение заказчика: рядом с обложкой текст шёл узкой боковой колонкой,
+   и страница выглядела перекошенной. Теперь картинка и текст стоят на
+   одной оси; текст уже картинки — строка в 760px удобна для чтения. */
+.news-detail{display:flex;flex-direction:column;align-items:center;gap:clamp(24px,3vw,40px)}
 /* Заглушка без снимка — в рамке 16/10, как в ленте. Снимок
    показывается целиком, в своих пропорциях (.news-photo ниже) */
-.news-detail-media{border-radius:var(--r-card);overflow:hidden;min-width:0}
+.news-detail-media{width:100%;max-width:1080px;border-radius:var(--r-card);overflow:hidden;min-width:0}
 .news-detail-media .cover-art{border-radius:var(--r-card)}
 /* Снимок новости — целиком, в своих пропорциях. В рамке 16:10
    с object-fit:cover картинку шире рамки обрезало по бокам, и у
@@ -1389,6 +1405,7 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
   gap:6px;padding:6px 12px;border-radius:999px;background:rgba(8,18,40,.78);color:#fff;
   font-size:13px;font-weight:600;line-height:20px;transition:background var(--t-fast)}
 .news-photo:hover .news-photo-hint{background:rgba(8,18,40,.92)}
+@media(max-width:639px){.news-photo-hint{right:8px;bottom:8px;padding:8px}}
 .news-zoom{width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:24px;
   border:0;background:transparent;box-sizing:border-box}
 .news-zoom[open]{display:grid;place-items:center}
@@ -1401,11 +1418,13 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .news-zoom-close:focus-visible{outline:3px solid #fff;outline-offset:2px}
 @media(max-width:560px){.news-zoom{padding:8px}.news-zoom-img{max-height:calc(100vh - 16px);border-radius:8px}}
 
-/* Длинное слово или ссылка в узкой колонке иначе вылезают за карточку */
-.news-detail-body{min-width:0;max-width:none;overflow-wrap:break-word}
-.news-detail-body .t-h1{font-size:clamp(24px,2vw,30px);line-height:1.22}
+/* Длинное слово или ссылка иначе вылезают за колонку */
+.news-detail-body{width:100%;max-width:760px;min-width:0;overflow-wrap:break-word}
+/* Шапка — по центру, как и колонка; абзацы — по левому краю: текст,
+   выровненный по центру, читать тяжело */
+.news-detail-head{text-align:center;margin-bottom:8px}
+.news-detail-body .t-h1{font-size:clamp(28px,3vw,40px);line-height:1.2}
 @media(max-width:900px){
-  .news-detail{grid-template-columns:1fr}
   .news-detail-body .t-h1{font-size:28px;line-height:36px}
 }
 
@@ -1705,21 +1724,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
    ============================================================ */
 
 /* ── Полоса тестового режима ── */
-.topbar{background:#fef9c3;border-bottom:1px solid #fde68a;color:#713f12}
-.topbar-inner{display:flex;align-items:center;justify-content:center;gap:16px;
-  padding:8px 0;font-size:13px;line-height:1.45;position:relative}
-.topbar-text{text-align:center;min-width:0}
-.topbar-text b{display:block;font-size:13.5px;color:#854d0e}
-.topbar-text b svg{display:inline-block;vertical-align:-3px;margin-right:6px;color:#d97706}
-.topbar-note{color:#a16207}
-.topbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.topbar-more{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
-  border:1px solid #facc15;border-radius:var(--r-btn);background:rgba(255,255,255,.6);
-  font-size:12.5px;font-weight:600;color:#854d0e;white-space:nowrap}
-.topbar-more:hover{background:#fff;text-decoration:none}
-.topbar-close{width:30px;height:30px;display:grid;place-items:center;border-radius:var(--r-btn);
-  color:#a16207;flex-shrink:0}
-.topbar-close:hover{background:rgba(255,255,255,.7);color:#713f12}
 
 /* ── Тёмная кнопка («Каталог товаров») ── */
 .btn-dark{background:var(--navy-900);color:#fff;border-color:var(--navy-900)}
@@ -1869,7 +1873,6 @@ button.notif-row:hover{box-shadow:var(--sh-hover);border-color:var(--primary-500
   box-shadow:0 6px 20px rgba(8,18,40,.28)}
 /* Полоса тестового режима с прокруткой уезжает — как и на остальных
    страницах, где она лежит над прилипающей шапкой, а не внутри неё */
-.chrome-overlay.is-solid .topbar{display:none}
 .chrome-overlay .hd{position:static;background:transparent;border-bottom:1px solid rgba(255,255,255,.14);box-shadow:none}
 .chrome-overlay .hd-logo-name{color:#fff}
 .chrome-overlay .hd-logo-sub{color:rgba(255,255,255,.65)}
@@ -2306,9 +2309,6 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
 }
 
 @media (max-width:768px){
-  .topbar-inner{gap:8px}
-  .topbar-note,.topbar-more{display:none}
-  .topbar-text{text-align:left}
   /* На узких экранах фиксированные минимумы не помещаются: поле сжимается
      свободно, подпись категории ужимается, кнопка уступает место полю */
   .hd-search input{min-width:0}
@@ -2512,7 +2512,7 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
      они стоят в потоке вплотную к краю экрана, и зона, вылезающая
      за половину своей ширины, добавляла документу горизонтальный
      скролл (крестик плашки давал +7 px на 375 px) */
-  .burger,.topbar-close,.btn-icon{width:44px;height:44px}
+  .burger,.btn-icon{width:44px;height:44px}
 
   /* Остальным зона расширяется только по вертикали: по горизонтали
      эти элементы либо достаточно широки, либо прижаты к краю */
@@ -2526,7 +2526,7 @@ a.stat-cell:hover .stat-cell-label{color:var(--primary-700)}
      Отступ между пунктами подвала убирается: его заменяет
      сама высота ссылки */
   .footer li{margin-bottom:0}
-  .footer li a,.contact-value,.pay-note,.topbar-more,.logo,
+  .footer li a,.contact-value,.pay-note,.logo,
   .subnav-inner a,.subnav-post,.section-bar-link{
     display:inline-flex;align-items:center;min-height:44px}
   /* Подсказки популярных запросов на первом экране: 28 пикселей

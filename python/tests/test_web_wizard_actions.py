@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from .factories import категория, компания
-from .pg_admin import sql, нужна_база, свежая_база
+from .pg_admin import sql, нужна_база, свежая_база, страна
 from .test_web_forms import inertia, отправить, учётка
 from .web_site import адрес
 
@@ -181,6 +181,36 @@ def test_новый_черновик(сайт, было, лимит, куда, �
     )
 
 
+@pytest.mark.parametrize(("код", "валюта"), [("cn", "USD"), ("uz", "UZS")])
+def test_валюта_по_стране_компании(сайт, код, валюта):
+    # ТЗ-02: иностранная компания — новое объявление сразу в долларах
+    uid = владелец()
+    есть = sql("select id from countries where code = %s", [код])
+    страна_ = есть[0][0] if есть else страна(код, {"ru": код})
+    [(было_страна,)] = sql("select country_id from companies where id = %s", [_компания()])
+
+    def подготовка() -> None:
+        sql("update plans set listings_limit = null where code = 'free'")
+        объявления()()
+        sql("update companies set country_id = %s where id = %s", [страна_, _компания()])
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/create",
+            подготовка,
+            снимок,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            method="GET",
+            headers={},
+        )
+    finally:
+        sql("update companies set country_id = %s where id = %s", [было_страна, _компания()])
+
+    assert [r[7] for r in итог["база"]["listings"]] == [валюта]
+
+
 @pytest.mark.parametrize(
     ("случай", "куда"),
     [("без компании", "/en/cabinet/company"), ("почта", "/en/verify-email")],
@@ -253,6 +283,48 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
     assert row[14].startswith("цемент м400 в мешках по 50 кг портландцемент")
     assert база["events"] == [("moderation", "success", сообщение, "/cabinet/listings")]
     assert база["notifications"] == [("moderation", сообщение, "success", "/cabinet/listings")]
+
+
+@pytest.mark.parametrize(
+    ("правка", "стало", "ошибка"),
+    [
+        # Диапазон «от – до»
+        ({"price_to": "60000"}, ("52000.00", "60000.00", False), None),
+        # «От»: верхней границы нет, даже если пришла
+        ({"price_from": True, "price_to": "60000"}, ("52000.00", None, True), None),
+        # Договорная — ни «от», ни диапазона
+        (
+            {"price": None, "price_negotiable": True, "price_from": True, "price_to": "60000"},
+            (None, None, False),
+            None,
+        ),
+        # Верхняя граница не больше нижней — ошибка
+        ({"price_to": "52000"}, None, "Верхняя граница цены должна быть больше нижней"),
+    ],
+)
+def test_цена_от_и_диапазон(сайт, правка, стало, ошибка):
+    тело = {**ВЕРНО, "category_id": _категория(), **правка}
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/publish",
+        объявления(("draft", "")),
+        снимок,
+        uid=владелец(),
+        env=БЕЗ_ПЕРЕВОДА,
+        body=тело,
+        headers=inertia(),
+    )
+
+    if ошибка is not None:
+        assert ошибки(итог) == {"price_to": [ошибка]}
+        assert sql("select status from listings where id = 1") == [("draft",)]
+
+        return
+
+    assert сессия(итог)["success"] == ОПУБЛИКОВАНО
+    assert sql("select price::text, price_to::text, price_from from listings where id = 1") == [
+        стало
+    ]
 
 
 @pytest.mark.parametrize(
@@ -525,3 +597,80 @@ def test_автосохранение(сайт, body, ожидание, admin):
     )
     # Администратору — строка журнала о правке черновика
     assert bool(база["journal"]) == admin
+
+
+@pytest.mark.parametrize(
+    ("правка", "сброшено"),
+    [
+        # Заголовок сменился — его перевод заново; описание то же — перевод остаётся
+        ({"title": "Цемент М500 в мешках по 50 кг"}, (True, False)),
+        ({"description": "Новое описание: доставка по всему Узбекистану."}, (False, True)),
+        # Ничего не поменялось — переводы на месте
+        ({"title": "Цемент"}, (False, False)),
+    ],
+)
+def test_правка_сбрасывает_перевод(сайт, правка, сброшено):
+    # Посетитель на другом языке не должен видеть старый текст после правки
+    def подготовка() -> None:
+        объявления(("draft", "Цемент"))()
+        sql(
+            "update listings set description = 'Описание', "
+            'title_i18n = \'{"en":"Cement"}\'::json, '
+            'description_i18n = \'{"en":"Description"}\'::json where id = 1'
+        )
+
+    отправить(
+        сайт,
+        "/cabinet/listings/1/autosave",
+        подготовка,
+        снимок,
+        uid=владелец(),
+        env=БЕЗ_ПЕРЕВОДА,
+        body=правка,
+        headers={"Accept": "application/json", "X-XSRF-TOKEN": inertia()["X-XSRF-TOKEN"]},
+    )
+    [(заголовки, описания)] = sql(
+        "select title_i18n::text, description_i18n::text from listings where id = 1"
+    )
+
+    assert (заголовки is None, описания is None) == сброшено
+
+
+# ── Код пропущен при регистрации («Не подтверждено») ────────────────
+
+
+@pytest.mark.parametrize(
+    ("активных", "куда"),
+    [(2, "/cabinet/listings/3/edit"), (3, "/cabinet/listings")],
+)
+def test_без_кода_не_больше_трёх(сайт, активных, куда):
+    # Почта не подтверждена, но код пропущен: мастер открыт, а объявлений —
+    # не больше трёх, какой бы ни был тариф
+    uid = владелец(verified=False)
+    sql("update users set email_code_skipped = true where id = %s", [uid])
+
+    def подготовка() -> None:
+        sql("update plans set listings_limit = null where code = 'free'")
+        sql("update companies set email_unconfirmed = true where id = %s", [_компания()])
+        объявления(*[("active", f"Цемент {n}") for n in range(активных)])()
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/create",
+            подготовка,
+            снимок,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            method="GET",
+            headers={},
+        )
+    finally:
+        sql("update companies set email_unconfirmed = false where id = %s", [_компания()])
+
+    assert итог["ответ"]["headers"]["location"] == сайт + куда
+
+    if куда == "/cabinet/listings":
+        assert сессия(итог)["error"].startswith(
+            "Пока почта не подтверждена, можно держать не больше 3 активных объявлений."
+        )

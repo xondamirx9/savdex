@@ -8,8 +8,10 @@ import { useState } from 'react';
 import { CompanyReviews, type CompanyReview } from '@/components/CompanyReviews';
 import { Modal } from '@/components/Modal';
 import { QrModal } from '@/components/QrModal';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { Button } from '@/components/ui';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { track, unlockState } from '@/lib/analytics';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { renderRichText } from '@/lib/richtext';
 import { routes } from '@/routes';
@@ -99,6 +101,7 @@ export default function CompanyShow({
     review_blocked: reviewBlocked,
     criteria,
     listings_count: listingsCount,
+    unconfirmed = false,
 }: {
     company: BusinessCard;
     initials: string;
@@ -116,6 +119,8 @@ export default function CompanyShow({
     /** Контакты открыты: своя компания либо кредит уже списан */
     unlocked: boolean;
     is_own: boolean;
+    /** Регистрация без кода из письма — метка «Не подтверждено» */
+    unconfirmed?: boolean;
     /** Остаток покупателя. null для гостя и для своей же визитки */
     wallet: { contacts_left: number; credits: number } | null;
 }) {
@@ -185,6 +190,7 @@ export default function CompanyShow({
                                 {company.is_it_provider && (
                                     <span className="badge badge-supply">{t('company.it_provider')}</span>
                                 )}
+                                {unconfirmed && <UnconfirmedBadge />}
                             </div>
                             {company.is_it_provider && company.it_specializations.length > 0 && (
                                 <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
@@ -210,6 +216,13 @@ export default function CompanyShow({
                                     <Globe aria-hidden className="size-4" /> {t('company.microsite')}
                                 </a>
                             )}
+                            {/* Собственный сайт компании из поля «Сайт» профиля — в новой
+                                вкладке. Не заполнено — нет кнопки */}
+                            {company.website && (
+                                <a href={company.website} target="_blank" rel="noopener nofollow" className="btn btn-secondary">
+                                    <ExternalLink aria-hidden className="size-4" /> {t('company.website')}
+                                </a>
+                            )}
                             <Button variant="secondary" onClick={() => setQrOpen(true)}>
                                 <QrCode aria-hidden className="size-4" /> {t('company.qr')}
                             </Button>
@@ -218,11 +231,20 @@ export default function CompanyShow({
                                    Кнопка, которая ничего не делает, хуже её отсутствия:
                                    человек решает, что сайт сломан. */
                                 (auth?.user ? (
-                                    <Button onClick={() => setUnlockOpen(true)}>
+                                    <Button
+                                        onClick={() => {
+                                            track('contact_unlock_clicked', { state: unlockState(auth) });
+                                            setUnlockOpen(true);
+                                        }}
+                                    >
                                         <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Button>
                                 ) : (
-                                    <Link href={routes.register} className="btn btn-primary">
+                                    <Link
+                                        href={routes.register}
+                                        className="btn btn-primary"
+                                        onClick={() => track('contact_unlock_clicked', { state: 'guest' })}
+                                    >
                                         <Lock aria-hidden className="size-4" /> {t('company.show_contacts')}
                                     </Link>
                                 ))}

@@ -356,8 +356,27 @@ _FREE_DEFAULT = {
 }
 
 
+#: Пока почта не подтверждена (код пропущен при регистрации) — не больше
+#: стольких активных объявлений, какой бы ни был тариф
+UNCONFIRMED_LISTINGS = 3
+
+
 def company_plan(company_id: int) -> dict[str, Any]:
-    """Company::plan: тариф действующей подписки, иначе Free."""
+    """
+    Company::plan: тариф действующей подписки, иначе Free. Компания
+    с меткой «Не подтверждено» — не больше UNCONFIRMED_LISTINGS объявлений.
+    """
+    plan = _plan_of(company_id)
+    unconfirmed = _rows("select 1 from companies where id = %s and email_unconfirmed", [company_id])
+    limit = plan.get("listings_limit")
+
+    if unconfirmed and (limit is None or limit > UNCONFIRMED_LISTINGS):
+        plan = {**plan, "listings_limit": UNCONFIRMED_LISTINGS, "unconfirmed_cap": True}
+
+    return plan
+
+
+def _plan_of(company_id: int) -> dict[str, Any]:
     subscription = active_subscription(company_id)
 
     if subscription is not None:
@@ -369,6 +388,16 @@ def company_plan(company_id: int) -> dict[str, Any]:
     rows = _rows("select * from plans where code = 'free' limit 1")
 
     return rows[0] if rows else dict(_FREE_DEFAULT)
+
+
+def listing_limit_message(ctx: Context, plan: dict[str, Any], hint: bool = True) -> str:
+    """«Достигнут лимит тарифа…» — или лимит до подтверждения почты."""
+    if plan.get("unconfirmed_cap"):
+        return ctx.t("messages.listing.limit_unconfirmed", limit=plan["listings_limit"])
+
+    message = ctx.t("messages.listing.limit", plan=plan["name"], limit=plan["listings_limit"])
+
+    return message + " " + ctx.t("messages.listing.limit_hint") if hint else message
 
 
 # ── Показатели (CabinetMetrics) ─────────────────────────────────────
@@ -1278,6 +1307,8 @@ def listings_props(ctx: Context) -> dict[str, Any]:
                 "type": r["type"],
                 "category": categories.get(r["category_id"]) if r["category_id"] else None,
                 "price": float(r["price"]) if r["price"] is not None else None,
+                "price_from": bool(r["price_from"]),
+                "price_to": float(r["price_to"]) if r["price_to"] is not None else None,
                 "currency": r["currency"],
                 "unit": r["unit"],
                 "negotiable": bool(r["price_negotiable"]),
@@ -1534,7 +1565,10 @@ def resume_props(ctx: Context) -> dict[str, Any]:
             "education_levels": options.labels(ctx, "education_level", options.EDUCATION_LEVELS),
             "currencies": CURRENCY_LABELS,
         },
-        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "countries": [
+            {"id": c["id"], "name": c["name"], "code": c["code"]}
+            for c in listed_countries(ctx.locale)
+        ],
         "cities": [
             {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
             for c in _rows("select id, country_id from cities where is_active order by sort, id")
@@ -1603,6 +1637,7 @@ def company_page(request: HttpRequest) -> HttpResponse:
 def company_props(ctx: Context) -> dict[str, Any]:
     from savdex import laravel_storage
     from savdex.web.company import _file_size
+    from savdex.web.company_profile_actions import locked_fields
     from savdex.web.directory import _named, listed_countries, logo_url
     from savdex.web.shared import initials
 
@@ -1674,6 +1709,7 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "completeness": completeness(company, bool(approved)),
             "missing": _missing(ctx, company, bool(approved)),
             "verification_level": company["verification_level"],
+            "locked_fields": list(locked_fields(company)),
         },
         "serviceTypes": service_types(ctx),
         "contacts": [
@@ -1713,10 +1749,17 @@ def company_props(ctx: Context) -> dict[str, Any]:
         ]
         if cid
         else [],
-        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "countries": [
+            {"id": c["id"], "name": c["name"], "code": c["code"]}
+            for c in listed_countries(ctx.locale)
+        ],
         "cities": [
             {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
-            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+            # Свой «другой город» (скрытый, city_choice.py) — тоже в списке
+            for c in _rows(
+                "select id, country_id from cities where is_active or id = %s order by sort, id",
+                [company["city_id"] if company else None],
+            )
         ],
         "verification": [
             check("verify_email", user["email_verified_at"] is not None),
@@ -1940,6 +1983,14 @@ SITE_FONTS = {
     "playfair-display": "Playfair Display",
     "lora": "Lora",
     "pt-serif": "PT Serif",
+    "roboto": "Roboto",
+    "open-sans": "Open Sans",
+    "raleway": "Raleway",
+    "ubuntu": "Ubuntu",
+    "exo-2": "Exo 2",
+    "comfortaa": "Comfortaa",
+    "roboto-slab": "Roboto Slab",
+    "merriweather": "Merriweather",
 }
 SITE_DEFAULTS: dict[str, str | None] = {
     "template": "classic",
@@ -1951,6 +2002,8 @@ SITE_DEFAULTS: dict[str, str | None] = {
     "radius": "soft",
     "hero_image": None,
 }
+#: Готовые сочетания. Подписи — cabinet.site.preset_names.<ключ>;
+#: редактор ставит светлые перед тёмными
 SITE_PRESETS = {
     "savdex": {
         "primary": "#1a56db",
@@ -1991,6 +2044,110 @@ SITE_PRESETS = {
         "heading_font": "montserrat",
         "body_font": "rubik",
         "radius": "round",
+    },
+    "ocean": {
+        "primary": "#0369a1",
+        "accent": "#f97316",
+        "mode": "light",
+        "heading_font": "raleway",
+        "body_font": "open-sans",
+        "radius": "soft",
+    },
+    "mint": {
+        "primary": "#0d9488",
+        "accent": "#f43f5e",
+        "mode": "light",
+        "heading_font": "nunito",
+        "body_font": "nunito",
+        "radius": "round",
+    },
+    "sunset": {
+        "primary": "#c2410c",
+        "accent": "#facc15",
+        "mode": "light",
+        "heading_font": "montserrat",
+        "body_font": "inter",
+        "radius": "soft",
+    },
+    "berry": {
+        "primary": "#9d174d",
+        "accent": "#0ea5e9",
+        "mode": "light",
+        "heading_font": "rubik",
+        "body_font": "rubik",
+        "radius": "round",
+    },
+    "coffee": {
+        "primary": "#6f4e37",
+        "accent": "#d4a373",
+        "mode": "light",
+        "heading_font": "merriweather",
+        "body_font": "pt-sans",
+        "radius": "soft",
+    },
+    "sakura": {
+        "primary": "#db2777",
+        "accent": "#7c3aed",
+        "mode": "light",
+        "heading_font": "comfortaa",
+        "body_font": "nunito",
+        "radius": "round",
+    },
+    "cobalt": {
+        "primary": "#1e3a8a",
+        "accent": "#10b981",
+        "mode": "light",
+        "heading_font": "ibm-plex-sans",
+        "body_font": "ibm-plex-sans",
+        "radius": "sharp",
+    },
+    "olive": {
+        "primary": "#4d7c0f",
+        "accent": "#ea580c",
+        "mode": "light",
+        "heading_font": "roboto-slab",
+        "body_font": "roboto",
+        "radius": "soft",
+    },
+    "steel": {
+        "primary": "#334155",
+        "accent": "#0ea5e9",
+        "mode": "light",
+        "heading_font": "inter",
+        "body_font": "inter",
+        "radius": "sharp",
+    },
+    "midnight": {
+        "primary": "#6366f1",
+        "accent": "#22d3ee",
+        "mode": "dark",
+        "heading_font": "exo-2",
+        "body_font": "inter",
+        "radius": "soft",
+    },
+    "emerald": {
+        "primary": "#10b981",
+        "accent": "#fbbf24",
+        "mode": "dark",
+        "heading_font": "montserrat",
+        "body_font": "roboto",
+        "radius": "soft",
+    },
+    "neon": {
+        "primary": "#a855f7",
+        "accent": "#f472b6",
+        "mode": "dark",
+        "heading_font": "ubuntu",
+        "body_font": "ubuntu",
+        "radius": "round",
+    },
+    "gold": {
+        "primary": "#d4a017",
+        "accent": "#e11d48",
+        "mode": "dark",
+        "heading_font": "playfair-display",
+        "body_font": "lora",
+        "radius": "sharp",
     },
 }
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -2263,9 +2420,11 @@ def _require_verified(ctx: Context) -> HttpResponse | None:
     verified (EnsureEmailIsVerified): почта не подтверждена — на экран
     подтверждения, адрес страницы — в url.intended; XHR, ждущий JSON, — 403.
     """
+    from savdex.web.shared import email_ok
     from savdex.web.views import error
 
-    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+    # Код пропущен при регистрации — мастер открыт (объявление с меткой)
+    if ctx.user is None or email_ok(ctx.user):
         return None
 
     if _expects_json(ctx.request):
@@ -2416,6 +2575,8 @@ def listing_wizard(request: HttpRequest, listing_id: str) -> HttpResponse:
                 "title": row["title"],
                 "description": row["description"],
                 "price": float(row["price"]) if row["price"] is not None else None,
+                "price_from": bool(row["price_from"]),
+                "price_to": float(row["price_to"]) if row["price_to"] is not None else None,
                 "bundle_price": float(row["bundle_price"])
                 if row["bundle_price"] is not None
                 else None,

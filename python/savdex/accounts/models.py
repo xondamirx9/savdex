@@ -33,6 +33,8 @@ class User(models.Model):
         choices=[("active", "Активен"), ("blocked", "Заблокирован")],
     )
     email_verified_at = UTCDateTimeField("почта подтверждена", null=True, blank=True)
+    #: Код из письма пропущен при регистрации (страна с «Регистрация без кода»)
+    email_code_skipped = models.BooleanField("код пропущен", default=False, editable=False)
     last_login_at = UTCDateTimeField("последний вход", null=True, blank=True)
     created_at = UTCDateTimeField("зарегистрирован", null=True, blank=True)
     updated_at = UTCDateTimeField("изменён", null=True, blank=True)

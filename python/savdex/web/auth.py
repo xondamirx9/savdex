@@ -101,7 +101,12 @@ def login(request: HttpRequest) -> HttpResponse:
     ):
         store.put("url.intended", ctx.root + back_to)
 
-    return inertia.render(ctx, "auth/Login", {"status": _flash(ctx, "status")}, _seo(ctx))
+    return inertia.render(
+        ctx,
+        "auth/Login",
+        {"status": _flash(ctx, "status")},
+        _seo(ctx).title(ctx.t("auth.login_title")),
+    )
 
 
 def register(request: HttpRequest) -> HttpResponse:
@@ -128,11 +133,27 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
-    # «Изменить почту» со второго шага — адрес уже в поле
+    from savdex.web.directory import listed_countries
+
+    # «Изменить почту» со второго шага — адрес и страна уже в полях
     store = _store(ctx)
     email = store.get("register.email") if store is not None else None
+    country_id = store.get("register.country_id") if store is not None else None
 
-    return inertia.render(ctx, "auth/RegisterEmail", {"email": email}, _seo(ctx))
+    return inertia.render(
+        ctx,
+        "auth/RegisterEmail",
+        {
+            "email": email,
+            "countryId": country_id,
+            # Страна — первым полем: от неё зависит, можно ли пропустить код
+            "countries": [
+                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                for c in listed_countries(ctx.locale)
+            ],
+        },
+        _seo(ctx).title(ctx.t("auth.register_title")),
+    )
 
 
 def _whatsapp_configured() -> bool:
@@ -296,7 +317,10 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
         ctx,
         "auth/CompanyStep",
         {
-            "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(locale)],
+            "countries": [
+                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                for c in listed_countries(locale)
+            ],
             "cities": [
                 {"id": c["id"], "name": cities[c["id"]], "country_id": c["country_id"]}
                 for c in _rows(
@@ -317,6 +341,8 @@ def onboarding_company(request: HttpRequest) -> HttpResponse:
             "personName": ctx.user["name"],
             # Компания заведена при регистрации — спрашиваем только недостающее
             "completing": ctx.user["company_id"] is not None,
+            # Страна, выбранная при регистрации: молча Узбекистан не ставится
+            "countryId": company["country_id"] if company is not None else None,
             "serviceCategories": [
                 {"id": c["id"], "slug": c["slug"], "name": categories[c["id"]]}
                 for c in _rows(

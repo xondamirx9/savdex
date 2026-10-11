@@ -331,6 +331,11 @@ urlpatterns = [
         name="register.code.resend",
     ),
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/code/skip$",
+        register_code.skip_code,
+        name="register.code.skip",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register/details$",
         register_code.details,
         name="register.details",

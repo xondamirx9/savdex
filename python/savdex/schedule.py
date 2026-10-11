@@ -288,6 +288,13 @@ def probe_uzum(now: datetime, due: datetime) -> str:
     return f"Uzum: {'доступен' if result.ok else 'СБОЙ'} — {result.message}"
 
 
+def send_ga4_purchases(now: datetime, due: datetime) -> str:
+    """Оплаты из product_events → GA4 (savdex/product_events.py)."""
+    from savdex import product_events
+
+    return product_events.send_purchases(now, due)
+
+
 JOBS: tuple[Job, ...] = (
     Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
@@ -299,6 +306,8 @@ JOBS: tuple[Job, ...] = (
     Job("promotions_finish", time(0, 0), finish_promotions, every=1),
     Job("cbu_rates", time(0, 0), refresh_rates, every=4),
     Job("uzum_probe", time(0, 0), probe_uzum, every=1),
+    # ТЗ-03: оплаты — в GA4 как purchase (Measurement Protocol)
+    Job("ga4_purchases", time(0, 10), send_ga4_purchases, every=1),
 )
 
 
