@@ -159,16 +159,18 @@ jobs:
             *\?*) url="$url&sslmode=require" ;;
             *) url="$url?sslmode=require" ;;
           esac
-          # База тестового — PostgreSQL 16: копия должна быть снята pg_dump 16,
-          # иначе pg_restore 16 её не прочитает
-          major=$(docker run --rm -e URL="$url" postgres:16 sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
-          echo "Боевая база: PostgreSQL $major"
-          if [ "$major" != "16" ]; then
-            echo "::error::Боевая база — PostgreSQL $major, а тестовая — 16. Нужно поднять версию базы тестового (deploy/staging/compose.yml)."
+          # Версия PostgreSQL тестового (deploy/staging/compose.yml) должна
+          # совпадать с боевой: копию снимает pg_dump той же версии, и
+          # pg_restore тестового её читает
+          staging_pg=$(grep -oE 'image: postgres:[0-9]+' deploy/staging/compose.yml | grep -oE '[0-9]+$')
+          major=$(docker run --rm -e URL="$url" "postgres:$staging_pg" sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
+          echo "Боевая база: PostgreSQL $major, тестовая: $staging_pg"
+          if [ "$major" != "$staging_pg" ]; then
+            echo "::error::Боевая база — PostgreSQL $major, а тестовая — $staging_pg. Поднимите версию в deploy/staging/compose.yml."
             exit 1
           fi
           umask 077
-          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" postgres:16 \
+          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" "postgres:$staging_pg" \
             sh -c 'pg_dump --format=custom --compress=9 --file=/out/prod.dump "$URL"'
           sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/prod.dump"
           size=$(stat -c %s "$RUNNER_TEMP/prod.dump")
