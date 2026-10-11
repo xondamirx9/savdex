@@ -125,7 +125,10 @@ if wait_healthy "$tag"; then
     echo "── Готово: https://$SITE_DOMAIN работает на $tag"
 else
     echo "ОШИБКА: savdex:$tag не поднялся. Последние строки журнала:" >&2
-    compose "$tag" logs --tail 80 app >&2 || true
+    # Журнал Actions публичный: почты и телефоны (база может быть копией
+    # боевой) заменяются заглушками
+    compose "$tag" logs --tail 80 app 2>&1 \
+        | sed -E 's/[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}/[почта]/g; s/\+?[0-9][0-9 ()-]{7,}[0-9]/[номер]/g' >&2 || true
     if [ -n "$previous" ] && [ "$previous" != "$tag" ]; then
         echo "── Возврат на $previous" >&2
         compose "$previous" up -d --remove-orphans

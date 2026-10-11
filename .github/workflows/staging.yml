@@ -2,8 +2,10 @@
 #
 # Каждое слияние в основную ветку выкладывается и сюда: Render — боевой
 # сайт, эта машина — тестовый. Вручную (Actions → staging → Run workflow)
-# можно выложить любую ветку, чтобы проверить её до слияния, и один раз —
-# подготовить чистую машину (галочка «bootstrap»).
+# можно выложить любую ветку, чтобы проверить её до слияния, один раз —
+# подготовить чистую машину (галочка «bootstrap»), а галочкой «копия
+# боевой базы» — залить на тестовый свежую копию данных с Render
+# (deploy/server/load-db.sh; база тестового при этом стирается).
 #
 # Образ собирается на самой машине (deploy/server/deploy.sh): так с
 # GitHub уходит только код, а не образ в сотни мегабайт.
@@ -14,6 +16,8 @@
 # Секреты и переменные (Settings → Secrets and variables → Actions):
 #   secrets.DEPLOY_SSH_KEY     закрытый SSH-ключ, открытая часть — в машине
 #   secrets.STAGING_PASSWORD   пароль на тестовый сайт (логин savdex)
+#   secrets.BACKUP_DATABASE_URL  адрес боевой базы — для галочки «копия
+#                              боевой базы» (тот же, что у ночных копий)
 #   vars.STAGING_HOST          публичный IP машины
 #   vars.STAGING_HOST_KEY      ключ машины («ssh-ed25519 AAAA…») — защищает
 #                              от подмены сервера; первая выкладка подскажет его
@@ -39,6 +43,10 @@ on:
         default: ''
       bootstrap:
         description: 'Сначала подготовить чистую машину (один раз)'
+        type: boolean
+        default: false
+      prod_db:
+        description: 'Загрузить копию боевой базы (база тестового стирается)'
         type: boolean
         default: false
 
@@ -77,8 +85,23 @@ jobs:
             exit 1
           fi
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
+          # Ключ, вставленный в секрет из Блокнота, приходит с переносами
+          # Windows (\r) или вовсе одной строкой — OpenSSH такой не читает
+          # («error in libcrypto»). Собираем заново: заголовок, тело base64
+          # по 70 знаков, конец
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          header=$(printf '%s' "$key" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1 || true)
+          if [ -z "$header" ]; then
+            echo "::error::В секрете DEPLOY_SSH_KEY не закрытый ключ: нет строки «-----BEGIN … PRIVATE KEY-----». Вставьте файл savdex-deploy (без .pub) целиком."
+            exit 1
+          fi
+          body=$(printf '%s' "$key" | sed -e 's/-----BEGIN [A-Z ]*-----//' -e 's/-----END [A-Z ]*-----//' | tr -d ' \t\n')
+          umask 077
+          { echo "$header"; printf '%s' "$body" | fold -w 70; echo; echo "${header/BEGIN/END}"; } > ~/.ssh/id_deploy
+          if ! ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null; then
+            echo "::error::Ключ в секрете DEPLOY_SSH_KEY не читается — похоже, скопирован не целиком. Вставьте файл savdex-deploy (без .pub) заново, от «-----BEGIN» до «-----END … KEY-----» включительно."
+            exit 1
+          fi
           if [ -n "$HOST_KEY" ]; then
             printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
           else
@@ -119,3 +142,44 @@ jobs:
         run: |
           printf '%s\n' "$STAGING_PASSWORD" \
             | ssh -l deploy staging "SITE_DOMAIN='$SITE_DOMAIN' bash /opt/savdex/src/deploy/server/deploy.sh --password-stdin"
+
+      - name: Копия боевой базы
+        if: inputs.prod_db
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Нет секрета BACKUP_DATABASE_URL (docs/backups.md)"
+            exit 1
+          fi
+          url="$DATABASE_URL"
+          case "$url" in
+            *sslmode=*) ;;
+            *\?*) url="$url&sslmode=require" ;;
+            *) url="$url?sslmode=require" ;;
+          esac
+          # Версия PostgreSQL тестового (deploy/staging/compose.yml) должна
+          # совпадать с боевой: копию снимает pg_dump той же версии, и
+          # pg_restore тестового её читает
+          staging_pg=$(grep -oE 'image: postgres:[0-9]+' deploy/staging/compose.yml | grep -oE '[0-9]+$')
+          major=$(docker run --rm -e URL="$url" "postgres:$staging_pg" sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
+          echo "Боевая база: PostgreSQL $major, тестовая: $staging_pg"
+          if [ "$major" != "$staging_pg" ]; then
+            echo "::error::Боевая база — PostgreSQL $major, а тестовая — $staging_pg. Поднимите версию в deploy/staging/compose.yml."
+            exit 1
+          fi
+          umask 077
+          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" "postgres:$staging_pg" \
+            sh -c 'pg_dump --format=custom --compress=9 --file=/out/prod.dump "$URL"'
+          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/prod.dump"
+          size=$(stat -c %s "$RUNNER_TEMP/prod.dump")
+          echo "Копия: $((size / 1024)) КБ"
+          if [ "$size" -lt 50000 ]; then
+            echo "::error::Копия подозрительно мала — проверьте BACKUP_DATABASE_URL."
+            exit 1
+          fi
+          ssh -l deploy staging 'install -d -m 700 /opt/savdex/restore'
+          scp -o User=deploy "$RUNNER_TEMP/prod.dump" staging:/opt/savdex/restore/prod.dump
+          rm -f "$RUNNER_TEMP/prod.dump"
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-db.sh /opt/savdex/restore/prod.dump'

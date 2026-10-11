@@ -6,7 +6,8 @@
 #   адрес посетителя и хост в ссылках из писем подделать нельзя.
 # app — тот же образ, что на Render (Dockerfile): Apache, сайт, админка
 #   и фоновые задачи; собирается на этой же машине (deploy/server/deploy.sh).
-# db — своя PostgreSQL 16 с тестовыми данными; наружу не открыта,
+# db — своя PostgreSQL 18 (та же версия, что на боевой) с тестовыми
+#   данными; наружу не открыта,
 #   её видит только app по внутренней сети Docker.
 #
 # Пароли и ключи — в /opt/savdex/env (права 600), не в репозитории:
@@ -59,7 +60,7 @@ services:
     stop_grace_period: 40s
 
   db:
-    image: postgres:16
+    image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_DB: savdex
@@ -69,7 +70,9 @@ services:
       # создаётся один раз, при первом запуске на пустом каталоге (initdb/)
       DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:?пароль роли savdex_django}
     volumes:
-      - ${SAVDEX_HOME:-/opt/savdex}/db:/var/lib/postgresql/data
+      # Образ 18 держит данные в /var/lib/postgresql/<версия>/docker:
+      # следующая major-версия не наткнётся на файлы прежней
+      - ${SAVDEX_HOME:-/opt/savdex}/pg:/var/lib/postgresql
       - ./initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256mb
     healthcheck:
