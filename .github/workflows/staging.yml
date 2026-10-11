@@ -77,8 +77,23 @@ jobs:
             exit 1
           fi
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
+          # Ключ, вставленный в секрет из Блокнота, приходит с переносами
+          # Windows (\r) или вовсе одной строкой — OpenSSH такой не читает
+          # («error in libcrypto»). Собираем заново: заголовок, тело base64
+          # по 70 знаков, конец
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          header=$(printf '%s' "$key" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1 || true)
+          if [ -z "$header" ]; then
+            echo "::error::В секрете DEPLOY_SSH_KEY не закрытый ключ: нет строки «-----BEGIN … PRIVATE KEY-----». Вставьте файл savdex-deploy (без .pub) целиком."
+            exit 1
+          fi
+          body=$(printf '%s' "$key" | sed -e 's/-----BEGIN [A-Z ]*-----//' -e 's/-----END [A-Z ]*-----//' | tr -d ' \t\n')
+          umask 077
+          { echo "$header"; printf '%s' "$body" | fold -w 70; echo; echo "${header/BEGIN/END}"; } > ~/.ssh/id_deploy
+          if ! ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null; then
+            echo "::error::Ключ в секрете DEPLOY_SSH_KEY не читается — похоже, скопирован не целиком. Вставьте файл savdex-deploy (без .pub) заново, от «-----BEGIN» до «-----END … KEY-----» включительно."
+            exit 1
+          fi
           if [ -n "$HOST_KEY" ]; then
             printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
           else
