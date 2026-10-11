@@ -97,8 +97,16 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
 CONF
+# Ubuntu 24.04 запускает sshd по сокету (ssh.socket): каталога /run/sshd
+# может не быть, и без него `sshd -t` отказывается проверять настройки
+install -d -m 755 /run/sshd
 sshd -t
-systemctl reload ssh 2>/dev/null || systemctl reload sshd
+if systemctl is-active --quiet ssh; then
+    systemctl reload ssh
+elif systemctl is-active --quiet sshd; then
+    systemctl reload sshd
+fi
+# Демон не запущен (ждёт подключения на сокете) — настройки подхватит сам при старте
 
 echo "── fail2ban"
 systemctl enable --now fail2ban
