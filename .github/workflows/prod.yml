@@ -365,3 +365,30 @@ jobs:
             | ssh web "SAVDEX_ROLE=web DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
                 bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
           echo "Готово: https://$SITE_DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверка снаружи
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Как посетитель: из интернета, по HTTPS (сертификат Caddy
+          # выпускает при первом обращении — поэтому ждём до двух минут)
+          auth=()
+          if [ "$SITE_DOMAIN" != savdex.uz ]; then
+            auth=(-u "savdex:$STAGING_PASSWORD")
+          fi
+          code() { curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "https://$SITE_DOMAIN$1"; }
+          for _ in $(seq 1 24); do
+            [ "$(code /up)" = 200 ] && break
+            sleep 5
+          done
+          for path in /up / /catalog /companies /py/admin/login/; do
+            status=$(code "$path")
+            echo "https://$SITE_DOMAIN$path — $status"
+            if [ "$status" != 200 ]; then
+              echo "::error::https://$SITE_DOMAIN$path отвечает $status"
+              exit 1
+            fi
+          done
+          # Админка — с машины админки: на её странице входа — форма Django
+          curl -fsS "${auth[@]}" "https://$SITE_DOMAIN/py/admin/login/" | grep -q 'name="_token"'
