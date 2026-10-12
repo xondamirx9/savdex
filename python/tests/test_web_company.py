@@ -439,3 +439,28 @@ def test_без_кода_отзыв_нельзя(сайт):
     props = визитка(сайт, "/company/stroybaza", куки)
 
     assert props["review_blocked"] == "Подтвердите почту, чтобы оставлять отзывы."
+
+
+def test_описание_не_по_русски_переводится_на_русский(сайт):
+    """Китайская компания пишет по-китайски — русская версия ждёт перевода."""
+    описание = "我们生产水泥和建筑材料"
+    новая(slug="cn-cement", name="Cement CN", description=описание)
+    sql("delete from content_translations where source = %s", [описание])
+
+    # Перевода ещё нет — оригинал, а текст в очереди на русский
+    assert визитка(сайт, "/company/cn-cement")["company"]["description"] == описание
+    assert sql("select locale from content_translations where source = %s", [описание]) == [("ru",)]
+
+    sql(
+        "update content_translations set translation = 'Производим цемент' where source = %s",
+        [описание],
+    )
+    assert визитка(сайт, "/company/cn-cement")["company"]["description"] == "Производим цемент"
+
+
+def test_русское_описание_на_русский_не_переводится(сайт):
+    описание = "Производим цемент M400"
+    новая(slug="ru-cement", name="Цемент РУ", description=описание)
+
+    assert визитка(сайт, "/company/ru-cement")["company"]["description"] == описание
+    assert sql("select 1 from content_translations where source = %s", [описание]) == []

@@ -103,13 +103,13 @@ def card(
 ) -> dict[str, Any]:
     """ItTaskController::card."""
     completed = row["status"] == "completed"
-    description = (translations.text(row["description"]) or "").strip(" \t\n\r\0\x0b")
+    description = (translations.user_text(row["description"]) or "").strip(" \t\n\r\0\x0b")
     url = row["result_url"]
 
     return {
         "id": row["id"],
         "slug": row["slug"],
-        "title": translations.text(row["title"]),
+        "title": translations.user_text(row["title"]),
         "excerpt": _limit(description, 180, "..."),
         "service_type": row["service_type"],
         "service_label": ctx.t(f"it_tasks.types.{row['service_type']}"),
@@ -436,7 +436,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         {
             "task": {
                 **card(ctx, row, translations, cities),
-                "description": paragraphs(translations.text(row["description"])),
+                "description": paragraphs(translations.user_text(row["description"])),
                 "files": [
                     {
                         "id": f["id"],
