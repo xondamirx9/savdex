@@ -101,7 +101,9 @@ def take(
             [[r["id"] for r in rows if r["kind"] == "platform"]],
         )
     }
-    translations.prefetch(r["body"] for r in [*company.values(), *platform.values()])
+    translations.prefetch(
+        (r["body"] for r in [*company.values(), *platform.values()]), user=True
+    )
 
     return [
         _company_card(company[r["id"]], translations)
@@ -118,7 +120,7 @@ def _company_card(r: dict[str, Any], translations: content.Translations) -> dict
         "author": r["author"],
         "initials": initials(r["author"]),
         "rating": int(r["rating"]),
-        "body": translations.text(r["body"]),
+        "body": translations.user_text(r["body"]),
         "when": r["created_at"].strftime("%d.%m.%Y"),
         "company_name": r["company_name"],
         "company_slug": r["company_slug"],
@@ -147,7 +149,7 @@ def _platform_card(r: dict[str, Any], translations: content.Translations) -> dic
         "author": author,
         "initials": initials(author),
         "rating": int(r["rating"]),
-        "body": translations.text(r["body"]),
+        "body": translations.user_text(r["body"]),
         "when": r["created_at"].strftime("%d.%m.%Y"),
         "company_name": None,
         "company_slug": None,

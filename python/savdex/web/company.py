@@ -281,9 +281,9 @@ def _reviews(ctx: Context, company_id: int) -> list[dict[str, Any]]:
             else ctx.t("cabinet.incoming.deleted"),
             "initials": initials(r["author_name"]) if r["author_name"] is not None else "?",
             "rating": r["rating"],
-            "body": translations.text(r["body"]),
+            "body": translations.user_text(r["body"]),
             "deal_confirmed": r["deal_confirmed"],
-            "reply": translations.text(r["reply"]),
+            "reply": translations.user_text(r["reply"]),
             "when": _utc(r["created_at"]).strftime("%d.%m.%Y"),  # type: ignore[union-attr]
         }
         for r in _rows(
@@ -404,7 +404,7 @@ def business_card(
         "type_label": type_label(ctx, c, type_options(ctx.locale)),
         "legal_form": c["legal_form"] if c["legal_form"] is not None else "legal",
         "legal_form_label": ctx.t(f"legal_form.{form}"),
-        "custom_category": translations.text(c["custom_category"]),
+        "custom_category": translations.user_text(c["custom_category"]),
         "country": countries.get(c["country_id"]) if c["country_id"] is not None else None,
         "city": cities.get(c["city_id"]) if c["city_id"] is not None else None,
         "address": c["address"],
@@ -412,7 +412,7 @@ def business_card(
         "coords": {"lat": float(c["lat"]), "lng": float(c["lng"])}
         if c["lat"] is not None and c["lng"] is not None
         else None,
-        "description": translations.text(c["description"]),
+        "description": translations.user_text(c["description"]),
         "source_note": translations.text(c["source_note"]),
         "website": website_url(c["website"]),
         # Кнопка «Мини-сайт компании» — только когда мини-сайт открывается
