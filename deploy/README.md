@@ -79,9 +79,9 @@ Telegram не подключены.
    - Render → Account Settings → SSH Public Keys → Add SSH Public Key —
      содержимое `savdex-deploy.pub` (тот же ключ, что у выкладки);
    - Render → служба сайта → Connect → SSH — скопировать адрес вида
-     `srv-…@ssh.oregon.render.com` в переменную `RENDER_SSH`;
-   - первый запуск с галочкой «копия файлов» подскажет ключ Render —
-     сохранить его переменной `RENDER_SSH_HOST_KEY`.
+     `srv-…@ssh.oregon.render.com` в переменную `RENDER_SSH`. Ключ
+     сервера SSH Render в Орегоне уже вписан в workflow (из документации
+     Render); для другого региона — переменная `RENDER_SSH_HOST_KEY`.
 
 Закрытый ключ и пароли — только в секреты GitHub, не в чат и не на
 скриншотах. Репозиторий публичный: журналы Actions видят все, поэтому

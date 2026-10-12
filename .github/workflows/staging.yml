@@ -27,7 +27,7 @@
 #                              машины (root или ubuntu), по умолчанию root
 #   vars.RENDER_SSH            адрес SSH службы на Render (srv-…@ssh.oregon.render.com) —
 #                              для галочки «копия файлов»; ключ — DEPLOY_SSH_KEY
-#   vars.RENDER_SSH_HOST_KEY   ключ сервера SSH Render; первая копия подскажет его
+#   vars.RENDER_SSH_HOST_KEY   ключ сервера SSH Render — только если служба не в Орегоне
 #
 # Репозиторий публичный, журналы Actions видят все: пароли и ключи
 # в журнал не выводятся — пароль уходит на сервер через stdin.
@@ -196,26 +196,23 @@ jobs:
         if: inputs.prod_files
         env:
           RENDER_SSH: ${{ vars.RENDER_SSH }}
-          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY }}
+          # Ключ сервера SSH Render в Орегоне — из документации Render
+          # (render.com/docs/ssh, SHA256:KkZPgnApmttFYSkdJsCi7B01sgZPMI6kY53MDbbanGM);
+          # служба в другом регионе — свой ключ в переменной RENDER_SSH_HOST_KEY
+          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY || 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFON8eay2FgHDBIVOLxWn/AWnsDJhCVvlY1igWEFoLD2' }}
         run: |
           set -euo pipefail
           if [ -z "$RENDER_SSH" ]; then
             echo "::error::Нет переменной RENDER_SSH — адреса SSH службы на Render (deploy/README.md)"
             exit 1
           fi
-          render_host=${RENDER_SSH#*@}
-          if [ -n "$RENDER_HOST_KEY" ]; then
-            printf '%s %s\n' "$render_host" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
-          else
-            ssh-keyscan -t ed25519 "$render_host" 2>/dev/null | tee -a ~/.ssh/known_hosts > "$RUNNER_TEMP/render.key"
-            echo "::warning::Ключ Render не закреплён. Добавьте переменную RENDER_SSH_HOST_KEY = $(cut -d' ' -f2- "$RUNNER_TEMP/render.key")"
-          fi
+          printf '%s %s\n' "${RENDER_SSH#*@}" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
           # Ключ — тот же DEPLOY_SSH_KEY: его открытая часть добавлена
           # в Render (Account Settings → SSH Public Keys). Загрузки лежат
           # на постоянном диске службы: /var/data/storage/{public,private}
           umask 077
           ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=30 "$RENDER_SSH" \
+            -o UpdateHostKeys=no -o ServerAliveInterval=30 "$RENDER_SSH" \
             'tar -C /var/data/storage -czf - public private' > "$RUNNER_TEMP/files.tgz"
           gzip -t "$RUNNER_TEMP/files.tgz"
           files=$(tar -tzf "$RUNNER_TEMP/files.tgz" | grep -vc '/$' || true)
