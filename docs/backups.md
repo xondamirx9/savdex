@@ -13,6 +13,33 @@
 работает как обычно. Перед сохранением копия восстанавливается в пустую
 базу; не восстановилась — запуск красный, и GitHub присылает письмо.
 
+## После переезда в Uztelecom
+
+Копии снимает машина базы ([deploy/server/backup.sh](../deploy/server/backup.sh),
+cron, [deploy/README.md](../deploy/README.md)) и кладёт в то же хранилище:
+
+| Что | Где | Сколько хранится |
+|---|---|---|
+| База — каждую ночь в 03:40 по Ташкенту, `pg_dump` + gpg тем же `BACKUP_PASSPHRASE` | `uz/db/savdex-ГГГГ-ММ-ДД.dump.gpg`; три последние — ещё и в `/opt/savdex/backup` на машине | 90 дней |
+| Загруженные файлы — каждый час, только новые и изменённые, зашифрованы rclone crypt тем же паролем | `uz/files/` | всё, что когда-либо было загружено (удалённые с сайта файлы в копии остаются) |
+
+Копия базы восстанавливается так же, как ночная копия Render (ниже):
+расшифровать `gpg --decrypt` и `pg_restore`. Файлы — rclone с тем же
+паролем (`rclone obscure` превращает пароль в вид, который ждёт rclone):
+
+```sh
+export RCLONE_CONFIG_S3_TYPE=s3 RCLONE_CONFIG_S3_PROVIDER=Other \
+  RCLONE_CONFIG_S3_ENDPOINT=https://s3.uzcstorage.uz \
+  RCLONE_CONFIG_S3_ACCESS_KEY_ID=… RCLONE_CONFIG_S3_SECRET_ACCESS_KEY=… \
+  RCLONE_CONFIG_FILES_TYPE=crypt RCLONE_CONFIG_FILES_REMOTE=s3:savdex/uz/files
+read -rsp 'Пароль BACKUP_PASSPHRASE: ' pass && echo
+export RCLONE_CONFIG_FILES_PASSWORD="$(rclone obscure "$pass")"
+rclone copy files: ./storage
+```
+
+После переезда ночная копия с Render (задача backup в GitHub) больше не
+нужна: её выключить, когда новая база станет боевой.
+
 ## Настройка (один раз)
 
 В GitHub: **Settings → Secrets and variables → Actions → New repository secret**.

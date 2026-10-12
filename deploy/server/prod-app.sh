@@ -94,8 +94,20 @@ MY_IP=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src"
         echo "PYTHON_WORKERS=1"
         echo "PYTHON_THREADS=2"
         echo "PYTHON_ADMIN_WORKERS=3"
+        # Репетиция (адрес не savdex.uz): база — копия боевой, а ключи
+        # почты, Telegram и ящика поддержки — настоящие, с Render. Фоновые
+        # задачи разослали бы людям письма второй раз и забрали бы письма
+        # поддержки из настоящего ящика — поэтому до переезда они
+        # выключены: их делает Render
+        if [ "$SITE_DOMAIN" != savdex.uz ]; then
+            echo "SAVDEX_BACKGROUND=0"
+        fi
     fi
 } > "$ENV_DIR/role.env"
+
+if [ "$ROLE" = admin ] && [ "$SITE_DOMAIN" != savdex.uz ]; then
+    echo "── Репетиция ($SITE_DOMAIN): фоновые задачи выключены — их делает Render"
+fi
 
 if [ "$ROLE" = web ]; then
     password=""
