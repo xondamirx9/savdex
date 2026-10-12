@@ -241,6 +241,20 @@ fi
 # Публичные загрузки по адресу /storage/… — как storage:link у Laravel
 ln -sfn /var/www/html/storage/app/public public/storage
 
+# Кэш (CACHE_STORE=file) — общий для нескольких машин: на машинах
+# Uztelecom сайт и админка — разные контейнеры, а правка настроек в
+# админке сбрасывает кэш, который читает сайт; курсы ЦБ кладёт в кэш
+# расписание, а читает сайт. SAVDEX_CACHE_DIR — каталог в общей папке
+# (NFS); без переменной кэш свой у контейнера, как на Render
+if [ -n "${SAVDEX_CACHE_DIR:-}" ]; then
+    mkdir -p "$SAVDEX_CACHE_DIR/data"
+    # Пишет в кэш Django от www-data; в NFS-папке Uztelecom владелец и
+    # так www-data (all_squash), chown там ничего не меняет
+    chown www-data:www-data "$SAVDEX_CACHE_DIR" "$SAVDEX_CACHE_DIR/data" 2>/dev/null || true
+    rm -rf storage/framework/cache
+    ln -sfn "$SAVDEX_CACHE_DIR" storage/framework/cache
+fi
+
 # Команды выше работали от root; Django пишет в storage от www-data
 chown -R www-data:www-data storage
 
@@ -307,8 +321,8 @@ fi
 # ── Фоновые задачи ──────────────────────────────────────────────────
 #
 # Ровно на одной машине: задачи по расписанию на двух пошли бы дважды
-# (два письма, два списания). На машине админки Uztelecom —
-# SAVDEX_BACKGROUND=0, они идут на машине сайта.
+# (два письма, два списания). В Uztelecom они на машине админки, а на
+# машине сайта — SAVDEX_BACKGROUND=0: процессор сайта только посетителям.
 if [ "${SAVDEX_BACKGROUND:-1}" != "0" ]; then
     # Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
     # объявления, просьбы об отзыве, чистка «Кто смотрел», продвижения,
@@ -343,5 +357,17 @@ if [ "${SAVDEX_BACKGROUND:-1}" != "0" ]; then
         run_forever 60 "Сверка денег" python/.venv/bin/python python/manage.py reconcile_billing
     fi
 fi
+
+# Apache — когда Django уже слушает: иначе первые секунды после запуска
+# он отвечал бы 503. На машинах Uztelecom Caddy, пока порт Apache закрыт,
+# держит запрос и ждёт — выкладка проходит без ошибок у посетителей
+wait_ports=(8001)
+[ "$admin_workers" -gt 0 ] && wait_ports+=(8002)
+for port in "${wait_ports[@]}"; do
+    for _ in $(seq 1 90); do
+        (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break
+        sleep 1
+    done
+done
 
 exec "$@"

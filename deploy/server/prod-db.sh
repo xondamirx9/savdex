@@ -12,7 +12,8 @@
 #
 # Резервные копии (deploy/server/backup.sh) — по cron пользователя
 # deploy: база каждую ночь, файлы каждый час; ключи хранилища и пароль
-# шифрования — в /opt/savdex/env/backup.env (кладёт prod.yml).
+# шифрования — в /opt/savdex/env/backup.env (кладёт prod.yml). Там же
+# раз в сутки — чистка общего кэша от просроченного (cache-prune.sh).
 set -euo pipefail
 
 APP_HOME=${SAVDEX_HOME:-/opt/savdex}
@@ -88,6 +89,7 @@ mkdir -p "$APP_HOME/backup"
     crontab -l 2>/dev/null | grep -v '# savdex-backup' || true
     echo "40 3 * * * bash $backup db >> $log 2>&1 # savdex-backup"
     echo "17 * * * * bash $backup files >> $log 2>&1 # savdex-backup"
+    echo "20 4 * * * bash $SRC/deploy/server/cache-prune.sh >> $log 2>&1 # savdex-backup"
 } | crontab -
 if [ ! -s "$ENV_DIR/backup.env" ]; then
     echo "ВНИМАНИЕ: нет $ENV_DIR/backup.env — копии в хранилище не пойдут (секреты S3_* и BACKUP_PASSPHRASE в GitHub)." >&2

@@ -94,7 +94,9 @@ case "$what" in
         echo "$(date -Iseconds) Копия базы: $prefix/db/$file, $((size / 1024)) КБ"
         ;;
     files)
-        rclone "$STORAGE" /data copy /data files: --stats-one-line --stats-log-level NOTICE
+        # Кэш (cache/) — не копия: он восстанавливается сам
+        rclone "$STORAGE" /data copy /data files: --exclude "/cache/**" \
+            --stats-one-line --stats-log-level NOTICE
         echo "$(date -Iseconds) Копия файлов: $prefix/files/"
         ;;
     *)

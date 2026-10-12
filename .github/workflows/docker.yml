@@ -258,8 +258,12 @@ jobs:
           set -euo pipefail
           db=postgres://savdex:savdex@host.docker.internal:5432/savdex_test
           key="base64:$(openssl rand -base64 32)"
+          # Общая папка (на машине базы — NFS) — здесь общий том Docker:
+          # в нём загрузки и кэш, который видят обе машины
           common=(--add-host=host.docker.internal:host-gateway
-            -e APP_KEY="$key" -e DB_CONNECTION=pgsql -e DB_URL="$db" -e DJANGO_DATABASE_URL="$db")
+            -e APP_KEY="$key" -e DB_CONNECTION=pgsql -e DB_URL="$db" -e DJANGO_DATABASE_URL="$db"
+            -e CACHE_STORE=file -e SAVDEX_CACHE_DIR=/var/data/storage/cache
+            -v savdex-ci-shared:/var/data/storage)
 
           docker run --rm "${common[@]}" savdex:ci migrate 2>&1 | tee /tmp/migrate.txt
           grep -q "Схема и справочники готовы" /tmp/migrate.txt
@@ -305,6 +309,16 @@ jobs:
           for task in schedule translate reconcile_billing notify; do
             if running admin "$task"; then exit 1; fi
           done
+          # Кэш общий: записанное админкой видит сайт, сброшенное — не видит
+          py() {
+            docker exec -u www-data -w /var/www/html/python -e DJANGO_SETTINGS_MODULE=savdex.settings "$1" \
+              .venv/bin/python -c "import django; django.setup(); $2"
+          }
+          test "$(docker exec web readlink /var/www/html/storage/framework/cache)" = /var/data/storage/cache
+          py admin "from savdex import laravel_cache; laravel_cache.put('ci:shared', 'да', 600)"
+          test "$(py web "from savdex import laravel_cache; print(laravel_cache.get('ci:shared'))")" = да
+          py admin "from savdex import laravel_cache; laravel_cache.forget('ci:shared')"
+          test "$(py web "from savdex import laravel_cache; print(laravel_cache.get('ci:shared'))")" = None
 
       - name: Журнал контейнера
         if: always()

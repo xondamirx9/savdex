@@ -4,12 +4,12 @@
 #
 # - compose.web.yml — машина сайта: Caddy (HTTPS) перед приложением;
 #   адреса админки Caddy передаёт на машину админки;
-# - compose.admin.yml — машина админки: приложение слушает частный
-#   адрес машины, его видит только Caddy машины сайта.
+# - compose.admin.yml — машина админки (и фоновых задач): приложение
+#   слушает частный адрес машины, его видит только Caddy машины сайта.
 #
-# Загруженные файлы (логотипы, фото, документы) — общая папка на машине
-# базы (NFS, deploy/server/bootstrap.sh, роль db): что загрузили через
-# сайт, видит админка, и наоборот.
+# Загруженные файлы (логотипы, фото, документы) и кэш — общая папка на
+# машине базы (NFS, deploy/server/bootstrap.sh, роль db): что загрузили
+# через сайт, видит админка, и наоборот.
 #
 #   SAVDEX_TAG=<версия> docker compose -f deploy/prod/app/compose.yml \
 #       -f deploy/prod/app/compose.web.yml \
@@ -37,7 +37,10 @@ services:
       timeout: 10s
       retries: 4
       start_period: 180s
-    # Apache и gunicorn дорабатывают начатые запросы (--graceful-timeout 30)
+    # SIGWINCH — мягкая остановка Apache: начатые запросы дорабатываются
+    # (gunicorn — --graceful-timeout 30), новых он уже не берёт, и Caddy
+    # ждёт новый контейнер
+    stop_signal: SIGWINCH
     stop_grace_period: 40s
 
 volumes:

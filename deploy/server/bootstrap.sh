@@ -150,7 +150,7 @@ if [ "$ROLE" = db ]; then
     echo "── Общая папка файлов для сайта и админки (NFS)"
     # Все записи — от www-data контейнера сайта (uid 33): сайт и админка
     # пишут файлы, root клиента здесь не root
-    install -d -m 755 -o 33 -g 33 /srv/savdex/storage
+    install -d -m 755 -o 33 -g 33 /srv/savdex/storage /srv/savdex/storage/cache
     install -d -m 755 /etc/exports.d
     cat > /etc/exports.d/savdex.exports <<EXPORTS
 /srv/savdex/storage ${WEB_IP}(rw,sync,no_subtree_check,all_squash,anonuid=33,anongid=33) ${ADMIN_IP}(rw,sync,no_subtree_check,all_squash,anonuid=33,anongid=33)

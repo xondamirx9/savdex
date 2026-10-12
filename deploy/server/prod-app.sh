@@ -77,13 +77,20 @@ MY_IP=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src"
     echo "DJANGO_ALLOWED_HOSTS=$SITE_DOMAIN,www.$SITE_DOMAIN,127.0.0.1,localhost"
     # Схему меняет только разовый запуск migrate (--migrate)
     echo "SAVDEX_MIGRATE=0"
+    # Кэш — общий для сайта и админки, в общей папке на машине базы:
+    # правку настроек в админке сайт видит сразу, курсы ЦБ из расписания —
+    # тоже. Кэш в базе не годится: с ним выключены ограничения частоты
+    echo "CACHE_STORE=file"
+    echo "SAVDEX_CACHE_DIR=/var/data/storage/cache"
     if [ "$ROLE" = web ]; then
-        # Фоновые задачи — здесь; адреса админки Caddy отдаёт машине админки
+        # Только посетители: фоновые задачи — на машине админки, адреса
+        # админки Caddy отдаёт туда же
+        echo "SAVDEX_BACKGROUND=0"
         echo "PYTHON_ADMIN_WORKERS=0"
     else
-        # Фоновые задачи идут на машине сайта. Процесс сайта — один и
-        # маленький: на него приходят только /up и проверка контейнера
-        echo "SAVDEX_BACKGROUND=0"
+        # Админка и фоновые задачи (расписание, перевод, письма, сверка).
+        # Процесс сайта — один и маленький: на него приходят только /up и
+        # проверка контейнера
         echo "PYTHON_WORKERS=1"
         echo "PYTHON_THREADS=2"
         echo "PYTHON_ADMIN_WORKERS=3"
@@ -113,13 +120,21 @@ $SITE_DOMAIN {
 	import /etc/caddy/auth.caddy
 	encode zstd gzip
 
-	# Админка — на своей машине (частная сеть). Остальное — сайт
+	# Админка — на своей машине (частная сеть). Остальное — сайт.
+	# Пока приложение перезапускается (выкладка), его порт закрыт: Caddy
+	# держит запрос до минуты и повторяет, а не отвечает посетителю 502
 	@admin path /py/admin /py/admin/* /py/login /py/logout
 	handle @admin {
-		reverse_proxy $ADMIN_IP:10000
+		reverse_proxy $ADMIN_IP:10000 {
+			lb_try_duration 60s
+			lb_try_interval 500ms
+		}
 	}
 	handle {
-		reverse_proxy app:10000
+		reverse_proxy app:10000 {
+			lb_try_duration 60s
+			lb_try_interval 500ms
+		}
 	}
 
 	log {
