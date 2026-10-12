@@ -101,9 +101,7 @@ def take(
             [[r["id"] for r in rows if r["kind"] == "platform"]],
         )
     }
-    translations.prefetch(
-        (r["body"] for r in [*company.values(), *platform.values()]), user=True
-    )
+    translations.prefetch((r["body"] for r in [*company.values(), *platform.values()]), user=True)
 
     return [
         _company_card(company[r["id"]], translations)
