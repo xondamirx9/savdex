@@ -107,13 +107,6 @@ ServerName ${server_name}
 Timeout 130
 CONF
 
-if [ "$admin_workers" -gt 0 ]; then
-    admin_line="админка — ${admin_workers} × ${admin_threads}"
-else
-    admin_line="админки здесь нет"
-fi
-echo "Django: сайт — ${workers} процессов × ${threads} потоков, ${admin_line}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
-
 # ── Ключ ────────────────────────────────────────────────────────────
 #
 # APP_KEY шифрует куку сессии (тот же формат, что у Laravel) и
@@ -268,6 +261,13 @@ run_forever() {
         done
     ) &
 }
+
+if [ "$admin_workers" -gt 0 ]; then
+    admin_line="админка — ${admin_workers} × ${admin_threads}"
+else
+    admin_line="админки здесь нет"
+fi
+echo "Django: сайт — ${workers} процессов × ${threads} потоков, ${admin_line}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
 
 # Слушает только 127.0.0.1: снаружи до Django не достучаться, только
 # через Apache
