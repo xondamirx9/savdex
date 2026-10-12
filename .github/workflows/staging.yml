@@ -5,7 +5,8 @@
 # можно выложить любую ветку, чтобы проверить её до слияния, один раз —
 # подготовить чистую машину (галочка «bootstrap»), а галочкой «копия
 # боевой базы» — залить на тестовый свежую копию данных с Render
-# (deploy/server/load-db.sh; база тестового при этом стирается).
+# (deploy/server/load-db.sh; база тестового при этом стирается), галочкой
+# «копия файлов» — загруженные файлы с диска Render (deploy/server/load-files.sh).
 #
 # Образ собирается на самой машине (deploy/server/deploy.sh): так с
 # GitHub уходит только код, а не образ в сотни мегабайт.
@@ -24,6 +25,9 @@
 #   vars.STAGING_DOMAIN        адрес сайта, по умолчанию staging.savdex.uz
 #   vars.STAGING_BOOTSTRAP_USER  пользователь образа ОС для подготовки
 #                              машины (root или ubuntu), по умолчанию root
+#   vars.RENDER_SSH            адрес SSH службы на Render (srv-…@ssh.oregon.render.com) —
+#                              для галочки «копия файлов»; ключ — DEPLOY_SSH_KEY
+#   vars.RENDER_SSH_HOST_KEY   ключ сервера SSH Render; первая копия подскажет его
 #
 # Репозиторий публичный, журналы Actions видят все: пароли и ключи
 # в журнал не выводятся — пароль уходит на сервер через stdin.
@@ -47,6 +51,10 @@ on:
         default: false
       prod_db:
         description: 'Загрузить копию боевой базы (база тестового стирается)'
+        type: boolean
+        default: false
+      prod_files:
+        description: 'Загрузить копию файлов с Render (файлы тестового заменяются)'
         type: boolean
         default: false
 
@@ -183,3 +191,41 @@ jobs:
           scp -o User=deploy "$RUNNER_TEMP/prod.dump" staging:/opt/savdex/restore/prod.dump
           rm -f "$RUNNER_TEMP/prod.dump"
           ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-db.sh /opt/savdex/restore/prod.dump'
+
+      - name: Копия файлов
+        if: inputs.prod_files
+        env:
+          RENDER_SSH: ${{ vars.RENDER_SSH }}
+          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RENDER_SSH" ]; then
+            echo "::error::Нет переменной RENDER_SSH — адреса SSH службы на Render (deploy/README.md)"
+            exit 1
+          fi
+          render_host=${RENDER_SSH#*@}
+          if [ -n "$RENDER_HOST_KEY" ]; then
+            printf '%s %s\n' "$render_host" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -t ed25519 "$render_host" 2>/dev/null | tee -a ~/.ssh/known_hosts > "$RUNNER_TEMP/render.key"
+            echo "::warning::Ключ Render не закреплён. Добавьте переменную RENDER_SSH_HOST_KEY = $(cut -d' ' -f2- "$RUNNER_TEMP/render.key")"
+          fi
+          # Ключ — тот же DEPLOY_SSH_KEY: его открытая часть добавлена
+          # в Render (Account Settings → SSH Public Keys). Загрузки лежат
+          # на постоянном диске службы: /var/data/storage/{public,private}
+          umask 077
+          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 "$RENDER_SSH" \
+            'tar -C /var/data/storage -czf - public private' > "$RUNNER_TEMP/files.tgz"
+          gzip -t "$RUNNER_TEMP/files.tgz"
+          files=$(tar -tzf "$RUNNER_TEMP/files.tgz" | grep -vc '/$' || true)
+          size=$(stat -c %s "$RUNNER_TEMP/files.tgz")
+          echo "Копия: $files файлов, $((size / 1024 / 1024)) МБ"
+          if [ "$files" -lt 1 ]; then
+            echo "::error::В копии нет ни одного файла — проверьте RENDER_SSH."
+            exit 1
+          fi
+          ssh -l deploy staging 'install -d -m 700 /opt/savdex/restore'
+          scp -o User=deploy "$RUNNER_TEMP/files.tgz" staging:/opt/savdex/restore/files.tgz
+          rm -f "$RUNNER_TEMP/files.tgz"
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-files.sh /opt/savdex/restore/files.tgz'
