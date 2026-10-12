@@ -364,6 +364,8 @@ def register(request: HttpRequest) -> HttpResponse:
         "company_name.min": ctx.t("messages.company.name_required"),
         "tin.unique": ctx.t("messages.company.tin_unique"),
         "country_id.required": ctx.t("messages.company.country_required"),
+        "city_id.required": ctx.t("messages.company.city_required"),
+        "city_id.city_country": ctx.t("messages.company.city_country"),
         "categories.required": ctx.t("messages.register.categories_required"),
         "categories.min": ctx.t("messages.register.categories_required"),
         "categories.max": ctx.t("messages.company.categories_max"),
@@ -395,6 +397,15 @@ def register(request: HttpRequest) -> HttpResponse:
         data["country_id"] = store.get(SESSION_COUNTRY)
 
     country = _country_code(data, None)
+
+    # Физлицо и фрилансер: город — сразу в анкете (у юрлица — на шаге
+    # компании). Без него объявления человека создавались без города и не
+    # находились фильтром по городу. «Другой город» — запись справочника
+    if not legal:
+        from savdex.web.city_choice import city_in_country, resolve_other
+
+        resolve_other(data)
+        rules["city_id"] = ["required", _exists("cities"), city_in_country(data)]
 
     if legal:
         rules["company_name"] = ["required", "string", "min:2", "max:190"]
@@ -676,6 +687,9 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
         )
 
     row["country_id"] = int(data["country_id"])
+
+    if kind != "legal":
+        row["city_id"] = int(data["city_id"])
 
     if kind == "freelancer":
         # $base += [...]: primary_role уже есть — остаётся «both»
