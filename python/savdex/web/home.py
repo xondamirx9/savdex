@@ -31,6 +31,7 @@ from savdex.web.shared import (
     Context,
     ago,
     initials,
+    profile_checks,
     public_url,
     setting,
     settings_values,
@@ -78,18 +79,7 @@ def _filled(value: object) -> bool:
 
 def completeness(company: dict[str, Any], has_documents: bool) -> int:
     """Company::profileCompleteness."""
-    checks = [
-        _filled(company["name"]),
-        _filled(company["type"]) or company["legal_form"] in ("individual", "freelancer"),
-        company["city_id"] is not None,
-        _filled(company["phone"]),
-        _filled(company["email"]),
-        _filled(company["tin"]),
-        _filled(company["address"]),
-        len(company["description"] or "") >= 100,
-        _filled(company["logo_path"]),
-        has_documents,
-    ]
+    checks = [done for _, done in profile_checks(company, has_documents)]
 
     return int(php_round(sum(checks) / len(checks) * 100))
 

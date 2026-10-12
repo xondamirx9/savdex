@@ -23,7 +23,7 @@ from savdex.web.directory import _named, listed_countries, logo_url, type_label,
 from savdex.web.home import _utc, completeness
 from savdex.web.phpquery import Array, laravel_input, text
 from savdex.web.seo import Seo
-from savdex.web.shared import Context, initials
+from savdex.web.shared import Context, initials, is_person
 from savdex.web.throttle import throttled
 
 PER_PAGE = 12
@@ -87,7 +87,11 @@ class Filters:
 
         # when(): «0» — ложь, как пустая строка
         if (term := value("q")) not in ("", "0"):
-            where.append("(c.search_text like %s or c.tin like %s)")
+            # По номеру ищутся только организации: ПИНФЛ человека — личные данные
+            where.append(
+                "(c.search_text like %s or (c.tin like %s "
+                "and c.legal_form not in ('individual', 'freelancer')))"
+            )
             params += [f"%{search_text.normalize(term)}%", f"%{term.strip(_TRIM)}%"]
 
         if (kind := value("type")) not in ("", "0"):
@@ -172,7 +176,8 @@ def card(
     return {
         "slug": c["slug"],
         "name": c["name"],
-        "tin": c["tin"],
+        "tin": None if is_person(c) else c["tin"],
+        "person": is_person(c),
         "type": c["type"],
         "type_label": type_label(ctx, c, options),
         "city": cities.get(c["city_id"]) if c["city_id"] is not None else None,

@@ -546,7 +546,9 @@ def register(request: HttpRequest) -> HttpResponse:
     if legal:
         return _to(ctx, "/onboarding/company")
 
-    flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
+    # У человека не компания, а профиль; почта уже подтверждена кодом (или
+    # код пропущен — об этом напомнит плашка кабинета)
+    flash(ctx, "success", ctx.t("messages.company.person_created"))
 
     return _intended(ctx, "/cabinet")
 
@@ -666,7 +668,12 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     if kind == "legal":
         row.update(name=data["company_name"], tin=data.get("tin"))
     else:
-        row.update(name=data["name"], tin=data.get("pinfl"))
+        # Телефон из анкеты — сразу в профиль человека («Мой профиль»)
+        row.update(
+            name=data["name"],
+            tin=data.get("pinfl"),
+            phone=_php_string(data.get("phone")).strip() or None,
+        )
 
     row["country_id"] = int(data["country_id"])
 
