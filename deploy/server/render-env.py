@@ -21,6 +21,8 @@ SKIP = {
     "_", "HOME", "HOSTNAME", "LANG", "LOGNAME", "MAIL", "OLDPWD", "PATH",
     "PWD", "SHELL", "SHLVL", "TERM", "USER", "PYTHONDONTWRITEBYTECODE",
     "PYTHONUNBUFFERED", "PORT", "IS_PULL_REQUEST",
+    # Render: число процессов gunicorn у него своё, у машин — своё
+    "WEB_CONCURRENCY",
     # База — с машины базы (db.env)
     "DB_CONNECTION", "DB_URL", "DB_HOST", "DB_PORT", "DB_DATABASE",
     "DB_USERNAME", "DB_PASSWORD", "DATABASE_URL", "TARGET_DB_URL",
@@ -31,7 +33,9 @@ SKIP = {
     "PYTHON_THREADS", "PYTHON_ADMIN_WORKERS", "PYTHON_ADMIN_THREADS",
     "PYTHON_WORKER_MB", "PYTHON_RESERVED_MB",
 }
-SKIP_PREFIXES = ("RENDER", "SSH_", "XDG_", "LC_", "GIT_")
+# KUBERNETES_* — адрес служебного API кластера, в котором Render держит
+# службу; на машинах Uztelecom его нет
+SKIP_PREFIXES = ("RENDER", "SSH_", "XDG_", "LC_", "GIT_", "KUBERNETES_")
 REQUIRED = ("APP_KEY",)
 NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
