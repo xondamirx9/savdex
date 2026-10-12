@@ -156,6 +156,10 @@ jobs:
             IdentityFile ~/.ssh/id_deploy
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            # Иначе ssh, узнав у машины новые ключи, перезаписывает
+            # known_hosts целиком — и теряет строки, которые мы дописываем
+            # в него в это же время
+            UpdateHostKeys no
             ServerAliveInterval 30
           CONF
 
@@ -169,8 +173,13 @@ jobs:
             web_key=$(cut -d' ' -f2- ~/.ssh/known_hosts)
             # До подготовки машин пользователя deploy ещё нет — через root
             for ip in "$ADMIN_IP" "$DB_IP"; do
-              ssh -o User=root "$HOST" "ssh-keyscan -t ed25519 $ip 2>/dev/null" >> ~/.ssh/known_hosts \
-                || ssh web "ssh-keyscan -t ed25519 $ip 2>/dev/null" >> ~/.ssh/known_hosts
+              found=$(ssh -o User=root "$HOST" "ssh-keyscan -t ed25519 $ip 2>/dev/null" \
+                || ssh web "ssh-keyscan -t ed25519 $ip 2>/dev/null" || true)
+              if [ -z "$found" ]; then
+                echo "::error::Машина $ip не отвечает по SSH из частной сети — проверьте, что она запущена и в сети savdex-prod."
+                exit 1
+              fi
+              printf '%s\n' "$found" >> ~/.ssh/known_hosts
             done
             printf '%s %s\n' "$WEB_IP" "$web_key" >> ~/.ssh/known_hosts
             {
