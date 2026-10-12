@@ -4,6 +4,7 @@ import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
 import { Alert, Button, PasswordInput, TextInput } from '@/components/ui';
+import { CityField, type CityValue } from '@/components/CityField';
 import { CountryField } from '@/components/CountryField';
 import { SelectField } from '@/components/SelectField';
 import { countryCode, tinInputMode, tinLabel, type CountryOption } from '@/lib/countries';
@@ -57,6 +58,8 @@ interface Props {
     countryId?: number | null;
     /** Код из письма пропущен: страну не сменить, почта — «Не подтверждено». */
     skipped?: boolean;
+    /** Города стран — город физлица и фрилансера (у юрлица — на шаге компании). */
+    cities?: { id: number; name: string; country_id: number }[];
 }
 
 /** Больше пяти категорий — профиль перестаёт что-либо говорить о компании. */
@@ -72,12 +75,16 @@ export default function Register({
     countries = [],
     countryId = null,
     skipped = false,
+    cities = [],
 }: Props) {
     const firstCountry = countries.find((c) => c.id === countryId) ?? null;
     const { data, setData, post, processing, errors, clearErrors } = useForm({
         // Юрлицо: страна, компания и её категории. Страна — уже выбрана
         // на шаге почты
         country_id: (firstCountry?.id ?? null) as number | null,
+        // Физлицо и фрилансер: город из справочника страны или «Другой город»
+        city_id: null as CityValue,
+        city_name: '',
         company_name: '',
         tin: '',
         categories: [] as number[],
@@ -235,6 +242,8 @@ export default function Register({
                         value={data.country_id}
                         onChange={(id) => {
                             update('country_id', id);
+                            // Город другой страны — не тот город
+                            update('city_id', null);
                             // Код страны — сразу в телефон: без него короткие иностранные
                             // номера не набирают 9 цифр и не проходят проверку
                             const dial = countries.find((c) => c.id === id)?.phone_code;
@@ -244,6 +253,24 @@ export default function Register({
                         }}
                         error={errors.country_id}
                         hint={t('auth.country_first_hint')}
+                    />
+                )}
+
+                {/* Город физлица и фрилансера — сразу здесь: без него объявления
+                    создавались без города и не находились фильтром по городу */}
+                {!legal && (
+                    <CityField
+                        id="r-city"
+                        label={t('auth.city_label')}
+                        required
+                        cities={cities.filter((c) => c.country_id === data.country_id)}
+                        value={data.city_id}
+                        name={data.city_name}
+                        onChange={(value) => update('city_id', value)}
+                        onNameChange={(name) => update('city_name', name)}
+                        placeholder={t('auth.city_choose')}
+                        error={errors.city_id}
+                        disabled={data.country_id === null}
                     />
                 )}
 

@@ -12,6 +12,8 @@ interface CompanyRow {
     slug: string;
     name: string;
     tin: string | null;
+    /** Физлицо или фрилансер: строки с номером нет (ПИНФЛ — личные данные) */
+    person?: boolean;
     type: string | null;
     type_label: string | null;
     city: string | null;
@@ -264,12 +266,14 @@ export default function CompaniesIndex({
                                             «профиль заполнен на» с процентом расходились
                                             по разным строкам */}
                                         <div className="co-facts">
+                                            {!c.person && (
                                             <span className="co-fact">
                                                 <FileText aria-hidden className="size-4" />
                                                 <span>
                                                     {t('companies_page.tin')} <b>{c.tin ?? t('companies_page.tin_none')}</b>
                                                 </span>
                                             </span>
+                                            )}
                                             <span className="co-fact">
                                                 <CalendarDays aria-hidden className="size-4" />
                                                 <span>

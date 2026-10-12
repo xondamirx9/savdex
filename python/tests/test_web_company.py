@@ -464,3 +464,29 @@ def test_русское_описание_на_русский_не_перевод
 
     assert визитка(сайт, "/company/ru-cement")["company"]["description"] == описание
     assert sql("select 1 from content_translations where source = %s", [описание]) == []
+
+
+def test_пинфл_человека_не_виден(сайт):
+    """Фрилансер: ПИНФЛ — личные данные, ни на визитке, ни в разметке, ни в каталоге."""
+    пинфл = "31234567890123"
+    новая(
+        slug="freelancer-aziz",
+        name="Азиз Каримов",
+        legal_form="freelancer",
+        tin=пинфл,
+        address="Ташкент, ул. 1",
+        founded_year=2010,
+        employees_range="1-10",
+    )
+
+    д = открыть(сайт, "/company/freelancer-aziz")
+    company = страница(д["body"])["props"]["company"]
+
+    assert company["person"] is True
+    assert (company["tin"], company["address"], company["founded_year"]) == (None, None, None)
+    assert company["employees_range"] is None and company["legal_name"] is None
+    assert пинфл not in д["body"]
+    assert '"@type":"Person"' in д["body"].replace(" ", "")
+    # Поиск по номеру физлица и фрилансера не находит
+    каталог = страница(открыть(сайт, f"/companies?q={пинфл}")["body"])["props"]
+    assert каталог["companies"]["data"] == []

@@ -67,6 +67,13 @@ LOCKED_FIELDS = ("name", "legal_name", "tin", "address")
 #: Физлицо и фрилансер: ограничений на смену сведений нет
 FREE_FORMS = ("individual", "freelancer")
 
+#: Сведения организации, которых у физлица и фрилансера нет: в их профиле
+#: этих полей нет, а пришедшие в запросе не записываются
+COMPANY_ONLY = ("legal_name", "address", "founded_year", "employees_range")
+
+#: Телефон в профиле — как при регистрации
+PHONE = r"/^\+?\d[\d\s\-()]{8,17}$/"
+
 
 def locked_fields(company: dict[str, Any]) -> tuple[str, ...]:
     """Какие заполненные сведения меняются только раз в полгода."""
@@ -266,6 +273,15 @@ def update(request: HttpRequest) -> HttpResponse:
     normalize_tin(data, company)
     resolve_other(data)
 
+    # Физлицо и фрилансер: номер — ПИНФЛ (14 цифр), реквизитов организации
+    # нет, телефон обязателен. Раньше ПИНФЛ проверялся как ИНН компании
+    # (9 цифр), и ни ввести его, ни исправить в кабинете было нельзя
+    person = company is not None and company.get("legal_form") in FREE_FORMS
+
+    if person:
+        for field in COMPANY_ONLY:
+            data.pop(field, None)
+
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
         "name": ["required", "string", "min:2", "max:190"],
@@ -274,9 +290,11 @@ def update(request: HttpRequest) -> HttpResponse:
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, _country_code(data, company), tin_messages),
+            _tin(ctx, _country_code(data, company), tin_messages, person=person),
             _unique_tin(ctx.user["company_id"], _country_id(data, company), ctx=ctx),
         ],
+        "phone": ["required" if person else "nullable", "string", f"regex:{PHONE}"],
+        "email": ["nullable", "string", "max:255", "email"],
         "country_id": ["nullable", _exists("countries")],
         "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],
         "address": ["nullable", "string", "max:255"],
@@ -296,10 +314,17 @@ def update(request: HttpRequest) -> HttpResponse:
         rules,
         ctx.locale,
         {
-            "name.required": ctx.t("messages.company.name_required"),
+            "name.required": ctx.t(
+                "messages.company.person_name_required"
+                if person
+                else "messages.company.name_required"
+            ),
             "founded_year.between": ctx.t("messages.company.founded_between", year=year),
             "tin.unique": ctx.t("messages.company.tin_unique"),
             "city_id.city_country": ctx.t("messages.company.city_country"),
+            "phone.required": ctx.t("messages.register.phone_required"),
+            "phone.regex": ctx.t("messages.phone_format"),
+            "email.email": ctx.t("messages.register.email_format"),
         },
     )
 

@@ -259,7 +259,8 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     return dict(_сессия(итог)["errors"]["default"]["messages"])
 
 
-СОЗДАНА = "Компания создана. Осталось подтвердить почту — и можно публиковать объявления."
+#: Физлицо и фрилансер: профиль, а не компания; почта уже подтверждена кодом
+СОЗДАНА = "Профиль создан. Заполните его до конца — так вам будут больше доверять."
 
 ВЕРНО = {
     "name": "  Азиз Каримов ",
@@ -272,6 +273,9 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     "locale": "uz",
     # Страна — у всех видов учёток (физлицу ПИНФЛ — только в Узбекистане)
     "country_id": "uz",
+    # Город физлица и фрилансера — в анкете; «Другой город» — запись справочника
+    "city_id": "other",
+    "city_name": "Нукус",
 }
 
 
@@ -281,8 +285,9 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
         (ВЕРНО, None),
         # Без вида — юрлицо: нужны название и разделы
         ({**ВЕРНО, "account_type": None, "locale": None}, {"company_name", "categories"}),
-        # Страна обязательна у всех: без неё номер не проверить
-        ({**ВЕРНО, "country_id": None}, {"country_id"}),
+        # Страна обязательна у всех: без неё номер не проверить; у физлица
+        # без страны и город не выбрать
+        ({**ВЕРНО, "country_id": None}, {"country_id", "city_id"}),
         (
             {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
             {"password", "password_confirmation"},
@@ -602,3 +607,21 @@ def test_без_кода_страна_без_галочки(сайт):
     итог = регистрация(сайт, ЮРЛИЦО, подтверждена=False, без_кода="uz")
 
     assert итог["location"].endswith("/register") and итог["users"] == []
+
+
+@pytest.mark.parametrize(("правка", "ошибка"), [({"city_id": None}, "city_id")])
+def test_город_человека_обязателен(сайт, правка, ошибка):
+    итог = регистрация(сайт, {**ВЕРНО, **правка})
+
+    assert итог["users"] == [] and ошибка in _ошибки(итог)
+
+
+def test_город_человека_в_профиле(сайт):
+    итог = регистрация(сайт, ВЕРНО)
+
+    assert итог["location"].endswith("/cabinet")
+    assert sql(
+        "select t.name, c.code from companies k join cities ci on ci.id = k.city_id "
+        "join city_translations t on t.city_id = ci.id and t.locale = 'ru' "
+        "join countries c on c.id = k.country_id where k.slug <> 'taken'"
+    ) == [("Нукус", "uz")]

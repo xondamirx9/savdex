@@ -225,11 +225,14 @@ def test_заполненное_кроме_реквизитов_меняется
 
 @pytest.mark.parametrize("форма", ["individual", "freelancer"])
 def test_физлицо_и_фрилансер_без_ограничений(сайт, форма):
-    # Физлицо и фрилансер меняют заполненные название и адрес прямо здесь
+    # Физлицо и фрилансер меняют Ф.И.О. и ПИНФЛ прямо здесь; реквизитов
+    # организации (юр. адрес) у человека нет — пришедший адрес не пишется
     def подготовка() -> None:
         сброс()()
         sql(
-            "update companies set legal_form = %s, address = 'Ташкент' where slug = 'mine'", [форма]
+            "update companies set legal_form = %s, address = 'Ташкент', country_id = %s "
+            "where slug = 'mine'",
+            [форма, _страна("uz")],
         )
 
     try:
@@ -239,20 +242,66 @@ def test_физлицо_и_фрилансер_без_ограничений(са
             подготовка,
             снимок,
             uid=учётка("owner@savdex.uz"),
-            body={"name": "Иван Петров", "address": "Самарканд"},
+            body={
+                "name": "Иван Петров",
+                "address": "Самарканд",
+                "tin": "31234567890123",
+                "phone": "+998 90 123-45-67",
+                "email": "ivan@mail.uz",
+            },
             method="PATCH",
             headers=inertia(),
         )
-        адрес_компании = sql("select address from companies where slug = 'mine'")
+        строка = sql("select address, phone, email from companies where slug = 'mine'")
     finally:
-        sql("update companies set legal_form = 'legal', address = null where slug = 'mine'")
+        sql(
+            "update companies set legal_form = 'legal', address = null, phone = null, "
+            "email = null where slug = 'mine'"
+        )
 
     сессия = json.loads(итог["сессия"]["payload"])
     [моя] = [r for r in итог["база"]["companies"] if r[1] == "mine"]
 
     assert "errors" not in сессия, сессия
-    assert моя[2:5] == ("Иван Петров", None, "301234567")
-    assert адрес_компании == [("Самарканд",)]
+    # ПИНФЛ — 14 цифр: раньше кабинет проверял его как ИНН (9 цифр) и отказывал
+    assert моя[2:5] == ("Иван Петров", None, "31234567890123")
+    assert строка == [("Ташкент", "+998 90 123-45-67", "ivan@mail.uz")]
+
+
+@pytest.mark.parametrize(
+    ("body", "ошибки"),
+    [
+        ({"name": "Иван Петров"}, {"phone"}),
+        ({"name": "Иван Петров", "phone": "abc"}, {"phone"}),
+        ({"name": "Иван Петров", "phone": "+998901234567", "email": "не почта"}, {"email"}),
+        ({"name": "Иван Петров", "phone": "+998901234567", "tin": "123"}, {"tin"}),
+    ],
+)
+def test_физлицо_телефон_обязателен(сайт, body, ошибки):
+    def подготовка() -> None:
+        сброс()()
+        sql(
+            "update companies set legal_form = 'individual', country_id = %s where slug = 'mine'",
+            [_страна("uz")],
+        )
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/company",
+            подготовка,
+            снимок,
+            uid=учётка("owner@savdex.uz"),
+            body=body,
+            method="PATCH",
+            headers=inertia(),
+        )
+    finally:
+        sql("update companies set legal_form = 'legal' where slug = 'mine'")
+
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert set(сессия["errors"]["default"]["messages"]) == ошибки
 
 
 @pytest.mark.parametrize("admin", [False, True])
