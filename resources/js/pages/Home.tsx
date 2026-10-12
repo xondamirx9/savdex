@@ -466,16 +466,9 @@ export default function Home({
                         <div className="hero-b2b-copy" data-reveal>
                             <h1>{hero.heading}</h1>
                             {hero.subheading !== '' && <p className="hero-b2b-lead">{hero.subheading}</p>}
-                            {/* Две стороны площадки — глазами посетителя: продавцу
-                                нужны заявки покупателей, покупателю — товары
-                                поставщиков. Главная кнопка — разместить */}
+                            {/* Одна кнопка — разместить. «Я продаю» и «Я покупаю»
+                                убраны: заявки и товары и так в меню шапки */}
                             <div className="hero-b2b-cta">
-                                <Link href={`${routes.catalog}?type=demand`} className="btn btn-secondary btn-lg">
-                                    {t('home.cta_sell')}
-                                </Link>
-                                <Link href={`${routes.catalog}?type=supply`} className="btn btn-secondary btn-lg">
-                                    {t('home.cta_buy')}
-                                </Link>
                                 <Link href={routes.register} className="btn btn-primary btn-lg">
                                     {t('home.cta_post')}
                                 </Link>
