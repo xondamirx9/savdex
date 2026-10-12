@@ -3,9 +3,19 @@
 # Подготовка чистой машины Ubuntu 24.04 в Uztelecom Cloud под SavdEx.
 #
 # Запускается один раз от root (или через sudo) — из GitHub Actions
-# (.github/workflows/staging.yml, «подготовить сервер») по SSH-ключу,
-# который вписан в машину при создании. Повторный запуск ничего не
-# ломает: каждый шаг проверяет, сделан ли он уже.
+# (.github/workflows/staging.yml и prod.yml, «подготовить машину») по
+# SSH-ключу, который вписан в машину при создании. Повторный запуск
+# ничего не ломает: каждый шаг проверяет, сделан ли он уже.
+#
+#   SAVDEX_ROLE=staging|web|admin|db [WEB_IP=… ADMIN_IP=…] bash bootstrap.sh
+#
+# Роль — что будет на машине (deploy/README.md):
+# - staging (по умолчанию) — тестовый сервер целиком;
+# - web — сайт: HTTP и HTTPS снаружи, общая папка файлов с машины базы;
+# - admin — админка: общая папка файлов; здесь же собирается образ, и
+#   ключ этой машины пускают на машину сайта только загрузить образ;
+# - db — база и общая папка файлов (NFS) для web и admin (их частные
+#   адреса — WEB_IP и ADMIN_IP), копии в S3 (deploy/server/backup.sh).
 #
 # Что делает:
 # - обновления: всё сейчас и дальше автоматически (только исправления
@@ -28,13 +38,36 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 APP_HOME=/opt/savdex
+ROLE=${SAVDEX_ROLE:-staging}
+
+case "$ROLE" in
+    staging|web|admin) ;;
+    db)
+        if [ -z "${WEB_IP:-}" ] || [ -z "${ADMIN_IP:-}" ]; then
+            echo "Машине базы нужны частные адреса сайта и админки: WEB_IP и ADMIN_IP" >&2
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Неизвестная роль: $ROLE (staging, web, admin или db)" >&2
+        exit 1
+        ;;
+esac
+echo "── Роль машины: $ROLE"
+
+extra_packages=()
+case "$ROLE" in
+    web|admin) extra_packages=(nfs-common) ;;
+    db) extra_packages=(nfs-kernel-server gnupg cron) ;;
+esac
 
 echo "── Часовой пояс и обновления"
 timedatectl set-timezone Asia/Tashkent 2>/dev/null || true
 apt-get update -q
 apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
 apt-get -y -q install --no-install-recommends \
-    docker.io docker-compose-v2 docker-buildx git ufw fail2ban unattended-upgrades ca-certificates
+    docker.io docker-compose-v2 docker-buildx git ufw fail2ban unattended-upgrades ca-certificates \
+    "${extra_packages[@]}"
 
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'CONF'
 APT::Periodic::Update-Package-Lists "1";
@@ -111,15 +144,52 @@ fi
 echo "── fail2ban"
 systemctl enable --now fail2ban
 
-echo "── Файрвол: SSH, HTTP, HTTPS"
+# ── Роль ───────────────────────────────────────────────────────────
+
+if [ "$ROLE" = db ]; then
+    echo "── Общая папка файлов для сайта и админки (NFS)"
+    # Все записи — от www-data контейнера сайта (uid 33): сайт и админка
+    # пишут файлы, root клиента здесь не root
+    install -d -m 755 -o 33 -g 33 /srv/savdex/storage
+    install -d -m 755 /etc/exports.d
+    cat > /etc/exports.d/savdex.exports <<EXPORTS
+/srv/savdex/storage ${WEB_IP}(rw,sync,no_subtree_check,all_squash,anonuid=33,anongid=33) ${ADMIN_IP}(rw,sync,no_subtree_check,all_squash,anonuid=33,anongid=33)
+EXPORTS
+    systemctl enable --now nfs-server
+    exportfs -ra
+    install -d -m 700 -o deploy -g deploy "$APP_HOME/pg" "$APP_HOME/backup"
+fi
+
+if [ "$ROLE" = admin ]; then
+    echo "── Ключ для загрузки образа на машину сайта"
+    # Образ собирается здесь и уходит на машину сайта по частной сети.
+    # Там этот ключ может только одно — загрузить образ (docker load):
+    # так его вписывает prod.yml
+    if [ ! -s /home/deploy/.ssh/ship_to_web ]; then
+        runuser -u deploy -- ssh-keygen -q -t ed25519 -N '' -C "savdex-admin-ship" \
+            -f /home/deploy/.ssh/ship_to_web
+    fi
+fi
+
+echo "── Файрвол"
 # Порты контейнеров Docker публикует в обход ufw — поэтому наружу
-# публикуются только 80 и 443 (Caddy), а база и приложение — нет
+# публикуются только 80 и 443 (Caddy), а база и приложение — только на
+# частный адрес машины
 ufw allow OpenSSH >/dev/null
-ufw allow 80/tcp >/dev/null
-ufw allow 443/tcp >/dev/null
-ufw allow 443/udp >/dev/null
+case "$ROLE" in
+    staging|web)
+        ufw allow 80/tcp >/dev/null
+        ufw allow 443/tcp >/dev/null
+        ufw allow 443/udp >/dev/null
+        ;;
+    db)
+        for ip in "$WEB_IP" "$ADMIN_IP"; do
+            ufw allow from "$ip" to any port 2049 proto tcp >/dev/null
+        done
+        ;;
+esac
 ufw --force enable >/dev/null
 
 echo "── Готово: $(lsb_release -ds 2>/dev/null || echo Linux), $(docker --version), $(docker compose version)"
-echo "Ключ этой машины (переменная STAGING_HOST_KEY в GitHub):"
+echo "Ключ этой машины (для known_hosts в GitHub):"
 cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub

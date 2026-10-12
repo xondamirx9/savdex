@@ -1,0 +1,53 @@
+# Сайт и админка (боевые, Uztelecom) — один и тот же образ на двух
+# машинах, разница — в переменных роли (/opt/savdex/env/role.env, его
+# пишет deploy/server/prod-app.sh) и в дополнении к этому файлу:
+#
+# - compose.web.yml — машина сайта: Caddy (HTTPS) перед приложением;
+#   адреса админки Caddy передаёт на машину админки;
+# - compose.admin.yml — машина админки: приложение слушает частный
+#   адрес машины, его видит только Caddy машины сайта.
+#
+# Загруженные файлы (логотипы, фото, документы) — общая папка на машине
+# базы (NFS, deploy/server/bootstrap.sh, роль db): что загрузили через
+# сайт, видит админка, и наоборот.
+#
+#   SAVDEX_TAG=<версия> docker compose -f deploy/prod/app/compose.yml \
+#       -f deploy/prod/app/compose.web.yml \
+#       --env-file /opt/savdex/env/compose.env up -d
+
+name: savdex
+
+services:
+  app:
+    image: savdex:${SAVDEX_TAG:?версия образа}
+    restart: unless-stopped
+    env_file:
+      # Адрес базы с паролями — с машины базы (prod-db.sh → prod.yml)
+      - ${SAVDEX_HOME:-/opt/savdex}/env/db.env
+      # Ключи, почта, оплата, Telegram — перенесены с Render (prod.yml)
+      - ${SAVDEX_HOME:-/opt/savdex}/env/app.env
+      # Роль машины, адрес сайта — prod-app.sh; последним: перекрывает
+      - ${SAVDEX_HOME:-/opt/savdex}/env/role.env
+    volumes:
+      - storage:/var/data/storage
+    healthcheck:
+      # /up — Django за Apache жив
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:10000/up', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+      start_period: 180s
+    # Apache и gunicorn дорабатывают начатые запросы (--graceful-timeout 30)
+    stop_grace_period: 40s
+
+volumes:
+  # Параметры тома Docker запоминает при создании: сменился адрес машины
+  # базы — том удалить (docker volume rm savdex_storage), он создастся
+  # заново. hard — при недоступной машине базы чтение ждёт, а не отдаёт
+  # ошибку посреди записи файла
+  storage:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=${DB_IP:?частный адрес машины базы},nfsvers=4.2,rw,hard,timeo=600,retrans=2,noatime"
+      device: ":/srv/savdex/storage"

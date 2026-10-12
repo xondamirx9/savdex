@@ -1,0 +1,28 @@
+# Машина сайта: Caddy перед приложением (см. compose.yml).
+#
+# Caddy выпускает и продлевает сертификат Let's Encrypt сам. Заголовки
+# X-Forwarded-* от посетителя не пропускает, а ставит свои: адрес
+# посетителя и хост в ссылках из писем подделать нельзя. Caddyfile
+# пишет deploy/server/prod-app.sh: в нём адрес сайта и частный адрес
+# машины админки.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${SAVDEX_HOME:-/opt/savdex}/env/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Пароль на сайт на время репетиции переезда (пустой файл — без пароля)
+      - ${SAVDEX_HOME:-/opt/savdex}/env/auth.caddy:/etc/caddy/auth.caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

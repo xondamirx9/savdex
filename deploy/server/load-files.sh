@@ -14,20 +14,25 @@
 #
 # Сайт не останавливается: новые каталоги раскладываются рядом и
 # подменяют старые переименованием.
+#
+# На машине базы Uztelecom (prod.yml, «копия с Render») — в общую папку
+# файлов: SAVDEX_DATA_DIR=/srv/savdex (в нём — storage), разбирает
+# архив образ postgres:18 (SAVDEX_TOOL_IMAGE): образа сайта там нет.
 set -euo pipefail
 
 ARCHIVE=${1:?путь к архиву}
 APP_HOME=${SAVDEX_HOME:-/opt/savdex}
-TAG=$(cat "$APP_HOME/current-tag")
+DATA_DIR=${SAVDEX_DATA_DIR:-$APP_HOME/data}
+TOOL_IMAGE=${SAVDEX_TOOL_IMAGE:-savdex:$(cat "$APP_HOME/current-tag")}
 
 trap 'rm -f "$ARCHIVE"' EXIT
 
-# Файлы на диске принадлежат www-data контейнера, а не deploy: раскладывает
-# их root в одноразовом контейнере из образа сайта (в нём есть tar)
+# Файлы на диске принадлежат www-data контейнера сайта (uid 33), а не
+# deploy: раскладывает их root в одноразовом контейнере (в нём есть tar)
 docker run --rm --network none --user root --entrypoint bash \
-    -v "$APP_HOME/data:/var/data" \
+    -v "$DATA_DIR:/var/data" \
     -v "$ARCHIVE:/restore/files.tgz:ro" \
-    "savdex:$TAG" -euo pipefail -c '
+    "$TOOL_IMAGE" -euo pipefail -c '
         cd /var/data
         rm -rf storage.incoming
         mkdir -p storage storage.incoming
@@ -48,7 +53,7 @@ docker run --rm --network none --user root --entrypoint bash \
             rm -rf "storage/$dir.old"
         done
         rm -rf storage.incoming
-        chown -R www-data:www-data storage/public storage/private
+        chown -R 33:33 storage/public storage/private
     '
 
-echo "── Готово: на тестовом сервере копия файлов боевого"
+echo "── Готово: копия файлов боевого разложена"
