@@ -237,7 +237,7 @@ def _сброс_счётчика() -> None:
             "FLASH-15",
             {"code": "FLASH-15", "plan_code": "flash", "discount_percent": 15, "days": None},
             # Своя сумовая цена: 499 000 × 0,85
-            ("flash", 34, 424150),
+            ("flash", 8.5, 424150),
             None,
         ),
         ("", None, None, None),

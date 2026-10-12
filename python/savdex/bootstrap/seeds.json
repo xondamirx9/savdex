@@ -27346,7 +27346,7 @@
   {
    "code": "flash",
    "name": "Flash",
-   "price_usd": "40.00",
+   "price_usd": "10.00",
    "price_uzs": null,
    "period_days": 30,
    "listings_limit": 10,
