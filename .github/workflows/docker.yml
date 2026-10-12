@@ -282,8 +282,9 @@ jobs:
             curl -fsS -o /dev/null "http://127.0.0.1:$port/up"
           done
           code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          # «manage.py [s]chedule» — чтобы под шаблон не попала сама эта проверка
           running() {
-            docker exec "$1" sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat | tr '\\0' ' ' | grep -q 'manage.py $2'"
+            docker exec "$1" sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat 2>/dev/null | tr '\\0' ' ' | grep -q 'manage.py [${2:0:1}]${2:1}'"
           }
 
           set -x
