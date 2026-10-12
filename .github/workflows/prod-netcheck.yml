@@ -1,0 +1,44 @@
+# Временная проверка связи между боевыми машинами Uztelecom: видит ли
+# машина сайта машины админки и базы по частной сети. Удаляется сразу
+# после проверки.
+name: prod-netcheck
+
+on:
+  push:
+    branches: [claude/ecstatic-hamilton-324y24]
+    paths: ['.github/workflows/prod-netcheck.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HOST: ${{ vars.PROD_HOST }}
+    steps:
+      - name: SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          header=$(printf '%s' "$key" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1)
+          body=$(printf '%s' "$key" | sed -e 's/-----BEGIN [A-Z ]*-----//' -e 's/-----END [A-Z ]*-----//' | tr -d ' \t\n')
+          umask 077
+          { echo "$header"; printf '%s' "$body" | fold -w 70; echo; echo "${header/BEGIN/END}"; } > ~/.ssh/id_deploy
+          ssh-keyscan -t ed25519 "$HOST" 2>/dev/null > ~/.ssh/known_hosts
+
+      - name: Связь с машины сайта
+        run: |
+          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o User=root "$HOST" '
+            echo "── адреса машины сайта"; ip -4 -br addr; ip -4 route
+            for ip in 10.0.1.16 10.0.1.121; do
+              echo "── $ip"
+              ping -c 2 -W 2 "$ip" | tail -2 || true
+              timeout 5 bash -c "</dev/tcp/$ip/22" && echo "порт 22 открыт" || echo "порт 22 закрыт"
+              ssh-keyscan -T 5 -t ed25519 "$ip" 2>&1 | head -3 || true
+            done
+            echo "── ufw"; ufw status | head -5'
