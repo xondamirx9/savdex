@@ -9,6 +9,11 @@
 # от пользователя deploy. Дамп после загрузки удаляется: в нём личные
 # данные пользователей.
 #
+# На машине базы Uztelecom (prod.yml, «копия с Render») — с
+# SAVDEX_COMPOSE_FILE=…/deploy/prod/db/compose.yml и пустым
+# SAVDEX_APP_SERVICE: приложения на этой машине нет, сайт и админку
+# prod.yml останавливает и запускает сам.
+#
 # Писем и сообщений настоящим людям тестовый сервер не шлёт: почта —
 # в журнал (MAIL_MAILER=log), ящики рассылки и поддержки, Telegram,
 # WhatsApp и Uzum не настроены — их ключи только в окружении боевого.
@@ -18,13 +23,14 @@ DUMP=${1:?путь к дампу}
 APP_HOME=${SAVDEX_HOME:-/opt/savdex}
 SRC=$APP_HOME/src
 ENV_DIR=$APP_HOME/env
-TAG=$(cat "$APP_HOME/current-tag")
+COMPOSE_FILE=${SAVDEX_COMPOSE_FILE:-$SRC/deploy/staging/compose.yml}
+APP_SERVICE=${SAVDEX_APP_SERVICE-app}
+TAG=$(cat "$APP_HOME/current-tag" 2>/dev/null || true)
 
 trap 'rm -f "$DUMP"' EXIT
 
 compose() {
-    SAVDEX_TAG="$TAG" docker compose -f "$SRC/deploy/staging/compose.yml" \
-        --env-file "$ENV_DIR/compose.env" "$@"
+    SAVDEX_TAG="$TAG" docker compose -f "$COMPOSE_FILE" --env-file "$ENV_DIR/compose.env" "$@"
 }
 
 # Журнал Actions публичный: почты и телефоны из копии в него не попадают
@@ -36,8 +42,10 @@ psql_db() {
     compose exec -T db psql -v ON_ERROR_STOP=1 -U savdex "$@"
 }
 
-echo "── Сайт останавливается на время загрузки"
-compose stop app
+if [ -n "$APP_SERVICE" ]; then
+    echo "── Сайт останавливается на время загрузки"
+    compose stop "$APP_SERVICE"
+fi
 
 echo "── База тестового пересоздаётся"
 psql_db -d postgres -c "drop database if exists savdex with (force)"
@@ -83,9 +91,14 @@ for table in users companies listings; do
     fi
 done
 
+if [ -z "$APP_SERVICE" ]; then
+    echo "── Готово: копия боевой базы загружена"
+    exit 0
+fi
+
 echo "── Сайт запускается"
-compose start app
-container=$(compose ps -q app)
+compose start "$APP_SERVICE"
+container=$(compose ps -q "$APP_SERVICE")
 for _ in $(seq 1 60); do
     status=$(docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null || echo missing)
     case "$status" in
@@ -101,5 +114,5 @@ for _ in $(seq 1 60); do
 done
 
 echo "ОШИБКА: сайт с копией базы не поднялся. Последние строки журнала:" >&2
-compose logs --tail 60 app 2>&1 | redact >&2 || true
+compose logs --tail 60 "$APP_SERVICE" 2>&1 | redact >&2 || true
 exit 1

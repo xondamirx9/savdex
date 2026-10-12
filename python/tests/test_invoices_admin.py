@@ -284,7 +284,12 @@ def test_деньги_пришли(люди, что, настройка):
 
 
 def _через_30_дней() -> str:
-    [(дата,)] = sql("select to_char(ends_at, 'DD.MM.YYYY') from subscriptions")
+    # ends_at хранится в UTC, а дату сайт пишет по Ташкенту: с полуночи
+    # до 5 утра по Ташкенту это разные дни
+    [(дата,)] = sql(
+        "select to_char(ends_at at time zone 'UTC' at time zone 'Asia/Tashkent', 'DD.MM.YYYY') "
+        "from subscriptions"
+    )
 
     return str(дата)
 

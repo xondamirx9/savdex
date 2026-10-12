@@ -1,0 +1,62 @@
+# Машина базы (боевая, Uztelecom): PostgreSQL 18 — та же основная версия,
+# что на Render. Слушает только частный адрес машины (DB_BIND): из
+# интернета до неё не достучаться, сайт и админка ходят по частной сети.
+#
+# Общая папка загруженных файлов — на этой же машине, но не в Docker:
+# NFS-сервер ставит deploy/server/bootstrap.sh (роль db).
+#
+# Пароли — в /opt/savdex/env/compose.env (права 600), их создаёт
+# deploy/server/prod-db.sh при первом запуске.
+#
+#   docker compose -f deploy/prod/db/compose.yml \
+#       --env-file /opt/savdex/env/compose.env up -d
+
+name: savdex-db
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: savdex
+      POSTGRES_USER: savdex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?пароль владельца базы}
+      # Роль Django с правами из python/savdex/bootstrap/grants.sql —
+      # создаётся один раз, при первом запуске на пустом каталоге
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:?пароль роли savdex_django}
+    # Машина 2 vCPU / 4 ГБ, на ней только база и NFS: четверть памяти —
+    # под буферы PostgreSQL, остальное — кэш ОС. Запросы дольше секунды —
+    # в журнал: так видно, что тормозит
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - log_timezone=Asia/Tashkent
+      - -c
+      - timezone=UTC
+    ports:
+      - "${DB_BIND:?частный адрес машины базы}:5432:5432"
+    volumes:
+      # Образ 18 держит данные в /var/lib/postgresql/18/docker
+      - ${SAVDEX_HOME:-/opt/savdex}/pg:/var/lib/postgresql
+      - ../../postgres-initdb:/docker-entrypoint-initdb.d:ro
+    shm_size: 512mb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "savdex", "-d", "savdex"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 60s
