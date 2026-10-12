@@ -63,6 +63,10 @@ fi
 
 # Частный адрес этой машины
 MY_IP=$(ip -4 route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')
+if [ "$ROLE" = admin ] && [ "$MY_IP" != "$ADMIN_IP" ]; then
+    echo "ОШИБКА: у машины админки адрес $MY_IP, а в GitHub (PROD_ADMIN_IP) — $ADMIN_IP: Caddy машины сайта её не найдёт." >&2
+    exit 1
+fi
 
 # ── Переменные роли ────────────────────────────────────────────────
 {
