@@ -47,7 +47,7 @@ if [ -n "$APP_SERVICE" ]; then
     compose stop "$APP_SERVICE"
 fi
 
-echo "── База тестового пересоздаётся"
+echo "── База пересоздаётся"
 psql_db -d postgres -c "drop database if exists savdex with (force)"
 psql_db -d postgres -c "create database savdex owner savdex"
 
