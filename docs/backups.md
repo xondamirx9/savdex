@@ -5,6 +5,7 @@
 | Что | Как | Сколько хранится |
 |---|---|---|
 | База `savdex-db` | GitHub Actions, задача **backup** (`.github/workflows/backup.yml`): каждую ночь в 03:30 по Ташкенту, зашифрованный файл в артефактах запуска | 30 дней |
+| База `savdex-db` | та же задача **backup**: тот же зашифрованный файл — в хранилище S3 Uztelecom (Ташкент), `db/savdex-ГГГГ-ММ-ДД.dump.gpg` | 90 дней |
 | База `savdex-db` | Render сам: история базы (Database → Recovery, Point-in-time recovery) | по тарифу Render |
 | Загруженные файлы (диск `/var/data`) | Render сам: снимок диска раз в сутки (сервис savdex → Disks → Snapshots) | 7 дней |
 
@@ -22,6 +23,15 @@
    самому и **сохранить отдельно** (менеджер паролей, бумага в сейфе): без
    него ни одну копию не открыть, а из GitHub секрет прочитать нельзя.
 
+3. Хранилище Uztelecom (UzCloud → Object Storage → `savdex`, значок с
+   глазом — адрес и ключи):
+   - секрет `S3_ACCESS_KEY` — Access Key;
+   - секрет `S3_SECRET_KEY` — Secret Key;
+   - переменная (вкладка **Variables**) `S3_ENDPOINT` — `https://s3.uzcstorage.uz`.
+
+   Без них копия сохраняется только в GitHub, а запуск показывает
+   предупреждение.
+
 Проверить: **Actions → backup → Run workflow**. Зелёный запуск — копия
 снята, проверена и сохранена.
 
@@ -33,7 +43,10 @@ Control** должен разрешать подключения извне (а�
 ## Восстановление
 
 1. **Actions → backup** → нужный запуск → внизу **Artifacts** → скачать
-   `savdex-db-ГГГГ-ММ-ДД` (zip с файлом `.dump.gpg`).
+   `savdex-db-ГГГГ-ММ-ДД` (zip с файлом `.dump.gpg`). Старше 30 дней — из
+   хранилища Uztelecom: `aws --endpoint-url https://s3.uzcstorage.uz s3 cp
+   s3://savdex/db/savdex-ГГГГ-ММ-ДД.dump.gpg .` (ключи — те же, что в
+   секретах `S3_ACCESS_KEY` и `S3_SECRET_KEY`).
 2. Расшифровать (спросит пароль `BACKUP_PASSPHRASE`):
 
    ```sh
