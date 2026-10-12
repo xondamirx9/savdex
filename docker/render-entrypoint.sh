@@ -107,7 +107,12 @@ ServerName ${server_name}
 Timeout 130
 CONF
 
-echo "Django: сайт — ${workers} процессов × ${threads} потоков, админка — ${admin_workers} × ${admin_threads}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
+if [ "$admin_workers" -gt 0 ]; then
+    admin_line="админка — ${admin_workers} × ${admin_threads}"
+else
+    admin_line="админки здесь нет"
+fi
+echo "Django: сайт — ${workers} процессов × ${threads} потоков, ${admin_line}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
 
 # ── Ключ ────────────────────────────────────────────────────────────
 #
@@ -160,41 +165,60 @@ py_owner() {
     fi
 }
 
-FRESH_DB=0
-if [ "$(py_owner schema --status | tail -1)" = "empty" ]; then
-    FRESH_DB=1
-fi
-py_owner schema
+# Машины Uztelecom (deploy/README.md): сайт и админка — на разных машинах
+# с одной базой. Схему меняет один разовый запуск с аргументом «migrate»
+# до перезапуска обеих, а сами они стартуют с SAVDEX_MIGRATE=0 — иначе
+# две машины взялись бы за одну миграцию разом. На Render — как раньше:
+# схема при каждом запуске.
+MIGRATE_ONLY=0
+[ "${1:-}" = "migrate" ] && MIGRATE_ONLY=1
 
-# Справочники: на свежей базе — все, на каждом деплое — недостающие
-# тарифы, категории, страны, города и настройки (правки из админки
-# не трогаются)
-if [ "$FRESH_DB" = "1" ]; then
-    py_owner seed --fresh
-else
-    py_owner seed
-fi
-
-# Адреса /company/company и /listing/-N — на латиницу, старые — в 301
-# (ТЗ-02, python/savdex/reslug.py). Трогает только ещё плохие адреса
-py_owner reslug
-
-# Демо-наполнение (выдуманные компании и объявления) было сидерами
-# Laravel и ушло вместе с ним
-if [ "${SEED_DEMO:-false}" = "true" ] || [ "${SEED_SHOWCASE:-false}" = "true" ]; then
-    echo "ВНИМАНИЕ: SEED_DEMO и SEED_SHOWCASE больше не работают — демо-наполнение было частью Laravel." >&2
-fi
-
-# Администратор заводится из переменных окружения: на хостинге нет
-# консоли, где можно было бы выполнить команду руками. --if-missing:
-# уже администратор — ничего не меняется, иначе каждый рестарт
-# сбрасывал бы пароль.
-if [ -n "${ADMIN_EMAIL:-}" ]; then
-    ADMIN_ARGS=("$ADMIN_EMAIL" --if-missing)
-    if [ -n "${ADMIN_PASSWORD:-}" ]; then
-        ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+migrate() {
+    local FRESH_DB=0
+    if [ "$(py_owner schema --status | tail -1)" = "empty" ]; then
+        FRESH_DB=1
     fi
-    py_owner admin "${ADMIN_ARGS[@]}"
+    py_owner schema
+
+    # Справочники: на свежей базе — все, на каждом деплое — недостающие
+    # тарифы, категории, страны, города и настройки (правки из админки
+    # не трогаются)
+    if [ "$FRESH_DB" = "1" ]; then
+        py_owner seed --fresh
+    else
+        py_owner seed
+    fi
+
+    # Адреса /company/company и /listing/-N — на латиницу, старые — в 301
+    # (ТЗ-02, python/savdex/reslug.py). Трогает только ещё плохие адреса
+    py_owner reslug
+
+    # Демо-наполнение (выдуманные компании и объявления) было сидерами
+    # Laravel и ушло вместе с ним
+    if [ "${SEED_DEMO:-false}" = "true" ] || [ "${SEED_SHOWCASE:-false}" = "true" ]; then
+        echo "ВНИМАНИЕ: SEED_DEMO и SEED_SHOWCASE больше не работают — демо-наполнение было частью Laravel." >&2
+    fi
+
+    # Администратор заводится из переменных окружения: на хостинге нет
+    # консоли, где можно было бы выполнить команду руками. --if-missing:
+    # уже администратор — ничего не меняется, иначе каждый рестарт
+    # сбрасывал бы пароль.
+    if [ -n "${ADMIN_EMAIL:-}" ]; then
+        local ADMIN_ARGS=("$ADMIN_EMAIL" --if-missing)
+        if [ -n "${ADMIN_PASSWORD:-}" ]; then
+            ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+        fi
+        py_owner admin "${ADMIN_ARGS[@]}"
+    fi
+}
+
+if [ "${SAVDEX_MIGRATE:-1}" != "0" ] || [ "$MIGRATE_ONLY" = "1" ]; then
+    migrate
+fi
+
+if [ "$MIGRATE_ONLY" = "1" ]; then
+    echo "── Схема и справочники готовы" >&2
+    exit 0
 fi
 
 # ── Загрузки ────────────────────────────────────────────────────────
@@ -264,48 +288,60 @@ run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
 # и наоборот. SAVDEX_ROLE=admin ограничивает её запросы к базе по
 # времени (savdex/settings.py): зависший отчёт не держит базу дольше,
 # чем gunicorn ждёт ответа.
-run_forever 5 "Админка Django (gunicorn)" env SAVDEX_ROLE=admin python/.venv/bin/gunicorn savdex.wsgi \
-    --chdir python \
-    --bind 127.0.0.1:8002 \
-    --workers "$admin_workers" \
-    --worker-class gthread \
-    --threads "$admin_threads" \
-    --timeout 130 \
-    --graceful-timeout 30 \
-    --max-requests 500 --max-requests-jitter 50 \
-    --error-logfile -
-
-# Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
-# объявления, просьбы об отзыве, чистка «Кто смотрел», продвижения,
-# месячные периоды тарифов, курсы ЦБ, прозвон Uzum. Пройденное помнит
-# файл состояния — на постоянном диске: в контейнере он пропадал с
-# каждым деплоем, и после перезапуска задачи, чей час уже прошёл,
-# считались выполненными и в тот день не шли вовсе
-if [ -d /var/data ] && [ -z "${SAVDEX_SCHEDULE_STATE:-}" ]; then
-    export SAVDEX_SCHEDULE_STATE=/var/data/storage/schedule.json
-    if [ -f storage/app/schedule.json ] && [ ! -f "$SAVDEX_SCHEDULE_STATE" ]; then
-        cp storage/app/schedule.json "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
-    fi
-    chown www-data:www-data "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
+#
+# PYTHON_ADMIN_WORKERS=0 — процесса админки здесь нет: на машинах
+# Uztelecom её адреса Caddy машины сайта передаёт на машину админки
+if [ "$admin_workers" -gt 0 ]; then
+    run_forever 5 "Админка Django (gunicorn)" env SAVDEX_ROLE=admin python/.venv/bin/gunicorn savdex.wsgi \
+        --chdir python \
+        --bind 127.0.0.1:8002 \
+        --workers "$admin_workers" \
+        --worker-class gthread \
+        --threads "$admin_threads" \
+        --timeout 130 \
+        --graceful-timeout 30 \
+        --max-requests 500 --max-requests-jitter 50 \
+        --error-logfile -
 fi
-run_forever 60 "Расписание Django" python/.venv/bin/python python/manage.py schedule
 
-# Машинный перевод: проход раз в минуту. Выключается переменной
-# MACHINE_TRANSLATION_ENABLED=false (savdex/translator.py)
-run_forever 30 "Перевод" python/.venv/bin/python python/manage.py translate
+# ── Фоновые задачи ──────────────────────────────────────────────────
+#
+# Ровно на одной машине: задачи по расписанию на двух пошли бы дважды
+# (два письма, два списания). На машине админки Uztelecom —
+# SAVDEX_BACKGROUND=0, они идут на машине сайта.
+if [ "${SAVDEX_BACKGROUND:-1}" != "0" ]; then
+    # Задачи по расписанию (python/savdex/schedule.py): рейтинги, истёкшие
+    # объявления, просьбы об отзыве, чистка «Кто смотрел», продвижения,
+    # месячные периоды тарифов, курсы ЦБ, прозвон Uzum. Пройденное помнит
+    # файл состояния — на постоянном диске: в контейнере он пропадал с
+    # каждым деплоем, и после перезапуска задачи, чей час уже прошёл,
+    # считались выполненными и в тот день не шли вовсе
+    if [ -d /var/data ] && [ -z "${SAVDEX_SCHEDULE_STATE:-}" ]; then
+        export SAVDEX_SCHEDULE_STATE=/var/data/storage/schedule.json
+        if [ -f storage/app/schedule.json ] && [ ! -f "$SAVDEX_SCHEDULE_STATE" ]; then
+            cp storage/app/schedule.json "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
+        fi
+        chown www-data:www-data "$SAVDEX_SCHEDULE_STATE" 2>/dev/null || true
+    fi
+    run_forever 60 "Расписание Django" python/.venv/bin/python python/manage.py schedule
 
-# Письма и Telegram по уведомлениям кабинета — по галочкам в «Настройки →
-# Уведомления» (python/savdex/deliveries.py): проход раз в минуту. Тем же
-# проходом — новинки в Telegram, рассылка по базе потенциальных клиентов и
-# чтение ящика поддержки в обращения (python/savdex/support/mail.py)
-run_forever 30 "Рассылка уведомлений" python/.venv/bin/python python/manage.py notify
+    # Машинный перевод: проход раз в минуту. Выключается переменной
+    # MACHINE_TRANSLATION_ENABLED=false (savdex/translator.py)
+    run_forever 30 "Перевод" python/.venv/bin/python python/manage.py translate
 
-# Сверка денег (python/savdex/payments/reconcile.py): раз в час — что
-# должна была выдать каждая свежая оплата и что лежит в базе;
-# расхождение — в журнал и письмом. Только чтение. Выключить —
-# SAVDEX_PY_RECONCILE=0
-if [ "${SAVDEX_PY_RECONCILE:-1}" != "0" ]; then
-    run_forever 60 "Сверка денег" python/.venv/bin/python python/manage.py reconcile_billing
+    # Письма и Telegram по уведомлениям кабинета — по галочкам в «Настройки →
+    # Уведомления» (python/savdex/deliveries.py): проход раз в минуту. Тем же
+    # проходом — новинки в Telegram, рассылка по базе потенциальных клиентов и
+    # чтение ящика поддержки в обращения (python/savdex/support/mail.py)
+    run_forever 30 "Рассылка уведомлений" python/.venv/bin/python python/manage.py notify
+
+    # Сверка денег (python/savdex/payments/reconcile.py): раз в час — что
+    # должна была выдать каждая свежая оплата и что лежит в базе;
+    # расхождение — в журнал и письмом. Только чтение. Выключить —
+    # SAVDEX_PY_RECONCILE=0
+    if [ "${SAVDEX_PY_RECONCILE:-1}" != "0" ]; then
+        run_forever 60 "Сверка денег" python/.venv/bin/python python/manage.py reconcile_billing
+    fi
 fi
 
 exec "$@"

@@ -250,6 +250,65 @@ jobs:
           done
           test "$(code http://127.0.0.1:18080/py/admin/login/)" = 200
 
+      # Машины Uztelecom (deploy/README.md): схему меняет разовый запуск
+      # «migrate», сайт работает без процесса админки, админка — без
+      # фоновых задач, и обе стартуют, не трогая схему (SAVDEX_MIGRATE=0)
+      - name: Режимы машин Uztelecom — migrate, сайт, админка
+        run: |
+          set -euo pipefail
+          db=postgres://savdex:savdex@host.docker.internal:5432/savdex_test
+          key="base64:$(openssl rand -base64 32)"
+          common=(--add-host=host.docker.internal:host-gateway
+            -e APP_KEY="$key" -e DB_CONNECTION=pgsql -e DB_URL="$db" -e DJANGO_DATABASE_URL="$db")
+
+          docker run --rm "${common[@]}" savdex:ci migrate 2>&1 | tee /tmp/migrate.txt
+          grep -q "Схема и справочники готовы" /tmp/migrate.txt
+          grep -q "снимок не нужен" /tmp/migrate.txt
+          # Ни Apache, ни Django разовый запуск не поднимает
+          if grep -q "Django: сайт" /tmp/migrate.txt; then exit 1; fi
+
+          docker run -d --name web -p 18081:18081 "${common[@]}" \
+            -e PORT=18081 -e APP_URL=http://127.0.0.1:18081 \
+            -e SAVDEX_MIGRATE=0 -e PYTHON_ADMIN_WORKERS=0 savdex:ci
+          docker run -d --name admin -p 18082:18082 "${common[@]}" \
+            -e PORT=18082 -e APP_URL=http://127.0.0.1:18082 \
+            -e SAVDEX_MIGRATE=0 -e SAVDEX_BACKGROUND=0 \
+            -e PYTHON_WORKERS=1 -e PYTHON_THREADS=2 -e PYTHON_ADMIN_WORKERS=2 savdex:ci
+          for port in 18081 18082; do
+            for _ in $(seq 1 90); do
+              curl -fsS -o /dev/null "http://127.0.0.1:$port/up" && break
+              sleep 2
+            done
+            curl -fsS -o /dev/null "http://127.0.0.1:$port/up"
+          done
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          running() {
+            docker exec "$1" sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat | tr '\\0' ' ' | grep -q 'manage.py $2'"
+          }
+
+          set -x
+          # Схему ни сайт, ни админка не трогали
+          for name in web admin; do
+            if docker logs "$name" 2>&1 | grep -q "снимок не нужен"; then exit 1; fi
+          done
+          # Сайт: страницы есть, фоновые задачи идут, процесса админки нет
+          curl -fsS -o /tmp/home.html http://127.0.0.1:18081/
+          grep -q '"component":"Home"' /tmp/home.html
+          for task in schedule translate reconcile_billing notify; do
+            running web "$task"
+          done
+          case "$(code http://127.0.0.1:18081/py/admin/login/)" in 502|503) ;; *) false ;; esac
+          docker logs web 2>&1 | grep -q "админки здесь нет"
+          # Админка: вход открывается, фоновых задач нет
+          test "$(code http://127.0.0.1:18082/py/admin/login/)" = 200
+          for task in schedule translate reconcile_billing notify; do
+            if running admin "$task"; then exit 1; fi
+          done
+
       - name: Журнал контейнера
         if: always()
-        run: docker logs savdex 2>&1 | tail -60 || true
+        run: |
+          for name in savdex web admin; do
+            echo "── $name"
+            docker logs "$name" 2>&1 | tail -60 || true
+          done
