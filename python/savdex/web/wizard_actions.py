@@ -16,6 +16,7 @@ search_text (событие saving), у администратора — стр�
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -27,7 +28,7 @@ from savdex.tenders.slug import numbered_slug
 from savdex.web import analytics, eloquent, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan, listing_limit_message
-from savdex.web.chat_actions import _unverified
+from savdex.web.chat_actions import _unverified, mask_contacts
 from savdex.web.company_contact_actions import _php_boolean
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, redirect
 from savdex.web.listing_actions import (
@@ -415,6 +416,42 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+def _category_fields(category_id: int | None) -> dict[str, dict[str, Any]]:
+    """Поля раздела объявления (category_fields) по ключу — их показывает мастер."""
+    if category_id is None:
+        return {}
+
+    return {
+        str(r["key"]): r
+        for r in _rows(
+            "select key, type, options from category_fields where category_id = %s",
+            [category_id],
+        )
+    }
+
+
+def _field_value(field: dict[str, Any], value: str) -> str | None:
+    """
+    Значение поля раздела: у списка — только из вариантов, у свободного
+    текста контакты скрыты (как в чате) — они открываются за кредит.
+    """
+    if value == "":
+        return None
+
+    options = field.get("options") or []
+
+    if isinstance(options, str):
+        options = json.loads(options)
+
+    if field.get("type") == "select" and options:
+        return value if value in [str(o) for o in options] else None
+
+    if field.get("type") == "text":
+        return mask_contacts(value)
+
+    return value
+
+
 def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     """
     Вид цены: точная, «от» (price_from) или диапазон «price – price_to».
@@ -525,6 +562,12 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     items = attributes.items() if isinstance(attributes, dict) else enumerate(attributes)
+    # Характеристики — только поля раздела (category_fields) и детали
+    # товара (spec_*): мастер других не шлёт, а без этого в объявление
+    # можно было записать тысячи полей — база и очередь перевода
+    # забивались, а в значения прятали телефон мимо скрытия контактов
+    allowed = _allowed_specs(listing["category_id"])
+    own_fields = _category_fields(listing["category_id"])
 
     for raw_key, value in items:
         key = str(raw_key)
@@ -539,11 +582,12 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
 
             continue
 
-        _attribute(listing["id"], key, _php_string(value))
+        if key not in own_fields:
+            continue
+
+        _attribute(listing["id"], key, _field_value(own_fields[key], _php_string(value)))
 
     # Сменили категорию — детали, которых у новой нет, убираются
-    allowed = _allowed_specs(listing["category_id"])
-
     with allowed_writes("listing_attributes"), connection.cursor() as cursor:
         cursor.execute(
             "delete from listing_attributes where listing_id = %s and key like %s "

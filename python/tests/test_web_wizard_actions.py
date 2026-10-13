@@ -547,7 +547,8 @@ def с_деталями() -> None:
                     "grade": "M500",
                 }
             },
-            {"attributes": [(1, "grade", "M500")], "tag_options": ["m500", "tashkent"]},
+            # «grade» — не поле раздела (у черновика раздела нет): не меняется
+            {"attributes": [ГРАДЕ]},
         ),
         (
             {"attributes": {"spec_weight": "много", "spec_length": None, "spec_unknown": "x"}},
@@ -621,6 +622,53 @@ def test_автосохранение(сайт, body, ожидание, admin):
     )
     # Администратору — строка журнала о правке черновика
     assert bool(база["journal"]) == admin
+
+
+def test_характеристики_только_поля_раздела(сайт):
+    """
+    Характеристики — только поля раздела: тысячи своих ключей не
+    записываются, вариант списка — только из списка, телефон в свободном
+    тексте скрыт, как в чате (контакты открываются за кредит).
+    """
+    uid = владелец()
+    cat = _категория()
+
+    def подготовка() -> None:
+        с_деталями()
+        sql(
+            "insert into category_fields (category_id, key, label, type, options, sort, "
+            "created_at, updated_at) values "
+            "(%s, 'note', 'Примечание', 'text', null, 1, now(), now()), "
+            "(%s, 'pack', 'Фасовка', 'select', '[\"50 кг\", \"25 кг\"]', 2, now(), now())",
+            [cat, cat],
+        )
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/1/autosave",
+            подготовка,
+            снимок_черновика,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            body={
+                "category_id": cat,
+                "attributes": {
+                    "note": "Звоните +998 90 123-45-67",
+                    "pack": "1000 кг",
+                    **{f"x{i}": "мусор" for i in range(500)},
+                },
+            },
+            headers={"Accept": "application/json", "X-XSRF-TOKEN": inertia()["X-XSRF-TOKEN"]},
+        )
+    finally:
+        sql("delete from category_fields where category_id = %s and key in ('note', 'pack')", [cat])
+
+    assert итог["ответ"]["status"] == 200
+    свои = [a for a in итог["база"]["attributes"] if not a[1].startswith("spec_")]
+    # Прежнее «grade» не тронуто, новое — только поле раздела «note»
+    assert [a[1] for a in свои] == ["grade", "note"]
+    assert "123-45-67" not in свои[1][2] and свои[1][2].startswith("Звоните")
 
 
 @pytest.mark.parametrize(
