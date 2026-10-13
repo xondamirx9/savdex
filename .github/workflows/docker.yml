@@ -125,6 +125,7 @@ jobs:
           docker run -d --name savdex --network host \
             -e PORT=18080 \
             -e APP_URL=http://127.0.0.1:18080 \
+            -e SAVDEX_FORCE_HTTPS=false \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
             -e DB_CONNECTION=pgsql \
             -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
