@@ -334,6 +334,14 @@ def register(request: HttpRequest) -> HttpResponse:
         return _to(ctx, "/register")
 
     data = input_of(request)
+
+    # Номер подтверждён кодом из SMS — в учётку идёт он, а не вписанный
+    # в анкету: подтверждённым считается только тот, на который пришёл код
+    sms_verified = sms_phone(store)
+
+    if sms_verified is not None:
+        data["phone"] = sms_verified
+
     kind = _account_type(data.get("account_type"))
     legal, freelancer = kind == "legal", kind == "freelancer"
 
@@ -518,9 +526,11 @@ def register(request: HttpRequest) -> HttpResponse:
             "updated_at": now,
             "created_at": now,
             # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified);
-            # код пропущен — подтвердит позже, а пока «Не подтверждено»
-            "email_verified_at": None if skipped else now,
+            # код пропущен — подтвердит позже, а пока «Не подтверждено».
+            # Подтверждён код из SMS — почта ещё не подтверждена, а телефон да
+            "email_verified_at": now if store.get(SESSION_VERIFIED) == email else None,
             "email_code_skipped": skipped,
+            "phone_verified_at": now if sms_verified is not None else None,
         }
 
         columns = list(row)
@@ -547,6 +557,8 @@ def register(request: HttpRequest) -> HttpResponse:
     store.forget(SESSION_VERIFIED)
     store.forget(SESSION_SKIPPED)
     store.forget(SESSION_COUNTRY)
+    store.forget(SESSION_SMS_PHONE)
+    store.forget(SESSION_SMS_VERIFIED)
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
@@ -578,6 +590,28 @@ SESSION_VERIFIED = "register.verified_email"
 SESSION_COUNTRY = "register.country_id"
 SESSION_SKIPPED = "register.skipped_email"
 
+#: Код по SMS (Telnyx, savdex/web/sms.py): номер, на который ушёл код, и
+#: подтверждённый номер вместе с адресом, для которого он подтверждён
+SESSION_SMS_PHONE = "register.sms_phone"
+SESSION_SMS_VERIFIED = "register.sms_verified"
+
+
+def sms_phone(store: Any) -> str | None:  # noqa: ANN401
+    """Номер, подтверждённый кодом из SMS для адреса первого шага, иначе None."""
+    email = store.get(SESSION_EMAIL)
+    verified = store.get(SESSION_SMS_VERIFIED)
+
+    if (
+        isinstance(email, str)
+        and email != ""
+        and isinstance(verified, dict)
+        and verified.get("email") == email
+        and isinstance(verified.get("phone"), str)
+    ):
+        return str(verified["phone"])
+
+    return None
+
 
 def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
     """
@@ -589,7 +623,8 @@ def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
     if not (isinstance(email, str) and email != ""):
         return None, False
 
-    if store.get(SESSION_VERIFIED) == email:
+    # Код из письма или из SMS — анкета открыта, учётка полноценная
+    if store.get(SESSION_VERIFIED) == email or sms_phone(store) is not None:
         return email, False
 
     if store.get(SESSION_SKIPPED) == email and code_optional(store.get(SESSION_COUNTRY)):

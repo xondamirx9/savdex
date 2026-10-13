@@ -8,6 +8,8 @@ export interface AuthUser {
     email_verified: boolean;
     /** Код из письма пропущен при регистрации: всё открыто, но с меткой «Не подтверждено» */
     email_skipped?: boolean;
+    /** Телефон подтверждён кодом из SMS (регистрация через Telnyx) */
+    phone_verified?: boolean;
     must_change_password: boolean;
     is_admin: boolean;
 }

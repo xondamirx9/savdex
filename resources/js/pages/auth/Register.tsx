@@ -60,6 +60,8 @@ interface Props {
     skipped?: boolean;
     /** Города стран — город физлица и фрилансера (у юрлица — на шаге компании). */
     cities?: { id: number; name: string; country_id: number }[];
+    /** Номер, подтверждённый кодом из SMS: в анкете закреплён. */
+    smsPhone?: string | null;
 }
 
 /** Больше пяти категорий — профиль перестаёт что-либо говорить о компании. */
@@ -76,6 +78,7 @@ export default function Register({
     countryId = null,
     skipped = false,
     cities = [],
+    smsPhone = null,
 }: Props) {
     const firstCountry = countries.find((c) => c.id === countryId) ?? null;
     const { data, setData, post, processing, errors, clearErrors } = useForm({
@@ -92,7 +95,7 @@ export default function Register({
         pinfl: '',
         service_section: '',
         name: '',
-        phone: firstCountry?.phone_code ? `${firstCountry.phone_code} ` : '',
+        phone: smsPhone ?? (firstCountry?.phone_code ? `${firstCountry.phone_code} ` : ''),
         password: '',
         password_confirmation: '',
         terms: false as boolean,
@@ -181,7 +184,7 @@ export default function Register({
             <div className="bg-primary-50 rounded-card mb-5 flex items-center gap-3 p-3.5 text-sm">
                 <MailCheck aria-hidden className="text-primary-700 size-5 shrink-0" />
                 <span className="min-w-0">
-                    {t(skipped ? 'auth.reg_email_unconfirmed' : 'auth.reg_email_verified')}: <b className="break-all">{email}</b>
+                    {t(skipped || smsPhone ? 'auth.reg_email_unconfirmed' : 'auth.reg_email_verified')}: <b className="break-all">{email}</b>
                 </span>
             </div>
             {/* Адрес успели занять между шагами — ошибка почты без поля */}
@@ -249,7 +252,7 @@ export default function Register({
                             const dial = countries.find((c) => c.id === id)?.phone_code;
                             const typed = data.phone.trim();
                             const onlyCode = typed === '' || countries.some((c) => c.phone_code && typed === c.phone_code);
-                            if (dial && onlyCode) update('phone', `${dial} `);
+                            if (dial && onlyCode && !smsPhone) update('phone', `${dial} `);
                         }}
                         error={errors.country_id}
                         hint={t('auth.country_first_hint')}
@@ -344,8 +347,10 @@ export default function Register({
                     }
                     value={data.phone}
                     onChange={(e) => update('phone', e.target.value)}
+                    // Подтверждён кодом из SMS — сменить нельзя
+                    disabled={smsPhone !== null}
                     error={errors.phone}
-                    hint={t('auth.phone_hint')}
+                    hint={smsPhone ? t('auth.reg_sms_phone_verified') : t('auth.phone_hint')}
                 />
 
 {legal && (
