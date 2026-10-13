@@ -371,6 +371,7 @@ def details(request: HttpRequest) -> HttpResponse:
         return _to(ctx, "/register/code" if store.get(SESSION_EMAIL) is not None else "/register")
 
     names = _named("categories", ctx.locale)
+    city_names = _named("cities", ctx.locale)
     # Код страны для телефона: выбрал страну — в поле сразу «+86 »
     phones = {r["id"]: r["phone_code"] for r in _rows("select id, phone_code from countries")}
     categories: list[dict[str, Any]] = [
@@ -390,6 +391,13 @@ def details(request: HttpRequest) -> HttpResponse:
             "skipped": skipped,
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": categories,
+            # Город физлица и фрилансера — из справочника страны или «Другой»
+            "cities": [
+                {"id": c["id"], "name": city_names[c["id"]], "country_id": c["country_id"]}
+                for c in _rows(
+                    "select id, country_id from cities where is_active order by sort, id"
+                )
+            ],
             # Страна юрлица — до номера: по ней номер проверяется (ТЗ-02)
             "countries": [
                 {

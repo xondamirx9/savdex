@@ -27,6 +27,7 @@ from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
 from savdex.web.city_choice import city_in_country, resolve_other
 from savdex.web.company_profile_actions import (
     CASTS,
+    FREE_FORMS,
     PROFILE_FIELDS,
     _country_code,
     _country_id,
@@ -204,7 +205,13 @@ def _rules(
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, _country_code(data, company), tin_messages),
+            # Физлицу и фрилансеру годится ПИНФЛ (14 цифр)
+            _tin(
+                ctx,
+                _country_code(data, company),
+                tin_messages,
+                person=company.get("legal_form") in FREE_FORMS,
+            ),
             _unique_tin(company["id"], _country_id(data, company), ctx=ctx),
         ],
         "country_id": ["nullable", _exists("countries")],

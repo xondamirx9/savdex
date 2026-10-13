@@ -88,6 +88,52 @@ class Context:
         return rows[0] if rows else None
 
 
+#: Физлицо и фрилансер: профиль человека, а не организации
+PERSON_FORMS = ("individual", "freelancer")
+
+
+def is_person(company: dict[str, Any] | None) -> bool:
+    """Профиль физлица или фрилансера (companies.legal_form)."""
+    return company is not None and company.get("legal_form") in PERSON_FORMS
+
+
+def profile_checks(company: dict[str, Any], has_documents: bool) -> list[tuple[str, bool]]:
+    """
+    Пункты заполненности профиля (Company::profileCompleteness) с ключами
+    подписей company.field.*. У физлица и фрилансера — только то, что у
+    человека есть: без типа, почты (она необязательна), юридического
+    адреса и документов о регистрации — иначе профиль не доходил до 100%.
+    """
+
+    def filled(value: object) -> bool:
+        return value is not None and str(value).strip() != ""
+
+    description = len(company.get("description") or "") >= 100
+
+    if is_person(company):
+        return [
+            ("name", filled(company.get("name"))),
+            ("city", company.get("city_id") is not None),
+            ("phone", filled(company.get("phone"))),
+            ("pinfl", filled(company.get("tin"))),
+            ("description", description),
+            ("logo", filled(company.get("logo_path"))),
+        ]
+
+    return [
+        ("name", filled(company.get("name"))),
+        ("type", filled(company.get("type"))),
+        ("city", company.get("city_id") is not None),
+        ("phone", filled(company.get("phone"))),
+        ("email", filled(company.get("email"))),
+        ("tin", filled(company.get("tin"))),
+        ("address", filled(company.get("address"))),
+        ("description", description),
+        ("logo", filled(company.get("logo_path"))),
+        ("documents", has_documents),
+    ]
+
+
 def email_ok(user: dict[str, Any] | None) -> bool:
     """
     Почта подтверждена кодом — или код пропущен при регистрации (страна
@@ -304,18 +350,7 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "and moderation_status = 'approved' limit 1",
         [company_id],
     )
-    checks = [
-        bool(company["name"]),
-        bool(company["type"]) or company["legal_form"] in ("individual", "freelancer"),
-        company["city_id"] is not None,
-        _filled(company["phone"]),
-        _filled(company["email"]),
-        _filled(company["tin"]),
-        _filled(company["address"]),
-        len(company["description"] or "") >= 100,
-        _filled(company["logo_path"]),
-        bool(documents),
-    ]
+    checks = [done for _, done in profile_checks(company, bool(documents))]
 
     card = {
         "id": company["id"],
@@ -328,7 +363,7 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "blocked": company["status"] == "blocked",
         "blocked_reason": company["blocked_reason"],
         # Company::isPerson: в меню «Мой профиль», а не «Моя компания»
-        "person": company["legal_form"] in ("individual", "freelancer"),
+        "person": is_person(company),
     }
 
     return card, company

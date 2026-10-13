@@ -319,16 +319,18 @@ def _date(value: datetime | None) -> str | None:
 
 
 def _missing(ctx: Context, company: dict[str, Any], has_documents: bool) -> list[str]:
-    """Company::missingProfileFields: подписи из словаря company."""
-    checks = (
-        ("tin", not _filled(company["tin"])),
-        ("address", not _filled(company["address"])),
-        ("description", len(company["description"] or "") < 100),
-        ("logo", not _filled(company["logo_path"])),
-        ("documents", not has_documents),
-    )
+    """
+    Company::missingProfileFields: подписи из словаря company — всё, чего
+    не хватает до 100% (те же пункты, что у заполненности: раньше телефон
+    и почта в процент входили, а в списке «не хватает» их не было).
+    """
+    from savdex.web.shared import profile_checks
 
-    return [ui.group_t(f"company.field.{key}", ctx.locale) for key, missing in checks if missing]
+    return [
+        ui.group_t(f"company.field.{key}", ctx.locale)
+        for key, done in profile_checks(company, has_documents)
+        if not done
+    ]
 
 
 # ── Тариф ───────────────────────────────────────────────────────────
@@ -1639,12 +1641,13 @@ def company_props(ctx: Context) -> dict[str, Any]:
     from savdex.web.company import _file_size
     from savdex.web.company_profile_actions import locked_fields
     from savdex.web.directory import _named, listed_countries, logo_url
-    from savdex.web.shared import initials
+    from savdex.web.shared import initials, is_person
 
     assert ctx.user is not None
     user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
     company = company_of(ctx)
     cid = company["id"] if company else None
+    person = is_person(company)
     documents = (
         _rows(
             "select * from company_documents where company_id = %s "
@@ -1691,6 +1694,12 @@ def company_props(ctx: Context) -> dict[str, Any]:
             "slug": company["slug"],
             "legal_name": company["legal_name"],
             "tin": company["tin"],
+            # Физлицо и фрилансер: Ф.И.О. вместо названия, ПИНФЛ вместо
+            # номера компании, без юр. адреса, года основания и сотрудников
+            "person": person,
+            # Телефон и почта профиля; у человека телефон — с регистрации
+            "phone": company["phone"] or (user["phone"] if person else None),
+            "email": company["email"],
             "country_id": company["country_id"],
             "city_id": company["city_id"],
             "address": company["address"],
@@ -1761,7 +1770,15 @@ def company_props(ctx: Context) -> dict[str, Any]:
                 [company["city_id"] if company else None],
             )
         ],
+        # У человека нет свидетельства о регистрации и юридического адреса —
+        # их в списке и не требуем
         "verification": [
+            check("verify_email", user["email_verified_at"] is not None),
+            check("verify_phone", user["phone_verified_at"] is not None),
+            check("verify_pinfl", company is not None and _filled(company["tin"])),
+        ]
+        if person
+        else [
             check("verify_email", user["email_verified_at"] is not None),
             check("verify_phone", user["phone_verified_at"] is not None),
             check("verify_registration", "registration" in approved),

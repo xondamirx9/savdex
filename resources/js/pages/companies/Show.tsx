@@ -32,6 +32,8 @@ interface BusinessCard {
     name: string;
     legal_name: string | null;
     tin: string | null;
+    /** Физлицо или фрилансер: ПИНФЛ не показывается, реквизитов организации нет */
+    person?: boolean;
     type: string | null;
     type_label: string | null;
     custom_category: string | null;
@@ -278,6 +280,7 @@ export default function CompanyShow({
                         {company.legal_name && (
                             <Fact icon={Building2} label={t('company.legal_name')}>{company.legal_name}</Fact>
                         )}
+                        {!company.person && (
                         <Fact icon={Files} label={t('company.tin')}>
                             {company.tin ? (
                                 <span className="row" style={{ gap: 6 }}>
@@ -294,13 +297,16 @@ export default function CompanyShow({
                                 <span className="muted">{t('company.not_set')}</span>
                             )}
                         </Fact>
+                        )}
                         <Fact icon={Globe} label={t('company.country')}>{company.country ?? '—'}</Fact>
                         {company.address && <Fact icon={MapPin} label={t('company.address')}>{company.address}</Fact>}
+                        {!company.person && (
                         <Fact icon={Users} label={t('company.employees')}>
                             {company.employees_range ?? '—'}
                             {company.founded_year ? ` · ${t('company.founded', { year: company.founded_year })}` : ''}
                         </Fact>
-                        <Fact icon={Layers} label={t('company.type')}>
+                        )}
+                        <Fact icon={Layers} label={company.person ? t('company.activity_type') : t('company.type')}>
                             {company.type_label ?? '—'}
                         </Fact>
                     </dl>
