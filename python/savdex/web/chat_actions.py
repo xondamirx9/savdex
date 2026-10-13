@@ -261,10 +261,10 @@ def _unverified(ctx: Context, strict: bool = False) -> HttpResponse | None:
     (email_ok); strict — только подтвердившего почту (отзывы).
     """
     from savdex.web.forms import _store
-    from savdex.web.shared import email_ok
+    from savdex.web.shared import email_ok, identity_confirmed
     from savdex.web.views import error
 
-    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+    if ctx.user is None or identity_confirmed(ctx.user):
         return None
 
     if not strict and email_ok(ctx.user):

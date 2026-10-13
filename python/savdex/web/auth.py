@@ -401,7 +401,10 @@ def _blocked_reason(ctx: Context) -> str | None:
     """PlatformReviewService::blockedReason: почта не подтверждена, аккаунт или компания закрыты."""
     assert ctx.user is not None
 
-    if ctx.user["email_verified_at"] is None:
+    from savdex.web.shared import identity_confirmed
+
+    # Почта или телефон (код из SMS) подтверждены — можно
+    if not identity_confirmed(ctx.user):
         return ctx.t("messages.review.verify_email")
 
     status = _rows("select status from users where id = %s", [ctx.user["id"]])[0]["status"]

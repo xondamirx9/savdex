@@ -80,7 +80,7 @@ class Context:
 
         rows = _rows(
             "select id, name, email, locale, email_verified_at, email_code_skipped, "
-            "must_change_password, is_admin, company_id from users "
+            "phone_verified_at, must_change_password, is_admin, company_id from users "
             "where id = %s and deleted_at is null",
             [self.visitor.user_id],
         )
@@ -141,7 +141,19 @@ def email_ok(user: dict[str, Any] | None) -> bool:
     отвечать, платить и открывать контакты — с пометкой «Не подтверждено».
     """
     return user is not None and (
-        user.get("email_verified_at") is not None or bool(user.get("email_code_skipped"))
+        user.get("email_verified_at") is not None
+        or user.get("phone_verified_at") is not None
+        or bool(user.get("email_code_skipped"))
+    )
+
+
+def identity_confirmed(user: dict[str, Any] | None) -> bool:
+    """
+    Подтверждена почта кодом из письма или телефон кодом из SMS: полноценный
+    пользователь (без метки «Не подтверждено»; отзывы — тоже можно).
+    """
+    return user is not None and (
+        user.get("email_verified_at") is not None or user.get("phone_verified_at") is not None
     )
 
 
@@ -587,6 +599,9 @@ def shared(ctx: Context) -> dict[str, Any]:
                 "locale": user["locale"],
                 "email_verified": user["email_verified_at"] is not None,
                 # Код из письма пропущен при регистрации («Не подтверждено»)
+                # Телефон подтверждён кодом из SMS: всё открыто, почту —
+                # по желанию (только для писем)
+                "phone_verified": user.get("phone_verified_at") is not None,
                 "email_skipped": bool(user.get("email_code_skipped"))
                 and user["email_verified_at"] is None,
                 "must_change_password": bool(user["must_change_password"]),
