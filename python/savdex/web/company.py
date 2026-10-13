@@ -524,10 +524,10 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
 def microsite_url(company: dict[str, Any]) -> str | None:
     """
     Адрес мини-сайта компании — если посетитель его увидит: сайт
-    опубликован, компания не заблокирована, в тарифе есть мини-сайт (как
+    опубликован, компания активна, в тарифе есть мини-сайт (как
     microsite._live). Иначе None, и кнопки в профиле нет.
     """
-    if company.get("status") == "blocked" or company.get("deleted_at") is not None:
+    if company.get("status") != "active" or company.get("deleted_at") is not None:
         return None
 
     sites = _rows(

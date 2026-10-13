@@ -26,6 +26,7 @@ from savdex.web.inertia import php_escape
 from savdex.web.request import CRAWLERS, context
 from savdex.web.services import SERVICE_PAGES
 from savdex.web.shared import Context
+from savdex.web.tenders import author_visible
 
 #: SitemapController::CHUNK
 CHUNK = 5000
@@ -167,7 +168,8 @@ def sitemap(request: HttpRequest) -> HttpResponse:
 
     if _rows(
         "select 1 from tenders where status = 'published' "
-        "and (published_at is null or published_at <= now()) limit 1"
+        "and (published_at is null or published_at <= now()) "
+        f"and {author_visible('tenders')} limit 1"
     ):
         parts.append("tenders")
 
@@ -318,7 +320,8 @@ def _part(ctx: Context, name: str) -> list[dict[str, Any]] | None:
             "/tenders",
             _rows(
                 "select slug, updated_at from tenders where status = 'published' "
-                "and (published_at is null or published_at <= now())"
+                "and (published_at is null or published_at <= now()) "
+                f"and {author_visible('tenders')}"
             ),
             "0.6",
             "weekly",

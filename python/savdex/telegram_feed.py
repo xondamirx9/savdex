@@ -48,6 +48,7 @@ from savdex.web import locales, messaging, ui
 from savdex.web.it_tasks import number_format
 from savdex.web.listing_actions import _now
 from savdex.web.messaging import Button
+from savdex.web.tenders import author_visible
 
 log = logging.getLogger("savdex.telegram_feed")
 
@@ -116,6 +117,7 @@ def _claim(kind: str, now: datetime, limit: int) -> list[int]:
         source = (
             "select 'tender', t.id, %s from tenders t "
             "where t.status = 'published' and (t.published_at is null or t.published_at <= %s) "
+            f"and {author_visible()} "
             "and not exists (select 1 from telegram_feed_items f "
             "  where f.kind = 'tender' and f.item_id = t.id) "
             "order by t.id limit %s"
