@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.db import connection
@@ -27,7 +28,7 @@ from savdex.guards import allowed_writes
 from savdex.web import analytics, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
-from savdex.web.forms import action, back, flash, input_of, invalid
+from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.search_text import index
 from savdex.web.shared import Context
 from savdex.web.tenders import _admin
@@ -401,9 +402,18 @@ def destroy(request: HttpRequest, listing_id: str) -> HttpResponse:
 def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
     """
     ListingController::resubmit: только возвращённое на исправление;
-    лимит тарифа; сразу на витрину и уведомление компании.
+    те же проверки, что у публикации из мастера (почта подтверждена,
+    поля заполнены как надо), лимит и срок тарифа; сразу на витрину и
+    уведомление компании.
     """
+    from savdex.web.chat_actions import _unverified
+    from savdex.web.wizard_actions import publish_errors
+
     ctx = action(request)
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
     row = _owned(ctx, int(listing_id))
 
     if row is None:
@@ -416,6 +426,19 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if (refused := refuse_blocked(ctx, row["company_id"])) is not None:
         return refused
+
+    fields = (
+        "category_id", "title", "description", "price", "price_to", "price_from",
+        "bundle_price", "price_negotiable", "currency", "unit", "min_order",
+        "delivery_terms", "payment_terms",
+    )  # fmt: skip
+    stored = {k: (str(row[k]) if isinstance(row.get(k), Decimal) else row.get(k)) for k in fields}
+
+    if (errors := publish_errors(ctx, stored)) is not None:
+        # Поправить можно только в мастере: там и поля, и подсказки
+        flash(ctx, "error", next(iter(errors.values()))[0])
+
+        return redirect(ctx, ctx.url(f"/cabinet/listings/{row['id']}/edit"))
 
     plan = company_plan(row["company_id"])
     limit = plan.get("listings_limit")
@@ -433,8 +456,9 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
         {
             "status": ACTIVE,
             "moderation_note": None,
-            "published_at": now,
-            "expires_at": now + timedelta(days=LIFETIME_DAYS),
+            # Дата первой публикации: повторная не поднимает наверх даром
+            "published_at": row["published_at"] or now,
+            "expires_at": now + timedelta(days=plan.get("listing_days") or LIFETIME_DAYS),
         },
     )
     company = company_of(ctx)

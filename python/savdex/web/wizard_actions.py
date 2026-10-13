@@ -199,28 +199,11 @@ def _owned(ctx: Context, listing_id: int) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-@form()
-def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
-    """ListingWizardController::publish (verified): строгая проверка перед витриной."""
-    ctx = action(request)
-
-    if (refused := _unverified(ctx)) is not None:
-        return refused
-
-    listing = _owned(ctx, int(listing_id))
-
-    if listing is None:
-        return not_found(ctx)
-
-    if listing["status"] == "rejected":
-        flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
-
-        return back(ctx)
-
-    if (refused := refuse_blocked(ctx, listing["company_id"])) is not None:
-        return refused
-
-    data = input_of(request)
+def publish_errors(ctx: Context, data: dict[str, Any]) -> dict[str, list[str]] | None:
+    """
+    Строгая проверка перед витриной — у мастера и у «Отправить снова»
+    (listing_actions.resubmit): ошибки по полям или None.
+    """
     errors = validate(
         data,
         {
@@ -250,16 +233,49 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     )
 
     if errors:
-        return invalid(ctx, errors)
+        return dict(errors)
 
     negotiable = _php_boolean(data.get("price_negotiable")) if "price_negotiable" in data else False
 
     if not negotiable and data.get("price") is None:
         # ValidationException::withMessages — как ошибка проверки
-        return invalid(ctx, {"price": [ctx.t("messages.listing.price_required")]})
+        return {"price": [ctx.t("messages.listing.price_required")]}
 
-    if (refused := _price_range_error(ctx, data, negotiable)) is not None:
+    upper = _price_kind(data, negotiable)["price_to"]
+
+    if upper is not None and (data.get("price") is None or float(upper) <= float(data["price"])):
+        return {"price_to": [ctx.t("messages.listing.price_to_min")]}
+
+    return None
+
+
+@form()
+def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
+    """ListingWizardController::publish (verified): строгая проверка перед витриной."""
+    ctx = action(request)
+
+    if (refused := _unverified(ctx)) is not None:
         return refused
+
+    listing = _owned(ctx, int(listing_id))
+
+    if listing is None:
+        return not_found(ctx)
+
+    if listing["status"] == "rejected":
+        flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
+
+        return back(ctx)
+
+    if (refused := refuse_blocked(ctx, listing["company_id"])) is not None:
+        return refused
+
+    data = input_of(request)
+
+    if (errors := publish_errors(ctx, data)) is not None:
+        return invalid(ctx, errors)
+
+    negotiable = _php_boolean(data.get("price_negotiable")) if "price_negotiable" in data else False
 
     company = company_of(ctx)
     assert company is not None
@@ -291,8 +307,11 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         price_negotiable=negotiable,
         status="active",
         wizard_step=4,
-        published_at=now,
-        expires_at=now + timedelta(days=LIFETIME_DAYS),
+        # Дата публикации — первая: по ней сортирует каталог, и повторная
+        # публикация поднимала объявление наверх бесплатно (это платная
+        # услуга «Поднять»)
+        published_at=listing["published_at"] or now,
+        expires_at=now + timedelta(days=plan.get("listing_days") or LIFETIME_DAYS),
     )
     _save(ctx, listing, changes)
 
@@ -406,19 +425,6 @@ def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     upper = None if upper in (None, "") or negotiable or price_from else upper
 
     return {"price_from": price_from and not negotiable, "price_to": upper}
-
-
-def _price_range_error(ctx: Context, data: dict[str, Any], negotiable: bool) -> HttpResponse | None:
-    """Диапазон «от – до»: верхняя граница больше нижней."""
-    upper = _price_kind(data, negotiable)["price_to"]
-
-    if upper is None:
-        return None
-
-    if data.get("price") is None or float(upper) <= float(data["price"]):
-        return invalid(ctx, {"price_to": [ctx.t("messages.listing.price_to_min")]})
-
-    return None
 
 
 def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:

@@ -278,7 +278,8 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
         4,
         "tsement-m400-v-meshkakh-po-50-kg-1",
         True,
-        90,
+        # Срок — по тарифу (Free — 30 дней), а не общие 90
+        30,
     )
     assert row[14].startswith("цемент м400 в мешках по 50 кг портландцемент")
     assert база["events"] == [("moderation", "success", сообщение, "/cabinet/listings")]
@@ -398,6 +399,29 @@ def test_публикация(сайт, body, ошибки_, admin):
         assert сессия(итог)["_old_input"]["title"] == тело["title"]
         assert [(r[0], r[9], r[2]) for r in база["listings"]] == [(1, "draft", "")]
         assert база["events"] == база["notifications"] == база["journal"] == []
+
+
+def test_повторная_публикация_не_поднимает(сайт):
+    """Правка объявления на витрине: дата публикации прежняя — подъём наверх платный."""
+    uid = владелец()
+
+    def подготовка() -> None:
+        объявления(("active", "Уже на витрине"))()
+        sql("update listings set published_at = now() - interval '10 days' where id = 1")
+
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/publish",
+        подготовка,
+        lambda: sql("select (now() - published_at) > interval '9 days' from listings where id = 1"),
+        uid=uid,
+        env=БЕЗ_ПЕРЕВОДА,
+        body={**ВЕРНО, "category_id": _категория()},
+        headers=inertia(),
+    )
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["база"] == [(True,)]
 
 
 @pytest.mark.parametrize(

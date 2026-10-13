@@ -70,8 +70,10 @@ def объявления(*статусы: str, компания: str = "seller")
                 объявление(
                     company_id=cid,
                     status=status,
-                    title=f"Цемент {i}",
-                    description="Мешки по 50 кг",
+                    # Поля — как требует публикация из мастера: «Отправить
+                    # снова» проверяет их так же
+                    title=f"Цемент М400, партия {i}",
+                    description="Мешки по 50 кг, доставка по Ташкенту и области.",
                     moderation_note="Уточните цену",
                     expires_at=Выражение("now() + interval '1 day'"),
                     published_at=None
@@ -268,9 +270,12 @@ def test_опубликовать_заново(сайт, status, prefix):
     assert итог["ответ"]["headers"]["location"].endswith(prefix + "/cabinet/settings")
 
     if status == "needs_changes":
-        # На витрине снова: заметка модератора снята, срок — заново
+        # На витрине снова: заметка модератора снята, срок — заново по
+        # тарифу (Free — 30 дней), дата публикации — прежняя: повторная
+        # публикация не поднимает объявление наверх даром
         assert строка[СТАТУС] == "active" and строка[ЗАМЕТКА] is None
-        assert строка[ОПУБЛИКОВАНО] == через(0)
+        assert строка[СРОК] == через(30)
+        assert строка[ОПУБЛИКОВАНО] == через(-10)
         assert "success" in сессия(итог)
         # Уведомление — обоим сотрудникам компании, в ленту — одно событие
         assert {n[0] for n in итог["база"]["notifications"]} == {
@@ -280,16 +285,38 @@ def test_опубликовать_заново(сайт, status, prefix):
         # На языке каждого получателя: продавец зашёл на /en — его язык теперь
         # английский, коллега остался на русском
         заголовки = {n[0]: n[3] for n in итог["база"]["notifications"]}
-        по_русски = "Объявление «Цемент 0» опубликовано заново"
+        по_русски = "Объявление «Цемент М400, партия 0» опубликовано заново"
         assert заголовки[учётка("colleague@savdex.uz")] == по_русски
         assert заголовки[учётка("seller@savdex.uz")] == (
-            "The listing “Цемент 0” has been published again" if prefix else по_русски
+            "The listing “Цемент М400, партия 0” has been published again" if prefix else по_русски
         )
         assert [e[0] for e in итог["база"]["events"]] == ["moderation"]
     else:
         assert "error" in сессия(итог)
         assert строка[СТАТУС] == status and строка[ЗАМЕТКА] == "Уточните цену"
         assert итог["база"]["notifications"] == [] and итог["база"]["events"] == []
+
+
+def test_опубликовать_заново_с_проверкой_мастера(сайт):
+    """Короткий заголовок мастер не пропустил бы — «Отправить снова» тоже."""
+    uid = продавец()
+    ids = объявления("needs_changes")()
+    sql("update listings set title = 'Цемент' where id = %s", [ids[0]])
+    итог = отправить(
+        сайт,
+        f"/cabinet/listings/{ids[0]}/resubmit",
+        lambda: None,
+        снимок(),
+        uid=uid,
+        headers=inertia(),
+    )
+    [строка] = итог["база"]["listings"]
+
+    # Исправлять — в мастер, с текстом ошибки
+    assert итог["ответ"]["headers"]["location"].endswith(f"/cabinet/listings/{ids[0]}/edit")
+    assert "заголовок" in сессия(итог)["error"].lower()
+    assert строка[СТАТУС] == "needs_changes"
+    assert итог["база"]["notifications"] == []
 
 
 def test_опубликовать_заново_сверх_лимита(сайт):
