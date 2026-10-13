@@ -182,8 +182,9 @@ def _company_file(ctx: Context, document_id: int) -> HttpResponse:
 
 def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
     """
-    ItTaskController::file (auth): активной задачи действующей компании — всем,
-    иначе только заказчику.
+    ItTaskController::file (auth): активной или завершённой задачи
+    действующей компании — всем (как и её страница, it_tasks.show), иначе
+    только заказчику. Раньше завершённая задача открывалась, а её файлы — нет.
     """
     from savdex.web.cabinet import page
 
@@ -206,7 +207,9 @@ def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
     file = rows[0]
     own = _viewer_company(ctx) == file["company_id"]
 
-    if (file["status"] != "active" or file["company_status"] != "active") and not own:
+    shown = file["status"] in ("active", "completed") and file["company_status"] == "active"
+
+    if not shown and not own:
         return not_found(ctx)
 
     path = private_root() / file["file_path"]

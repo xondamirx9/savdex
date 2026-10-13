@@ -251,11 +251,11 @@ def reset_billing_periods(now: datetime, due: datetime) -> str:
     """billing:reset-periods (00:30): счета на продление, конец подписок, сброс лимитов."""
     from savdex.payments import periods
 
-    issued, expired, wallets = periods.reset_periods(now)
+    issued, expired, wallets, invoices = periods.reset_periods(now)
 
     return (
         f"Выставлено счетов на продление: {issued}. Закрыто подписок: {expired}. "
-        f"Сброшено кошельков: {wallets}."
+        f"Сброшено кошельков: {wallets}. Закрыто старых счетов: {invoices}."
     )
 
 

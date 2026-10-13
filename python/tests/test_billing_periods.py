@@ -333,3 +333,38 @@ def test_досрочная_оплата_продления(мир, тариф, 
         assert (ends - было).days < 30
         assert счётчики == [(0, 0)]
         assert единицы == 1 + квота
+
+
+def test_старые_неоплаченные_счета_закрываются(мир, tmp_path):
+    """Счёт, не оплаченный за 30 дней, — «Не прошёл»; свежий ждёт дальше."""
+    cid = компания()
+
+    for number, days in (("SVD-OLD", 31), ("SVD-NEW", 29)):
+        sql(
+            "insert into payments (company_id, purpose, description, amount, currency, "
+            "provider, status, number, created_at, updated_at) values (%s, 'credits', 'x', 1, "
+            "'UZS', 'invoice', 'pending', %s, now() - make_interval(days => %s), now())",
+            [cid, number, days],
+        )
+
+    вывод = subprocess.run(
+        [sys.executable, "manage.py", "schedule", "--once", "billing_reset_periods"],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            "PYTHONPATH": str(PYTHON),
+            "SAVDEX_SCHEDULE_STATE": str(tmp_path / "state"),
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert "Закрыто старых счетов: 1." in вывод
+    assert sql(
+        "select number, status, admin_note from payments where company_id = %s order by number",
+        [cid],
+    ) == [
+        ("SVD-NEW", "pending", None),
+        ("SVD-OLD", "failed", "Счёт не оплачен за 30 дней — закрыт"),
+    ]

@@ -25,6 +25,10 @@ from savdex.web.shared import Context
 #: ResetBillingPeriods::RENEW_BEFORE_DAYS
 RENEW_BEFORE_DAYS = 7
 
+#: Сколько живёт неоплаченный счёт: дольше — закрывается сам («Не прошёл»),
+#: промокод возвращается в оборот. Перевод по счёту идёт днями, не месяцами
+INVOICE_LIFETIME_DAYS = 30
+
 
 @dataclass
 class _Console:
@@ -244,6 +248,33 @@ def _reset_wallets(now: datetime) -> int:
     return len(wallets)
 
 
-def reset_periods(now: datetime) -> tuple[int, int, int]:
-    """ResetBillingPeriods: продление, конец подписок, сброс кошельков — в этом порядке."""
-    return _issue_renewals(now), _expire_subscriptions(now), _reset_wallets(now)
+def expire_invoices(now: datetime) -> int:
+    """
+    Старые неоплаченные счета закрываются (orders.cancel — как отмена
+    компанией): раньше они висели «Ожидает» вечно, держали промокод и
+    мешали выставить новый счёт на продление. Оплата, пришедшая уже
+    после закрытия, — через администратора (сверка Uzum, перевод).
+    """
+    from savdex.web import orders
+
+    stale = _rows(
+        "select * from payments where status = 'pending' and created_at < %s order by id",
+        [_stamp(now - timedelta(days=INVOICE_LIFETIME_DAYS))],
+    )
+
+    for payment in stale:
+        orders.cancel(
+            _console(), payment, f"Счёт не оплачен за {INVOICE_LIFETIME_DAYS} дней — закрыт"
+        )
+
+    return len(stale)
+
+
+def reset_periods(now: datetime) -> tuple[int, int, int, int]:
+    """
+    ResetBillingPeriods: старые счета, продление, конец подписок, сброс
+    кошельков — в этом порядке (закрытый старый счёт не мешает новому).
+    """
+    invoices = expire_invoices(now)
+
+    return _issue_renewals(now), _expire_subscriptions(now), _reset_wallets(now), invoices
