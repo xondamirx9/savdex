@@ -265,6 +265,21 @@ def cancel(
         casts={"amount": "int"},
     )
 
+    from savdex import product_events
+
+    product_events.record(
+        "payment_failed",
+        company_id=payment["company_id"],
+        user_id=ctx.user["id"] if ctx.user else None,
+        plan=product_events.plan_code(payment["company_id"]),
+        props={
+            "number": payment["number"],
+            "amount": payment["amount"],
+            "purpose": payment["purpose"],
+            "reason": "cancelled_by_admin" if admin is not None else "cancelled",
+        },
+    )
+
     if payment["promo_code_id"] is not None and not _live_card_transaction(payment):
         with allowed_writes("promo_codes"), connection.cursor() as cursor:
             cursor.execute(

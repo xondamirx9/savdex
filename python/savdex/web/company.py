@@ -29,7 +29,7 @@ from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
 from savdex.web.it_tasks import SERVICE_TYPES, _decimal, number_format
 from savdex.web.seo import Seo
-from savdex.web.shared import Context, initials
+from savdex.web.shared import Context, initials, is_person
 from savdex.web.throttle import throttled
 
 #: StatsRecorder::DEDUP_MINUTES
@@ -281,9 +281,9 @@ def _reviews(ctx: Context, company_id: int) -> list[dict[str, Any]]:
             else ctx.t("cabinet.incoming.deleted"),
             "initials": initials(r["author_name"]) if r["author_name"] is not None else "?",
             "rating": r["rating"],
-            "body": translations.text(r["body"]),
+            "body": translations.user_text(r["body"]),
             "deal_confirmed": r["deal_confirmed"],
-            "reply": translations.text(r["reply"]),
+            "reply": translations.user_text(r["reply"]),
             "when": _utc(r["created_at"]).strftime("%d.%m.%Y"),  # type: ignore[union-attr]
         }
         for r in _rows(
@@ -386,6 +386,9 @@ def business_card(
     cities = _named("cities", ctx.locale)
     countries = _named("countries", ctx.locale)
     form = c["legal_form"] if c["legal_form"] in LEGAL_FORMS else "legal"
+    # Физлицо и фрилансер: ПИНФЛ — личные данные, наружу не отдаётся (виден
+    # только владельцу в «Моём профиле»); реквизитов организации у человека нет
+    person = is_person(c)
     specializations = (
         [
             ctx.t(f"it_tasks.types.{s}")
@@ -398,27 +401,28 @@ def business_card(
 
     return {
         "name": c["name"],
-        "legal_name": c["legal_name"],
-        "tin": c["tin"],
+        "legal_name": None if person else c["legal_name"],
+        "tin": None if person else c["tin"],
+        "person": person,
         "type": c["type"],
         "type_label": type_label(ctx, c, type_options(ctx.locale)),
         "legal_form": c["legal_form"] if c["legal_form"] is not None else "legal",
         "legal_form_label": ctx.t(f"legal_form.{form}"),
-        "custom_category": translations.text(c["custom_category"]),
+        "custom_category": translations.user_text(c["custom_category"]),
         "country": countries.get(c["country_id"]) if c["country_id"] is not None else None,
         "city": cities.get(c["city_id"]) if c["city_id"] is not None else None,
-        "address": c["address"],
+        "address": None if person else c["address"],
         # decimal:7 — строка «0.0000000» у PHP истинна, пусто только null
         "coords": {"lat": float(c["lat"]), "lng": float(c["lng"])}
         if c["lat"] is not None and c["lng"] is not None
         else None,
-        "description": translations.text(c["description"]),
+        "description": translations.user_text(c["description"]),
         "source_note": translations.text(c["source_note"]),
         "website": website_url(c["website"]),
         # Кнопка «Мини-сайт компании» — только когда мини-сайт открывается
         "microsite": microsite_url(c),
-        "founded_year": c["founded_year"],
-        "employees_range": c["employees_range"],
+        "founded_year": None if person else c["founded_year"],
+        "employees_range": None if person else c["employees_range"],
         "verification_level": c["verification_level"],
         "is_it_provider": bool(c["is_it_provider"]),
         "it_specializations": specializations,
@@ -435,7 +439,11 @@ def business_card(
 def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     """SeoBuilders::company: заголовок, описание, разметка организации и крошки."""
     city = card["city"]
-    tin = f"{ctx.t('companies_page.tin')} {c['tin']}" if c["tin"] is not None else None
+    person = is_person(c)
+    # ПИНФЛ человека в описание для поисковиков не попадает
+    tin = (
+        f"{ctx.t('companies_page.tin')} {c['tin']}" if c["tin"] is not None and not person else None
+    )
     parts = [card["type_label"], city, tin]
     fallback = ", ".join(p for p in parts if not _falsy(p)).strip(_TRIM)
     url = ctx.url(f"company/{c['slug']}")
@@ -453,18 +461,29 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
     seo.type = "website"
     url = seo.link(url)
 
-    schema: dict[str, Any] = {
-        "@type": "Organization",
-        "name": c["name"],
-        "legalName": c["legal_name"],
-        "url": url,
-        "logo": card["logo"],
-        "description": c["description"],
-        "taxID": c["tin"],
-        "foundingDate": str(c["founded_year"]) if c["founded_year"] is not None else None,
-    }
+    # Человек — Person: без налогового номера, юр. названия и адреса
+    schema: dict[str, Any] = (
+        {
+            "@type": "Person",
+            "name": c["name"],
+            "url": url,
+            "image": card["logo"],
+            "description": c["description"],
+        }
+        if person
+        else {
+            "@type": "Organization",
+            "name": c["name"],
+            "legalName": c["legal_name"],
+            "url": url,
+            "logo": card["logo"],
+            "description": c["description"],
+            "taxID": c["tin"],
+            "foundingDate": str(c["founded_year"]) if c["founded_year"] is not None else None,
+        }
+    )
 
-    if card["city"] is not None or c["address"] is not None:
+    if not person and (card["city"] is not None or c["address"] is not None):
         codes = _rows("select code from countries where id = %s", [c["country_id"]])
         address = {
             "@type": "PostalAddress",
@@ -474,7 +493,7 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
         }
         schema["address"] = {k: v for k, v in address.items() if not _falsy(v)}
 
-    if c["reviews_count"] > 0:
+    if c["reviews_count"] > 0 and not person:
         schema["aggregateRating"] = {
             "@type": "AggregateRating",
             "ratingValue": php_round(float(c["rating"] or 0), 1),
@@ -534,7 +553,10 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     found = _rows("select * from companies where slug = %s and deleted_at is null limit 1", [slug])
 
     if not found:
-        return not_found(ctx)
+        # Прежний адрес (/company/company) — 301 на нынешний (ТЗ-02)
+        from savdex.reslug import redirect_for
+
+        return redirect_for(ctx, "company", slug) or not_found(ctx)
 
     c = found[0]
     user = ctx.user
@@ -579,6 +601,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
             "files": _files(ctx, c["id"]),
             "unlocked": unlocked,
             "is_own": viewer == c["id"],
+            # Код из письма пропущен при регистрации — «Не подтверждено»
+            "unconfirmed": bool(c.get("email_unconfirmed")),
             "reviews": _reviews(ctx, c["id"]),
             "review_blocked": review_blocked(ctx, c["id"]),
             "criteria": cabinet.review_criteria(ctx.locale),

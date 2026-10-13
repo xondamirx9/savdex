@@ -4,7 +4,9 @@ App\\Support\\PageBody и HasOwnTranslations.
 
 - ContentTranslation: готовый машинный перевод — если есть; нет —
   оригинал, а текст встаёт в очередь (переводит задача Laravel
-  translations:fill). Русская версия — всегда оригинал.
+  translations:fill). Русская версия — оригинал; только тексты людей
+  (user_text: описание компании, отзывы, IT-задачи) без кириллицы
+  переводятся и на русский — китайская компания пишет по-китайски.
 - PageBody: разметка текста страницы (подзаголовки, шаги, список,
   предупреждение) — блоками.
 - own/localized: свой текст языка из *_i18n, иначе машинный перевод.
@@ -27,6 +29,10 @@ TARGETS = ("en", "uz", "tr", "zh")
 #: preg_match('/\p{L}{2,}/u') — две буквы подряд, любой азбуки
 _LETTERS = re.compile(r"[^\W\d_]{2,}")
 
+#: Кириллица в тексте — он по-русски (или по-узбекски кириллицей): на
+#: русский не переводится
+_CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+
 
 class Translations:
     """ContentTranslation на время одного запроса: с памятью, как у Laravel."""
@@ -35,7 +41,15 @@ class Translations:
         self.locale = locale
         self.memo: dict[str, str | None] = {}
 
-    def _translatable(self, text: str | None) -> bool:
+    def _translatable(self, text: str | None, user: bool = False) -> bool:
+        if self.locale == "ru":
+            return (
+                user
+                and (text or "").strip() != ""
+                and _LETTERS.search(text or "") is not None
+                and _CYRILLIC.search(text or "") is None
+            )
+
         return (
             self.locale != "ru"
             and self.locale in TARGETS
@@ -43,11 +57,11 @@ class Translations:
             and _LETTERS.search(text or "") is not None
         )
 
-    def prefetch(self, texts: Iterable[str | None]) -> None:
+    def prefetch(self, texts: Iterable[str | None], user: bool = False) -> None:
         wanted = {}
 
         for text in texts:
-            if self._translatable(text):
+            if self._translatable(text, user):
                 source = (text or "").strip()
                 digest = hashlib.sha1(source.encode()).hexdigest()
 
@@ -67,8 +81,8 @@ class Translations:
             for digest, translation in cursor.fetchall():
                 self.memo[digest] = translation
 
-    def text(self, text: str | None) -> str | None:
-        if not self._translatable(text):
+    def text(self, text: str | None, user: bool = False) -> str | None:
+        if not self._translatable(text, user):
             return text
 
         source = (text or "").strip()
@@ -78,6 +92,10 @@ class Translations:
             self.memo[digest] = self._lookup(digest, source)
 
         return self.memo[digest] or text
+
+    def user_text(self, text: str | None) -> str | None:
+        """Текст человека (компании, автора отзыва): переводится и на русский."""
+        return self.text(text, user=True)
 
     def _lookup(self, digest: str, source: str) -> str | None:
         with connection.cursor() as cursor:

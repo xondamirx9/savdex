@@ -203,8 +203,10 @@ def test_отмена_автопродления(сайт, подготовка,
     if подготовка.get("конец", "") is None:
         assert _сессия(итог)["success"] == "Автопродление отключено."
     else:
+        # ends_at — время UTC без пояса: сначала UTC, потом Ташкент
         [(до,)] = sql(
-            "select to_char(ends_at at time zone 'Asia/Tashkent', 'DD.MM.YYYY') from subscriptions"
+            "select to_char(ends_at at time zone 'UTC' at time zone 'Asia/Tashkent', 'DD.MM.YYYY') "
+            "from subscriptions"
         )
         assert _сессия(итог)["success"] == f"Автопродление отключено. Тариф действует до {до}."
 

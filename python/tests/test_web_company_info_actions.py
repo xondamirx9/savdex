@@ -151,7 +151,9 @@ def test_сведения(сайт, настройка, статус, смена
     assert данные["company"]["it_specializations"] == []
     assert (данные["changed_at"], данные["locked_until"]) == смена
     assert данные["cooldown_months"] == 6
-    assert данные["countries"] == [{"id": данные["company"]["country_id"], "name": "Узбекистан"}]
+    assert данные["countries"] == [
+        {"id": данные["company"]["country_id"], "name": "Узбекистан", "code": "uz"}
+    ]
     assert "web" in данные["serviceTypes"]
     # Сведения ничего не меняют
     assert итог["база"]["company"][0][9] is False

@@ -3,8 +3,11 @@ import { MailCheck, X } from 'lucide-react';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { Link } from '@/components/ui/Link';
 import { useMemo, type FormEvent } from 'react';
-import { Button, PasswordInput, TextInput } from '@/components/ui';
+import { Alert, Button, PasswordInput, TextInput } from '@/components/ui';
+import { CityField, type CityValue } from '@/components/CityField';
+import { CountryField } from '@/components/CountryField';
 import { SelectField } from '@/components/SelectField';
+import { countryCode, tinInputMode, tinLabel, type CountryOption } from '@/lib/countries';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
@@ -49,6 +52,14 @@ interface Props {
     categories?: { id: number; name: string }[];
     /** Направления «Доп. услуг» — «Категория» фрилансера. */
     serviceSections?: { code: string; label: string }[];
+    /** Страна юрлица — от неё зависит, как проверяется номер компании. */
+    countries?: CountryOption[];
+    /** Страна с первого шага (почта). */
+    countryId?: number | null;
+    /** Код из письма пропущен: страну не сменить, почта — «Не подтверждено». */
+    skipped?: boolean;
+    /** Города стран — город физлица и фрилансера (у юрлица — на шаге компании). */
+    cities?: { id: number; name: string; country_id: number }[];
 }
 
 /** Больше пяти категорий — профиль перестаёт что-либо говорить о компании. */
@@ -57,9 +68,23 @@ const MAX_CATEGORIES = 5;
 const BARS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-success', 'bg-success'];
 const TEXTS = ['text-danger', 'text-danger', 'text-warning', 'text-success', 'text-success'];
 
-export default function Register({ email = '', categories = [], serviceSections = [] }: Props) {
+export default function Register({
+    email = '',
+    categories = [],
+    serviceSections = [],
+    countries = [],
+    countryId = null,
+    skipped = false,
+    cities = [],
+}: Props) {
+    const firstCountry = countries.find((c) => c.id === countryId) ?? null;
     const { data, setData, post, processing, errors, clearErrors } = useForm({
-        // Юрлицо: компания и её категории
+        // Юрлицо: страна, компания и её категории. Страна — уже выбрана
+        // на шаге почты
+        country_id: (firstCountry?.id ?? null) as number | null,
+        // Физлицо и фрилансер: город из справочника страны или «Другой город»
+        city_id: null as CityValue,
+        city_name: '',
         company_name: '',
         tin: '',
         categories: [] as number[],
@@ -67,7 +92,7 @@ export default function Register({ email = '', categories = [], serviceSections 
         pinfl: '',
         service_section: '',
         name: '',
-        phone: '',
+        phone: firstCountry?.phone_code ? `${firstCountry.phone_code} ` : '',
         password: '',
         password_confirmation: '',
         terms: false as boolean,
@@ -93,6 +118,9 @@ export default function Register({ email = '', categories = [], serviceSections 
     }
 
     const legal = data.account_type === 'legal';
+    const code = countryCode(countries, data.country_id);
+    const uzOrUnknown = code === null || code === 'uz';
+    const phoneCode = countries.find((c) => c.id === data.country_id)?.phone_code ?? null;
     const freelancer = data.account_type === 'freelancer';
 
     function toggleCategory(id: number) {
@@ -149,11 +177,11 @@ export default function Register({ email = '', categories = [], serviceSections 
         >
             <RegisterSteps current={3} />
 
-            {/* Почта уже подтверждена кодом — здесь её только показываем */}
+            {/* Почта уже подтверждена кодом (или код пропущен) — здесь её только показываем */}
             <div className="bg-primary-50 rounded-card mb-5 flex items-center gap-3 p-3.5 text-sm">
                 <MailCheck aria-hidden className="text-primary-700 size-5 shrink-0" />
                 <span className="min-w-0">
-                    {t('auth.reg_email_verified')}: <b className="break-all">{email}</b>
+                    {t(skipped ? 'auth.reg_email_unconfirmed' : 'auth.reg_email_verified')}: <b className="break-all">{email}</b>
                 </span>
             </div>
             {/* Адрес успели занять между шагами — ошибка почты без поля */}
@@ -197,6 +225,55 @@ export default function Register({ email = '', categories = [], serviceSections 
 
                 {/* Порядок полей — свой у каждого типа: юрлицо начинает
                     с компании, физлицо и фрилансер — с себя */}
+                {/* Страна — у всех: по ней проверяется номер (у иностранного
+                    фрилансера нет узбекского ПИНФЛ) */}
+                {skipped ? (
+                    <>
+                        <div className="field" style={{ margin: 0 }}>
+                            <span className="label">{t('auth.country_label')}</span>
+                            <p className="text-sm font-medium">{firstCountry?.name}</p>
+                        </div>
+                        <Alert tone="warning">{t('auth.reg_skipped_note')}</Alert>
+                    </>
+                ) : (
+                    <CountryField
+                        id="r-country"
+                        countries={countries}
+                        value={data.country_id}
+                        onChange={(id) => {
+                            update('country_id', id);
+                            // Город другой страны — не тот город
+                            update('city_id', null);
+                            // Код страны — сразу в телефон: без него короткие иностранные
+                            // номера не набирают 9 цифр и не проходят проверку
+                            const dial = countries.find((c) => c.id === id)?.phone_code;
+                            const typed = data.phone.trim();
+                            const onlyCode = typed === '' || countries.some((c) => c.phone_code && typed === c.phone_code);
+                            if (dial && onlyCode) update('phone', `${dial} `);
+                        }}
+                        error={errors.country_id}
+                        hint={t('auth.country_first_hint')}
+                    />
+                )}
+
+                {/* Город физлица и фрилансера — сразу здесь: без него объявления
+                    создавались без города и не находились фильтром по городу */}
+                {!legal && (
+                    <CityField
+                        id="r-city"
+                        label={t('auth.city_label')}
+                        required
+                        cities={cities.filter((c) => c.country_id === data.country_id)}
+                        value={data.city_id}
+                        name={data.city_name}
+                        onChange={(value) => update('city_id', value)}
+                        onNameChange={(name) => update('city_name', name)}
+                        placeholder={t('auth.city_choose')}
+                        error={errors.city_id}
+                        disabled={data.country_id === null}
+                    />
+                )}
+
                 {legal && (
                     <>
                         <TextInput
@@ -212,10 +289,12 @@ export default function Register({ email = '', categories = [], serviceSections 
                         />
 
                         <TextInput
-                            label={t('auth.tin_label')}
+                            label={tinLabel(code)}
                             name="tin"
-                            inputMode="numeric"
-                            placeholder={t('auth.tin_placeholder')}
+                            inputMode={tinInputMode(code)}
+                            placeholder={
+                                code === 'uz' ? t('auth.tin_placeholder') : undefined
+                            }
                             value={data.tin}
                             onChange={(e) => update('tin', e.target.value)}
                             error={errors.tin}
@@ -237,17 +316,20 @@ export default function Register({ email = '', categories = [], serviceSections 
                 />
 
                 {!legal && (
+                    /* ПИНФЛ — только в Узбекистане; у других стран — свой номер, по желанию */
                     <TextInput
-                        label={t('auth.pinfl_label')}
+                        label={uzOrUnknown ? t('auth.pinfl_label') : tinLabel(code)}
                         name="pinfl"
-                        inputMode="numeric"
+                        inputMode={uzOrUnknown ? 'numeric' : tinInputMode(code)}
                         maxLength={20}
-                        required={freelancer}
-                        placeholder={t('auth.pinfl_placeholder')}
+                        required={freelancer && uzOrUnknown}
+                        placeholder={uzOrUnknown ? t('auth.pinfl_placeholder') : undefined}
                         value={data.pinfl}
                         onChange={(e) => update('pinfl', e.target.value)}
                         error={errors.pinfl}
-                        hint={freelancer ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')}
+                        hint={
+                            freelancer && uzOrUnknown ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')
+                        }
                     />
                 )}
 
@@ -257,7 +339,9 @@ export default function Register({ email = '', categories = [], serviceSections 
                     name="phone"
                     autoComplete="tel"
                     required
-                    placeholder={t('auth.phone_placeholder')}
+                    placeholder={
+                        phoneCode && phoneCode !== '+998' ? `${phoneCode} …` : t('auth.phone_placeholder')
+                    }
                     value={data.phone}
                     onChange={(e) => update('phone', e.target.value)}
                     error={errors.phone}

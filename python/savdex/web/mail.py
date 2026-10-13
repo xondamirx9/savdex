@@ -127,6 +127,11 @@ def _sender(prefix: str = "MAIL") -> str:
     return formataddr((name, address))
 
 
+def sender_address(prefix: str = "MAIL") -> str:
+    """Адрес «От кого» — его человек добавляет в белый список почты."""
+    return _env(prefix, "FROM_ADDRESS") or "hello@example.com"
+
+
 def _log_path(prefix: str = "MAIL") -> Path:
     configured = _env(prefix, "LOG_PATH") or os.environ.get("MAIL_LOG_PATH")
 
@@ -166,6 +171,35 @@ def configured(prefix: str = "MAIL") -> bool:
     return mailer(prefix) == "smtp"
 
 
+#: Китайские почтовые ящики (ТЗ: китайцы не проходят регистрацию). Gmail в
+#: Китае закрыт, там почта на qq.com, 163.com и т. п., а они жёстко режут
+#: письма из-за рубежа. Если задан свой почтовик CN_MAIL_* (сервис с
+#: хорошей доставкой в Китай), письма на эти адреса идут через него
+CN_DOMAINS = frozenset(
+    {
+        "qq.com", "vip.qq.com", "foxmail.com", "163.com", "126.com", "yeah.net",
+        "vip.163.com", "vip.126.com", "188.com", "sina.com", "sina.cn", "sohu.com",
+        "aliyun.com", "139.com", "189.cn", "wo.cn", "tom.com", "21cn.com",
+    }
+)  # fmt: skip
+
+
+def is_chinese_mailbox(address: str) -> bool:
+    """Ящик у китайского почтовика: qq.com, 163.com, 126.com…"""
+    return address.rsplit("@", 1)[-1].strip().lower() in CN_DOMAINS
+
+
+def _routes(to: str, prefix: str) -> list[str]:
+    """
+    Через чьи почтовики слать: на китайский ящик — сначала CN_MAIL_* (если
+    задан), затем обычный; не дошло через первый — пробуем второй.
+    """
+    if prefix == "MAIL" and is_chinese_mailbox(to) and configured("CN_MAIL"):
+        return ["CN_MAIL", "MAIL"]
+
+    return [prefix]
+
+
 def send(
     to: str,
     subject: str,
@@ -185,6 +219,23 @@ def send(
     клиентам со своего ящика (savdex/crm/prospects.py). sender — свой
     «От кого» («Поддержка <support@…>»), иначе — из настроек почтовика.
     """
+    return any(
+        _send_via(route, to, subject, body_html, body_text, reply_to, headers, sender)
+        for route in _routes(to, prefix)
+    )
+
+
+def _send_via(
+    prefix: str,
+    to: str,
+    subject: str,
+    body_html: str,
+    body_text: str,
+    reply_to: str | None,
+    headers: Mapping[str, str] | None,
+    sender: str | None,
+) -> bool:
+    """Одна попытка через почтовик prefix; сбой — в журнал, False."""
     message = EmailMultiAlternatives(
         subject,
         body_text,
@@ -218,7 +269,7 @@ def send(
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(message.message().as_string() + "\n")
     except Exception:
-        log.exception("Письмо на %s не отправлено", to)
+        log.exception("Письмо на %s не отправлено (%s)", to, prefix)
 
         return False
 

@@ -12,6 +12,8 @@ import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { t, tChoice } from '@/lib/i18n';
 import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
+import { CityField, type CityValue } from '@/components/CityField';
+import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
 
 interface Company {
@@ -20,6 +22,10 @@ interface Company {
     slug: string;
     legal_name: string | null;
     tin: string | null;
+    /** Физлицо или фрилансер: Ф.И.О., ПИНФЛ, без реквизитов организации */
+    person: boolean;
+    phone: string | null;
+    email: string | null;
     country_id: number | null;
     city_id: number | null;
     address: string | null;
@@ -38,6 +44,8 @@ interface Company {
     completeness: number;
     missing: string[];
     verification_level: number;
+    /** Заполненные из них меняются только в настройках и раз в полгода; у физлица и фрилансера — пусто */
+    locked_fields: string[];
 }
 
 interface Props {
@@ -57,7 +65,7 @@ interface Props {
         missing: boolean;
     }[];
     employees: { id: number; name: string; email: string; role: string; verified: boolean }[];
-    countries: { id: number; name: string }[];
+    countries: CountryOption[];
     cities: { id: number; name: string; country_id: number }[];
     verification: { label: string; done: boolean; hint: string | null }[];
     plan: { name: string; verification_days: number; has_microsite: boolean } | null;
@@ -101,8 +109,11 @@ export default function CompanyProfile({
         name: string;
         legal_name: string;
         tin: string;
+        phone: string;
+        email: string;
         country_id: number | null;
-        city_id: number | null;
+        city_id: CityValue;
+        city_name: string;
         address: string;
         description: string;
         website: string;
@@ -117,14 +128,20 @@ export default function CompanyProfile({
         name: company?.name ?? '',
         legal_name: company?.legal_name ?? '',
         tin: company?.tin ?? '',
-        country_id: company?.country_id ?? countries[0]?.id ?? null,
+        phone: company?.phone ?? '',
+        email: company?.email ?? '',
+        // Без молчаливого «Узбекистана»: страну выбирает человек (ТЗ-02)
+        country_id: company?.country_id ?? null,
         city_id: company?.city_id ?? null,
+        city_name: '',
         address: company?.address ?? '',
         description: company?.description ?? '',
         website: company?.website ?? '',
         founded_year: company?.founded_year ?? null,
         employees_range: company?.employees_range ?? '',
-        type: company?.type ?? 'distributor',
+        // У человека тип деятельности по умолчанию не выбран: раньше первое же
+        // сохранение записывало фрилансеру «Дистрибьютор»
+        type: company?.type ?? (company?.person ? '' : 'distributor'),
         custom_category: company?.custom_category ?? '',
         primary_role: company?.primary_role ?? 'both',
         is_it_provider: company?.is_it_provider ?? false,
@@ -190,13 +207,24 @@ export default function CompanyProfile({
     }
 
     const availableCities = cities.filter((c) => c.country_id === form.data.country_id);
+    const person = company?.person ?? false;
+    const code = countryCode(countries, form.data.country_id);
+    /** Ошибка поля под ним: раньше ошибки ИНН, сайта, адреса не выводились, и форма молча не сохранялась */
+    const fieldError = (field: keyof typeof form.data) =>
+        form.errors[field] ? (
+            <p className="hint" style={{ color: 'var(--danger)' }}>
+                {form.errors[field]}
+            </p>
+        ) : null;
 
     /*
-     * Заполненные сведения здесь только читаются: меняются они в
-     * настройках профиля и раз в полгода. Пустое можно заполнить сразу.
+     * Заполненные реквизиты (название, юр. название, ИНН, юр. адрес) здесь
+     * только читаются: меняются они в настройках профиля и раз в полгода.
+     * Остальное — и всё у физлица и фрилансера — меняется здесь когда угодно.
      */
-    const locked = (field: keyof Company) => company !== null && isFilled(company[field]);
-    const anyLocked = company !== null && (['name', 'tin', 'country_id', 'address'] as const).some(locked);
+    const locked = (field: keyof Company) =>
+        company !== null && company.locked_fields.includes(field) && isFilled(company[field]);
+    const anyLocked = company !== null && (company.locked_fields as (keyof Company)[]).some(locked);
 
     function submit() {
         form.patch(routes.cabinetCompany, { preserveScroll: true });
@@ -238,8 +266,10 @@ export default function CompanyProfile({
 
     return (
         <CabinetLayout
-            title={t('cabinet.company.title')}
-            heading={company ? t('cabinet.company.title') : t('cabinet.company.title_new')}
+            title={person ? t('cabinet.nav.profile') : t('cabinet.company.title')}
+            heading={
+                company ? (person ? t('cabinet.nav.profile') : t('cabinet.company.title')) : t('cabinet.company.title_new')
+            }
             subheading={
                 company
                     ? t('cabinet.company.filled', { percent: company.completeness })
@@ -390,7 +420,7 @@ export default function CompanyProfile({
 
                     <div className="field">
                         <label className="label" htmlFor="p-name">
-                            {t('cabinet.company.name')} <span className="req">*</span>
+                            {person ? t('auth.full_name_label') : t('cabinet.company.name')} <span className="req">*</span>
                         </label>
                         <input
                             id="p-name"
@@ -398,11 +428,14 @@ export default function CompanyProfile({
                             value={form.data.name}
                             disabled={locked('name')}
                             onChange={(e) => form.setData('name', e.target.value)}
-                            placeholder={t('cabinet.company.name_placeholder')}
+                            placeholder={
+                                person ? t('auth.person_name_placeholder') : t('cabinet.company.name_placeholder')
+                            }
                         />
-                        {form.errors.name && <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.name}</p>}
+                        {fieldError('name')}
                     </div>
 
+                    {!person && (
                     <div className="field">
                         <label className="label" htmlFor="p-legal">
                             {t('cabinet.company.legal_name')}
@@ -414,12 +447,15 @@ export default function CompanyProfile({
                             disabled={locked('legal_name')}
                             onChange={(e) => form.setData('legal_name', e.target.value)}
                         />
+                        {fieldError('legal_name')}
                     </div>
+                    )}
 
                     <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-tin">
-                                {t('cabinet.company.tin')}
+                                {/* Человек из Узбекистана — ПИНФЛ, иностранец — номер своей страны */}
+                                {person && (code === 'uz' || code === null) ? t('auth.pinfl_label') : tinLabel(code)}
                             </label>
                             <input
                                 id="p-tin"
@@ -427,8 +463,12 @@ export default function CompanyProfile({
                                 value={form.data.tin}
                                 disabled={locked('tin')}
                                 onChange={(e) => form.setData('tin', e.target.value)}
+                                inputMode={person && code === 'uz' ? 'numeric' : undefined}
                             />
+                            {person && <p className="hint">{t('cabinet.company.pinfl_private')}</p>}
+                            {fieldError('tin')}
                         </div>
+                        {!person && (
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-year">
                                 {t('cabinet.company.founded')}
@@ -441,9 +481,44 @@ export default function CompanyProfile({
                                 disabled={locked('founded_year')}
                                 onChange={(e) => form.setData('founded_year', e.target.value ? Number(e.target.value) : null)}
                             />
-                            {form.errors.founded_year && (
-                                <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.founded_year}</p>
-                            )}
+                            {fieldError('founded_year')}
+                        </div>
+                        )}
+                    </div>
+
+                    {/* Телефон и почта профиля: у человека телефон обязателен, почта — нет */}
+                    <div className="grid grid-2 grid-tight mt-16" style={{ gap: 12 }}>
+                        <div className="field" style={{ margin: 0 }}>
+                            <label className="label" htmlFor="p-phone">
+                                {t('cabinet.company.contact_phone')} {person && <span className="req">*</span>}
+                            </label>
+                            <input
+                                id="p-phone"
+                                className="input"
+                                type="tel"
+                                inputMode="tel"
+                                autoComplete="tel"
+                                value={form.data.phone}
+                                onChange={(e) => form.setData('phone', e.target.value)}
+                                placeholder="+998 90 123-45-67"
+                            />
+                            {fieldError('phone')}
+                        </div>
+                        <div className="field" style={{ margin: 0 }}>
+                            <label className="label" htmlFor="p-email">
+                                {t('cabinet.company.contact_email')}{' '}
+                                <span className="muted t-sm">({t('cabinet.company.optional')})</span>
+                            </label>
+                            <input
+                                id="p-email"
+                                className="input"
+                                type="email"
+                                autoComplete="email"
+                                value={form.data.email}
+                                onChange={(e) => form.setData('email', e.target.value)}
+                                placeholder="name@mail.com"
+                            />
+                            {fieldError('email')}
                         </div>
                     </div>
 
@@ -464,23 +539,23 @@ export default function CompanyProfile({
                                 placeholder={t('cabinet.company.country_none')}
                                 options={countries.map((c) => ({ value: String(c.id), label: c.name }))}
                             />
+                            {fieldError('country_id')}
                         </div>
-                        <div className="field" style={{ margin: 0 }}>
-                            <label className="label" htmlFor="p-city">
-                                {t('cabinet.company.city')}
-                            </label>
-                            <SelectField
-                                id="p-city"
-                                ariaLabel={t('cabinet.company.city')}
-                                value={String(form.data.city_id ?? '')}
-                                disabled={locked('city_id')}
-                                onChange={(value) => form.setData('city_id', value ? Number(value) : null)}
-                                placeholder={t('cabinet.company.city_none')}
-                                options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
-                            />
-                        </div>
+                        <CityField
+                            id="p-city"
+                            label={t('cabinet.company.city')}
+                            cities={availableCities}
+                            value={form.data.city_id}
+                            name={form.data.city_name}
+                            onChange={(value) => form.setData('city_id', value)}
+                            onNameChange={(name) => form.setData('city_name', name)}
+                            placeholder={t('cabinet.company.city_none')}
+                            error={form.errors.city_id}
+                            disabled={locked('city_id') || form.data.country_id === null}
+                        />
                     </div>
 
+                    {!person && (
                     <div className="field mt-16">
                         <label className="label" htmlFor="p-addr">
                             {t('cabinet.company.address')}
@@ -494,25 +569,29 @@ export default function CompanyProfile({
                             placeholder={t('cabinet.company.address_placeholder')}
                         />
                         <p className="hint">{t('cabinet.company.address_hint')}</p>
+                        {fieldError('address')}
                     </div>
+                    )}
 
-                    <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
+                    <div className={cn('grid grid-tight', person ? 'mt-16' : 'grid-2')} style={{ gap: 12 }}>
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-type">
-                                {t('cabinet.company.type')}
+                                {person ? t('cabinet.company.activity_type') : t('cabinet.company.type')}
                             </label>
                             <SelectField
                                 id="p-type"
-                                ariaLabel={t('cabinet.company.type')}
+                                ariaLabel={person ? t('cabinet.company.activity_type') : t('cabinet.company.type')}
                                 value={form.data.type ?? ''}
                                 disabled={locked('type')}
                                 onChange={(value) => form.setData('type', value)}
+                                placeholder={person ? t('cabinet.company.not_set') : undefined}
                                 options={TYPES.map((value) => ({
                                     value,
                                     label: t(`cabinet.company.type_${value}`),
                                 }))}
                             />
                         </div>
+                        {!person && (
                         <div className="field" style={{ margin: 0 }}>
                             <label className="label" htmlFor="p-emp">
                                 {t('cabinet.company.employees')}
@@ -527,6 +606,7 @@ export default function CompanyProfile({
                                 options={EMPLOYEE_RANGES.map((r) => ({ value: r, label: r }))}
                             />
                         </div>
+                        )}
                     </div>
 
                     <div className="field mt-16">
@@ -555,6 +635,7 @@ export default function CompanyProfile({
                             onChange={(e) => form.setData('website', e.target.value)}
                             placeholder="company.uz"
                         />
+                        {fieldError('website')}
                     </div>
 
                     <div className="field">
@@ -590,6 +671,7 @@ export default function CompanyProfile({
                             placeholder={t('cabinet.company.description_placeholder')}
                         />
                         <p className="hint">{t('cabinet.company.description_hint')}</p>
+                        {fieldError('description')}
                     </div>
 
                     {/* Роль IT-исполнителя: только с ней видна кнопка «Откликнуться»
@@ -632,9 +714,7 @@ export default function CompanyProfile({
                                 })}
                             </div>
                         )}
-                        {form.errors.it_specializations && (
-                            <p className="hint" style={{ color: 'var(--danger)' }}>{form.errors.it_specializations}</p>
-                        )}
+                        {fieldError('it_specializations')}
                     </div>
 
                     <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>
@@ -682,7 +762,7 @@ export default function CompanyProfile({
                         </div>
                     </div>
 
-                    <button className="btn btn-primary mt-24" onClick={() => setUploading('registration')}>
+                    <button className="btn btn-primary mt-24" onClick={() => setUploading(person ? 'other' : 'registration')}>
                         <Upload aria-hidden className="size-4" /> {t('cabinet.company.upload_document')}
                     </button>
                 </div>

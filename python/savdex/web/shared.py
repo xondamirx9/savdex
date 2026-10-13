@@ -79,12 +79,70 @@ class Context:
             return None
 
         rows = _rows(
-            "select id, name, email, locale, email_verified_at, must_change_password, "
-            "is_admin, company_id from users where id = %s and deleted_at is null",
+            "select id, name, email, locale, email_verified_at, email_code_skipped, "
+            "must_change_password, is_admin, company_id from users "
+            "where id = %s and deleted_at is null",
             [self.visitor.user_id],
         )
 
         return rows[0] if rows else None
+
+
+#: Физлицо и фрилансер: профиль человека, а не организации
+PERSON_FORMS = ("individual", "freelancer")
+
+
+def is_person(company: dict[str, Any] | None) -> bool:
+    """Профиль физлица или фрилансера (companies.legal_form)."""
+    return company is not None and company.get("legal_form") in PERSON_FORMS
+
+
+def profile_checks(company: dict[str, Any], has_documents: bool) -> list[tuple[str, bool]]:
+    """
+    Пункты заполненности профиля (Company::profileCompleteness) с ключами
+    подписей company.field.*. У физлица и фрилансера — только то, что у
+    человека есть: без типа, почты (она необязательна), юридического
+    адреса и документов о регистрации — иначе профиль не доходил до 100%.
+    """
+
+    def filled(value: object) -> bool:
+        return value is not None and str(value).strip() != ""
+
+    description = len(company.get("description") or "") >= 100
+
+    if is_person(company):
+        return [
+            ("name", filled(company.get("name"))),
+            ("city", company.get("city_id") is not None),
+            ("phone", filled(company.get("phone"))),
+            ("pinfl", filled(company.get("tin"))),
+            ("description", description),
+            ("logo", filled(company.get("logo_path"))),
+        ]
+
+    return [
+        ("name", filled(company.get("name"))),
+        ("type", filled(company.get("type"))),
+        ("city", company.get("city_id") is not None),
+        ("phone", filled(company.get("phone"))),
+        ("email", filled(company.get("email"))),
+        ("tin", filled(company.get("tin"))),
+        ("address", filled(company.get("address"))),
+        ("description", description),
+        ("logo", filled(company.get("logo_path"))),
+        ("documents", has_documents),
+    ]
+
+
+def email_ok(user: dict[str, Any] | None) -> bool:
+    """
+    Почта подтверждена кодом — или код пропущен при регистрации (страна
+    с галочкой «Регистрация без кода»). Такому можно публиковать,
+    отвечать, платить и открывать контакты — с пометкой «Не подтверждено».
+    """
+    return user is not None and (
+        user.get("email_verified_at") is not None or bool(user.get("email_code_skipped"))
+    )
 
 
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
@@ -137,17 +195,35 @@ def public_url(path: str) -> str:
     return os.environ.get("APP_URL", "http://localhost").rstrip("/") + "/storage/" + path
 
 
+#: Знак из коробки: шапка, подвал, админка
+DEFAULT_LOGO = "/images/logo-mark.svg"
+#: Тот же знак с полями — значок вкладки и выдачи Google
+DEFAULT_ICON = "/images/favicon.svg"
+
+
 def appearance_logo(values: dict[str, Any]) -> str:
     """Appearance::logo()."""
     path = setting(values, "logo_image").strip()
 
     if path == "":
-        return "/images/logo-mark.svg"
+        return DEFAULT_LOGO
 
     if path.startswith(("http://", "https://", "/")):
         return path
 
     return public_url(path)
+
+
+def appearance_icon(logo: str) -> str:
+    """
+    Значок сайта для <link rel="icon">.
+
+    Свой логотип из админки — как есть: подсказка «Оформления» обещает его
+    и на вкладке браузера. Знак из коробки — в варианте с полями: Google
+    и соцсети обрезают значок кругом, а знак занимает квадрат до краёв,
+    и у него срезались самолёт и росчерк.
+    """
+    return DEFAULT_ICON if logo == DEFAULT_LOGO else logo
 
 
 # ── «N минут назад» ─────────────────────────────────────────────────
@@ -274,18 +350,7 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "and moderation_status = 'approved' limit 1",
         [company_id],
     )
-    checks = [
-        bool(company["name"]),
-        bool(company["type"]) or company["legal_form"] in ("individual", "freelancer"),
-        company["city_id"] is not None,
-        _filled(company["phone"]),
-        _filled(company["email"]),
-        _filled(company["tin"]),
-        _filled(company["address"]),
-        len(company["description"] or "") >= 100,
-        _filled(company["logo_path"]),
-        bool(documents),
-    ]
+    checks = [done for _, done in profile_checks(company, bool(documents))]
 
     card = {
         "id": company["id"],
@@ -298,7 +363,7 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "blocked": company["status"] == "blocked",
         "blocked_reason": company["blocked_reason"],
         # Company::isPerson: в меню «Мой профиль», а не «Моя компания»
-        "person": company["legal_form"] in ("individual", "freelancer"),
+        "person": is_person(company),
     }
 
     return card, company
@@ -521,6 +586,9 @@ def shared(ctx: Context) -> dict[str, Any]:
                 "email": user["email"],
                 "locale": user["locale"],
                 "email_verified": user["email_verified_at"] is not None,
+                # Код из письма пропущен при регистрации («Не подтверждено»)
+                "email_skipped": bool(user.get("email_code_skipped"))
+                and user["email_verified_at"] is None,
                 "must_change_password": bool(user["must_change_password"]),
                 "is_admin": bool(user["is_admin"]),
             }
@@ -548,7 +616,6 @@ def shared(ctx: Context) -> dict[str, Any]:
         "support": {
             "email": setting(values, "support_email"),
             "phone": setting(values, "support_phone"),
-            "hours": setting(values, "support_hours"),
             "telegram": setting(values, "telegram"),
             "legal_name": setting(values, "legal_name"),
             "legal_tin": setting(values, "legal_tin"),
@@ -558,4 +625,27 @@ def shared(ctx: Context) -> dict[str, Any]:
         "translations": None if ctx.inertia else ui.translations(ctx.locale),
         "localeLinks": locale_links(ctx),
         "localeSuggest": suggest,
+        "analytics": _analytics(ctx, company),
     }
+
+
+def _analytics(ctx: Context, company: dict[str, Any] | None) -> dict[str, Any]:
+    """
+    GA4 (ТЗ-03): номер потока (пусто — тега нет), тариф для user_properties
+    и события, подтверждённые сервером (savdex/web/analytics.py).
+    """
+    from savdex.web import analytics
+
+    ga = analytics.measurement_id()
+
+    if not ga:
+        return {"id": "", "plan": None, "events": []}
+
+    plan = None
+
+    if company is not None:
+        from savdex.web.cabinet import company_plan
+
+        plan = company_plan(company["id"]).get("code")
+
+    return {"id": ga, "plan": plan, "events": analytics.events(ctx)}

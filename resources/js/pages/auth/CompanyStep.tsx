@@ -2,14 +2,17 @@ import { useForm } from '@inertiajs/react';
 import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Button, TextInput } from '@/components/ui';
+import { CityField, type CityValue } from '@/components/CityField';
+import { CountryField } from '@/components/CountryField';
 import { SelectField } from '@/components/SelectField';
+import { countryCode, tinInputMode, tinLabel, type CountryOption } from '@/lib/countries';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 import { cn } from '@/lib/cn';
 
 interface Props {
-    countries: { id: number; name: string }[];
+    countries: CountryOption[];
     cities: { id: number; name: string; country_id: number }[];
     categories: { id: number; slug: string; name: string }[];
     serviceCategories: { id: number; slug: string; name: string }[];
@@ -23,6 +26,8 @@ interface Props {
      * и категории уже есть — шаг спрашивает только недостающее.
      */
     completing?: boolean;
+    /** Страна, выбранная при регистрации; нет — человек выбирает сам. */
+    countryId?: number | null;
 }
 
 /**
@@ -56,6 +61,7 @@ export default function CompanyStep({
     accountType = 'legal',
     personName = '',
     completing = false,
+    countryId = null,
 }: Props) {
     // Физлицо и фрилансер выступают от своего имени: без названия
     // компании и обязательного типа бизнеса, ИНН или ПИНФЛ — по желанию
@@ -65,7 +71,8 @@ export default function CompanyStep({
         name: string;
         type: string;
         country_id: number | null;
-        city_id: number | null;
+        city_id: CityValue;
+        city_name: string;
         tin: string;
         primary_role: string;
         categories: number[];
@@ -74,8 +81,10 @@ export default function CompanyStep({
         name: person ? personName : '',
         // Фрилансер оказывает услуги — сразу открываем их направления
         type: accountType === 'freelancer' ? serviceTypeKey(types) : person ? '' : 'distributor',
-        country_id: countries[0]?.id ?? null,
+        // Без молчаливого «Узбекистана»: страну выбирает человек (ТЗ-02)
+        country_id: countryId,
         city_id: null,
+        city_name: '',
         tin: '',
         primary_role: 'both',
         categories: [],
@@ -96,6 +105,8 @@ export default function CompanyStep({
     );
 
     const availableCities = cities.filter((c) => c.country_id === data.country_id);
+    // Узбекский ИНН (и ПИНФЛ физлица) — свои подписи; у других стран — свой номер
+    const uzOrUnknown = ['uz', null].includes(countryCode(countries, data.country_id));
 
     function toggleCategory(id: number) {
         setData(
@@ -122,6 +133,36 @@ export default function CompanyStep({
             subheading={person ? t('auth.person_subheading') : t('auth.company_subheading')}
         >
             <form onSubmit={submit} className="space-y-5" noValidate>
+                {/* Страна — первой: от неё зависят город и правила номера (ТЗ-02) */}
+                <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
+                    <CountryField
+                        id="c-country"
+                        countries={countries}
+                        value={data.country_id}
+                        onChange={(id) => {
+                            setData('country_id', id);
+                            // Город из другой страны — рассинхрон,
+                            // который потом ищут в данных руками
+                            setData('city_id', null);
+                        }}
+                        error={errors.country_id}
+                    />
+
+                    <CityField
+                        id="c-city"
+                        label={t('auth.city_label')}
+                        required
+                        cities={availableCities}
+                        value={data.city_id}
+                        name={data.city_name}
+                        onChange={(value) => setData('city_id', value)}
+                        onNameChange={(name) => setData('city_name', name)}
+                        placeholder={t('auth.city_choose')}
+                        error={errors.city_id}
+                        disabled={data.country_id === null}
+                    />
+                </div>
+
                 {!completing && (
                     <TextInput
                         label={person ? t('auth.person_name_label') : t('auth.company_name_label')}
@@ -178,47 +219,16 @@ export default function CompanyStep({
                     </div>
                 )}
 
-                <div className="grid grid-2 grid-tight" style={{ gap: 12 }}>
-                    <div className="field" style={{ margin: 0 }}>
-                        <label className="label" htmlFor="c-country">
-                            {t('auth.country_label')} <span className="req">*</span>
-                        </label>
-                        <SelectField
-                            id="c-country"
-                            ariaLabel={t('auth.country_label')}
-                            value={String(data.country_id ?? '')}
-                            onChange={(value) => {
-                                setData('country_id', Number(value));
-                                // Город из другой страны — рассинхрон,
-                                // который потом ищут в данных руками
-                                setData('city_id', null);
-                            }}
-                            options={countries.map((c) => ({ value: String(c.id), label: c.name }))}
-                        />
-                    </div>
-
-                    <div className="field" style={{ margin: 0 }}>
-                        <label className="label" htmlFor="c-city">
-                            {t('auth.city_label')} <span className="req">*</span>
-                        </label>
-                        <SelectField
-                            id="c-city"
-                            ariaLabel={t('auth.city_label')}
-                            value={String(data.city_id ?? '')}
-                            onChange={(value) => setData('city_id', value ? Number(value) : null)}
-                            placeholder={t('auth.city_choose')}
-                            options={availableCities.map((c) => ({ value: String(c.id), label: c.name }))}
-                        />
-                        {errors.city_id && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.city_id}</p>}
-                    </div>
-                </div>
-
                 {!completing && (
                     <TextInput
-                        label={person ? t('auth.person_tin_label') : t('auth.tin_label')}
+                        label={
+                            person && uzOrUnknown ? t('auth.person_tin_label') : tinLabel(countryCode(countries, data.country_id))
+                        }
                         name="tin"
-                        inputMode="numeric"
-                        placeholder={person ? t('auth.person_tin_placeholder') : t('auth.tin_placeholder')}
+                        inputMode={tinInputMode(countryCode(countries, data.country_id))}
+                        placeholder={
+                            !uzOrUnknown ? undefined : person ? t('auth.person_tin_placeholder') : t('auth.tin_placeholder')
+                        }
                         value={data.tin}
                         onChange={(e) => setData('tin', e.target.value)}
                         error={errors.tin}

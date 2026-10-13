@@ -27,7 +27,7 @@ import pytest
 from savdex import laravel_session
 
 from .factories import категория, компания
-from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база
+from .pg_admin import APP_KEY, KEY, КОРЕНЬ, sql, нужна_база, свежая_база, страна
 from .test_web_forms import SID, ТОКЕН, inertia
 from .test_web_session import СЕССИЯ, завести, кука, строка
 from .web_site import адрес, открыть
@@ -51,7 +51,9 @@ def сайт() -> Iterator[str]:
     cement = категория(slug="cement", parent_id=None)
     категория(slug="metal", parent_id=None)
     категория(slug="child", parent_id=cement)
-    компания(slug="taken", tin="305123456")
+    uz = страна("uz", {"ru": "Узбекистан"})
+    страна("cn", {"ru": "Китай"})
+    компания(slug="taken", tin="305123456", country_id=uz)
 
     try:
         with адрес() as root:
@@ -140,6 +142,7 @@ def регистрация(
     лимит: bool = False,
     отключена: bool = True,
     подтверждена: bool = True,
+    без_кода: str | None = None,
 ) -> dict[str, Any]:
     sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
     sql("delete from companies where slug <> 'taken'")
@@ -148,15 +151,20 @@ def регистрация(
     _ЖУРНАЛ.parent.mkdir(parents=True, exist_ok=True)
     _ЖУРНАЛ.write_text("")
 
+    if isinstance(body.get("country_id"), str):
+        body = {**body, "country_id": _страна(body["country_id"])}
+
     if лимит:
-        # Пять созданных аккаунтов с этого адреса — полчаса назад
+        # Предел созданных аккаунтов с этого адреса — полчаса назад
         import os
         import time
 
         from savdex import laravel_cache
 
         os.environ["CACHE_STORE"] = "file"
-        laravel_cache.put(f"register:{IP}", 5, 3600)
+        from savdex.web.auth_actions import MAX_REGISTRATIONS_PER_HOUR
+
+        laravel_cache.put(f"register:{IP}", MAX_REGISTRATIONS_PER_HOUR, 3600)
         laravel_cache.put(f"register:{IP}:timer", int(time.time()) + 1800, 3600)
 
     if занята:
@@ -172,6 +180,15 @@ def регистрация(
     if подтверждена and isinstance(body.get("email"), str):
         адрес_ = body["email"].strip().lower()
         данные["register"] = {"email": адрес_, "verified_email": адрес_}
+
+    # Код пропущен (страна с «Регистрация без кода»): страна — с первого шага
+    if без_кода is not None and isinstance(body.get("email"), str):
+        адрес_ = body["email"].strip().lower()
+        данные["register"] = {
+            "email": адрес_,
+            "skipped_email": адрес_,
+            "country_id": _страна(без_кода),
+        }
 
     завести(SID, данные)
 
@@ -242,7 +259,8 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     return dict(_сессия(итог)["errors"]["default"]["messages"])
 
 
-СОЗДАНА = "Компания создана. Осталось подтвердить почту — и можно публиковать объявления."
+#: Физлицо и фрилансер: профиль, а не компания; почта уже подтверждена кодом
+СОЗДАНА = "Профиль создан. Заполните его до конца — так вам будут больше доверять."
 
 ВЕРНО = {
     "name": "  Азиз Каримов ",
@@ -253,6 +271,11 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
     "terms": True,
     "account_type": "individual",
     "locale": "uz",
+    # Страна — у всех видов учёток (физлицу ПИНФЛ — только в Узбекистане)
+    "country_id": "uz",
+    # Город физлица и фрилансера — в анкете; «Другой город» — запись справочника
+    "city_id": "other",
+    "city_name": "Нукус",
 }
 
 
@@ -262,6 +285,9 @@ def _ошибки(итог: dict[str, Any]) -> dict[str, list[str]]:
         (ВЕРНО, None),
         # Без вида — юрлицо: нужны название и разделы
         ({**ВЕРНО, "account_type": None, "locale": None}, {"company_name", "categories"}),
+        # Страна обязательна у всех: без неё номер не проверить; у физлица
+        # без страны и город не выбрать
+        ({**ВЕРНО, "country_id": None}, {"country_id", "city_id"}),
         (
             {**ВЕРНО, "password": "short1", "password_confirmation": "other"},
             {"password", "password_confirmation"},
@@ -343,6 +369,10 @@ def test_регистрация(сайт, body, ошибки):
         assert ввод["name"] == body["name"].strip()
 
 
+def _страна(code: str) -> int:
+    return int(sql("select id from countries where code = %s", [code])[0][0])
+
+
 def _раздел(slug: str) -> int:
     return int(sql("select id from categories where slug = %s", [slug])[0][0])
 
@@ -350,6 +380,7 @@ def _раздел(slug: str) -> int:
 ЮРЛИЦО = {
     **ВЕРНО,
     "account_type": "legal",
+    "country_id": "uz",
     "company_name": "  ООО «Цемент Плюс» ",
     "tin": "302 345-678",
     "categories": "cement,metal",
@@ -363,8 +394,12 @@ def _раздел(slug: str) -> int:
         ({"tin": None, "company_name": ""}, {"company_name": ["Укажите название компании"]}),
         (
             {"tin": "305123456"},
-            {"tin": ["Компания с таким ИНН уже зарегистрирована на площадке"]},
+            {"tin": ["Компания с таким номером из этой страны уже зарегистрирована на площадке"]},
         ),
+        # Узбекский номер у китайской компании не проходит: у Китая 18 знаков
+        ({"tin": "305123456", "country_id": "cn"}, {"tin"}),
+        # Страна обязательна: без неё номер не проверить
+        ({"country_id": None}, {"country_id": ["Выберите страну"]}),
         ({"tin": "30234567"}, {"tin": ["ИНН (СТИР) в Узбекистане — ровно 9 цифр."]}),
         ({"categories": []}, {"categories": ["Выберите хотя бы одну категорию"]}),
         # Повтор раздела — один раз
@@ -377,6 +412,9 @@ def _раздел(slug: str) -> int:
 )
 def test_регистрация_юрлица(сайт, правка, итог_):
     body = {**ЮРЛИЦО, **правка}
+
+    if body.get("country_id"):
+        body["country_id"] = _страна(body["country_id"])
 
     if isinstance(body["categories"], str):
         body["categories"] = [_раздел(s) for s in body["categories"].split(",")]
@@ -398,6 +436,59 @@ def test_регистрация_юрлица(сайт, правка, итог_):
         assert итог["users"] == [] and итог["companies"] == []
         найдено = _ошибки(итог)
         assert (найдено if isinstance(итог_, dict) else set(найдено)) == итог_
+
+
+@pytest.mark.parametrize(
+    ("правка", "итог_"),
+    [
+        # Иностранный фрилансер: ПИНФЛ (Узбекистан) не нужен — свой номер по желанию
+        ({"pinfl": None}, ("freelancer", None)),
+        ({"pinfl": "91510107-ma6xxxxxxx"}, ("freelancer", "91510107MA6XXXXXXX")),
+        ({"pinfl": "12345"}, {"pinfl"}),
+    ],
+)
+def test_иностранный_фрилансер(сайт, правка, итог_):
+    body = {
+        **ВЕРНО,
+        "account_type": "freelancer",
+        "service_section": "it",
+        "country_id": "cn",
+        **правка,
+    }
+    итог = регистрация(сайт, body)
+
+    if isinstance(итог_, set):
+        assert set(_ошибки(итог)) == итог_
+        assert итог["users"] == []
+
+        return
+
+    assert итог["location"].endswith("/cabinet")
+    [компания_] = итог["companies"]
+    assert (компания_[2], компания_[3]) == итог_
+    assert sql(
+        "select c.code from companies k join countries c on c.id = k.country_id "
+        "where k.slug <> 'taken'"
+    ) == [("cn",)]
+
+
+def test_китайская_компания(сайт):
+    # Приёмка ТЗ-02: 18-значный код сохраняется целиком, страна — Китай
+    body = {
+        **ЮРЛИЦО,
+        "country_id": _страна("cn"),
+        "tin": "91510107ma6-xxxxxxx",
+        "categories": [_раздел("cement")],
+    }
+    итог = регистрация(сайт, body)
+
+    assert итог["status"] == 302 and итог["location"].endswith("/onboarding/company")
+    [компания_] = итог["companies"]
+    assert компания_[3] == "91510107MA6XXXXXXX"
+    assert sql(
+        "select c.code from companies k join countries c on c.id = k.country_id "
+        "where k.slug <> 'taken'"
+    ) == [("cn",)]
 
 
 @pytest.mark.parametrize(
@@ -482,3 +573,55 @@ def test_без_подтверждённой_почты_анкета_не_при
 
     assert итог["location"].endswith("/register") and итог["users"] == []
     assert "errors" not in _сессия(итог)
+
+
+def _без_кода(code: str = "cn") -> None:
+    sql("update countries set email_code_optional = (code = %s)", [code])
+
+
+def test_регистрация_без_кода(сайт):
+    """Китай: код пропущен — аккаунт есть, почта не подтверждена, компания «Не подтверждено»."""
+    _без_кода()
+    # Страна из формы не в счёт — та, что выбрана на первом шаге
+    body = {
+        **ЮРЛИЦО,
+        "country_id": _страна("uz"),
+        "tin": "91510107MA6XXXXXXX",
+        "categories": [_раздел("cement")],
+    }
+    итог = регистрация(сайт, body, без_кода="cn")
+
+    assert итог["status"] == 302 and итог["location"].endswith("/onboarding/company")
+    assert итог["users"][0][-2] is False  # email_verified_at пуст
+    assert sql(
+        "select u.email_code_skipped, k.email_unconfirmed, c.code from users u "
+        "join companies k on k.id = u.company_id join countries c on c.id = k.country_id "
+        "where u.email like '%%@reg.savdex.uz'"
+    ) == [(True, True, "cn")]
+    assert "skipped_email" not in итог["session"]["payload"]
+
+
+def test_без_кода_страна_без_галочки(сайт):
+    """Узбекистан без галочки: пропуск кода не принимается — назад к первому шагу."""
+    _без_кода()
+    итог = регистрация(сайт, ЮРЛИЦО, подтверждена=False, без_кода="uz")
+
+    assert итог["location"].endswith("/register") and итог["users"] == []
+
+
+@pytest.mark.parametrize(("правка", "ошибка"), [({"city_id": None}, "city_id")])
+def test_город_человека_обязателен(сайт, правка, ошибка):
+    итог = регистрация(сайт, {**ВЕРНО, **правка})
+
+    assert итог["users"] == [] and ошибка in _ошибки(итог)
+
+
+def test_город_человека_в_профиле(сайт):
+    итог = регистрация(сайт, ВЕРНО)
+
+    assert итог["location"].endswith("/cabinet")
+    assert sql(
+        "select t.name, c.code from companies k join cities ci on ci.id = k.city_id "
+        "join city_translations t on t.city_id = ci.id and t.locale = 'ru' "
+        "join countries c on c.id = k.country_id where k.slug <> 'taken'"
+    ) == [("Нукус", "uz")]

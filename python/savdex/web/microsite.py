@@ -58,6 +58,14 @@ FONTS = {
     "playfair-display": ("Playfair Display", "serif"),
     "lora": ("Lora", "serif"),
     "pt-serif": ("PT Serif", "serif"),
+    "roboto": ("Roboto", "sans-serif"),
+    "open-sans": ("Open Sans", "sans-serif"),
+    "raleway": ("Raleway", "sans-serif"),
+    "ubuntu": ("Ubuntu", "sans-serif"),
+    "exo-2": ("Exo 2", "sans-serif"),
+    "comfortaa": ("Comfortaa", "sans-serif"),
+    "roboto-slab": ("Roboto Slab", "serif"),
+    "merriweather": ("Merriweather", "serif"),
 }
 SURFACES = {
     "light": {
@@ -182,8 +190,31 @@ def marketplace_url(ctx: Context, path: str) -> str:
     return _app_url() + locales.prefix(ctx.locale) + path
 
 
-def _contacts(company_id: int) -> list[dict[str, Any]]:
-    return [
+#: Контакты, которые мини-сайт берёт сам, если их нет в «Моих контактах»
+_AUTO_CONTACTS = ("phone", "email", "telegram", "whatsapp")
+
+
+def _contact(kind: str, value: str) -> dict[str, Any]:
+    return {
+        "type": kind,
+        "label": None,
+        "contact_person": None,
+        "value": value,
+        "href": href(kind, value),
+    }
+
+
+def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Контакты мини-сайта: сначала «Мои контакты» (company_contacts,
+    публичные). Телефона, почты, Telegram или WhatsApp там нет вовсе (даже
+    скрытого) — мини-сайт берёт их сам: из профиля компании, а телефон и
+    почту — ещё и из учётной записи владельца (то, что вписали при
+    регистрации). Так у
+    только что зарегистрированной компании на сайте сразу есть как с ней
+    связаться; правка в профиле видна на сайте без отдельного шага.
+    """
+    contacts = [
         {
             "type": c["type"],
             "label": c["label"],
@@ -194,9 +225,35 @@ def _contacts(company_id: int) -> list[dict[str, Any]]:
         for c in _rows(
             "select type, label, contact_person, value from company_contacts "
             "where company_id = %s and is_public order by is_primary desc, sort_order, id",
-            [company_id],
+            [company["id"]],
         )
     ]
+    # Вид контакта, который есть в «Моих контактах» — пусть и скрытый, — сам
+    # не подставляется: скрытую почту владелец скрыл нарочно
+    have = {
+        r["type"]
+        for r in _rows(
+            "select distinct type from company_contacts where company_id = %s", [company["id"]]
+        )
+    }
+    # Сотрудники — владелец первым: у кого первого есть телефон или почта
+    people = _rows(
+        "select phone, email from users where company_id = %s and deleted_at is null "
+        "and status = 'active' order by (company_role = 'owner') desc, id",
+        [company["id"]],
+    )
+
+    for kind in _AUTO_CONTACTS:
+        if kind in have:
+            continue
+
+        candidates = [company.get(kind), *(p.get(kind) for p in people)]
+        value = next((str(v).strip() for v in candidates if v and str(v).strip()), "")
+
+        if value:
+            contacts.append(_contact(kind, value))
+
+    return contacts
 
 
 def _products(ctx: Context, company_id: int) -> list[dict[str, Any]]:
@@ -361,7 +418,9 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
         f"<style>:root{{ {view['css']} }}</style>",
         '<link rel="preconnect" href="https://fonts.bunny.net">',
         '<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>',
-        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet">',
+        # Шрифт — без ожидания отрисовки (как на сайте, inertia.py)
+        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet" media="print" '
+        "onload=\"this.media='all'\">",
         tags,
     ]
     lang = e(ctx.locale.replace("_", "-"))
@@ -401,7 +460,7 @@ def render(
         },
         "company": business_card(ctx, company, translations),
         "initials": initials(company["name"]),
-        "contacts": _contacts(company["id"]),
+        "contacts": _contacts(company),
         "products": _products(ctx, company["id"]),
         "files": _files(ctx, company["id"]),
         "reviews": _reviews(ctx, company),

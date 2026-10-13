@@ -477,3 +477,40 @@ def test_добор_переводит_недостающее(переводчи
     [(titles,)] = sql("select title_i18n::text from listings where id = %s", [lid])
 
     assert json.loads(titles) == переводы("Цемент для добора")
+
+
+def test_объявление_не_по_русски_переводится_и_на_русский(переводчик):
+    """Китайский заголовок — переводы и на русский: иначе русская версия видит иероглифы."""
+    lid = _объявление()
+
+    def подготовить() -> None:
+        sql(
+            "update listings set title = '水泥 M400', description = '每袋50公斤', "
+            "title_i18n = null, description_i18n = null, status = 'active' where id = %s",
+            [lid],
+        )
+
+    [(заголовки, описания, _, _)] = перевести(
+        переводчик,
+        подготовить,
+        _снимок_объявления(lid),
+        ["--kind", "listings", "--id", str(lid)],
+    )
+
+    assert json.loads(заголовки) == {**переводы("水泥 M400"), "ru": "ru:水泥 M400"}
+    assert json.loads(описания) == {**переводы("每袋50公斤"), "ru": "ru:每袋50公斤"}
+
+
+def test_добор_после_правки_описания(переводчик):
+    """Заголовок переведён, описание после правки — нет: добор переводит описание."""
+    lid = _объявление()
+    sql("delete from content_translations")
+    sql(
+        "update listings set title = 'Цемент', description = 'Новое описание', "
+        "title_i18n = %s::json, description_i18n = null, status = 'active' where id = %s",
+        [json.dumps(переводы("Цемент")), lid],
+    )
+    _python(переводчик, "--once")
+    [(описания,)] = sql("select description_i18n::text from listings where id = %s", [lid])
+
+    assert json.loads(описания) == переводы("Новое описание")

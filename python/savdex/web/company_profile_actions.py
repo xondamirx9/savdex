@@ -16,7 +16,6 @@ users).
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -26,9 +25,12 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import slugify
-from savdex.web import eloquent
+from savdex.web import analytics, eloquent
+from savdex.web import tin as tin_rules
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
+from savdex.web.city_choice import city_in_country, resolve_other
+from savdex.web.companies import has_domain
 from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.listing_actions import _stamp
 from savdex.web.resume_actions import _exists
@@ -37,14 +39,11 @@ from savdex.web.shared import Context
 from savdex.web.validation import Check, validate, validated
 from savdex.web.views import not_found
 
-#: Tin::FAKE
-FAKE_TINS = ("123456789", "987654321", "123123123")
-
 #: Приведения Company для сравнения
 CASTS = {"is_it_provider": "bool", "it_specializations": "json", "founded_year": "int"}
 
 
-#: Company::PROFILE_FIELDS — сведения, которые меняются раз в полгода
+#: Company::PROFILE_FIELDS — сведения о компании из блока в настройках
 PROFILE_FIELDS = (
     "name",
     "legal_name",
@@ -59,6 +58,26 @@ PROFILE_FIELDS = (
     "is_it_provider",
     "it_specializations",
 )
+
+
+#: Реквизиты: заполненные меняются только в настройках и раз в полгода.
+#: Остальные сведения меняются когда угодно
+LOCKED_FIELDS = ("name", "legal_name", "tin", "address")
+
+#: Физлицо и фрилансер: ограничений на смену сведений нет
+FREE_FORMS = ("individual", "freelancer")
+
+#: Сведения организации, которых у физлица и фрилансера нет: в их профиле
+#: этих полей нет, а пришедшие в запросе не записываются
+COMPANY_ONLY = ("legal_name", "address", "founded_year", "employees_range")
+
+#: Телефон в профиле — как при регистрации
+PHONE = r"/^\+?\d[\d\s\-()]{8,17}$/"
+
+
+def locked_fields(company: dict[str, Any]) -> tuple[str, ...]:
+    """Какие заполненные сведения меняются только раз в полгода."""
+    return () if company.get("legal_form") in FREE_FORMS else LOCKED_FIELDS
 
 
 def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
@@ -83,10 +102,10 @@ def _profile_value(field: str, value: Any) -> str | None:  # noqa: ANN401
 
 
 def changed_profile_fields(company: dict[str, Any], data: dict[str, Any]) -> list[str]:
-    """Company::changedProfileFields: какие из заполненных сведений запрос меняет."""
+    """Company::changedProfileFields: какие из заполненных реквизитов запрос меняет."""
     changed = []
 
-    for field in PROFILE_FIELDS:
+    for field in locked_fields(company):
         if field not in data:
             continue
 
@@ -103,44 +122,42 @@ def changed_profile_fields(company: dict[str, Any], data: dict[str, Any]) -> lis
 
 def _tin(ctx: Context, country: str | None, messages: list[str], *, person: bool = False) -> Check:
     """
-    App\\Rules\\Tin: текст ошибки — свой у каждого случая. Физлицу и
-    фрилансеру в Узбекистане годится и ПИНФЛ (14 цифр).
+    App\\Rules\\Tin: номер по правилам страны (savdex/web/tin.py); текст
+    ошибки — свой у каждого случая. Физлицу и фрилансеру в Узбекистане
+    годится и ПИНФЛ (14 цифр).
     """
 
     def passes(value: Any) -> bool:  # noqa: ANN401
-        tin = "" if value is None else str(value)
+        key = tin_rules.problem("" if value is None else str(value), country, person=person)
 
-        if re.fullmatch(r"\d+", tin, re.ASCII) is None:
-            messages.append(ctx.t("messages.tin.digits_only"))
+        if key is not None:
+            messages.append(ctx.t(f"messages.tin.{key}"))
+            # GA4 (ТЗ-02): где номер не проходит — по стране и причине, без номера
+            analytics.tin_validation_failed(ctx, country, key)
 
-            return False
-
-        if re.fullmatch(r"(\d)\1+", tin, re.ASCII) or tin in FAKE_TINS:
-            messages.append(ctx.t("messages.tin.invalid"))
-
-            return False
-
-        if country in (None, "uz"):
-            if person and len(tin) == 14:
-                return True
-
-            if len(tin) != 9:
-                messages.append(
-                    ctx.t("messages.tin.uz_person_length" if person else "messages.tin.uz_length")
-                )
-
-                return False
-
-            return True
-
-        if not 6 <= len(tin) <= 15:
-            messages.append(ctx.t("messages.tin.length"))
-
-            return False
-
-        return True
+        return key is None
 
     return Check("tin", passes)
+
+
+def _country_id(data: dict[str, Any], company: dict[str, Any] | None) -> int | None:
+    """Страна из запроса, иначе страна компании — для уникальности номера."""
+    return _int_or_none(data.get("country_id")) or (company["country_id"] if company else None)
+
+
+def normalize_tin(data: dict[str, Any], company: dict[str, Any] | None = None) -> None:
+    """
+    Номер без пробелов и дефисов, буквы заглавные — до проверки и записи.
+    Прежний номер компании заново не проверяется: сменили страну — а
+    записанный при старой стране номер мешал бы сохранить всё остальное.
+    """
+    if "tin" not in data:
+        return
+
+    data["tin"] = tin_rules.normalize(data["tin"])
+
+    if company is not None and company.get("tin") and data["tin"] == company["tin"]:
+        del data["tin"]
 
 
 def _country_code(data: dict[str, Any], company: dict[str, Any] | None) -> str | None:
@@ -162,20 +179,47 @@ def _country_code(data: dict[str, Any], company: dict[str, Any] | None) -> str |
     return None
 
 
-def _unique_tin(company_id: int | None) -> Check:
-    """Rule::unique('companies', 'tin')->ignore($user->company_id)->whereNull('deleted_at')."""
+def _unique_tin(
+    company_id: int | None,
+    country_id: Any = None,  # noqa: ANN401
+    *,
+    ctx: Context | None = None,
+) -> Check:
+    """
+    Одна компания на номер — в паре со страной (ТЗ-02): у китайской и
+    узбекской компании номера могут совпасть. Без удалённых и без своей.
+    """
+
+    country = _int_or_none(country_id)
 
     def passes(value: Any) -> bool:  # noqa: ANN401
+        # Страна не известна (ПИНФЛ при регистрации) — по всем, как раньше
         sql = "select count(*) as n from companies where tin = %s and deleted_at is null"
         params: list[Any] = [str(value)]
+
+        if country is not None:
+            sql += " and country_id is not distinct from %s"
+            params.append(country)
 
         if company_id is not None:
             sql += " and id <> %s"
             params.append(company_id)
 
-        return int(_rows(sql, params)[0]["n"]) == 0
+        free = int(_rows(sql, params)[0]["n"]) == 0
+
+        if not free and ctx is not None:
+            analytics.tin_validation_failed(ctx, analytics.country_code(country), "taken")
+
+        return free
 
     return Check("unique", passes)
+
+
+def _int_or_none(value: Any) -> int | None:  # noqa: ANN401
+    try:
+        return int(str(value).strip()) if value not in (None, "") else None
+    except ValueError:
+        return None
 
 
 def _search_text(company: dict[str, Any]) -> dict[str, Any]:
@@ -185,16 +229,22 @@ def _search_text(company: dict[str, Any]) -> dict[str, Any]:
     return {"search_text": index(text)}
 
 
-def _slug(name: str) -> str:
-    """Company::makeSlug: свободный адрес, в том числе среди удалённых."""
-    base = slugify(name) or "company"
-    slug, i = base, 2
+def slug_fields(name: str) -> dict[str, Any]:
+    """
+    Адрес новой компании (ТЗ-02 §4): название латиницей (кириллица, пиньинь,
+    турецкие буквы — savdex/tenders/slug.py), до 60 знаков. Адрес занят (в том
+    числе удалённой) или короче 3 знаков — с номером компании через дефис:
+    «ce-shi-gong-si-<номер>», «company-<номер>». Номер для этого берётся из
+    последовательности заранее — тогда его и нужно записать как id.
+    """
+    base = slugify(name)[:60].strip("-")
 
-    while _rows("select 1 from companies where slug = %s limit 1", [slug]):
-        slug = f"{base}-{i}"
-        i += 1
+    if len(base) >= 3 and not _rows("select 1 from companies where slug = %s limit 1", [base]):
+        return {"slug": base}
 
-    return slug
+    key = int(_rows("select nextval(pg_get_serial_sequence('companies', 'id')) as id")[0]["id"])
+
+    return {"id": key, "slug": f"{base if len(base) >= 3 else 'company'}-{key}"}
 
 
 @form("PATCH")
@@ -212,6 +262,26 @@ def update(request: HttpRequest) -> HttpResponse:
     if isinstance(site, str) and site.strip() and "://" not in site:
         data["website"] = "https://" + site.strip()
 
+    # Заполненные реквизиты здесь не меняются (только в настройках и раз в
+    # полгода): в форме они только для чтения. Пришли другими — остаются
+    # прежними, а остальное сохраняется: раньше из-за одного такого поля не
+    # сохранялось ничего
+    if company is not None:
+        for field in changed_profile_fields(company, data):
+            data[field] = company[field]
+
+    normalize_tin(data, company)
+    resolve_other(data)
+
+    # Физлицо и фрилансер: номер — ПИНФЛ (14 цифр), реквизитов организации
+    # нет, телефон обязателен. Раньше ПИНФЛ проверялся как ИНН компании
+    # (9 цифр), и ни ввести его, ни исправить в кабинете было нельзя
+    person = company is not None and company.get("legal_form") in FREE_FORMS
+
+    if person:
+        for field in COMPANY_ONLY:
+            data.pop(field, None)
+
     tin_messages: list[str] = []
     rules: dict[str, list[str | Check]] = {
         "name": ["required", "string", "min:2", "max:190"],
@@ -220,14 +290,16 @@ def update(request: HttpRequest) -> HttpResponse:
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, _country_code(data, company), tin_messages),
-            _unique_tin(ctx.user["company_id"]),
+            _tin(ctx, _country_code(data, company), tin_messages, person=person),
+            _unique_tin(ctx.user["company_id"], _country_id(data, company), ctx=ctx),
         ],
+        "phone": ["required" if person else "nullable", "string", f"regex:{PHONE}"],
+        "email": ["nullable", "string", "max:255", "email"],
         "country_id": ["nullable", _exists("countries")],
-        "city_id": ["nullable", _exists("cities")],
+        "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],
         "address": ["nullable", "string", "max:255"],
         "description": ["nullable", "string", "max:5000"],
-        "website": ["nullable", "string", "max:190", "url"],
+        "website": ["nullable", "string", "max:190", "url", Check("url", has_domain)],
         "founded_year": ["nullable", "integer", f"between:1850,{year}"],
         "employees_range": ["nullable", "string", "max:20"],
         "type": ["nullable", "string", "max:30"],
@@ -242,9 +314,17 @@ def update(request: HttpRequest) -> HttpResponse:
         rules,
         ctx.locale,
         {
-            "name.required": ctx.t("messages.company.name_required"),
+            "name.required": ctx.t(
+                "messages.company.person_name_required"
+                if person
+                else "messages.company.name_required"
+            ),
             "founded_year.between": ctx.t("messages.company.founded_between", year=year),
             "tin.unique": ctx.t("messages.company.tin_unique"),
+            "city_id.city_country": ctx.t("messages.company.city_country"),
+            "phone.required": ctx.t("messages.register.phone_required"),
+            "phone.regex": ctx.t("messages.phone_format"),
+            "email.email": ctx.t("messages.register.email_format"),
         },
     )
 
@@ -269,11 +349,6 @@ def update(request: HttpRequest) -> HttpResponse:
 
     # Заполненные сведения здесь не меняются — только из настроек
     # профиля и раз в полгода (CompanyInfoController у Laravel)
-    locked = changed_profile_fields(company, fields) if company is not None else []
-
-    if locked:
-        return invalid(ctx, {f: [ctx.t("messages.company.change_in_settings")] for f in locked})
-
     if company is None:
         _create(ctx, fields)
         flash(ctx, "success", ctx.t("messages.company.created"))
@@ -308,7 +383,7 @@ def _create(
     assert ctx.user is not None
     row: dict[str, Any] = {**fields, "status": "active"}
     row.update(_search_text(row))
-    row["slug"] = fields.get("slug") or _slug(str(fields["name"]))
+    row.update({"slug": fields["slug"]} if fields.get("slug") else slug_fields(str(fields["name"])))
     now = _stamp(eloquent.now())
     row.update(updated_at=now, created_at=now)
     columns = list(row)

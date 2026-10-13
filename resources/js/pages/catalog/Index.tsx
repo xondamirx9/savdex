@@ -65,6 +65,9 @@ export default function CatalogIndex({ banner, listings, tenders, filters, sorts
     }, [filtersOpen]);
 
     const isTenders = filters.type === 'tender';
+    // Предложений на площадке пока мало: пустой список «Товаров» уводит
+    // к запросам покупателей и к размещению, а не в тупик (ТЗ-01, п.2.4)
+    const fewOffers = filters.type === 'supply';
     const feed = isTenders ? tenders : listings;
 
     function apply(next: Partial<Props['filters']>) {
@@ -289,7 +292,25 @@ export default function CatalogIndex({ banner, listings, tenders, filters, sorts
                         {tChoice(isTenders ? 'tenders.found' : 'catalog.found', total)}
                     </p>
 
-                    {feed === undefined || feed.data.length === 0 ? (
+                    {(feed === undefined || feed.data.length === 0) && fewOffers ? (
+                        <div className="card empty">
+                            <div className="empty-icon">
+                                <Package aria-hidden className="size-7" />
+                            </div>
+                            <p className="t-h4">{t('catalog.few_offers_title')}</p>
+                            <p className="t-sm muted mt-8" style={{ maxWidth: 420, margin: '8px auto 0' }}>
+                                {t('catalog.few_offers_text')}
+                            </p>
+                            <div className="row mt-24" style={{ gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                <Link href={`${routes.catalog}?type=demand`} className="btn btn-secondary">
+                                    {t('catalog.few_offers_requests')}
+                                </Link>
+                                <Link href={routes.listingCreate} className="btn btn-primary">
+                                    {t('catalog.few_offers_post')}
+                                </Link>
+                            </div>
+                        </div>
+                    ) : feed === undefined || feed.data.length === 0 ? (
                         <div className="card empty">
                             <div className="empty-icon">
                                 {isTenders

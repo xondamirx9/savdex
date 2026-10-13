@@ -2,7 +2,6 @@ import { router, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import {
     FileUser,
-    AlertTriangle,
     Building2,
     ChevronDown,
     CircleUserRound,
@@ -216,56 +215,6 @@ function NavDropdown({ item, active }: { item: MenuItem; active: boolean }) {
                     document.body,
                 )}
         </span>
-    );
-}
-
-/**
- * Полоса тестового режима.
- *
- * Закрывается крестиком и запоминает это в localStorage: полоса —
- * предупреждение, а не украшение, и показывать её человеку, который
- * уже прочитал и закрыл, значит приучать не читать предупреждения.
- */
-const TOPBAR_KEY = 'savdex.topbar.closed';
-
-function TopBar() {
-    const [closed, setClosed] = useState(true);
-
-    // Начальное состояние читается в эффекте: при SSR localStorage нет,
-    // и чтение в useState уронило бы отрисовку на сервере
-    useEffect(() => {
-        setClosed(localStorage.getItem(TOPBAR_KEY) === '1');
-    }, []);
-
-    if (closed) return null;
-
-    return (
-        <div className="topbar" role="status">
-            <div className="container topbar-inner">
-                <div className="topbar-text">
-                    <b>
-                        <AlertTriangle aria-hidden className="size-4" />
-                        {t('topbar.title')}
-                    </b>
-                    <span className="topbar-note">{t('topbar.text')}</span>
-                </div>
-                <div className="topbar-actions">
-                    <Link href={routes.about} className="topbar-more">
-                        {t('topbar.more')}
-                    </Link>
-                    <button
-                        className="topbar-close"
-                        aria-label={t('topbar.close')}
-                        onClick={() => {
-                            localStorage.setItem(TOPBAR_KEY, '1');
-                            setClosed(true);
-                        }}
-                    >
-                        <X aria-hidden className="size-4" />
-                    </button>
-                </div>
-            </div>
-        </div>
     );
 }
 
@@ -803,10 +752,10 @@ export function SiteHeader() {
     const headerRef = useRef<HTMLElement>(null);
     /*
      * Верхний край мобильного меню — под нижним краем шапки.
-     * Высота шапки плавает: полоса тестового режима закрывается,
-     * строка поиска на телефоне добавляется, — поэтому измеряем,
-     * а не зашиваем константу. Иначе меню открывалось бы под шапкой
-     * и первый пункт был бы скрыт и некликабелен.
+     * Высота шапки плавает: на телефоне к ней добавляется строка
+     * поиска, — поэтому измеряем, а не зашиваем константу. Иначе
+     * меню открывалось бы под шапкой и первый пункт был бы скрыт
+     * и некликабелен.
      */
     const [menuTop, setMenuTop] = useState<number | undefined>(undefined);
 
@@ -868,8 +817,6 @@ export function SiteHeader() {
 
     return (
         <>
-            <TopBar />
-
             <header className="hd" ref={headerRef}>
                 <div className="container">
                     <div className="hd-main">

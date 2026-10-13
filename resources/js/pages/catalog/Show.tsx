@@ -17,11 +17,13 @@ import {
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { formatNumber } from '@/components/cabinet';
-import { type Money, sellerPrice, shownPrice } from '@/components/ProductCard';
+import { type Money, priceLabel, sellerPrice, sellerPriceLabel, shownPrice } from '@/components/ProductCard';
 import { Gallery } from '@/components/Gallery';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { cn } from '@/lib/cn';
 import { unitLabel } from '@/lib/units';
+import { track, unlockState } from '@/lib/analytics';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -40,10 +42,14 @@ interface Listing {
     type: 'supply' | 'demand';
     category: string | null;
     price: number | null;
+    /** Цена «от» и диапазон «price – price_to» */
+    price_from: boolean;
+    price_to: number | null;
     bundle_price: number | null;
     currency: string;
     /** Приблизительно в валюте языка; null — пересчитывать нечего */
     converted: Money | null;
+    converted_to: Money | null;
     bundle_converted: Money | null;
     unit: string | null;
     negotiable: boolean;
@@ -104,6 +110,8 @@ export default function ListingShow({
         country: string | null;
         /** Заявка площадки: продавцом подписан SavdEx, контактов нет */
         platform?: boolean;
+        /** Регистрация без кода из письма — метка «Не подтверждено» */
+        unconfirmed?: boolean;
     };
     contacts: Contact[];
     unlocked: boolean;
@@ -122,7 +130,7 @@ export default function ListingShow({
 
     const price = !priced
         ? t('catalog.price_negotiable')
-        : `${shownPrice(listing.price!, listing.currency, listing.converted)}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
+        : `${priceLabel({ ...listing, price: listing.price! })}${listing.unit ? `/${unitLabel(listing.unit)}` : ''}`;
 
     return (
         <PublicLayout
@@ -172,6 +180,7 @@ export default function ListingShow({
                                     <span key={b} className="badge badge-top">{b}</span>
                                 ))}
                                 {listing.promoted && <span className="badge badge-promoted">{t('catalog.badge_promoted')}</span>}
+                                {company.unconfirmed && <UnconfirmedBadge />}
                             </div>
 
                             <h1 className="t-h1">{listing.title}</h1>
@@ -187,7 +196,7 @@ export default function ListingShow({
                             {/* Пересчёт приблизителен — цена продавца
                                 остаётся рядом: договор заключают по ней */}
                             {priced && listing.converted && (
-                                <p className="t-sm muted mt-8">{sellerPrice(listing.price!, listing.currency, listing.converted)}</p>
+                                <p className="t-sm muted mt-8">{sellerPriceLabel({ ...listing, price: listing.price! })}</p>
                             )}
 
                             {/* Цена комплекта — под ценой единицы; при
@@ -326,6 +335,12 @@ export default function ListingShow({
                                 </p>
                             )}
 
+                            {company.unconfirmed && (
+                                <p className="t-sm" style={{ marginBottom: 12 }}>
+                                    <UnconfirmedBadge />
+                                </p>
+                            )}
+
                             {company.verification_level >= 2 && (
                                 <p className="t-sm" style={{ color: 'var(--success)', marginBottom: 12 }}>
                                     <BadgeCheck aria-hidden className="inline size-4" /> {t('listing.company_verified')}
@@ -370,11 +385,21 @@ export default function ListingShow({
                             {lockedCount > 0 && (
                                 <>
                                     {auth?.user ? (
-                                        <button className="btn btn-primary btn-block mt-16" onClick={() => setUnlockOpen(true)}>
+                                        <button
+                                            className="btn btn-primary btn-block mt-16"
+                                            onClick={() => {
+                                                track('contact_unlock_clicked', { state: unlockState(auth) });
+                                                setUnlockOpen(true);
+                                            }}
+                                        >
                                             <Lock aria-hidden className="size-4" /> {t('listing.show_contacts')}
                                         </button>
                                     ) : (
-                                        <Link href={routes.register} className="btn btn-primary btn-block mt-16">
+                                        <Link
+                                            href={routes.register}
+                                            className="btn btn-primary btn-block mt-16"
+                                            onClick={() => track('contact_unlock_clicked', { state: 'guest' })}
+                                        >
                                             <Lock aria-hidden className="size-4" /> {t('listing.show_contacts')}
                                         </Link>
                                     )}

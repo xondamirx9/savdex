@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Send, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { routes } from '@/routes';
 import { SelectField } from '@/components/SelectField';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
+import type { SharedProps } from '@/types';
 
 interface Notification {
     event: string;
@@ -51,6 +52,9 @@ const LOCALES = [
 ];
 
 export default function Settings({ profile, notifications, telegram, security, is_owner, categories, feed }: Props) {
+    // У физлица и фрилансера всё о себе — в «Моём профиле» и меняется там
+    // когда угодно: второй блок «Данные компании» с полями организации им не нужен
+    const person = Boolean(usePage<SharedProps>().props.auth?.company?.person);
     const [rows, setRows] = useState(notifications);
     const [chosen, setChosen] = useState(categories?.selected ?? []);
     const [feedOn, setFeedOn] = useState(feed);
@@ -194,7 +198,7 @@ export default function Settings({ profile, notifications, telegram, security, i
 
                     {/* Данные компании меняет только владелец: сотрудник
                         видит их на странице «Компания» */}
-                    {is_owner && <CompanyInfoPanel />}
+                    {is_owner && !person && <CompanyInfoPanel />}
                 </div>
 
                 <div className="stack-16">

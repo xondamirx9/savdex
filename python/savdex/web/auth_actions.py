@@ -27,7 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, locales, throttle
+from savdex.web import analytics, eloquent, guard, locales, throttle
 from savdex.web.actions import form
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -318,7 +318,8 @@ def register(request: HttpRequest) -> HttpResponse:
     savdex/web/register_code.py.
     """
     from savdex.web import password_rule
-    from savdex.web.company_profile_actions import _tin, _unique_tin
+    from savdex.web.company_profile_actions import _country_code, _country_id, _tin, _unique_tin
+    from savdex.web.resume_actions import _exists
     from savdex.web.resumes import SERVICE_SECTIONS
 
     ctx = action(request, auth=False, throttle=20, throttle_minutes=10, throttle_prefix="register")
@@ -327,9 +328,9 @@ def register(request: HttpRequest) -> HttpResponse:
         return refused
 
     store = _session(ctx)
-    verified = store.get(SESSION_VERIFIED)
+    verified, skipped = registration_email(store)
 
-    if not (isinstance(verified, str) and verified != "" and verified == store.get(SESSION_EMAIL)):
+    if verified is None:
         return _to(ctx, "/register")
 
     data = input_of(request)
@@ -343,7 +344,7 @@ def register(request: HttpRequest) -> HttpResponse:
     data["company_name"] = _php_string(data.get("company_name")).strip(" \t\n\r\0\x0b")
 
     for key in ("tin", "pinfl"):
-        number = re.sub(r"[\s\-]+", "", _php_string(data.get(key)))
+        number = re.sub(r"[\s\-]+", "", _php_string(data.get(key))).upper()
         data[key] = number if number not in ("", "0") else None
 
     custom = {
@@ -362,6 +363,9 @@ def register(request: HttpRequest) -> HttpResponse:
         "company_name.required": ctx.t("messages.company.name_required"),
         "company_name.min": ctx.t("messages.company.name_required"),
         "tin.unique": ctx.t("messages.company.tin_unique"),
+        "country_id.required": ctx.t("messages.company.country_required"),
+        "city_id.required": ctx.t("messages.company.city_required"),
+        "city_id.city_country": ctx.t("messages.company.city_country"),
         "categories.required": ctx.t("messages.register.categories_required"),
         "categories.min": ctx.t("messages.register.categories_required"),
         "categories.max": ctx.t("messages.company.categories_max"),
@@ -382,23 +386,53 @@ def register(request: HttpRequest) -> HttpResponse:
     }
 
     # Набор полей — по тому, кто регистрируется; остальное — exclude
+    # Страна — у всех и до номера: номер проверяется по правилам её страны
+    # (ТЗ-02). Раньше физлицо и фрилансер страну не выбирали и получали
+    # узбекский ПИНФЛ — иностранный фрилансер не мог зарегистрироваться
+    rules["country_id"] = ["required", _exists("countries")]
+
+    # Код пропущен — страна та, что на первом шаге: без кода пускают только
+    # страны с галочкой «Регистрация без кода», сменить её здесь нельзя
+    if skipped:
+        data["country_id"] = store.get(SESSION_COUNTRY)
+
+    country = _country_code(data, None)
+
+    # Физлицо и фрилансер: город — сразу в анкете (у юрлица — на шаге
+    # компании). Без него объявления человека создавались без города и не
+    # находились фильтром по городу. «Другой город» — запись справочника
+    if not legal:
+        from savdex.web.city_choice import city_in_country, resolve_other
+
+        resolve_other(data)
+        rules["city_id"] = ["required", _exists("cities"), city_in_country(data)]
+
     if legal:
         rules["company_name"] = ["required", "string", "min:2", "max:190"]
         rules["tin"] = [
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, "uz", tin_messages),
-            _unique_tin(None),
+            _tin(ctx, _country_code(data, None), tin_messages),
+            _unique_tin(None, _country_id(data, None), ctx=ctx),
         ]
         rules["categories"] = ["required", "array", "min:1", "max:5"]
         rules["categories.*"] = ["integer", _top_category()]
-    else:
+    elif country in (None, "uz"):
         rules["pinfl"] = [
             "required" if freelancer else "nullable",
             "string",
             _pinfl(ctx, tin_messages),
             _unique_tin(None),
+        ]
+    else:
+        # Не Узбекистан: ПИНФЛ там нет — свой номер по правилам страны, по желанию
+        rules["pinfl"] = [
+            "nullable",
+            "string",
+            "max:20",
+            _tin(ctx, country, tin_messages, person=True),
+            _unique_tin(None, _country_id(data, None), ctx=ctx),
         ]
 
     if freelancer:
@@ -418,9 +452,12 @@ def register(request: HttpRequest) -> HttpResponse:
             errors["password"] = merged
 
     # Текст ошибки правил Tin и Pinfl выбирает само правило
-    for key, rule in (("tin", "validation.tin"), ("pinfl", "validation.pinfl")):
+    for key in ("tin", "pinfl"):
         if key in errors and tin_messages:
-            errors[key] = [tin_messages[0] if m == rule else m for m in errors[key]]
+            errors[key] = [
+                tin_messages[0] if m in ("validation.tin", "validation.pinfl") else m
+                for m in errors[key]
+            ]
 
     errors = _ordered(errors, list(rules))
 
@@ -480,8 +517,10 @@ def register(request: HttpRequest) -> HttpResponse:
             "company_role": "owner",
             "updated_at": now,
             "created_at": now,
-            # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified)
-            "email_verified_at": now,
+            # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified);
+            # код пропущен — подтвердит позже, а пока «Не подтверждено»
+            "email_verified_at": None if skipped else now,
+            "email_code_skipped": skipped,
         }
 
         columns = list(row)
@@ -494,32 +533,83 @@ def register(request: HttpRequest) -> HttpResponse:
             )
             row["id"] = cursor.fetchone()[0]
 
+        if skipped:
+            with allowed_writes("companies"), connection.cursor() as cursor:
+                cursor.execute(
+                    "update companies set email_unconfirmed = true where id = %s", [company_id]
+                )
+
     if counted:
         throttle.hit(limit, 3600)
 
     user = _row(row["id"])
     store.forget(SESSION_EMAIL)
     store.forget(SESSION_VERIFIED)
+    store.forget(SESSION_SKIPPED)
+    store.forget(SESSION_COUNTRY)
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
+    analytics.queue(ctx, "sign_up_completed", {"legal_form": kind})
 
     # Второй шаг — данные компании — только у юрлица; остальным —
     # туда, куда шли (оплата тарифа), иначе в кабинет
     if legal:
         return _to(ctx, "/onboarding/company")
 
-    flash(ctx, "success", ctx.t("messages.company.created_onboarding"))
+    # У человека не компания, а профиль; почта уже подтверждена кодом (или
+    # код пропущен — об этом напомнит плашка кабинета)
+    flash(ctx, "success", ctx.t("messages.company.person_created"))
 
     return _intended(ctx, "/cabinet")
 
 
-#: RegisteredUserController::MAX_PER_HOUR: созданные аккаунты, не отправки формы
-MAX_REGISTRATIONS_PER_HOUR = 5
+#: Созданные аккаунты с одного адреса сети в час (не отправки формы). Было
+#: 5: китайские клиенты выходят через общие VPN, а менеджер заводит
+#: нескольких клиентов из одного офиса — лимит кончался на чужих регистрациях
+MAX_REGISTRATIONS_PER_HOUR = 20
 
 #: RegisteredUserController::SESSION_EMAIL и SESSION_VERIFIED
 SESSION_EMAIL = "register.email"
 SESSION_VERIFIED = "register.verified_email"
+
+#: Страна с первого шага и адрес, для которого код пропущен (страна с
+#: галочкой «Регистрация без кода» — countries.email_code_optional)
+SESSION_COUNTRY = "register.country_id"
+SESSION_SKIPPED = "register.skipped_email"
+
+
+def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
+    """
+    Адрес, с которым открыта анкета (третий шаг), и пропущен ли код. Код
+    верный — (адрес, False); пропущен — (адрес, True); иначе (None, False).
+    """
+    email = store.get(SESSION_EMAIL)
+
+    if not (isinstance(email, str) and email != ""):
+        return None, False
+
+    if store.get(SESSION_VERIFIED) == email:
+        return email, False
+
+    if store.get(SESSION_SKIPPED) == email and code_optional(store.get(SESSION_COUNTRY)):
+        return email, True
+
+    return None, False
+
+
+def code_optional(country_id: Any) -> bool:  # noqa: ANN401
+    """Страна с галочкой «Регистрация без кода»."""
+    try:
+        key = int(str(country_id))
+    except (TypeError, ValueError):
+        return False
+
+    from savdex.web.cabinet import _rows
+
+    return bool(
+        _rows("select 1 from countries where id = %s and email_code_optional and is_active", [key])
+    )
 
 
 def _account_type(value: Any) -> str:  # noqa: ANN401
@@ -581,7 +671,7 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     RegisteredUserController::companyData и Company::create: профиль
     заводится вместе с человеком; у юрлица — и выбранные разделы каталога.
     """
-    from savdex.web.company_profile_actions import CASTS, _search_text, _slug
+    from savdex.web.company_profile_actions import CASTS, _search_text, slug_fields
     from savdex.web.it_tasks import types_under
 
     row: dict[str, Any] = {"legal_form": kind, "status": "active", "primary_role": "both"}
@@ -589,7 +679,17 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
     if kind == "legal":
         row.update(name=data["company_name"], tin=data.get("tin"))
     else:
-        row.update(name=data["name"], tin=data.get("pinfl"))
+        # Телефон из анкеты — сразу в профиль человека («Мой профиль»)
+        row.update(
+            name=data["name"],
+            tin=data.get("pinfl"),
+            phone=_php_string(data.get("phone")).strip() or None,
+        )
+
+    row["country_id"] = int(data["country_id"])
+
+    if kind != "legal":
+        row["city_id"] = int(data["city_id"])
 
     if kind == "freelancer":
         # $base += [...]: primary_role уже есть — остаётся «both»
@@ -599,7 +699,7 @@ def _register_company(ctx: Context, data: dict[str, Any], kind: str) -> int:
         )
 
     row.update(_search_text(row))
-    row["slug"] = _slug(str(row["name"]))
+    row.update(slug_fields(str(row["name"])))
     now = _stamp(eloquent.now())
     row.update(updated_at=now, created_at=now)
     columns = list(row)

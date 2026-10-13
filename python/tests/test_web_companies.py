@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 
@@ -151,15 +152,19 @@ def test_без_фильтров_пустой_список(сайт):
 def test_карточка(сайт):
     """Заполненность профиля, сайт со схемой, тип или правовая форма."""
     [шестая] = компании_на(сайт, "/companies?q=300000006")["companies"]["data"]
-    [седьмая] = компании_на(сайт, "/companies?q=300000007")["companies"]["data"]
+    # ИП (физлицо): по ПИНФЛ не ищется — только по имени
+    assert компании_на(сайт, "/companies?q=300000007")["companies"]["data"] == []
+    [седьмая] = компании_на(сайт, "/companies?q=" + quote("Цемент 7"))["companies"]["data"]
     [двадцать_четвёртая] = компании_на(сайт, "/companies?q=300000024")["companies"]["data"]
 
     # Название, тип, ИНН из десяти пунктов
     assert шестая["trust"] == 30
     assert шестая["website"] == "https://savdo6.uz"
     assert (шестая["type"], шестая["country"], шестая["city"]) == ("distributor", "uz", None)
-    # Без типа, но ИП; город и описание длиннее 100 знаков
-    assert седьмая["trust"] == 50
+    # ИП — свои пункты: имя, город, ПИНФЛ, описание из шести (без телефона
+    # и логотипа); сам ПИНФЛ наружу не отдаётся
+    assert седьмая["trust"] == 67
+    assert седьмая["tin"] is None and седьмая["person"] is True
     assert седьмая["type"] is None and седьмая["website"] is None
     assert седьмая["city"]
     # Документ одобрен — тоже пункт; адрес со схемой — как есть
