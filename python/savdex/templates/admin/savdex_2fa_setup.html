@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% comment %}
+  «Вход по коду» (savdex/adminsecurity.py): второй фактор входа в админку.
+  QR-код рисует qrcode-generator (MIT, тот же, что у визиток на сайте) —
+  в браузере, ключ никуда не уходит.
+{% endcomment %}
+{% block content %}
+<div id="content-main" style="max-width:640px">
+  {% if done %}<ul class="messagelist"><li class="success">{{ done }}</li></ul>{% endif %}
+  {% if error %}<p class="errornote">{{ error }}</p>{% endif %}
+
+  {% if enrolled %}
+    <p>Вход по коду <b>подключён</b>: после пароля админка спрашивает шестизначный код из приложения.</p>
+    {% if required %}
+      <p>На площадке вход по коду обязателен — отключить его нельзя. Сменить телефон: попросите суперадминистратора снять код и подключите заново.</p>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="disable">
+        <p>
+          <label for="id_code">Чтобы отключить, введите текущий код:</label><br>
+          <input type="text" name="code" id="id_code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required>
+          <input type="submit" value="Отключить вход по коду">
+        </p>
+      </form>
+    {% endif %}
+  {% else %}
+    {% if required %}<p class="errornote">На площадке вход по коду обязателен: подключите его, чтобы продолжить работу.</p>{% endif %}
+    <p>Пароль могут подсмотреть или подобрать — код из вашего телефона нет. Подключите приложение-аутентификатор (Google Authenticator, Яндекс Ключ, Microsoft Authenticator, 1Password).</p>
+    <ol>
+      <li>Откройте приложение и отсканируйте QR-код.</li>
+      <li>Не получается сканировать — добавьте вручную ключ <code style="user-select:all">{{ secret_groups }}</code></li>
+      <li>Введите шесть цифр, которые покажет приложение.</li>
+    </ol>
+    <div id="sx-totp-qr" data-uri="{{ uri }}" style="background:#fff;display:inline-block;padding:12px;border-radius:8px"></div>
+    <form method="post" style="margin-top:16px">
+      {% csrf_token %}
+      <input type="hidden" name="act" value="confirm">
+      <p>
+        <label for="id_code">Код из приложения:</label><br>
+        <input type="text" name="code" id="id_code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required autofocus>
+        <input type="submit" class="default" value="Подключить">
+      </p>
+    </form>
+    <script src="{% static 'savdex/qrcode.js' %}"></script>
+    <script>
+      (function () {
+        var box = document.getElementById('sx-totp-qr');
+        var qr = qrcode(0, 'M');
+        qr.addData(box.dataset.uri);
+        qr.make();
+        box.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 0 });
+      })();
+    </script>
+  {% endif %}
+</div>
+{% endblock %}

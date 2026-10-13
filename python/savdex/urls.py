@@ -15,7 +15,7 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.urls import path, re_path
 
-from savdex import adminlogin, adminpanel, adminsite, visitor
+from savdex import adminlogin, adminpanel, adminsecurity, adminsite, visitor
 from savdex.crm import unsubscribe as prospect_unsubscribe
 from savdex.data.meyos import feed as meyos_feed
 from savdex.web import (
@@ -86,6 +86,10 @@ urlpatterns = [
     # Вход и выход админки (шаг 67): раньше разделов Django — свои виды,
     # а не django.contrib.auth; без посредника входа (AdminMiddleware)
     path("py/admin/login/", adminlogin.login_page, name="savdex_admin_login"),
+    # Второй фактор (savdex/adminsecurity.py): ввод кода — до входа, мимо
+    # посредника; подключение — вошедшему, через него
+    path("py/admin/2fa/verify/", adminsecurity.verify, name="savdex_admin_2fa_verify"),
+    path("py/admin/2fa/setup/", adminsecurity.setup, name="savdex_admin_2fa_setup"),
     # Бывшая панель Filament (этап 8): /admin… — в админку Django,
     # служебные адреса Livewire и Filament — 404
     re_path(r"^admin(?:/(?P<rest>.*))?$", fallback.admin, name="filament.redirect"),

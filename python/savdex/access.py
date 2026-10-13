@@ -222,6 +222,8 @@ class Admin:
     #: Отпечаток пароля для куки входа (bridge.stamp): сменили или
     #: сбросили пароль — прежние входы в админку недействительны
     stamp: str = ""
+    #: Подключён второй фактор (savdex/twofactor.py): вход — только с кодом
+    two_factor: bool = False
 
     @property
     def is_superadmin(self) -> bool:

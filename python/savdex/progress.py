@@ -127,6 +127,7 @@ STAGES: tuple[Stage, ...] = (
             "users",
             "password_reset_tokens",
             "login_attempts",
+            "admin_two_factor",
             "companies",
             "company_attributes",
             "company_category",
