@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { FlashToast } from '@/components/FlashToast';
+import { MaintenanceOverlay } from '@/components/MaintenanceOverlay';
 import { MobileTabBar } from '@/components/MobileTabBar';
 import { SiteHeader } from '@/components/SiteHeader';
 import { routes } from '@/routes';
@@ -192,6 +193,7 @@ export function CabinetLayout({
                             {/* Итог действия — плашкой у края экрана (FlashToast):
                                 сверху страницы его не видно после preserveScroll */}
                             <FlashToast />
+                            <MaintenanceOverlay />
 
                             {/* Заблокированная компания невидима на витрине,
                                 хотя объявления в кабинете значатся активными.

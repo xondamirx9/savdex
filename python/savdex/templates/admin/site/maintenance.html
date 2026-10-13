@@ -1,0 +1,102 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Технические работы (savdex/site/maintenance_view.py): заставка на весь
+  экран сайта до заданного времени. Включить на N минут, до своего
+  времени, продлить на 30 минут, снять.
+{% endcomment %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Начало</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .sx-maint { max-width: 760px; }
+  .sx-maint .module { padding: 20px 24px; margin-bottom: 20px; }
+  #content .sx-maint h2 { margin: 0 0 8px; padding: 0; background: none; color: var(--sx-text-strong); font-size: 16px; text-transform: none; }
+  .sx-maint p { margin: 0 0 10px; color: var(--sx-text); }
+  .sx-maint .sx-muted { color: var(--sx-muted); font-size: 13px; }
+  .sx-maint-state { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--sx-control-radius); border: 1px solid var(--sx-border); background: var(--sx-surface-2); }
+  .sx-maint-state.is-on { border-color: rgba(245, 158, 11, .45); background: rgba(245, 158, 11, .10); }
+  .sx-maint-dot { flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 4px rgba(34, 197, 94, .18); }
+  .is-on .sx-maint-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .22); }
+  .sx-maint-state b { display: block; font-size: 15px; color: var(--sx-text-strong); }
+  .sx-maint-state span { font-size: 13px; color: var(--sx-muted); }
+  .sx-maint-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .sx-maint-actions form { margin: 0; }
+  .sx-maint-until { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+  .sx-maint-until input[type="datetime-local"] { min-width: 220px; }
+  .sx-maint .button.sx-danger { background: var(--sx-danger, #dc2626); }
+</style>
+{% endblock %}
+{% block content %}
+<div id="content-main" class="sx-maint">
+  <div class="module">
+    <div class="sx-maint-state{% if active %} is-on{% endif %}">
+      <span class="sx-maint-dot" aria-hidden="true"></span>
+      <div>
+        {% if active %}
+          <b>Сайт закрыт заставкой до {{ until }} по Ташкенту</b>
+          <span>Осталось около {{ left }} мин. В срок заставка пропадёт сама.</span>
+        {% else %}
+          <b>Сайт работает</b>
+          <span>Заставки нет — посетители пользуются сайтом как обычно.</span>
+        {% endif %}
+      </div>
+    </div>
+    <p class="sx-muted" style="margin-top: 12px">
+      Заставка «Сайт временно не работает» с обратным отсчётом закрывает все страницы сайта, кабинет, вход и мини-сайты компаний. Админка не закрывается — работы отсюда можно продлить или снять в любой момент.
+    </p>
+  </div>
+
+  {% if can_edit %}
+  <div class="module">
+    <h2>{% if active %}Начать заново{% else %}Включить{% endif %}</h2>
+    <p>Отсчёт пойдёт от текущего момента.</p>
+    <div class="sx-maint-actions">
+      {% for minutes in presets %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="minutes">
+        <input type="hidden" name="minutes" value="{{ minutes }}">
+        <button type="submit" class="button">
+          {% if minutes == 120 %}На 2 часа{% else %}На {{ minutes }} мин{% endif %}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+
+    <form method="post" class="sx-maint-until">
+      {% csrf_token %}
+      <input type="hidden" name="act" value="until">
+      <label for="sx-maint-until">Или до (по Ташкенту):</label>
+      <input type="datetime-local" id="sx-maint-until" name="until" value="{{ default_until }}" required>
+      <button type="submit" class="button">Включить до этого времени</button>
+    </form>
+  </div>
+
+  {% if active %}
+  <div class="module">
+    <h2>Работы идут</h2>
+    <div class="sx-maint-actions">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="extend">
+        <button type="submit" class="button">Продлить на 30 мин</button>
+      </form>
+      <form method="post" onsubmit="return confirm('Снять заставку и открыть сайт?')">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="stop">
+        <button type="submit" class="button sx-danger">Снять сейчас — открыть сайт</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="module">
+    <p class="sx-muted">Включать и снимать заставку может только тот, у кого есть право изменять раздел «Технические работы».</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -117,6 +117,11 @@ export interface SharedProps extends InertiaPageProps {
      * из репозитория.
      */
     brandLogo: string;
+    /**
+     * Технические работы: until — время окончания (UTC, ISO). Задаётся
+     * в админке настройкой maintenance_until; null — работ нет.
+     */
+    maintenance?: { until: string } | null;
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];

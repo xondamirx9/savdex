@@ -233,6 +233,7 @@ class SavdexAdminSite(admin.AdminSite):
         from django.urls import path
 
         from savdex.data import meyos
+        from savdex.site import maintenance_view
         from savdex.system import exports_view
 
         # «Выгрузка в Excel» (шаг 68) — страница админки, а не раздел
@@ -247,6 +248,8 @@ class SavdexAdminSite(admin.AdminSite):
             # Ссылка для MEYOS — страница, а не раздел модели: настройка
             # в двух строках settings и файл по запросу
             path("integrations/meyos/", self.admin_view(meyos.view), name="integrations_meyos"),
+            # Технические работы — заставка на сайте по одной настройке
+            path("maintenance/", self.admin_view(maintenance_view.view), name="site_maintenance"),
         ]
 
         # Смена пароля — на сайте: у Django своих паролей нет
@@ -325,7 +328,43 @@ class SavdexAdminSite(admin.AdminSite):
 
         # С приложением (app_index проверяет, есть ли что показать) — его
         # разделы как есть; меню слева и главная — группы MENU_GROUPS
-        return apps if app_label else _grouped(apps, request.path)
+        if app_label:
+            return apps
+
+        groups = _grouped(apps, request.path)
+        _add_maintenance(groups, request)
+
+        return groups
+
+
+def _add_maintenance(groups: list[dict[str, Any]], request: HttpRequest) -> None:
+    """
+    «Технические работы» — страница, а не раздел модели: в меню её
+    вставляем сами, в группу «Система» (у модератора её нет — заводим).
+    """
+    from savdex.site.maintenance_view import menu_entry
+
+    entry = menu_entry(request)
+
+    if entry is None:
+        return
+
+    current = request.path.startswith(entry["admin_url"])
+    system = next((g for g in groups if g["app_label"] == "system"), None)
+
+    if system is None:
+        system = {
+            "name": "Система",
+            "app_label": "system",
+            "app_url": "",
+            "has_module_perms": True,
+            "current": False,
+            "models": [],
+        }
+        groups.append(system)
+
+    system["models"].append(entry)
+    system["current"] = system["current"] or current
 
 
 #: Меню слева: разделы по работе, а не по приложениям Django — иначе

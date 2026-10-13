@@ -91,6 +91,9 @@ def люди() -> dict[str, int]:
                     "catalogs.create",
                     "catalogs.edit",
                     "broadcasts.view",
+                    "maintenance.view",
+                    "maintenance.create",
+                    "maintenance.edit",
                 ]
             }
         ),

@@ -4,6 +4,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { money } from '@/components/ProductCard';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { unitLabel } from '@/lib/units';
+import { MaintenanceOverlay } from '@/components/MaintenanceOverlay';
 
 /**
  * Мини-сайт компании на acme.savdex.site.
@@ -136,6 +137,8 @@ export default function SiteShow(props: Props) {
 
     return (
         <div className={`ms-root ms-tpl-${theme.template} ms-mode-${theme.mode}`} style={vars as CSSProperties}>
+            {/* В предпросмотре редактора заставку показывает сам кабинет */}
+            {!preview && <MaintenanceOverlay />}
             <header className="ms-header">
                 <div className="ms-container ms-header-row">
                     <a href="#top" className="ms-brand">
