@@ -1883,6 +1883,31 @@ a.sx-row-btn.is-danger:visited {
     box-shadow: inset 0 0 0 1px var(--sx-danger-ring);
 }
 
+/* Главное действие строки — залитая кнопка */
+a.sx-row-btn.is-primary:link,
+a.sx-row-btn.is-primary:visited {
+    background: var(--button-bg);
+    box-shadow: none;
+    color: #fff;
+}
+
+a.sx-row-btn.is-primary:hover {
+    background: var(--button-hover-bg);
+}
+
+/* Счета: номер («SVD-000294») и сумма («476 000 сум») — одной строкой,
+   иначе они ломались по дефису и пробелу */
+.model-payment #result_list .field-invoice b,
+.model-payment #result_list td.field-amount_text {
+    white-space: nowrap;
+}
+
+/* Счета: кнопки под статусом, от левого края колонки */
+.sx-payment-actions {
+    justify-content: flex-start;
+    margin-top: 8px;
+}
+
 .model-subscription #result_list td,
 .model-subscription #result_list th {
     vertical-align: middle;

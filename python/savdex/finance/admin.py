@@ -162,15 +162,23 @@ class PaymentAdmin(SavdexModelAdmin):
         who = obj.confirmed_by.name if obj.confirmed_by is not None else ""
         buttons = ""
 
+        # Кнопки — строкой под статусом, каждая не шире своей подписи.
+        # Были обычные .button подряд в узкой колонке: подпись ломалась
+        # внутри кнопки, и «Отменить счёт» налезал на «Деньги пришли»
         if obj.status == "pending" and self._can_edit:
             buttons = format_html(
-                '<br><a class="button" href="{}">Деньги пришли</a> '
-                '<a class="button" href="{}">Отменить счёт</a>',
+                '<span class="sx-row-actions sx-payment-actions">'
+                '<a class="sx-row-btn is-primary" href="{}">Деньги пришли</a>'
+                '<a class="sx-row-btn is-danger" href="{}">Отменить счёт</a></span>',
                 reverse("savdex_admin:finance_payment_confirm", args=[obj.pk]),
                 reverse("savdex_admin:finance_payment_cancel", args=[obj.pk]),
             )
 
-        return format_html("{}<br><small>{}</small>{}", badge, who, buttons)
+        # Кто подтвердил — только если есть: пустая строка давала зазор
+        if who:
+            return format_html("{}<br><small>{}</small>{}", badge, who, buttons)
+
+        return format_html("{}{}", badge, buttons)
 
     @admin.display(description="оплачен", ordering="paid_at")
     def paid(self, obj: Payment) -> str:
