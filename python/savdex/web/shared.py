@@ -18,7 +18,7 @@ import json
 import math
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from functools import cached_property
 from typing import Any
 
@@ -571,6 +571,36 @@ def preferred_language(header: str, available: tuple[str, ...]) -> str | None:
     return targets[0]
 
 
+#: Ташкент — UTC+5 круглый год, без перехода на летнее время
+_TASHKENT = timezone(timedelta(hours=5))
+_MAINTENANCE_FORMATS = ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M")
+
+
+def maintenance(values: dict[str, Any], now: datetime | None = None) -> dict[str, str] | None:
+    """
+    Технические работы: настройка maintenance_until — время окончания
+    по Ташкенту. Пока оно не наступило, сайт закрыт заставкой с отсчётом
+    (MaintenanceOverlay). Пусто, не время или уже прошло — заставки нет.
+    """
+    text = setting(values, "maintenance_until").strip()
+
+    if not text:
+        return None
+
+    for pattern in _MAINTENANCE_FORMATS:
+        try:
+            until = datetime.strptime(text, pattern).replace(tzinfo=_TASHKENT)
+        except ValueError:
+            continue
+
+        if until <= (now or datetime.now(UTC)):
+            return None
+
+        return {"until": until.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+    return None
+
+
 def shared(ctx: Context) -> dict[str, Any]:
     """Общие пропсы — ключи и порядок HandleInertiaRequests::share."""
     user = ctx.user
@@ -636,6 +666,7 @@ def shared(ctx: Context) -> dict[str, Any]:
             "legal_tin": setting(values, "legal_tin"),
         },
         "brandLogo": appearance_logo(values),
+        "maintenance": maintenance(values),
         "locale": ctx.locale,
         "translations": None if ctx.inertia else ui.translations(ctx.locale),
         "localeLinks": locale_links(ctx),

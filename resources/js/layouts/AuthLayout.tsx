@@ -6,6 +6,7 @@ import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
 import type { SharedProps } from '@/types';
+import { MaintenanceOverlay } from '@/components/MaintenanceOverlay';
 
 /**
  * Аргументы левой панели. Функция, а не константа модуля: подписи
@@ -52,6 +53,7 @@ export function AuthLayout({
     return (
         <>
             <Head title={title} />
+            <MaintenanceOverlay />
             <a href="#form" className="skip-link">
                 {t('auth.skip_to_form')}
             </a>
