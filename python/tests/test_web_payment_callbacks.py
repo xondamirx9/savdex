@@ -656,6 +656,39 @@ def test_вебхук_повтор(сайт, касса):
     assert база["subscriptions"] == [] and база["notifications"] == []
 
 
+def test_вебхук_по_прежнему_заказу_счёта(сайт, касса):
+    """
+    Оплачена форма первой вкладки, а в счёте уже номер заказа второй:
+    подтверждение находит счёт по журналу заказов и выдаёт тариф.
+    Раньше такой платёж терялся — деньги списаны, тариф не выдан.
+    """
+    касса.режим = "completed"
+
+    def подготовка() -> None:
+        сброс()()
+        sql("update payments set provider = 'uzum', external_id = 'ORD-NEW'")
+        sql(
+            "insert into payment_transactions (payment_id, provider, provider_transaction_id, "
+            "state, currency, created_at, updated_at) values (1, 'uzum', 'ORD-OLD', "
+            "'created', 'UZS', now(), now())"
+        )
+
+    итог = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback",
+        {"orderId": "ORD-OLD", "operationState": "SUCCESS"},
+        подготовка,
+        вход=None,
+    )
+    база = итог["база"]
+
+    assert (итог["ответ"]["status"], ответ(итог)) == ПРИНЯТ
+    assert [p[1] for p in база["payments"]] == ["paid"]
+    assert [t[3] for t in база["transactions"]] == ["performed"]
+    assert база["subscriptions"]
+
+
 def test_вебхук_чужой_адрес(сайт, касса):
     итог = вызов(
         сайт,
