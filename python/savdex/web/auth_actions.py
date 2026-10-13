@@ -260,8 +260,14 @@ def logout(request: HttpRequest) -> HttpResponse:
     store.regenerate_token()
 
     # redirect('/') — адрес без языка; LocalizeUrl его не трогает только
-    # для внешних, здесь — хост площадки
-    return _to(ctx, "/")
+    # для внешних, здесь — хост площадки. Вход в админку Django — та же
+    # учётка: выход с сайта закрывает и его
+    from savdex import bridge
+
+    response = _to(ctx, "/")
+    response.delete_cookie(bridge.COOKIE, path=bridge.COOKIE_PATH)
+
+    return response
 
 
 def either(

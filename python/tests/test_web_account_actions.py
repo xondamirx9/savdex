@@ -457,6 +457,46 @@ def test_сброс_пароля(сайт, body, шаг, ошибки_):
         assert база["tokens"] == ([] if шаг.__name__ == "<lambda>" else [(ПОЧТА, True, True)])
 
 
+def _другое_устройство(шаг: Callable[[], None]) -> Callable[[], None]:
+    """Тот же пользователь вошёл ещё и с телефона — своя сессия в базе."""
+
+    def run() -> None:
+        шаг()
+        sql(
+            "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
+            "select 'phone-session', id, '198.51.100.7', 'phone', '', 0 from users "
+            "where email = %s",
+            [ПОЧТА],
+        )
+
+    return run
+
+
+def test_сброс_пароля_выходит_на_других_устройствах(сайт):
+    пользователь()
+    итог = форма(сайт, "/reset-password", _другое_устройство(_токен()), body=ВЕРНЫЙ_СБРОС)
+
+    assert куда(сайт, итог) == (302, "/login")
+    # Пароль сбросили — значит, его могли украсть: прежние входы закрыты
+    assert sql("select id from sessions where id = 'phone-session'") == []
+
+
+def test_смена_пароля_выходит_на_других_устройствах(сайт):
+    uid = пользователь(must_change_password=True)
+    итог = форма(
+        сайт,
+        "/password/change",
+        _другое_устройство(lambda: пользователь(must_change_password=True, password=_хеш(ПАРОЛЬ))),
+        uid=uid,
+        body={"password": НОВЫЙ, "password_confirmation": НОВЫЙ},
+    )
+
+    assert куда(сайт, итог) == (302, "/cabinet")
+    assert sql("select id from sessions where id = 'phone-session'") == []
+    # Сам браузер, сменивший пароль, остаётся во входе
+    assert сессия(итог)["password_hash_web"] == "<хеш>"
+
+
 # ── Подтверждение почты ─────────────────────────────────────────────
 
 

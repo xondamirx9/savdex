@@ -247,6 +247,19 @@ def _read(session_id: str) -> tuple[dict[str, Any], bool]:
     return (data if isinstance(data, dict) else {}), True
 
 
+def end_user_sessions(user_id: int, keep: str | None = None) -> None:
+    """
+    Выйти на всех устройствах: после сброса или смены пароля сессии,
+    открытые со старым паролем, больше не действуют. keep — текущая
+    сессия, которую оставить (смена пароля из кабинета).
+    """
+    with allowed_writes("sessions"), connection.cursor() as cursor:
+        if keep is None:
+            cursor.execute("delete from sessions where user_id = %s", [user_id])
+        else:
+            cursor.execute("delete from sessions where user_id = %s and id <> %s", [user_id, keep])
+
+
 def _live_user(user_id: int) -> tuple[Any, ...] | None:
     """
     Учётка, под которой можно быть вошедшим: не в корзине и не

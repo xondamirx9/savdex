@@ -321,6 +321,8 @@ def test_выход(сайт, admin, remember):
     assert (итог["status"], итог["location"]) == (302, сайт)
     assert not итог["same_sid"] and итог["session"]["user_id"] is None
     assert laravel_session.LOGIN_KEY not in payload and payload["_token"] == "<token>"
+    # Вход в админку Django — та же учётка: его кука тоже стёрта
+    assert "savdex_py_admin" in итог["cookies"]
 
     if remember:
         # Кука «запомнить» забыта, токен в базе — новый

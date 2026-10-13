@@ -219,6 +219,9 @@ class Admin:
     role: str | None
     status: str
     permissions: Mapping[str, Any] = field(default_factory=dict)
+    #: Отпечаток пароля для куки входа (bridge.stamp): сменили или
+    #: сбросили пароль — прежние входы в админку недействительны
+    stamp: str = ""
 
     @property
     def is_superadmin(self) -> bool:
