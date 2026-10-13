@@ -38,7 +38,7 @@ from savdex.web.chat_actions import str_limit
 from savdex.web.company import _file_size, business_card, href
 from savdex.web.directory import logo_url
 from savdex.web.home import _LISTING_COMPANY, Cards, visible_in
-from savdex.web.seo import Seo, php_json
+from savdex.web.seo import Seo
 from savdex.web.shared import Context, _php_round, initials, settings_values
 
 #: SitePage::LISTINGS: мини-сайт — витрина, а не каталог
@@ -426,7 +426,7 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
     ]
     lang = e(ctx.locale.replace("_", "-"))
     body = (
-        f'<script data-page="app" type="application/json">{php_json(page)}</script>'
+        f'<script data-page="app" type="application/json">{inertia.page_json(page)}</script>'
         '<div id="app"></div>'
     )
 
