@@ -43,6 +43,11 @@ ACTIVE, ARCHIVED, REJECTED, NEEDS_CHANGES = "active", "archived", "rejected", "n
 #: возвращённое на исправление идут через мастер с проверкой публикации
 RENEWABLE = (ACTIVE, ARCHIVED, "expired")
 
+#: Снять в архив можно только прошедшее модерацию — бывшее на витрине.
+#: Иначе черновик или отклонённое уходило в архив, а «Продлить» из
+#: архива ставило его на витрину в обход проверки
+ARCHIVABLE = (ACTIVE, "expired")
+
 
 def _now() -> datetime:
     return datetime.now(UTC).replace(microsecond=0, tzinfo=None)
@@ -361,6 +366,16 @@ def archive(request: HttpRequest, listing_id: str) -> HttpResponse:
     if row is None:
         return not_found(ctx)
 
+    if row["status"] == ARCHIVED:
+        flash(ctx, "success", ctx.t("messages.listing.archived"))
+
+        return back(ctx)
+
+    if row["status"] not in ARCHIVABLE:
+        flash(ctx, "error", ctx.t("messages.listing.archive_closed"))
+
+        return back(ctx)
+
     save_listing(ctx, row, {"status": ARCHIVED})
     flash(ctx, "success", ctx.t("messages.listing.archived"))
 
@@ -507,6 +522,15 @@ def bulk(request: HttpRequest) -> HttpResponse:
                 )
 
                 return back(ctx)
+
+    if what == "archive":
+        # Как у одного объявления: черновик, проверка и отклонённое не снимаются
+        listings = [r for r in listings if r["status"] in (*ARCHIVABLE, ARCHIVED)]
+
+        if not listings:
+            flash(ctx, "error", ctx.t("messages.listing.archive_closed"))
+
+            return back(ctx)
 
     for row in listings:
         if what == "renew":

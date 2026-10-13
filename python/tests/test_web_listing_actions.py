@@ -198,6 +198,20 @@ def test_продлить_сверх_лимита(сайт):
     assert итог["база"]["listings"][0][СТАТУС] == "archived"
 
 
+@pytest.mark.parametrize("status", ["draft", "moderation", "rejected", "needs_changes"])
+def test_не_прошедшее_модерацию_в_архив_не_снимается(сайт, status):
+    """
+    Обход модерации: «В архив», затем «Продлить» ставило на витрину
+    черновик или отклонённое. Снять можно только бывшее на витрине.
+    """
+    итог = послать(сайт, "/cabinet/listings/{id}/archive", (status,), uid=продавец())
+
+    assert итог["ответ"]["status"] == 302
+    assert "только активное или истёкшее" in сессия(итог)["error"]
+    assert итог["база"]["listings"][0][СТАТУС] == status
+    assert итог["база"]["journal"] == []
+
+
 @pytest.mark.parametrize("admin", [False, True])
 def test_снять_и_удалить(сайт, admin):
     uid = продавец(admin)
@@ -332,10 +346,11 @@ def test_пачкой(сайт, what, prefix):
         assert [j[1] for j in журнал] == ["updated", "updated"]
         число = "2"
     elif what == "archive":
-        assert [r[СТАТУС] for r in строки] == ["archived"] * 3
-        # Уже снятое не меняется — в журнале его нет
-        assert [j[1] for j in журнал] == ["updated", "updated"]
-        число = "3"
+        # Отклонённое не снимается: из архива «Продлить» вернуло бы его
+        # на витрину в обход модерации. Уже снятое не меняется
+        assert [r[СТАТУС] for r in строки] == ["archived", "archived", "rejected"]
+        assert [j[1] for j in журнал] == ["updated"]
+        число = "2"
     else:
         assert [r[УДАЛЕНО] for r in строки] == [True] * 3
         assert [j[1] for j in журнал] == ["deleted"] * 3
