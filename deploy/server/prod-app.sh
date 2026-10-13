@@ -86,6 +86,10 @@ fi
     # тоже. Кэш в базе не годится: с ним выключены ограничения частоты
     echo "CACHE_STORE=file"
     echo "SAVDEX_CACHE_DIR=/var/data/storage/cache"
+    # Адрес посетителя (savdex/audit.py) — из X-Forwarded-For, который
+    # Caddy пишет сам. Заголовки края сети (CF-Connecting-IP) — у Render,
+    # где перед ним Cloudflare; здесь Cloudflare нет — не читать
+    echo "SAVDEX_CLIENT_IP_HEADERS="
     if [ "$ROLE" = web ]; then
         # Только посетители: фоновые задачи — на машине админки, адреса
         # админки Caddy отдаёт туда же
@@ -135,6 +139,12 @@ if [ "$ROLE" = web ]; then
 $SITE_DOMAIN {
 	import /etc/caddy/auth.caddy
 	encode zstd gzip
+
+	# Cloudflare перед сайтом нет: его заголовки с адресом посетителя
+	# ставить некому — пришедшие убираются. Адрес — в X-Forwarded-For,
+	# его Caddy пишет сам
+	request_header -CF-Connecting-IP
+	request_header -True-Client-IP
 
 	# Админка — на своей машине (частная сеть). Остальное — сайт.
 	# Пока приложение перезапускается (выкладка), его порт закрыт: Caddy
