@@ -514,3 +514,33 @@ def test_добор_после_правки_описания(переводчи�
     [(описания,)] = sql("select description_i18n::text from listings where id = %s", [lid])
 
     assert json.loads(описания) == переводы("Новое описание")
+
+
+def test_добор_после_правки_описания_закупки(переводчик):
+    """Закупка: заголовок переведён, описание после правки — нет: добор переводит описание."""
+    tid = _закупка()
+    sql("delete from content_translations")
+    sql(
+        "update tenders set description = 'Новые условия поставки', title_i18n = %s::json, "
+        "description_i18n = null, status = 'published' where id = %s",
+        [json.dumps(переводы("Закупка для перевода")), tid],
+    )
+    _python(переводчик, "--once")
+    [(описания,)] = sql("select description_i18n::text from tenders where id = %s", [tid])
+
+    assert json.loads(описания) == переводы("Новые условия поставки")
+
+
+def test_добор_после_правки_резюме(переводчик):
+    """Резюме: должность переведена, «о себе» после правки — нет: добор переводит его."""
+    rid = _резюме()
+    sql("delete from content_translations")
+    sql(
+        "update resumes set about = 'Опыт десять лет', title_i18n = %s::json, about_i18n = null, "
+        "jobs = null, jobs_i18n = null, status = 'published', deleted_at = null where id = %s",
+        [json.dumps(переводы("Бухгалтер")), rid],
+    )
+    _python(переводчик, "--once")
+    [(о_себе,)] = sql("select about_i18n::text from resumes where id = %s", [rid])
+
+    assert json.loads(о_себе) == переводы("Опыт десять лет")
