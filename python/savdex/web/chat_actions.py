@@ -188,20 +188,13 @@ def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
 
     now = _stamp(_now())
 
+    # Wallet::firstOrCreate — с датой смены периода, иначе счётчик
+    # откликов бесплатного тарифа не обнулялся никогда
+    from savdex.web import wallet as wallet_store
+
+    wallet_id = wallet_store.ensure(company["id"])["id"]
+
     with allowed_writes("wallets"), connection.cursor() as cursor:
-        # Wallet::firstOrCreate
-        wallets = _rows("select id from wallets where company_id = %s limit 1", [company["id"]])
-
-        if wallets:
-            wallet_id = wallets[0]["id"]
-        else:
-            cursor.execute(
-                "insert into wallets (company_id, created_at, updated_at) values (%s, %s, %s) "
-                "returning id",
-                [company["id"], now, now],
-            )
-            wallet_id = cursor.fetchone()[0]
-
         cursor.execute(
             "update wallets set responses_used_this_period = responses_used_this_period + 1, "
             "updated_at = %s where id = %s and responses_used_this_period < %s",

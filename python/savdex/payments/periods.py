@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from django.db import connection
+
 from savdex.web import eloquent, ui
 from savdex.web.cabinet import _rows, company_plan
 from savdex.web.shared import Context
@@ -198,6 +200,16 @@ def _reset_wallets(now: datetime) -> int:
     единицы продвижения — заново по тарифу (месячная квота, не копятся).
     Кредиты не сгорают — они живут 12 месяцев (§3.2 ТЗ).
     """
+    # Кошелёк без даты смены периода (заведён до тарифа — у бесплатной
+    # компании) не обновлялся никогда: даём ему период от сегодня
+    from savdex.guards import allowed_writes
+
+    with allowed_writes("wallets"), connection.cursor() as cursor:
+        cursor.execute(
+            "update wallets set period_resets_at = %s where period_resets_at is null",
+            [_stamp(now + timedelta(days=30))],
+        )
+
     wallets = _rows(
         "select * from wallets where period_resets_at is not null and period_resets_at <= %s "
         "order by id",

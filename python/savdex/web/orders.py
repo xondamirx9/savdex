@@ -251,19 +251,30 @@ def cancel(
     if payment["status"] != "pending":
         return
 
-    eloquent.save(
-        ctx,
-        "payments",
-        payment,
-        {
-            "status": "failed",
-            "confirmed_by": admin["id"] if admin is not None else None,
-            "admin_note": note,
-        },
-        section="payments",
-        model="Payment",
-        casts={"amount": "int"},
-    )
+    from django.db import transaction
+
+    with transaction.atomic():
+        # Счёт под замком и статус — заново, как при зачислении оплаты:
+        # подтверждение могло прийти между чтением счёта и отменой, и
+        # «отменён» затирал уже оплаченный счёт
+        locked = _rows("select status from payments where id = %s for update", [payment["id"]])
+
+        if not locked or locked[0]["status"] != "pending":
+            return
+
+        eloquent.save(
+            ctx,
+            "payments",
+            payment,
+            {
+                "status": "failed",
+                "confirmed_by": admin["id"] if admin is not None else None,
+                "admin_note": note,
+            },
+            section="payments",
+            model="Payment",
+            casts={"amount": "int"},
+        )
 
     from savdex import product_events
 
@@ -380,6 +391,9 @@ def assign(
 
     ends = subscription["ends_at"]
     period: dict[str, Any] = (
+        # Продление: единицы продвижения нового периода выдаст смена
+        # периода (payments/periods.py, _reset_wallets — квота заново).
+        # Добавленные здесь они начислялись дважды: сейчас и при сбросе
         {}
         if extends
         else {
@@ -387,16 +401,14 @@ def assign(
             "contacts_used_this_period": 0,
             "responses_used_this_period": 0,
             "period_resets_at": ends if ends is not None else now + timedelta(days=30),
+            "promo_units": int(wallet.get("promo_units") or 0) + int(plan["promo_units"] or 0),
         }
     )
     eloquent.save(
         ctx,
         "wallets",
         wallet,
-        {
-            "promo_units": int(wallet.get("promo_units") or 0) + int(plan["promo_units"] or 0),
-            **period,
-        },
+        period,
         section=None,
         model="Wallet",
         casts={
