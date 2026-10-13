@@ -247,6 +247,27 @@ def slug_fields(name: str) -> dict[str, Any]:
     return {"id": key, "slug": f"{base if len(base) >= 3 else 'company'}-{key}"}
 
 
+def not_owner(ctx: Context, company: dict[str, Any] | None) -> HttpResponse | None:
+    """
+    Профиль компании правит только владелец (как реквизиты в
+    company_info_actions): сотруднику — 403. Без компании — можно: так
+    её заводят, и заведший становится владельцем.
+    """
+    assert ctx.user is not None
+
+    if company is None:
+        return None
+
+    role = _rows("select company_role from users where id = %s", [ctx.user["id"]])[0]
+
+    if role["company_role"] == "owner":
+        return None
+
+    from savdex.web.views import error
+
+    return error(ctx, 403)
+
+
 @form("PATCH")
 def update(request: HttpRequest) -> HttpResponse:
     """CompanyProfileController::update."""
@@ -254,6 +275,9 @@ def update(request: HttpRequest) -> HttpResponse:
     assert ctx.user is not None
     data = dict(input_of(request))
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
     year = datetime.now(UTC).year
 
     # «cement.uz» — тоже сайт: протокол дописывается, а «не сайт ###» не проходит
@@ -442,6 +466,9 @@ def _upload(request: HttpRequest, field: str, size: Any, saved: str) -> HttpResp
 
         return back(ctx)
 
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
+
     data = {**input_of(request), **request.FILES.dict()}
     errors = validate(
         data,
@@ -491,6 +518,9 @@ def _remove(request: HttpRequest, field: str, deleted: str) -> HttpResponse:
 
     if company is None:
         return not_found(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
 
     column = f"{field}_path"
     image_store.delete(company[column])
