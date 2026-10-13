@@ -26,7 +26,16 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_session
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, locales, mail, messaging, password_rule, verification
+from savdex.web import (
+    eloquent,
+    guard,
+    locales,
+    mail,
+    messaging,
+    password_rule,
+    session,
+    verification,
+)
 from savdex.web.actions import form
 from savdex.web.auth_actions import _guest, _intended, _row, _session, _to
 from savdex.web.cabinet import _rows
@@ -96,7 +105,10 @@ def force_password(request: HttpRequest) -> HttpResponse:
         casts={"must_change_password": "bool"},
     )
     # AuthenticateSession панели сверяет хеш пароля из сессии — уже новый
-    _session(ctx).put("password_hash_web", fresh_hash)
+    store = _session(ctx)
+    store.put("password_hash_web", fresh_hash)
+    # Другие устройства со старым паролем — прочь, эта сессия остаётся
+    session.end_user_sessions(int(user["id"]), keep=store.id)
 
     if user["is_admin"]:
         # Inertia::location('/admin'): панель — не страница Inertia; адрес — как есть

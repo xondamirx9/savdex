@@ -96,6 +96,40 @@ interface Form {
     show_email: boolean;
 }
 
+/** Подпись поля для сводки ошибок: «Опыт работы · Начало» для jobs.0.start. */
+const ERROR_LABELS: Record<string, string> = {
+    title: 'position',
+    field: 'field',
+    country_id: 'location',
+    city_id: 'location',
+    salary: 'salary_label',
+    currency: 'salary_label',
+    employment: 'employment',
+    schedule: 'schedule',
+    about: 'about',
+    skills: 'skills',
+    contact_name: 'contact_name',
+    contact_phone: 'contact_phone',
+    contact_email: 'contact_email',
+};
+
+const LIST_LABELS: Record<string, [string, string]> = {
+    jobs: ['jobs', 'job_'],
+    education: ['education', 'edu_'],
+    languages: ['languages', 'language_'],
+};
+
+function errorLabel(key: string): string {
+    const [head, , part] = key.split('.');
+    const list = LIST_LABELS[head];
+
+    if (list) {
+        return part ? `${t(`resume.${list[0]}`)} · ${t(`resume.${list[1]}${part}`)}` : t(`resume.${list[0]}`);
+    }
+
+    return t(`resume.${ERROR_LABELS[head] ?? head}`);
+}
+
 const EMPTY_JOB: Job = { company: '', position: '', start: '', end: '', duties: '' };
 const EMPTY_EDUCATION: Education = { institution: '', faculty: '', level: '', year: null };
 const EMPTY_LANGUAGE: Language = { name: '', level: '' };
@@ -110,6 +144,7 @@ const EMPTY_LANGUAGE: Language = { name: '', level: '' };
  */
 export default function Resume({ resume, defaults, options, countries, cities }: Props) {
     const photoInput = useRef<HTMLInputElement>(null);
+    const summary = useRef<HTMLDivElement>(null);
 
     const form = useForm<Form>({
         title: resume?.title ?? '',
@@ -612,12 +647,36 @@ export default function Resume({ resume, defaults, options, countries, cities }:
                 <p className="hint mt-8">{t('resume.contacts_hint')}</p>
             </Panel>
 
+            {/* Сводка ошибок: часть полей (места работы, зарплата, телефон)
+                своих подписей ошибок не имеет — без сводки резюме молча не
+                сохранялось, а на экране ничего не менялось */}
+            {Object.keys(form.errors).length > 0 && (
+                <div ref={summary} role="alert" className="mt-16" style={{ color: 'var(--danger)' }}>
+                    <p className="hint" style={{ color: 'inherit', fontWeight: 600 }}>{t('resume.not_saved')}</p>
+                    <ul className="hint" style={{ color: 'inherit', margin: '4px 0 0', paddingLeft: 18 }}>
+                        {Object.entries(form.errors).map(([key, message]) => (
+                            <li key={key}>
+                                {errorLabel(key)}: {message}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             <div className="row wrap" style={{ gap: 8, marginTop: 24 }}>
                 <button
                     type="button"
                     className="btn btn-primary"
                     disabled={form.processing}
-                    onClick={() => form.patch('/cabinet/resume', { preserveScroll: true })}
+                    onClick={() =>
+                        form.patch('/cabinet/resume', {
+                            preserveScroll: true,
+                            onError: () =>
+                                requestAnimationFrame(() =>
+                                    summary.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+                                ),
+                        })
+                    }
                 >
                     {resume ? t('resume.save') : t('resume.create')}
                 </button>

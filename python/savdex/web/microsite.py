@@ -25,7 +25,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 
-from savdex.web import content, inertia, locales, platform
+from savdex.web import content, inertia, locales, platform, visibility
 from savdex.web.cabinet import (
     _microsite_domain,
     _rows,
@@ -38,7 +38,7 @@ from savdex.web.chat_actions import str_limit
 from savdex.web.company import _file_size, business_card, href
 from savdex.web.directory import logo_url
 from savdex.web.home import _LISTING_COMPANY, Cards, visible_in
-from savdex.web.seo import Seo, php_json
+from savdex.web.seo import Seo
 from savdex.web.shared import Context, _php_round, initials, settings_values
 
 #: SitePage::LISTINGS: мини-сайт — витрина, а не каталог
@@ -236,10 +236,11 @@ def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
             "select distinct type from company_contacts where company_id = %s", [company["id"]]
         )
     }
-    # Сотрудники — владелец первым: у кого первого есть телефон или почта
+    # Только владелец: личный телефон и почта сотрудников — не контакты
+    # компании, на публичную страницу они не выносятся
     people = _rows(
         "select phone, email from users where company_id = %s and deleted_at is null "
-        "and status = 'active' order by (company_role = 'owner') desc, id",
+        "and status = 'active' and company_role = 'owner' order by id",
         [company["id"]],
     )
 
@@ -425,7 +426,7 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
     ]
     lang = e(ctx.locale.replace("_", "-"))
     body = (
-        f'<script data-page="app" type="application/json">{php_json(page)}</script>'
+        f'<script data-page="app" type="application/json">{inertia.page_json(page)}</script>'
         '<div id="app"></div>'
     )
 
@@ -485,7 +486,11 @@ def render(
 
 
 def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Опубликован, компания не заблокирована, тариф с мини-сайтом."""
+    """
+    Опубликован, компания видна на площадке (как её страница в каталоге:
+    только активная — не заблокированная, не скрытая, не на проверке),
+    тариф с мини-сайтом.
+    """
     found = _rows("select * from company_sites where subdomain = %s limit 1", [subdomain.lower()])
 
     if not found or found[0]["status"] != "published":
@@ -495,7 +500,7 @@ def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         "select * from companies where id = %s and deleted_at is null", [found[0]["company_id"]]
     )
 
-    if not companies or companies[0]["status"] == "blocked":
+    if not companies or not visibility.company_visible(companies[0]):
         return None
 
     if not company_plan(companies[0]["id"]).get("has_microsite"):

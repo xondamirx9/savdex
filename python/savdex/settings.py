@@ -79,6 +79,33 @@ ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",
 # Django считал бы каждый запрос небезопасным и строил ссылки на http://
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Защита на боевом (savdex/web/headers.py — то, чего Django не ставит сам):
+# - HTTPS принудительно: http:// — 301 на https://. Кроме проверки
+#   здоровья Render (/up, /py/up): она ходит внутрь по HTTP и редирект
+#   сочла бы падением службы;
+# - HSTS на год: браузер сам идёт по HTTPS. Без includeSubDomains и
+#   preload — поддомены и мини-сайты не связаны обещанием навсегда;
+# - чужим сайтам встраивать страницы площадки нельзя (кликджекинг):
+#   X-Frame-Options и frame-ancestors — только свой сайт (предпросмотр
+#   мини-сайта в кабинете — iframe того же адреса).
+# SAVDEX_FORCE_HTTPS=false выключает HTTPS-часть, если домен ещё без TLS
+FORCE_HTTPS = os.environ.get("SAVDEX_FORCE_HTTPS", "true" if not DEBUG else "false").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+SECURE_SSL_REDIRECT = FORCE_HTTPS
+SECURE_REDIRECT_EXEMPT = [r"^up$", r"^py/up$"]
+SECURE_HSTS_SECONDS = 31_536_000 if FORCE_HTTPS else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
+X_FRAME_OPTIONS = "SAMEORIGIN"
+SESSION_COOKIE_SECURE = FORCE_HTTPS
+
 # ── База ────────────────────────────────────────────────────────────
 
 
@@ -171,6 +198,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Встраивание в чужие страницы и лишние возможности браузера — нет
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "savdex.web.headers.SecurityHeadersMiddleware",
     # Нулевой байт в пути — 400, а не 500 из базы
     "savdex.web.fallback.NulPathMiddleware",
     # «База отвечает медленно» — полсекунды запросов на странице (как у Laravel)

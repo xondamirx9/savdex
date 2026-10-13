@@ -321,6 +321,8 @@ def test_выход(сайт, admin, remember):
     assert (итог["status"], итог["location"]) == (302, сайт)
     assert not итог["same_sid"] and итог["session"]["user_id"] is None
     assert laravel_session.LOGIN_KEY not in payload and payload["_token"] == "<token>"
+    # Вход в админку Django — та же учётка: его кука тоже стёрта
+    assert "savdex_py_admin" in итог["cookies"]
 
     if remember:
         # Кука «запомнить» забыта, токен в базе — новый
@@ -333,3 +335,42 @@ def test_выход(сайт, admin, remember):
 
     # Новый токен «запомнить» у администратора — в журнале
     assert len(итог["db"]["journal"]) == (1 if admin and remember else 0)
+
+
+def test_перебор_с_разных_адресов_запирает_учётку(сайт):
+    """
+    У каждого адреса свои пять попыток — но двадцать неудач по учётке со
+    всех адресов запирают её и для нового адреса, даже с верным паролем.
+    """
+
+    def подготовка() -> None:
+        сброс()()
+
+        for n in range(20):
+            sql(
+                "insert into login_attempts (email, ip, successful, created_at) "
+                "values (%s, %s, false, now() - interval '1 minute')",
+                [ПОЧТА, f"198.51.100.{n + 1}"],
+            )
+
+    итог = вход(сайт, "/login", подготовка, body=ВЕРНО)
+
+    assert итог["location"] == f"{сайт}/login"
+    assert итог["session"]["user_id"] is None
+    assert ошибки(итог)["email"][0].startswith(МНОГО)
+
+
+def test_неудачи_с_разных_адресов_ниже_порога_не_мешают(сайт):
+    def подготовка() -> None:
+        сброс()()
+
+        for n in range(19):
+            sql(
+                "insert into login_attempts (email, ip, successful, created_at) "
+                "values (%s, %s, false, now() - interval '1 minute')",
+                [ПОЧТА, f"198.51.100.{n + 1}"],
+            )
+
+    итог = вход(сайт, "/login", подготовка, body=ВЕРНО)
+
+    assert итог["location"] == f"{сайт}/cabinet"

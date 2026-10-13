@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.db import connection
@@ -27,7 +28,7 @@ from savdex.guards import allowed_writes
 from savdex.web import analytics, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
-from savdex.web.forms import action, back, flash, input_of, invalid
+from savdex.web.forms import action, back, flash, input_of, invalid, redirect
 from savdex.web.search_text import index
 from savdex.web.shared import Context
 from savdex.web.tenders import _admin
@@ -42,6 +43,11 @@ ACTIVE, ARCHIVED, REJECTED, NEEDS_CHANGES = "active", "archived", "rejected", "n
 #: Продлить можно только то, что уже было на витрине: черновик и
 #: возвращённое на исправление идут через мастер с проверкой публикации
 RENEWABLE = (ACTIVE, ARCHIVED, "expired")
+
+#: Снять в архив можно только прошедшее модерацию — бывшее на витрине.
+#: Иначе черновик или отклонённое уходило в архив, а «Продлить» из
+#: архива ставило его на витрину в обход проверки
+ARCHIVABLE = (ACTIVE, "expired")
 
 
 def _now() -> datetime:
@@ -63,12 +69,21 @@ def _search_text(row: dict[str, Any]) -> str:
     return index(" ".join(str(p) for p in parts if p not in (None, "", "0")))
 
 
-def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, Any]) -> bool:
+def save_listing(
+    ctx: Context | None,
+    row: dict[str, Any],
+    changes: dict[str, Any],
+    *,
+    actor: str = "owner",
+) -> bool:
     """
     $listing->forceFill($changes)->save(): изменившиеся поля и
     search_text, updated_at; у администратора — строка журнала. Без
     запроса (ctx None — команда по расписанию) журнала нет, как у
     AuditObserver без вошедшего администратора.
+
+    Смена статуса — только разрешённая для actor (savdex/web/transitions.py:
+    owner — владелец, moderator — модератор, system — расписание).
     """
     after = {**row, **changes}
     after["search_text"] = _search_text(after)
@@ -80,6 +95,11 @@ def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, An
 
     if not dirty:
         return False
+
+    if "status" in dirty:
+        from savdex.web import transitions
+
+        transitions.check_listing(row["status"], dirty["status"], actor, listing_id=row["id"])
 
     now = _now()
     sets = ", ".join(f"{c} = %s" for c in dirty)
@@ -361,6 +381,16 @@ def archive(request: HttpRequest, listing_id: str) -> HttpResponse:
     if row is None:
         return not_found(ctx)
 
+    if row["status"] == ARCHIVED:
+        flash(ctx, "success", ctx.t("messages.listing.archived"))
+
+        return back(ctx)
+
+    if row["status"] not in ARCHIVABLE:
+        flash(ctx, "error", ctx.t("messages.listing.archive_closed"))
+
+        return back(ctx)
+
     save_listing(ctx, row, {"status": ARCHIVED})
     flash(ctx, "success", ctx.t("messages.listing.archived"))
 
@@ -386,9 +416,18 @@ def destroy(request: HttpRequest, listing_id: str) -> HttpResponse:
 def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
     """
     ListingController::resubmit: только возвращённое на исправление;
-    лимит тарифа; сразу на витрину и уведомление компании.
+    те же проверки, что у публикации из мастера (почта подтверждена,
+    поля заполнены как надо), лимит и срок тарифа; сразу на витрину и
+    уведомление компании.
     """
+    from savdex.web.chat_actions import _unverified
+    from savdex.web.wizard_actions import publish_errors
+
     ctx = action(request)
+
+    if (refused := _unverified(ctx)) is not None:
+        return refused
+
     row = _owned(ctx, int(listing_id))
 
     if row is None:
@@ -401,6 +440,19 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if (refused := refuse_blocked(ctx, row["company_id"])) is not None:
         return refused
+
+    fields = (
+        "category_id", "title", "description", "price", "price_to", "price_from",
+        "bundle_price", "price_negotiable", "currency", "unit", "min_order",
+        "delivery_terms", "payment_terms",
+    )  # fmt: skip
+    stored = {k: (str(row[k]) if isinstance(row.get(k), Decimal) else row.get(k)) for k in fields}
+
+    if (errors := publish_errors(ctx, stored)) is not None:
+        # Поправить можно только в мастере: там и поля, и подсказки
+        flash(ctx, "error", next(iter(errors.values()))[0])
+
+        return redirect(ctx, ctx.url(f"/cabinet/listings/{row['id']}/edit"))
 
     plan = company_plan(row["company_id"])
     limit = plan.get("listings_limit")
@@ -418,8 +470,9 @@ def resubmit(request: HttpRequest, listing_id: str) -> HttpResponse:
         {
             "status": ACTIVE,
             "moderation_note": None,
-            "published_at": now,
-            "expires_at": now + timedelta(days=LIFETIME_DAYS),
+            # Дата первой публикации: повторная не поднимает наверх даром
+            "published_at": row["published_at"] or now,
+            "expires_at": now + timedelta(days=plan.get("listing_days") or LIFETIME_DAYS),
         },
     )
     company = company_of(ctx)
@@ -507,6 +560,15 @@ def bulk(request: HttpRequest) -> HttpResponse:
                 )
 
                 return back(ctx)
+
+    if what == "archive":
+        # Как у одного объявления: черновик, проверка и отклонённое не снимаются
+        listings = [r for r in listings if r["status"] in (*ARCHIVABLE, ARCHIVED)]
+
+        if not listings:
+            flash(ctx, "error", ctx.t("messages.listing.archive_closed"))
+
+            return back(ctx)
 
     for row in listings:
         if what == "renew":

@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import analytics, content, inertia, platform, specs
+from savdex.web import analytics, content, inertia, platform, specs, visibility
 from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
@@ -335,7 +335,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
 
     # Черновик для чужих не существует: 404, а не 403. Объявление
     # заблокированной или удалённой компании — тоже: в каталоге его нет
-    hidden = preview or company is None or company["status"] != "active"
+    hidden = preview or not visibility.company_visible(company)
 
     if hidden and not owner:
         return not_found(ctx)
@@ -562,8 +562,8 @@ def _similar(ctx: Context, cards: Cards, row: dict[str, Any]) -> list[dict[str, 
 
     rows = _rows(
         f"select l.*, {_LISTING_COMPANY} from listings l join companies c "
-        f"on c.id = l.company_id where {where} and c.status = 'active' "
-        "and c.deleted_at is null order by l.published_at desc, l.id desc limit 4",
+        f"on c.id = l.company_id where {where} and {visibility.company_sql()} "
+        "order by l.published_at desc, l.id desc limit 4",
         params,
     )
 

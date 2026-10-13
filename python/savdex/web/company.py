@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import cabinet, content, inertia, locales, platform, ui
+from savdex.web import cabinet, content, inertia, locales, platform, ui, visibility
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
@@ -525,10 +525,10 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
 def microsite_url(company: dict[str, Any]) -> str | None:
     """
     Адрес мини-сайта компании — если посетитель его увидит: сайт
-    опубликован, компания не заблокирована, в тарифе есть мини-сайт (как
+    опубликован, компания активна, в тарифе есть мини-сайт (как
     microsite._live). Иначе None, и кнопки в профиле нет.
     """
-    if company.get("status") == "blocked" or company.get("deleted_at") is not None:
+    if not visibility.company_visible(company):
         return None
 
     sites = _rows(
@@ -565,7 +565,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
 
     # Заблокированной компании нет ни в каталоге, ни на мини-сайте — нет и
     # визитки; себя компания видит (причина блокировки — в кабинете)
-    if c["status"] != "active" and viewer != c["id"]:
+    if not visibility.company_visible(c) and viewer != c["id"]:
         return not_found(ctx)
 
     company_view(ctx, c["id"])

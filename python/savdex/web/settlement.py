@@ -17,7 +17,7 @@ from typing import Any
 from django.db import connection, transaction
 
 from savdex.guards import allowed_writes
-from savdex.web import content, eloquent, orders, ui
+from savdex.web import content, eloquent, orders, transitions, ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.shared import Context
@@ -209,7 +209,7 @@ def settle(
     admin: dict[str, Any] | None,
 ) -> tuple[bool, str]:
     """OrderService::settle: отметка об оплате и начисление — одной транзакцией."""
-    if payment["status"] == "paid":
+    if not transitions.payment_allowed(payment["status"], transitions.PAID):
         return False, _t(ctx, "messages.order.already_paid")
 
     companies = _rows(
@@ -226,7 +226,10 @@ def settle(
         # щелчок, две вкладки, шлюз и администратор) начисляли дважды
         locked = _rows("select status from payments where id = %s for update", [payment["id"]])
 
-        if not locked or locked[0]["status"] == "paid":
+        # Только «ждёт оплаты» и «не прошёл» (опоздавший перевод):
+        # возвращённый счёт поздний колбэк снова оплаченным не сделает —
+        # иначе купленное выдалось бы второй раз (savdex/web/transitions.py)
+        if not locked or not transitions.payment_allowed(locked[0]["status"], transitions.PAID):
             return False, _t(ctx, "messages.order.already_paid")
 
         eloquent.save(

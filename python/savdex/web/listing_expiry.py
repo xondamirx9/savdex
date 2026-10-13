@@ -59,7 +59,7 @@ def expire(now: datetime) -> int:
     )
 
     for listing, company in found:
-        save_listing(None, listing, {"status": EXPIRED})
+        save_listing(None, listing, {"status": EXPIRED}, actor="system")
 
         if company is not None:
             _notify_company(

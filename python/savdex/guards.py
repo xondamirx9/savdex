@@ -359,9 +359,17 @@ def install_guard(connection: BaseDatabaseWrapper, **kwargs: Any) -> None:
     Обёртка вокруг запроса, а не сигнал модели: сигнал ловит только
     записи через ORM, а обойти его можно `cursor.execute` — то есть
     ровно там, где руки чешутся больше всего.
+
+    Первой в списке, а не последней. `connection.execute_wrapper(...)`
+    у Django при выходе снимает последнюю обёртку (pop()). Соединение
+    открывается лениво — часто уже внутри такого блока (наблюдатель
+    медленных запросов, savdex/web/slowdb.py, оборачивает весь запрос).
+    Добавленный в конец предохранитель снимался вместо наблюдателя:
+    после первого запроса на новом соединении защита пропадала, а
+    наблюдатель оставался навсегда и слал ложные «база медленно».
     """
     if guard not in connection.execute_wrappers:
-        connection.execute_wrappers.append(guard)
+        connection.execute_wrappers.insert(0, guard)
 
 
 class LaravelOwnsSchema:

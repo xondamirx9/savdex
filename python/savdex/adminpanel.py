@@ -67,8 +67,12 @@ class AdminMiddleware:
                 content_type="text/plain; charset=utf-8",
             )
 
-        uid = bridge.session_uid(request.COOKIES.get(bridge.COOKIE))
-        admin = bridge.load_admin(connections["default"], uid) if uid is not None else None
+        entry = bridge.session_data(request.COOKIES.get(bridge.COOKIE))
+        admin = bridge.load_admin(connections["default"], entry[0]) if entry is not None else None
+
+        # Пароль с тех пор сменили или сбросили — этот вход закрыт
+        if admin is not None and entry is not None and admin.stamp != entry[1]:
+            admin = None
         fresh = False
 
         if admin is None:
@@ -99,7 +103,7 @@ class AdminMiddleware:
         if fresh:
             response.set_cookie(
                 bridge.COOKIE,
-                bridge.session_cookie(admin.id),
+                bridge.session_cookie(admin.id, admin.stamp),
                 max_age=bridge.SESSION_TTL,
                 path=bridge.COOKIE_PATH,
                 secure=request.is_secure(),
@@ -161,13 +165,15 @@ def login(request: HttpRequest) -> HttpResponseBase:
     except bridge.BridgeError as error:
         return _forbidden(str(error))
 
-    if bridge.load_admin(connections["default"], passed.uid) is None:
+    passed_admin = bridge.load_admin(connections["default"], passed.uid)
+
+    if passed_admin is None:
         return _forbidden(f"пользователю {passed.uid} в админку нельзя")
 
     response = HttpResponseRedirect(passed.next)
     response.set_cookie(
         bridge.COOKIE,
-        bridge.session_cookie(passed.uid),
+        bridge.session_cookie(passed.uid, passed_admin.stamp),
         max_age=bridge.SESSION_TTL,
         path=bridge.COOKIE_PATH,
         secure=request.is_secure(),

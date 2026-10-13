@@ -37,7 +37,7 @@ def _decide(
 ) -> None:
     ctx = context_of(request)
     row = _row(listing)
-    save_listing(ctx, row, changes)
+    save_listing(ctx, row, changes, actor="moderator")
 
     if row["company_id"] is not None:
         notify_company(ctx, row["company_id"], "moderation", title, tone, url, body)

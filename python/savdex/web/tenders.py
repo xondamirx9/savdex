@@ -28,6 +28,7 @@ from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo, _limit
 from savdex.web.shared import Context
+from savdex.web.visibility import author_visible
 
 PER_PAGE = 20
 
@@ -152,6 +153,7 @@ def tenders_tab(ctx: Context, string: Callable[[str], str]) -> HttpResponse:
     where = [
         "t.status = 'published'",
         "(t.published_at is null or t.published_at <= %s)",
+        author_visible(),
     ]
     params: list[Any] = [naive]
 
@@ -292,7 +294,8 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     naive = now.replace(tzinfo=None)
     found = _rows(
         f"select t.*, {_AUTHOR_UNCONFIRMED} from tenders t where t.status = 'published' "
-        "and (t.published_at is null or t.published_at <= %s) and t.slug = %s limit 1",
+        f"and (t.published_at is null or t.published_at <= %s) and {author_visible()} "
+        "and t.slug = %s limit 1",
         [naive, slug],
     )
 
@@ -350,7 +353,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         f"select t.*, {_AUTHOR_UNCONFIRMED} from tenders t where t.status = 'published' "
         "and (t.published_at is null or t.published_at <= %s) "
         "and (t.deadline_at is null or t.deadline_at >= %s) "
-        f"and t.id != %s{same_category} "
+        f"and {author_visible()} and t.id != %s{same_category} "
         "order by t.deadline_at is null, t.deadline_at asc, t.id desc limit 3",
         params,
     )

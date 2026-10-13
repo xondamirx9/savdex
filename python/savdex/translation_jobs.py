@@ -411,16 +411,24 @@ CATCHUP: dict[str, tuple[Callable[[int, Translator], None], str, int]] = {
     ),
     "resumes": (
         translate_resume,
+        # После правки владельцем перевод изменённого поля стирается — не
+        # только заголовка: «о себе» и места работы тоже доводятся
         "select id from resumes where status = 'published' and deleted_at is null and ("
         + _LACKING.format(col="title_i18n")
-        + ") order by id limit %s",
+        + " or (coalesce(about, '') <> '' and ("
+        + _LACKING.format(col="about_i18n")
+        + ")) or (coalesce(jobs::text, '') not in ('', 'null', '[]', '{}') and ("
+        + _LACKING.format(col="jobs_i18n")
+        + "))) order by id limit %s",
         10,
     ),
     "tenders": (
         translate_tender,
         "select id from tenders where status = 'published' and ("
         + _LACKING.format(col="title_i18n")
-        + ") order by id limit %s",
+        + " or (coalesce(description, '') <> '' and ("
+        + _LACKING.format(col="description_i18n")
+        + "))) order by id limit %s",
         20,
     ),
     "news": (

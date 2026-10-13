@@ -278,7 +278,8 @@ def опубликовано(сайт: str, итог: dict[str, Any], *, price: 
         4,
         "tsement-m400-v-meshkakh-po-50-kg-1",
         True,
-        90,
+        # Срок — по тарифу (Free — 30 дней), а не общие 90
+        30,
     )
     assert row[14].startswith("цемент м400 в мешках по 50 кг портландцемент")
     assert база["events"] == [("moderation", "success", сообщение, "/cabinet/listings")]
@@ -398,6 +399,48 @@ def test_публикация(сайт, body, ошибки_, admin):
         assert сессия(итог)["_old_input"]["title"] == тело["title"]
         assert [(r[0], r[9], r[2]) for r in база["listings"]] == [(1, "draft", "")]
         assert база["events"] == база["notifications"] == база["journal"] == []
+
+
+def test_на_модерации_владелец_не_публикует(сайт):
+    """Ждёт решения модератора — мастер владельца его на витрину не выпустит."""
+    uid = владелец()
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/publish",
+        объявления(("moderation", "Цемент на проверке")),
+        снимок,
+        uid=uid,
+        env=БЕЗ_ПЕРЕВОДА,
+        body={**ВЕРНО, "category_id": _категория()},
+        headers=inertia(),
+    )
+
+    assert итог["ответ"]["status"] == 302
+    assert сессия(итог)["error"].startswith("Объявление на проверке у модератора")
+    assert [r[9] for r in итог["база"]["listings"]] == ["moderation"]
+
+
+def test_повторная_публикация_не_поднимает(сайт):
+    """Правка объявления на витрине: дата публикации прежняя — подъём наверх платный."""
+    uid = владелец()
+
+    def подготовка() -> None:
+        объявления(("active", "Уже на витрине"))()
+        sql("update listings set published_at = now() - interval '10 days' where id = 1")
+
+    итог = отправить(
+        сайт,
+        "/cabinet/listings/1/publish",
+        подготовка,
+        lambda: sql("select (now() - published_at) > interval '9 days' from listings where id = 1"),
+        uid=uid,
+        env=БЕЗ_ПЕРЕВОДА,
+        body={**ВЕРНО, "category_id": _категория()},
+        headers=inertia(),
+    )
+
+    assert итог["ответ"]["status"] == 302
+    assert итог["база"] == [(True,)]
 
 
 @pytest.mark.parametrize(
@@ -523,7 +566,8 @@ def с_деталями() -> None:
                     "grade": "M500",
                 }
             },
-            {"attributes": [(1, "grade", "M500")], "tag_options": ["m500", "tashkent"]},
+            # «grade» — не поле раздела (у черновика раздела нет): не меняется
+            {"attributes": [ГРАДЕ]},
         ),
         (
             {"attributes": {"spec_weight": "много", "spec_length": None, "spec_unknown": "x"}},
@@ -597,6 +641,53 @@ def test_автосохранение(сайт, body, ожидание, admin):
     )
     # Администратору — строка журнала о правке черновика
     assert bool(база["journal"]) == admin
+
+
+def test_характеристики_только_поля_раздела(сайт):
+    """
+    Характеристики — только поля раздела: тысячи своих ключей не
+    записываются, вариант списка — только из списка, телефон в свободном
+    тексте скрыт, как в чате (контакты открываются за кредит).
+    """
+    uid = владелец()
+    cat = _категория()
+
+    def подготовка() -> None:
+        с_деталями()
+        sql(
+            "insert into category_fields (category_id, key, label, type, options, sort, "
+            "created_at, updated_at) values "
+            "(%s, 'note', 'Примечание', 'text', null, 1, now(), now()), "
+            "(%s, 'pack', 'Фасовка', 'select', '[\"50 кг\", \"25 кг\"]', 2, now(), now())",
+            [cat, cat],
+        )
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/listings/1/autosave",
+            подготовка,
+            снимок_черновика,
+            uid=uid,
+            env=БЕЗ_ПЕРЕВОДА,
+            body={
+                "category_id": cat,
+                "attributes": {
+                    "note": "Звоните +998 90 123-45-67",
+                    "pack": "1000 кг",
+                    **{f"x{i}": "мусор" for i in range(500)},
+                },
+            },
+            headers={"Accept": "application/json", "X-XSRF-TOKEN": inertia()["X-XSRF-TOKEN"]},
+        )
+    finally:
+        sql("delete from category_fields where category_id = %s and key in ('note', 'pack')", [cat])
+
+    assert итог["ответ"]["status"] == 200
+    свои = [a for a in итог["база"]["attributes"] if not a[1].startswith("spec_")]
+    # Прежнее «grade» не тронуто, новое — только поле раздела «note»
+    assert [a[1] for a in свои] == ["grade", "note"]
+    assert "123-45-67" not in свои[1][2] and свои[1][2].startswith("Звоните")
 
 
 @pytest.mark.parametrize(

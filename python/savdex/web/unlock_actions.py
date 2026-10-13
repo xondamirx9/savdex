@@ -240,14 +240,8 @@ def _unlock(
     if _existing(company["id"], target["id"]) is not None:
         return True, ctx.t("messages.unlock.already_open")
 
-    wallets = _rows(
-        "select * from wallets where company_id = %s order by id limit 1", [company["id"]]
-    )
-
-    if not wallets:
-        return False, ctx.t("messages.promo.no_wallet")
-
-    wallet = wallets[0]
+    # Кошелёк — всегда: у бесплатного тарифа его могло не быть
+    wallet = wallet_store.ensure(company["id"])
 
     try:
         charged = _charge(ctx, {**company, "wallet_id": wallet["id"]}, target, listing)

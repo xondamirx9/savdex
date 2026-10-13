@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import inertia, news, paginator, search_text, ui
+from savdex.web import inertia, news, paginator, search_text, ui, visibility
 from savdex.web.directory import _named, listed_countries, logo_url, type_label, type_options
 from savdex.web.home import _utc, completeness
 from savdex.web.phpquery import Array, laravel_input, text
@@ -82,7 +82,7 @@ class Filters:
         def value(key: str) -> str:
             return "" if ignore == key else self.string(key)
 
-        where = ["c.status = 'active'", "c.deleted_at is null"]
+        where = [visibility.company_sql()]
         params: list[Any] = []
 
         # when(): «0» — ложь, как пустая строка
@@ -280,7 +280,7 @@ def _index(ctx: Context) -> HttpResponse:
     seo.noindex = any(key in query for key in FILTERS) or current > 1
 
     verified_where, verified_params = filters.where("verified")
-    active = "c.status = 'active' and c.deleted_at is null"
+    active = visibility.company_sql()
 
     return inertia.render(
         ctx,

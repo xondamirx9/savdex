@@ -16,6 +16,7 @@ search_text (событие saving), у администратора — стр�
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -24,10 +25,10 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import numbered_slug
-from savdex.web import analytics, eloquent, ui
+from savdex.web import analytics, eloquent, transitions, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan, listing_limit_message
-from savdex.web.chat_actions import _unverified
+from savdex.web.chat_actions import _unverified, mask_contacts
 from savdex.web.company_contact_actions import _php_boolean
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, redirect
 from savdex.web.listing_actions import (
@@ -65,6 +66,9 @@ _TRANSLATED = ("title", "description", "delivery_terms", "payment_terms")
 
 
 def _save(ctx: Context, listing: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    if "status" in changes and changes["status"] != listing["status"]:
+        transitions.check_listing(listing["status"], changes["status"], listing_id=listing["id"])
+
     # Перевод делается один раз: без сброса после правки посетитель на другом
     # языке видел старый текст (М400 вместо М500). Пустой перевод фоновая
     # задача (manage.py translate) заполнит заново — как у тендеров и резюме
@@ -199,28 +203,11 @@ def _owned(ctx: Context, listing_id: int) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-@form()
-def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
-    """ListingWizardController::publish (verified): строгая проверка перед витриной."""
-    ctx = action(request)
-
-    if (refused := _unverified(ctx)) is not None:
-        return refused
-
-    listing = _owned(ctx, int(listing_id))
-
-    if listing is None:
-        return not_found(ctx)
-
-    if listing["status"] == "rejected":
-        flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
-
-        return back(ctx)
-
-    if (refused := refuse_blocked(ctx, listing["company_id"])) is not None:
-        return refused
-
-    data = input_of(request)
+def publish_errors(ctx: Context, data: dict[str, Any]) -> dict[str, list[str]] | None:
+    """
+    Строгая проверка перед витриной — у мастера и у «Отправить снова»
+    (listing_actions.resubmit): ошибки по полям или None.
+    """
     errors = validate(
         data,
         {
@@ -250,16 +237,55 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     )
 
     if errors:
-        return invalid(ctx, errors)
+        return dict(errors)
 
     negotiable = _php_boolean(data.get("price_negotiable")) if "price_negotiable" in data else False
 
     if not negotiable and data.get("price") is None:
         # ValidationException::withMessages — как ошибка проверки
-        return invalid(ctx, {"price": [ctx.t("messages.listing.price_required")]})
+        return {"price": [ctx.t("messages.listing.price_required")]}
 
-    if (refused := _price_range_error(ctx, data, negotiable)) is not None:
+    upper = _price_kind(data, negotiable)["price_to"]
+
+    if upper is not None and (data.get("price") is None or float(upper) <= float(data["price"])):
+        return {"price_to": [ctx.t("messages.listing.price_to_min")]}
+
+    return None
+
+
+@form()
+def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
+    """ListingWizardController::publish (verified): строгая проверка перед витриной."""
+    ctx = action(request)
+
+    if (refused := _unverified(ctx)) is not None:
         return refused
+
+    listing = _owned(ctx, int(listing_id))
+
+    if listing is None:
+        return not_found(ctx)
+
+    if listing["status"] == "rejected":
+        flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
+
+        return back(ctx)
+
+    # Ждёт решения модератора — сам владелец его не выпустит
+    if not transitions.listing_allowed(listing["status"], "active"):
+        flash(ctx, "error", ctx.t("messages.listing.in_moderation"))
+
+        return back(ctx)
+
+    if (refused := refuse_blocked(ctx, listing["company_id"])) is not None:
+        return refused
+
+    data = input_of(request)
+
+    if (errors := publish_errors(ctx, data)) is not None:
+        return invalid(ctx, errors)
+
+    negotiable = _php_boolean(data.get("price_negotiable")) if "price_negotiable" in data else False
 
     company = company_of(ctx)
     assert company is not None
@@ -291,8 +317,11 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
         price_negotiable=negotiable,
         status="active",
         wizard_step=4,
-        published_at=now,
-        expires_at=now + timedelta(days=LIFETIME_DAYS),
+        # Дата публикации — первая: по ней сортирует каталог, и повторная
+        # публикация поднимала объявление наверх бесплатно (это платная
+        # услуга «Поднять»)
+        published_at=listing["published_at"] or now,
+        expires_at=now + timedelta(days=plan.get("listing_days") or LIFETIME_DAYS),
     )
     _save(ctx, listing, changes)
 
@@ -396,6 +425,42 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+def _category_fields(category_id: int | None) -> dict[str, dict[str, Any]]:
+    """Поля раздела объявления (category_fields) по ключу — их показывает мастер."""
+    if category_id is None:
+        return {}
+
+    return {
+        str(r["key"]): r
+        for r in _rows(
+            "select key, type, options from category_fields where category_id = %s",
+            [category_id],
+        )
+    }
+
+
+def _field_value(field: dict[str, Any], value: str) -> str | None:
+    """
+    Значение поля раздела: у списка — только из вариантов, у свободного
+    текста контакты скрыты (как в чате) — они открываются за кредит.
+    """
+    if value == "":
+        return None
+
+    options = field.get("options") or []
+
+    if isinstance(options, str):
+        options = json.loads(options)
+
+    if field.get("type") == "select" and options:
+        return value if value in [str(o) for o in options] else None
+
+    if field.get("type") == "text":
+        return mask_contacts(value)
+
+    return value
+
+
 def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     """
     Вид цены: точная, «от» (price_from) или диапазон «price – price_to».
@@ -406,19 +471,6 @@ def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     upper = None if upper in (None, "") or negotiable or price_from else upper
 
     return {"price_from": price_from and not negotiable, "price_to": upper}
-
-
-def _price_range_error(ctx: Context, data: dict[str, Any], negotiable: bool) -> HttpResponse | None:
-    """Диапазон «от – до»: верхняя граница больше нижней."""
-    upper = _price_kind(data, negotiable)["price_to"]
-
-    if upper is None:
-        return None
-
-    if data.get("price") is None or float(upper) <= float(data["price"]):
-        return invalid(ctx, {"price_to": [ctx.t("messages.listing.price_to_min")]})
-
-    return None
 
 
 def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:
@@ -519,6 +571,12 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     items = attributes.items() if isinstance(attributes, dict) else enumerate(attributes)
+    # Характеристики — только поля раздела (category_fields) и детали
+    # товара (spec_*): мастер других не шлёт, а без этого в объявление
+    # можно было записать тысячи полей — база и очередь перевода
+    # забивались, а в значения прятали телефон мимо скрытия контактов
+    allowed = _allowed_specs(listing["category_id"])
+    own_fields = _category_fields(listing["category_id"])
 
     for raw_key, value in items:
         key = str(raw_key)
@@ -533,11 +591,12 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
 
             continue
 
-        _attribute(listing["id"], key, _php_string(value))
+        if key not in own_fields:
+            continue
+
+        _attribute(listing["id"], key, _field_value(own_fields[key], _php_string(value)))
 
     # Сменили категорию — детали, которых у новой нет, убираются
-    allowed = _allowed_specs(listing["category_id"])
-
     with allowed_writes("listing_attributes"), connection.cursor() as cursor:
         cursor.execute(
             "delete from listing_attributes where listing_id = %s and key like %s "

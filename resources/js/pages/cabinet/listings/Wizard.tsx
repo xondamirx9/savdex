@@ -75,14 +75,39 @@ const STEPS = ['category', 'price', 'terms', 'photos'];
  * без этой карты человек видел бы «не опубликовалось» и не знал,
  * где именно править.
  */
+/*
+ * На каком шаге поле — для ссылки «Перейти к шагу» у ошибки публикации.
+ * Раньше здесь было шесть полей, и ошибка любого другого (верхняя
+ * граница цены, фасовка, условия поставки) отправляла на шаг 1, где
+ * этого поля нет.
+ */
 const FIELD_STEP: Record<string, number> = {
     type: 1,
     category_id: 1,
     title: 1,
     description: 2,
     price: 2,
+    price_to: 2,
+    price_from: 2,
+    price_negotiable: 2,
+    bundle_price: 2,
     currency: 2,
+    unit: 2,
+    min_order: 2,
+    delivery_terms: 3,
+    payment_terms: 3,
+    tags: 4,
 };
+
+/** Шаг поля ошибки: поля раздела — на шаге 1, детали товара (spec_*) — на шаге 2. */
+function fieldStep(field: string): number {
+    const [head, key] = field.split('.');
+
+    if (head === 'attributes') return key?.startsWith('spec_') ? 2 : 1;
+    if (head === 'tags') return 4;
+
+    return FIELD_STEP[head] ?? 1;
+}
 
 const TIPS = ['brand', 'photos', 'quality', 'price'];
 
@@ -222,7 +247,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
      * жмёт «Опубликовать» повторно, ничего не исправив.
      */
     const problems = Object.entries(errors)
-        .map(([field, message]) => ({ field, message: String(message), step: FIELD_STEP[field] ?? 1 }))
+        .map(([field, message]) => ({ field, message: String(message), step: fieldStep(field) }))
         .sort((a, b) => a.step - b.step);
 
     const titleLeft = 90 - data.title.length;
