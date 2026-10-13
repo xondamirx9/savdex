@@ -264,6 +264,7 @@ jobs:
           common=(--add-host=host.docker.internal:host-gateway
             -e APP_KEY="$key" -e DB_CONNECTION=pgsql -e DB_URL="$db" -e DJANGO_DATABASE_URL="$db"
             -e CACHE_STORE=file -e SAVDEX_CACHE_DIR=/var/data/storage/cache
+            -e SAVDEX_FORCE_HTTPS=false
             -v savdex-ci-shared:/var/data/storage)
 
           docker run --rm "${common[@]}" savdex:ci migrate 2>&1 | tee /tmp/migrate.txt
