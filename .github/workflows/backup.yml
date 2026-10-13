@@ -39,6 +39,9 @@ concurrency:
 
 jobs:
   database:
+    # После переезда в Uztelecom (PROD_LIVE=true) база Render больше не
+    # боевая: копии снимает машина базы (deploy/server/backup.sh)
+    if: vars.PROD_LIVE != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
