@@ -48,7 +48,7 @@ from savdex.web import locales, messaging, ui
 from savdex.web.it_tasks import number_format
 from savdex.web.listing_actions import _now
 from savdex.web.messaging import Button
-from savdex.web.tenders import author_visible
+from savdex.web.visibility import author_visible
 
 log = logging.getLogger("savdex.telegram_feed")
 

@@ -22,7 +22,7 @@ from PIL import Image
 
 from savdex import laravel_storage
 from savdex.site.models import Banner, LandingBlock
-from savdex.web import content, inertia, locales, news, platform, reviews, ui
+from savdex.web import content, inertia, locales, news, platform, reviews, ui, visibility
 from savdex.web.currency import CurrencyRate
 from savdex.web.directory import _named, listed_countries, logo_url, type_label, type_options
 from savdex.web.request import context
@@ -281,8 +281,8 @@ class Cards:
 def _listings(where: str, params: list[Any], order: str, limit: int) -> list[dict[str, Any]]:
     return _rows(
         f"select l.*, {_LISTING_COMPANY} from listings l join companies c on c.id = l.company_id "
-        f"where l.status = 'active' and l.deleted_at is null and c.status = 'active' "
-        f"and c.deleted_at is null {where} order by {order} limit {int(limit)}",
+        f"where l.status = 'active' and l.deleted_at is null and {visibility.company_sql()} "
+        f"{where} order by {order} limit {int(limit)}",
         params,
     )
 
@@ -330,8 +330,8 @@ def offers_count(locale: str) -> int:
     visible, params = visible_in(locale)
     rows = _rows(
         "select count(*) as n from listings l join companies c on c.id = l.company_id "
-        "where l.status = 'active' and l.deleted_at is null and c.status = 'active' "
-        f"and c.deleted_at is null {visible} and l.type = 'supply'",
+        f"where l.status = 'active' and l.deleted_at is null and {visibility.company_sql()} "
+        f"{visible} and l.type = 'supply'",
         params,
     )
 
@@ -494,10 +494,8 @@ def hero_ratio(values: dict[str, Any]) -> float | None:
 
 #: Объявление действующей компании — как в каталоге: у заблокированной
 #: и удалённой объявлений в счётчиках и фильтрах нет
-LIVE_COMPANY = (
-    " and exists (select 1 from companies co where co.id = l.company_id "
-    "and co.status = 'active' and co.deleted_at is null)"
-)
+#: Объявление l — у видимой компании (savdex/web/visibility.py)
+LIVE_COMPANY = " and " + visibility.live_company("l")
 
 
 def popular_categories(locale: str) -> list[dict[str, Any]]:
@@ -556,8 +554,8 @@ def popular_services(locale: str) -> list[dict[str, Any]]:
         r["service_type"]: int(r["total"])
         for r in _rows(
             "select t.service_type, count(*) as total from it_tasks t join companies c "
-            "on c.id = t.company_id where t.status = 'active' and c.status = 'active' "
-            "and c.deleted_at is null group by t.service_type"
+            f"on c.id = t.company_id where t.status = 'active' and {visibility.company_sql()} "
+            "group by t.service_type"
         )
     }
     sections: list[dict[str, Any]] = [
@@ -636,8 +634,8 @@ def city_options(locale: str) -> list[dict[str, Any]]:
         {"id": r["id"], "name": names[r["id"]]}
         for r in _rows(
             "select id from cities ci where is_active and exists (select 1 from listings l "
-            "join companies c on c.id = l.company_id and c.status = 'active' "
-            f"and c.deleted_at is null where {shown} = ci.id and l.status = 'active' "
+            f"join companies c on c.id = l.company_id and {visibility.company_sql()} "
+            f"where {shown} = ci.id and l.status = 'active' "
             "and l.deleted_at is null)",
             params,
         )

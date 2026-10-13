@@ -31,7 +31,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
 from savdex.guards import allowed_writes
-from savdex.web import analytics, content, inertia, paginator, platform, search_text
+from savdex.web import analytics, content, inertia, paginator, platform, search_text, visibility
 from savdex.web.directory import _named
 from savdex.web.home import _LISTING_COMPANY, Cards, banner, shown_city_sql, visible_in
 from savdex.web.phpquery import Array, laravel_input, php_int, text
@@ -232,8 +232,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     where = [
         "l.status = 'active'" + visible,
         "l.deleted_at is null",
-        "c.status = 'active'",
-        "c.deleted_at is null",
+        visibility.company_sql(),
     ]
 
     if term != "":

@@ -25,7 +25,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 
-from savdex.web import content, inertia, locales, platform
+from savdex.web import content, inertia, locales, platform, visibility
 from savdex.web.cabinet import (
     _microsite_domain,
     _rows,
@@ -500,7 +500,7 @@ def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         "select * from companies where id = %s and deleted_at is null", [found[0]["company_id"]]
     )
 
-    if not companies or companies[0]["status"] != "active":
+    if not companies or not visibility.company_visible(companies[0]):
         return None
 
     if not company_plan(companies[0]["id"]).get("has_microsite"):

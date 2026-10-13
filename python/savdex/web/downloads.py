@@ -23,7 +23,7 @@ from urllib.parse import quote
 from django.http import HttpRequest, HttpResponse
 
 from savdex.laravel_storage import private_root
-from savdex.web import filetype
+from savdex.web import filetype, visibility
 from savdex.web.cabinet import _rows
 from savdex.web.shared import Context
 from savdex.web.throttle import throttled
@@ -207,7 +207,9 @@ def it_task_file(request: HttpRequest, file_id: str) -> HttpResponse:
     file = rows[0]
     own = _viewer_company(ctx) == file["company_id"]
 
-    shown = file["status"] in ("active", "completed") and file["company_status"] == "active"
+    shown = (
+        file["status"] in ("active", "completed") and file["company_status"] == visibility.ACTIVE
+    )
 
     if not shown and not own:
         return not_found(ctx)

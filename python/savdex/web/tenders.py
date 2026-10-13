@@ -28,6 +28,7 @@ from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo, _limit
 from savdex.web.shared import Context
+from savdex.web.visibility import author_visible
 
 PER_PAGE = 20
 
@@ -63,22 +64,6 @@ _AUTHOR_UNCONFIRMED = (
     "coalesce((select c.email_unconfirmed from users u join companies c on c.id = u.company_id "
     "where u.id = t.author_id), false) as author_unconfirmed"
 )
-
-
-def author_visible(alias: str = "t") -> str:
-    """
-    Условие where: автор закупки не заблокирован и не удалён, а его
-    компания (если она есть) — активна. Закупка заблокированной или
-    скрытой компании пропадает из каталога, со страницы, из карты сайта и
-    ленты вместе с контактами. Закупки администратора без компании и без
-    автора (загрузка из Excel) видны как прежде.
-    """
-    return (
-        "not exists (select 1 from users au left join companies ac on ac.id = au.company_id "
-        f"where au.id = {alias}.author_id and (au.status = 'blocked' "
-        "or au.deleted_at is not null or ac.deleted_at is not null "
-        "or (ac.id is not null and ac.status <> 'active')))"
-    )
 
 
 def card(

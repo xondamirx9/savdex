@@ -336,10 +336,10 @@ def test_досрочная_оплата_продления(мир, тариф, 
 
 
 def test_старые_неоплаченные_счета_закрываются(мир, tmp_path):
-    """Счёт, не оплаченный за 30 дней, — «Не прошёл»; свежий ждёт дальше."""
+    """Счёт, не оплаченный в срок из счёта (14 дней), — «Не прошёл»; свежий ждёт дальше."""
     cid = компания()
 
-    for number, days in (("SVD-OLD", 31), ("SVD-NEW", 29)):
+    for number, days in (("SVD-OLD", 15), ("SVD-NEW", 13)):
         sql(
             "insert into payments (company_id, purpose, description, amount, currency, "
             "provider, status, number, created_at, updated_at) values (%s, 'credits', 'x', 1, "
@@ -366,5 +366,5 @@ def test_старые_неоплаченные_счета_закрываются
         [cid],
     ) == [
         ("SVD-NEW", "pending", None),
-        ("SVD-OLD", "failed", "Счёт не оплачен за 30 дней — закрыт"),
+        ("SVD-OLD", "failed", "Счёт не оплачен за 14 дней — закрыт"),
     ]

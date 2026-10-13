@@ -19,14 +19,14 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import locales
+from savdex.web import locales, visibility
 from savdex.web.cabinet import _rows
 from savdex.web.home import _utc
 from savdex.web.inertia import php_escape
 from savdex.web.request import CRAWLERS, context
 from savdex.web.services import SERVICE_PAGES
 from savdex.web.shared import Context
-from savdex.web.tenders import author_visible
+from savdex.web.visibility import author_visible
 
 #: SitemapController::CHUNK
 CHUNK = 5000
@@ -133,10 +133,7 @@ def _xml(body: str) -> HttpResponse:
 
 def _live(table: str) -> str:
     """Условие «компания строки действует»: заблокированных и удалённых в карте нет."""
-    return (
-        f"exists (select 1 from companies co where co.id = {table}.company_id "
-        "and co.status = 'active' and co.deleted_at is null)"
-    )
+    return visibility.live_company(table)
 
 
 def _count(query: str, params: list[Any] | None = None) -> int:
