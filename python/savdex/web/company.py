@@ -29,7 +29,7 @@ from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
 from savdex.web.it_tasks import SERVICE_TYPES, _decimal, number_format
 from savdex.web.seo import Seo
-from savdex.web.shared import Context, initials, is_person
+from savdex.web.shared import Context, identity_confirmed, initials, is_person
 from savdex.web.throttle import throttled
 
 #: StatsRecorder::DEDUP_MINUTES
@@ -314,7 +314,8 @@ def review_blocked(ctx: Context, target: int) -> str | None:
     if author["id"] == target:
         return ctx.t("messages.review.own_company")
 
-    if user["email_verified_at"] is None:
+    # Почта или телефон (код из SMS) подтверждены — можно
+    if not identity_confirmed(user):
         return ctx.t("messages.review.verify_email")
 
     status = _rows("select status from users where id = %s", [user["id"]])[0]["status"]

@@ -336,6 +336,16 @@ urlpatterns = [
         name="register.code.skip",
     ),
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/sms$",
+        register_code.send_sms,
+        name="register.sms",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/sms/confirm$",
+        register_code.confirm_sms,
+        name="register.sms.confirm",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register/details$",
         register_code.details,
         name="register.details",

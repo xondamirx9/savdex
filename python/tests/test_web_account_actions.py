@@ -674,3 +674,42 @@ def test_код_снимает_метку_не_подтверждено(сайт
         "join companies c on c.id = u.company_id where u.email = %s",
         [ПОЧТА],
     ) == [(False, False)]
+
+
+def test_сброс_возвращает_аккаунт_хозяину_почты(сайт):
+    """
+    Адрес занят без подтверждения (код пропущен): ссылка сброса приходит
+    только письмом, значит сбросивший владеет почтой. Почта подтверждается,
+    телефон и Telegram занявшего отвязываются, все входы закрываются.
+    """
+    from .factories import компания
+
+    def шаг() -> None:
+        _токен()()
+        cid = компания(email_unconfirmed=True)
+        sql(
+            "update users set email_verified_at = null, email_code_skipped = true, "
+            "phone = '+8613800000000', phone_verified_at = now(), telegram_chat_id = '777', "
+            "company_id = %s where email = %s",
+            [cid, ПОЧТА],
+        )
+        sql(
+            "insert into sessions (id, user_id, payload, last_activity) "
+            "select 'чужая-сессия', id, '', 0 from users where email = %s",
+            [ПОЧТА],
+        )
+
+    пользователь()
+    итог = форма(сайт, "/reset-password", шаг, body=ВЕРНЫЙ_СБРОС)
+
+    assert куда(сайт, итог) == (302, "/login")
+    assert sql(
+        "select u.email_verified_at is not null, u.phone, u.phone_verified_at, "
+        "u.telegram_chat_id, u.email_code_skipped, c.email_unconfirmed from users u "
+        "join companies c on c.id = u.company_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(True, None, None, None, False, False)]
+    assert sql(
+        "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(0,)]

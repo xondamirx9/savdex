@@ -60,6 +60,8 @@ export const routes = {
     registerCode: '/register/code',
     registerCodeResend: '/register/code/resend',
     registerCodeSkip: '/register/code/skip',
+    registerSms: '/register/sms',
+    registerSmsConfirm: '/register/sms/confirm',
     registerDetails: '/register/details',
     passwordRequest: '/forgot-password',
     passwordForced: '/password/change',

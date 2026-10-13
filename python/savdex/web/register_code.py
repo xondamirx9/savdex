@@ -28,12 +28,14 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import analytics, guard, inertia, mail
+from savdex.web import analytics, guard, inertia, mail, sms
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_COUNTRY,
     SESSION_EMAIL,
     SESSION_SKIPPED,
+    SESSION_SMS_PHONE,
+    SESSION_SMS_VERIFIED,
     SESSION_VERIFIED,
     _guest,
     _php_string,
@@ -42,6 +44,7 @@ from savdex.web.auth_actions import (
     _unique_email,
     code_optional,
     registration_email,
+    sms_phone,
 )
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.shared import Context
@@ -207,6 +210,8 @@ def send_code(request: HttpRequest) -> HttpResponse:
     store.put(SESSION_COUNTRY, country)
     store.forget(SESSION_VERIFIED)
     store.forget(SESSION_SKIPPED)
+    store.forget(SESSION_SMS_PHONE)
+    store.forget(SESSION_SMS_VERIFIED)
     analytics.queue(ctx, "sign_up_start", {"plan_param": analytics.intended_plan(ctx)})
 
     return _to(ctx, "/register/code")
@@ -246,6 +251,13 @@ def code_page(request: HttpRequest) -> HttpResponse:
             "demoCode": _flash(ctx, "demo_code"),
             # Страна с галочкой «Регистрация без кода» — «Продолжить без кода»
             "canSkip": code_optional(_session(ctx).get(SESSION_COUNTRY)),
+            # Код по SMS (Telnyx) — для всех стран, когда ключи заданы
+            "sms": {
+                "enabled": sms.configured(),
+                # Номер, на который код уже ушёл: показываем поле для кода
+                "sentTo": _session(ctx).get(SESSION_SMS_PHONE),
+                "dialCode": _dial_code(_session(ctx).get(SESSION_COUNTRY)),
+            },
             # Китайский ящик (qq.com, 163.com…): письма идут дольше и чаще
             # в «Спам» — своя подсказка и адрес отправителя для белого списка
             "chinaMailbox": mail.is_chinese_mailbox(email),
@@ -321,6 +333,101 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     return back(ctx)
 
 
+# ── Код по SMS (Telnyx Verify, savdex/web/sms.py) ───────────────────
+
+
+def _dial_code(country_id: Any) -> str | None:  # noqa: ANN401
+    """Телефонный код страны с первого шага: «+86»."""
+    from savdex.web.cabinet import _rows
+
+    try:
+        key = int(str(country_id))
+    except (TypeError, ValueError):
+        return None
+
+    rows = _rows("select phone_code from countries where id = %s", [key])
+    code = str(rows[0]["phone_code"] or "") if rows else ""
+
+    return ("+" + code.lstrip("+")) if code else None
+
+
+@form()
+def send_sms(request: HttpRequest) -> HttpResponse:
+    """
+    «Получить код по SMS»: Telnyx шлёт код на номер. Каждое SMS платное —
+    поэтому частота с адреса сети и не больше sms.MAX_PER_DAY в сутки на номер.
+    """
+    ctx = action(
+        request, auth=False, throttle=5, throttle_minutes=10, throttle_prefix="register-sms"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    store = _session(ctx)
+    email = _email(ctx)
+
+    if email is None:
+        return _to(ctx, "/register")
+
+    if not sms.configured():
+        return _to(ctx, "/register/code")
+
+    phone = sms.normalize(
+        _php_string(input_of(request).get("phone")), _dial_code(store.get(SESSION_COUNTRY))
+    )
+
+    if phone is None:
+        return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
+
+    if sms.daily_limit_reached(phone):
+        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_limit")]})
+
+    if not sms.send_code(phone):
+        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_failed")]})
+
+    store.put(SESSION_SMS_PHONE, phone)
+    store.forget(SESSION_SMS_VERIFIED)
+    flash(ctx, "status", ctx.t("messages.register.sms_sent", phone=phone))
+
+    return _to(ctx, "/register/code")
+
+
+@form()
+def confirm_sms(request: HttpRequest) -> HttpResponse:
+    """Код из SMS верный — анкета открыта, номер подтверждён (учётка без метки)."""
+    from savdex.web.account_actions import _with_errors
+
+    ctx = action(
+        request, auth=False, throttle=10, throttle_minutes=1, throttle_prefix="register-code"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    store = _session(ctx)
+    email = _email(ctx)
+    phone = store.get(SESSION_SMS_PHONE)
+
+    if email is None:
+        return _to(ctx, "/register")
+
+    if not isinstance(phone, str) or phone == "":
+        return _to(ctx, "/register/code")
+
+    code = _php_string(input_of(request).get("sms_code")).strip()
+
+    if code == "":
+        return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
+
+    if not sms.check_code(phone, code):
+        return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.code_invalid")]})
+
+    store.put(SESSION_SMS_VERIFIED, {"email": email, "phone": phone})
+
+    return _to(ctx, "/register/details")
+
+
 @form()
 def skip_code(request: HttpRequest) -> HttpResponse:
     """
@@ -389,6 +496,8 @@ def details(request: HttpRequest) -> HttpResponse:
             # Страна с первого шага; код пропущен — сменить её нельзя
             "countryId": store.get(SESSION_COUNTRY),
             "skipped": skipped,
+            # Номер подтверждён кодом из SMS — в анкете он закреплён
+            "smsPhone": sms_phone(store),
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": categories,
             # Город физлица и фрилансера — из справочника страны или «Другой»

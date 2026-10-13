@@ -130,7 +130,10 @@ export function CabinetLayout({
     const unverified = auth?.user && !auth.user.email_verified;
     // Код пропущен при регистрации: метка «Не подтверждено» на компании,
     // объявлениях и тендерах — напоминаем подтвердить почту и дозаполнить профиль
-    const skipped = unverified && Boolean(auth?.user?.email_skipped);
+    // Телефон подтверждён кодом из SMS: всё открыто, почта нужна только для
+    // писем — мягкая подсказка вместо «публикация недоступна»
+    const phoneOk = unverified && Boolean(auth?.user?.phone_verified);
+    const skipped = unverified && !phoneOk && Boolean(auth?.user?.email_skipped);
     const completeness = auth?.company?.profile_completeness ?? 100;
 
     /* Подсвечен один пункт — с самым длинным подходящим адресом: на
@@ -217,9 +220,11 @@ export function CabinetLayout({
                                     <MailWarning aria-hidden className="size-5 shrink-0" />
                                     <div className="row-between wrap" style={{ gap: 12, flex: 1 }}>
                                         <span style={{ flex: 1, minWidth: 220 }}>
-                                            {skipped
-                                                ? t('cabinet.unconfirmed', { email: auth.user?.email ?? '' })
-                                                : t('cabinet.unverified', { email: auth.user?.email ?? '' })}
+                                            {phoneOk
+                                                ? t('cabinet.unverified_phone_ok', { email: auth.user?.email ?? '' })
+                                                : skipped
+                                                  ? t('cabinet.unconfirmed', { email: auth.user?.email ?? '' })
+                                                  : t('cabinet.unverified', { email: auth.user?.email ?? '' })}
                                             {skipped && completeness < 100 && (
                                                 <>
                                                     {' '}
@@ -231,7 +236,7 @@ export function CabinetLayout({
                                             )}
                                         </span>
                                         <Link href={routes.verifyNotice} className="btn btn-secondary btn-sm shrink-0">
-                                            {skipped ? t('cabinet.verify_email') : t('cabinet.verify')}
+                                            {skipped || phoneOk ? t('cabinet.verify_email') : t('cabinet.verify')}
                                         </Link>
                                     </div>
                                 </div>
