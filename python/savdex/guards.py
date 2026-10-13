@@ -208,9 +208,6 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Визитки компании для QR-кода (миграция 2026_10_17_100000):
         # таблица появилась после ухода Laravel, ведёт её только Django
         "company_cards",
-        # Второй фактор входа в админку (миграция 2026_10_25_100000,
-        # savdex/twofactor.py)
-        "admin_two_factor",
         # Старые адреса компаний и объявлений — 301 на новые (миграция
         # 2026_10_22_100000, savdex/reslug.py)
         "slug_redirects",

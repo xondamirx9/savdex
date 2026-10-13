@@ -27,54 +27,12 @@ from django.utils.html import format_html
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from savdex import access, bridge, twofactor
+from savdex import bridge
 
 log = logging.getLogger(__name__)
 
 #: Страница входа (savdex/adminlogin.py)
 LOGIN = "/py/admin/login/"
-
-
-#: Второй фактор (savdex/adminsecurity.py): ввод кода — до входа, как
-#: страница входа; подключение — уже вошедшему сотруднику
-TWO_FACTOR = "/py/admin/2fa/"
-VERIFY = TWO_FACTOR + "verify/"
-SETUP = TWO_FACTOR + "setup/"
-#: Выход — и до ввода кода: иначе со страницы кода было бы не уйти
-LOGOUT = "/py/admin/logout/"
-
-
-def resolve(
-    request: HttpRequest,
-) -> tuple[access.Admin | None, bool, bool, HttpResponseBase | None]:
-    """
-    Кто открыл админку: (сотрудник, вход из сессии сайта, код второго
-    фактора введён, отказ). Кука входа — номер, отпечаток пароля и отметка
-    о коде; её нет или пароль с тех пор сменили — сессия сайта (тогда
-    отметки о коде нет). Не вошёл — на вход; не сотрудник — отказ.
-    """
-    entry = bridge.session_data(request.COOKIES.get(bridge.COOKIE))
-    admin = bridge.load_admin(connections["default"], entry[0]) if entry is not None else None
-
-    # Пароль с тех пор сменили или сбросили — этот вход закрыт
-    if admin is not None and entry is not None and admin.stamp == entry[1]:
-        return admin, False, entry[2], None
-
-    # Сессия сайта — только чтение: страница админки не должна
-    # продлевать её, старить флеш-сообщения сайта и т. п.
-    from savdex import laravel_session
-
-    visitor = laravel_session.identify(request.COOKIES, connections["default"])
-
-    if visitor.user_id is None:
-        return None, False, False, _to_login(request.get_full_path())
-
-    admin = bridge.load_admin(connections["default"], visitor.user_id)
-
-    if admin is None:
-        return None, False, False, _refused(connections["default"], visitor.user_id)
-
-    return admin, True, False, None
 
 
 def _to_login(path: str) -> HttpResponseRedirect:
@@ -99,7 +57,7 @@ class AdminMiddleware:
     def __call__(self, request: HttpRequest) -> HttpResponseBase:
         request.admin = None  # type: ignore[attr-defined]
 
-        if not request.path.startswith(bridge.HOME) or request.path.startswith((LOGIN, VERIFY)):
+        if not request.path.startswith(bridge.HOME) or request.path.startswith(LOGIN):
             return self.get_response(request)
 
         if not bridge.enabled():
@@ -109,21 +67,30 @@ class AdminMiddleware:
                 content_type="text/plain; charset=utf-8",
             )
 
-        admin, fresh, mfa, refusal = resolve(request)
+        entry = bridge.session_data(request.COOKIES.get(bridge.COOKIE))
+        admin = bridge.load_admin(connections["default"], entry[0]) if entry is not None else None
 
-        if refusal is not None:
-            return refusal
+        # Пароль с тех пор сменили или сбросили — этот вход закрыт
+        if admin is not None and entry is not None and admin.stamp != entry[1]:
+            admin = None
+        fresh = False
 
-        assert admin is not None
+        if admin is None:
+            # Сессия сайта — только чтение: страница админки не должна
+            # продлевать её, старить флеш-сообщения сайта и т. п.
+            from savdex import laravel_session
 
-        # Второй фактор: подключён — без кода дальше нельзя (и тому, кто
-        # пришёл сессией сайта: иначе вход на сайт обходил бы код); не
-        # подключён, а он обязателен, — только страница подключения
-        if admin.two_factor and not mfa and not request.path.startswith(LOGOUT):
-            return HttpResponseRedirect(f"{VERIFY}?next={quote(request.get_full_path(), safe='/')}")
+            visitor = laravel_session.identify(request.COOKIES, connections["default"])
 
-        if not admin.two_factor and twofactor.required() and not request.path.startswith(SETUP):
-            return HttpResponseRedirect(SETUP)
+            if visitor.user_id is None:
+                return _to_login(request.get_full_path())
+
+            admin = bridge.load_admin(connections["default"], visitor.user_id)
+
+            if admin is None:
+                return _refused(connections["default"], visitor.user_id)
+
+            fresh = True
 
         request.admin = admin  # type: ignore[attr-defined]
         # Админка Django спрашивает права у request.user
@@ -136,7 +103,7 @@ class AdminMiddleware:
         if fresh:
             response.set_cookie(
                 bridge.COOKIE,
-                bridge.session_cookie(admin.id, admin.stamp, mfa),
+                bridge.session_cookie(admin.id, admin.stamp),
                 max_age=bridge.SESSION_TTL,
                 path=bridge.COOKIE_PATH,
                 secure=request.is_secure(),

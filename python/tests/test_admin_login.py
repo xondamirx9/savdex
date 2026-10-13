@@ -48,7 +48,6 @@ steps = json.loads(sys.argv[1])
 client = Client(HTTP_X_FORWARDED_FOR=sys.argv[2])
 out = []
 token = ""
-state = {}
 
 for method, url, data in steps:
     if method == "sql-revoke":
@@ -69,35 +68,12 @@ for method, url, data in steps:
             )
         out.append({})
         continue
-    if method == "totp-enroll":
-        # Подключить код сотруднику с почтой url; ключ — для следующих шагов
-        import time
-        from savdex import twofactor
-        from django.db import connection as db
-        with db.cursor() as cursor:
-            cursor.execute("select id from users where email = %s", [url])
-            uid = cursor.fetchone()[0]
-        secret = twofactor.pending_secret(uid)
-        assert twofactor.confirm(uid, twofactor.code_at(secret, int(time.time() // 30)))
-        state["secret"] = secret
-        out.append({})
-        continue
-    if method == "post-code":
-        # Код следующего шага: текущий уже израсходован подключением
-        import time
-        from savdex import twofactor
-        step = int(time.time() // 30) + (data or {}).get("shift", 1)
-        good = (data or {}).get("good", True)
-        code = twofactor.code_at(state["secret"], step) if good else "000000"
-        data = {"code": code, "next": (data or {}).get("next", "/py/admin/")}
     if method == "drop-admin-cookie":
         client.cookies.pop(bridge.COOKIE, None)
         out.append({})
         continue
     if method == "post" and url.startswith("/py/admin/login/"):
         data = {"_token": token, **(data or {})}
-    if method == "post-code":
-        method, url = "post", "/py/admin/2fa/verify/"
     r = client.get(url) if method == "get" else client.post(url, data or {})
     body = r.content.decode(errors="replace")
     found = re.search(r'name="_token" value="([^"]+)"', body)
@@ -286,69 +262,6 @@ def test_сброс_пароля_закрывает_админку(люди):
     assert ответ["admin_cookie"] and раздел["status"] == 200
     # Кука админки ещё не истекла, но пароль с тех пор другой — снова вход
     assert после["status"] == 302 and после["location"].startswith("/py/admin/login/")
-
-
-def test_вход_по_коду(люди):
-    """
-    Подключён код — после пароля админка спрашивает его; неверный не
-    пускает; верный — пускает; тот же код второй раз не проходит; вход
-    через сессию сайта (без куки админки) тоже спрашивает код.
-    """
-    sql("truncate login_attempts")
-    sql("delete from admin_two_factor")
-
-    try:
-        шаги = браузер(
-            ["get", "/py/admin/login/", None],
-            ["totp-enroll", "admin@savdex.uz", None],
-            вход("admin@savdex.uz"),
-            ["get", "/py/admin/", None],
-            ["post-code", "", {"good": False}],
-            ["post-code", "", {"shift": 1}],
-            ["get", "/py/admin/", None],
-            ["drop-admin-cookie", "", None],
-            ["get", "/py/admin/", None],
-            ["post-code", "", {"shift": 1}],
-            ["post", "/py/admin/logout/", None],
-        )
-    finally:
-        sql("delete from admin_two_factor")
-
-    _, _, вошёл, без_кода, неверный, верный, раздел, _, сайтом, повтор, выход = шаги
-
-    assert вошёл["status"] == 302
-    assert без_кода["status"] == 302 and без_кода["location"].startswith("/py/admin/2fa/verify/")
-    assert неверный["status"] == 422 and "Неверный код" in неверный["body"]
-    assert верный["status"] == 302 and верный["location"] == "/py/admin/" and верный["admin_cookie"]
-    assert раздел["status"] == 200
-    # Вход на сайт не обходит код
-    assert сайтом["status"] == 302 and сайтом["location"].startswith("/py/admin/2fa/verify/")
-    # Код, уже принятый, второй раз не проходит
-    assert повтор["status"] == 422
-    # Выйти можно и со страницы кода
-    assert выход["status"] == 302 and выход["location"] == "/py/admin/login/"
-
-
-def test_страница_подключения_кода(люди):
-    """«Вход по коду»: QR для приложения и ключ; ссылка — в шапке админки."""
-    sql("truncate login_attempts")
-    sql("delete from admin_two_factor")
-
-    try:
-        _, _, страница, раздел = браузер(
-            ["get", "/py/admin/login/", None],
-            вход("admin@savdex.uz"),
-            ["get", "/py/admin/2fa/setup/", None],
-            ["get", "/py/admin/", None],
-        )
-    finally:
-        sql("delete from admin_two_factor")
-
-    assert страница["status"] == 200
-    assert 'data-uri="otpauth://totp/SAVDEX' in страница["body"]
-    assert "Подключить" in страница["body"]
-    # Подключение начато, но не закончено — вход без кода по-прежнему
-    assert раздел["status"] == 200 and "/py/admin/2fa/setup/" in раздел["body"]
 
 
 def test_частота_попыток(люди):

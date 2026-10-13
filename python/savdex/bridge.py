@@ -149,16 +149,13 @@ def stamp(password_hash: str | None) -> str:
     return hmac.new(key, password_hash.encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def session_cookie(uid: int, stamp: str = "", mfa: bool = False) -> str:
-    """
-    Значение куки входа: номер, отпечаток пароля и «код второго фактора
-    введён» (savdex/twofactor.py), подписанные SECRET_KEY, со временем.
-    """
-    return signing.dumps({"uid": uid, "pw": stamp, "mfa": mfa}, salt=_SALT, compress=False)
+def session_cookie(uid: int, stamp: str = "") -> str:
+    """Значение куки входа: номер и отпечаток пароля, подписанные SECRET_KEY, со временем."""
+    return signing.dumps({"uid": uid, "pw": stamp}, salt=_SALT, compress=False)
 
 
-def session_data(value: str | None) -> tuple[int, str, bool] | None:
-    """Номер, отпечаток пароля и «код введён» из куки входа, если подпись цела и вход не истёк."""
+def session_data(value: str | None) -> tuple[int, str] | None:
+    """Номер и отпечаток пароля из куки входа, если подпись цела и вход не истёк."""
     if not value:
         return None
 
@@ -170,12 +167,12 @@ def session_data(value: str | None) -> tuple[int, str, bool] | None:
     if not isinstance(data, dict):
         return None
 
-    uid, pw, mfa = data.get("uid"), data.get("pw", ""), data.get("mfa", False)
+    uid, pw = data.get("uid"), data.get("pw", "")
 
     if not isinstance(uid, int) or isinstance(uid, bool) or not isinstance(pw, str):
         return None
 
-    return uid, pw, mfa is True
+    return uid, pw
 
 
 def session_uid(value: str | None) -> int | None:
@@ -195,11 +192,8 @@ def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None
     """
     with connection.cursor() as cursor:
         cursor.execute(
-            "select u.id, u.name, u.email, u.is_admin, u.admin_role, u.status, "
-            "u.admin_permissions, u.must_change_password, u.password, "
-            "exists (select 1 from admin_two_factor f where f.user_id = u.id "
-            "and f.confirmed_at is not null) from users u "
-            "where u.id = %s and u.deleted_at is null",
+            "select id, name, email, is_admin, admin_role, status, admin_permissions, "
+            "must_change_password, password from users where id = %s and deleted_at is null",
             [uid],
         )
         row = cursor.fetchone()
@@ -224,7 +218,6 @@ def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None
         status=str(row[5]),
         permissions=permissions if isinstance(permissions, dict) else {},
         stamp=stamp(row[8]),
-        two_factor=bool(row[9]),
     )
 
     if not admin.is_admin or admin.status != "active" or bool(row[7]):
