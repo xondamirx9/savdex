@@ -301,8 +301,10 @@ def test_раздел_и_город(сайт):
 
     props = каталог(сайт, f"/catalog?category={раздел}&city={город}")["props"]
 
-    # Раздел — с подразделом (i % 3 = 0 и 1), город — свой у чётных и нечётных
-    ожидаемо = [i for i in range(1, 27) if i % 3 != 2 and ДАННЫЕ["города"][i % 2] == город]
+    # Раздел — с подразделом (i % 3 = 0 и 1). Город — тот, что на карточке:
+    # компании (у объявления i — компания i % 3, её город — города[(i % 3) % 2]),
+    # а не записанный в объявлении (он у чётных и нечётных свой)
+    ожидаемо = [i for i in range(1, 27) if i % 3 != 2 and ДАННЫЕ["города"][(i % 3) % 2] == город]
     assert props["filters"]["category"] == раздел
     assert props["filters"]["city"] == город
     assert props["total"] == len(ожидаемо)
@@ -365,3 +367,18 @@ def test_повтор_показа_отсеивает_кэш(сайт):
     # Другая страница — другие объявления, их засчитывает
     открыть(сайт, "/catalog?page=2", куки, IP, ФАЙЛОВЫЙ)
     assert sql("select sum(impressions_count) from listings")[0][0] == 7
+
+
+def test_дешевле_по_курсу_а_не_по_числу(сайт, monkeypatch):
+    """100 USD дороже 500 000 сум: «дешевле» сравнивает цену в сумах по курсу ЦБ."""
+    from savdex.web import catalog
+    from savdex.web.currency import CurrencyRate
+
+    monkeypatch.setattr(CurrencyRate, "rates", lambda self: {"USD": 12_800.0, "EUR": 14_000.0})
+    цена = catalog._price_in_sum()
+    строки = sql(
+        f"select l.price, l.currency from (values (100, 'USD'), (500000, 'UZS'), "
+        f"(30, 'EUR')) as l(price, currency) order by {цена} asc"
+    )
+
+    assert строки == [(30, "EUR"), (500000, "UZS"), (100, "USD")]

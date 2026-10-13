@@ -612,15 +612,34 @@ def top_suppliers(ctx: Context) -> list[dict[str, Any]]:
     ]
 
 
+def shown_city_sql(service: int | None) -> tuple[str, list[Any]]:
+    """
+    Город, который карточка объявления показывает (Cards._card): город
+    компании, а у заявки площадки — её собственный. Фильтр по городу
+    ищет по нему же: раньше искал по городу объявления, а показывал город
+    компании, и выдача с подписью не сходилась. Нужны псевдонимы l и c.
+    """
+    if service is None:
+        return "c.city_id", []
+
+    return (
+        "(case when l.company_id = %s and l.source = 'import' then l.city_id else c.city_id end)",
+        [service],
+    )
+
+
 def city_options(locale: str) -> list[dict[str, Any]]:
     """PageController::cityOptions: города с живыми объявлениями, по названию."""
     names = _named("cities", locale)
+    shown, params = shown_city_sql(platform.service_company_id())
     cities = [
         {"id": r["id"], "name": names[r["id"]]}
         for r in _rows(
-            "select id from cities c where is_active and exists (select 1 from listings l "
-            "where l.city_id = c.id and l.status = 'active' and l.deleted_at is null"
-            f"{LIVE_COMPANY})"
+            "select id from cities ci where is_active and exists (select 1 from listings l "
+            "join companies c on c.id = l.company_id and c.status = 'active' "
+            f"and c.deleted_at is null where {shown} = ci.id and l.status = 'active' "
+            "and l.deleted_at is null)",
+            params,
         )
     ]
 
