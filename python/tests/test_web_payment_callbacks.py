@@ -719,3 +719,31 @@ def test_вебхук_другой_провайдер(сайт, касса, prov
 
     assert итог["ответ"]["status"] == 404
     assert итог["база"]["transactions"] == []
+
+
+def test_вебхук_по_возвращённому_счёту(сайт, касса):
+    """
+    Деньги по счёту вернули, а провайдер прислал запоздалое «оплачено»:
+    счёт остаётся возвращённым, купленное второй раз не выдаётся.
+    """
+    касса.режим = "completed"
+
+    def подготовка() -> None:
+        сброс()()
+        sql(
+            "update payments set provider = 'uzum', external_id = 'ORD-SVD-000001', "
+            "status = 'refunded'"
+        )
+
+    итог = вызов(
+        сайт,
+        касса,
+        "/payments/uzum/callback",
+        {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+        подготовка,
+        вход=None,
+    )
+    база = итог["база"]
+
+    assert [p[1] for p in база["payments"]] == ["refunded"]
+    assert база["subscriptions"] == [] and база["wallet_log"] == []

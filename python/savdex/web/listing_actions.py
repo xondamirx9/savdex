@@ -69,12 +69,21 @@ def _search_text(row: dict[str, Any]) -> str:
     return index(" ".join(str(p) for p in parts if p not in (None, "", "0")))
 
 
-def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, Any]) -> bool:
+def save_listing(
+    ctx: Context | None,
+    row: dict[str, Any],
+    changes: dict[str, Any],
+    *,
+    actor: str = "owner",
+) -> bool:
     """
     $listing->forceFill($changes)->save(): изменившиеся поля и
     search_text, updated_at; у администратора — строка журнала. Без
     запроса (ctx None — команда по расписанию) журнала нет, как у
     AuditObserver без вошедшего администратора.
+
+    Смена статуса — только разрешённая для actor (savdex/web/transitions.py:
+    owner — владелец, moderator — модератор, system — расписание).
     """
     after = {**row, **changes}
     after["search_text"] = _search_text(after)
@@ -86,6 +95,11 @@ def save_listing(ctx: Context | None, row: dict[str, Any], changes: dict[str, An
 
     if not dirty:
         return False
+
+    if "status" in dirty:
+        from savdex.web import transitions
+
+        transitions.check_listing(row["status"], dirty["status"], actor, listing_id=row["id"])
 
     now = _now()
     sets = ", ".join(f"{c} = %s" for c in dirty)

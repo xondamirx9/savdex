@@ -233,6 +233,11 @@ def approve(ctx: Context, actor: access.Admin, refund: dict[str, Any], note: str
         _decide(ctx, actor, refund, DONE, note)
 
         if payments and refundable(payments[0]) == 0:
+            from savdex.web import transitions
+
+            transitions.check_payment(
+                payments[0]["status"], transitions.REFUNDED, payment_id=payments[0]["id"]
+            )
             eloquent.save(
                 ctx,
                 "payments",

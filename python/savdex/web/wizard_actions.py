@@ -25,7 +25,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex.guards import allowed_writes
 from savdex.tenders.slug import numbered_slug
-from savdex.web import analytics, eloquent, ui
+from savdex.web import analytics, eloquent, transitions, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan, listing_limit_message
 from savdex.web.chat_actions import _unverified, mask_contacts
@@ -66,6 +66,9 @@ _TRANSLATED = ("title", "description", "delivery_terms", "payment_terms")
 
 
 def _save(ctx: Context, listing: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
+    if "status" in changes and changes["status"] != listing["status"]:
+        transitions.check_listing(listing["status"], changes["status"], listing_id=listing["id"])
+
     # Перевод делается один раз: без сброса после правки посетитель на другом
     # языке видел старый текст (М400 вместо М500). Пустой перевод фоновая
     # задача (manage.py translate) заполнит заново — как у тендеров и резюме
@@ -265,6 +268,12 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
 
     if listing["status"] == "rejected":
         flash(ctx, "error", ctx.t("messages.listing.resubmit_closed"))
+
+        return back(ctx)
+
+    # Ждёт решения модератора — сам владелец его не выпустит
+    if not transitions.listing_allowed(listing["status"], "active"):
+        flash(ctx, "error", ctx.t("messages.listing.in_moderation"))
 
         return back(ctx)
 
