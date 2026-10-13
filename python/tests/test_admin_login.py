@@ -165,7 +165,7 @@ def test_вход_сотрудника_и_сессия_сайта(люди):
     assert ответ["admin_cookie"]
     assert раздел["status"] == 200 and "admin" in раздел["body"]
     # Вход в админку — вход и на сайт: одна сессия Laravel
-    assert str(люди["admin"]) in кто["body"]
+    assert json.loads(кто["body"])["user_id"] == люди["admin"]
     assert снова["status"] == 200
     # Кука админки пропала, сессия сайта осталась — пускает и выдаёт куку
     assert без_куки["status"] == 200 and без_куки["admin_cookie"]
@@ -238,7 +238,7 @@ def test_выход_из_админки_и_с_сайта(люди):
 
     assert ответ["status"] == 302
     assert выход["status"] == 302 and выход["location"] == "/py/admin/login/"
-    assert str(люди["admin"]) not in кто["body"]
+    assert json.loads(кто["body"]).get("user_id") is None
     assert раздел["status"] == 302 and раздел["location"].startswith("/py/admin/login/")
 
 
