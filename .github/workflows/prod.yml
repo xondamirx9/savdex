@@ -1,10 +1,11 @@
 # Боевые машины в Uztelecom Cloud: сайт; админка и фоновые задачи; база,
 # общая папка файлов и кэша (deploy/README.md).
 #
-# Пока только вручную (Actions → prod → Run workflow): до переезда
-# боевой сайт — Render, а эти машины — репетиция на своём адресе
-# (переменная PROD_DOMAIN, например new.savdex.uz) под паролем
-# тестового сервера. После переезда сюда добавится выкладка по слиянию.
+# Вручную (Actions → prod → Run workflow) — всегда. До переезда боевой
+# сайт — Render, а эти машины — репетиция на своём адресе (переменная
+# PROD_DOMAIN, например new.savdex.uz) под паролем тестового сервера.
+# После переезда (переменная PROD_LIVE=true) — ещё и каждое слияние в
+# основную ветку, как раньше на Render.
 #
 # Что делает (галочки):
 # - «bootstrap» — подготовить чистые машины (deploy/server/bootstrap.sh
@@ -42,6 +43,11 @@
 name: prod
 
 on:
+  push:
+    branches: [claude/website-copy-new-design-xaxsr0]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       ref:
@@ -74,7 +80,8 @@ permissions:
 
 jobs:
   deploy:
-    if: vars.PROD_HOST != ''
+    # Слияние выкладывается сюда только после переезда (PROD_LIVE=true)
+    if: vars.PROD_HOST != '' && (github.event_name == 'workflow_dispatch' || vars.PROD_LIVE == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -156,6 +163,10 @@ jobs:
             IdentityFile ~/.ssh/id_deploy
             IdentitiesOnly yes
             StrictHostKeyChecking yes
+            # Иначе ssh, узнав у машины новые ключи, перезаписывает
+            # known_hosts целиком — и теряет строки, которые мы дописываем
+            # в него в это же время
+            UpdateHostKeys no
             ServerAliveInterval 30
           CONF
 
@@ -169,8 +180,13 @@ jobs:
             web_key=$(cut -d' ' -f2- ~/.ssh/known_hosts)
             # До подготовки машин пользователя deploy ещё нет — через root
             for ip in "$ADMIN_IP" "$DB_IP"; do
-              ssh -o User=root "$HOST" "ssh-keyscan -t ed25519 $ip 2>/dev/null" >> ~/.ssh/known_hosts \
-                || ssh web "ssh-keyscan -t ed25519 $ip 2>/dev/null" >> ~/.ssh/known_hosts
+              found=$(ssh -o User=root "$HOST" "ssh-keyscan -t ed25519 $ip 2>/dev/null" \
+                || ssh web "ssh-keyscan -t ed25519 $ip 2>/dev/null" || true)
+              if [ -z "$found" ]; then
+                echo "::error::Машина $ip не отвечает по SSH из частной сети — проверьте, что она запущена и в сети savdex-prod."
+                exit 1
+              fi
+              printf '%s\n' "$found" >> ~/.ssh/known_hosts
             done
             printf '%s %s\n' "$WEB_IP" "$web_key" >> ~/.ssh/known_hosts
             {
@@ -356,3 +372,31 @@ jobs:
             | ssh web "SAVDEX_ROLE=web DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
                 bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
           echo "Готово: https://$SITE_DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверка снаружи
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Как посетитель: из интернета, по HTTPS. Сертификат Caddy
+          # выпускает при первом обращении, а в день переезда — ещё и когда
+          # DNS начнёт указывать сюда: ждём до пяти минут
+          auth=()
+          if [ "$SITE_DOMAIN" != savdex.uz ]; then
+            auth=(-u "savdex:$STAGING_PASSWORD")
+          fi
+          code() { curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "https://$SITE_DOMAIN$1"; }
+          for _ in $(seq 1 60); do
+            [ "$(code /up)" = 200 ] && break
+            sleep 5
+          done
+          for path in /up / /catalog /companies /py/admin/login/; do
+            status=$(code "$path")
+            echo "https://$SITE_DOMAIN$path — $status"
+            if [ "$status" != 200 ]; then
+              echo "::error::https://$SITE_DOMAIN$path отвечает $status"
+              exit 1
+            fi
+          done
+          # Админка — с машины админки: на её странице входа — форма Django
+          curl -fsS "${auth[@]}" "https://$SITE_DOMAIN/py/admin/login/" | grep -q 'name="_token"'
