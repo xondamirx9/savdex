@@ -21,6 +21,7 @@ import hashlib
 import logging
 import os
 import re
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -85,6 +86,32 @@ def verified_elsewhere(phone: str, user_id: int | None = None) -> bool:
             [digits, user_id or 0],
         )
     )
+
+
+def verified_user(raw: str) -> dict[str, Any] | None:
+    """
+    Учётка с этим подтверждённым номером — для входа и «Забыли пароль».
+    Сначала номер целиком (с кодом страны); не нашёлся — без кода страны
+    («90 123 45 67»): по концу номера, если такая учётка одна.
+    """
+    from savdex.web.cabinet import _rows
+
+    digits = re.sub(r"\D+", "", raw or "")
+
+    if len(digits) < 7:
+        return None
+
+    query = (
+        "select * from users where phone_verified_at is not null and deleted_at is null"
+        " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') "
+    )
+    rows = _rows(query + "= %s order by id limit 1", [digits])
+
+    if not rows and len(digits) >= 9:
+        rows = _rows(query + "like %s order by id limit 2", ["%" + digits])
+        rows = rows if len(rows) == 1 else []
+
+    return rows[0] if rows else None
 
 
 def _headers() -> dict[str, str]:

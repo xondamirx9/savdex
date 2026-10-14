@@ -207,13 +207,22 @@ def login(request: HttpRequest) -> HttpResponse:
         return refused
 
     data = input_of(request)
+    raw = _php_string(data.get("email")).strip(" \t\n\r\0\x0b")
+
+    # Вход по номеру: подтверждённый телефон вместо почты (регистрация по
+    # телефону). Неподтверждённый номер не годится — вписать можно любой
+    by_phone = "@" not in raw and re.fullmatch(r"\+?[\d\s\-()]{7,20}", raw) is not None
+    rules: dict[str, list[Any]] = {
+        "email": ["required", "string"] if by_phone else ["required", "string", "email"],
+        "password": ["required", "string"],
+    }
     errors = validate(
         data,
-        {"email": ["required", "string", "email"], "password": ["required", "string"]},
+        rules,
         ctx.locale,
         {
-            "email.required": ctx.t("messages.auth.email_required"),
-            "email.email": ctx.t("messages.auth.email_invalid"),
+            "email.required": ctx.t("messages.auth.login_required"),
+            "email.email": ctx.t("messages.auth.login_invalid"),
             "password.required": ctx.t("messages.auth.password_required"),
         },
     )
@@ -221,7 +230,13 @@ def login(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    email = str(data["email"]).strip(" \t\n\r\0\x0b").lower()
+    if by_phone:
+        owner = sms.verified_user(raw)
+        # Нет такого номера — тот же ответ, что и при неверном пароле
+        email = str(owner["email"]) if owner is not None else "phone:" + re.sub(r"\D+", "", raw)
+    else:
+        email = raw.lower()
+
     throttle = LoginThrottle(email, client_ip(request) or "")
 
     if throttle.locked():

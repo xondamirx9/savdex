@@ -269,17 +269,6 @@ SESSION_RESET_PHONE = "reset.sms_phone"
 SESSION_RESET_USER = "reset.sms_user"
 
 
-def _user_by_phone(phone: str) -> dict[str, Any] | None:
-    """Учётка с этим подтверждённым номером (по цифрам: номер вписывали по-разному)."""
-    rows = _rows(
-        "select * from users where phone_verified_at is not null"
-        " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = %s order by id limit 1",
-        ["".join(ch for ch in phone if ch.isdigit())],
-    )
-
-    return rows[0] if rows else None
-
-
 @form()
 def forgot_sms(request: HttpRequest) -> HttpResponse:
     """
@@ -304,7 +293,7 @@ def forgot_sms(request: HttpRequest) -> HttpResponse:
     if phone is None:
         return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
 
-    if _user_by_phone(phone) is not None and not sms.daily_limit_reached(phone):
+    if sms.verified_user(phone) is not None and not sms.daily_limit_reached(phone):
         sms.send_code(phone)
 
     store = _session(ctx)
@@ -341,7 +330,7 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
     if code == "":
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
-    user = _user_by_phone(phone)
+    user = sms.verified_user(phone)
 
     if user is None or not sms.check_code(phone, code):
         return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
