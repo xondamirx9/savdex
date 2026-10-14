@@ -92,47 +92,56 @@ def label(attributes: Mapping[str, Any], basename: str, key: Any) -> str:  # noq
     return f"{basename} #{key}"
 
 
+#: Заголовки с адресом посетителя, которые ставит край сети (Cloudflare
+#: перед Render) поверх присланного клиентом: подделать их нельзя.
+#: SAVDEX_CLIENT_IP_HEADERS — свой список через запятую, пусто — не читать
+CLIENT_IP_HEADERS = "CF-Connecting-IP,True-Client-IP"
+
+
+def _ip(value: object) -> str | None:
+    # Мусор в заголовке — не адрес: столбец на 45 знаков, и Symfony
+    # такое тоже отбрасывает
+    try:
+        return str(ipaddress.ip_address(str(value).strip()))
+    except ValueError:
+        return None
+
+
+def _hops() -> int:
+    """SAVDEX_PROXY_HOPS: сколько прокси дописывают себя в X-Forwarded-For справа."""
+    try:
+        return max(int(os.environ.get("SAVDEX_PROXY_HOPS", "0")), 0)
+    except ValueError:
+        return 0
+
+
 def client_ip(request: HttpRequest | None) -> str | None:
     """
-    Адрес посетителя — как Request::ip() у Laravel с trustProxies('*').
+    Адрес посетителя — для журнала, сессий и замков от перебора.
 
-    Laravel доверяет всем прокси и берёт самый левый адрес из
-    X-Forwarded-For. Это верно только за прокси, который заголовок
-    посетителя выбрасывает (Caddy на своих машинах). Балансировщик Render
-    присланный X-Forwarded-For не чистит, а дописывает справа: самый
-    левый адрес задаёт сам посетитель и обходит лимиты по IP. Поэтому
-    источник настраивается:
-
-    - CLIENT_IP_HEADER — заголовок, который ставит только свой прокси
-      (например, CF-Connecting-IP), — адрес из него;
-    - TRUSTED_PROXY_HOPS=N — N своих прокси перед Django (Apache тоже
-      считается): адрес N-й справа в цепочке X-Forwarded-For + REMOTE_ADDR;
-    - ничего не задано — как раньше, самый левый.
+    Render не чистит присланный клиентом X-Forwarded-For, а дописывает к
+    нему справа: самый левый адрес (как Request::ip() у Laravel с
+    trustProxies('*')) посетитель выбирает сам и обходит замок по IP.
+    Поэтому сначала — заголовок края сети (CF-Connecting-IP), затем
+    X-Forwarded-For с заданным числом своих прокси справа
+    (SAVDEX_PROXY_HOPS), и только без них — по-старому, самый левый.
     """
     if request is None:
         return None
 
-    forwarded = str(request.META.get("HTTP_X_FORWARDED_FOR", ""))
-    header = os.environ.get("CLIENT_IP_HEADER", "").strip()
-    hops = os.environ.get("TRUSTED_PROXY_HOPS", "").strip()
+    names = os.environ.get("SAVDEX_CLIENT_IP_HEADERS", CLIENT_IP_HEADERS)
 
-    if header:
-        meta = "HTTP_" + header.upper().replace("-", "_")
-        first = str(request.META.get(meta, "")).split(",")[0].strip()
-    elif hops.isdigit():
-        chain = [p.strip() for p in forwarded.split(",") if p.strip()]
-        chain.append(str(request.META.get("REMOTE_ADDR", "")))
-        first = chain[max(0, len(chain) - 1 - int(hops))]
-    else:
-        first = forwarded.split(",")[0].strip()
+    for name in (n.strip() for n in names.split(",")):
+        if name and (found := _ip(request.headers.get(name, ""))) is not None:
+            return found
 
-    for candidate in (first, request.META.get("REMOTE_ADDR")):
-        # Мусор в заголовке — не адрес: столбец на 45 знаков, и Symfony
-        # такое тоже отбрасывает
-        try:
-            return str(ipaddress.ip_address(str(candidate)))
-        except ValueError:
-            continue
+    chain = [part.strip() for part in str(request.META.get("HTTP_X_FORWARDED_FOR", "")).split(",")]
+    hops = _hops()
+    candidate = chain[-hops] if 0 < hops <= len(chain) else chain[0]
+
+    for value in (candidate, request.META.get("REMOTE_ADDR")):
+        if (found := _ip(value)) is not None:
+            return found
 
     return None
 

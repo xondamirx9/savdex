@@ -36,6 +36,17 @@ def php_escape(text: object) -> str:
     )
 
 
+def page_json(page: dict[str, Any]) -> str:
+    """
+    Данные страницы для <script type="application/json">. «/» уже
+    экранирован (php_json), но «<!--<script>» в отзыве или названии
+    переводит разбор HTML в режим, где закрывающий </script> не
+    закрывает: страница оставалась пустой. «<» вне строк в JSON не
+    бывает — заменяется везде, JSON.parse читает \u003c как «<».
+    """
+    return php_json(page).replace("<", "\\u003C")
+
+
 def full_url(ctx: Context) -> str:
     """
     Адрес, который просил браузер: строка запроса разобрана и собрана
@@ -245,10 +256,10 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
     ]
 
     lang = php_escape(ctx.locale.replace("_", "-"))
-    # «<» и «>» внутри строк — \u003C и \u003E: название «<!--<script>» иначе
-    # уводит парсер HTML из скрипта, и вся страница после него пропадает
-    data = php_json(page, hex_tags=True)
-    body = f'<script data-page="app" type="application/json">{data}</script><div id="app"></div>'
+    body = (
+        f'<script data-page="app" type="application/json">{page_json(page)}</script>'
+        '<div id="app"></div>'
+    )
 
     return (
         f'<!DOCTYPE html>\n<html lang="{lang}">\n<head>\n    '

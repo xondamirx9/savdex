@@ -146,7 +146,7 @@ def _remember(ответ: dict[str, Any]) -> str | None:
     return f"{uid}|{token == row[0]}|{hashed == ожидание}"
 
 
-def сброс(*, неудач: int = 0, чужих_адресов: int = 0, **поля: Any) -> Callable[[], None]:
+def сброс(*, неудач: int = 0, **поля: Any) -> Callable[[], None]:
     def run() -> None:
         sql("delete from login_attempts")
         sql("delete from admin_actions")
@@ -161,14 +161,6 @@ def сброс(*, неудач: int = 0, чужих_адресов: int = 0, **�
                 "insert into login_attempts (email, ip, successful, created_at) "
                 "values (%s, '127.0.0.1', false, now() - interval '90 seconds')",
                 [ПОЧТА],
-            )
-
-        # Неудачи с разных адресов: IP подделан, счётчик «почта + IP» пуст
-        for n in range(чужих_адресов):
-            sql(
-                "insert into login_attempts (email, ip, successful, created_at) "
-                "values (%s, %s, false, now() - interval '90 seconds')",
-                [ПОЧТА, f"198.51.100.{n + 1}"],
             )
 
     return run
@@ -217,10 +209,6 @@ def вошёл(итог: dict[str, Any], uid: int) -> bool:
         ({**ВЕРНО, "password": "wrong"}, {"неудач": 4}, {"email": МНОГО + "15 мин."}),
         # Пять неудач за 15 минут — и верный пароль не пускает
         (ВЕРНО, {"неудач": 5}, {"email": МНОГО + "14 мин."}),
-        # Двадцать неудач по почте с разных адресов — тоже блокировка
-        (ВЕРНО, {"чужих_адресов": 20}, {"email": МНОГО + "14 мин."}),
-        ({**ВЕРНО, "password": "wrong"}, {"чужих_адресов": 19}, {"email": МНОГО + "15 мин."}),
-        ({**ВЕРНО, "password": "wrong"}, {"чужих_адресов": 18}, {"email": НЕВЕРНО + "4 из 5"}),
         ({"email": "nobody@savdex.uz", "password": "x"}, {}, {"email": НЕВЕРНО + "4 из 5"}),
         (
             {"email": "не почта", "password": ""},
@@ -260,7 +248,7 @@ def test_вход(сайт, body, подготовка, ожидание):
         for поле in найдено:
             assert найдено[поле][0].startswith(ожидание[поле]), найдено[поле]
 
-        неудач = подготовка.get("неудач", 0) + подготовка.get("чужих_адресов", 0)
+        неудач = подготовка.get("неудач", 0)
         if body.get("password") == "wrong" or body.get("email") == "nobody@savdex.uz":
             # Неверная пара записана — с тем адресом, что ввели
             assert len(попытки) == неудач + 1
@@ -333,6 +321,8 @@ def test_выход(сайт, admin, remember):
     assert (итог["status"], итог["location"]) == (302, сайт)
     assert not итог["same_sid"] and итог["session"]["user_id"] is None
     assert laravel_session.LOGIN_KEY not in payload and payload["_token"] == "<token>"
+    # Вход в админку Django — та же учётка: его кука тоже стёрта
+    assert "savdex_py_admin" in итог["cookies"]
 
     if remember:
         # Кука «запомнить» забыта, токен в базе — новый
@@ -345,3 +335,42 @@ def test_выход(сайт, admin, remember):
 
     # Новый токен «запомнить» у администратора — в журнале
     assert len(итог["db"]["journal"]) == (1 if admin and remember else 0)
+
+
+def test_перебор_с_разных_адресов_запирает_учётку(сайт):
+    """
+    У каждого адреса свои пять попыток — но двадцать неудач по учётке со
+    всех адресов запирают её и для нового адреса, даже с верным паролем.
+    """
+
+    def подготовка() -> None:
+        сброс()()
+
+        for n in range(20):
+            sql(
+                "insert into login_attempts (email, ip, successful, created_at) "
+                "values (%s, %s, false, now() - interval '1 minute')",
+                [ПОЧТА, f"198.51.100.{n + 1}"],
+            )
+
+    итог = вход(сайт, "/login", подготовка, body=ВЕРНО)
+
+    assert итог["location"] == f"{сайт}/login"
+    assert итог["session"]["user_id"] is None
+    assert ошибки(итог)["email"][0].startswith(МНОГО)
+
+
+def test_неудачи_с_разных_адресов_ниже_порога_не_мешают(сайт):
+    def подготовка() -> None:
+        сброс()()
+
+        for n in range(19):
+            sql(
+                "insert into login_attempts (email, ip, successful, created_at) "
+                "values (%s, %s, false, now() - interval '1 minute')",
+                [ПОЧТА, f"198.51.100.{n + 1}"],
+            )
+
+    итог = вход(сайт, "/login", подготовка, body=ВЕРНО)
+
+    assert итог["location"] == f"{сайт}/cabinet"

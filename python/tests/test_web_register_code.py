@@ -489,3 +489,127 @@ def test_анкета_без_кода(сайт):
 
     assert итог["ответ"]["status"] == 200
     assert props["skipped"] is True and props["countryId"] == _страна("cn")
+
+
+# ── Код по SMS (Telnyx Verify, заглушка из test_sms) ────────────────
+
+
+@pytest.fixture(scope="module")
+def telnyx() -> Iterator[str]:
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    from .test_sms import _Telnyx
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Telnyx)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+
+
+def _смс(telnyx: str) -> dict[str, str]:
+    return {
+        **ОКРУЖЕНИЕ_DJANGO,
+        "TELNYX_API_KEY": "key-1",
+        "TELNYX_VERIFY_PROFILE_ID": "profile-1",
+        "TELNYX_API_URL": telnyx,
+    }
+
+
+def _по_смс(сайт: str, telnyx: str, path: str, body: dict[str, Any], register: dict[str, Any]):
+    return отправить(
+        сайт,
+        path,
+        подготовка(),
+        снимок(сайт),
+        данные={"register": register},
+        body=body,
+        env=_смс(telnyx),
+        headers=inertia(Referer=сайт + "/register/code"),
+    )
+
+
+def test_кнопка_смс(сайт, telnyx):
+    данные = {"register": {"email": АДРЕС, "country_id": _страна("cn")}}
+    итог = отправить(
+        сайт,
+        "/register/code",
+        подготовка(),
+        данные=данные,
+        method="GET",
+        env=_смс(telnyx),
+        headers={"Referer": сайт + "/register", "User-Agent": "savdex-parity"},
+    )
+    props = страница(итог["ответ"]["body"])["props"]
+
+    assert props["sms"] == {"enabled": True, "sentTo": None, "dialCode": "+86"}
+    # Без ключей Telnyx кнопки нет
+    без = страница(шаг(сайт, "/register/code", данные=данные, method="GET")["ответ"]["body"])
+    assert без["props"]["sms"]["enabled"] is False
+
+
+def test_смс_отправлен(сайт, telnyx):
+    register = {"email": АДРЕС, "country_id": _страна("cn")}
+    итог = _по_смс(сайт, telnyx, "/register/sms", {"phone": "138 1234 5678"}, register)
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["headers"]["location"] == сайт + "/register/code"
+    # Код страны с первого шага дописан сам
+    assert сессия["register"]["sms_phone"] == "+8613812345678"
+
+
+@pytest.mark.parametrize(("phone", "ошибка"), [("123", "phone"), ("+8613812345000", "phone")])
+def test_смс_не_ушло(сайт, telnyx, phone, ошибка):
+    register = {"email": АДРЕС, "country_id": _страна("cn")}
+    итог = _по_смс(сайт, telnyx, "/register/sms", {"phone": phone}, register)
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert list(сессия["errors"]["default"]["messages"]) == [ошибка]
+    assert "sms_phone" not in сессия["register"]
+
+
+@pytest.mark.parametrize(("код", "верный"), [("12345", True), ("99999", False)])
+def test_код_из_смс(сайт, telnyx, код, верный):
+    register = {"email": АДРЕС, "country_id": _страна("cn"), "sms_phone": "+8613812345678"}
+    итог = _по_смс(сайт, telnyx, "/register/sms/confirm", {"sms_code": код}, register)
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    if верный:
+        assert итог["ответ"]["headers"]["location"] == сайт + "/register/details"
+        assert сессия["register"]["sms_verified"] == {
+            "email": АДРЕС,
+            "phone": "+8613812345678",
+        }
+    else:
+        assert list(сессия["errors"]["default"]["messages"]) == ["sms_code"]
+        assert "sms_verified" not in сессия["register"]
+
+
+def test_анкета_после_смс(сайт):
+    данные = {
+        "register": {
+            "email": АДРЕС,
+            "country_id": _страна("cn"),
+            "sms_verified": {"email": АДРЕС, "phone": "+8613812345678"},
+        }
+    }
+    итог = шаг(сайт, "/register/details", данные=данные, method="GET")
+    props = страница(итог["ответ"]["body"])["props"]
+
+    assert итог["ответ"]["status"] == 200
+    assert props["smsPhone"] == "+8613812345678" and props["skipped"] is False
+
+
+def test_смс_другого_адреса_не_в_счёт(сайт):
+    данные = {
+        "register": {
+            "email": АДРЕС,
+            "sms_verified": {"email": "other@reg.savdex.uz", "phone": "+8613812345678"},
+        }
+    }
+    итог = шаг(сайт, "/register/details", данные=данные, method="GET")
+
+    assert итог["ответ"]["headers"]["location"].endswith("/register/code")

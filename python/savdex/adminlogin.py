@@ -65,12 +65,12 @@ def _page(
     )
 
 
-def _session_cookie(response: HttpResponse, request: HttpRequest, uid: int) -> HttpResponse:
-    from django.db import connections
-
+def _session_cookie(
+    response: HttpResponse, request: HttpRequest, uid: int, stamp: str
+) -> HttpResponse:
     response.set_cookie(
         bridge.COOKIE,
-        bridge.session_cookie(uid, bridge.fingerprint(connections["default"], uid)),
+        bridge.session_cookie(uid, stamp),
         max_age=bridge.SESSION_TTL,
         path=bridge.COOKIE_PATH,
         secure=request.is_secure(),
@@ -139,7 +139,7 @@ def login_page(request: HttpRequest) -> HttpResponse:
 
     target = bridge.safe_next(data.get("next"))
 
-    return _session_cookie(HttpResponseRedirect(target), request, admin.id)
+    return _session_cookie(HttpResponseRedirect(target), request, admin.id, admin.stamp)
 
 
 @require_POST

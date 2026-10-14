@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import connection
 
 from savdex.guards import allowed_writes
@@ -17,6 +19,38 @@ from savdex.web.listing_actions import _stamp
 
 #: Wallet::KINDS
 KINDS = ("credits", "promo_units")
+
+
+def ensure(company_id: int) -> dict[str, Any]:
+    """
+    Кошелёк компании — найти или завести, всегда с датой смены периода.
+
+    У компании на бесплатном тарифе подписки нет, а кошелёк заводился
+    только при выдаче тарифа: раскрытие контакта и продвижение отвечали
+    «Кошелёк не найден». А кошелёк без period_resets_at смена периода
+    не трогала — месячный лимит бесплатных контактов не обновлялся.
+    """
+    from datetime import timedelta
+
+    from savdex.web.cabinet import company_plan
+
+    now = eloquent.now()
+    days = int(company_plan(company_id).get("period_days") or 30)
+
+    with allowed_writes("wallets"), connection.cursor() as cursor:
+        cursor.execute(
+            "insert into wallets (company_id, period_resets_at, created_at, updated_at) "
+            "select %s, %s, %s, %s where not exists "
+            "(select 1 from wallets where company_id = %s)",
+            [company_id, _stamp(now + timedelta(days=days)), _stamp(now), _stamp(now), company_id],
+        )
+        cursor.execute(
+            "update wallets set period_resets_at = %s where company_id = %s "
+            "and period_resets_at is null",
+            [_stamp(now + timedelta(days=days)), company_id],
+        )
+
+    return _rows("select * from wallets where company_id = %s order by id limit 1", [company_id])[0]
 
 
 def spend(

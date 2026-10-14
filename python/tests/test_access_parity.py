@@ -68,8 +68,8 @@ from savdex import access
     },
 ]
 
-#: 33 раздела × 7 действий
-ВСЕГО = 231
+#: 34 раздела × 7 действий
+ВСЕГО = 238
 
 #: Сколько прав даёт роль: уровни матрицы (r — 1, w — 3, m — 4, f — 5)
 #: плюс выгрузки и загрузки поимённо
@@ -77,7 +77,7 @@ from savdex import access
     "superadmin": ВСЕГО,
     # 16 разделов w (с интеграциями), 4 — r, резюме — m, этапы воронки и
     # потенциальные клиенты — f, 9 выгрузок/загрузок
-    "admin": 16 * 3 + 4 + 4 + 5 * 2 + 9,
+    "admin": 16 * 3 + 4 + 4 + 5 * 2 + 9 + 3,  # и технические работы (w)
     # 3 r, 7 w (4 из них только свои), загрузка потенциальных клиентов
     "sales": 3 + 7 * 3 + 1,
     # 3 r (объявления, тендеры, документы), 7 w, загрузка
@@ -85,12 +85,12 @@ from savdex import access
     # тендеры у него w, а не r
     "buyer_manager": 2 + 8 * 3 + 1,
     # 8 разделов m; справочники, лиды и сделки — r
-    "moderator": 8 * 4 + 3,
+    "moderator": 8 * 4 + 3 + 3,  # и технические работы (w)
     # 4 r, 5 w, 3 выгрузки
     "finance": 4 + 5 * 3 + 3,
     # 9 r, 3 w
     "support": 9 + 3 * 3,
-    "content_manager": 3 + 3 + 1,
+    "content_manager": 3 + 3 + 1 + 3,  # и технические работы (w)
     "нет-такой": 0,
     None: 0,
 }
@@ -140,7 +140,15 @@ def test_узкие_роли_поимённо():
         "catalogs.create",
         "catalogs.edit",
         "broadcasts.view",
+        "maintenance.view",
+        "maintenance.create",
+        "maintenance.edit",
     ]
+    # Технические работы — без доступа к настройкам площадки
+    assert "settings.edit" not in access.abilities_for("moderator")
+    assert "maintenance.edit" in access.abilities_for("moderator")
+    assert "maintenance.edit" in access.abilities_for("admin")
+    assert "maintenance.view" not in access.abilities_for("finance")
     assert "payments.export" in access.abilities_for("finance")
     assert "payments.delete" not in access.abilities_for("finance")
     assert "companies.delete" not in access.abilities_for("admin")
@@ -178,7 +186,7 @@ def _admin(case: dict) -> access.Admin:
     (ЧИСЛО_ПРАВ["admin"], ЧИСЛО_ПРАВ["admin"], False, "Администратор", []),
     (ЧИСЛО_ПРАВ["sales"], ЧИСЛО_ПРАВ["sales"], False, "Отдел продаж", ТОЛЬКО_СВОИ["sales"]),
     (ЧИСЛО_ПРАВ["finance"], ЧИСЛО_ПРАВ["finance"], False, "Финансы", []),
-    (7, 7, False, "Контент-менеджер", []),
+    (ЧИСЛО_ПРАВ["content_manager"], ЧИСЛО_ПРАВ["content_manager"], False, "Контент-менеджер", []),
     (0, 0, False, "Роль не назначена", []),
     (0, 0, False, "Роль не назначена", []),
     # Модератор и два выданных права

@@ -26,7 +26,16 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_session
 from savdex.guards import allowed_writes
-from savdex.web import eloquent, guard, locales, mail, messaging, password_rule, verification
+from savdex.web import (
+    eloquent,
+    guard,
+    locales,
+    mail,
+    messaging,
+    password_rule,
+    session,
+    verification,
+)
 from savdex.web.actions import form
 from savdex.web.auth_actions import _guest, _intended, _row, _session, _to
 from savdex.web.cabinet import _rows
@@ -39,18 +48,6 @@ from savdex.web.validation import _php_string, validate
 #: config('auth.passwords.users'): срок ссылки и пауза между запросами
 RESET_EXPIRE_MINUTES = 60
 RESET_THROTTLE_SECONDS = 60
-
-
-def _drop_sessions(user_id: int, keep: str | None = None) -> None:
-    """
-    Смена пароля — выход на остальных устройствах: строки sessions
-    пользователя прочь, кроме текущей. Без этого украденная сессия жила
-    бы и после смены пароля: вход по сессии пароль не сверяет.
-    """
-    with allowed_writes("sessions"), connection.cursor() as cursor:
-        cursor.execute(
-            "delete from sessions where user_id = %s and id <> %s", [user_id, keep or ""]
-        )
 
 
 def _with_errors(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
@@ -113,8 +110,10 @@ def force_password(request: HttpRequest) -> HttpResponse:
         casts={"must_change_password": "bool"},
     )
     # AuthenticateSession панели сверяет хеш пароля из сессии — уже новый
-    _session(ctx).put("password_hash_web", fresh_hash)
-    _drop_sessions(int(user["id"]), keep=_session(ctx).id)
+    store = _session(ctx)
+    store.put("password_hash_web", fresh_hash)
+    # Другие устройства со старым паролем — прочь, эта сессия остаётся
+    session.end_user_sessions(int(user["id"]), keep=store.id)
 
     if user["is_admin"]:
         # Inertia::location('/admin'): панель — не страница Inertia; адрес — как есть
@@ -211,6 +210,12 @@ def _send_reset_message(ctx: Context, email: str, channel: str) -> None:
     if user is None:
         return
 
+    # Почта не подтверждена — ссылка только письмом. Иначе занявший чужой
+    # адрес (регистрация без кода или по SMS) снова забирал бы аккаунт через
+    # свой Telegram или WhatsApp после того, как хозяин почты его вернул
+    if user["email_verified_at"] is None:
+        return
+
     token = create_reset_token(str(user["email"]))
     link = _reset_link(ctx, token, str(user["email"]))
 
@@ -218,7 +223,7 @@ def _send_reset_message(ctx: Context, email: str, channel: str) -> None:
         messaging.telegram(
             str(user["telegram_chat_id"]), ctx.t("messages.auth.reset_message", link=link)
         )
-    elif channel == "whatsapp" and (user["phone"] or "") != "":
+    elif channel == "whatsapp" and (user["phone"] or "") != "" and user["phone_verified_at"]:
         messaging.whatsapp(str(user["phone"]), link, user["locale"] or "ru")
 
 
@@ -313,25 +318,44 @@ def reset_password(request: HttpRequest) -> HttpResponse:
     if user is None or not fresh or not guard.check(str(data["token"]), record["token"]):  # type: ignore[index]
         return _with_errors(ctx, {"email": [ctx.t("messages.auth.reset_expired")]})
 
+    changes: dict[str, Any] = {
+        "password": guard.make(str(data["password"])),
+        "remember_token": random_string(60),
+        "must_change_password": False,
+    }
+
+    # Почта не подтверждена — ссылка могла прийти только письмом
+    # (_send_reset_message), значит сбросивший владеет адресом. Аккаунт —
+    # ему: почта подтверждена, а телефон и Telegram того, кто занял адрес
+    # без кода, отвязываются
+    reclaimed = user["email_verified_at"] is None
+
+    if reclaimed:
+        changes.update(
+            email_verified_at=eloquent.now(),
+            phone=None,
+            phone_verified_at=None,
+            telegram_chat_id=None,
+        )
+
     eloquent.save(
         ctx,
         "users",
         user,
-        {
-            "password": guard.make(str(data["password"])),
-            "remember_token": random_string(60),
-            "must_change_password": False,
-        },
+        changes,
         section="users",
         model="User",
         casts={"must_change_password": "bool"},
     )
 
-    with allowed_writes("password_reset_tokens"), connection.cursor() as cursor:
-        cursor.execute("delete from password_reset_tokens where email = %s", [user["email"]])
+    if reclaimed:
+        confirm_skipped(user["id"])
 
-    # Сбрасывает гость: своей сессии у пользователя здесь нет — прочь все
-    _drop_sessions(int(user["id"]))
+    with allowed_writes("password_reset_tokens", "sessions"), connection.cursor() as cursor:
+        cursor.execute("delete from password_reset_tokens where email = %s", [user["email"]])
+        # Новый пароль — все входы с других устройств закрываются: украденная
+        # или чужая сессия иначе жила бы и после сброса
+        cursor.execute("delete from sessions where user_id = %s", [user["id"]])
 
     flash(ctx, "status", ctx.t("messages.auth.password_reset"))
 

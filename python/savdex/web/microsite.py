@@ -25,7 +25,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 
-from savdex.web import content, inertia, locales, platform
+from savdex.web import content, inertia, locales, platform, visibility
 from savdex.web.cabinet import (
     _microsite_domain,
     _rows,
@@ -38,7 +38,7 @@ from savdex.web.chat_actions import str_limit
 from savdex.web.company import _file_size, business_card, href
 from savdex.web.directory import logo_url
 from savdex.web.home import _LISTING_COMPANY, Cards, visible_in
-from savdex.web.seo import Seo, php_json
+from savdex.web.seo import Seo
 from savdex.web.shared import Context, _php_round, initials, settings_values
 
 #: SitePage::LISTINGS: мини-сайт — витрина, а не каталог
@@ -208,12 +208,11 @@ def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Контакты мини-сайта: сначала «Мои контакты» (company_contacts,
     публичные). Телефона, почты, Telegram или WhatsApp там нет вовсе (даже
-    скрытого) — мини-сайт берёт их из профиля компании: правка в профиле
-    видна на сайте без отдельного шага.
-
-    Учётные записи владельца и сотрудников не подставляются: телефон и
-    почта из регистрации — личные, публиковать их никто не соглашался, а
-    на странице компании контакты к тому же открываются только платно.
+    скрытого) — мини-сайт берёт их сам: из профиля компании, а телефон и
+    почту — ещё и из учётной записи владельца (то, что вписали при
+    регистрации). Так у
+    только что зарегистрированной компании на сайте сразу есть как с ней
+    связаться; правка в профиле видна на сайте без отдельного шага.
     """
     contacts = [
         {
@@ -237,12 +236,20 @@ def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
             "select distinct type from company_contacts where company_id = %s", [company["id"]]
         )
     }
+    # Только владелец: личный телефон и почта сотрудников — не контакты
+    # компании, на публичную страницу они не выносятся
+    people = _rows(
+        "select phone, email from users where company_id = %s and deleted_at is null "
+        "and status = 'active' and company_role = 'owner' order by id",
+        [company["id"]],
+    )
 
     for kind in _AUTO_CONTACTS:
         if kind in have:
             continue
 
-        value = str(company.get(kind) or "").strip()
+        candidates = [company.get(kind), *(p.get(kind) for p in people)]
+        value = next((str(v).strip() for v in candidates if v and str(v).strip()), "")
 
         if value:
             contacts.append(_contact(kind, value))
@@ -418,10 +425,10 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
         tags,
     ]
     lang = e(ctx.locale.replace("_", "-"))
-    # «<» и «>» внутри строк — \u003C и \u003E: название «<!--<script>» иначе
-    # уводит парсер HTML из скрипта, и вся страница после него пропадает
-    data = php_json(page, hex_tags=True)
-    body = f'<script data-page="app" type="application/json">{data}</script><div id="app"></div>'
+    body = (
+        f'<script data-page="app" type="application/json">{inertia.page_json(page)}</script>'
+        '<div id="app"></div>'
+    )
 
     return (
         f'<!DOCTYPE html>\n<html lang="{lang}">\n<head>\n    '
@@ -479,7 +486,11 @@ def render(
 
 
 def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Опубликован, компания не заблокирована, тариф с мини-сайтом."""
+    """
+    Опубликован, компания видна на площадке (как её страница в каталоге:
+    только активная — не заблокированная, не скрытая, не на проверке),
+    тариф с мини-сайтом.
+    """
     found = _rows("select * from company_sites where subdomain = %s limit 1", [subdomain.lower()])
 
     if not found or found[0]["status"] != "published":
@@ -489,7 +500,7 @@ def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         "select * from companies where id = %s and deleted_at is null", [found[0]["company_id"]]
     )
 
-    if not companies or companies[0]["status"] == "blocked":
+    if not companies or not visibility.company_visible(companies[0]):
         return None
 
     if not company_plan(companies[0]["id"]).get("has_microsite"):

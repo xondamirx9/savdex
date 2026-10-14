@@ -9,13 +9,21 @@ savdex/web/validation.py. Сверка с настоящим Laravel (ответ
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
 
-from django.db import connection, transaction
-from django.http import HttpRequest, HttpResponse, HttpResponseNotAllowed, HttpResponseRedirect
+from django.db import IntegrityError, connection, transaction
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseNotAllowed,
+    HttpResponseRedirect,
+    JsonResponse,
+)
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 
 from savdex import audit
@@ -38,6 +46,8 @@ from savdex.web.tenders import _admin
 from savdex.web.validation import validate
 from savdex.web.views import not_found
 
+logger = logging.getLogger(__name__)
+
 
 def form(
     method: str = "POST",
@@ -59,10 +69,41 @@ def form(
                 return rate_headers(request, view(request, *args, **kwargs))
             except RefusedError as refused:
                 return refused.response
+            except IntegrityError as error:
+                return _double_submit(request, error)
 
         return wrapped
 
     return decorate
+
+
+#: unique_violation у PostgreSQL
+_UNIQUE = "23505"
+
+
+def _double_submit(request: HttpRequest, error: IntegrityError) -> HttpResponse:
+    """
+    Двойной щелчок: два одинаковых запроса разом, первый записал, второй
+    упёрся в уникальный ключ — и отдавал 500. Проигравший гонку просто
+    возвращает назад: то, что он хотел, уже сделано первым. Прочие
+    нарушения целостности — ошибка, как и раньше.
+    """
+    if getattr(error.__cause__, "sqlstate", None) != _UNIQUE:
+        raise error
+
+    logger.warning("form.double_submit path=%s", request.path)
+
+    if "application/json" in request.headers.get("Accept", "") and not request.headers.get(
+        "X-Inertia"
+    ):
+        return JsonResponse({"message": "duplicate"}, status=409)
+
+    referer = request.headers.get("Referer", "")
+    safe = url_has_allowed_host_and_scheme(
+        referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    )
+
+    return HttpResponseRedirect(referer if safe else "/", status=303)
 
 
 def _now() -> str:

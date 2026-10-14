@@ -19,7 +19,8 @@ from typing import Any
 
 import pytest
 
-from .factories import Выражение, объявления, тендер
+from .factories import Выражение, компания, объявления, тендер
+from .factories import пользователь as владелец
 from .pg_admin import PYTHON, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .web_site import адрес, вход, открыть, пользователь, страница
 
@@ -262,6 +263,32 @@ def test_нет_закупки(сайт):
 
     for slug in ("nothing-here", черновик, будущая):
         assert открыть(сайт, f"/tenders/{slug}")["status"] == 404
+
+
+@pytest.mark.parametrize(
+    ("компании", "автору"),
+    [
+        ({"status": "blocked"}, {}),
+        ({"status": "pending"}, {}),
+        ({}, {"status": "blocked"}),
+    ],
+)
+def test_закупка_заблокированной_компании_не_видна(сайт, компании, автору):
+    slug = адреса()[0]
+    всего = вкладка(сайт, "/catalog?type=tender")["props"]["tenders"]["total"]
+    cid = компания(**компании)
+    uid = владелец(company_id=cid, **автору)
+    sql("update tenders set author_id = %s where slug = %s", [uid, slug])
+
+    try:
+        страница_ = открыть(сайт, f"/tenders/{slug}")["status"]
+        после = вкладка(сайт, "/catalog?type=tender")["props"]["tenders"]["total"]
+    finally:
+        sql("update tenders set author_id = null where slug = %s", [slug])
+
+    # Вместе со страницей пропадают и контакты закупки
+    assert страница_ == 404
+    assert после == всего - 1
 
 
 def test_просмотры_считаются(сайт):

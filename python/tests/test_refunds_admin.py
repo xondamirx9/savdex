@@ -321,3 +321,56 @@ def test_отказ_без_причины(люди):
     _, ответ = django(люди["finance"], ("post", f"{LIST}1/reject/", {"note": "нет"}))
 
     assert ответ["status"] == 200 and снимок() == до
+
+
+def test_полный_возврат_пакета_забирает_кредиты(люди):
+    """
+    Полный возврат пакета списывает выданные по счёту кредиты; уже
+    потраченное не вернуть — остаток не уходит в минус. Раньше кредиты
+    оставались у компании вместе с деньгами.
+    """
+    сброс(заявки=((1000000, "requested"),))
+    sql("truncate wallets, wallet_transactions restart identity cascade")
+    sql(
+        "insert into wallets (company_id, credits, created_at, updated_at) "
+        "select id, 30, now(), now() from companies where slug = 'buyer'"
+    )
+    sql(
+        "insert into wallet_transactions (company_id, kind, amount, balance_after, reason, "
+        "subject_type, subject_id, created_at, updated_at) select id, 'credits', 50, 50, "
+        "'purchase', 'App\\Models\\Payment', 1, now(), now() from companies where slug = 'buyer'"
+    )
+
+    _, ответ = django(люди["superadmin"], ("post", f"{LIST}1/approve/", {"note": ""}))
+
+    assert ответ["status"] == 302
+    assert sql("select credits from wallets") == [(0,)]
+    assert sql(
+        "select amount, balance_after, reason from wallet_transactions where reason = 'refund'"
+    ) == [(-30, 0, "refund")]
+
+
+def test_полный_возврат_тарифа_закрывает_подписку(люди):
+    # До счетов: очистка подписок каскадом стёрла бы и их
+    sql("truncate subscriptions restart identity cascade")
+    сброс(заявки=((1000000, "requested"),))
+    sql(
+        "insert into plans (code, name, price_usd, period_days, listing_days, listings_limit, "
+        "contacts_limit, promo_units, verification_days, sort, is_active, created_at, "
+        "updated_at) values ('business', 'Business', 20, 30, 30, 20, 20, 50, 1, 2, true, "
+        "now(), now()) on conflict (code) do nothing"
+    )
+    sql(
+        "insert into subscriptions (company_id, plan_id, status, started_at, ends_at, "
+        "auto_renew, source, created_at, updated_at) select c.id, p.id, 'active', now(), "
+        "now() + interval '20 days', true, 'payment', now(), now() from companies c, plans p "
+        "where c.slug = 'buyer' limit 1"
+    )
+    sql("update payments set purpose = 'subscription', subscription_id = 1")
+
+    _, ответ = django(люди["superadmin"], ("post", f"{LIST}1/approve/", {"note": ""}))
+
+    assert ответ["status"] == 302
+    assert sql("select status, auto_renew, ends_at <= now() from subscriptions") == [
+        ("cancelled", False, True)
+    ]

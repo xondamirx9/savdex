@@ -51,7 +51,6 @@ def среда(monkeypatch, settings, tmp_path):
         3: сотрудник(3, "content_manager", permissions={"grant": ["backups.view"]}),
     }
     monkeypatch.setattr(bridge, "load_admin", lambda _conn, uid: люди.get(uid))
-    monkeypatch.setattr(bridge, "fingerprint", lambda _conn, uid: f"отпечаток-{uid}")
     from savdex.dashboard import widgets
     from savdex.web import shared
 
@@ -68,7 +67,7 @@ def среда(monkeypatch, settings, tmp_path):
 
 def браузер(uid: int) -> Client:
     client = Client()
-    client.cookies[bridge.COOKIE] = bridge.session_cookie(uid, f"отпечаток-{uid}")
+    client.cookies[bridge.COOKIE] = bridge.session_cookie(uid)
 
     return client
 

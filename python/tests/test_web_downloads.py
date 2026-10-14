@@ -256,3 +256,14 @@ def test_файл_задачи_заблокированной_компании(�
         assert _запрос(сайт, f"/it-services/files/{номер}", False) == _нет()
     finally:
         sql("update companies set status = 'active' where slug = 'other'")
+
+
+def test_файл_завершённой_задачи(сайт):
+    """Завершённая задача открыта всем вошедшим — и её файлы скачиваются."""
+    номер = int(sql("select id from it_task_files where title = 'ТЗ проекта.pdf'")[0][0])
+    sql("update it_tasks set status = 'completed' where slug = 'task-ТЗ проекта.pdf'")
+
+    try:
+        assert _запрос(сайт, f"/it-services/files/{номер}", False) == ЗАДАЧИ["ТЗ проекта.pdf"]
+    finally:
+        sql("update it_tasks set status = 'active' where slug = 'task-ТЗ проекта.pdf'")

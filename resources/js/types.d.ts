@@ -8,6 +8,8 @@ export interface AuthUser {
     email_verified: boolean;
     /** Код из письма пропущен при регистрации: всё открыто, но с меткой «Не подтверждено» */
     email_skipped?: boolean;
+    /** Телефон подтверждён кодом из SMS (регистрация через Telnyx) */
+    phone_verified?: boolean;
     must_change_password: boolean;
     is_admin: boolean;
 }
@@ -115,6 +117,11 @@ export interface SharedProps extends InertiaPageProps {
      * из репозитория.
      */
     brandLogo: string;
+    /**
+     * Технические работы: until — время окончания (UTC, ISO). Задаётся
+     * в админке настройкой maintenance_until; null — работ нет.
+     */
+    maintenance?: { until: string } | null;
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];

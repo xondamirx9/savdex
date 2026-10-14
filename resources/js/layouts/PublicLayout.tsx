@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { FlashToast } from '@/components/FlashToast';
+import { MaintenanceOverlay } from '@/components/MaintenanceOverlay';
 import { MobileTabBar } from '@/components/MobileTabBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -87,6 +88,7 @@ export function PublicLayout({
             <main id="main">{children}</main>
             {/* Итог действия на витрине: «нет кредитов», «добавлено в избранное» */}
             <FlashToast />
+            <MaintenanceOverlay />
             {!noFooter && <SiteFooter />}
             <MobileTabBar />
         </>

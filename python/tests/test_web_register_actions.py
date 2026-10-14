@@ -143,6 +143,7 @@ def регистрация(
     отключена: bool = True,
     подтверждена: bool = True,
     без_кода: str | None = None,
+    смс: str | None = None,
 ) -> dict[str, Any]:
     sql("delete from users where email like '%%@reg.savdex.uz' or email = 'taken@savdex.uz'")
     sql("delete from companies where slug <> 'taken'")
@@ -180,6 +181,11 @@ def регистрация(
     if подтверждена and isinstance(body.get("email"), str):
         адрес_ = body["email"].strip().lower()
         данные["register"] = {"email": адрес_, "verified_email": адрес_}
+
+    # Номер подтверждён кодом из SMS (Telnyx), почта — нет
+    if смс is not None and isinstance(body.get("email"), str):
+        адрес_ = body["email"].strip().lower()
+        данные["register"] = {"email": адрес_, "sms_verified": {"email": адрес_, "phone": смс}}
 
     # Код пропущен (страна с «Регистрация без кода»): страна — с первого шага
     if без_кода is not None and isinstance(body.get("email"), str):
@@ -625,3 +631,17 @@ def test_город_человека_в_профиле(сайт):
         "join city_translations t on t.city_id = ci.id and t.locale = 'ru' "
         "join countries c on c.id = k.country_id where k.slug <> 'taken'"
     ) == [("Нукус", "uz")]
+
+
+def test_регистрация_по_смс(сайт):
+    """Номер подтверждён кодом из SMS: учётка полноценная, телефон — подтверждённый."""
+    итог = регистрация(
+        сайт, {**ВЕРНО, "phone": "+998 99 000-00-00"}, подтверждена=False, смс="+998901234567"
+    )
+
+    assert итог["location"].endswith("/cabinet")
+    assert sql(
+        "select u.phone, u.phone_verified_at is not null, u.email_verified_at is null, "
+        "u.email_code_skipped, k.email_unconfirmed from users u "
+        "join companies k on k.id = u.company_id where u.email like '%%@reg.savdex.uz'"
+    ) == [("+998901234567", True, True, False, False)]

@@ -513,7 +513,7 @@ class OnBoard(Scoped):
         field = super().owner_field(request, **kwargs)
         staff = _admin_of(request)
 
-        if staff.scope_is_own(self.section):
+        if staff.scope_is_own(self.section) and field.queryset is not None:
             field.queryset = field.queryset.filter(pk=staff.id)
 
         return field

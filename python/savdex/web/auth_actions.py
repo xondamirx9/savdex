@@ -4,8 +4,8 @@ AuthenticatedSessionController, RegisteredUserController и
 App\\Services\\Auth\\LoginThrottle.
 
 Вход: единое сообщение для «нет такого» и «неверный пароль» с остатком
-попыток; пять неудач за 15 минут по связке почта + IP или двадцать по
-одной почте — блокировка с обратным отсчётом; заблокированного не пускает и с верным паролем.
+попыток; пять неудач за 15 минут по связке почта + IP — блокировка с
+обратным отсчётом; заблокированного не пускает и с верным паролем.
 Успех: счётчик сброшен, сессия под новым номером, метка последнего
 входа, выданный пароль — на смену, иначе — туда, куда шёл (url.intended).
 
@@ -38,20 +38,16 @@ from savdex.web.validation import validate
 # ── LoginThrottle ───────────────────────────────────────────────────
 
 MAX_ATTEMPTS = 5
-#: Неудач по одной почте с любых адресов. IP посетитель может подделать
-#: (audit.client_ip), и счётчик «почта + IP» тогда каждый раз новый —
-#: этот предел перебор пароля всё равно останавливает. Выше пяти, чтобы
-#: чужие опечатки с разных адресов не запирали хозяина сразу
-MAX_ATTEMPTS_PER_EMAIL = 20
 LOCKOUT_MINUTES = 15
 WINDOW_MINUTES = 15
+#: Неудач по самой учётке со всех адресов за то же окно: перебор пароля с
+#: тысяч адресов (у каждого — свои пять попыток) упирается сюда. С запасом:
+#: чужими неудачами хозяина почти не запереть, а сброс пароля открыт всегда
+ACCOUNT_MAX_ATTEMPTS = 20
 
 
 class LoginThrottle:
-    """
-    Неудачные попытки входа в таблице login_attempts: пять по связке
-    почта + IP или двадцать по одной почте — блокировка.
-    """
+    """Неудачные попытки входа по связке почта + IP — в таблице login_attempts."""
 
     def __init__(self, email: str, ip: str) -> None:
         self.email = email
@@ -60,48 +56,48 @@ class LoginThrottle:
     def _since(self) -> datetime:
         return eloquent.now() - timedelta(minutes=WINDOW_MINUTES)
 
-    def _failures(self, *, any_ip: bool = False) -> tuple[str, list[Any]]:
-        where = "email = %s and successful = false and created_at >= %s"
-        params: list[Any] = [self.email, _stamp(self._since())]
-
-        if not any_ip:
-            where += " and ip = %s"
-            params.append(self.ip)
-
-        return where, params
-
-    def failed_attempts(self, *, any_ip: bool = False) -> int:
-        where, params = self._failures(any_ip=any_ip)
-
+    def failed_attempts(self) -> int:
         with connection.cursor() as cursor:
-            cursor.execute(f"select count(*) from login_attempts where {where}", params)
+            cursor.execute(
+                "select count(*) from login_attempts where email = %s and ip = %s "
+                "and successful = false and created_at >= %s",
+                [self.email, self.ip, _stamp(self._since())],
+            )
             return int(cursor.fetchone()[0])
 
+    def account_failures(self) -> int:
+        """Неудачи по учётке со всех адресов за окно."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "select count(*) from login_attempts where email = %s "
+                "and successful = false and created_at >= %s",
+                [self.email, _stamp(self._since())],
+            )
+            return int(cursor.fetchone()[0])
+
+    def account_locked(self) -> bool:
+        return self.account_failures() >= ACCOUNT_MAX_ATTEMPTS
+
     def remaining(self) -> int:
+        if self.account_locked():
+            return 0
+
         return max(0, MAX_ATTEMPTS - self.failed_attempts())
 
-    def _locked_by_email(self) -> bool:
-        return self.failed_attempts(any_ip=True) >= MAX_ATTEMPTS_PER_EMAIL
-
     def locked(self) -> bool:
-        return self.remaining() == 0 or self._locked_by_email()
+        return self.remaining() == 0
 
-    def seconds_until_unlock(self) -> int:
-        """unlocksAt: последняя неудача в окне плюс 15 минут."""
-        if self.remaining() == 0:
-            where, params = self._failures()
-            limit = MAX_ATTEMPTS
-        elif self._locked_by_email():
-            where, params = self._failures(any_ip=True)
-            limit = MAX_ATTEMPTS_PER_EMAIL
-        else:
-            return 0
+    def _unlocks_after(self, by_ip: bool, limit: int) -> int:
+        """Самая ранняя из limit последних неудач плюс 15 минут — сколько секунд ждать."""
+        where = "email = %s and ip = %s" if by_ip else "email = %s"
+        params: list[Any] = [self.email, self.ip] if by_ip else [self.email]
 
         with connection.cursor() as cursor:
             cursor.execute(
                 f"select created_at from login_attempts where {where} "
+                "and successful = false and created_at >= %s "
                 "order by created_at desc limit %s",
-                [*params, limit],
+                [*params, _stamp(self._since()), limit],
             )
             # ->value(): первая строка выборки
             row = cursor.fetchone()
@@ -109,6 +105,23 @@ class LoginThrottle:
         unlocks = (row[0] if row else eloquent.now()) + timedelta(minutes=LOCKOUT_MINUTES)
 
         return max(0, int((unlocks - eloquent.now()).total_seconds()))
+
+    def seconds_until_unlock(self) -> int:
+        """unlocksAt: самая ранняя из пяти последних неудач плюс 15 минут."""
+        if not self.locked():
+            return 0
+
+        waits = []
+
+        if self.failed_attempts() >= MAX_ATTEMPTS:
+            waits.append(self._unlocks_after(True, MAX_ATTEMPTS))
+
+        if self.account_locked():
+            # Окно учётки скользит: замок снимается, когда старейшая из
+            # последних двадцати неудач выйдет из окна
+            waits.append(self._unlocks_after(False, ACCOUNT_MAX_ATTEMPTS))
+
+        return max(waits, default=0)
 
     def _record(self, successful: bool, user_agent: str | None) -> None:
         with allowed_writes("login_attempts"), connection.cursor() as cursor:
@@ -284,8 +297,14 @@ def logout(request: HttpRequest) -> HttpResponse:
     store.regenerate_token()
 
     # redirect('/') — адрес без языка; LocalizeUrl его не трогает только
-    # для внешних, здесь — хост площадки
-    return _to(ctx, "/")
+    # для внешних, здесь — хост площадки. Вход в админку Django — та же
+    # учётка: выход с сайта закрывает и его
+    from savdex import bridge
+
+    response = _to(ctx, "/")
+    response.delete_cookie(bridge.COOKIE, path=bridge.COOKIE_PATH)
+
+    return response
 
 
 def either(
@@ -358,6 +377,14 @@ def register(request: HttpRequest) -> HttpResponse:
         return _to(ctx, "/register")
 
     data = input_of(request)
+
+    # Номер подтверждён кодом из SMS — в учётку идёт он, а не вписанный
+    # в анкету: подтверждённым считается только тот, на который пришёл код
+    sms_verified = sms_phone(store)
+
+    if sms_verified is not None:
+        data["phone"] = sms_verified
+
     kind = _account_type(data.get("account_type"))
     legal, freelancer = kind == "legal", kind == "freelancer"
 
@@ -542,9 +569,11 @@ def register(request: HttpRequest) -> HttpResponse:
             "updated_at": now,
             "created_at": now,
             # Почта подтверждена кодом ещё до анкеты (markEmailAsVerified);
-            # код пропущен — подтвердит позже, а пока «Не подтверждено»
-            "email_verified_at": None if skipped else now,
+            # код пропущен — подтвердит позже, а пока «Не подтверждено».
+            # Подтверждён код из SMS — почта ещё не подтверждена, а телефон да
+            "email_verified_at": now if store.get(SESSION_VERIFIED) == email else None,
             "email_code_skipped": skipped,
+            "phone_verified_at": now if sms_verified is not None else None,
         }
 
         columns = list(row)
@@ -571,6 +600,8 @@ def register(request: HttpRequest) -> HttpResponse:
     store.forget(SESSION_VERIFIED)
     store.forget(SESSION_SKIPPED)
     store.forget(SESSION_COUNTRY)
+    store.forget(SESSION_SMS_PHONE)
+    store.forget(SESSION_SMS_VERIFIED)
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
@@ -602,6 +633,28 @@ SESSION_VERIFIED = "register.verified_email"
 SESSION_COUNTRY = "register.country_id"
 SESSION_SKIPPED = "register.skipped_email"
 
+#: Код по SMS (Telnyx, savdex/web/sms.py): номер, на который ушёл код, и
+#: подтверждённый номер вместе с адресом, для которого он подтверждён
+SESSION_SMS_PHONE = "register.sms_phone"
+SESSION_SMS_VERIFIED = "register.sms_verified"
+
+
+def sms_phone(store: Any) -> str | None:  # noqa: ANN401
+    """Номер, подтверждённый кодом из SMS для адреса первого шага, иначе None."""
+    email = store.get(SESSION_EMAIL)
+    verified = store.get(SESSION_SMS_VERIFIED)
+
+    if (
+        isinstance(email, str)
+        and email != ""
+        and isinstance(verified, dict)
+        and verified.get("email") == email
+        and isinstance(verified.get("phone"), str)
+    ):
+        return str(verified["phone"])
+
+    return None
+
 
 def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
     """
@@ -613,7 +666,8 @@ def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
     if not (isinstance(email, str) and email != ""):
         return None, False
 
-    if store.get(SESSION_VERIFIED) == email:
+    # Код из письма или из SMS — анкета открыта, учётка полноценная
+    if store.get(SESSION_VERIFIED) == email or sms_phone(store) is not None:
         return email, False
 
     if store.get(SESSION_SKIPPED) == email and code_optional(store.get(SESSION_COUNTRY)):

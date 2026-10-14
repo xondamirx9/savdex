@@ -83,6 +83,7 @@ SYSTEM_KEYS: frozenset[str] = frozenset(
         "moderation_hours",
         "legal_email",
         "reviews_premoderation",
+        "maintenance_until",
         "legal_bank",
         "legal_mfo",
         "legal_account",

@@ -23,13 +23,13 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache, laravel_storage
 from savdex.guards import allowed_writes
-from savdex.web import cabinet, content, inertia, locales, platform, ui
+from savdex.web import cabinet, content, inertia, locales, platform, ui, visibility
 from savdex.web.companies import website_url
 from savdex.web.directory import _named, logo_url, type_label, type_options
 from savdex.web.home import _utc, php_round, visible_in
 from savdex.web.it_tasks import SERVICE_TYPES, _decimal, number_format
 from savdex.web.seo import Seo
-from savdex.web.shared import Context, initials, is_person
+from savdex.web.shared import Context, identity_confirmed, initials, is_person
 from savdex.web.throttle import throttled
 
 #: StatsRecorder::DEDUP_MINUTES
@@ -314,7 +314,8 @@ def review_blocked(ctx: Context, target: int) -> str | None:
     if author["id"] == target:
         return ctx.t("messages.review.own_company")
 
-    if user["email_verified_at"] is None:
+    # Почта или телефон (код из SMS) подтверждены — можно
+    if not identity_confirmed(user):
         return ctx.t("messages.review.verify_email")
 
     status = _rows("select status from users where id = %s", [user["id"]])[0]["status"]
@@ -524,10 +525,10 @@ def _seo(ctx: Context, c: dict[str, Any], card: dict[str, Any]) -> Seo:
 def microsite_url(company: dict[str, Any]) -> str | None:
     """
     Адрес мини-сайта компании — если посетитель его увидит: сайт
-    опубликован, компания не заблокирована, в тарифе есть мини-сайт (как
+    опубликован, компания активна, в тарифе есть мини-сайт (как
     microsite._live). Иначе None, и кнопки в профиле нет.
     """
-    if company.get("status") == "blocked" or company.get("deleted_at") is not None:
+    if not visibility.company_visible(company):
         return None
 
     sites = _rows(
@@ -564,7 +565,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
 
     # Заблокированной компании нет ни в каталоге, ни на мини-сайте — нет и
     # визитки; себя компания видит (причина блокировки — в кабинете)
-    if c["status"] != "active" and viewer != c["id"]:
+    if not visibility.company_visible(c) and viewer != c["id"]:
         return not_found(ctx)
 
     company_view(ctx, c["id"])

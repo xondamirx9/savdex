@@ -15,8 +15,7 @@
    действуют сразу, а не когда истечёт вход.
 
 Своих таблиц сессий у Django нет — кука подписана SECRET_KEY и хранит
-номер, время входа и отпечаток (fingerprint: хеш пароля и remember_token):
-смена пароля и выход гасят и украденную копию куки.
+только номер и время входа.
 """
 
 from __future__ import annotations
@@ -137,30 +136,26 @@ def verify(token: str, now: float | None = None) -> Pass:
     return Pass(uid=uid, next=safe_next(data.get("next")))
 
 
-def fingerprint(connection: BaseDatabaseWrapper, uid: int) -> str | None:
+def stamp(password_hash: str | None) -> str:
     """
-    Отпечаток входа: HMAC от хеша пароля и remember_token. Смена пароля
-    и выход (новый remember_token, guard.logout) меняют его — и кука,
-    выданная раньше, больше не годится, даже украденная.
+    Отпечаток пароля для куки входа: HMAC от хэша, коротко. Сам хэш
+    в куку не попадает; сменили пароль — отпечаток другой.
     """
-    with connection.cursor() as cursor:
-        cursor.execute("select password, remember_token from users where id = %s", [uid])
-        row = cursor.fetchone()
+    if not password_hash:
+        return ""
 
-    if row is None:
-        return None
+    key = settings.SECRET_KEY.encode()
 
-    secret = str(settings.SECRET_KEY).encode()
-
-    return hmac.new(secret, f"{row[0] or ''}|{row[1] or ''}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(key, password_hash.encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def session_cookie(uid: int, stamp: str | None) -> str:
-    """Значение куки входа: номер и отпечаток, подписанные SECRET_KEY, со временем."""
-    return signing.dumps({"uid": uid, "fp": stamp or ""}, salt=_SALT, compress=False)
+def session_cookie(uid: int, stamp: str = "") -> str:
+    """Значение куки входа: номер и отпечаток пароля, подписанные SECRET_KEY, со временем."""
+    return signing.dumps({"uid": uid, "pw": stamp}, salt=_SALT, compress=False)
 
 
-def _session(value: str | None) -> dict[str, Any] | None:
+def session_data(value: str | None) -> tuple[int, str] | None:
+    """Номер и отпечаток пароля из куки входа, если подпись цела и вход не истёк."""
     if not value:
         return None
 
@@ -169,35 +164,22 @@ def _session(value: str | None) -> dict[str, Any] | None:
     except signing.BadSignature:
         return None
 
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+
+    uid, pw = data.get("uid"), data.get("pw", "")
+
+    if not isinstance(uid, int) or isinstance(uid, bool) or not isinstance(pw, str):
+        return None
+
+    return uid, pw
 
 
 def session_uid(value: str | None) -> int | None:
     """Номер из куки входа, если подпись цела и вход не истёк."""
-    data = _session(value) or {}
-    uid = data.get("uid")
+    data = session_data(value)
 
-    return uid if isinstance(uid, int) and not isinstance(uid, bool) else None
-
-
-def session_admin(connection: BaseDatabaseWrapper, value: str | None) -> access.Admin | None:
-    """
-    Сотрудник по куке входа: подпись, срок и отпечаток (fingerprint)
-    сходятся, в админку ему можно. Кука без отпечатка (выданная до него)
-    не годится — вход заново, по сессии сайта.
-    """
-    uid = session_uid(value)
-
-    if uid is None:
-        return None
-
-    stamp = str((_session(value) or {}).get("fp") or "")
-    current = fingerprint(connection, uid)
-
-    if not stamp or current is None or not hmac.compare_digest(stamp, current):
-        return None
-
-    return load_admin(connection, uid)
+    return data[0] if data is not None else None
 
 
 def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None:
@@ -211,7 +193,7 @@ def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None
     with connection.cursor() as cursor:
         cursor.execute(
             "select id, name, email, is_admin, admin_role, status, admin_permissions, "
-            "must_change_password from users where id = %s and deleted_at is null",
+            "must_change_password, password from users where id = %s and deleted_at is null",
             [uid],
         )
         row = cursor.fetchone()
@@ -235,6 +217,7 @@ def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None
         role=row[4],
         status=str(row[5]),
         permissions=permissions if isinstance(permissions, dict) else {},
+        stamp=stamp(row[8]),
     )
 
     if not admin.is_admin or admin.status != "active" or bool(row[7]):

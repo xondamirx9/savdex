@@ -14,7 +14,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import content, inertia, ui
+from savdex.web import content, inertia, ui, visibility
 from savdex.web.directory import _named, logo_url
 from savdex.web.it_tasks import _SELECT, _rows, card, types_under
 from savdex.web.request import context
@@ -41,7 +41,7 @@ RESUMES = 6
 #: Направления, у которых на странице есть резюме
 WITH_RESUMES = ("hr_services", "hr")
 
-_ACTIVE_COMPANY = "c.status = 'active'"
+_ACTIVE_COMPANY = visibility.company_sql()
 
 
 def service_menu() -> list[str]:
@@ -95,7 +95,7 @@ def _providers_where(types: list[str]) -> tuple[str, list[Any]]:
     anyof = " or ".join(["(c.it_specializations)::jsonb @> %s"] * len(types))
 
     return (
-        "from companies c where c.deleted_at is null and c.status = 'active' "
+        f"from companies c where {visibility.company_sql()} "
         f"and c.is_it_provider = true and ({anyof})",
         [json.dumps(t) for t in types],
     )
@@ -149,8 +149,7 @@ def _kinds(ctx: Context, code: str) -> list[dict[str, Any]]:
         r["service_type"]: int(r["total"])
         for r in _rows(
             "select t.service_type, count(*) as total from it_tasks t "
-            "where t.status = 'active' and exists (select 1 from companies c "
-            "where c.id = t.company_id and c.deleted_at is null and c.status = 'active') "
+            f"where t.status = 'active' and {visibility.live_company('t')} "
             "group by t.service_type"
         )
     }

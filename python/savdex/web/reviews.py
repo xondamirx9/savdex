@@ -18,7 +18,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import content, inertia, ui
+from savdex.web import content, inertia, ui, visibility
 from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo
@@ -39,7 +39,7 @@ CRITERIA = {
 _COMPANY_ROWS = (
     "select 'company' as kind, r.id, r.created_at from reviews r "
     "join companies c on c.id = r.company_id join companies a on a.id = r.author_company_id "
-    "where r.status = 'published' and c.status = 'active' and c.deleted_at is null "
+    f"where r.status = 'published' and {visibility.company_sql()} "
     "and a.deleted_at is null"
 )
 _PLATFORM_ROWS = (

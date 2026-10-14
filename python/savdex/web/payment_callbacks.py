@@ -562,6 +562,12 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
         )
         if status == "paid"
         else _rows("select * from payments where external_id = %s limit 1", [order_id])
+    ) or _rows(
+        # Заказ, заведённый раньше последнего «Оплатить» по тому же счёту:
+        # номер в счёте уже другой, но заказ записан в журнал счёта
+        "select p.* from payments p join payment_transactions t on t.payment_id = p.id "
+        "where t.provider = %s and t.provider_transaction_id = %s limit 1",
+        [provider, order_id],
     )
 
     if not found:
@@ -587,6 +593,13 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
     }
 
     if status == "paid":
+        if payment["status"] == "paid" and payment.get("external_id") not in (None, order_id):
+            # Счёт уже оплачен другим заказом: деньги пришли дважды — на возврат
+            log.error(
+                "payment.callback.paid_twice",
+                extra={"payment": payment["number"], "order": order_id},
+            )
+
         settlement.mark_paid(ctx, payment, {"provider": provider, "external_id": order_id})
         fields.update(state=PERFORMED, performed_at=eloquent.now())
     else:

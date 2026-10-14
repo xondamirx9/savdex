@@ -99,11 +99,14 @@ export default function Legal({ title, intro, preamble, updatedAt, draft, blocks
                         )}
 
                         {/* Документы утверждены только по-русски: на других
-                            языках честно предупреждаем, какой текст имеет силу */}
+                            языках честно предупреждаем, какой текст имеет силу.
+                            Заметным блоком, а не серой строкой — иначе её не
+                            видели и считали, что страница не переведена по ошибке */}
                         {getLocale() !== DEFAULT_LOCALE && (
-                            <p className="t-sm muted mt-16" lang={getLocale()}>
-                                {t('legal_page.russian_only')}
-                            </p>
+                            <div className="alert alert-info mt-24" lang={getLocale()} role="note">
+                                <span aria-hidden>ℹ</span>
+                                <div>{t('legal_page.russian_only')}</div>
+                            </div>
                         )}
 
                         <div className="prose" style={{ maxWidth: '72ch' }}>

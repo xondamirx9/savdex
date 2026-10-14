@@ -157,7 +157,11 @@ if [ "$ROLE" = db ]; then
 EXPORTS
     systemctl enable --now nfs-server
     exportfs -ra
-    install -d -m 700 -o deploy -g deploy "$APP_HOME/pg" "$APP_HOME/backup"
+    # Каталог базы — 755: образ postgres входит в него ещё до смены
+    # владельца, а сами данные (pg/18/docker) PostgreSQL закрывает
+    # правами 700 сам. С 700 на этом каталоге база не запускалась
+    install -d -m 755 -o root -g root "$APP_HOME/pg"
+    install -d -m 700 -o deploy -g deploy "$APP_HOME/backup"
 fi
 
 if [ "$ROLE" = admin ]; then

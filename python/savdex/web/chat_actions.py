@@ -188,20 +188,13 @@ def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
 
     now = _stamp(_now())
 
+    # Wallet::firstOrCreate — с датой смены периода, иначе счётчик
+    # откликов бесплатного тарифа не обнулялся никогда
+    from savdex.web import wallet as wallet_store
+
+    wallet_id = wallet_store.ensure(company["id"])["id"]
+
     with allowed_writes("wallets"), connection.cursor() as cursor:
-        # Wallet::firstOrCreate
-        wallets = _rows("select id from wallets where company_id = %s limit 1", [company["id"]])
-
-        if wallets:
-            wallet_id = wallets[0]["id"]
-        else:
-            cursor.execute(
-                "insert into wallets (company_id, created_at, updated_at) values (%s, %s, %s) "
-                "returning id",
-                [company["id"], now, now],
-            )
-            wallet_id = cursor.fetchone()[0]
-
         cursor.execute(
             "update wallets set responses_used_this_period = responses_used_this_period + 1, "
             "updated_at = %s where id = %s and responses_used_this_period < %s",
@@ -268,10 +261,10 @@ def _unverified(ctx: Context, strict: bool = False) -> HttpResponse | None:
     (email_ok); strict — только подтвердившего почту (отзывы).
     """
     from savdex.web.forms import _store
-    from savdex.web.shared import email_ok
+    from savdex.web.shared import email_ok, identity_confirmed
     from savdex.web.views import error
 
-    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+    if ctx.user is None or identity_confirmed(ctx.user):
         return None
 
     if not strict and email_ok(ctx.user):
