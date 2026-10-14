@@ -1,0 +1,466 @@
+# Боевые машины в Uztelecom Cloud: сайт; админка и фоновые задачи; база,
+# общая папка файлов и кэша (deploy/README.md).
+#
+# Выкладка — релизами. Слияние в основную ветку уходит только на
+# тестовый сервер (staging.yml); на боевой — пачкой всё, что накопилось
+# с прошлого релиза:
+# - вручную: Actions → prod → Run workflow (кнопка «Релиз»);
+# - по расписанию: каждый вечер в 22:00 по Ташкенту, если включено
+#   (переменная PROD_NIGHTLY_RELEASE=true) и с прошлого релиза в основной
+#   ветке есть новое; нового нет — машины не трогаются.
+# Что вошло в релиз — в сводке запуска (Summary): список слитых PR с
+# прошлого удачного релиза.
+#
+# Что делает (галочки):
+# - «bootstrap» — подготовить чистые машины (deploy/server/bootstrap.sh
+#   с ролями web, admin, db): Docker, файрвол, SSH по ключу, общая папка
+#   файлов (NFS) на машине базы;
+# - «настройки с Render» — перенести переменные окружения службы Render
+#   (APP_KEY, почта, оплата, Telegram…) на машины сайта и админки, по SSH
+#   и без вывода значений в журнал (deploy/server/render-env.py);
+# - «копия с Render» — база и загруженные файлы с Render на новые
+#   машины. Данные новых машин стираются, поэтому нужно ещё и слово «да»
+#   в поле подтверждения; после переезда (PROD_LIVE=true) — запрещено;
+# - каждый запуск — база (prod-db.sh, копии в S3 по расписанию), сборка
+#   образа на машине админки и отправка его на машину сайта
+#   (prod-build.sh), схема базы, админка, сайт (prod-app.sh).
+#
+# В GitHub Actions машины видны так: машина сайта — по публичному IP
+# сети savdex-prod (на неё переадресованы порты 22, 80 и 443), машины
+# админки и базы — через неё (ProxyJump) по частным адресам.
+#
+# Секреты и переменные (Settings → Secrets and variables → Actions):
+#   secrets.DEPLOY_SSH_KEY       тот же ключ, что у тестового; открытая часть — в машинах
+#   secrets.STAGING_PASSWORD     пароль на сайт на время репетиции (логин savdex)
+#   secrets.BACKUP_DATABASE_URL  база Render — для «копии с Render»
+#   secrets.BACKUP_PASSPHRASE    пароль шифрования копий (docs/backups.md)
+#   secrets.S3_ACCESS_KEY, S3_SECRET_KEY, vars.S3_ENDPOINT — хранилище Uztelecom
+#   vars.RENDER_SSH              адрес SSH службы Render — настройки и файлы
+#   vars.PROD_HOST               публичный IP сети savdex-prod
+#   vars.PROD_WEB_IP, PROD_ADMIN_IP, PROD_DB_IP  частные адреса машин (10.…)
+#   vars.PROD_DOMAIN             адрес сайта; не savdex.uz — сайт под паролем
+#   vars.PROD_KNOWN_HOSTS        ключи машин (строки known_hosts) — подскажет первый запуск
+#   vars.PROD_LIVE               true после переезда: «копия с Render» запрещена
+#   vars.PROD_NIGHTLY_RELEASE    true — ночной релиз в 22:00 по Ташкенту
+#
+# Репозиторий публичный, журналы Actions видят все: пароли, ключи и
+# значения настроек в журнал не выводятся.
+name: prod
+
+on:
+  schedule:
+    # 17:00 UTC — 22:00 по Ташкенту
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ветка или коммит (пусто — основная ветка)'
+        required: false
+        default: ''
+      bootstrap:
+        description: 'Сначала подготовить чистые машины'
+        type: boolean
+        default: false
+      render_env:
+        description: 'Перенести настройки (переменные окружения) с Render'
+        type: boolean
+        default: false
+      render_data:
+        description: 'Копия базы и файлов с Render (данные новых машин стираются)'
+        type: boolean
+        default: false
+      confirm:
+        description: 'Для копии с Render — напишите «да»'
+        required: false
+        default: ''
+
+concurrency:
+  group: prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Что войдёт в релиз: слитое с прошлого удачного релиза. По расписанию
+  # нового нет — выкладки нет
+  plan:
+    if: >-
+      vars.PROD_HOST != '' && (github.event_name == 'workflow_dispatch'
+      || (vars.PROD_LIVE == 'true' && vars.PROD_NIGHTLY_RELEASE == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Что выкладывается
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          # Прошлый релиз — последний удачный запуск этого workflow
+          prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod.yml/runs?status=success&per_page=20" \
+            --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID)][0].head_sha // \"\"")
+          count=-1
+          if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+            count=$(git rev-list --count --first-parent "$prev..$head")
+          fi
+          {
+            echo "## Релиз ${head:0:12}"
+            echo
+            if [ "$count" = 0 ]; then
+              echo "С прошлого релиза (${prev:0:12}) нового нет."
+            elif [ "$count" -gt 0 ]; then
+              echo "С прошлого релиза (${prev:0:12}) — $count:"
+              echo
+              git log --first-parent --format='%H' "$prev..$head" | while read -r commit; do
+                subject=$(git log -1 --format=%s "$commit")
+                title=$(git log -1 --format=%b "$commit" | sed -n '1{/./p}')
+                if [[ "$subject" =~ ^Merge\ pull\ request\ (#[0-9]+) ]]; then
+                  echo "- ${BASH_REMATCH[1]} ${title:-$subject}"
+                else
+                  echo "- $subject"
+                fi
+              done
+            else
+              echo "Прошлый релиз не найден — выкладывается ${head:0:12}."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          release=true
+          if [ "$EVENT" = schedule ] && [ "$count" = 0 ]; then
+            release=false
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HOST: ${{ vars.PROD_HOST }}
+      WEB_IP: ${{ vars.PROD_WEB_IP }}
+      ADMIN_IP: ${{ vars.PROD_ADMIN_IP }}
+      DB_IP: ${{ vars.PROD_DB_IP }}
+      SITE_DOMAIN: ${{ vars.PROD_DOMAIN || 'new.savdex.uz' }}
+      KNOWN_HOSTS: ${{ vars.PROD_KNOWN_HOSTS }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Проверка настроек
+        env:
+          RENDER_DATA: ${{ inputs.render_data }}
+          CONFIRM: ${{ inputs.confirm }}
+          LIVE: ${{ vars.PROD_LIVE }}
+        run: |
+          for name in WEB_IP ADMIN_IP DB_IP; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Нет переменной PROD_$name — частного адреса машины (deploy/README.md)"
+              exit 1
+            fi
+          done
+          if [ "$RENDER_DATA" = true ]; then
+            if [ "$LIVE" = true ]; then
+              echo "::error::Сайт уже переехал (PROD_LIVE=true): копия с Render стёрла бы живые данные."
+              exit 1
+            fi
+            if [ "$CONFIRM" != "да" ]; then
+              echo "::error::Копия с Render стирает базу и файлы новых машин — напишите «да» в поле подтверждения."
+              exit 1
+            fi
+          fi
+          echo "Адрес сайта: $SITE_DOMAIN"
+
+      - name: SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::error::Нет секрета DEPLOY_SSH_KEY (deploy/README.md)"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          # Ключ из Блокнота приходит с переносами Windows или одной
+          # строкой — собираем заново (как в staging.yml)
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          header=$(printf '%s' "$key" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1 || true)
+          if [ -z "$header" ]; then
+            echo "::error::В секрете DEPLOY_SSH_KEY не закрытый ключ."
+            exit 1
+          fi
+          body=$(printf '%s' "$key" | sed -e 's/-----BEGIN [A-Z ]*-----//' -e 's/-----END [A-Z ]*-----//' | tr -d ' \t\n')
+          umask 077
+          { echo "$header"; printf '%s' "$body" | fold -w 70; echo; echo "${header/BEGIN/END}"; } > ~/.ssh/id_deploy
+          ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null
+
+          cat > ~/.ssh/config <<CONF
+          Host web
+            HostName $HOST
+            User deploy
+          Host admin
+            HostName $ADMIN_IP
+            User deploy
+            ProxyJump web
+          Host db
+            HostName $DB_IP
+            User deploy
+            ProxyJump web
+          Host *
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            # Иначе ssh, узнав у машины новые ключи, перезаписывает
+            # known_hosts целиком — и теряет строки, которые мы дописываем
+            # в него в это же время
+            UpdateHostKeys no
+            ServerAliveInterval 30
+          CONF
+
+          # Ключи машин: из переменной PROD_KNOWN_HOSTS, иначе — с самих
+          # машин (машина сайта — напрямую, остальные — через неё, по
+          # частной сети) и подсказка, что сохранить
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -t ed25519 "$HOST" 2>/dev/null > ~/.ssh/known_hosts
+            web_key=$(cut -d' ' -f2- ~/.ssh/known_hosts)
+            # До подготовки машин пользователя deploy ещё нет — через root
+            for ip in "$ADMIN_IP" "$DB_IP"; do
+              found=$(ssh -o User=root "$HOST" "ssh-keyscan -t ed25519 $ip 2>/dev/null" \
+                || ssh web "ssh-keyscan -t ed25519 $ip 2>/dev/null" || true)
+              if [ -z "$found" ]; then
+                echo "::error::Машина $ip не отвечает по SSH из частной сети — проверьте, что она запущена и в сети savdex-prod."
+                exit 1
+              fi
+              printf '%s\n' "$found" >> ~/.ssh/known_hosts
+            done
+            printf '%s %s\n' "$WEB_IP" "$web_key" >> ~/.ssh/known_hosts
+            {
+              echo "Ключи машин не закреплены. Сохраните переменную PROD_KNOWN_HOSTS:"
+              cat ~/.ssh/known_hosts
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Ключи машин не закреплены — значение для переменной PROD_KNOWN_HOSTS в сводке запуска (Summary)."
+          fi
+          # Ключ машины сайта по частному адресу — для машины админки
+          # (prod-build.sh шлёт образ по частной сети)
+          if ! grep -q "^$WEB_IP " ~/.ssh/known_hosts; then
+            printf '%s %s\n' "$WEB_IP" "$(grep "^$HOST " ~/.ssh/known_hosts | cut -d' ' -f2-)" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Подготовить машины
+        if: inputs.bootstrap
+        run: |
+          set -euo pipefail
+          for role in web admin db; do
+            case "$role" in
+              web) target=(-o User=root "$HOST") ;;
+              admin) target=(-o User=root -o ProxyJump="root@$HOST" "$ADMIN_IP") ;;
+              db) target=(-o User=root -o ProxyJump="root@$HOST" "$DB_IP") ;;
+            esac
+            echo "── Машина $role"
+            ssh "${target[@]}" 'cat > /tmp/savdex-bootstrap.sh' < deploy/server/bootstrap.sh
+            ssh "${target[@]}" "SAVDEX_ROLE=$role WEB_IP=$WEB_IP ADMIN_IP=$ADMIN_IP bash /tmp/savdex-bootstrap.sh && rm -f /tmp/savdex-bootstrap.sh"
+          done
+
+      - name: Связь машины админки с машиной сайта
+        run: |
+          set -euo pipefail
+          # Ключ машины админки на машине сайта может только загрузить
+          # образ (docker load) и только с частного адреса админки
+          pub=$(ssh admin 'cat ~/.ssh/ship_to_web.pub')
+          line=$(printf 'restrict,from="%s",command="docker load" %s' "$ADMIN_IP" "$pub" | base64 -w0)
+          ssh web "line=\$(echo $line | base64 -d)
+            grep -qxF \"\$line\" ~/.ssh/authorized_keys || printf '%s\n' \"\$line\" >> ~/.ssh/authorized_keys"
+          # Машина админки узнаёт машину сайта по её ключу, а не на веру
+          entry=$(grep -m1 "^$WEB_IP " ~/.ssh/known_hosts)
+          ssh admin "grep -qxF '$entry' ~/.ssh/known_hosts 2>/dev/null || echo '$entry' >> ~/.ssh/known_hosts"
+
+      - name: Код на машинах
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          echo "Коммит $sha"
+          for host in admin web db; do
+            ssh "$host" "set -e
+              test -d /opt/savdex/src/.git || git clone --no-checkout --filter=blob:none '$REPO_URL' /opt/savdex/src
+              git -C /opt/savdex/src fetch --depth 1 origin '$sha'
+              git -C /opt/savdex/src checkout --force --detach FETCH_HEAD"
+          done
+
+      - name: База
+        env:
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_BUCKET: ${{ vars.S3_BUCKET || 'savdex' }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          # Ключи хранилища и пароль шифрования копий — на машину базы,
+          # через stdin, не в командной строке
+          if [ -n "$S3_ENDPOINT" ] && [ -n "$S3_ACCESS_KEY" ] && [ -n "$S3_SECRET_KEY" ] && [ -n "$BACKUP_PASSPHRASE" ]; then
+            {
+              printf 'S3_ENDPOINT=%q\n' "$S3_ENDPOINT"
+              printf 'S3_BUCKET=%q\n' "$S3_BUCKET"
+              printf 'S3_ACCESS_KEY=%q\n' "$S3_ACCESS_KEY"
+              printf 'S3_SECRET_KEY=%q\n' "$S3_SECRET_KEY"
+              printf 'BACKUP_PASSPHRASE=%q\n' "$BACKUP_PASSPHRASE"
+            } | ssh db 'umask 077; mkdir -p /opt/savdex/env; cat > /opt/savdex/env/backup.env'
+          else
+            echo "::warning::Нет ключей хранилища или BACKUP_PASSPHRASE — копии с машины базы не пойдут."
+          fi
+          ssh db 'bash /opt/savdex/src/deploy/server/prod-db.sh'
+          # Адрес базы с паролями — сайту и админке
+          for host in web admin; do
+            ssh db 'cat /opt/savdex/env/app-db.env' \
+              | ssh "$host" 'umask 077; mkdir -p /opt/savdex/env; cat > /opt/savdex/env/db.env'
+          done
+
+      - name: Настройки с Render
+        if: inputs.render_env
+        env:
+          RENDER_SSH: ${{ vars.RENDER_SSH }}
+          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY || 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFON8eay2FgHDBIVOLxWn/AWnsDJhCVvlY1igWEFoLD2' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RENDER_SSH" ]; then
+            echo "::error::Нет переменной RENDER_SSH (deploy/README.md)"
+            exit 1
+          fi
+          printf '%s %s\n' "${RENDER_SSH#*@}" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
+          umask 077
+          ssh -o UpdateHostKeys=no "$RENDER_SSH" 'env -0' \
+            | python3 -I deploy/server/render-env.py > "$RUNNER_TEMP/app.env"
+          for host in web admin; do
+            ssh "$host" 'umask 077; cat > /opt/savdex/env/app.env' < "$RUNNER_TEMP/app.env"
+          done
+          rm -f "$RUNNER_TEMP/app.env"
+
+      - name: Копия с Render
+        if: inputs.render_data
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          RENDER_SSH: ${{ vars.RENDER_SSH }}
+          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY || 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFON8eay2FgHDBIVOLxWn/AWnsDJhCVvlY1igWEFoLD2' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL" ] || [ -z "$RENDER_SSH" ]; then
+            echo "::error::Нужны секрет BACKUP_DATABASE_URL и переменная RENDER_SSH"
+            exit 1
+          fi
+          grep -q "^${RENDER_SSH#*@} " ~/.ssh/known_hosts \
+            || printf '%s %s\n' "${RENDER_SSH#*@}" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
+          umask 077
+
+          echo "── Сайт и админка останавливаются"
+          for host in web admin; do
+            ssh "$host" 'docker ps -q --filter label=com.docker.compose.project=savdex \
+              --filter label=com.docker.compose.service=app | xargs -r docker stop -t 40 > /dev/null'
+          done
+
+          echo "── База с Render"
+          url="$DATABASE_URL"
+          case "$url" in
+            *sslmode=*) ;;
+            *\?*) url="$url&sslmode=require" ;;
+            *) url="$url?sslmode=require" ;;
+          esac
+          pg=$(grep -oE 'image: postgres:[0-9]+' deploy/prod/db/compose.yml | grep -oE '[0-9]+$')
+          major=$(docker run --rm -e URL="$url" "postgres:$pg" sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
+          echo "Render: PostgreSQL $major, новая база: $pg"
+          if [ "$major" != "$pg" ]; then
+            echo "::error::Версии PostgreSQL расходятся — поднимите её в deploy/prod/db/compose.yml."
+            exit 1
+          fi
+          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" "postgres:$pg" \
+            sh -c 'pg_dump --format=custom --compress=9 --file=/out/prod.dump "$URL"'
+          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/prod.dump"
+          echo "Копия базы: $(( $(stat -c %s "$RUNNER_TEMP/prod.dump") / 1024 )) КБ"
+          ssh db 'install -d -m 700 /opt/savdex/restore; cat > /opt/savdex/restore/prod.dump' < "$RUNNER_TEMP/prod.dump"
+          rm -f "$RUNNER_TEMP/prod.dump"
+          ssh db 'SAVDEX_COMPOSE_FILE=/opt/savdex/src/deploy/prod/db/compose.yml SAVDEX_APP_SERVICE= \
+            bash /opt/savdex/src/deploy/server/load-db.sh /opt/savdex/restore/prod.dump'
+
+          echo "── Файлы с Render"
+          ssh -o UpdateHostKeys=no -o ServerAliveInterval=30 "$RENDER_SSH" \
+            'tar -C /var/data/storage -czf - public private' > "$RUNNER_TEMP/files.tgz"
+          gzip -t "$RUNNER_TEMP/files.tgz"
+          echo "Копия файлов: $(tar -tzf "$RUNNER_TEMP/files.tgz" | grep -vc '/$') файлов, $(( $(stat -c %s "$RUNNER_TEMP/files.tgz") / 1048576 )) МБ"
+          ssh db 'cat > /opt/savdex/restore/files.tgz' < "$RUNNER_TEMP/files.tgz"
+          rm -f "$RUNNER_TEMP/files.tgz"
+          ssh db 'SAVDEX_DATA_DIR=/srv/savdex SAVDEX_TOOL_IMAGE=postgres:18 \
+            bash /opt/savdex/src/deploy/server/load-files.sh /opt/savdex/restore/files.tgz'
+
+      - name: Сборка образа
+        run: |
+          set -euo pipefail
+          ssh admin "WEB_IP='$WEB_IP' bash /opt/savdex/src/deploy/server/prod-build.sh"
+
+      - name: Админка и схема базы
+        run: |
+          set -euo pipefail
+          tag=$(git rev-parse HEAD | cut -c1-12)
+          ssh admin "SAVDEX_ROLE=admin DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
+            bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --migrate"
+
+      - name: Сайт
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          tag=$(git rev-parse HEAD | cut -c1-12)
+          # Пока адрес не savdex.uz — репетиция: сайт под паролем тестового
+          password=""
+          if [ "$SITE_DOMAIN" != savdex.uz ]; then
+            password="$STAGING_PASSWORD"
+          fi
+          printf '%s\n' "$password" \
+            | ssh web "SAVDEX_ROLE=web DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
+                bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
+          echo "Готово: https://$SITE_DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверка снаружи
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Как посетитель: из интернета, по HTTPS. Сертификат Caddy
+          # выпускает при первом обращении, а в день переезда — ещё и когда
+          # DNS начнёт указывать сюда: ждём до пяти минут
+          auth=()
+          if [ "$SITE_DOMAIN" != savdex.uz ]; then
+            auth=(-u "savdex:$STAGING_PASSWORD")
+          fi
+          code() { curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "https://$SITE_DOMAIN$1"; }
+          for _ in $(seq 1 60); do
+            [ "$(code /up)" = 200 ] && break
+            sleep 5
+          done
+          for path in /up / /catalog /companies /py/admin/login/; do
+            status=$(code "$path")
+            echo "https://$SITE_DOMAIN$path — $status"
+            if [ "$status" != 200 ]; then
+              echo "::error::https://$SITE_DOMAIN$path отвечает $status"
+              exit 1
+            fi
+          done
+          # Админка — с машины админки: на её странице входа — форма Django
+          curl -fsS "${auth[@]}" "https://$SITE_DOMAIN/py/admin/login/" | grep -q 'name="_token"'

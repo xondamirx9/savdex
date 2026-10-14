@@ -113,16 +113,8 @@ def store(request: HttpRequest) -> HttpResponse:
 
         return back(ctx)
 
-    wallets = _rows(
-        "select * from wallets where company_id = %s order by id limit 1", [company["id"]]
-    )
-
-    if not wallets:
-        flash(ctx, "error", ctx.t("messages.promo.no_wallet"))
-
-        return back(ctx)
-
-    wallet = wallets[0]
+    # Кошелёк — всегда: у бесплатного тарифа его могло не быть
+    wallet = wallet_store.ensure(company["id"])
 
     try:
         with transaction.atomic():

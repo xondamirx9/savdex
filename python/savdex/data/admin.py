@@ -552,6 +552,8 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
             "payment_terms",
             "price_negotiable",
             "price",
+            "price_from",
+            "price_to",
             "bundle_price",
             "currency",
             "unit",
@@ -562,6 +564,8 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
         )
         help_texts: ClassVar[dict[str, str]] = {
             "bundle_price": "Необязательно: для товаров, продающихся набором",
+            "price_from": "На витрине — «от <цена>»: цена нижняя, верхней нет",
+            "price_to": "Необязательно: верхняя граница — на витрине «<цена> – <до>»",
             "moderation_note": "Текст виден владельцу объявления. Заполняется при отказе.",
             "unit": "шт, тонна, м³",
         }
@@ -612,7 +616,7 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
     def clean(self) -> dict[str, Any]:
         data: dict[str, Any] = super().clean() or {}
 
-        for name in ("price", "bundle_price", "min_order"):
+        for name in ("price", "price_to", "bundle_price", "min_order"):
             value = data.get(name)
 
             if value is not None and value < 0:
@@ -621,6 +625,15 @@ class ListingFormBase(forms.ModelForm):  # type: ignore[type-arg]
         # Пустая цена — только вместе с «договорной»: иначе на витрине пусто
         if not data.get("price_negotiable") and data.get("price") is None:
             self.add_error("price", "Укажите цену или отметьте «Цена договорная».")
+
+        # Диапазон — верхняя граница больше нижней; «от» без верхней
+        price, price_to = data.get("price"), data.get("price_to")
+
+        if price_to is not None and (price is None or price_to <= price):
+            self.add_error("price_to", "Верхняя граница должна быть больше цены.")
+
+        if data.get("price_from") and price_to is not None:
+            self.add_error("price_to", "У цены «от» верхней границы нет — уберите её.")
 
         return data
 
@@ -953,6 +966,8 @@ class ListingAdmin(SavdexModelAdmin):
                     "fields": (
                         "price_negotiable",
                         "price",
+                        "price_from",
+                        "price_to",
                         "bundle_price",
                         "currency",
                         "unit",

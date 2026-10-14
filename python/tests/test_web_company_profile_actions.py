@@ -103,30 +103,27 @@ def снимок() -> Any:
 }
 
 
-#: Ошибка «заполненное меняется только в настройках» — у name и tin
-ЗАПОЛНЕНО = ("name", "tin")
-
-
 @pytest.mark.parametrize(
     ("body", "ошибки"),
     [
-        # Название и ИНН у компании уже есть — их правка здесь запрещена
-        (ВЕРНО, ЗАПОЛНЕНО),
+        # Название и ИНН у компании уже есть — здесь они не меняются, а
+        # остальное сохраняется
+        (ВЕРНО, ()),
         ({"name": "Цемент Трейд", "tin": "301234567"}, ()),
-        ({**ВЕРНО, "tin": "30234567"}, ("tin",)),
-        ({**ВЕРНО, "tin": "30234567a"}, ("tin",)),
-        ({**ВЕРНО, "tin": "111111111"}, ("tin",)),
-        ({**ВЕРНО, "tin": "123456789"}, ("tin",)),
-        ({**ВЕРНО, "tin": "305123456"}, ("tin",)),
-        ({**ВЕРНО, "tin": "1234567", "country_id": "kz"}, (*ЗАПОЛНЕНО, "country_id")),
-        ({**ВЕРНО, "tin": "12345", "country_id": "kz"}, ("tin",)),
+        # Заполненный ИНН здесь только для чтения: пришёл другим — остаётся
+        # прежним и не проверяется (номер проверяют регистрация и настройки)
+        ({**ВЕРНО, "tin": "30234567"}, ()),
+        ({**ВЕРНО, "tin": "305123456"}, ()),
         ({**ВЕРНО, "founded_year": "1800"}, ("founded_year",)),
         (
             {**ВЕРНО, "it_specializations": ["web", "space"], "primary_role": "boss"},
             ("primary_role", "it_specializations.1"),
         ),
-        ({**ВЕРНО, "name": ""}, ("name",)),
-        ({**ВЕРНО, "tin": None, "legal_name": None}, ЗАПОЛНЕНО),
+        # Название тоже: пустое — остаётся прежнее
+        ({**ВЕРНО, "name": ""}, ()),
+        # Сайт — только с настоящим доменом: иначе кнопка «Сайт компании» ведёт в никуда
+        ({"name": "Цемент Трейд", "tin": "301234567", "website": "fwfwfef"}, ("website",)),
+        ({"name": "Цемент Трейд", "tin": "301234567", "website": "https://fwfwfef"}, ("website",)),
         # Заполненное здесь не меняется (раз в полгода — из настроек),
         # пустое заполняется: название и ИНН те же, остальное — впервые
         (
@@ -184,7 +181,7 @@ def test_правка(сайт, body, ошибки, admin):
             _страна("uz"),
             2010,
             True,
-            '["erp","web"]',
+            json.dumps(body["it_specializations"], separators=(",", ":")),
             "цемент трейд ооо «цемент плюс» sement treyd ooo «sement plyus»",
         )
         assert моя[-1] is True
@@ -192,6 +189,142 @@ def test_правка(сайт, body, ошибки, admin):
         assert [(a, s, label) for a, s, label, _ in итог["база"]["journal"]] == (
             [("updated", "companies", "Цемент Трейд")] if admin else []
         )
+
+
+def test_сотрудник_профиль_не_правит(сайт):
+    """Профиль компании правит владелец; сотруднику — 403, ничего не записано."""
+
+    def подготовка() -> None:
+        сброс()()
+        учётка("staff@savdex.uz", company_id=_компания("mine"), company_role="manager")
+
+    итог = отправить(
+        сайт,
+        "/cabinet/company",
+        подготовка,
+        снимок,
+        uid=учётка("staff@savdex.uz"),
+        body=ВЕРНО,
+        method="PATCH",
+        headers=inertia(),
+    )
+    [моя] = [r for r in итог["база"]["companies"] if r[1] == "mine"]
+
+    assert итог["ответ"]["status"] == 403
+    assert моя[3] is None and моя[-1] is False
+
+
+def test_заполненное_кроме_реквизитов_меняется(сайт):
+    # Год основания и страна заполнены — их всё равно можно сменить здесь;
+    # название и ИНН (реквизиты) остаются прежними, но сохранению не мешают
+    def подготовка() -> None:
+        сброс()()
+        sql("update companies set founded_year = 2000 where slug = 'mine'")
+
+    итог = отправить(
+        сайт,
+        "/cabinet/company",
+        подготовка,
+        снимок,
+        uid=учётка("owner@savdex.uz"),
+        body={
+            "name": "Другое название",
+            "tin": "1234567",
+            "country_id": _страна("kz"),
+            "founded_year": "2015",
+            "website": "cement.uz",
+        },
+        method="PATCH",
+        headers=inertia(),
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+    [моя] = [r for r in итог["база"]["companies"] if r[1] == "mine"]
+
+    assert "errors" not in сессия, сессия
+    assert сессия["success"] == "Данные компании сохранены"
+    assert моя[2:7] == ("Цемент Трейд", None, "301234567", _страна("kz"), 2015)
+    assert sql("select website from companies where slug = 'mine'") == [("https://cement.uz",)]
+
+
+@pytest.mark.parametrize("форма", ["individual", "freelancer"])
+def test_физлицо_и_фрилансер_без_ограничений(сайт, форма):
+    # Физлицо и фрилансер меняют Ф.И.О. и ПИНФЛ прямо здесь; реквизитов
+    # организации (юр. адрес) у человека нет — пришедший адрес не пишется
+    def подготовка() -> None:
+        сброс()()
+        sql(
+            "update companies set legal_form = %s, address = 'Ташкент', country_id = %s "
+            "where slug = 'mine'",
+            [форма, _страна("uz")],
+        )
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/company",
+            подготовка,
+            снимок,
+            uid=учётка("owner@savdex.uz"),
+            body={
+                "name": "Иван Петров",
+                "address": "Самарканд",
+                "tin": "31234567890123",
+                "phone": "+998 90 123-45-67",
+                "email": "ivan@mail.uz",
+            },
+            method="PATCH",
+            headers=inertia(),
+        )
+        строка = sql("select address, phone, email from companies where slug = 'mine'")
+    finally:
+        sql(
+            "update companies set legal_form = 'legal', address = null, phone = null, "
+            "email = null where slug = 'mine'"
+        )
+
+    сессия = json.loads(итог["сессия"]["payload"])
+    [моя] = [r for r in итог["база"]["companies"] if r[1] == "mine"]
+
+    assert "errors" not in сессия, сессия
+    # ПИНФЛ — 14 цифр: раньше кабинет проверял его как ИНН (9 цифр) и отказывал
+    assert моя[2:5] == ("Иван Петров", None, "31234567890123")
+    assert строка == [("Ташкент", "+998 90 123-45-67", "ivan@mail.uz")]
+
+
+@pytest.mark.parametrize(
+    ("body", "ошибки"),
+    [
+        ({"name": "Иван Петров"}, {"phone"}),
+        ({"name": "Иван Петров", "phone": "abc"}, {"phone"}),
+        ({"name": "Иван Петров", "phone": "+998901234567", "email": "не почта"}, {"email"}),
+        ({"name": "Иван Петров", "phone": "+998901234567", "tin": "123"}, {"tin"}),
+    ],
+)
+def test_физлицо_телефон_обязателен(сайт, body, ошибки):
+    def подготовка() -> None:
+        сброс()()
+        sql(
+            "update companies set legal_form = 'individual', country_id = %s where slug = 'mine'",
+            [_страна("uz")],
+        )
+
+    try:
+        итог = отправить(
+            сайт,
+            "/cabinet/company",
+            подготовка,
+            снимок,
+            uid=учётка("owner@savdex.uz"),
+            body=body,
+            method="PATCH",
+            headers=inertia(),
+        )
+    finally:
+        sql("update companies set legal_form = 'legal' where slug = 'mine'")
+
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert set(сессия["errors"]["default"]["messages"]) == ошибки
 
 
 @pytest.mark.parametrize("admin", [False, True])

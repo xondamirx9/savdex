@@ -2,13 +2,13 @@
 {% comment %}
   Компания (savdex/data/companies_admin.py, CompanyAdmin): решения — не
   поля формы, а отдельные действия под формой: верификация, партнёрство,
-  логотип, обложка и эмблема, блокировка; корзина.
+  логотип, обложка и эмблема, блокировка, скрытие с витрины; корзина.
 {% endcomment %}
 {% block form_top %}
   {% if original %}
     <div class="module aligned">
       <div class="form-row"><p>
-        <b>Статус:</b> {% if original.status == "active" %}активна{% else %}<b style="color:var(--sx-status-danger, #b91c1c)">заблокирована</b>{% if original.blocked_reason %} — {{ original.blocked_reason }}{% endif %}{% endif %}
+        <b>Статус:</b> {% if original.status == "active" %}активна{% elif original.status == "hidden" %}<b>скрыта с витрины</b>{% else %}<b style="color:var(--sx-status-danger, #b91c1c)">заблокирована</b>{% if original.blocked_reason %} — {{ original.blocked_reason }}{% endif %}{% endif %}
         {% if trashed %} · <b style="color:var(--sx-status-danger, #b91c1c)">в корзине</b>{% endif %}
         · <a href="/company/{{ original.slug }}" target="_blank" rel="noopener">визитка на сайте</a>
       </p></div>
@@ -75,6 +75,22 @@
         <div class="help">Настоящие знаки площадка использовать не может (авторское право), а плашка с инициалами в цвете региона — своя и единообразная.</div>
       </form>
 
+      {% if original.status != "blocked" %}
+      <form method="post" action="{{ act_url }}" class="form-row">
+        {% csrf_token %}
+        <input type="hidden" name="act" value="hide">
+        <label>Витрина:</label>
+        {% if original.status == "active" %}
+          <button type="submit" class="button" onclick="return confirm('Скрыть компанию с витрины?')">Скрыть с витрины</button>
+          <div class="help">Для тестовых и пустых карточек: компания и её объявления пропадут из каталога, поиска и с главной. Объявления не снимаются, вход в кабинет остаётся.</div>
+        {% else %}
+          <button type="submit" class="button">Вернуть на витрину</button>
+          <div class="help">Компания и её активные объявления снова появятся на сайте.</div>
+        {% endif %}
+      </form>
+      {% endif %}
+
+      {% if original.status != "hidden" %}
       <form method="post" action="{{ act_url }}" class="form-row">
         {% csrf_token %}
         <input type="hidden" name="act" value="block">
@@ -87,6 +103,7 @@
           <button type="submit" class="button" onclick="return confirm('Разблокировать компанию?')">Разблокировать</button>
         {% endif %}
       </form>
+      {% endif %}
     </div>
   {% endif %}
   {% if original and can_trash %}

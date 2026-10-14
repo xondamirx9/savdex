@@ -72,3 +72,59 @@ def test_запись_в_чужую_таблицу_отказывает():
 
     assert "отказ: WriteToForeignTableError" in вывод
     assert "отказа не было" not in вывод
+
+
+ПРОБА_БЛОК = """
+import django
+django.setup()
+
+from django.db import connection
+
+def watch(execute, sql, params, many, context):
+    return execute(sql, params, many, context)
+
+# Соединение открывается внутри блока — как у наблюдателя медленных
+# запросов, который оборачивает весь запрос к сайту
+connection.close()
+with connection.execute_wrapper(watch):
+    with connection.cursor() as cursor:
+        cursor.execute("select 1")
+
+from savdex.guards import guard
+print("предохранитель:", guard in connection.execute_wrappers)
+print("наблюдатель:", watch in connection.execute_wrappers)
+
+try:
+    with connection.cursor() as cursor:
+        cursor.execute("insert into jobs (id) values (1)")
+except Exception as error:
+    print("отказ:", type(error).__name__)
+else:
+    print("отказа не было")
+"""
+
+
+def test_предохранитель_переживает_блок_с_обёрткой():
+    """
+    Соединение открылось внутри `execute_wrapper(...)`: на выходе блок
+    снимает свою обёртку, а не предохранитель. Раньше защита пропадала
+    после первого запроса на новом соединении.
+    """
+    окружение = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": "savdex.settings",
+        "DATABASE_URL": "sqlite://:memory:",
+        "PYTHONPATH": str(КОРЕНЬ),
+    }
+    вывод = subprocess.run(
+        [sys.executable, "-c", ПРОБА_БЛОК],
+        capture_output=True,
+        text=True,
+        cwd=КОРЕНЬ,
+        env=окружение,
+        check=True,
+    ).stdout
+
+    assert "предохранитель: True" in вывод
+    assert "наблюдатель: False" in вывод
+    assert "отказ: WriteToForeignTableError" in вывод

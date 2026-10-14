@@ -42,6 +42,10 @@ interface Props {
         title: string;
         description: string | null;
         price: number | null;
+        /** Цена «от»: price — нижняя, верхней нет */
+        price_from: boolean;
+        /** Диапазон «price – price_to» */
+        price_to: number | null;
         bundle_price: number | null;
         currency: string;
         unit: string | null;
@@ -71,14 +75,39 @@ const STEPS = ['category', 'price', 'terms', 'photos'];
  * без этой карты человек видел бы «не опубликовалось» и не знал,
  * где именно править.
  */
+/*
+ * На каком шаге поле — для ссылки «Перейти к шагу» у ошибки публикации.
+ * Раньше здесь было шесть полей, и ошибка любого другого (верхняя
+ * граница цены, фасовка, условия поставки) отправляла на шаг 1, где
+ * этого поля нет.
+ */
 const FIELD_STEP: Record<string, number> = {
     type: 1,
     category_id: 1,
     title: 1,
     description: 2,
     price: 2,
+    price_to: 2,
+    price_from: 2,
+    price_negotiable: 2,
+    bundle_price: 2,
     currency: 2,
+    unit: 2,
+    min_order: 2,
+    delivery_terms: 3,
+    payment_terms: 3,
+    tags: 4,
 };
+
+/** Шаг поля ошибки: поля раздела — на шаге 1, детали товара (spec_*) — на шаге 2. */
+function fieldStep(field: string): number {
+    const [head, key] = field.split('.');
+
+    if (head === 'attributes') return key?.startsWith('spec_') ? 2 : 1;
+    if (head === 'tags') return 4;
+
+    return FIELD_STEP[head] ?? 1;
+}
 
 const TIPS = ['brand', 'photos', 'quality', 'price'];
 
@@ -99,6 +128,8 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
         title: listing.title,
         description: listing.description ?? '',
         price: listing.price,
+        price_from: listing.price_from,
+        price_to: listing.price_to,
         bundle_price: listing.bundle_price,
         currency: listing.currency,
         unit: listing.unit ?? '',
@@ -109,6 +140,20 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
         tags: listing.tags ?? [],
         attributes: listing.attributes ?? {},
     });
+
+    /*
+     * Вид цены: точная, «от» или диапазон «от – до». Диапазон без верхней
+     * границы ещё не введён — поэтому вид хранится отдельно, а не выводится
+     * только из price_to.
+     */
+    const [priceKind, setPriceKind] = useState<'exact' | 'from' | 'range'>(
+        listing.price_to !== null ? 'range' : listing.price_from ? 'from' : 'exact',
+    );
+
+    function choosePriceKind(kind: 'exact' | 'from' | 'range') {
+        setPriceKind(kind);
+        setData((d) => ({ ...d, price_from: kind === 'from', price_to: kind === 'range' ? d.price_to : null }));
+    }
 
     const parent = categories.find((c) => c.id === data.parent_id);
     const child = parent?.children.find((c) => c.id === data.category_id);
@@ -202,7 +247,7 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
      * жмёт «Опубликовать» повторно, ничего не исправив.
      */
     const problems = Object.entries(errors)
-        .map(([field, message]) => ({ field, message: String(message), step: FIELD_STEP[field] ?? 1 }))
+        .map(([field, message]) => ({ field, message: String(message), step: fieldStep(field) }))
         .sort((a, b) => a.step - b.step);
 
     const titleLeft = 90 - data.title.length;
@@ -444,10 +489,34 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                 {errors.description && <p className="hint" style={{ color: 'var(--danger)' }}>{errors.description}</p>}
                             </div>
 
-                            <div className="grid grid-2 grid-tight mt-24" style={{ gap: 12 }}>
+                            {/* Вид цены: точная, «от» или «от – до» — когда цена
+                                зависит от объёма, лучше диапазон, чем «договорная» */}
+                            {!data.price_negotiable && (
+                                <div className="field mt-24" style={{ margin: 0 }}>
+                                    <span className="label">{t('cabinet.wizard.price_kind')}</span>
+                                    <div className="row wrap" role="radiogroup" style={{ gap: 6 }}>
+                                        {(['exact', 'from', 'range'] as const).map((kind) => (
+                                            <button
+                                                key={kind}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={priceKind === kind}
+                                                className={cn('chip', priceKind === kind && 'chip-active')}
+                                                onClick={() => choosePriceKind(kind)}
+                                            >
+                                                {t(`cabinet.wizard.price_kind_${kind}`)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-2 grid-tight mt-12" style={{ gap: 12 }}>
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-price">
-                                        {t('cabinet.wizard.price')}
+                                        {priceKind === 'exact' || data.price_negotiable
+                                            ? t('cabinet.wizard.price')
+                                            : t('cabinet.wizard.price_lower')}
                                     </label>
                                     <input
                                         id="w-price"
@@ -459,7 +528,30 @@ export default function Wizard({ listing, categories, slots, tagOptions }: Props
                                         onChange={(e) => setData('price', e.target.value ? Number(e.target.value) : null)}
                                         placeholder="1200000"
                                     />
+                                    {/* Объявление без цены пролистывают: подсказка — у самого поля (ТЗ-02) */}
+                                    <p className="hint">
+                                        {t('cabinet.wizard.tip_price')}. {t('cabinet.wizard.price_range_hint')}
+                                    </p>
                                 </div>
+                                {priceKind === 'range' && !data.price_negotiable && (
+                                    <div className="field" style={{ margin: 0 }}>
+                                        <label className="label" htmlFor="w-price-to">
+                                            {t('cabinet.wizard.price_to')}
+                                        </label>
+                                        <input
+                                            id="w-price-to"
+                                            className="input"
+                                            type="number"
+                                            min={0}
+                                            value={data.price_to ?? ''}
+                                            onChange={(e) => setData('price_to', e.target.value ? Number(e.target.value) : null)}
+                                            placeholder="1500000"
+                                        />
+                                        {errors.price_to && (
+                                            <p className="hint" style={{ color: 'var(--danger)' }}>{errors.price_to}</p>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="field" style={{ margin: 0 }}>
                                     <label className="label" htmlFor="w-cur">
                                         {t('cabinet.wizard.currency')}

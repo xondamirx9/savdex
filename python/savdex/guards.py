@@ -210,6 +210,12 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # Визитки компании для QR-кода (миграция 2026_10_17_100000):
         # таблица появилась после ухода Laravel, ведёт её только Django
         "company_cards",
+        # Старые адреса компаний и объявлений — 301 на новые (миграция
+        # 2026_10_22_100000, savdex/reslug.py)
+        "slug_redirects",
+        # События продукта для аналитики (ТЗ-03, миграция 2026_10_21_100000,
+        # savdex/product_events.py)
+        "product_events",
     }
 )
 
@@ -355,9 +361,17 @@ def install_guard(connection: BaseDatabaseWrapper, **kwargs: Any) -> None:
     Обёртка вокруг запроса, а не сигнал модели: сигнал ловит только
     записи через ORM, а обойти его можно `cursor.execute` — то есть
     ровно там, где руки чешутся больше всего.
+
+    Первой в списке, а не последней. `connection.execute_wrapper(...)`
+    у Django при выходе снимает последнюю обёртку (pop()). Соединение
+    открывается лениво — часто уже внутри такого блока (наблюдатель
+    медленных запросов, savdex/web/slowdb.py, оборачивает весь запрос).
+    Добавленный в конец предохранитель снимался вместо наблюдателя:
+    после первого запроса на новом соединении защита пропадала, а
+    наблюдатель оставался навсегда и слал ложные «база медленно».
     """
     if guard not in connection.execute_wrappers:
-        connection.execute_wrappers.append(guard)
+        connection.execute_wrappers.insert(0, guard)
 
 
 class LaravelOwnsSchema:

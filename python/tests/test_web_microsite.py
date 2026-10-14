@@ -22,7 +22,7 @@ from urllib.parse import quote
 
 import pytest
 
-from .factories import Выражение, компания, объявление, отзыв
+from .factories import Выражение, компания, объявление, отзыв, пользователь
 from .pg_admin import PYTHON, КОРЕНЬ, ОКРУЖЕНИЕ, sql, нужна_база, свежая_база
 from .test_web_forms import учётка
 from .web_site import адрес, вход, открыть, страница
@@ -321,3 +321,79 @@ def test_поддомены(поддомены, host, path, ожидание):
         assert props["site"]["url"] == f"http://mine.savdex.site:{port}"
         prefix = "" if ожидание == "ru" else f"/{ожидание}"
         assert props["site"]["marketplace"] == f"{поддомены}{prefix}/company/mine"
+
+
+def test_скрытая_компания_без_мини_сайта(сайт):
+    """Компании нет в каталоге (на проверке, скрыта) — нет и мини-сайта."""
+    сброс()()
+    sql("update companies set status = 'pending' where slug = 'mine'")
+
+    try:
+        д = открыть(сайт, "/s/mine")
+    finally:
+        sql("update companies set status = 'active' where slug = 'mine'")
+
+    assert д["status"] == 404
+
+
+def test_личный_телефон_сотрудника_не_на_мини_сайте(сайт):
+    сброс()()
+    [(cid,)] = sql("select id from companies where slug = 'mine'")
+    пользователь(
+        company_id=cid,
+        email="staff@cement.uz",
+        phone="+998 97 555-55-55",
+        company_role="manager",
+    )
+    sql("delete from company_contacts where company_id = %s and type = 'phone'", [cid])
+
+    try:
+        props = мини_сайт(открыть(сайт, "/s/mine"))
+    finally:
+        sql("delete from users where email = 'staff@cement.uz'")
+        sql(
+            "insert into company_contacts (company_id, type, value, is_public, sort_order, "
+            "created_at, updated_at) "
+            "values (%s, 'phone', '+998 90 123-45-67', true, 3, now(), now())",
+            [cid],
+        )
+
+    assert "+998 97 555-55-55" not in [c["value"] for c in props["contacts"]]
+
+
+def test_контакты_из_регистрации(сайт):
+    """
+    Нет телефона и почты в «Моих контактах» — мини-сайт берёт их из
+    профиля компании и учётной записи владельца; скрытый вид контакта сам
+    не подставляется.
+    """
+    сброс()()
+    [(cid,)] = sql("select id from companies where slug = 'mine'")
+    пользователь(
+        company_id=cid,
+        email="owner@cement.uz",
+        phone="+998 91 000-00-00",
+        company_role="owner",
+    )
+    sql("delete from company_contacts where company_id = %s and type = 'phone'", [cid])
+    sql("update companies set whatsapp = '+998 93 111-11-11' where id = %s", [cid])
+
+    try:
+        props = мини_сайт(открыть(сайт, "/s/mine"))
+    finally:
+        sql("delete from users where email = 'owner@cement.uz'")
+        sql("update companies set whatsapp = null where id = %s", [cid])
+        sql(
+            "insert into company_contacts (company_id, type, value, is_public, sort_order, "
+            "created_at, updated_at) "
+            "values (%s, 'phone', '+998 90 123-45-67', true, 3, now(), now())",
+            [cid],
+        )
+
+    assert [(c["type"], c["value"], c["href"]) for c in props["contacts"]] == [
+        ("telegram", "@cement", "https://t.me/cement"),
+        # Телефона в «Моих контактах» нет — из регистрации владельца
+        ("phone", "+998 91 000-00-00", "tel:+998910000000"),
+        # Почта в «Моих контактах» скрыта — не подставляется
+        ("whatsapp", "+998 93 111-11-11", "https://wa.me/998931111111"),
+    ]

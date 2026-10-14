@@ -48,7 +48,7 @@ from savdex.guards import allowed_writes
 from savdex.tenders.importer import country_id, email, first, matches, normalize, phone, text
 from savdex.web import eloquent
 from savdex.web.cabinet import _rows
-from savdex.web.company_profile_actions import CASTS, _search_text, _slug
+from savdex.web.company_profile_actions import CASTS, _search_text, slug_fields
 from savdex.web.listing_actions import _stamp
 from savdex.web.shared import Context
 
@@ -546,7 +546,7 @@ def _insert(ctx: Context, fields: dict[str, Any]) -> int:
         "source_note": SOURCE_NOTE,
     }
     row.update(_search_text(row))
-    row["slug"] = _slug(str(row.get("name") or ""))
+    row.update(slug_fields(str(row.get("name") or "")))
     now = _stamp(eloquent.now())
     row.update(updated_at=now, created_at=now)
     columns = list(row)

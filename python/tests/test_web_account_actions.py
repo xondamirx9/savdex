@@ -457,6 +457,46 @@ def test_сброс_пароля(сайт, body, шаг, ошибки_):
         assert база["tokens"] == ([] if шаг.__name__ == "<lambda>" else [(ПОЧТА, True, True)])
 
 
+def _другое_устройство(шаг: Callable[[], None]) -> Callable[[], None]:
+    """Тот же пользователь вошёл ещё и с телефона — своя сессия в базе."""
+
+    def run() -> None:
+        шаг()
+        sql(
+            "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
+            "select 'phone-session', id, '198.51.100.7', 'phone', '', 0 from users "
+            "where email = %s",
+            [ПОЧТА],
+        )
+
+    return run
+
+
+def test_сброс_пароля_выходит_на_других_устройствах(сайт):
+    пользователь()
+    итог = форма(сайт, "/reset-password", _другое_устройство(_токен()), body=ВЕРНЫЙ_СБРОС)
+
+    assert куда(сайт, итог) == (302, "/login")
+    # Пароль сбросили — значит, его могли украсть: прежние входы закрыты
+    assert sql("select id from sessions where id = 'phone-session'") == []
+
+
+def test_смена_пароля_выходит_на_других_устройствах(сайт):
+    uid = пользователь(must_change_password=True)
+    итог = форма(
+        сайт,
+        "/password/change",
+        _другое_устройство(lambda: пользователь(must_change_password=True, password=_хеш(ПАРОЛЬ))),
+        uid=uid,
+        body={"password": НОВЫЙ, "password_confirmation": НОВЫЙ},
+    )
+
+    assert куда(сайт, итог) == (302, "/cabinet")
+    assert sql("select id from sessions where id = 'phone-session'") == []
+    # Сам браузер, сменивший пароль, остаётся во входе
+    assert сессия(итог)["password_hash_web"] == "<хеш>"
+
+
 # ── Подтверждение почты ─────────────────────────────────────────────
 
 
@@ -651,3 +691,65 @@ def test_ссылка_подтверждения(сайт, вариант, ит�
     assert куда(сайт, итог) == (status, location)
     assert сессия(итог).get("success") == success
     assert итог["база"]["users"][0][5] is (status == 302)
+
+
+def test_код_снимает_метку_не_подтверждено(сайт):
+    """Код пропущен при регистрации — подтверждение почты снимает «Не подтверждено»."""
+    from .factories import компания
+
+    def шаг() -> None:
+        _код()()
+        cid = компания(email_unconfirmed=True)
+        sql(
+            "update users set email_code_skipped = true, company_id = %s where email = %s",
+            [cid, ПОЧТА],
+        )
+
+    uid = пользователь()
+    итог = форма(сайт, "/verify-email/code", шаг, uid=uid, body={"code": "123456"})
+
+    assert куда(сайт, итог) == (302, "/cabinet")
+    assert sql(
+        "select u.email_code_skipped, c.email_unconfirmed from users u "
+        "join companies c on c.id = u.company_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(False, False)]
+
+
+def test_сброс_возвращает_аккаунт_хозяину_почты(сайт):
+    """
+    Адрес занят без подтверждения (код пропущен): ссылка сброса приходит
+    только письмом, значит сбросивший владеет почтой. Почта подтверждается,
+    телефон и Telegram занявшего отвязываются, все входы закрываются.
+    """
+    from .factories import компания
+
+    def шаг() -> None:
+        _токен()()
+        cid = компания(email_unconfirmed=True)
+        sql(
+            "update users set email_verified_at = null, email_code_skipped = true, "
+            "phone = '+8613800000000', phone_verified_at = now(), telegram_chat_id = '777', "
+            "company_id = %s where email = %s",
+            [cid, ПОЧТА],
+        )
+        sql(
+            "insert into sessions (id, user_id, payload, last_activity) "
+            "select 'чужая-сессия', id, '', 0 from users where email = %s",
+            [ПОЧТА],
+        )
+
+    пользователь()
+    итог = форма(сайт, "/reset-password", шаг, body=ВЕРНЫЙ_СБРОС)
+
+    assert куда(сайт, итог) == (302, "/login")
+    assert sql(
+        "select u.email_verified_at is not null, u.phone, u.phone_verified_at, "
+        "u.telegram_chat_id, u.email_code_skipped, c.email_unconfirmed from users u "
+        "join companies c on c.id = u.company_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(True, None, None, None, False, False)]
+    assert sql(
+        "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(0,)]

@@ -4,6 +4,7 @@ import { Check, Ticket, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { formatNumber } from '@/components/cabinet';
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { track } from '@/lib/analytics';
 import { t, tChoice } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
@@ -326,6 +327,7 @@ export default function Pricing({
                                         <Link
                                             href={chooseHref(p.code, signedIn)}
                                             className={`btn btn-block ${highlighted ? 'btn-primary' : 'btn-secondary'}`}
+                                            onClick={() => track('plan_selected', { plan_code: p.code, source: 'pricing' })}
                                         >
                                             {t('pricing.choose')}
                                         </Link>

@@ -23,7 +23,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, platform, specs
+from savdex.web import analytics, content, inertia, platform, specs, visibility
 from savdex.web.catalog import bump_daily, visitor_key, without_recent
 from savdex.web.companies import website_url
 from savdex.web.company import PUBLIC_TYPES, href, masked, remember_viewer
@@ -136,12 +136,14 @@ def tags(listing: dict[str, Any], suggested: list[str]) -> list[str]:
 
 
 def _localized(row: dict[str, Any], field: str, locale: str) -> str | None:
-    """Listing::localized: перевод есть и не пустой — он, иначе оригинал."""
-    if locale != "ru":
-        value = (row[f"{field}_i18n"] or {}).get(locale)
+    """
+    Listing::localized: перевод есть и не пустой — он, иначе оригинал. Русский
+    перевод бывает у объявления не по-русски (translation_jobs.needs_russian).
+    """
+    value = (row[f"{field}_i18n"] or {}).get(locale)
 
-        if str(value or "").strip(_TRIM) != "":
-            return str(value)
+    if str(value or "").strip(_TRIM) != "":
+        return str(value)
 
     original = row[field]
 
@@ -195,8 +197,14 @@ def _price_text(ctx: Context, row: dict[str, Any]) -> str:
         return ctx.t("cabinet.listings.negotiable")
 
     unit = ctx.t("catalog.currency_uzs") if row["currency"] == "UZS" else row["currency"]
+    price = number_format(float(row["price"]), 0)
 
-    return f"{number_format(float(row['price']), 0)} {unit}"
+    if row.get("price_to") is not None:
+        return f"{price} – {number_format(float(row['price_to']), 0)} {unit}"
+
+    text = f"{price} {unit}"
+
+    return ctx.t("catalog.price_from", price=text) if row.get("price_from") else text
 
 
 def _seo(
@@ -248,6 +256,18 @@ def _seo(
             "seller": {"@type": "Organization", "name": company_name},
         }
 
+        # Диапазон — AggregateOffer с нижней и верхней ценой
+        if row.get("price_to") is not None:
+            offers = product["offers"]
+            del offers["price"]
+            offers.update(
+                {
+                    "@type": "AggregateOffer",
+                    "lowPrice": float(row["price"]),
+                    "highPrice": float(row["price_to"]),
+                }
+            )
+
     seo.schema(product)
     crumbs = [
         (ctx.t("listing.catalog"), seo.link(ctx.url("catalog"))),
@@ -297,7 +317,10 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     found = _rows("select * from listings where slug = %s and deleted_at is null limit 1", [slug])
 
     if not found:
-        return not_found(ctx)
+        # Прежний адрес (/listing/-864) — 301 на нынешний (ТЗ-02)
+        from savdex.reslug import redirect_for
+
+        return redirect_for(ctx, "listing", slug) or not_found(ctx)
 
     row = found[0]
     user = ctx.user
@@ -312,7 +335,7 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
 
     # Черновик для чужих не существует: 404, а не 403. Объявление
     # заблокированной или удалённой компании — тоже: в каталоге его нет
-    hidden = preview or company is None or company["status"] != "active"
+    hidden = preview or not visibility.company_visible(company)
 
     if hidden and not owner:
         return not_found(ctx)
@@ -365,6 +388,15 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     # Заявка площадки (PlatformListings): продавцом подписан SavdEx,
     # контактов служебной компании нет — отклик приходит в её кабинет
     own = platform.owns(row, platform.service_company_id())
+
+    if not preview and not owner:
+        analytics.queue(
+            ctx,
+            "listing_viewed",
+            {"listing_id": row["id"], "type": row["type"], "is_platform": own},
+            now=True,
+        )
+
     shown_city = (cities.get(row["city_id"]) if row["city_id"] else None) if own else city
 
     unlocked = (
@@ -431,6 +463,11 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 "type": row["type"],
                 "category": category,
                 "price": float(row["price"]) if row["price"] is not None else None,
+                "price_from": bool(row["price_from"]),
+                "price_to": float(row["price_to"]) if row["price_to"] is not None else None,
+                "converted_to": None
+                if row["price_negotiable"]
+                else cards.prices.convert(row["price_to"], row["currency"]),
                 "bundle_price": float(row["bundle_price"])
                 if row["bundle_price"] is not None
                 else None,
@@ -495,6 +532,8 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
                 if company and company["country_id"]
                 else None,
                 "platform": False,
+                # Код из письма пропущен при регистрации — «Не подтверждено»
+                "unconfirmed": bool(company and company.get("email_unconfirmed")),
             },
             "contacts": contacts,
             "unlocked": unlocked,
@@ -523,8 +562,8 @@ def _similar(ctx: Context, cards: Cards, row: dict[str, Any]) -> list[dict[str, 
 
     rows = _rows(
         f"select l.*, {_LISTING_COMPANY} from listings l join companies c "
-        f"on c.id = l.company_id where {where} and c.status = 'active' "
-        "and c.deleted_at is null order by l.published_at desc, l.id desc limit 4",
+        f"on c.id = l.company_id where {where} and {visibility.company_sql()} "
+        "order by l.published_at desc, l.id desc limit 4",
         params,
     )
 

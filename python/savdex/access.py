@@ -76,6 +76,9 @@ SECTIONS: dict[str, str] = {
     "catalogs": "Справочники",
     "broadcasts": "Рассылки",
     "settings": "Настройки площадки",
+    # Заставка «Технические работы» на сайте — отдельно от настроек:
+    # закрыть сайт на обновление можно без доступа к реквизитам
+    "maintenance": "Технические работы",
     "integrations": "Интеграции",
     "backups": "Выгрузка базы",
 }
@@ -103,6 +106,7 @@ _MATRIX: dict[str, dict[str, str]] = {
         "integrations": "w",
         "support": "w",
         "content": "w", "catalogs": "w", "broadcasts": "r",
+        "maintenance": "w",
     },
     "sales": {
         "companies": "r", "listings": "r", "tenders": "r",
@@ -133,6 +137,7 @@ _MATRIX: dict[str, dict[str, str]] = {
         # карточки по этапам модератор не может
         "leads": "r", "deals": "r",
         "catalogs": "r",
+        "maintenance": "w",
     },
     "finance": {
         "audit": "r", "companies": "r",
@@ -147,6 +152,7 @@ _MATRIX: dict[str, dict[str, str]] = {
     },
     "content_manager": {
         "content": "w", "catalogs": "w", "broadcasts": "r",
+        "maintenance": "w",
     },
 }  # fmt: skip
 
@@ -219,6 +225,9 @@ class Admin:
     role: str | None
     status: str
     permissions: Mapping[str, Any] = field(default_factory=dict)
+    #: Отпечаток пароля для куки входа (bridge.stamp): сменили или
+    #: сбросили пароль — прежние входы в админку недействительны
+    stamp: str = ""
 
     @property
     def is_superadmin(self) -> bool:

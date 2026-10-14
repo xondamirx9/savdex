@@ -19,6 +19,19 @@ import { useDismiss } from '@/lib/useDismiss';
 export interface SelectOption {
     value: string;
     label: string;
+    /**
+     * Шрифт подписи. Нужен там, где список предлагает сами шрифты:
+     * «Playfair Display», набранное системным шрифтом, о Playfair
+     * Display не говорит ничего.
+     */
+    font?: string;
+    /** Приписка справа, бледнее подписи: образец, число, единица */
+    hint?: string;
+}
+
+/** Начертание подписи: пусто, пока список не о шрифтах. */
+function fontOf(option: SelectOption): { fontFamily?: string } {
+    return option.font ? { fontFamily: `'${option.font}'` } : {};
 }
 
 export function SelectField({
@@ -92,7 +105,9 @@ export function SelectField({
                 onChange={(e) => onChange(e.target.value)}
             >
                 {all.map((o) => (
-                    <option key={o.value} value={o.value}>
+                    // style: системный список шрифт подписи показывает
+                    // не везде, но там, где показывает, он к месту
+                    <option key={o.value} value={o.value} style={fontOf(o)}>
                         {o.label}
                     </option>
                 ))}
@@ -161,7 +176,9 @@ export function SelectField({
                     setOpen((v) => !v);
                 }}
             >
-                <span className="select-field-value">{current.label}</span>
+                <span className="select-field-value" style={fontOf(current)}>
+                    {current.label}
+                </span>
                 <ChevronDown aria-hidden className="size-4 select-field-arrow" />
             </button>
 
@@ -182,7 +199,14 @@ export function SelectField({
                         onMouseEnter={() => setCursor(i)}
                         onClick={() => pick(option)}
                     >
-                        {option.label}
+                        <span className="select-option-label" style={fontOf(option)}>
+                            {option.label}
+                        </span>
+                        {option.hint !== undefined && (
+                            <span className="select-option-hint" style={fontOf(option)}>
+                                {option.hint}
+                            </span>
+                        )}
                         {option.value === value && <Check aria-hidden className="size-4 select-option-mark" />}
                     </button>
                 ))}

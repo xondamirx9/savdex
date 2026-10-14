@@ -37,6 +37,16 @@ def whoami(request: HttpRequest) -> HttpResponse:
     visitor: laravel_session.Visitor = request.visitor  # type: ignore[attr-defined]
     body: dict[str, object] = {"authenticated": visitor.authenticated}
 
+    # Каким адресом площадка видит посетителя и откуда он взят — чтобы
+    # на Render сверить замок от перебора (savdex/audit.client_ip)
+    from savdex import audit
+
+    body["ip"] = audit.client_ip(request)
+    body["ip_headers"] = {
+        name: request.headers.get(name)
+        for name in ("X-Forwarded-For", "CF-Connecting-IP", "True-Client-IP")
+    }
+
     if visitor.authenticated:
         with connection.cursor() as cursor:
             cursor.execute("select name from users where id = %s", [visitor.user_id])

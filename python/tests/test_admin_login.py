@@ -57,6 +57,17 @@ for method, url, data in steps:
             db.execute("update users set is_admin = false where email = 'buyer@savdex.uz'")
         out.append({})
         continue
+    if method == "sql-reset":
+        # Пароль сбросили по ссылке с другого устройства: новый хэш, сессии закрыты
+        import os, psycopg
+        with psycopg.connect(os.environ["DB_URL"], autocommit=True) as db:
+            db.execute("update users set password = %s where email = %s", [data, url])
+            db.execute(
+                "delete from sessions where user_id = (select id from users where email = %s)",
+                [url],
+            )
+        out.append({})
+        continue
     if method == "drop-admin-cookie":
         client.cookies.pop(bridge.COOKIE, None)
         out.append({})
@@ -154,7 +165,7 @@ def test_вход_сотрудника_и_сессия_сайта(люди):
     assert ответ["admin_cookie"]
     assert раздел["status"] == 200 and "admin" in раздел["body"]
     # Вход в админку — вход и на сайт: одна сессия Laravel
-    assert str(люди["admin"]) in кто["body"]
+    assert json.loads(кто["body"])["user_id"] == люди["admin"]
     assert снова["status"] == 200
     # Кука админки пропала, сессия сайта осталась — пускает и выдаёт куку
     assert без_куки["status"] == 200 and без_куки["admin_cookie"]
@@ -227,8 +238,30 @@ def test_выход_из_админки_и_с_сайта(люди):
 
     assert ответ["status"] == 302
     assert выход["status"] == 302 and выход["location"] == "/py/admin/login/"
-    assert str(люди["admin"]) not in кто["body"]
+    assert json.loads(кто["body"]).get("user_id") is None
     assert раздел["status"] == 302 and раздел["location"].startswith("/py/admin/login/")
+
+
+def test_сброс_пароля_закрывает_админку(люди):
+    sql("truncate login_attempts")
+    import bcrypt
+
+    прежний = sql("select password from users where id = %s", [люди["admin"]])[0][0]
+    новый = bcrypt.hashpw(b"Another-2026!", bcrypt.gensalt(4)).decode().replace("$2b$", "$2y$")
+    try:
+        _, ответ, раздел, _, после = браузер(
+            ["get", "/py/admin/login/", None],
+            вход("admin@savdex.uz"),
+            ["get", "/py/admin/", None],
+            ["sql-reset", "admin@savdex.uz", новый],
+            ["get", "/py/admin/", None],
+        )
+    finally:
+        sql("update users set password = %s where id = %s", [прежний, люди["admin"]])
+
+    assert ответ["admin_cookie"] and раздел["status"] == 200
+    # Кука админки ещё не истекла, но пароль с тех пор другой — снова вход
+    assert после["status"] == 302 and после["location"].startswith("/py/admin/login/")
 
 
 def test_частота_попыток(люди):

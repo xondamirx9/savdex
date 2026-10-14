@@ -1,8 +1,8 @@
-import { Clock, ExternalLink, MapPin, Navigation } from 'lucide-react';
+import { ExternalLink, MapPin, Navigation } from 'lucide-react';
 import { t } from '@/lib/i18n';
 
 /**
- * Офис площадки: адрес, часы работы и точка на карте.
+ * Офис площадки: адрес и точка на карте.
  *
  * Данные приходят с сервера из настроек площадки — адрес и координаты
  * меняются в админке, без правки вёрстки.
@@ -12,7 +12,6 @@ export type Office = {
     lat: number | null;
     lng: number | null;
     zoom: number;
-    hours: string;
 };
 
 /**
@@ -72,7 +71,7 @@ function addressHref({ address, lat, lng, zoom }: Office): string {
 }
 
 export function OfficeMap({ office }: { office: Office }) {
-    const { address, lat, lng, zoom, hours } = office;
+    const { address, lat, lng, zoom } = office;
     // Координаты необязательны: адрес без метки на карте — рабочий
     // случай, здание может ещё не быть в справочнике
     const hasPoint = lat !== null && lng !== null;
@@ -107,20 +106,6 @@ export function OfficeMap({ office }: { office: Office }) {
                         </p>
                     </div>
                 </div>
-
-                {hours !== '' && (
-                    <div className="card row" style={{ gap: 16, alignItems: 'flex-start' }}>
-                        <span className="ico-box ico-box-lg">
-                            <Clock aria-hidden className="size-5" />
-                        </span>
-                        <div style={{ minWidth: 0 }}>
-                            <h3 className="t-h4" style={{ marginBottom: 4 }}>
-                                {t('office.hours')}
-                            </h3>
-                            <p className="t-body">{hours}</p>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {hasPoint && (

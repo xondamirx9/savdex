@@ -151,6 +151,19 @@ def store(request: HttpRequest) -> HttpResponse:
         row["id"] = cursor.fetchone()[0]
 
     eloquent.journal(ctx, "created", "documents", "CompanyDocument", row, {"after": dict(row)})
+
+    if not material:
+        from savdex import product_events
+
+        product_events.record(
+            "verification_submitted",
+            company_id=company["id"],
+            user_id=ctx.user["id"] if ctx.user else None,
+            plan=product_events.plan_code(company["id"]),
+            locale=ctx.locale,
+            props={"document_id": row["id"], "document_type": row["type"]},
+        )
+
     # Скрытый материал партнёры не видят — так и говорим
     if not material:
         message = "messages.file.document_uploaded"

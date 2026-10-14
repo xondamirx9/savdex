@@ -27,7 +27,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
         <PublicLayout title={post.title} description={post.excerpt}>
             <div className="container" style={{ paddingBlock: '24px 96px' }}>
                 <nav aria-label={t('news.breadcrumbs')} style={{ paddingBottom: 20 }}>
-                    <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <ol className="row t-sm muted" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
                         <li>
                             <Link href={routes.home}>{t('news.home')}</Link>
                         </li>
@@ -42,10 +42,9 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                     </ol>
                 </nav>
 
-                {/* Обложка и текст рядом: картинка занимает основную часть
-                    ширины, описание идёт боковой колонкой и начинается
-                    вровень с верхом обложки. На узком экране колонки
-                    складываются: сначала картинка, потом текст. */}
+                {/* Одна колонка по центру: сначала картинка, под ней текст.
+                    Обе части стоят на одной оси, поэтому страница
+                    симметрична; ширина текста — удобная для чтения строка */}
                 <div className="news-detail">
                     <div className="news-detail-media" data-reveal>
                         {post.image ? (
@@ -55,8 +54,12 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                                     текст. Нажатие открывает его на весь экран */}
                                 <button type="button" className="news-photo" onClick={() => zoom.current?.showModal()}>
                                     <img src={post.image} alt={post.title} className="news-photo-img" />
+                                    {/* На телефоне снимок невысокий, и подпись закрывала
+                                        его почти наполовину — там остаётся один значок,
+                                        подпись слышна только экранному диктору */}
                                     <span className="news-photo-hint">
-                                        <Maximize2 aria-hidden className="size-4" /> {t('news.zoom')}
+                                        <Maximize2 aria-hidden className="size-4" />
+                                        <span className="max-sm:sr-only">{t('news.zoom')}</span>
                                     </span>
                                 </button>
                                 {/* <dialog> сам закрывается по Esc и держит фокус
@@ -79,18 +82,20 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                     </div>
 
                     <article className="news-detail-body">
-                        <div className="row wrap" style={{ gap: 10, marginBottom: 16 }}>
-                            <span className="badge badge-supply">{post.category_label}</span>
-                            <span className="t-caption muted row" style={{ gap: 6 }}>
-                                <CalendarDays aria-hidden className="size-3.5" /> {post.date}
-                            </span>
-                            <span className="t-caption muted row" style={{ gap: 6 }}>
-                                <Clock aria-hidden className="size-3.5" /> {post.read}
-                            </span>
-                        </div>
+                        <header className="news-detail-head">
+                            <div className="row wrap" style={{ gap: 10, marginBottom: 16, justifyContent: 'center' }}>
+                                <span className="badge badge-supply">{post.category_label}</span>
+                                <span className="t-caption muted row" style={{ gap: 6 }}>
+                                    <CalendarDays aria-hidden className="size-3.5" /> {post.date}
+                                </span>
+                                <span className="t-caption muted row" style={{ gap: 6 }}>
+                                    <Clock aria-hidden className="size-3.5" /> {post.read}
+                                </span>
+                            </div>
 
-                        <h1 className="t-h1">{post.title}</h1>
-                        <p className="t-lead mt-16">{post.excerpt}</p>
+                            <h1 className="t-h1">{post.title}</h1>
+                            <p className="t-lead mt-16">{post.excerpt}</p>
+                        </header>
 
                         <div className="mt-32">
                             {/* pre-line сохраняет переносы внутри абзаца: редактор
@@ -103,7 +108,7 @@ export default function NewsShow({ post, related }: { post: Post; related: Post[
                             ))}
                         </div>
 
-                        <div className="mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)' }}>
+                        <div className="mt-48" style={{ paddingTop: 24, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
                             <Link href={routes.news} className="btn btn-secondary">
                                 <ArrowLeft aria-hidden className="size-4" /> {t('news.back')}
                             </Link>

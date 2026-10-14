@@ -91,6 +91,9 @@ def люди() -> dict[str, int]:
                     "catalogs.create",
                     "catalogs.edit",
                     "broadcasts.view",
+                    "maintenance.view",
+                    "maintenance.create",
+                    "maintenance.edit",
                 ]
             }
         ),
@@ -254,11 +257,22 @@ def test_выручка_только_с_финансовыми_отчётами(
 
 
 def test_лиды_свои_и_ничьи_старые_сверху(люди):
+    # Минута запаса за границей суток: created_at в базе — timestamp(0),
+    # Postgres округляет его до секунды и может сдвинуть на полсекунды
+    # вперёд. Если страница успела собраться быстрее, лиду выходило
+    # «3 дня 23:59:59» — подпись «3 дня», и тест падал на быстром раннере
     мой = _вставить(
-        "crm_leads", title="Мой старый лид", owner_id=люди["sales"], created_at=назад(days=4)
+        "crm_leads",
+        title="Мой старый лид",
+        owner_id=люди["sales"],
+        created_at=назад(days=4, minutes=1),
     )
     ничей = _вставить(
-        "crm_leads", title="Ничей лид", source="call", contact_name="Пётр", created_at=назад(days=1)
+        "crm_leads",
+        title="Ничей лид",
+        source="call",
+        contact_name="Пётр",
+        created_at=назад(days=1, minutes=1),
     )
     _вставить("crm_leads", title="Чужой лид", owner_id=люди["sales2"], created_at=назад(days=2))
     _вставить("crm_leads", title="Закрытый лид", owner_id=люди["sales"], status="converted")
@@ -414,9 +428,8 @@ def test_обращения_свои_ничьи_чужие(люди):
         assignee_id=люди["support2"],
         created_at=назад(days=3),
     )
-    # С запасом от границы: столбец до секунды округляет, бывает и вверх, и
-    # «ровно 2 дня назад» без запаса на быстром раннере выходило «1 день»
-    _вставить("support_tickets", subject="Ничьё обычное", created_at=назад(days=2, hours=1))
+    # Минута запаса: см. test_лиды_свои_и_ничьи_старые_сверху
+    _вставить("support_tickets", subject="Ничьё обычное", created_at=назад(days=2, minutes=1))
     _вставить(
         "support_tickets", subject="Ничьё срочное", priority="high", created_at=назад(hours=1)
     )
@@ -428,10 +441,8 @@ def test_обращения_свои_ничьи_чужие(люди):
         author_name="Пётр",
         # Давность — в часах: подпись округляется вниз, и с минутами
         # («30 минут») тест падал, если между вставкой и выдачей прошло
-        # больше минуты — на загруженном раннере так и было. И полчаса
-        # запаса снизу: «ровно 5 часов», округлённое столбцом вверх, на
-        # быстром раннере давало «4 часа»
-        created_at=назад(hours=5, minutes=30),
+        # больше минуты — на загруженном раннере так и было
+        created_at=назад(hours=5, minutes=1),
     )
     _вставить("support_tickets", subject="Моё закрытое", assignee_id=я, status="closed")
     _вставить("support_tickets", subject="Моё удалённое", assignee_id=я, deleted_at=_время())

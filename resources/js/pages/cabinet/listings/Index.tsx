@@ -17,6 +17,8 @@ interface Row {
     type: 'supply' | 'demand';
     category: string | null;
     price: number | null;
+    price_from: boolean;
+    price_to: number | null;
     currency: string;
     unit: string | null;
     negotiable: boolean;
@@ -56,12 +58,18 @@ const STATUS_BADGE: Record<string, string> = {
 function priceLabel(row: Row): string {
     if (row.negotiable || row.price === null) return t('cabinet.listings.negotiable');
 
-    const amount = formatNumber(row.price);
     const currency = row.currency === 'UZS' ? t('catalog.currency_uzs') : row.currency;
+    // Цена «от» и диапазон «от – до» — как на витрине
+    const amount =
+        row.price_to !== null
+            ? `${formatNumber(row.price)} – ${formatNumber(row.price_to)} ${currency}`
+            : row.price_from
+              ? t('catalog.price_from', { price: `${formatNumber(row.price)} ${currency}` })
+              : `${formatNumber(row.price)} ${currency}`;
 
     const unit = unitLabel(row.unit);
 
-    return unit ? `${amount} ${currency}/${unit}` : `${amount} ${currency}`;
+    return unit ? `${amount}/${unit}` : amount;
 }
 
 export default function ListingsIndex({ listings, counts, tabs, status, limit }: Props) {

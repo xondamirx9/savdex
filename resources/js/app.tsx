@@ -7,6 +7,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client';
 import { resolvePage } from '@/lib/pages';
 import { localize, setLocale } from '@/lib/locale';
 import { setTranslations } from '@/lib/i18n';
+import { startAnalytics } from '@/lib/analytics';
 
 const appName = import.meta.env.VITE_APP_NAME ?? 'SAVDEX';
 
@@ -31,6 +32,9 @@ router.on('navigate', (event) => {
 
     if (typeof locale === 'string') setLocale(locale);
 });
+
+/** Просмотры страниц и события продукта — GA4 (lib/analytics.ts) */
+startAnalytics();
 
 /**
  * Переходы, вызванные из кода.

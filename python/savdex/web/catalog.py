@@ -31,9 +31,9 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
 from savdex.guards import allowed_writes
-from savdex.web import content, inertia, paginator, search_text
+from savdex.web import analytics, content, inertia, paginator, platform, search_text, visibility
 from savdex.web.directory import _named
-from savdex.web.home import _LISTING_COMPANY, Cards, banner, visible_in
+from savdex.web.home import _LISTING_COMPANY, Cards, banner, shown_city_sql, visible_in
 from savdex.web.phpquery import Array, laravel_input, php_int, text
 from savdex.web.seo import Seo
 from savdex.web.shared import Context, settings_values
@@ -172,14 +172,38 @@ def _catalog(ctx: Context) -> HttpResponse:
     return listings_tab(ctx, query, string)
 
 
+def _price_in_sum() -> str:
+    """
+    Цена объявления в сумах для сортировки: «дешевле» среди 100 USD и
+    500 000 сум — по курсу ЦБ (как цены показываются), а не по числу.
+    Курсы — числа из таблицы ЦБ, не ввод посетителя.
+    """
+    from savdex.web.currency import CurrencyRate
+    from savdex.web.wizard_actions import CURRENCIES
+
+    rates = CurrencyRate()
+    cases = []
+
+    for code in CURRENCIES:
+        rate = rates.usd() if code == "USD" else rates.rate(code)
+
+        if code != "UZS" and rate:
+            cases.append(f"when '{code}' then {float(rate)!r}")
+
+    if not cases:
+        return "l.price"
+
+    return f"l.price * (case l.currency {' '.join(cases)} else 1 end)"
+
+
 def _order(sort: str) -> str:
     """CatalogController::applySort; хвост по id — у любой сортировки."""
     if sort == "fresh":
         order = "l.published_at desc"
     elif sort == "cheap":
-        order = "l.price is null, l.price asc"
+        order = f"l.price is null, {_price_in_sum()} asc"
     elif sort == "expensive":
-        order = "l.price is null, l.price desc"
+        order = f"l.price is null, {_price_in_sum()} desc"
     else:
         codes = ", ".join(f"'{c}'" for c in PROMOTED_CODES)
         order = (
@@ -208,8 +232,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     where = [
         "l.status = 'active'" + visible,
         "l.deleted_at is null",
-        "c.status = 'active'",
-        "c.deleted_at is null",
+        visibility.company_sql(),
     ]
 
     if term != "":
@@ -225,8 +248,10 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
         params += [category, category]
 
     if city:
-        where.append("l.city_id = %s")
-        params.append(city)
+        # Город — тот, что на карточке: компании, у заявки площадки — свой
+        shown, shown_params = shown_city_sql(platform.service_company_id())
+        where.append(f"{shown} = %s")
+        params += [*shown_params, city]
 
     if verified:
         where.append("c.verification_level >= 2")
@@ -252,6 +277,23 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
 
         if term != "":
             search_hits([int(r["company_id"]) for r in rows], term)
+
+    # GA4: поиск — запрос или любой фильтр; сам текст запроса не уходит,
+    # только его письменность (поиски без результата — отдельный отчёт)
+    filtered = bool(kind or category or city or verified or with_price)
+
+    if term.strip() != "" or filtered:
+        analytics.queue(
+            ctx,
+            "search_performed",
+            {
+                "q_script": analytics.script_of(term),
+                "type": kind or "all",
+                "results_count": int(total),
+                "has_filters": filtered,
+            },
+            now=True,
+        )
 
     translations = content.Translations(ctx.locale)
     cards = Cards(ctx, settings_values(), translations)

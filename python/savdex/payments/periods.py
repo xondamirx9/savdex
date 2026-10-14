@@ -16,12 +16,21 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from django.db import connection
+
 from savdex.web import eloquent, ui
 from savdex.web.cabinet import _rows, company_plan
 from savdex.web.shared import Context
 
 #: ResetBillingPeriods::RENEW_BEFORE_DAYS
 RENEW_BEFORE_DAYS = 7
+
+#: Сколько живёт неоплаченный счёт — срок, названный в самом счёте
+#: (OrderService::EXPIRES_DAYS): дольше — закрывается сам («Не прошёл»),
+#: промокод возвращается в оборот. Опоздавший перевод администратор
+#: зачисляет и по закрытому счёту (settlement.settle отказывает только
+#: уже оплаченному)
+INVOICE_LIFETIME_DAYS = 14
 
 
 @dataclass
@@ -136,6 +145,19 @@ def _issue_renewals(now: datetime) -> int:
     return issued
 
 
+def _plan_expired(subscription: dict[str, Any]) -> None:
+    """ТЗ-03: истёк тариф — product_events (компания переходит на Free)."""
+    from savdex import product_events
+
+    plans = _rows("select code from plans where id = %s", [subscription["plan_id"]])
+    product_events.record(
+        "plan_expired",
+        company_id=subscription["company_id"],
+        plan=plans[0]["code"] if plans else None,
+        props={"subscription_id": subscription["id"], "auto_renew": subscription.get("auto_renew")},
+    )
+
+
 def _expire_subscriptions(now: datetime) -> int:
     """
     Подписка с истёкшим сроком закрывается; компания не блокируется —
@@ -159,6 +181,7 @@ def _expire_subscriptions(now: datetime) -> int:
             model="Subscription",
             casts={"auto_renew": "bool"},
         )
+        _plan_expired(subscription)
         companies = _rows(
             "select * from companies where id = %s and deleted_at is null",
             [subscription["company_id"]],
@@ -184,6 +207,16 @@ def _reset_wallets(now: datetime) -> int:
     единицы продвижения — заново по тарифу (месячная квота, не копятся).
     Кредиты не сгорают — они живут 12 месяцев (§3.2 ТЗ).
     """
+    # Кошелёк без даты смены периода (заведён до тарифа — у бесплатной
+    # компании) не обновлялся никогда: даём ему период от сегодня
+    from savdex.guards import allowed_writes
+
+    with allowed_writes("wallets"), connection.cursor() as cursor:
+        cursor.execute(
+            "update wallets set period_resets_at = %s where period_resets_at is null",
+            [_stamp(now + timedelta(days=30))],
+        )
+
     wallets = _rows(
         "select * from wallets where period_resets_at is not null and period_resets_at <= %s "
         "order by id",
@@ -218,6 +251,33 @@ def _reset_wallets(now: datetime) -> int:
     return len(wallets)
 
 
-def reset_periods(now: datetime) -> tuple[int, int, int]:
-    """ResetBillingPeriods: продление, конец подписок, сброс кошельков — в этом порядке."""
-    return _issue_renewals(now), _expire_subscriptions(now), _reset_wallets(now)
+def expire_invoices(now: datetime) -> int:
+    """
+    Старые неоплаченные счета закрываются (orders.cancel — как отмена
+    компанией): раньше они висели «Ожидает» вечно, держали промокод и
+    мешали выставить новый счёт на продление. Оплата, пришедшая уже
+    после закрытия, — через администратора (сверка Uzum, перевод).
+    """
+    from savdex.web import orders
+
+    stale = _rows(
+        "select * from payments where status = 'pending' and created_at < %s order by id",
+        [_stamp(now - timedelta(days=INVOICE_LIFETIME_DAYS))],
+    )
+
+    for payment in stale:
+        orders.cancel(
+            _console(), payment, f"Счёт не оплачен за {INVOICE_LIFETIME_DAYS} дней — закрыт"
+        )
+
+    return len(stale)
+
+
+def reset_periods(now: datetime) -> tuple[int, int, int, int]:
+    """
+    ResetBillingPeriods: старые счета, продление, конец подписок, сброс
+    кошельков — в этом порядке (закрытый старый счёт не мешает новому).
+    """
+    invoices = expire_invoices(now)
+
+    return _issue_renewals(now), _expire_subscriptions(now), _reset_wallets(now), invoices

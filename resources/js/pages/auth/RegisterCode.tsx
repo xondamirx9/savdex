@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { MailCheck, RefreshCw } from 'lucide-react';
+import { MailCheck, MessageSquare, RefreshCw } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { Alert, Button, TextInput } from '@/components/ui';
@@ -16,13 +16,38 @@ export default function RegisterCode({
     email,
     status,
     demoCode,
+    chinaMailbox = false,
+    sender = '',
+    canSkip = false,
+    sms,
 }: {
     email: string;
     status?: string | null;
     demoCode?: string | null;
+    /** Ящик у китайского почтовика (qq.com, 163.com…) — своя подсказка */
+    chinaMailbox?: boolean;
+    /** Адрес отправителя — для белого списка почты */
+    sender?: string;
+    /** Страна с галочкой «Регистрация без кода» — можно продолжить без кода */
+    canSkip?: boolean;
+    /** Код по SMS (Telnyx): включён ли, на какой номер уже ушёл, код страны */
+    sms?: { enabled: boolean; sentTo: string | null; dialCode: string | null };
 }) {
     const form = useForm({ code: demoCode ?? '' });
     const resend = useForm({});
+    const skip = useForm({});
+    const smsSend = useForm({ phone: sms?.sentTo ?? (sms?.dialCode ? `${sms.dialCode} ` : '') });
+    const smsCheck = useForm({ sms_code: '' });
+
+    function sendSms(e: FormEvent) {
+        e.preventDefault();
+        smsSend.post(routes.registerSms, { preserveScroll: true });
+    }
+
+    function checkSms(e: FormEvent) {
+        e.preventDefault();
+        smsCheck.post(routes.registerSmsConfirm, { preserveScroll: true });
+    }
 
     function submit(e: FormEvent) {
         e.preventDefault();
@@ -32,6 +57,11 @@ export default function RegisterCode({
     function sendAgain(e: FormEvent) {
         e.preventDefault();
         resend.post(routes.registerCodeResend, { preserveScroll: true, onSuccess: () => form.reset() });
+    }
+
+    function skipCode(e: FormEvent) {
+        e.preventDefault();
+        skip.post(routes.registerCodeSkip);
     }
 
     return (
@@ -83,12 +113,87 @@ export default function RegisterCode({
 
                 <p className="text-muted text-sm leading-relaxed">{t('auth.verify_spam_hint')}</p>
 
+                {/* qq.com, 163.com: письма идут дольше и уходят в «垃圾邮件» —
+                    без этой подсказки китайские клиенты бросали регистрацию */}
+                {chinaMailbox && <Alert tone="info">{t('auth.reg_code_cn_hint', { sender })}</Alert>}
+
                 <form onSubmit={sendAgain}>
                     <Button type="submit" variant="secondary" size="lg" block loading={resend.processing}>
                         <RefreshCw aria-hidden className="size-4" />
                         {t('auth.reg_code_resend')}
                     </Button>
                 </form>
+
+                {/* Код по SMS: письмо не пришло (китайские ящики режут письма) —
+                    номер подтверждается кодом, и учётка полноценная */}
+                {sms?.enabled && (
+                    <div className="rounded-card border-border space-y-4 border p-4">
+                        <div className="flex gap-3">
+                            <MessageSquare aria-hidden className="text-primary-700 mt-0.5 size-5 shrink-0" />
+                            <div className="text-sm leading-relaxed">
+                                <b>{t('auth.reg_sms_title')}</b>
+                                <p className="text-muted">{t('auth.reg_sms_hint')}</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={sendSms} className="space-y-3" noValidate>
+                            <TextInput
+                                label={t('auth.phone_label')}
+                                name="phone"
+                                type="tel"
+                                inputMode="tel"
+                                autoComplete="tel"
+                                value={smsSend.data.phone}
+                                onChange={(e) => {
+                                    smsSend.setData('phone', e.target.value);
+                                    if (smsSend.errors.phone) smsSend.clearErrors('phone');
+                                }}
+                                error={smsSend.errors.phone}
+                            />
+                            <Button type="submit" variant="secondary" size="lg" block loading={smsSend.processing}>
+                                {sms.sentTo ? t('auth.reg_sms_resend') : t('auth.reg_sms_send')}
+                            </Button>
+                        </form>
+
+                        {sms.sentTo && (
+                            <form onSubmit={checkSms} className="space-y-3" noValidate>
+                                <TextInput
+                                    label={t('auth.reg_sms_code_label', { phone: sms.sentTo })}
+                                    name="sms_code"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    maxLength={10}
+                                    value={smsCheck.data.sms_code}
+                                    onChange={(e) => {
+                                        smsCheck.setData('sms_code', e.target.value.replace(/\D/g, ''));
+                                        if (smsCheck.errors.sms_code) smsCheck.clearErrors('sms_code');
+                                    }}
+                                    error={smsCheck.errors.sms_code}
+                                />
+                                <Button
+                                    type="submit"
+                                    size="lg"
+                                    block
+                                    loading={smsCheck.processing}
+                                    disabled={smsCheck.data.sms_code.length < 4}
+                                >
+                                    {t('auth.continue')}
+                                </Button>
+                            </form>
+                        )}
+                    </div>
+                )}
+
+                {/* Письмо не дошло (китайские ящики) — можно и без кода: учётка
+                    будет с пометкой «Не подтверждено», пока почту не подтвердят */}
+                {canSkip && (
+                    <form onSubmit={skipCode} className="space-y-2">
+                        <Button type="submit" variant="ghost" size="lg" block loading={skip.processing}>
+                            {t('auth.reg_code_skip')}
+                        </Button>
+                        <p className="text-muted text-center text-xs leading-relaxed">{t('auth.reg_code_skip_hint')}</p>
+                    </form>
+                )}
             </div>
         </AuthLayout>
     );

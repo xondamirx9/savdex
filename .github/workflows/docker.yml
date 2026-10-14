@@ -103,7 +103,10 @@ jobs:
               .venv/bin/python manage.py schema | tee /tmp/schema.txt
               grep -q "Схема создана" /tmp/schema.txt
               .venv/bin/python manage.py seed --fresh | tee /tmp/seed.txt
-              grep -q "countries 33" /tmp/seed.txt
+              grep -q "countries 59" /tmp/seed.txt
+              # Адреса страниц латиницей (ТЗ-02) — на пустой базе трогать нечего
+              .venv/bin/python manage.py reslug | tee /tmp/reslug.txt
+              grep -q "компаний 0, объявлений 0" /tmp/reslug.txt
               # Повторный запуск (каждый деплой) ничего не ломает
               .venv/bin/python manage.py schema | tee /tmp/schema.txt
               grep -q "снимок не нужен" /tmp/schema.txt
@@ -112,6 +115,11 @@ jobs:
               grep -q "\.xlsx" /tmp/run.txt
               BCRYPT_ROUNDS=4 .venv/bin/python manage.py admin ci@savdex.uz --role=support | tee /tmp/admin.txt
               grep -q "Администратор создан" /tmp/admin.txt
+              # Демо-данные тестового сервера (deploy/server/staging-reset.sh):
+              # на боевом — отказ; дальше страницы проверяются с ними
+              if APP_ENV=production .venv/bin/python manage.py demo; then exit 1; fi
+              APP_ENV=staging BCRYPT_ROUNDS=4 .venv/bin/python manage.py demo | tee /tmp/demo.txt
+              grep -q "компаний 24" /tmp/demo.txt
             '
 
       # Контейнер целиком, как его запускает Render: скрипт запуска,
@@ -122,6 +130,7 @@ jobs:
           docker run -d --name savdex --network host \
             -e PORT=18080 \
             -e APP_URL=http://127.0.0.1:18080 \
+            -e SAVDEX_FORCE_HTTPS=false \
             -e APP_KEY="base64:$(openssl rand -base64 32)" \
             -e DB_CONNECTION=pgsql \
             -e DB_URL=postgres://savdex:savdex@127.0.0.1:5432/savdex_test \
@@ -247,6 +256,87 @@ jobs:
           done
           test "$(code http://127.0.0.1:18080/py/admin/login/)" = 200
 
+      # Машины Uztelecom (deploy/README.md): схему меняет разовый запуск
+      # «migrate», сайт работает без процесса админки, админка — без
+      # фоновых задач, и обе стартуют, не трогая схему (SAVDEX_MIGRATE=0)
+      - name: Режимы машин Uztelecom — migrate, сайт, админка
+        run: |
+          set -euo pipefail
+          db=postgres://savdex:savdex@host.docker.internal:5432/savdex_test
+          key="base64:$(openssl rand -base64 32)"
+          # Общая папка (на машине базы — NFS) — здесь общий том Docker:
+          # в нём загрузки и кэш, который видят обе машины
+          common=(--add-host=host.docker.internal:host-gateway
+            -e APP_KEY="$key" -e DB_CONNECTION=pgsql -e DB_URL="$db" -e DJANGO_DATABASE_URL="$db"
+            -e CACHE_STORE=file -e SAVDEX_CACHE_DIR=/var/data/storage/cache
+            -e SAVDEX_FORCE_HTTPS=false
+            -v savdex-ci-shared:/var/data/storage)
+
+          docker run --rm "${common[@]}" savdex:ci migrate 2>&1 | tee /tmp/migrate.txt
+          grep -q "Схема и справочники готовы" /tmp/migrate.txt
+          grep -q "снимок не нужен" /tmp/migrate.txt
+          # Ни Apache, ни Django разовый запуск не поднимает
+          if grep -q "Django: сайт" /tmp/migrate.txt; then exit 1; fi
+
+          docker run -d --name web -p 18081:18081 "${common[@]}" \
+            -e PORT=18081 -e APP_URL=http://127.0.0.1:18081 \
+            -e SAVDEX_MIGRATE=0 -e PYTHON_ADMIN_WORKERS=0 savdex:ci
+          docker run -d --name admin -p 18082:18082 "${common[@]}" \
+            -e PORT=18082 -e APP_URL=http://127.0.0.1:18082 \
+            -e SAVDEX_MIGRATE=0 -e SAVDEX_BACKGROUND=0 \
+            -e PYTHON_WORKERS=1 -e PYTHON_THREADS=2 -e PYTHON_ADMIN_WORKERS=2 savdex:ci
+          for port in 18081 18082; do
+            for _ in $(seq 1 90); do
+              curl -fsS -o /dev/null "http://127.0.0.1:$port/up" && break
+              sleep 2
+            done
+            curl -fsS -o /dev/null "http://127.0.0.1:$port/up"
+          done
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          # «manage.py [s]chedule» — чтобы под шаблон не попала сама эта проверка
+          running() {
+            docker exec "$1" sh -c "grep -al manage.py /proc/[0-9]*/cmdline | xargs -r cat 2>/dev/null | tr '\\0' ' ' | grep -q 'manage.py [${2:0:1}]${2:1}'"
+          }
+
+          set -x
+          # Журналы — сначала в файл: «docker logs | grep -q» под pipefail
+          # падал с 141, когда grep находил строку и выходил раньше, чем
+          # docker logs дописывал остальное
+          for name in web admin; do
+            docker logs "$name" > "/tmp/$name.log" 2>&1
+          done
+          # Схему ни сайт, ни админка не трогали
+          for name in web admin; do
+            if grep -q "снимок не нужен" "/tmp/$name.log"; then exit 1; fi
+          done
+          # Сайт: страницы есть, фоновые задачи идут, процесса админки нет
+          curl -fsS -o /tmp/home.html http://127.0.0.1:18081/
+          grep -q '"component":"Home"' /tmp/home.html
+          for task in schedule translate reconcile_billing notify; do
+            running web "$task"
+          done
+          case "$(code http://127.0.0.1:18081/py/admin/login/)" in 502|503) ;; *) false ;; esac
+          grep -q "админки здесь нет" /tmp/web.log
+          # Админка: вход открывается, фоновых задач нет
+          test "$(code http://127.0.0.1:18082/py/admin/login/)" = 200
+          for task in schedule translate reconcile_billing notify; do
+            if running admin "$task"; then exit 1; fi
+          done
+          # Кэш общий: записанное админкой видит сайт, сброшенное — не видит
+          py() {
+            docker exec -u www-data -w /var/www/html/python -e DJANGO_SETTINGS_MODULE=savdex.settings "$1" \
+              .venv/bin/python -c "import django; django.setup(); $2"
+          }
+          test "$(docker exec web readlink /var/www/html/storage/framework/cache)" = /var/data/storage/cache
+          py admin "from savdex import laravel_cache; laravel_cache.put('ci:shared', 'да', 600)"
+          test "$(py web "from savdex import laravel_cache; print(laravel_cache.get('ci:shared'))")" = да
+          py admin "from savdex import laravel_cache; laravel_cache.forget('ci:shared')"
+          test "$(py web "from savdex import laravel_cache; print(laravel_cache.get('ci:shared'))")" = None
+
       - name: Журнал контейнера
         if: always()
-        run: docker logs savdex 2>&1 | tail -60 || true
+        run: |
+          for name in savdex web admin; do
+            echo "── $name"
+            docker logs "$name" 2>&1 | tail -60 || true
+          done

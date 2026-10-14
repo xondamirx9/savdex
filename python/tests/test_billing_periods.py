@@ -301,9 +301,10 @@ def test_досрочная_оплата_продления(мир, тариф, 
     )
     sql(
         "insert into wallets (company_id, contacts_used_this_period, responses_used_this_period, "
-        "period_resets_at, created_at, updated_at) values (%s, 7, 9, now() + interval '5 days', "
-        "now(), now()) on conflict (company_id) do update set contacts_used_this_period = 7, "
-        "responses_used_this_period = 9, period_resets_at = excluded.period_resets_at",
+        "promo_units, period_resets_at, created_at, updated_at) values (%s, 7, 9, 1, "
+        "now() + interval '5 days', now(), now()) on conflict (company_id) do update set "
+        "contacts_used_this_period = 7, responses_used_this_period = 9, promo_units = 1, "
+        "period_resets_at = excluded.period_resets_at",
         [c5],
     )
     [(было,)] = sql("select ends_at from subscriptions where company_id = %s", [c5])
@@ -319,9 +320,51 @@ def test_досрочная_оплата_продления(мир, тариф, 
         [c5],
     )
 
+    [(единицы,)] = sql("select promo_units from wallets where company_id = %s", [c5])
+    [(квота,)] = sql("select promo_units from plans where code = %s", [тариф])
+
     if продление:
         assert (ends - было).days == 30
         assert счётчики == [(7, 9)]
+        # Единицы продвижения нового периода выдаст смена периода — раньше
+        # они начислялись дважды: при оплате и при сбросе
+        assert единицы == 1
     else:
         assert (ends - было).days < 30
         assert счётчики == [(0, 0)]
+        assert единицы == 1 + квота
+
+
+def test_старые_неоплаченные_счета_закрываются(мир, tmp_path):
+    """Счёт, не оплаченный в срок из счёта (14 дней), — «Не прошёл»; свежий ждёт дальше."""
+    cid = компания()
+
+    for number, days in (("SVD-OLD", 15), ("SVD-NEW", 13)):
+        sql(
+            "insert into payments (company_id, purpose, description, amount, currency, "
+            "provider, status, number, created_at, updated_at) values (%s, 'credits', 'x', 1, "
+            "'UZS', 'invoice', 'pending', %s, now() - make_interval(days => %s), now())",
+            [cid, number, days],
+        )
+
+    вывод = subprocess.run(
+        [sys.executable, "manage.py", "schedule", "--once", "billing_reset_periods"],
+        cwd=PYTHON,
+        env={
+            **ОКРУЖЕНИЕ,
+            "PYTHONPATH": str(PYTHON),
+            "SAVDEX_SCHEDULE_STATE": str(tmp_path / "state"),
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert "Закрыто старых счетов: 1." in вывод
+    assert sql(
+        "select number, status, admin_note from payments where company_id = %s order by number",
+        [cid],
+    ) == [
+        ("SVD-NEW", "pending", None),
+        ("SVD-OLD", "failed", "Счёт не оплачен за 14 дней — закрыт"),
+    ]

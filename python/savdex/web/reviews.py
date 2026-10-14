@@ -18,7 +18,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
-from savdex.web import content, inertia, ui
+from savdex.web import content, inertia, ui, visibility
 from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo
@@ -39,7 +39,7 @@ CRITERIA = {
 _COMPANY_ROWS = (
     "select 'company' as kind, r.id, r.created_at from reviews r "
     "join companies c on c.id = r.company_id join companies a on a.id = r.author_company_id "
-    "where r.status = 'published' and c.status = 'active' and c.deleted_at is null "
+    f"where r.status = 'published' and {visibility.company_sql()} "
     "and a.deleted_at is null"
 )
 _PLATFORM_ROWS = (
@@ -101,7 +101,7 @@ def take(
             [[r["id"] for r in rows if r["kind"] == "platform"]],
         )
     }
-    translations.prefetch(r["body"] for r in [*company.values(), *platform.values()])
+    translations.prefetch((r["body"] for r in [*company.values(), *platform.values()]), user=True)
 
     return [
         _company_card(company[r["id"]], translations)
@@ -118,7 +118,7 @@ def _company_card(r: dict[str, Any], translations: content.Translations) -> dict
         "author": r["author"],
         "initials": initials(r["author"]),
         "rating": int(r["rating"]),
-        "body": translations.text(r["body"]),
+        "body": translations.user_text(r["body"]),
         "when": r["created_at"].strftime("%d.%m.%Y"),
         "company_name": r["company_name"],
         "company_slug": r["company_slug"],
@@ -147,7 +147,7 @@ def _platform_card(r: dict[str, Any], translations: content.Translations) -> dic
         "author": author,
         "initials": initials(author),
         "rating": int(r["rating"]),
-        "body": translations.text(r["body"]),
+        "body": translations.user_text(r["body"]),
         "when": r["created_at"].strftime("%d.%m.%Y"),
         "company_name": None,
         "company_slug": None,

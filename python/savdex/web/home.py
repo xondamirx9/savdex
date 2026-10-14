@@ -22,7 +22,7 @@ from PIL import Image
 
 from savdex import laravel_storage
 from savdex.site.models import Banner, LandingBlock
-from savdex.web import content, inertia, locales, news, platform, reviews, ui
+from savdex.web import content, inertia, locales, news, platform, reviews, ui, visibility
 from savdex.web.currency import CurrencyRate
 from savdex.web.directory import _named, listed_countries, logo_url, type_label, type_options
 from savdex.web.request import context
@@ -31,6 +31,7 @@ from savdex.web.shared import (
     Context,
     ago,
     initials,
+    profile_checks,
     public_url,
     setting,
     settings_values,
@@ -78,18 +79,7 @@ def _filled(value: object) -> bool:
 
 def completeness(company: dict[str, Any], has_documents: bool) -> int:
     """Company::profileCompleteness."""
-    checks = [
-        _filled(company["name"]),
-        _filled(company["type"]) or company["legal_form"] in ("individual", "freelancer"),
-        company["city_id"] is not None,
-        _filled(company["phone"]),
-        _filled(company["email"]),
-        _filled(company["tin"]),
-        _filled(company["address"]),
-        len(company["description"] or "") >= 100,
-        _filled(company["logo_path"]),
-        has_documents,
-    ]
+    checks = [done for _, done in profile_checks(company, has_documents)]
 
     return int(php_round(sum(checks) / len(checks) * 100))
 
@@ -144,7 +134,8 @@ _LISTING_COMPANY = (
     "c.city_id as c_city_id, c.country_id as c_country_id, "
     "c.type as c_type, c.legal_form as c_legal_form, c.phone as c_phone, c.email as c_email, "
     "c.tin as c_tin, c.address as c_address, c.description as c_description, "
-    "c.logo_path as c_logo_path, exists (select 1 from company_documents d where "
+    "c.logo_path as c_logo_path, c.email_unconfirmed as c_email_unconfirmed, "
+    "exists (select 1 from company_documents d where "
     "d.company_id = c.id and d.moderation_status = 'approved') as c_has_documents"
 )
 
@@ -168,12 +159,11 @@ class Cards:
         self.service = platform.service_company_id()
 
     def _localized(self, listing: dict[str, Any], field: str) -> str | None:
-        """Listing::localized: перевод есть и не пустой — он, иначе оригинал."""
-        if self.locale != "ru":
-            value = (listing[f"{field}_i18n"] or {}).get(self.locale)
+        """Listing::localized: перевод есть и не пустой — он, иначе оригинал (и для ru)."""
+        value = (listing[f"{field}_i18n"] or {}).get(self.locale)
 
-            if str(value or "").strip() != "":
-                return str(value)
+        if str(value or "").strip() != "":
+            return str(value)
 
         original = listing[field]
 
@@ -239,10 +229,16 @@ class Cards:
             if listing["category_id"]
             else None,
             "price": float(listing["price"]) if listing["price"] is not None else None,
+            # Цена «от» и диапазон «price – price_to»
+            "price_from": bool(listing.get("price_from")),
+            "price_to": float(listing["price_to"]) if listing.get("price_to") is not None else None,
             "currency": listing["currency"],
             "converted": None
             if listing["price_negotiable"]
             else self.prices.convert(listing["price"], listing["currency"]),
+            "converted_to": None
+            if listing["price_negotiable"]
+            else self.prices.convert(listing.get("price_to"), listing["currency"]),
             "unit": listing["unit"],
             "negotiable": listing["price_negotiable"],
             "min_order": listing["min_order"],
@@ -274,6 +270,8 @@ class Cards:
                 "trust": completeness(company, bool(company["has_documents"])),
                 "response_hours": company["response_time_hours"],
                 "platform": False,
+                # Код из письма пропущен при регистрации — «Не подтверждено»
+                "unconfirmed": bool(company.get("email_unconfirmed")),
             },
             "badges": [b for b in badges if b],
             "promoted": promoted,
@@ -283,8 +281,8 @@ class Cards:
 def _listings(where: str, params: list[Any], order: str, limit: int) -> list[dict[str, Any]]:
     return _rows(
         f"select l.*, {_LISTING_COMPANY} from listings l join companies c on c.id = l.company_id "
-        f"where l.status = 'active' and l.deleted_at is null and c.status = 'active' "
-        f"and c.deleted_at is null {where} order by {order} limit {int(limit)}",
+        f"where l.status = 'active' and l.deleted_at is null and {visibility.company_sql()} "
+        f"{where} order by {order} limit {int(limit)}",
         params,
     )
 
@@ -320,6 +318,24 @@ def latest_products(cards: Cards, shown: list[int]) -> list[dict[str, Any]]:
             8,
         )
     )
+
+
+#: Пока живых предложений меньше — «Запросы» на главной стоят выше «Товаров»:
+#: свежий посетитель видит наполненный раздел, а не три карточки (ТЗ-01, п.2.3)
+FEW_OFFERS = 20
+
+
+def offers_count(locale: str) -> int:
+    """Сколько предложений (supply) видно на витрине этого языка."""
+    visible, params = visible_in(locale)
+    rows = _rows(
+        "select count(*) as n from listings l join companies c on c.id = l.company_id "
+        f"where l.status = 'active' and l.deleted_at is null and {visibility.company_sql()} "
+        f"{visible} and l.type = 'supply'",
+        params,
+    )
+
+    return int(rows[0]["n"]) if rows else 0
 
 
 def latest_requests(cards: Cards) -> list[dict[str, Any]]:
@@ -478,10 +494,8 @@ def hero_ratio(values: dict[str, Any]) -> float | None:
 
 #: Объявление действующей компании — как в каталоге: у заблокированной
 #: и удалённой объявлений в счётчиках и фильтрах нет
-LIVE_COMPANY = (
-    " and exists (select 1 from companies co where co.id = l.company_id "
-    "and co.status = 'active' and co.deleted_at is null)"
-)
+#: Объявление l — у видимой компании (savdex/web/visibility.py)
+LIVE_COMPANY = " and " + visibility.live_company("l")
 
 
 def popular_categories(locale: str) -> list[dict[str, Any]]:
@@ -540,8 +554,8 @@ def popular_services(locale: str) -> list[dict[str, Any]]:
         r["service_type"]: int(r["total"])
         for r in _rows(
             "select t.service_type, count(*) as total from it_tasks t join companies c "
-            "on c.id = t.company_id where t.status = 'active' and c.status = 'active' "
-            "and c.deleted_at is null group by t.service_type"
+            f"on c.id = t.company_id where t.status = 'active' and {visibility.company_sql()} "
+            "group by t.service_type"
         )
     }
     sections: list[dict[str, Any]] = [
@@ -560,7 +574,13 @@ def popular_services(locale: str) -> list[dict[str, Any]]:
 
 
 def top_suppliers(ctx: Context) -> list[dict[str, Any]]:
-    """PageController::topSuppliers: лучшие по проверке и рейтингу."""
+    """
+    Блок «Поставщики»: только компании, у которых есть что купить, —
+    хотя бы одно живое предложение. Карточки, заведённые площадкой из
+    открытых источников (source_note), сюда не попадают, пока владелец
+    не решил, как их показывать (ТЗ-01, п.4). Порядок: проверенные,
+    затем с логотипом, затем новые.
+    """
     options = type_options(ctx.locale)
     cities = _named("cities", ctx.locale)
 
@@ -581,20 +601,43 @@ def top_suppliers(ctx: Context) -> list[dict[str, Any]]:
             "select m.*, (select count(*) from listings l where l.company_id = m.id and "
             "l.status = 'active' and l.deleted_at is null) as listings_count from companies m "
             "where m.status = 'active' and m.deleted_at is null "
-            "order by m.verification_level desc, m.rating desc, m.id limit 4"
+            "and coalesce(m.source_note, '') = '' "
+            "and exists (select 1 from listings s where s.company_id = m.id "
+            "and s.type = 'supply' and s.status = 'active' and s.deleted_at is null) "
+            "order by m.verification_level desc, coalesce(m.logo_path, '') <> '' desc, "
+            "m.created_at desc nulls last, m.id desc limit 4"
         )
     ]
+
+
+def shown_city_sql(service: int | None) -> tuple[str, list[Any]]:
+    """
+    Город, который карточка объявления показывает (Cards._card): город
+    компании, а у заявки площадки — её собственный. Фильтр по городу
+    ищет по нему же: раньше искал по городу объявления, а показывал город
+    компании, и выдача с подписью не сходилась. Нужны псевдонимы l и c.
+    """
+    if service is None:
+        return "c.city_id", []
+
+    return (
+        "(case when l.company_id = %s and l.source = 'import' then l.city_id else c.city_id end)",
+        [service],
+    )
 
 
 def city_options(locale: str) -> list[dict[str, Any]]:
     """PageController::cityOptions: города с живыми объявлениями, по названию."""
     names = _named("cities", locale)
+    shown, params = shown_city_sql(platform.service_company_id())
     cities = [
         {"id": r["id"], "name": names[r["id"]]}
         for r in _rows(
-            "select id from cities c where is_active and exists (select 1 from listings l "
-            "where l.city_id = c.id and l.status = 'active' and l.deleted_at is null"
-            f"{LIVE_COMPANY})"
+            "select id from cities ci where is_active and exists (select 1 from listings l "
+            f"join companies c on c.id = l.company_id and {visibility.company_sql()} "
+            f"where {shown} = ci.id and l.status = 'active' "
+            "and l.deleted_at is null)",
+            params,
         )
     ]
 
@@ -667,6 +710,7 @@ def home(request: HttpRequest) -> HttpResponse:
             "latest": latest,
             "products": latest_products(cards, [row["id"] for row in latest]),
             "requests": latest_requests(cards),
+            "requestsFirst": offers_count(ctx.locale) < FEW_OFFERS,
             "suppliers": top_suppliers(ctx),
             "countries": [
                 {"code": c["code"], "name": c["name"]} for c in listed_countries(ctx.locale)

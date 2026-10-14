@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any
 
 from django.db import connection, transaction
@@ -28,7 +29,7 @@ from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
 from savdex.guards import allowed_writes
-from savdex.web import ui
+from savdex.web import analytics, platform, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of, company_plan
 from savdex.web.forms import action, back, flash, input_of, invalid, previous, redirect
@@ -176,7 +177,8 @@ def send_message(ctx: Context, thread: dict[str, Any], company: dict[str, Any], 
 
 def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
     """ChatService::spendResponse: условный update, а не проверка с записью."""
-    limit = company_plan(company["id"]).get("responses_limit")
+    plan = company_plan(company["id"])
+    limit = plan.get("responses_limit")
 
     if limit is None:
         return
@@ -186,20 +188,13 @@ def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
 
     now = _stamp(_now())
 
+    # Wallet::firstOrCreate — с датой смены периода, иначе счётчик
+    # откликов бесплатного тарифа не обнулялся никогда
+    from savdex.web import wallet as wallet_store
+
+    wallet_id = wallet_store.ensure(company["id"])["id"]
+
     with allowed_writes("wallets"), connection.cursor() as cursor:
-        # Wallet::firstOrCreate
-        wallets = _rows("select id from wallets where company_id = %s limit 1", [company["id"]])
-
-        if wallets:
-            wallet_id = wallets[0]["id"]
-        else:
-            cursor.execute(
-                "insert into wallets (company_id, created_at, updated_at) values (%s, %s, %s) "
-                "returning id",
-                [company["id"], now, now],
-            )
-            wallet_id = cursor.fetchone()[0]
-
         cursor.execute(
             "update wallets set responses_used_this_period = responses_used_this_period + 1, "
             "updated_at = %s where id = %s and responses_used_this_period < %s",
@@ -208,6 +203,8 @@ def _spend_response(ctx: Context, company: dict[str, Any]) -> None:
         spent = cursor.rowcount
 
     if spent != 1:
+        analytics.limit_reached(ctx, "replies", plan.get("code"))
+
         raise ChatRejectedError(ctx.t("messages.chat.replies_used_up", limit=limit))
 
 
@@ -256,16 +253,21 @@ def _open_thread(
 # ── Посредник verified ───────────────────────────────────────────────
 
 
-def _unverified(ctx: Context) -> HttpResponse | None:
+def _unverified(ctx: Context, strict: bool = False) -> HttpResponse | None:
     """
     EnsureEmailIsVerified: ждущему JSON — 403 (страница ошибки: JSON
     Laravel отдаёт только для api/*), иначе Redirect::guest на
-    подтверждение почты.
+    подтверждение почты. Пропустившего код при регистрации пускает
+    (email_ok); strict — только подтвердившего почту (отзывы).
     """
     from savdex.web.forms import _store
+    from savdex.web.shared import email_ok, identity_confirmed
     from savdex.web.views import error
 
-    if ctx.user is None or ctx.user["email_verified_at"] is not None:
+    if ctx.user is None or identity_confirmed(ctx.user):
+        return None
+
+    if not strict and email_ok(ctx.user):
         return None
 
     if _expects_json(ctx.request):
@@ -341,11 +343,38 @@ def send(request: HttpRequest, thread_id: str) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
+    thread = found[0]
+    # Первый ответ продавца на отклик — до вставки, иначе он уже «не первый»
+    first_reply = company["id"] == thread["seller_company_id"] and not _rows(
+        "select 1 from messages where thread_id = %s and company_id = %s limit 1",
+        [thread["id"], company["id"]],
+    )
+
     try:
         with transaction.atomic():
-            send_message(ctx, found[0], company, data["body"])
+            send_message(ctx, thread, company, data["body"])
     except ChatRejectedError as e:
         return _rejected(ctx, str(e))
+
+    if first_reply:
+        from savdex import product_events
+
+        # created_at и _now() — UTC без пояса, как пишет площадка
+        started = thread.get("created_at")
+        product_events.record(
+            "response_replied",
+            company_id=company["id"],
+            user_id=ctx.user["id"] if ctx.user else None,
+            plan=product_events.plan_code(company["id"]),
+            locale=ctx.locale,
+            props={
+                "thread_id": thread["id"],
+                "listing_id": thread.get("listing_id"),
+                "hours_to_reply": round((_now() - started).total_seconds() / 3600, 1)
+                if isinstance(started, datetime)
+                else None,
+            },
+        )
 
     return back(ctx)
 
@@ -396,6 +425,14 @@ def respond(request: HttpRequest, listing_id: str) -> HttpResponse:
     except ChatRejectedError as e:
         return _rejected(ctx, str(e))
 
+    analytics.queue(
+        ctx,
+        "response_sent",
+        {
+            "listing_id": listing["id"],
+            "is_platform_listing": platform.owns(listing, platform.service_company_id()),
+        },
+    )
     flash(ctx, "success", ctx.t("messages.chat.reply_sent"))
 
     return redirect(ctx, ctx.url(f"/cabinet/chats/{thread['id']}"))

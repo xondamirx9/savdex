@@ -28,6 +28,7 @@ from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo, _limit
 from savdex.web.shared import Context
+from savdex.web.visibility import author_visible
 
 PER_PAGE = 20
 
@@ -56,6 +57,13 @@ def _localized(row: dict[str, Any], field: str, locale: str) -> str | None:
     translated = (row[f"{field}_i18n"] or {}).get(locale)
 
     return translated if str(translated or "").strip(_TRIM) != "" else original
+
+
+#: Автор закупки зарегистрировался без кода из письма — «Не подтверждено»
+_AUTHOR_UNCONFIRMED = (
+    "coalesce((select c.email_unconfirmed from users u join companies c on c.id = u.company_id "
+    "where u.id = t.author_id), false) as author_unconfirmed"
+)
 
 
 def card(
@@ -87,6 +95,8 @@ def card(
         "published": _date(row["published_at"], locale),
         # Госзакупка (этап 5, только Django): значок на карточке и странице
         "government": bool(row.get("is_government")),
+        # Код из письма пропущен при регистрации автора — «Не подтверждено»
+        "unconfirmed": bool(row.get("author_unconfirmed")),
     }
 
 
@@ -143,6 +153,7 @@ def tenders_tab(ctx: Context, string: Callable[[str], str]) -> HttpResponse:
     where = [
         "t.status = 'published'",
         "(t.published_at is null or t.published_at <= %s)",
+        author_visible(),
     ]
     params: list[Any] = [naive]
 
@@ -166,7 +177,7 @@ def tenders_tab(ctx: Context, string: Callable[[str], str]) -> HttpResponse:
     total = _rows(f"select count(*) as n from tenders t where {condition}", params)[0]["n"]
     current, offset = paginator.offset(ctx, PER_PAGE)
     rows = _rows(
-        f"select t.* from tenders t where {condition} "
+        f"select t.*, {_AUTHOR_UNCONFIRMED} from tenders t where {condition} "
         f"order by {order}, t.published_at desc, t.id desc limit %s offset %s",
         [*params, PER_PAGE, offset],
     )
@@ -282,8 +293,9 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     now = datetime.now(UTC).replace(microsecond=0)
     naive = now.replace(tzinfo=None)
     found = _rows(
-        "select t.* from tenders t where t.status = 'published' "
-        "and (t.published_at is null or t.published_at <= %s) and t.slug = %s limit 1",
+        f"select t.*, {_AUTHOR_UNCONFIRMED} from tenders t where t.status = 'published' "
+        f"and (t.published_at is null or t.published_at <= %s) and {author_visible()} "
+        "and t.slug = %s limit 1",
         [naive, slug],
     )
 
@@ -338,10 +350,10 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         params.append(row["category_id"])
 
     similar = _rows(
-        "select t.* from tenders t where t.status = 'published' "
+        f"select t.*, {_AUTHOR_UNCONFIRMED} from tenders t where t.status = 'published' "
         "and (t.published_at is null or t.published_at <= %s) "
         "and (t.deadline_at is null or t.deadline_at >= %s) "
-        f"and t.id != %s{same_category} "
+        f"and {author_visible()} and t.id != %s{same_category} "
         "order by t.deadline_at is null, t.deadline_at asc, t.id desc limit 3",
         params,
     )

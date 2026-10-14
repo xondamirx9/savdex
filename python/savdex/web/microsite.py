@@ -25,7 +25,7 @@ from django.http import (
     HttpResponseRedirect,
 )
 
-from savdex.web import content, inertia, locales, platform
+from savdex.web import content, inertia, locales, platform, visibility
 from savdex.web.cabinet import (
     _microsite_domain,
     _rows,
@@ -38,7 +38,7 @@ from savdex.web.chat_actions import str_limit
 from savdex.web.company import _file_size, business_card, href
 from savdex.web.directory import logo_url
 from savdex.web.home import _LISTING_COMPANY, Cards, visible_in
-from savdex.web.seo import Seo, php_json
+from savdex.web.seo import Seo
 from savdex.web.shared import Context, _php_round, initials, settings_values
 
 #: SitePage::LISTINGS: мини-сайт — витрина, а не каталог
@@ -58,6 +58,14 @@ FONTS = {
     "playfair-display": ("Playfair Display", "serif"),
     "lora": ("Lora", "serif"),
     "pt-serif": ("PT Serif", "serif"),
+    "roboto": ("Roboto", "sans-serif"),
+    "open-sans": ("Open Sans", "sans-serif"),
+    "raleway": ("Raleway", "sans-serif"),
+    "ubuntu": ("Ubuntu", "sans-serif"),
+    "exo-2": ("Exo 2", "sans-serif"),
+    "comfortaa": ("Comfortaa", "sans-serif"),
+    "roboto-slab": ("Roboto Slab", "serif"),
+    "merriweather": ("Merriweather", "serif"),
 }
 SURFACES = {
     "light": {
@@ -182,8 +190,31 @@ def marketplace_url(ctx: Context, path: str) -> str:
     return _app_url() + locales.prefix(ctx.locale) + path
 
 
-def _contacts(company_id: int) -> list[dict[str, Any]]:
-    return [
+#: Контакты, которые мини-сайт берёт сам, если их нет в «Моих контактах»
+_AUTO_CONTACTS = ("phone", "email", "telegram", "whatsapp")
+
+
+def _contact(kind: str, value: str) -> dict[str, Any]:
+    return {
+        "type": kind,
+        "label": None,
+        "contact_person": None,
+        "value": value,
+        "href": href(kind, value),
+    }
+
+
+def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Контакты мини-сайта: сначала «Мои контакты» (company_contacts,
+    публичные). Телефона, почты, Telegram или WhatsApp там нет вовсе (даже
+    скрытого) — мини-сайт берёт их сам: из профиля компании, а телефон и
+    почту — ещё и из учётной записи владельца (то, что вписали при
+    регистрации). Так у
+    только что зарегистрированной компании на сайте сразу есть как с ней
+    связаться; правка в профиле видна на сайте без отдельного шага.
+    """
+    contacts = [
         {
             "type": c["type"],
             "label": c["label"],
@@ -194,9 +225,36 @@ def _contacts(company_id: int) -> list[dict[str, Any]]:
         for c in _rows(
             "select type, label, contact_person, value from company_contacts "
             "where company_id = %s and is_public order by is_primary desc, sort_order, id",
-            [company_id],
+            [company["id"]],
         )
     ]
+    # Вид контакта, который есть в «Моих контактах» — пусть и скрытый, — сам
+    # не подставляется: скрытую почту владелец скрыл нарочно
+    have = {
+        r["type"]
+        for r in _rows(
+            "select distinct type from company_contacts where company_id = %s", [company["id"]]
+        )
+    }
+    # Только владелец: личный телефон и почта сотрудников — не контакты
+    # компании, на публичную страницу они не выносятся
+    people = _rows(
+        "select phone, email from users where company_id = %s and deleted_at is null "
+        "and status = 'active' and company_role = 'owner' order by id",
+        [company["id"]],
+    )
+
+    for kind in _AUTO_CONTACTS:
+        if kind in have:
+            continue
+
+        candidates = [company.get(kind), *(p.get(kind) for p in people)]
+        value = next((str(v).strip() for v in candidates if v and str(v).strip()), "")
+
+        if value:
+            contacts.append(_contact(kind, value))
+
+    return contacts
 
 
 def _products(ctx: Context, company_id: int) -> list[dict[str, Any]]:
@@ -361,12 +419,14 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
         f"<style>:root{{ {view['css']} }}</style>",
         '<link rel="preconnect" href="https://fonts.bunny.net">',
         '<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>',
-        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet">',
+        # Шрифт — без ожидания отрисовки (как на сайте, inertia.py)
+        f'<link id="ms-fonts" href="{e(view["fonts"])}" rel="stylesheet" media="print" '
+        "onload=\"this.media='all'\">",
         tags,
     ]
     lang = e(ctx.locale.replace("_", "-"))
     body = (
-        f'<script data-page="app" type="application/json">{php_json(page)}</script>'
+        f'<script data-page="app" type="application/json">{inertia.page_json(page)}</script>'
         '<div id="app"></div>'
     )
 
@@ -401,7 +461,7 @@ def render(
         },
         "company": business_card(ctx, company, translations),
         "initials": initials(company["name"]),
-        "contacts": _contacts(company["id"]),
+        "contacts": _contacts(company),
         "products": _products(ctx, company["id"]),
         "files": _files(ctx, company["id"]),
         "reviews": _reviews(ctx, company),
@@ -426,7 +486,11 @@ def render(
 
 
 def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Опубликован, компания не заблокирована, тариф с мини-сайтом."""
+    """
+    Опубликован, компания видна на площадке (как её страница в каталоге:
+    только активная — не заблокированная, не скрытая, не на проверке),
+    тариф с мини-сайтом.
+    """
     found = _rows("select * from company_sites where subdomain = %s limit 1", [subdomain.lower()])
 
     if not found or found[0]["status"] != "published":
@@ -436,7 +500,7 @@ def _live(subdomain: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         "select * from companies where id = %s and deleted_at is null", [found[0]["company_id"]]
     )
 
-    if not companies or companies[0]["status"] == "blocked":
+    if not companies or not visibility.company_visible(companies[0]):
         return None
 
     if not company_plan(companies[0]["id"]).get("has_microsite"):

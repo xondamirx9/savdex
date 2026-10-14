@@ -24,14 +24,19 @@ from django.http import HttpRequest, HttpResponse
 from savdex.web import eloquent
 from savdex.web.actions import form
 from savdex.web.cabinet import SERVICE_TYPES, _rows, company_of
+from savdex.web.city_choice import city_in_country, resolve_other
 from savdex.web.company_profile_actions import (
     CASTS,
+    FREE_FORMS,
     PROFILE_FIELDS,
     _country_code,
+    _country_id,
     _search_text,
     _tin,
     _unique_tin,
     changed_profile_fields,
+    locked_fields,
+    normalize_tin,
 )
 from savdex.web.forms import action, input_of
 from savdex.web.listing_actions import _stamp
@@ -63,7 +68,8 @@ def locked_until(company: dict[str, Any]) -> datetime | None:
     """Company::profileLockedUntil: до какого момента заполненное менять нельзя."""
     changed = company.get("profile_changed_at")
 
-    if changed is None:
+    # Физлицо и фрилансер меняют сведения когда угодно
+    if changed is None or not locked_fields(company):
         return None
 
     # Время в столбце — UTC без пояса, как и eloquent.now()
@@ -147,13 +153,21 @@ def _payload(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
             "it_specializations": specializations or [],
         },
         "locked_until": _date(locked_until(company)),
+        "locked_fields": list(locked_fields(company)),
         "changed_at": _date(company.get("profile_changed_at")),
         "cooldown_months": COOLDOWN_MONTHS,
         **_cooldown(company),
-        "countries": [{"id": c["id"], "name": c["name"]} for c in listed_countries(ctx.locale)],
+        "countries": [
+            {"id": c["id"], "name": c["name"], "code": c["code"]}
+            for c in listed_countries(ctx.locale)
+        ],
         "cities": [
             {"id": c["id"], "name": cities[c["id"]], "country_id": c["country_id"]}
-            for c in _rows("select id, country_id from cities where is_active order by sort, id")
+            # Свой «другой город» (скрытый, city_choice.py) — тоже в списке
+            for c in _rows(
+                "select id, country_id from cities where is_active or id = %s order by sort, id",
+                [company["city_id"]],
+            )
         ],
         "serviceTypes": {code: ctx.t(f"it_tasks.types.{code}") for code in SERVICE_TYPES},
     }
@@ -191,11 +205,17 @@ def _rules(
             "nullable",
             "string",
             "max:20",
-            _tin(ctx, _country_code(data, company), tin_messages),
-            _unique_tin(company["id"]),
+            # Физлицу и фрилансеру годится ПИНФЛ (14 цифр)
+            _tin(
+                ctx,
+                _country_code(data, company),
+                tin_messages,
+                person=company.get("legal_form") in FREE_FORMS,
+            ),
+            _unique_tin(company["id"], _country_id(data, company), ctx=ctx),
         ],
         "country_id": ["nullable", _exists("countries")],
-        "city_id": ["nullable", _exists("cities")],
+        "city_id": ["nullable", _exists("cities"), city_in_country(data, company)],
         "address": ["nullable", "string", "max:255"],
         "description": ["nullable", "string", "max:5000"],
         "founded_year": ["nullable", "integer", f"between:1850,{year}"],
@@ -216,7 +236,9 @@ def update(request: HttpRequest) -> HttpResponse:
     if company is None:
         return _forbidden(ctx)
 
-    data = input_of(request)
+    data = dict(input_of(request))
+    normalize_tin(data, company)
+    resolve_other(data)
     tin_messages: list[str] = []
     rules = _rules(ctx, data, company, tin_messages)
     year = datetime.now().year
@@ -228,6 +250,7 @@ def update(request: HttpRequest) -> HttpResponse:
             "name.required": ctx.t("messages.company.name_required"),
             "founded_year.between": ctx.t("messages.company.founded_between", year=year),
             "tin.unique": ctx.t("messages.company.tin_unique"),
+            "city_id.city_country": ctx.t("messages.company.city_country"),
         },
     )
 

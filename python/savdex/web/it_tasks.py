@@ -17,7 +17,7 @@ from django.db import connection
 from django.http import HttpRequest, HttpResponse
 
 from savdex import audit
-from savdex.web import content, inertia, paginator, search_text, ui
+from savdex.web import content, inertia, paginator, search_text, ui, visibility
 from savdex.web.directory import _named, logo_url
 from savdex.web.home import _utc
 from savdex.web.news import day_month_year
@@ -103,13 +103,13 @@ def card(
 ) -> dict[str, Any]:
     """ItTaskController::card."""
     completed = row["status"] == "completed"
-    description = (translations.text(row["description"]) or "").strip(" \t\n\r\0\x0b")
+    description = (translations.user_text(row["description"]) or "").strip(" \t\n\r\0\x0b")
     url = row["result_url"]
 
     return {
         "id": row["id"],
         "slug": row["slug"],
-        "title": translations.text(row["title"]),
+        "title": translations.user_text(row["title"]),
         "excerpt": _limit(description, 180, "..."),
         "service_type": row["service_type"],
         "service_label": ctx.t(f"it_tasks.types.{row['service_type']}"),
@@ -143,8 +143,8 @@ def _cities(locale: str) -> list[dict[str, Any]]:
     """
     names = _named("cities", locale)
     taken = _rows(
-        "select distinct c.city_id from companies c where c.status = 'active' "
-        "and c.deleted_at is null and c.city_id is not null "
+        f"select distinct c.city_id from companies c where {visibility.company_sql()} "
+        "and c.city_id is not null "
         "and c.id in (select t.company_id from it_tasks t where t.status = 'active')"
     )
     ids = [r["city_id"] for r in taken]
@@ -205,8 +205,7 @@ def index(request: HttpRequest) -> HttpResponse:
 
     where = [
         "t.status = %s",
-        "c.status = 'active'",
-        "c.deleted_at is null",
+        visibility.company_sql(),
     ]
     params: list[Any] = ["completed" if done else "active"]
 
@@ -378,7 +377,9 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
 
     # Закрытую без результата видит только заказчик; задачи заблокированной
     # или удалённой компании — тоже только она, как и в списке
-    hidden = row["status"] not in ("active", "completed") or row["company_status"] != "active"
+    hidden = (
+        row["status"] not in ("active", "completed") or row["company_status"] != visibility.ACTIVE
+    )
 
     if hidden and not owner:
         return not_found(ctx)
@@ -411,7 +412,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
     seo.noindex = row["status"] != "active"
 
     similar = _rows(
-        f"{_SELECT} where t.status = 'active' and c.status = 'active' and t.id != %s "
+        f"{_SELECT} where t.status = 'active' and {visibility.company_sql()} and t.id != %s "
         "and t.service_type = %s "
         "order by t.published_at desc, t.id desc limit 3",
         [row["id"], row["service_type"]],
@@ -436,7 +437,7 @@ def show(request: HttpRequest, slug: str) -> HttpResponse:
         {
             "task": {
                 **card(ctx, row, translations, cities),
-                "description": paragraphs(translations.text(row["description"])),
+                "description": paragraphs(translations.user_text(row["description"])),
                 "files": [
                     {
                         "id": f["id"],

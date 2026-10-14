@@ -163,6 +163,10 @@ class Listing(Timestamped):
     title = models.CharField("заголовок", max_length=255)
     description = models.TextField("описание", null=True, blank=True)
     price = models.DecimalField("цена", max_digits=16, decimal_places=2, null=True, blank=True)
+    price_from = models.BooleanField("цена «от»", default=False)
+    price_to = models.DecimalField(
+        "цена до (диапазон)", max_digits=16, decimal_places=2, null=True, blank=True
+    )
     bundle_price = models.DecimalField(
         "цена за весь комплект", max_digits=16, decimal_places=2, null=True, blank=True
     )
@@ -239,6 +243,16 @@ LEGAL_FORMS = {"legal": "Юрлицо", "individual": "Физлицо", "freelan
 #: CompaniesTable::LEVELS
 LEVELS = {0: "Не проверена", 1: "Контакты подтверждены", 2: "Проверена", 3: "Проверена+"}
 
+#: Статусы компании. «Скрыта» — тестовая или пустая карточка убрана с
+#: витрины (ТЗ-01, п.4): сайт показывает только active, а вход в кабинет
+#: закрывает только blocked
+COMPANY_HIDDEN = "hidden"
+COMPANY_STATUSES = {
+    "active": "Активна",
+    "blocked": "Заблокирована",
+    COMPANY_HIDDEN: "Скрыта с витрины",
+}
+
 #: Company::PARTNER_TIERS
 PARTNER_TIERS = {"general": "Генеральный партнёр", "partner": "Партнёр", "multi": "Мультипартнёр"}
 
@@ -275,7 +289,11 @@ class CompanyRecord(Timestamped):
     )
     legal_name = models.CharField("юридическое название", max_length=190, null=True, blank=True)
     tin = models.CharField(
-        "ИНН", max_length=20, null=True, blank=True, help_text="9 цифр для Узбекистана"
+        "ИНН / номер компании",
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="По стране: Узбекистан — 9 цифр, Китай — 18 знаков, Индия — GSTIN или PAN",
     )
     type = models.CharField(
         "тип",
@@ -354,10 +372,15 @@ class CompanyRecord(Timestamped):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Company::creating — адрес; Company::saving — search_text."""
-        from savdex.web.company_profile_actions import _search_text, _slug
+        from savdex.web.company_profile_actions import _search_text, slug_fields
 
         if self._state.adding and not self.slug:
-            self.slug = _slug(self.name)
+            fields = slug_fields(self.name)
+            self.slug = fields["slug"]
+
+            # Номер взят заранее — он же в адресе: «company-<номер>»
+            if "id" in fields:
+                self.pk = fields["id"]
 
         self.search_text = _search_text({"name": self.name, "legal_name": self.legal_name})[
             "search_text"

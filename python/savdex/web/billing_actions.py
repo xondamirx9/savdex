@@ -30,6 +30,7 @@ from typing import Any
 from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
+from savdex import product_events
 from savdex.guards import allowed_writes
 from savdex.payments import checkout as cashier
 from savdex.web import eloquent, locales, orders
@@ -71,6 +72,14 @@ def cancel(request: HttpRequest) -> HttpResponse:
         section="subscriptions",
         model="Subscription",
         casts=SUBSCRIPTION_CASTS,
+    )
+    product_events.record(
+        "subscription_cancelled",
+        company_id=subscription["company_id"],
+        user_id=ctx.user["id"] if ctx.user else None,
+        plan=product_events.plan_code(subscription["company_id"]),
+        locale=ctx.locale,
+        props={"ends_at": subscription["ends_at"]},
     )
 
     until = _date(subscription["ends_at"])
@@ -192,12 +201,84 @@ def _location(ctx: Context, url: str) -> HttpResponse:
     return HttpResponseRedirect(url)
 
 
+def _live_order(payment: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Заказ Uzum этого счёта, форма которого ещё открыта (моложе срока
+    сессии Uzum), — с сохранённой ссылкой на неё.
+    """
+    from datetime import timedelta
+
+    rows = _rows(
+        "select * from payment_transactions where payment_id = %s and provider = 'uzum' "
+        "and state = 'created' and provider_transaction_id is not null "
+        "and created_at > %s order by id desc limit 1",
+        [
+            payment["id"],
+            eloquent.now() - timedelta(seconds=cashier.SESSION_TIMEOUT_SECS - 60),
+        ],
+    )
+
+    if not rows:
+        return None
+
+    import json
+
+    payload = rows[0]["payload"]
+    data = json.loads(payload) if isinstance(payload, str) else (payload or {})
+
+    return rows[0] if isinstance(data, dict) and data.get("redirect_url") else None
+
+
+def _paid_elsewhere(ctx: Context, payment: dict[str, Any]) -> bool:
+    """
+    Прежний заказ счёта уже оплачен (в другой вкладке), а подтверждение
+    ещё не дошло: засчитать его, а не открывать вторую форму оплаты.
+    """
+    from savdex.web import payment_callbacks, settlement
+
+    order_id = payment.get("external_id")
+
+    if not order_id or payment.get("provider") != "uzum":
+        return False
+
+    if not payment_callbacks.order_completed(cashier.gateway(), str(order_id)):
+        return False
+
+    settlement.mark_paid(ctx, payment, {"provider": "uzum", "external_id": order_id})
+
+    return True
+
+
 def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
     """
     BillingController::checkout: регистрация в Uzum и уход на его форму.
     Отказ кассы не роняет покупку — счёт остаётся для оплаты переводом.
+
+    Один живой заказ на счёт. Повторное «Оплатить» (вторая вкладка,
+    двойной щелчок) раньше регистрировало новый заказ и затирало номер
+    прежнего: оплата в первой вкладке не находила счёт — деньги
+    списаны, тариф не выдан, а оплата в обеих списывала дважды.
+    Теперь открытая форма переиспользуется, а оплаченный прежний
+    заказ засчитывается без новой формы.
     """
+    import json
+
+    live = _live_order(payment)
+
+    if live is not None:
+        payload = live["payload"]
+        data = json.loads(payload) if isinstance(payload, str) else payload
+
+        return _location(ctx, str(data["redirect_url"]))
+
     try:
+        if _paid_elsewhere(ctx, payment):
+            flash(ctx, "success", ctx.t("messages.billing.paid_title", number=payment["number"]))
+
+            return HttpResponseRedirect(
+                locales.url(ctx.root, "/cabinet/billing", ctx.locale), status=303
+            )
+
         config = cashier.gateway()
         # Назад — на тарифы того же домена и языка, а не ко входу
         result = cashier.create_checkout(
@@ -226,12 +307,41 @@ def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
             model="Payment",
             casts={"amount": "int"},
         )
+        # Заказ — в журнал счёта: подтверждение по нему найдёт счёт, даже
+        # если номер заказа в счёте уже другой, а повторное «Оплатить»
+        # откроет эту же форму, а не вторую
+        now = eloquent.now()
+        orders._insert(
+            "payment_transactions",
+            {
+                "payment_id": payment["id"],
+                "provider": "uzum",
+                "provider_transaction_id": result["order_id"],
+                "state": "created",
+                "currency": "UZS",
+                "payload": json.dumps({"redirect_url": result["redirect_url"]}),
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
 
         return _location(ctx, result["redirect_url"])
     except cashier.GatewayError as error:
         log.warning(
             "payment.checkout.failed",
             extra={"payment": payment["number"], "error": str(error)},
+        )
+        product_events.record(
+            "payment_failed",
+            company_id=payment["company_id"],
+            user_id=ctx.user["id"] if ctx.user else None,
+            plan=product_events.plan_code(payment["company_id"]),
+            props={
+                "number": payment["number"],
+                "amount": payment["amount"],
+                "purpose": payment["purpose"],
+                "reason": "gateway_error",
+            },
         )
         flash(
             ctx,

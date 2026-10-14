@@ -426,6 +426,23 @@ def _save_document(
         )
 
 
+def _verification_event(event: str, document: CompanyDocument) -> None:
+    """ТЗ-03: решение по документу проверки — в product_events, без файла и причины."""
+    from savdex import product_events
+    from savdex.web.company_file_actions import VERIFICATION_TYPES
+
+    # Прайсы и каталоги — не проверка компании
+    if document.type not in VERIFICATION_TYPES:
+        return
+
+    product_events.record(
+        event,
+        company_id=document.company_id,
+        plan=product_events.plan_code(document.company_id),
+        props={"document_id": document.pk, "document_type": document.type},
+    )
+
+
 def approve_document(request: HttpRequest, document: CompanyDocument) -> None:
     """Документ принят: на визитке, если компания разрешила показ."""
     ctx = context_of(request)
@@ -449,6 +466,7 @@ def approve_document(request: HttpRequest, document: CompanyDocument) -> None:
         )
 
     _decision(request, "approved", document, DOCUMENT, None, section="documents")
+    _verification_event("verification_approved", document)
 
 
 def reject_document(request: HttpRequest, document: CompanyDocument, reason: str) -> None:
@@ -474,6 +492,7 @@ def reject_document(request: HttpRequest, document: CompanyDocument, reason: str
         )
 
     _decision(request, "rejected", document, DOCUMENT, reason, section="documents")
+    _verification_event("verification_rejected", document)
 
 
 # ── Резюме ───────────────────────────────────────────────────────────

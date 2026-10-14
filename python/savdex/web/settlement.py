@@ -17,7 +17,7 @@ from typing import Any
 from django.db import connection, transaction
 
 from savdex.guards import allowed_writes
-from savdex.web import content, eloquent, orders, ui
+from savdex.web import content, eloquent, orders, transitions, ui
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _notify_company, _stamp
 from savdex.web.shared import Context
@@ -162,6 +162,46 @@ def confirm(
     return settle(ctx, payment, {"confirmed_by": admin["id"], "admin_note": note}, admin)
 
 
+def _record_payment(payment: dict[str, Any], admin: dict[str, Any] | None) -> None:
+    """
+    ТЗ-03: payment_succeeded (а для пакетов — ещё credits_purchased) в
+    product_events; в GA4 как purchase его отправит задача расписания.
+    """
+    from savdex import product_events
+
+    plans = (
+        _rows("select code from plans where id = %s", [payment["plan_id"]])
+        if payment.get("plan_id")
+        else []
+    )
+    props = {
+        "number": payment["number"],
+        "amount": payment["amount"],
+        "currency": payment.get("currency") or "UZS",
+        "purpose": payment["purpose"],
+        "provider": payment.get("provider"),
+        "by_admin": admin is not None,
+        "promo": payment.get("promo_code_id") is not None,
+    }
+    product_events.record(
+        "payment_succeeded",
+        company_id=payment["company_id"],
+        plan=plans[0]["code"] if plans else product_events.plan_code(payment["company_id"]),
+        props=props,
+    )
+
+    if payment["purpose"] == "credits":
+        packs = _rows(
+            "select credits from credit_packs where id = %s", [payment.get("credit_pack_id")]
+        )
+        product_events.record(
+            "credits_purchased",
+            company_id=payment["company_id"],
+            plan=product_events.plan_code(payment["company_id"]),
+            props={**props, "credits": int(packs[0]["credits"]) if packs else None},
+        )
+
+
 def settle(
     ctx: Context,
     payment: dict[str, Any],
@@ -169,7 +209,7 @@ def settle(
     admin: dict[str, Any] | None,
 ) -> tuple[bool, str]:
     """OrderService::settle: отметка об оплате и начисление — одной транзакцией."""
-    if payment["status"] == "paid":
+    if not transitions.payment_allowed(payment["status"], transitions.PAID):
         return False, _t(ctx, "messages.order.already_paid")
 
     companies = _rows(
@@ -186,7 +226,10 @@ def settle(
         # щелчок, две вкладки, шлюз и администратор) начисляли дважды
         locked = _rows("select status from payments where id = %s for update", [payment["id"]])
 
-        if not locked or locked[0]["status"] == "paid":
+        # Только «ждёт оплаты» и «не прошёл» (опоздавший перевод):
+        # возвращённый счёт поздний колбэк снова оплаченным не сделает —
+        # иначе купленное выдалось бы второй раз (savdex/web/transitions.py)
+        if not locked or not transitions.payment_allowed(locked[0]["status"], transitions.PAID):
             return False, _t(ctx, "messages.order.already_paid")
 
         eloquent.save(
@@ -203,6 +246,8 @@ def settle(
             _grant_plan(ctx, payment, company, admin)
         elif payment["purpose"] == "credits":
             _grant_credits(payment, company, admin)
+
+    _record_payment(payment, admin)
 
     _notify_company(
         ctx,

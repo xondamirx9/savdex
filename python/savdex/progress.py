@@ -116,6 +116,8 @@ STAGES: tuple[Stage, ...] = (
             "it_tasks",
             "it_task_files",
             "resumes",
+            # Старые адреса компаний и объявлений — 301 на новые (ТЗ-02)
+            "slug_redirects",
         ),
     ),
     Stage(
@@ -155,6 +157,8 @@ STAGES: tuple[Stage, ...] = (
         tables=(
             "admin_actions",
             "activity_events",
+            # События продукта для аналитики (ТЗ-03): появилась после ухода Laravel
+            "product_events",
             "crm_leads",
             "crm_deals",
             "crm_stages",

@@ -1,5 +1,6 @@
 import { Link } from '@/components/ui/Link';
 import { ArrowLeft, Building2, CalendarDays, ExternalLink, Mail, MapPin, Phone, User, Wallet } from 'lucide-react';
+import { UnconfirmedBadge } from '@/components/UnconfirmedBadge';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
@@ -48,6 +49,7 @@ export default function TenderShow({ tender, similar }: { tender: Tender; simila
                             {tender.government && (
                                 <span className="badge badge-verified">{t('tenders.government')}</span>
                             )}
+                            {tender.unconfirmed && <UnconfirmedBadge />}
                             {tender.category && <span className="badge badge-neutral">{tender.category}</span>}
                             {tender.published && (
                                 <span className="t-caption muted row" style={{ gap: 6 }}>

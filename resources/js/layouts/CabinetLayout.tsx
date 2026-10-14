@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType, ReactNode } from 'react';
 import { FlashToast } from '@/components/FlashToast';
+import { MaintenanceOverlay } from '@/components/MaintenanceOverlay';
 import { MobileTabBar } from '@/components/MobileTabBar';
 import { SiteHeader } from '@/components/SiteHeader';
 import { routes } from '@/routes';
@@ -128,6 +129,13 @@ export function CabinetLayout({
     const GROUPS = groups(Boolean(auth?.company?.person));
     const path = typeof window !== 'undefined' ? stripLocale(window.location.pathname) : routes.cabinet;
     const unverified = auth?.user && !auth.user.email_verified;
+    // Код пропущен при регистрации: метка «Не подтверждено» на компании,
+    // объявлениях и тендерах — напоминаем подтвердить почту и дозаполнить профиль
+    // Телефон подтверждён кодом из SMS: всё открыто, почта нужна только для
+    // писем — мягкая подсказка вместо «публикация недоступна»
+    const phoneOk = unverified && Boolean(auth?.user?.phone_verified);
+    const skipped = unverified && !phoneOk && Boolean(auth?.user?.email_skipped);
+    const completeness = auth?.company?.profile_completeness ?? 100;
 
     /* Подсвечен один пункт — с самым длинным подходящим адресом: на
        /cabinet/tenders/create это «Создать тендер», а не ещё и «Мои тендеры» */
@@ -185,6 +193,7 @@ export function CabinetLayout({
                             {/* Итог действия — плашкой у края экрана (FlashToast):
                                 сверху страницы его не видно после preserveScroll */}
                             <FlashToast />
+                            <MaintenanceOverlay />
 
                             {/* Заблокированная компания невидима на витрине,
                                 хотя объявления в кабинете значатся активными.
@@ -213,10 +222,23 @@ export function CabinetLayout({
                                     <MailWarning aria-hidden className="size-5 shrink-0" />
                                     <div className="row-between wrap" style={{ gap: 12, flex: 1 }}>
                                         <span style={{ flex: 1, minWidth: 220 }}>
-                                            {t('cabinet.unverified', { email: auth.user?.email ?? '' })}
+                                            {phoneOk
+                                                ? t('cabinet.unverified_phone_ok', { email: auth.user?.email ?? '' })
+                                                : skipped
+                                                  ? t('cabinet.unconfirmed', { email: auth.user?.email ?? '' })
+                                                  : t('cabinet.unverified', { email: auth.user?.email ?? '' })}
+                                            {skipped && completeness < 100 && (
+                                                <>
+                                                    {' '}
+                                                    {t('cabinet.fill_profile', { percent: String(completeness) })}{' '}
+                                                    <Link href={routes.cabinetCompany} className="underline">
+                                                        {t('cabinet.fill_profile_link')}
+                                                    </Link>
+                                                </>
+                                            )}
                                         </span>
                                         <Link href={routes.verifyNotice} className="btn btn-secondary btn-sm shrink-0">
-                                            {t('cabinet.verify')}
+                                            {skipped || phoneOk ? t('cabinet.verify_email') : t('cabinet.verify')}
                                         </Link>
                                     </div>
                                 </div>

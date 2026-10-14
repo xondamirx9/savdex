@@ -23,6 +23,7 @@ from typing import Any
 from django.db import connection, transaction
 
 from savdex import access, audit
+from savdex.guards import allowed_writes
 from savdex.web import eloquent, orders
 from savdex.web.cabinet import _rows
 from savdex.web.listing_actions import _stamp
@@ -146,6 +147,68 @@ def _decide(
     )
 
 
+def _revoke(ctx: Context, payment: dict[str, Any], actor: access.Admin) -> None:
+    """
+    Полный возврат — забрать купленное этим счётом. Раньше счёт только
+    становился «Возвращён»: деньги возвращены, а кредиты пакета и тариф
+    оставались у компании.
+
+    - пакет: кредиты, выданные по счёту (по истории кошелька), списываются,
+      но не ниже нуля — потраченное уже не вернуть; строка в историю;
+    - тариф: подписка этого счёта закрывается, компания — на Free.
+    """
+    now = _stamp(eloquent.now())
+
+    if payment["purpose"] == "credits":
+        granted = int(
+            _rows(
+                "select coalesce(sum(amount), 0) as n from wallet_transactions "
+                "where company_id = %s and kind = 'credits' and reason = 'purchase' "
+                "and subject_type = 'App\\Models\\Payment' and subject_id = %s",
+                [payment["company_id"], payment["id"]],
+            )[0]["n"]
+        )
+        wallets = _rows(
+            "select * from wallets where company_id = %s for update", [payment["company_id"]]
+        )
+
+        if granted <= 0 or not wallets:
+            return
+
+        take = min(granted, int(wallets[0]["credits"] or 0))
+
+        if take <= 0:
+            return
+
+        with allowed_writes("wallets", "wallet_transactions"), connection.cursor() as cursor:
+            cursor.execute(
+                "update wallets set credits = credits - %s, updated_at = %s where id = %s",
+                [take, now, wallets[0]["id"]],
+            )
+            cursor.execute(
+                "insert into wallet_transactions (company_id, user_id, kind, amount, "
+                "balance_after, reason, subject_type, subject_id, updated_at, created_at) "
+                "values (%s, null, 'credits', %s, %s, 'refund', 'App\\Models\\Payment', %s, "
+                "%s, %s)",
+                [
+                    payment["company_id"],
+                    -take,
+                    int(wallets[0]["credits"]) - take,
+                    payment["id"],
+                    now,
+                    now,
+                ],
+            )
+    elif payment["purpose"] == "subscription" and payment.get("subscription_id"):
+        with allowed_writes("subscriptions"), connection.cursor() as cursor:
+            cursor.execute(
+                "update subscriptions set status = 'cancelled', auto_renew = false, "
+                "cancelled_at = %s, ends_at = least(coalesce(ends_at, %s), %s), "
+                "updated_at = %s where id = %s and status = 'active'",
+                [now, now, now, now, payment["subscription_id"]],
+            )
+
+
 def approve(ctx: Context, actor: access.Admin, refund: dict[str, Any], note: str | None) -> None:
     """RefundService::approve: полный возврат — счёт «Возвращён»."""
     if refund["status"] != REQUESTED:
@@ -170,6 +233,11 @@ def approve(ctx: Context, actor: access.Admin, refund: dict[str, Any], note: str
         _decide(ctx, actor, refund, DONE, note)
 
         if payments and refundable(payments[0]) == 0:
+            from savdex.web import transitions
+
+            transitions.check_payment(
+                payments[0]["status"], transitions.REFUNDED, payment_id=payments[0]["id"]
+            )
             eloquent.save(
                 ctx,
                 "payments",
@@ -179,6 +247,7 @@ def approve(ctx: Context, actor: access.Admin, refund: dict[str, Any], note: str
                 model="Payment",
                 casts={"amount": "int"},
             )
+            _revoke(ctx, payments[0], actor)
 
     _log(
         actor,
