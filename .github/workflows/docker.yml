@@ -294,11 +294,14 @@ jobs:
           }
 
           set -x
-          # Схему ни сайт, ни админка не трогали
-          # Журнал — сначала в файл: «docker logs | grep -q» под pipefail
-          # падает с 141 (SIGPIPE), когда grep нашёл строку и закрыл канал
+          # Журналы — сначала в файл: «docker logs | grep -q» под pipefail
+          # падал с 141, когда grep находил строку и выходил раньше, чем
+          # docker logs дописывал остальное
           for name in web admin; do
             docker logs "$name" > "/tmp/$name.log" 2>&1
+          done
+          # Схему ни сайт, ни админка не трогали
+          for name in web admin; do
             if grep -q "снимок не нужен" "/tmp/$name.log"; then exit 1; fi
           done
           # Сайт: страницы есть, фоновые задачи идут, процесса админки нет
@@ -308,7 +311,6 @@ jobs:
             running web "$task"
           done
           case "$(code http://127.0.0.1:18081/py/admin/login/)" in 502|503) ;; *) false ;; esac
-          docker logs web > /tmp/web.log 2>&1
           grep -q "админки здесь нет" /tmp/web.log
           # Админка: вход открывается, фоновых задач нет
           test "$(code http://127.0.0.1:18082/py/admin/login/)" = 200
