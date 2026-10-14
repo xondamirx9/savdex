@@ -19,6 +19,10 @@ Django только запросы к основному домену (docker/ap
 
 from __future__ import annotations
 
+import os
+import re
+from urllib.parse import urlsplit
+
 from django.db import connection
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
@@ -44,9 +48,59 @@ CRAWLERS = (
 )
 
 
+_HOST = re.compile(r"([A-Za-z0-9.-]+)(?::[0-9]{1,5})?")
+
+
+def _own_host(host: str) -> bool:
+    """
+    Хост — свой: домен из APP_URL, из DJANGO_ALLOWED_HOSTS (кроме «*»)
+    или домен мини-сайтов с поддоменами (MICROSITE_DOMAIN).
+    """
+    # Только «домен[:порт]»: в «evil.tld\@savdex.uz» Python видит хост
+    # savdex.uz, а браузер откроет evil.tld
+    match = _HOST.fullmatch(host)
+
+    if match is None:
+        return False
+
+    name = match.group(1).lower()
+    allowed = {urlsplit(os.environ.get("APP_URL", "")).hostname or ""}
+    allowed.update(h.strip().lower() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(","))
+    allowed -= {"", "*"}
+    microsites = (os.environ.get("MICROSITE_DOMAIN") or "").strip().lower()
+
+    if microsites:
+        allowed.add("." + microsites)
+
+    # «.savdex.uz» — как у Django: сам домен и все поддомены
+    return any(
+        name == h or (h.startswith(".") and (name == h[1:] or name.endswith(h))) for h in allowed
+    )
+
+
 def root_of(request: HttpRequest) -> str:
-    """url('/') за прокси: схема и хост из X-Forwarded-* (trustProxies('*'))."""
-    proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip()
+    """
+    url('/') за прокси: схема и хост из X-Forwarded-* (trustProxies('*')).
+
+    Хост в заголовках задаёт сам посетитель: X-Forwarded-Host: evil.tld
+    в запросе «забыли пароль» увёл бы ссылку сброса с токеном на чужой
+    домен. Поэтому чужой хост не берётся — вместо него APP_URL целиком.
+    Без APP_URL (разработка) — как раньше.
+    """
+    root = _root_from_headers(request)
+    app_url = (os.environ.get("APP_URL") or "").rstrip("/")
+
+    if app_url == "" or _own_host(root.split("://", 1)[1]):
+        return root
+
+    app = urlsplit(app_url)
+
+    return f"{app.scheme or 'https'}://{app.netloc}"
+
+
+def _root_from_headers(request: HttpRequest) -> str:
+    proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    proto = proto if proto in ("http", "https") else ""
     host = request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()
     scheme = proto or ("https" if request.is_secure() else "http")
     host = host or request.META.get("HTTP_HOST") or request.META.get("SERVER_NAME", "localhost")

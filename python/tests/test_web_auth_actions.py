@@ -146,7 +146,7 @@ def _remember(ответ: dict[str, Any]) -> str | None:
     return f"{uid}|{token == row[0]}|{hashed == ожидание}"
 
 
-def сброс(*, неудач: int = 0, **поля: Any) -> Callable[[], None]:
+def сброс(*, неудач: int = 0, чужих_адресов: int = 0, **поля: Any) -> Callable[[], None]:
     def run() -> None:
         sql("delete from login_attempts")
         sql("delete from admin_actions")
@@ -161,6 +161,14 @@ def сброс(*, неудач: int = 0, **поля: Any) -> Callable[[], None]:
                 "insert into login_attempts (email, ip, successful, created_at) "
                 "values (%s, '127.0.0.1', false, now() - interval '90 seconds')",
                 [ПОЧТА],
+            )
+
+        # Неудачи с разных адресов: IP подделан, счётчик «почта + IP» пуст
+        for n in range(чужих_адресов):
+            sql(
+                "insert into login_attempts (email, ip, successful, created_at) "
+                "values (%s, %s, false, now() - interval '90 seconds')",
+                [ПОЧТА, f"198.51.100.{n + 1}"],
             )
 
     return run
@@ -209,6 +217,10 @@ def вошёл(итог: dict[str, Any], uid: int) -> bool:
         ({**ВЕРНО, "password": "wrong"}, {"неудач": 4}, {"email": МНОГО + "15 мин."}),
         # Пять неудач за 15 минут — и верный пароль не пускает
         (ВЕРНО, {"неудач": 5}, {"email": МНОГО + "14 мин."}),
+        # Двадцать неудач по почте с разных адресов — тоже блокировка
+        (ВЕРНО, {"чужих_адресов": 20}, {"email": МНОГО + "14 мин."}),
+        ({**ВЕРНО, "password": "wrong"}, {"чужих_адресов": 19}, {"email": МНОГО + "15 мин."}),
+        ({**ВЕРНО, "password": "wrong"}, {"чужих_адресов": 18}, {"email": НЕВЕРНО + "4 из 5"}),
         ({"email": "nobody@savdex.uz", "password": "x"}, {}, {"email": НЕВЕРНО + "4 из 5"}),
         (
             {"email": "не почта", "password": ""},
@@ -248,7 +260,7 @@ def test_вход(сайт, body, подготовка, ожидание):
         for поле in найдено:
             assert найдено[поле][0].startswith(ожидание[поле]), найдено[поле]
 
-        неудач = подготовка.get("неудач", 0)
+        неудач = подготовка.get("неудач", 0) + подготовка.get("чужих_адресов", 0)
         if body.get("password") == "wrong" or body.get("email") == "nobody@savdex.uz":
             # Неверная пара записана — с тем адресом, что ввели
             assert len(попытки) == неудач + 1

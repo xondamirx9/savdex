@@ -58,6 +58,32 @@ def test_адрес_клиента(forwarded, remote, expected):
     assert audit.client_ip(None) is None
 
 
+@pytest.mark.parametrize(
+    ("env", "forwarded", "expected"),
+    [
+        # Render дописывает справа: «подделка, посетитель, балансировщик»;
+        # два своих прокси (балансировщик и Apache) — третий справа
+        ({"TRUSTED_PROXY_HOPS": "2"}, "6.6.6.6, 203.0.113.5, 10.0.0.1", "203.0.113.5"),
+        ({"TRUSTED_PROXY_HOPS": "2"}, "203.0.113.5, 10.0.0.1", "203.0.113.5"),
+        # Цепочка короче, чем прокси, — самый левый адрес
+        ({"TRUSTED_PROXY_HOPS": "2"}, "", "127.0.0.1"),
+        ({"TRUSTED_PROXY_HOPS": "0"}, "6.6.6.6", "127.0.0.1"),
+        # Свой заголовок прокси: X-Forwarded-For посетителя не важен
+        ({"CLIENT_IP_HEADER": "CF-Connecting-IP"}, "6.6.6.6", "198.51.100.7"),
+    ],
+)
+def test_адрес_клиента_за_своими_прокси(monkeypatch, env, forwarded, expected):
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    extra = {"HTTP_X_FORWARDED_FOR": forwarded} if forwarded else {}
+    request = RequestFactory().get(
+        "/", REMOTE_ADDR="127.0.0.1", HTTP_CF_CONNECTING_IP="198.51.100.7", **extra
+    )
+
+    assert audit.client_ip(request) == expected
+
+
 def test_значения_вне_json_не_губят_запись():
     """Число с фиксированной точкой (координаты города) пишется строкой."""
     import json

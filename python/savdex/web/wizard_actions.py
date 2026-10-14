@@ -396,6 +396,24 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+#: Поля характеристик в одном автосохранении: у категории их единицы, а
+#: без предела один запрос на 2,5 МБ писал бы сто тысяч строк
+MAX_ATTRIBUTES = 50
+
+#: Не поле категории, а свой раздел («Другое» в мастере)
+_OWN_ATTRIBUTES = ("custom_category",)
+
+
+def _field_keys(category_id: int | None) -> set[str]:
+    """Ключи полей категории (category_fields) — то, что мастер показывает."""
+    if category_id is None:
+        return set(_OWN_ATTRIBUTES)
+
+    rows = _rows("select key from category_fields where category_id = %s", [category_id])
+
+    return {str(r["key"]) for r in rows} | set(_OWN_ATTRIBUTES)
+
+
 def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     """
     Вид цены: точная, «от» (price_from) или диапазон «price – price_to».
@@ -519,8 +537,11 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     _save(ctx, listing, changes)
 
     items = attributes.items() if isinstance(attributes, dict) else enumerate(attributes)
+    # Только поля категории объявления: произвольные ключи раньше уходили
+    # прямо на витрину (характеристики карточки) — спам в обход описания
+    fields_of = _field_keys(listing["category_id"])
 
-    for raw_key, value in items:
+    for raw_key, value in list(items)[:MAX_ATTRIBUTES]:
         key = str(raw_key)
 
         if key.startswith(specs.PREFIX):
@@ -531,6 +552,9 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
             elif cleaned is not None:
                 _attribute(listing["id"], key, cleaned)
 
+            continue
+
+        if key not in fields_of:
             continue
 
         _attribute(listing["id"], key, _php_string(value))

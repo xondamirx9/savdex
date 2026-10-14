@@ -4,8 +4,8 @@ AuthenticatedSessionController, RegisteredUserController и
 App\\Services\\Auth\\LoginThrottle.
 
 Вход: единое сообщение для «нет такого» и «неверный пароль» с остатком
-попыток; пять неудач за 15 минут по связке почта + IP — блокировка с
-обратным отсчётом; заблокированного не пускает и с верным паролем.
+попыток; пять неудач за 15 минут по связке почта + IP или двадцать по
+одной почте — блокировка с обратным отсчётом; заблокированного не пускает и с верным паролем.
 Успех: счётчик сброшен, сессия под новым номером, метка последнего
 входа, выданный пароль — на смену, иначе — туда, куда шёл (url.intended).
 
@@ -38,12 +38,20 @@ from savdex.web.validation import validate
 # ── LoginThrottle ───────────────────────────────────────────────────
 
 MAX_ATTEMPTS = 5
+#: Неудач по одной почте с любых адресов. IP посетитель может подделать
+#: (audit.client_ip), и счётчик «почта + IP» тогда каждый раз новый —
+#: этот предел перебор пароля всё равно останавливает. Выше пяти, чтобы
+#: чужие опечатки с разных адресов не запирали хозяина сразу
+MAX_ATTEMPTS_PER_EMAIL = 20
 LOCKOUT_MINUTES = 15
 WINDOW_MINUTES = 15
 
 
 class LoginThrottle:
-    """Неудачные попытки входа по связке почта + IP — в таблице login_attempts."""
+    """
+    Неудачные попытки входа в таблице login_attempts: пять по связке
+    почта + IP или двадцать по одной почте — блокировка.
+    """
 
     def __init__(self, email: str, ip: str) -> None:
         self.email = email
@@ -52,32 +60,48 @@ class LoginThrottle:
     def _since(self) -> datetime:
         return eloquent.now() - timedelta(minutes=WINDOW_MINUTES)
 
-    def failed_attempts(self) -> int:
+    def _failures(self, *, any_ip: bool = False) -> tuple[str, list[Any]]:
+        where = "email = %s and successful = false and created_at >= %s"
+        params: list[Any] = [self.email, _stamp(self._since())]
+
+        if not any_ip:
+            where += " and ip = %s"
+            params.append(self.ip)
+
+        return where, params
+
+    def failed_attempts(self, *, any_ip: bool = False) -> int:
+        where, params = self._failures(any_ip=any_ip)
+
         with connection.cursor() as cursor:
-            cursor.execute(
-                "select count(*) from login_attempts where email = %s and ip = %s "
-                "and successful = false and created_at >= %s",
-                [self.email, self.ip, _stamp(self._since())],
-            )
+            cursor.execute(f"select count(*) from login_attempts where {where}", params)
             return int(cursor.fetchone()[0])
 
     def remaining(self) -> int:
         return max(0, MAX_ATTEMPTS - self.failed_attempts())
 
+    def _locked_by_email(self) -> bool:
+        return self.failed_attempts(any_ip=True) >= MAX_ATTEMPTS_PER_EMAIL
+
     def locked(self) -> bool:
-        return self.remaining() == 0
+        return self.remaining() == 0 or self._locked_by_email()
 
     def seconds_until_unlock(self) -> int:
-        """unlocksAt: самая ранняя из пяти последних неудач плюс 15 минут."""
-        if not self.locked():
+        """unlocksAt: последняя неудача в окне плюс 15 минут."""
+        if self.remaining() == 0:
+            where, params = self._failures()
+            limit = MAX_ATTEMPTS
+        elif self._locked_by_email():
+            where, params = self._failures(any_ip=True)
+            limit = MAX_ATTEMPTS_PER_EMAIL
+        else:
             return 0
 
         with connection.cursor() as cursor:
             cursor.execute(
-                "select created_at from login_attempts where email = %s and ip = %s "
-                "and successful = false and created_at >= %s "
+                f"select created_at from login_attempts where {where} "
                 "order by created_at desc limit %s",
-                [self.email, self.ip, _stamp(self._since()), MAX_ATTEMPTS],
+                [*params, limit],
             )
             # ->value(): первая строка выборки
             row = cursor.fetchone()

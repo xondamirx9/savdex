@@ -170,6 +170,8 @@ def _снимок_уведомлений(uid: int) -> Callable[[], Any]:
         {"X-Inertia": "true", "X-Requested-With": "XMLHttpRequest"},
         {"X-Inertia": "true", "X-XSRF-TOKEN": "garbage"},
         {"X-Inertia": "true", "X-CSRF-TOKEN": "x" * 40},
+        # Токен не из ASCII — тоже 419, а не 500 (compare_digest на строках)
+        {"X-Inertia": "true", "X-CSRF-TOKEN": "é" * 40},
     ],
 )
 def test_без_токена_419(сайт, headers):

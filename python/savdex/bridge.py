@@ -15,7 +15,8 @@
    действуют сразу, а не когда истечёт вход.
 
 Своих таблиц сессий у Django нет — кука подписана SECRET_KEY и хранит
-только номер и время входа.
+номер, время входа и отпечаток (fingerprint: хеш пароля и remember_token):
+смена пароля и выход гасят и украденную копию куки.
 """
 
 from __future__ import annotations
@@ -136,13 +137,30 @@ def verify(token: str, now: float | None = None) -> Pass:
     return Pass(uid=uid, next=safe_next(data.get("next")))
 
 
-def session_cookie(uid: int) -> str:
-    """Значение куки входа: номер, подписанный SECRET_KEY, со временем."""
-    return signing.dumps({"uid": uid}, salt=_SALT, compress=False)
+def fingerprint(connection: BaseDatabaseWrapper, uid: int) -> str | None:
+    """
+    Отпечаток входа: HMAC от хеша пароля и remember_token. Смена пароля
+    и выход (новый remember_token, guard.logout) меняют его — и кука,
+    выданная раньше, больше не годится, даже украденная.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("select password, remember_token from users where id = %s", [uid])
+        row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    secret = str(settings.SECRET_KEY).encode()
+
+    return hmac.new(secret, f"{row[0] or ''}|{row[1] or ''}".encode(), hashlib.sha256).hexdigest()
 
 
-def session_uid(value: str | None) -> int | None:
-    """Номер из куки входа, если подпись цела и вход не истёк."""
+def session_cookie(uid: int, stamp: str | None) -> str:
+    """Значение куки входа: номер и отпечаток, подписанные SECRET_KEY, со временем."""
+    return signing.dumps({"uid": uid, "fp": stamp or ""}, salt=_SALT, compress=False)
+
+
+def _session(value: str | None) -> dict[str, Any] | None:
     if not value:
         return None
 
@@ -151,9 +169,35 @@ def session_uid(value: str | None) -> int | None:
     except signing.BadSignature:
         return None
 
-    uid = data.get("uid") if isinstance(data, dict) else None
+    return data if isinstance(data, dict) else None
+
+
+def session_uid(value: str | None) -> int | None:
+    """Номер из куки входа, если подпись цела и вход не истёк."""
+    data = _session(value) or {}
+    uid = data.get("uid")
 
     return uid if isinstance(uid, int) and not isinstance(uid, bool) else None
+
+
+def session_admin(connection: BaseDatabaseWrapper, value: str | None) -> access.Admin | None:
+    """
+    Сотрудник по куке входа: подпись, срок и отпечаток (fingerprint)
+    сходятся, в админку ему можно. Кука без отпечатка (выданная до него)
+    не годится — вход заново, по сессии сайта.
+    """
+    uid = session_uid(value)
+
+    if uid is None:
+        return None
+
+    stamp = str((_session(value) or {}).get("fp") or "")
+    current = fingerprint(connection, uid)
+
+    if not stamp or current is None or not hmac.compare_digest(stamp, current):
+        return None
+
+    return load_admin(connection, uid)
 
 
 def load_admin(connection: BaseDatabaseWrapper, uid: int) -> access.Admin | None:

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from io import StringIO
 from typing import Any
@@ -73,6 +75,10 @@ def test_регистрация_адреса(бот):
             {
                 "url": "https://savdex.uz/telegram/webhook/secret-12345",
                 "drop_pending_updates": True,
+                # Заголовок для вебхука — свой, не секрет из адреса
+                "secret_token": hmac.new(
+                    b"secret-12345", b"telegram-webhook-header", hashlib.sha256
+                ).hexdigest(),
             },
         )
     ]

@@ -126,6 +126,8 @@ def снимок() -> dict[str, Any]:
             assert len(токены) == 1 and _проверка(найдено.group(1), токены[0][1])
 
     код = laravel_cache.get(f"email_verification_code.{uid}")
+    # Сессия на другом устройстве (_чужая_сессия): после смены пароля — прочь
+    чужие = sql("select count(*) from sessions where id = 'чужая-сессия'")[0][0]
 
     return {
         "users": sql(
@@ -134,6 +136,7 @@ def снимок() -> dict[str, Any]:
             "from users where email = %s",
             [ПОЧТА],
         ),
+        "other_sessions": чужие,
         "tokens": [(e, t.startswith("$2y$"), c) for e, t, c in токены],
         "code": None if not isinstance(код, dict) else {"attempts": код.get("attempts")},
         "mail": [{k: _без_изменчивого(v) for k, v in п.items()} for п in письма],
@@ -145,6 +148,17 @@ def снимок() -> dict[str, Any]:
             )
         ],
     }
+
+
+def _чужая_сессия() -> None:
+    """Пользователь вошёл и на другом устройстве: строка sessions с его номером."""
+    [(uid,)] = sql("select id from users where email = %s", [ПОЧТА])
+    sql("delete from sessions where id = 'чужая-сессия'")
+    sql(
+        "insert into sessions (id, user_id, payload, last_activity) "
+        "values ('чужая-сессия', %s, 'e30=', extract(epoch from now())::int)",
+        [uid],
+    )
 
 
 def _без_хеша(payload: str) -> str:
@@ -181,7 +195,6 @@ def куда(сайт: str, итог: dict[str, Any]) -> tuple[int, str | None]:
 #: хеш фабрики (4 раунда), токен «запомнить» прежний, «сменить пароль»,
 #: почта подтверждена
 БЫЛ = (ПОЧТА, False, True, True)
-СМЕНИЛ = (ПОЧТА, True, False, True)
 СБРОСИЛ = (ПОЧТА, True, False, False)
 
 # ── Смена выданного пароля ──────────────────────────────────────────
@@ -217,21 +230,28 @@ def test_смена_пароля(сайт, body, ошибка):
     итог = форма(
         сайт,
         "/password/change",
-        lambda: пользователь(must_change_password=True, password=_хеш(ПАРОЛЬ)),
+        lambda: (
+            пользователь(must_change_password=True, password=_хеш(ПАРОЛЬ)),
+            _чужая_сессия(),
+        ),
         uid=uid,
         body=body,
     )
 
     if ошибка is None:
-        # Флаг снят, хеш в сессии — новый
+        # Флаг снят, хеш в сессии — новый; токен «запомнить» новый, другие
+        # устройства — без входа, текущая сессия жива
         assert куда(сайт, итог) == (302, "/cabinet")
-        assert итог["база"]["users"] == [(*СМЕНИЛ, False, True)]
+        assert итог["база"]["users"] == [(*СБРОСИЛ, False, True)]
+        assert итог["база"]["other_sessions"] == 0
+        assert итог["сессия"] is not None
         assert сессия(итог)["success"] == "Пароль изменён"
         assert сессия(итог)["password_hash_web"] == "<хеш>"
     else:
         assert куда(сайт, итог) == (302, "/cabinet/settings")
         assert ошибки(итог) == {"password": ошибка}
         assert итог["база"]["users"] == [(*БЫЛ, True, True)]
+        assert итог["база"]["other_sessions"] == 1
 
     assert итог["база"]["journal"] == []
 
@@ -260,13 +280,13 @@ def test_смена_пароля_администратора(сайт, заго
     )
 
     assert куда(сайт, итог) == (status, "/admin")
-    assert итог["база"]["users"] == [(*СМЕНИЛ, False, True)]
+    assert итог["база"]["users"] == [(*СБРОСИЛ, False, True)]
     # Правка администратора — в журнал, пароль скрыт
     [(action, section, label, changes)] = итог["база"]["journal"]
     assert (action, section, label) == ("updated", "users", f"Покупатель {ПОЧТА}")
     assert json.loads(changes) == {
-        "before": {"password": "···", "must_change_password": True},
-        "after": {"password": "···", "must_change_password": False},
+        "before": {"password": "···", "remember_token": "···", "must_change_password": True},
+        "after": {"password": "···", "remember_token": "···", "must_change_password": False},
     }
 
 
@@ -455,6 +475,17 @@ def test_сброс_пароля(сайт, body, шаг, ошибки_):
         assert ошибки(итог) == ошибки_
         assert база["users"] == [(*БЫЛ, True, True)]
         assert база["tokens"] == ([] if шаг.__name__ == "<lambda>" else [(ПОЧТА, True, True)])
+
+
+def test_сброс_пароля_выходит_на_других_устройствах(сайт):
+    """Сброс по ссылке — сессии пользователя на всех устройствах прочь."""
+    пользователь()
+    итог = форма(
+        сайт, "/reset-password", lambda: (_токен()(), _чужая_сессия()), body=ВЕРНЫЙ_СБРОС
+    )
+
+    assert куда(сайт, итог) == (302, "/login")
+    assert итог["база"]["other_sessions"] == 0
 
 
 # ── Подтверждение почты ─────────────────────────────────────────────

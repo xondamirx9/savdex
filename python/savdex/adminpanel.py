@@ -67,8 +67,7 @@ class AdminMiddleware:
                 content_type="text/plain; charset=utf-8",
             )
 
-        uid = bridge.session_uid(request.COOKIES.get(bridge.COOKIE))
-        admin = bridge.load_admin(connections["default"], uid) if uid is not None else None
+        admin = bridge.session_admin(connections["default"], request.COOKIES.get(bridge.COOKIE))
         fresh = False
 
         if admin is None:
@@ -99,7 +98,9 @@ class AdminMiddleware:
         if fresh:
             response.set_cookie(
                 bridge.COOKIE,
-                bridge.session_cookie(admin.id),
+                bridge.session_cookie(
+                    admin.id, bridge.fingerprint(connections["default"], admin.id)
+                ),
                 max_age=bridge.SESSION_TTL,
                 path=bridge.COOKIE_PATH,
                 secure=request.is_secure(),
@@ -167,7 +168,7 @@ def login(request: HttpRequest) -> HttpResponseBase:
     response = HttpResponseRedirect(passed.next)
     response.set_cookie(
         bridge.COOKIE,
-        bridge.session_cookie(passed.uid),
+        bridge.session_cookie(passed.uid, bridge.fingerprint(connections["default"], passed.uid)),
         max_age=bridge.SESSION_TTL,
         path=bridge.COOKIE_PATH,
         secure=request.is_secure(),

@@ -22,6 +22,7 @@
     <div class="module aligned" id="company-actions">
       <h2>Решения по компании</h2>
 
+      {% if can_decide %}
       <form method="post" action="{{ act_url }}" class="form-row">
         {% csrf_token %}
         <input type="hidden" name="act" value="verify">
@@ -46,6 +47,7 @@
         <button type="submit" class="button">Сохранить</button>
         <div class="help">У каждого вида — своя страница: «Генеральные партнёры», «Партнёры», «Мультипартнёры» (раздел «Партнёры» на сайте). Меньше порядок — выше на своей странице; при равном — по рейтингу.</div>
       </form>
+      {% endif %}
 
       <form method="post" enctype="multipart/form-data" action="{{ act_url }}" class="form-row">
         {% csrf_token %}
@@ -75,6 +77,7 @@
         <div class="help">Настоящие знаки площадка использовать не может (авторское право), а плашка с инициалами в цвете региона — своя и единообразная.</div>
       </form>
 
+      {% if can_decide %}
       {% if original.status != "blocked" %}
       <form method="post" action="{{ act_url }}" class="form-row">
         {% csrf_token %}
@@ -103,6 +106,7 @@
           <button type="submit" class="button" onclick="return confirm('Разблокировать компанию?')">Разблокировать</button>
         {% endif %}
       </form>
+      {% endif %}
       {% endif %}
     </div>
   {% endif %}

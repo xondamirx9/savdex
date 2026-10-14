@@ -47,8 +47,15 @@ def _письмо(
     в_ответ: str | None = None,
     вложения: tuple[tuple[str, str, bytes], ...] = (),
     заголовки: dict[str, str] | None = None,
+    подлинное: bool = True,
 ) -> tuple[bytes, str]:
     message = EmailMessage()
+
+    # Верхний заголовок — от нашего почтового сервера: DKIM домена отправителя
+    if подлинное:
+        домен = от.rsplit("@", 1)[-1].strip("> ").lower()
+        message["Authentication-Results"] = f"mx.zohomail.com; dkim=pass header.d={домен}"
+
     message["From"] = от
     message["To"] = кому
     message["Subject"] = тема
@@ -132,6 +139,38 @@ def test_автоответ_и_отказ():
 
     assert mail.parse(auto).automatic
     assert mail.parse(daemon).bounce
+
+
+@pytest.mark.parametrize(
+    ("результат", "подлинное"),
+    [
+        ("mx.zohomail.com; dkim=pass header.d=mebel.uz", True),
+        ("mx.zohomail.com; dkim=pass header.d=mail.mebel.uz", True),
+        ("mx.zohomail.com; spf=pass smtp.mailfrom=bounce@mebel.uz", True),
+        ("mx.zohomail.com; dmarc=pass header.from=mebel.uz", True),
+        # Подпись чужого домена — не про отправителя
+        ("mx.zohomail.com; dkim=pass header.d=evil.example", False),
+        ("mx.zohomail.com; dkim=fail header.d=mebel.uz; spf=softfail", False),
+        ("mx.zohomail.com; dkim=pass header.d=notmebel.uz", False),
+    ],
+)
+def test_подтверждённый_отправитель(результат, подлинное):
+    raw, _ = _письмо(подлинное=False, заголовки={"Authentication-Results": результат})
+
+    assert mail.parse(raw).authentic is подлинное
+
+
+def test_без_проверки_и_с_подложенным_заголовком_не_подтверждён():
+    без, _ = _письмо(подлинное=False)
+    # Сервер ставит свой заголовок сверху; присланный отправителем — ниже
+    message = EmailMessage()
+    message["Authentication-Results"] = "mx.zohomail.com; dkim=none; spf=fail"
+    message["From"] = "aziz@mebel.uz"
+    message["Authentication-Results"] = "mx.zohomail.com; dkim=pass header.d=mebel.uz"
+    message.set_content("Привет")
+
+    assert not mail.parse(без).authentic
+    assert not mail.parse(message.as_bytes()).authentic
 
 
 # ── С базой ─────────────────────────────────────────────────────────
@@ -271,6 +310,30 @@ def test_чужое_письмо_с_номером(люди, чисто):
     assert sql("select author_email, subject from support_tickets order by id") == [
         ("aziz@mebel.uz", "Не могу оплатить тариф"),
         ("other@spam.uz", "Re: что-то"),
+    ]
+
+
+@нужна_база
+def test_неподтверждённое_письмо_ничьё(люди, чисто):
+    """«From» клиента без DKIM/SPF: ни к учётной записи, ни в его обращение по номеру."""
+    sql(
+        "insert into users (name, email, password, status, created_at, updated_at) "
+        "values ('Азиз', 'aziz@mebel.uz', 'x', 'active', now(), now())"
+    )
+    raw, _ = _письмо()
+    _загрузить(чисто, raw)
+    [(ticket,)] = sql("select id from support_tickets")
+    поддельное, _ = _письмо(тема=f"Re: срочно [№{ticket}]", подлинное=False)
+    # Похожий на наш Message-ID, но такого письма мы не отправляли
+    наш_вид, _ = _письмо(в_ответ=f"<support-{ticket}-1.abcdef@savdex.uz>", подлинное=False)
+
+    итог = _загрузить(чисто, поддельное, наш_вид)
+
+    assert "created" in итог[0] and "created" in итог[1]
+    assert sql("select user_id is not null from support_tickets order by id") == [
+        (True,),
+        (False,),
+        (False,),
     ]
 
 

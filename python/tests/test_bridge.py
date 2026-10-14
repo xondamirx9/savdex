@@ -124,17 +124,17 @@ class TestПропуск:
 
 class TestКука:
     def test_туда_и_обратно(self):
-        assert bridge.session_uid(bridge.session_cookie(7)) == 7
+        assert bridge.session_uid(bridge.session_cookie(7, "отпечаток")) == 7
 
     def test_подделанная(self):
-        value = bridge.session_cookie(7)
+        value = bridge.session_cookie(7, "отпечаток")
 
         assert bridge.session_uid(value[:-2] + "xx") is None
         assert bridge.session_uid("") is None
         assert bridge.session_uid(None) is None
 
     def test_истёкшая(self, monkeypatch):
-        value = bridge.session_cookie(7)
+        value = bridge.session_cookie(7, "отпечаток")
         сейчас = time.time()
         monkeypatch.setattr(time, "time", lambda: сейчас + bridge.SESSION_TTL + 5)
 
@@ -155,12 +155,20 @@ def сотрудник(**поправки) -> access.Admin:
     )
 
 
+#: Отпечатки входа сотрудников (bridge.fingerprint) в TestСтраницы
+ОТПЕЧАТКИ: dict[int, str] = {}
+
+
 class TestСтраницы:
     """Вход, раздел и выход — с подменённым чтением пользователя из базы."""
 
     @pytest.fixture
     def база(self, monkeypatch):
         люди: dict[int, access.Admin | None] = {7: сотрудник()}
+        # Отпечаток входа — из хеша пароля в базе; здесь подменён
+        ОТПЕЧАТКИ.clear()
+        ОТПЕЧАТКИ[7] = "пароль-1"
+        monkeypatch.setattr(bridge, "fingerprint", lambda _conn, uid: ОТПЕЧАТКИ.get(uid))
         monkeypatch.setattr(bridge, "load_admin", lambda _conn, uid: люди.get(uid))
         # Базы здесь нет, а виджеты главной её читают; они проверены
         # на PostgreSQL в tests/test_dashboard.py
@@ -202,6 +210,23 @@ class TestСтраницы:
         client.post("/py/login", {"token": пропуск(годный())})
 
         база[7] = None  # заблокировали, удалили или сняли роль
+
+        assert client.get("/py/admin/").status_code == 302
+
+    def test_смена_пароля_и_выход_гасят_куку(self, база):
+        """Кука с прежним отпечатком не годится, даже украденная."""
+        client = Client()
+        client.post("/py/login", {"token": пропуск(годный())})
+
+        assert client.get("/py/admin/").status_code == 200
+
+        ОТПЕЧАТКИ[7] = "пароль-2"  # сменили пароль или вышли (новый remember_token)
+
+        assert client.get("/py/admin/").status_code == 302
+
+    def test_кука_без_отпечатка_не_годится(self, база):
+        client = Client()
+        client.cookies[bridge.COOKIE] = bridge.session_cookie(7, None)
 
         assert client.get("/py/admin/").status_code == 302
 

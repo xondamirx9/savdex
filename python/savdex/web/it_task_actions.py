@@ -112,7 +112,9 @@ def complete(request: HttpRequest, task_id: str) -> HttpResponse:
     errors = validate(
         data,
         {
-            "result_url": ["nullable", "url", "max:255"],
+            # Только http(s): ссылка выводится как <a href>, ftp://, file:// и
+            # прочие протоколы исполнителю показывать незачем
+            "result_url": ["nullable", "url:http,https", "max:255"],
             "result_summary": ["nullable", "string", "max:600"],
             "contractor_company_id": ["nullable", "integer", "in:" + ",".join(responders)],
         },

@@ -69,7 +69,11 @@ SECRET_KEY = (
 )
 SECRET_KEY_IS_REAL = bool(os.environ.get("DJANGO_SECRET_KEY") or _app_key())
 
-DEBUG = os.environ.get("APP_ENV", "local") not in ("production", "staging")
+# Отладка — только на машине разработчика: local или testing. Любое
+# другое значение (опечатка «prod», «stage») — боевой режим, а не
+# страница ошибки с настройками и кусками кода у посетителя. Без APP_ENV —
+# local: образ (Dockerfile) и Render задают production сами
+DEBUG = os.environ.get("APP_ENV", "local") in ("local", "testing")
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",") if h]
 

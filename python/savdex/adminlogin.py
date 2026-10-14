@@ -66,9 +66,11 @@ def _page(
 
 
 def _session_cookie(response: HttpResponse, request: HttpRequest, uid: int) -> HttpResponse:
+    from django.db import connections
+
     response.set_cookie(
         bridge.COOKIE,
-        bridge.session_cookie(uid),
+        bridge.session_cookie(uid, bridge.fingerprint(connections["default"], uid)),
         max_age=bridge.SESSION_TTL,
         path=bridge.COOKIE_PATH,
         secure=request.is_secure(),

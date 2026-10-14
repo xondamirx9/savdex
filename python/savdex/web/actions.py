@@ -314,10 +314,13 @@ def locale_update(request: HttpRequest, locale: str) -> HttpResponse:
         session.save_user_locale(request, ctx.visitor.user_id, locale)
 
     referer = request.headers.get("Referer")
-    path = (
-        referer[len(ctx.root) :]
-        if isinstance(referer, str) and referer.startswith(ctx.root)
-        else "/"
-    )
+    # Свой адрес — корень сайта или путь за ним: «https://savdex.uz.evil.tld»
+    # тоже начинается с корня, но это чужой сайт
+    path = "/"
+
+    if isinstance(referer, str) and (
+        referer == ctx.root or referer.startswith((ctx.root + "/", ctx.root + "?"))
+    ):
+        path = referer[len(ctx.root) :]
 
     return HttpResponseRedirect(locales.url(ctx.root, path or "/", locale))

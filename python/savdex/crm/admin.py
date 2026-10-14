@@ -505,6 +505,19 @@ class OnBoard(Scoped):
     archive_title: ClassVar[str]
     change_list_template = "admin/crm/archive.html"
 
+    def owner_field(self, request: HttpRequest, **kwargs: Any) -> forms.ModelChoiceField:  # type: ignore[type-arg]
+        """
+        Передать лид или сделку другому — только тому, кто видит раздел
+        целиком (как assign_view): у «только свои» в списке лишь он сам.
+        """
+        field = super().owner_field(request, **kwargs)
+        staff = _admin_of(request)
+
+        if staff.scope_is_own(self.section):
+            field.queryset = field.queryset.filter(pk=staff.id)
+
+        return field
+
     def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
         """Название и колонка этапа — подзапросом: значок в архиве без запроса на строку."""
         same = Stage.objects.filter(

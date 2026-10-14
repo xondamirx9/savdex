@@ -208,11 +208,12 @@ def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Контакты мини-сайта: сначала «Мои контакты» (company_contacts,
     публичные). Телефона, почты, Telegram или WhatsApp там нет вовсе (даже
-    скрытого) — мини-сайт берёт их сам: из профиля компании, а телефон и
-    почту — ещё и из учётной записи владельца (то, что вписали при
-    регистрации). Так у
-    только что зарегистрированной компании на сайте сразу есть как с ней
-    связаться; правка в профиле видна на сайте без отдельного шага.
+    скрытого) — мини-сайт берёт их из профиля компании: правка в профиле
+    видна на сайте без отдельного шага.
+
+    Учётные записи владельца и сотрудников не подставляются: телефон и
+    почта из регистрации — личные, публиковать их никто не соглашался, а
+    на странице компании контакты к тому же открываются только платно.
     """
     contacts = [
         {
@@ -236,19 +237,12 @@ def _contacts(company: dict[str, Any]) -> list[dict[str, Any]]:
             "select distinct type from company_contacts where company_id = %s", [company["id"]]
         )
     }
-    # Сотрудники — владелец первым: у кого первого есть телефон или почта
-    people = _rows(
-        "select phone, email from users where company_id = %s and deleted_at is null "
-        "and status = 'active' order by (company_role = 'owner') desc, id",
-        [company["id"]],
-    )
 
     for kind in _AUTO_CONTACTS:
         if kind in have:
             continue
 
-        candidates = [company.get(kind), *(p.get(kind) for p in people)]
-        value = next((str(v).strip() for v in candidates if v and str(v).strip()), "")
+        value = str(company.get(kind) or "").strip()
 
         if value:
             contacts.append(_contact(kind, value))
@@ -424,8 +418,11 @@ def _html(ctx: Context, page: dict[str, Any], view: dict[str, Any], tags: str) -
         tags,
     ]
     lang = e(ctx.locale.replace("_", "-"))
+    # «<» и «>» внутри строк — \u003C и \u003E: название «<!--<script>» иначе
+    # уводит парсер HTML из скрипта, и вся страница после него пропадает
+    data = php_json(page, hex_tags=True)
     body = (
-        f'<script data-page="app" type="application/json">{php_json(page)}</script>'
+        f'<script data-page="app" type="application/json">{data}</script>'
         '<div id="app"></div>'
     )
 

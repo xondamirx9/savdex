@@ -41,6 +41,18 @@ RESET_EXPIRE_MINUTES = 60
 RESET_THROTTLE_SECONDS = 60
 
 
+def _drop_sessions(user_id: int, keep: str | None = None) -> None:
+    """
+    Смена пароля — выход на остальных устройствах: строки sessions
+    пользователя прочь, кроме текущей. Без этого украденная сессия жила
+    бы и после смены пароля: вход по сессии пароль не сверяет.
+    """
+    with allowed_writes("sessions"), connection.cursor() as cursor:
+        cursor.execute(
+            "delete from sessions where user_id = %s and id <> %s", [user_id, keep or ""]
+        )
+
+
 def _with_errors(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
     """back()->withErrors([...]): ошибки без ввода."""
     _session(ctx).flash("errors", {"default": {"format": ":message", "messages": errors}})
@@ -90,13 +102,19 @@ def force_password(request: HttpRequest) -> HttpResponse:
         ctx,
         "users",
         user,
-        {"password": fresh_hash, "must_change_password": False},
+        {
+            "password": fresh_hash,
+            # Кука «запомнить» на других устройствах — недействительна
+            "remember_token": random_string(60),
+            "must_change_password": False,
+        },
         section="users",
         model="User",
         casts={"must_change_password": "bool"},
     )
     # AuthenticateSession панели сверяет хеш пароля из сессии — уже новый
     _session(ctx).put("password_hash_web", fresh_hash)
+    _drop_sessions(int(user["id"]), keep=_session(ctx).id)
 
     if user["is_admin"]:
         # Inertia::location('/admin'): панель — не страница Inertia; адрес — как есть
@@ -311,6 +329,9 @@ def reset_password(request: HttpRequest) -> HttpResponse:
 
     with allowed_writes("password_reset_tokens"), connection.cursor() as cursor:
         cursor.execute("delete from password_reset_tokens where email = %s", [user["email"]])
+
+    # Сбрасывает гость: своей сессии у пользователя здесь нет — прочь все
+    _drop_sessions(int(user["id"]))
 
     flash(ctx, "status", ctx.t("messages.auth.password_reset"))
 

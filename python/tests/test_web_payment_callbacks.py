@@ -366,6 +366,16 @@ def ответ(итог: dict[str, Any]) -> dict[str, Any]:
             "paid",
             "created",
         ),
+        # Счёт отменён после create — не выдаётся, транзакция гасится
+        (
+            "confirm",
+            {"transId": "T-1"},
+            {"счета": счёт("failed"), "транзакция": СВЕЖАЯ},
+            ВХОД,
+            (400, 10009),
+            "failed",
+            "cancelled",
+        ),
         ("confirm", {"transId": "T-9"}, {}, ВХОД, (400, 10014), "pending", None),
         (
             "reverse",
@@ -579,12 +589,21 @@ def test_merchant_выключен(сайт, касса):
             "created",
         ),
         (
-            {"orderId": "SVD-000001", "operationState": "PROCESSING"},
+            {"orderId": "ORD-SVD-000001", "operationState": "PROCESSING"},
             "completed",
             {},
             ПРИНЯТ,
             "pending",
             "created",
+        ),
+        # Не успех по номеру счёта (его можно угадать) — не записывается
+        (
+            {"orderId": "SVD-000001", "operationState": "PROCESSING"},
+            "completed",
+            {},
+            ОТКАЗ,
+            "pending",
+            None,
         ),
         # Неизвестный заказ и пустые поля
         (

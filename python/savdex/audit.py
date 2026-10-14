@@ -15,6 +15,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import logging
+import os
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -96,15 +97,36 @@ def client_ip(request: HttpRequest | None) -> str | None:
     Адрес посетителя — как Request::ip() у Laravel с trustProxies('*').
 
     Laravel доверяет всем прокси и берёт самый левый адрес из
-    X-Forwarded-For: его ставит балансировщик Render. Apache перед
-    Django добавляет свой адрес справа, на выбор это не влияет.
+    X-Forwarded-For. Это верно только за прокси, который заголовок
+    посетителя выбрасывает (Caddy на своих машинах). Балансировщик Render
+    присланный X-Forwarded-For не чистит, а дописывает справа: самый
+    левый адрес задаёт сам посетитель и обходит лимиты по IP. Поэтому
+    источник настраивается:
+
+    - CLIENT_IP_HEADER — заголовок, который ставит только свой прокси
+      (например, CF-Connecting-IP), — адрес из него;
+    - TRUSTED_PROXY_HOPS=N — N своих прокси перед Django (Apache тоже
+      считается): адрес N-й справа в цепочке X-Forwarded-For + REMOTE_ADDR;
+    - ничего не задано — как раньше, самый левый.
     """
     if request is None:
         return None
 
     forwarded = str(request.META.get("HTTP_X_FORWARDED_FOR", ""))
+    header = os.environ.get("CLIENT_IP_HEADER", "").strip()
+    hops = os.environ.get("TRUSTED_PROXY_HOPS", "").strip()
 
-    for candidate in (forwarded.split(",")[0].strip(), request.META.get("REMOTE_ADDR")):
+    if header:
+        meta = "HTTP_" + header.upper().replace("-", "_")
+        first = str(request.META.get(meta, "")).split(",")[0].strip()
+    elif hops.isdigit():
+        chain = [p.strip() for p in forwarded.split(",") if p.strip()]
+        chain.append(str(request.META.get("REMOTE_ADDR", "")))
+        first = chain[max(0, len(chain) - 1 - int(hops))]
+    else:
+        first = forwarded.split(",")[0].strip()
+
+    for candidate in (first, request.META.get("REMOTE_ADDR")):
         # Мусор в заголовке — не адрес: столбец на 45 знаков, и Symfony
         # такое тоже отбрасывает
         try:
