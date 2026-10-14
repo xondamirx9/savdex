@@ -284,7 +284,9 @@ fi
 echo "Django: сайт — ${workers} процессов × ${threads} потоков, ${admin_line}, при ${total_mb} МБ памяти и ${cpus} ядрах." >&2
 
 # Слушает только 127.0.0.1: снаружи до Django не достучаться, только
-# через Apache
+# через Apache. --no-control-socket: пульт gunicorn 25+ (gunicornc) нам не
+# нужен, а его сокет он кладёт в домашнюю папку www-data (/var/www), куда
+# писать нельзя, — и при каждом запуске пишет в журнал ошибку
 run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
     --chdir python \
     --bind 127.0.0.1:8001 \
@@ -294,6 +296,7 @@ run_forever 5 "Django (gunicorn)" python/.venv/bin/gunicorn savdex.wsgi \
     --timeout 130 \
     --graceful-timeout 30 \
     --max-requests 1000 --max-requests-jitter 100 \
+    --no-control-socket \
     --error-logfile -
 
 # Админка (/py/admin/) — отдельный процесс на 127.0.0.1:8002, Apache
@@ -315,6 +318,7 @@ if [ "$admin_workers" -gt 0 ]; then
         --timeout 130 \
         --graceful-timeout 30 \
         --max-requests 500 --max-requests-jitter 50 \
+        --no-control-socket \
         --error-logfile -
 fi
 

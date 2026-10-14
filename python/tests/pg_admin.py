@@ -49,6 +49,9 @@ APP_KEY = "base64:" + base64.b64encode(KEY).decode()
     "CACHE_STORE": "array",
     "SESSION_DRIVER": "array",
     "QUEUE_CONNECTION": "sync",
+    # Клиент Django в проверках ходит по http: с APP_ENV=production сайт
+    # иначе отвечал бы на всё 301 на https:// (settings.FORCE_HTTPS)
+    "SAVDEX_FORCE_HTTPS": "false",
 }
 
 #: Django в отдельном процессе: входит по пропуску и выполняет шаги.
