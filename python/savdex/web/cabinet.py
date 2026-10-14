@@ -1043,6 +1043,12 @@ def _telegram_configured() -> bool:
     return token != "" and username != ""
 
 
+def _sms_configured() -> bool:
+    from savdex.web import sms
+
+    return sms.configured()
+
+
 def settings_props(ctx: Context) -> dict[str, Any]:
     assert ctx.user is not None
     user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
@@ -1064,6 +1070,11 @@ def settings_props(ctx: Context) -> dict[str, Any]:
             "locale": user["locale"],
             "email_verified": user["email_verified_at"] is not None,
             "phone_verified": user["phone_verified_at"] is not None,
+        },
+        # «Подтвердить по SMS» (Telnyx) и номер, на который код уже ушёл
+        "sms": {
+            "available": _sms_configured(),
+            "sentTo": ctx.session.get("settings.sms_phone"),
         },
         # Умолчания — здесь, а не строками в базе: список событий растёт
         "notifications": [

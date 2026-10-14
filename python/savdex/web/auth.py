@@ -133,12 +133,21 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
+    from savdex.web import sms
     from savdex.web.directory import listed_countries
 
-    # «Изменить почту» со второго шага — адрес и страна уже в полях
+    # «Изменить почту» или «Изменить номер» со второго шага — всё уже в полях
     store = _store(ctx)
     email = store.get("register.email") if store is not None else None
     country_id = store.get("register.country_id") if store is not None else None
+    phone = store.get("register.sms_phone") if store is not None else None
+    method = store.get("register.method") if store is not None else None
+
+    # Ссылка «Зарегистрируйтесь по телефону» со второго шага — ?method=phone
+    if _query(ctx, "method") in ("email", "phone"):
+        method = _query(ctx, "method")
+
+    phones = {r["id"]: r["phone_code"] for r in _rows("select id, phone_code from countries")}
 
     return inertia.render(
         ctx,
@@ -146,9 +155,19 @@ def register(request: HttpRequest) -> HttpResponse:
         {
             "email": email,
             "countryId": country_id,
-            # Страна — первым полем: от неё зависит, можно ли пропустить код
+            # Способ регистрации: почта или телефон (код по SMS, когда Telnyx настроен)
+            "phoneAvailable": sms.configured(),
+            "method": method if method == "phone" and sms.configured() else "email",
+            "phone": phone,
+            # Страна — первым полем: от неё зависит, можно ли пропустить код,
+            # и код страны в номере телефона
             "countries": [
-                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                {
+                    "id": c["id"],
+                    "name": c["name"],
+                    "code": c["code"],
+                    "phone_code": phones.get(c["id"]),
+                }
                 for c in listed_countries(ctx.locale)
             ],
         },
@@ -179,6 +198,15 @@ def reset_channels() -> list[str]:
     ]
 
 
+def _reset_sms(ctx: Context) -> dict[str, Any]:
+    from savdex.web import sms
+
+    store = _store(ctx)
+    sent = store.get("reset.sms_phone") if store is not None else None
+
+    return {"available": sms.configured(), "sentTo": sent if isinstance(sent, str) else None}
+
+
 def forgot_password(request: HttpRequest) -> HttpResponse:
     """PasswordResetController::request."""
     ctx = guest(request)
@@ -189,7 +217,12 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
     return inertia.render(
         ctx,
         "auth/ForgotPassword",
-        {"status": _flash(ctx, "status"), "channels": reset_channels()},
+        {
+            "status": _flash(ctx, "status"),
+            "channels": reset_channels(),
+            # Код по SMS на подтверждённый номер: настроен ли и куда уже ушёл
+            "sms": _reset_sms(ctx),
+        },
         _seo(ctx),
     )
 

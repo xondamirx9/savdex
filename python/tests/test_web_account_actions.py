@@ -753,3 +753,119 @@ def test_сброс_возвращает_аккаунт_хозяину_почт�
         "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
         [ПОЧТА],
     ) == [(0,)]
+
+
+# ── Забыли пароль: код по SMS (Telnyx, заглушка из test_sms) ────────
+
+
+@pytest.fixture(scope="module")
+def telnyx() -> Iterator[str]:
+    from .test_sms import заглушка_telnyx
+
+    with заглушка_telnyx() as url:
+        yield url
+
+
+def _смс(telnyx: str) -> dict[str, str]:
+    return {
+        **ОКРУЖЕНИЕ_DJANGO,
+        "TELNYX_API_KEY": "key-1",
+        "TELNYX_VERIFY_PROFILE_ID": "profile-1",
+        "TELNYX_API_URL": telnyx,
+    }
+
+
+def _по_телефону(подтверждён: bool = True) -> Callable[[], None]:
+    """Регистрация по телефону: номер подтверждён, почта — нет."""
+
+    def run() -> None:
+        пользователь()
+        sql(
+            "update users set email_verified_at = null, phone = '+998 90 111-22-33', "
+            "phone_verified_at = %s where email = %s",
+            ["2026-09-01 10:00:00" if подтверждён else None, ПОЧТА],
+        )
+
+    return run
+
+
+@pytest.mark.parametrize(("подтверждён", "уходит"), [(True, True), (False, False)])
+def test_забыли_пароль_по_смс(сайт, telnyx, подтверждён, уходит):
+    from .test_sms import ЗАПРОСЫ
+
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms",
+        подготовка(_по_телефону(подтверждён)),
+        body={"phone": "+998 90 111 22 33"},
+        env=_смс(telnyx),
+    )
+
+    # Ответ один при любом номере, а SMS — только на подтверждённый
+    assert куда(сайт, итог) == (302, "/forgot-password")
+    assert сессия(итог)["reset"] == {"sms_phone": "+998901112233"}
+    assert сессия(итог)["status"].startswith("Если этот номер подтверждён")
+    assert [з["body"]["phone_number"] for з in ЗАПРОСЫ] == (["+998901112233"] if уходит else [])
+
+
+@pytest.mark.parametrize(("код", "верный"), [("12345", True), ("99999", False)])
+def test_код_сброса_из_смс(сайт, telnyx, код, верный):
+    uid = учётка(ПОЧТА)
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms/confirm",
+        подготовка(_по_телефону()),
+        снимок,
+        данные={"reset": {"sms_phone": "+998901112233"}},
+        body={"sms_code": код},
+        env=_смс(telnyx),
+    )
+
+    if верный:
+        # На страницу нового пароля — тот же токен брокера, что и в письме
+        статус, location = куда(сайт, итог)
+        assert статус == 302
+        assert re.fullmatch(
+            r"/reset-password/[0-9a-f]{64}\?email=account%40savdex\.uz", location or ""
+        )
+        assert сессия(итог)["reset"] == {"sms_user": uid}
+        assert итог["база"]["tokens"] == [(ПОЧТА, True, True)]
+    else:
+        assert ошибки(итог) == {
+            "sms_code": ["Код не подошёл или устарел. Отправьте SMS ещё раз и введите новый код."]
+        }
+        assert итог["база"]["tokens"] == []
+
+
+def test_сброс_по_смс_почту_не_возвращает(сайт):
+    """
+    Сброс кодом из SMS доказывает номер, а не почту: телефон остаётся,
+    почта — неподтверждённой. Все входы закрываются, как и при сбросе письмом.
+    """
+
+    def шаг() -> None:
+        _токен()()
+        _по_телефону()()
+        sql(
+            "insert into sessions (id, user_id, payload, last_activity) "
+            "select 'чужая-сессия', id, '', 0 from users where email = %s",
+            [ПОЧТА],
+        )
+
+    uid = пользователь()
+    итог = форма(
+        сайт, "/reset-password", шаг, данные={"reset": {"sms_user": uid}}, body=ВЕРНЫЙ_СБРОС
+    )
+
+    assert куда(сайт, итог) == (302, "/login")
+    assert "reset" not in сессия(итог) or "sms_user" not in сессия(итог)["reset"]
+    assert sql(
+        "select email_verified_at is null, phone, phone_verified_at is not null "
+        "from users where email = %s",
+        [ПОЧТА],
+    ) == [(True, "+998 90 111-22-33", True)]
+    assert sql(
+        "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(0,)]

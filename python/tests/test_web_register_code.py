@@ -183,6 +183,7 @@ def test_почта(сайт, email, уходит):
             "from_mail": True,
         }
         assert json.loads(итог["сессия"]["payload"])["register"] == {
+            "method": "email",
             "email": "aziz@reg.savdex.uz",
             "country_id": _страна(),
         }
@@ -496,18 +497,10 @@ def test_анкета_без_кода(сайт):
 
 @pytest.fixture(scope="module")
 def telnyx() -> Iterator[str]:
-    import threading
-    from http.server import ThreadingHTTPServer
+    from .test_sms import заглушка_telnyx
 
-    from .test_sms import _Telnyx
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Telnyx)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
-    finally:
-        server.shutdown()
+    with заглушка_telnyx() as url:
+        yield url
 
 
 def _смс(telnyx: str) -> dict[str, str]:
@@ -532,84 +525,167 @@ def _по_смс(сайт: str, telnyx: str, path: str, body: dict[str, Any], re
     )
 
 
-def test_кнопка_смс(сайт, telnyx):
-    данные = {"register": {"email": АДРЕС, "country_id": _страна("cn")}}
+def _открыть(сайт: str, path: str, register: dict[str, Any], env: dict[str, str]) -> Any:
     итог = отправить(
         сайт,
-        "/register/code",
+        path,
         подготовка(),
-        данные=данные,
+        данные={"register": register},
         method="GET",
-        env=_смс(telnyx),
+        env=env,
         headers={"Referer": сайт + "/register", "User-Agent": "savdex-parity"},
     )
-    props = страница(итог["ответ"]["body"])["props"]
 
-    assert props["sms"] == {"enabled": True, "sentTo": None, "dialCode": "+86"}
-    # Без ключей Telnyx кнопки нет
-    без = страница(шаг(сайт, "/register/code", данные=данные, method="GET")["ответ"]["body"])
-    assert без["props"]["sms"]["enabled"] is False
+    return итог["ответ"], (
+        страница(итог["ответ"]["body"]) if итог["ответ"]["status"] == 200 else None
+    )
 
 
-def test_смс_отправлен(сайт, telnyx):
-    register = {"email": АДРЕС, "country_id": _страна("cn")}
-    итог = _по_смс(сайт, telnyx, "/register/sms", {"phone": "138 1234 5678"}, register)
+#: Регистрация по телефону: номер на первом шаге, код из SMS — на втором
+ПО_ТЕЛЕФОНУ = {"method": "phone", "sms_phone": "+8613812345678"}
+
+
+@pytest.mark.parametrize(
+    ("path", "ключи", "способ", "есть_телефон"),
+    [
+        ("/register", True, "email", True),
+        ("/register?method=phone", True, "phone", True),
+        # Без ключей Telnyx вкладки «Телефон» нет
+        ("/register?method=phone", False, "email", False),
+    ],
+)
+def test_выбор_способа(сайт, telnyx, path, ключи, способ, есть_телефон):
+    env = _смс(telnyx) if ключи else ОКРУЖЕНИЕ_DJANGO
+    _, стр = _открыть(сайт, path, {}, env)
+
+    assert стр["props"]["method"] == способ
+    assert стр["props"]["phoneAvailable"] is есть_телефон
+    assert {"id": _страна("cn"), "phone_code": "86"}.items() <= next(
+        c for c in стр["props"]["countries"] if c["code"] == "cn"
+    ).items()
+
+
+def test_телефон(сайт, telnyx):
+    # Прежняя регистрация по почте в этой сессии — забывается
+    register = {"email": АДРЕС, "verified_email": АДРЕС, "method": "email"}
+    body = {"country_id": _страна("cn"), "phone": "138 1234 5678"}
+    итог = _по_смс(сайт, telnyx, "/register/phone", body, register)
     сессия = json.loads(итог["сессия"]["payload"])
 
     assert итог["ответ"]["headers"]["location"] == сайт + "/register/code"
     # Код страны с первого шага дописан сам
-    assert сессия["register"]["sms_phone"] == "+8613812345678"
+    assert сессия["register"] == {
+        "method": "phone",
+        "sms_phone": "+8613812345678",
+        "country_id": _страна("cn"),
+    }
+    # Письма нет — только SMS
+    assert итог["база"]["mail"] == []
 
 
-@pytest.mark.parametrize(("phone", "ошибка"), [("123", "phone"), ("+8613812345000", "phone")])
-def test_смс_не_ушло(сайт, telnyx, phone, ошибка):
-    register = {"email": АДРЕС, "country_id": _страна("cn")}
-    итог = _по_смс(сайт, telnyx, "/register/sms", {"phone": phone}, register)
+@pytest.mark.parametrize(
+    ("body", "ошибки"),
+    [
+        ({"phone": "123"}, ["phone"]),
+        # Telnyx отказал
+        ({"phone": "+8613812345000"}, ["phone"]),
+        ({"country_id": None, "phone": "+8613812345678"}, ["country_id"]),
+    ],
+)
+def test_телефон_не_ушёл(сайт, telnyx, body, ошибки):
+    итог = _по_смс(сайт, telnyx, "/register/phone", {"country_id": _страна("cn"), **body}, {})
     сессия = json.loads(итог["сессия"]["payload"])
 
-    assert list(сессия["errors"]["default"]["messages"]) == [ошибка]
-    assert "sms_phone" not in сессия["register"]
+    assert list(сессия["errors"]["default"]["messages"]) == ошибки
+    assert "register" not in сессия or "sms_phone" not in сессия["register"]
+
+
+def test_телефон_занят(сайт, telnyx):
+    sql(
+        "insert into users (name, email, password, status, phone, phone_verified_at, "
+        "created_at, updated_at) values ('Был', 'phone@reg.savdex.uz', 'x', 'active', "
+        "'+86 138 1234 5678', now(), now(), now())"
+    )
+
+    try:
+        body = {"country_id": _страна("cn"), "phone": "+8613812345678"}
+        итог = _по_смс(сайт, telnyx, "/register/phone", body, {})
+    finally:
+        sql("delete from users where email = 'phone@reg.savdex.uz'")
+
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert сессия["errors"]["default"]["messages"]["phone"] == [
+        "Этот номер уже подтверждён в другом аккаунте. Войдите или восстановите пароль."
+    ]
+
+
+def test_экран_кода(сайт, telnyx):
+    ответ, стр = _открыть(
+        сайт, "/register/code", {**ПО_ТЕЛЕФОНУ, "country_id": _страна("cn")}, _смс(telnyx)
+    )
+
+    assert ответ["status"] == 200
+    assert стр["props"]["method"] == "phone" and стр["props"]["phone"] == "+8613812345678"
+    assert стр["props"]["email"] is None and стр["props"]["canSkip"] is False
+
+    # По почте: ссылка «Зарегистрируйтесь по телефону» — когда Telnyx настроен
+    _, почта = _открыть(сайт, "/register/code", {"email": АДРЕС}, _смс(telnyx))
+    _, без = _открыть(сайт, "/register/code", {"email": АДРЕС}, ОКРУЖЕНИЕ_DJANGO)
+
+    assert почта["props"]["method"] == "email" and почта["props"]["phoneAvailable"] is True
+    assert без["props"]["phoneAvailable"] is False
+
+
+def test_смс_ещё_раз(сайт, telnyx):
+    итог = _по_смс(сайт, telnyx, "/register/sms", {}, dict(ПО_ТЕЛЕФОНУ))
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert сессия["status"] == "Код отправлен в SMS на +8613812345678."
+    # Без регистрации по телефону — к первому шагу
+    мимо = _по_смс(сайт, telnyx, "/register/sms", {}, {"email": АДРЕС})
+    assert мимо["ответ"]["headers"]["location"] == сайт + "/register"
 
 
 @pytest.mark.parametrize(("код", "верный"), [("12345", True), ("99999", False)])
 def test_код_из_смс(сайт, telnyx, код, верный):
-    register = {"email": АДРЕС, "country_id": _страна("cn"), "sms_phone": "+8613812345678"}
-    итог = _по_смс(сайт, telnyx, "/register/sms/confirm", {"sms_code": код}, register)
+    итог = _по_смс(сайт, telnyx, "/register/sms/confirm", {"sms_code": код}, dict(ПО_ТЕЛЕФОНУ))
     сессия = json.loads(итог["сессия"]["payload"])
 
     if верный:
         assert итог["ответ"]["headers"]["location"] == сайт + "/register/details"
-        assert сессия["register"]["sms_verified"] == {
-            "email": АДРЕС,
-            "phone": "+8613812345678",
-        }
+        assert сессия["register"]["sms_verified"] == {"phone": "+8613812345678"}
     else:
         assert list(сессия["errors"]["default"]["messages"]) == ["sms_code"]
         assert "sms_verified" not in сессия["register"]
 
 
+def test_код_из_смс_только_по_телефону(сайт, telnyx):
+    register = {"email": АДРЕС, "method": "email", "sms_phone": "+8613812345678"}
+    итог = _по_смс(сайт, telnyx, "/register/sms/confirm", {"sms_code": "12345"}, register)
+
+    assert итог["ответ"]["headers"]["location"] == сайт + "/register"
+
+
 def test_анкета_после_смс(сайт):
     данные = {
         "register": {
-            "email": АДРЕС,
+            **ПО_ТЕЛЕФОНУ,
             "country_id": _страна("cn"),
-            "sms_verified": {"email": АДРЕС, "phone": "+8613812345678"},
+            "sms_verified": {"phone": "+8613812345678"},
         }
     }
     итог = шаг(сайт, "/register/details", данные=данные, method="GET")
     props = страница(итог["ответ"]["body"])["props"]
 
     assert итог["ответ"]["status"] == 200
-    assert props["smsPhone"] == "+8613812345678" and props["skipped"] is False
+    # Почту человек впишет в анкете
+    assert props["smsPhone"] == "+8613812345678" and props["email"] == ""
+    assert props["skipped"] is False
 
 
-def test_смс_другого_адреса_не_в_счёт(сайт):
-    данные = {
-        "register": {
-            "email": АДРЕС,
-            "sms_verified": {"email": "other@reg.savdex.uz", "phone": "+8613812345678"},
-        }
-    }
+def test_смс_другого_номера_не_в_счёт(сайт):
+    данные = {"register": {**ПО_ТЕЛЕФОНУ, "sms_verified": {"phone": "+8613812345679"}}}
     итог = шаг(сайт, "/register/details", данные=данные, method="GET")
 
     assert итог["ответ"]["headers"]["location"].endswith("/register/code")

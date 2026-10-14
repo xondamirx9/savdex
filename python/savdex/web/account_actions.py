@@ -262,6 +262,98 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
     return back(ctx)
 
 
+# ── Забыли пароль: код по SMS на подтверждённый номер ───────────────
+
+#: Номер, на который ушёл код, и учётка, чей пароль сбрасывается по SMS
+SESSION_RESET_PHONE = "reset.sms_phone"
+SESSION_RESET_USER = "reset.sms_user"
+
+
+def _user_by_phone(phone: str) -> dict[str, Any] | None:
+    """Учётка с этим подтверждённым номером (по цифрам: номер вписывали по-разному)."""
+    rows = _rows(
+        "select * from users where phone_verified_at is not null"
+        " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = %s order by id limit 1",
+        ["".join(ch for ch in phone if ch.isdigit())],
+    )
+
+    return rows[0] if rows else None
+
+
+@form()
+def forgot_sms(request: HttpRequest) -> HttpResponse:
+    """
+    «Забыли пароль» по SMS: код — на номер, подтверждённый в учётке. Ответ
+    один при любом номере (как и у почты), а SMS уходит только на номер,
+    который есть в базе подтверждённым: каждое SMS платное.
+    """
+    from savdex.web import sms
+
+    ctx = action(
+        request, auth=False, throttle=3, throttle_minutes=10, throttle_prefix="password-sms"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    if not sms.configured():
+        return _to(ctx, "/forgot-password")
+
+    phone = sms.normalize(_string(input_of(request).get("phone")))
+
+    if phone is None:
+        return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
+
+    if _user_by_phone(phone) is not None and not sms.daily_limit_reached(phone):
+        sms.send_code(phone)
+
+    store = _session(ctx)
+    store.put(SESSION_RESET_PHONE, phone)
+    store.forget(SESSION_RESET_USER)
+    flash(ctx, "status", ctx.t("messages.auth.reset_sent_sms"))
+
+    return _to(ctx, "/forgot-password")
+
+
+@form()
+def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
+    """
+    Код из SMS верный — на страницу нового пароля (тот же токен брокера,
+    что и в письме). Почту при этом не «возвращают»: см. reset_password.
+    """
+    from savdex.web import sms
+
+    ctx = action(
+        request, auth=False, throttle=10, throttle_minutes=1, throttle_prefix="password-sms-code"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    store = _session(ctx)
+    phone = store.get(SESSION_RESET_PHONE)
+
+    if not isinstance(phone, str) or phone == "":
+        return _to(ctx, "/forgot-password")
+
+    code = _string(input_of(request).get("sms_code")).strip()
+
+    if code == "":
+        return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
+
+    user = _user_by_phone(phone)
+
+    if user is None or not sms.check_code(phone, code):
+        return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
+
+    email = str(user["email"])
+    token = create_reset_token(email)
+    store.forget(SESSION_RESET_PHONE)
+    store.put(SESSION_RESET_USER, user["id"])
+
+    return _to(ctx, f"/reset-password/{quote(token, safe='')}?email={quote(email, safe='')}")
+
+
 @form()
 def reset_password(request: HttpRequest) -> HttpResponse:
     """PasswordResetController::update (guest, throttle:10,60,password-reset) и Password::reset."""
@@ -322,8 +414,12 @@ def reset_password(request: HttpRequest) -> HttpResponse:
     # Почта не подтверждена — ссылка могла прийти только письмом
     # (_send_reset_message), значит сбросивший владеет адресом. Аккаунт —
     # ему: почта подтверждена, а телефон и Telegram того, кто занял адрес
-    # без кода, отвязываются
-    reclaimed = user["email_verified_at"] is None
+    # без кода, отвязываются. Кроме сброса кодом из SMS (forgot_sms_confirm):
+    # он доказал номер, а не почту
+    store = _session(ctx)
+    by_sms = store.get(SESSION_RESET_USER) == user["id"]
+    store.forget(SESSION_RESET_USER)
+    reclaimed = user["email_verified_at"] is None and not by_sms
 
     if reclaimed:
         changes.update(
@@ -388,7 +484,7 @@ CONFIRM_SKIPPED = (
 
 
 def confirm_skipped(user_id: int) -> None:
-    """Снимает «Не подтверждено» — только подтверждение почты кодом (или админом)."""
+    """Снимает «Не подтверждено» — подтверждение почты или телефона кодом (или админом)."""
     with allowed_writes("companies", "users"), connection.cursor() as cursor:
         for query in CONFIRM_SKIPPED:
             cursor.execute(query, [user_id])

@@ -67,6 +67,26 @@ def normalize(raw: str, dial_code: str | None = None) -> str | None:
     return "+" + digits if 8 <= len(digits) <= 15 else None
 
 
+def verified_elsewhere(phone: str, user_id: int | None = None) -> bool:
+    """
+    Номер уже подтверждён другой учёткой (сравнение по цифрам: в учётках
+    номер мог быть вписан с пробелами и скобками). Один подтверждённый
+    номер — одна учётка: по нему восстанавливают пароль.
+    """
+    from savdex.web.cabinet import _rows
+
+    digits = re.sub(r"\D+", "", phone)
+
+    return bool(
+        _rows(
+            "select 1 from users where phone_verified_at is not null"
+            " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = %s"
+            " and id <> %s limit 1",
+            [digits, user_id or 0],
+        )
+    )
+
+
 def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_env('TELNYX_API_KEY')}"}
 

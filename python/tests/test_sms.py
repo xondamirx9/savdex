@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -45,8 +46,9 @@ class _Telnyx(BaseHTTPRequestHandler):
         pass
 
 
-@pytest.fixture(scope="module")
-def telnyx() -> Iterator[str]:
+@contextmanager
+def заглушка_telnyx() -> Iterator[str]:
+    """Заглушка Telnyx на свободном порту — её адрес для TELNYX_API_URL."""
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Telnyx)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -54,6 +56,12 @@ def telnyx() -> Iterator[str]:
         yield f"http://127.0.0.1:{server.server_address[1]}"
     finally:
         server.shutdown()
+
+
+@pytest.fixture(scope="module")
+def telnyx() -> Iterator[str]:
+    with заглушка_telnyx() as url:
+        yield url
 
 
 @pytest.fixture

@@ -27,7 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import analytics, eloquent, guard, locales, throttle
+from savdex.web import analytics, eloquent, guard, locales, sms, throttle
 from savdex.web.actions import form
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -371,19 +371,22 @@ def register(request: HttpRequest) -> HttpResponse:
         return refused
 
     store = _session(ctx)
-    verified, skipped = registration_email(store)
-
-    if verified is None:
-        return _to(ctx, "/register")
-
     data = input_of(request)
 
-    # Номер подтверждён кодом из SMS — в учётку идёт он, а не вписанный
-    # в анкету: подтверждённым считается только тот, на который пришёл код
+    # Регистрация по телефону: номер подтверждён кодом из SMS и идёт в учётку
+    # он, а не вписанный в анкету; почта — из анкеты, без подтверждения
     sms_verified = sms_phone(store)
 
     if sms_verified is not None:
+        verified, skipped = _php_string(data.get("email")), False
         data["phone"] = sms_verified
+    else:
+        email_verified, skipped = registration_email(store)
+
+        if email_verified is None:
+            return _to(ctx, "/register")
+
+        verified = email_verified
 
     kind = _account_type(data.get("account_type"))
     legal, freelancer = kind == "legal", kind == "freelancer"
@@ -538,6 +541,10 @@ def register(request: HttpRequest) -> HttpResponse:
             del errors["email"]
             errors["email"] = [hint]
 
+    # Номер подтвердили, пока человек заполнял анкету, — другой учёткой
+    if sms_verified is not None and "phone" not in errors and sms.verified_elsewhere(sms_verified):
+        errors["phone"] = [ctx.t("messages.register.phone_taken")]
+
     if errors:
         return invalid(ctx, errors)
 
@@ -602,6 +609,7 @@ def register(request: HttpRequest) -> HttpResponse:
     store.forget(SESSION_COUNTRY)
     store.forget(SESSION_SMS_PHONE)
     store.forget(SESSION_SMS_VERIFIED)
+    store.forget(SESSION_METHOD)
 
     # Registered: почта уже подтверждена — второго письма нет
     guard.login(ctx, _session(ctx), user)
@@ -633,25 +641,29 @@ SESSION_VERIFIED = "register.verified_email"
 SESSION_COUNTRY = "register.country_id"
 SESSION_SKIPPED = "register.skipped_email"
 
-#: Код по SMS (Telnyx, savdex/web/sms.py): номер, на который ушёл код, и
-#: подтверждённый номер вместе с адресом, для которого он подтверждён
+#: Регистрация по телефону (Telnyx, savdex/web/sms.py): способ первого шага
+#: («email» или «phone»), номер, на который ушёл код, и подтверждённый номер
+SESSION_METHOD = "register.method"
 SESSION_SMS_PHONE = "register.sms_phone"
 SESSION_SMS_VERIFIED = "register.sms_verified"
 
 
 def sms_phone(store: Any) -> str | None:  # noqa: ANN401
-    """Номер, подтверждённый кодом из SMS для адреса первого шага, иначе None."""
-    email = store.get(SESSION_EMAIL)
+    """
+    Регистрация по телефону: номер первого шага, подтверждённый кодом из SMS,
+    иначе None. Почту человек укажет в анкете — без подтверждения.
+    """
+    phone = store.get(SESSION_SMS_PHONE)
     verified = store.get(SESSION_SMS_VERIFIED)
 
     if (
-        isinstance(email, str)
-        and email != ""
+        store.get(SESSION_METHOD) == "phone"
+        and isinstance(phone, str)
+        and phone != ""
         and isinstance(verified, dict)
-        and verified.get("email") == email
-        and isinstance(verified.get("phone"), str)
+        and verified.get("phone") == phone
     ):
-        return str(verified["phone"])
+        return phone
 
     return None
 
@@ -666,8 +678,7 @@ def registration_email(store: Any) -> tuple[str | None, bool]:  # noqa: ANN401
     if not (isinstance(email, str) and email != ""):
         return None, False
 
-    # Код из письма или из SMS — анкета открыта, учётка полноценная
-    if store.get(SESSION_VERIFIED) == email or sms_phone(store) is not None:
+    if store.get(SESSION_VERIFIED) == email:
         return email, False
 
     if store.get(SESSION_SKIPPED) == email and code_optional(store.get(SESSION_COUNTRY)):
