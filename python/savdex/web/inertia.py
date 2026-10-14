@@ -248,10 +248,7 @@ def _html(ctx: Context, seo: Seo, page: dict[str, Any], vite_tags: str) -> str:
     # «<» и «>» внутри строк — \u003C и \u003E: название «<!--<script>» иначе
     # уводит парсер HTML из скрипта, и вся страница после него пропадает
     data = php_json(page, hex_tags=True)
-    body = (
-        f'<script data-page="app" type="application/json">{data}</script>'
-        '<div id="app"></div>'
-    )
+    body = f'<script data-page="app" type="application/json">{data}</script><div id="app"></div>'
 
     return (
         f'<!DOCTYPE html>\n<html lang="{lang}">\n<head>\n    '
