@@ -189,6 +189,18 @@ def is_chinese_mailbox(address: str) -> bool:
     return address.rsplit("@", 1)[-1].strip().lower() in CN_DOMAINS
 
 
+#: Зоны, писем в которые не бывает (RFC 2606): демо-учётки тестового
+#: сервера (savdex/demo.py — demo.savdex.test)
+UNDELIVERABLE_ZONES = (".test", ".example", ".invalid", ".localhost")
+
+
+def undeliverable(address: str) -> bool:
+    """Адрес в зоне, куда почта не доходит никогда."""
+    domain = address.rsplit("@", 1)[-1].strip().lower().rstrip(".")
+
+    return ("." + domain).endswith(UNDELIVERABLE_ZONES)
+
+
 def _routes(to: str, prefix: str) -> list[str]:
     """
     Через чьи почтовики слать: на китайский ящик — сначала CN_MAIL_* (если
@@ -218,7 +230,17 @@ def send(
     MAIL_* — письма сайта, PROSPECT_MAIL_* — рассылка потенциальным
     клиентам со своего ящика (savdex/crm/prospects.py). sender — свой
     «От кого» («Поддержка <support@…>»), иначе — из настроек почтовика.
+
+    Адрес, куда почта не доходит (undeliverable), через SMTP не шлётся:
+    почтовик вернул бы письмо недоставленным, а частые отказы портят
+    репутацию отправителя. Считается отправленным — иначе рассылка
+    повторяла бы его каждый проход.
     """
+    if undeliverable(to) and mailer(prefix) == "smtp":
+        log.info("Письмо на %s не отправляется: адрес-заглушка", to)
+
+        return True
+
     return any(
         _send_via(route, to, subject, body_html, body_text, reply_to, headers, sender)
         for route in _routes(to, prefix)
