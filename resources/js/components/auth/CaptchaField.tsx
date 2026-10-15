@@ -1,5 +1,6 @@
 import { AlertCircle, Check, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
@@ -22,6 +23,12 @@ function xsrf(): Record<string, string> {
  * (POST /captcha/verify) и получает одноразовый пропуск — он и уходит с
  * формой в поле captcha. Пропуск гасится при отправке формы, поэтому после
  * каждой отправки страница меняет reloadKey и галочка снимается.
+ *
+ * Окно — по центру экрана поверх затемнения, а не выпадающее под галочкой:
+ * выпадающее накрывало кнопку «Продолжить», вылезало за край карточки, а
+ * на телефоне — и за край экрана. Выводится порталом в ближайший
+ * .auth-dark (там цвета тёмной темы) или в body: так его не обрежет и не
+ * перекроет ни один родитель формы.
  */
 export function CaptchaField({
     purpose,
@@ -44,7 +51,11 @@ export function CaptchaField({
     const [problem, setProblem] = useState<string | null>(null);
     const request = useRef(0);
     const root = useRef<HTMLDivElement>(null);
+    const box = useRef<HTMLButtonElement>(null);
+    const dialog = useRef<HTMLDivElement>(null);
     const input = useRef<HTMLInputElement>(null);
+    // Куда выводится окно: узел с цветами темы страницы
+    const [host, setHost] = useState<HTMLElement | null>(null);
     // onChange от useForm меняется на каждой отрисовке — держим последний
     const change = useRef(onChange);
     change.current = onChange;
@@ -95,6 +106,7 @@ export function CaptchaField({
         if (state !== 'idle') return;
 
         setProblem(null);
+        setHost(root.current?.closest<HTMLElement>('.auth-dark') ?? document.body);
         setState('checking');
 
         if (await load()) {
@@ -156,26 +168,48 @@ export function CaptchaField({
         change.current('');
     }, [reloadKey, close]);
 
-    // Окно закрывается по Esc и по щелчку мимо
+    /*
+     * Пока окно открыто: Esc закрывает, Tab не уводит фокус на форму под
+     * затемнением, фон не прокручивается. Закрылось — фокус обратно на
+     * галочку, а не в начало страницы.
+     */
     useEffect(() => {
         if (!isOpen) return;
 
         input.current?.focus();
 
         function onKey(e: KeyboardEvent) {
-            if (e.key === 'Escape') close();
+            if (e.key === 'Escape') {
+                close();
+                return;
+            }
+
+            if (e.key !== 'Tab' || !dialog.current) return;
+
+            const items = dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), input');
+
+            if (items.length === 0) return;
+
+            const first = items[0];
+            const last = items[items.length - 1];
+
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
         }
 
-        function onDown(e: MouseEvent) {
-            if (root.current && !root.current.contains(e.target as Node)) close();
-        }
-
+        const overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', onKey);
-        document.addEventListener('mousedown', onDown);
 
         return () => {
             document.removeEventListener('keydown', onKey);
-            document.removeEventListener('mousedown', onDown);
+            document.body.style.overflow = overflow;
+            box.current?.focus();
         };
     }, [isOpen, close]);
 
@@ -190,6 +224,7 @@ export function CaptchaField({
                 )}
             >
                 <button
+                    ref={box}
                     type="button"
                     role="checkbox"
                     aria-checked={verified}
@@ -232,103 +267,125 @@ export function CaptchaField({
                 </p>
             )}
 
-            {isOpen && (
-                <div
-                    id={popupId}
-                    role="dialog"
-                    aria-label={t('captcha.popup_title')}
-                    className="border-line bg-surface absolute top-full left-0 z-30 mt-2 w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[6px] border shadow-xl"
-                >
-                    <div className="bg-primary-700 flex items-start justify-between gap-2 px-4 py-3 text-white">
-                        <p className="text-[15px] leading-snug font-medium">{t('captcha.popup_title')}</p>
-                        <button
-                            type="button"
-                            onClick={close}
-                            aria-label={t('captcha.close')}
-                            className="-mt-1 -mr-2 grid size-8 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white"
-                        >
-                            <X aria-hidden className="size-4" />
-                        </button>
-                    </div>
-
-                    {/* div, а не form: форма в форме — недопустимый HTML */}
+            {isOpen &&
+                host &&
+                createPortal(
+                    // Щелчок по затемнению мимо окна — закрыть. mousedown, а не
+                    // click: выделение текста в поле, отпущенное за краем окна,
+                    // не должно его закрывать
                     <div
-                        className="space-y-3 p-4"
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') void confirm(e);
+                        role="presentation"
+                        onMouseDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            // Иначе браузер после щелчка переведёт фокус на body
+                            // и снимет его с галочки, куда его вернуло закрытие
+                            e.preventDefault();
+                            close();
                         }}
+                        className="fixed inset-0 z-[100] flex overflow-y-auto bg-slate-950/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] animate-[fadeIn_.2s_ease-out]"
                     >
-                        {/* Картинка светлая в любой теме: фон под ней — её же бумага */}
-                        <div className="border-line aspect-[200/64] w-full overflow-hidden rounded-[4px] border bg-white">
-                            {challenge && !loadingImage ? (
-                                <img
-                                    src={challenge.image}
-                                    alt={t('captcha.image_alt')}
-                                    width={200}
-                                    height={64}
-                                    draggable={false}
-                                    className="size-full select-none"
+                        {/* m-auto, а не align-items: center — окно выше экрана
+                            (телефон боком) прокручивается, а не обрезается сверху */}
+                        <div
+                            ref={dialog}
+                            id={popupId}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={t('captcha.popup_title')}
+                            className="border-line bg-surface m-auto w-full max-w-[360px] overflow-hidden rounded-[12px] border shadow-2xl animate-[modalIn_.25s_cubic-bezier(.16,1,.3,1)]"
+                        >
+                            <div className="bg-primary-700 flex items-center justify-between gap-2 px-4 py-3 text-white">
+                                <p className="text-[15px] leading-snug font-medium">{t('captcha.popup_title')}</p>
+                                <button
+                                    type="button"
+                                    onClick={close}
+                                    aria-label={t('captcha.close')}
+                                    className="-my-1.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white"
+                                >
+                                    <X aria-hidden className="size-4" />
+                                </button>
+                            </div>
+
+                            {/* div, а не form: форма в форме — недопустимый HTML */}
+                            <div
+                                className="space-y-3 p-4"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void confirm(e);
+                                }}
+                            >
+                                {/* Картинка светлая в любой теме: фон под ней — её же бумага */}
+                                <div className="border-line aspect-[200/64] w-full overflow-hidden rounded-[4px] border bg-white">
+                                    {challenge && !loadingImage ? (
+                                        <img
+                                            src={challenge.image}
+                                            alt={t('captcha.image_alt')}
+                                            width={200}
+                                            height={64}
+                                            draggable={false}
+                                            className="size-full select-none"
+                                        />
+                                    ) : (
+                                        <span className="block size-full animate-pulse bg-slate-100" aria-label={t('captcha.loading')} />
+                                    )}
+                                </div>
+
+                                <input
+                                    ref={input}
+                                    type="text"
+                                    aria-label={t('captcha.label')}
+                                    aria-invalid={problem ? true : undefined}
+                                    autoComplete="off"
+                                    autoCapitalize="characters"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    maxLength={(challenge?.length ?? 5) + 4}
+                                    placeholder={t('captcha.placeholder')}
+                                    value={typed}
+                                    onChange={(e) => {
+                                        setTyped(e.target.value);
+                                        if (problem) setProblem(null);
+                                    }}
+                                    className={cn(
+                                        'bg-surface border-line rounded-btn focus:border-primary-500 focus:ring-primary-500/15 h-12 w-full border px-3.5 text-[16px] tracking-[.08em] uppercase placeholder:tracking-normal placeholder:normal-case focus:ring-3 focus:outline-none',
+                                        problem && 'border-danger',
+                                    )}
                                 />
-                            ) : (
-                                <span className="block size-full animate-pulse bg-slate-100" aria-label={t('captcha.loading')} />
-                            )}
+
+                                {problem && (
+                                    <p className="text-danger flex items-start gap-1.5 text-[13px]" role="alert">
+                                        <AlertCircle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                                        <span>{problem}</span>
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="border-line flex items-center justify-between gap-2 border-t px-3 py-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setProblem(null);
+                                        void load();
+                                    }}
+                                    disabled={loadingImage || state === 'verifying'}
+                                    title={t('captcha.refresh')}
+                                    aria-label={t('captcha.refresh')}
+                                    className="text-muted hover:text-ink hover:bg-canvas rounded-btn grid size-11 place-items-center transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw aria-hidden className={cn('size-[18px]', loadingImage && 'animate-spin')} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => void confirm(e)}
+                                    disabled={loadingImage || state === 'verifying'}
+                                    className="bg-primary-700 hover:bg-primary-600 rounded-btn h-11 px-6 text-sm font-semibold text-white disabled:opacity-60"
+                                >
+                                    {state === 'verifying' ? t('captcha.checking') : t('captcha.confirm')}
+                                </button>
+                            </div>
                         </div>
-
-                        <input
-                            ref={input}
-                            type="text"
-                            aria-label={t('captcha.label')}
-                            aria-invalid={problem ? true : undefined}
-                            autoComplete="off"
-                            autoCapitalize="characters"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            maxLength={(challenge?.length ?? 5) + 4}
-                            placeholder={t('captcha.placeholder')}
-                            value={typed}
-                            onChange={(e) => {
-                                setTyped(e.target.value);
-                                if (problem) setProblem(null);
-                            }}
-                            className={cn(
-                                'bg-surface border-line rounded-btn focus:border-primary-500 focus:ring-primary-500/15 h-11 w-full border px-3.5 text-[15px] focus:ring-3 focus:outline-none',
-                                problem && 'border-danger',
-                            )}
-                        />
-
-                        {problem && (
-                            <p className="text-danger flex items-start gap-1.5 text-[13px]" role="alert">
-                                <AlertCircle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-                                <span>{problem}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="border-line flex items-center justify-between gap-2 border-t px-2 py-2">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setProblem(null);
-                                void load();
-                            }}
-                            disabled={loadingImage || state === 'verifying'}
-                            title={t('captcha.refresh')}
-                            aria-label={t('captcha.refresh')}
-                            className="text-muted hover:text-ink hover:bg-canvas rounded-btn grid size-10 place-items-center transition-colors disabled:opacity-50"
-                        >
-                            <RefreshCw aria-hidden className={cn('size-[18px]', loadingImage && 'animate-spin')} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={(e) => void confirm(e)}
-                            disabled={loadingImage || state === 'verifying'}
-                            className="bg-primary-700 hover:bg-primary-600 rounded-btn h-10 px-5 text-sm font-semibold text-white disabled:opacity-60"
-                        >
-                            {state === 'verifying' ? t('captcha.checking') : t('captcha.confirm')}
-                        </button>
-                    </div>
-                </div>
-            )}
+                    </div>,
+                    host,
+                )}
         </div>
     );
 }
