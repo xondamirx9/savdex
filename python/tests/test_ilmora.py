@@ -76,7 +76,9 @@ def test_телефон_с_ошибкой(phone, ошибка):
     assert _ошибки(phone=phone) == {"phone": [ошибка]}
 
 
-@pytest.mark.parametrize("phone", ["992223344", "+998 99 222 33 44", "998992223344", "(99) 222-33-44"])
+@pytest.mark.parametrize(
+    "phone", ["992223344", "+998 99 222 33 44", "998992223344", "(99) 222-33-44"]
+)
 def test_телефон_верный(phone):
     заявка, errors = validate(_Язык(), {**ВЕРНО, "phone": phone})  # type: ignore[arg-type]
 

@@ -381,6 +381,8 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "crm.deal",
             "crm.prospect",
             "crm.prospectmailing",
+            # Заявки на регистрацию в ILMORA (savdex/ilmora)
+            "ilmora.registration",
             "crm.contact",
             "crm.task",
             "crm.communication",

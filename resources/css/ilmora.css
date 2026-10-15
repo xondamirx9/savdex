@@ -86,6 +86,8 @@
     border-left: 1px solid rgb(255 255 255 / 0.16);
 }
 .ilmora-cta__title {
+    /* Цвет ссылок тёмного экрана входа (.auth-dark a) сюда не доходит */
+    color: #fff;
     font-size: 15px;
     font-weight: 600;
     line-height: 1.35;
@@ -94,6 +96,12 @@
     font-size: 13px;
     line-height: 1.4;
     color: #b7c3d9;
+}
+/* На узком экране знак — без слова: надпись и так говорит «ILMORA» */
+@media (max-width: 479px) {
+    .ilmora-cta .ilmora-logo__word {
+        display: none;
+    }
 }
 .ilmora-cta__arrow {
     flex-shrink: 0;
