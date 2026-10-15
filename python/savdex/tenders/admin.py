@@ -1,6 +1,6 @@
 """
 Раздел «Тендеры» в админке Django (этап 5; с этапа 6 — вместо раздела
-Filament).
+Filament; до 8 октября 2026 назывался «Закупки»).
 
 Список с отбором по статусу и госзакупкам, правка закупки и загрузка
 файлом (Excel или CSV, см. importer.py) с признаком «госзакупка» — на
@@ -13,6 +13,13 @@ Filament).
 отмеченными, удаление — с правом удалять (суперадмин), «На сайте» у
 опубликованной; загрузка пишет строку журнала «Загрузка», как
 ImportAction::before.
+
+Статусы и подписи — как в кабинете компании: «Черновик / на модерации»,
+«Опубликован», «Истёк», «Завершён» (владелец нажал «Завершить»), «Архив» —
+«В архив» над отмеченными убирает тендер с сайта, и владелец сам его не
+вернёт (вернуть — «Опубликовать»). Кто разместил — компания и человек из
+кабинета или администратор; на странице тендера — ещё просмотры, когда
+продлён и когда завершён.
 """
 
 from __future__ import annotations
@@ -25,6 +32,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import connection
+from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -32,12 +40,18 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from savdex import audit
+from savdex.accounts.models import User
 from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
+from savdex.crm.models import Company
 from savdex.tenders import importer
 from savdex.tenders.models import OUTCOMES, SOURCES, STATUSES, Tender
 
 #: Файл больше — не загрузка закупок, а ошибка (или не тот файл)
 MAX_UPLOAD = 10 * 1024 * 1024
+
+
+def _when(moment: Any) -> str:  # noqa: ANN401
+    return timezone.localtime(moment).strftime("%d.%m.%Y %H:%M") if moment else "—"
 
 
 class ImportForm(forms.Form):
@@ -46,7 +60,7 @@ class ImportForm(forms.Form):
         help_text="Excel (.xlsx) или CSV. Первая строка — заголовки столбцов, язык любой.",
     )
     all_government = forms.BooleanField(
-        label="Все закупки в файле — госзакупки",
+        label="Все тендеры в файле — госзакупки",
         required=False,
         help_text="Иначе — по столбцу «Госзакупка» (да/нет), если он есть.",
     )
@@ -78,9 +92,9 @@ class ExpiringFilter(admin.SimpleListFilter):
 @register(Tender, section="tenders")
 class TenderAdmin(SavdexModelAdmin):
     laravel_model = "App\\Models\\Tender"
-    title_list = "Закупки"
-    title_add = "Новая закупка"
-    title_change = "Закупка"
+    title_list = "Тендеры"
+    title_add = "Новый тендер"
+    title_change = "Тендер"
     change_list_template = "admin/tenders/tender/change_list.html"
 
     fieldsets = (
@@ -102,7 +116,7 @@ class TenderAdmin(SavdexModelAdmin):
         "government",
         "state",
         "result",
-        "origin",
+        "placed_by",
         "published",
         "row_actions",
     )
@@ -160,9 +174,12 @@ class TenderAdmin(SavdexModelAdmin):
 
     @admin.display(description="статус", ordering="status")
     def state(self, obj: Tender) -> str:
-        color = {"published": "#15803d", "archived": "#6b7280", "expired": "#b91c1c"}.get(
-            obj.status, "#b45309"
-        )
+        color = {
+            "published": "#15803d",
+            "archived": "#1d4ed8",
+            "archive": "#6b7280",
+            "expired": "#b91c1c",
+        }.get(obj.status, "#b45309")
 
         return format_html(
             '<b style="color:{}">{}</b>', color, STATUSES.get(obj.status, obj.status)
@@ -191,9 +208,61 @@ class TenderAdmin(SavdexModelAdmin):
             " · ".join(details),
         )
 
-    @admin.display(description="откуда", ordering="source")
-    def origin(self, obj: Tender) -> str:
-        return SOURCES.get(obj.source, obj.source)
+    @admin.display(description="кто разместил", ordering="source")
+    def placed_by(self, obj: Tender) -> str:
+        """Компания и человек из кабинета или «Администратор / Excel» и кто завёл."""
+        company = getattr(obj, "author_company", None)
+        person = getattr(obj, "author_name", None)
+
+        if obj.source == "cabinet":
+            return format_html("{}<br><small>{}</small>", company or "—", person or "")
+
+        return format_html(
+            "{}<br><small>{}</small>", SOURCES.get(obj.source, obj.source), person or ""
+        )
+
+    @admin.display(description="кто разместил")
+    def placed_by_detail(self, obj: Tender) -> str:
+        return self.placed_by(obj) if obj.pk else "—"
+
+    @admin.display(description="просмотры на сайте")
+    def views(self, obj: Tender) -> int:
+        return obj.views_count
+
+    @admin.display(description="продлён")
+    def extended(self, obj: Tender) -> str:
+        return _when(obj.extended_at)
+
+    @admin.display(description="завершён")
+    def finished(self, obj: Tender) -> str:
+        return _when(obj.finished_at)
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Tender]:
+        """Кто разместил: имя автора и его компания — подзапросами, без модели связей."""
+        queryset: QuerySet[Tender] = super().get_queryset(request)
+        author = User.objects.filter(pk=OuterRef("author_id"))
+        company = User.objects.filter(pk=OuterRef(OuterRef("author_id"))).values("company_id")[:1]
+
+        return queryset.annotate(
+            author_name=Subquery(author.values("name")[:1]),
+            author_company=Subquery(
+                Company.objects.filter(pk=Subquery(company)).values("name")[:1]
+            ),
+        )
+
+    def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        if obj is None:
+            return self.fieldsets
+
+        return (
+            *self.fieldsets,
+            (
+                "На сайте",
+                {"fields": ("placed_by_detail", "views", "extended", "finished")},
+            ),
+        )
+
+    readonly_fields = ("placed_by_detail", "views", "extended", "finished")
 
     @admin.display(description="опубликован", ordering="published_at")
     def published(self, obj: Tender) -> str:
@@ -261,16 +330,16 @@ class TenderAdmin(SavdexModelAdmin):
         count = sum(self.publish(request, tender) for tender in queryset)
         messages.success(request, f"Опубликовано: {count}.")
 
-    @admin.action(description="В архив", permissions=["publish"])
+    @admin.action(description="В архив — убрать с сайта", permissions=["publish"])
     def archive_selected(self, request: HttpRequest, queryset: Any) -> None:  # noqa: ANN401
         count = 0
 
         for tender in queryset:
-            if tender.status == "archived":
+            if tender.status == "archive":
                 continue
 
             before = self.snapshot(tender)
-            tender.status = "archived"
+            tender.status = "archive"
             tender.save()
             self._journal_change(request, tender, before)
             count += 1
@@ -413,7 +482,7 @@ class TenderAdmin(SavdexModelAdmin):
             "admin/tenders/tender/import.html",
             {
                 **self.admin_site.each_context(request),
-                "title": "Загрузка закупок из файла",
+                "title": "Загрузка тендеров из файла",
                 "opts": self.model._meta,
                 "form": form,
                 "report": report,
@@ -428,7 +497,7 @@ class TenderAdmin(SavdexModelAdmin):
                     ("Бюджет", "250 000 000, «от 100 до 200 млн»"),
                     ("Валюта", "UZS, USD, сум, $ …"),
                     ("Приём заявок до", "30.10.2026 или «30 октября 2026»"),
-                    ("Ссылка на источник", "по ней повторная загрузка обновляет закупку"),
+                    ("Ссылка на источник", "по ней повторная загрузка обновляет тендер"),
                     ("Контактное лицо, Телефон, Почта", ""),
                     ("Опубликовать", "да — сразу на сайт, иначе черновик"),
                 ],

@@ -240,6 +240,33 @@ def test_кнопки_на_странице_пользователя(люди):
     sql("delete from users where id = %s", [uid])
 
 
+def test_ip_последнего_входа_в_карточке(люди):
+    """Когда и откуда входил — в карточке; IP — только тем, кто изменяет пользователей."""
+    uid = _аккаунт("ip@company.uz")
+    sql(
+        "update users set last_login_at = '2026-10-14 09:30:00', last_login_ip = '203.0.113.42' "
+        "where id = %s",
+        [uid],
+    )
+    страница = f"{LIST}{uid}/change/"
+
+    for role in ("superadmin", "admin"):
+        _, ответ = django(люди[role], ("get", страница, None))
+        assert ответ["status"] == 200
+        assert "IP последнего входа" in ответ["body"] and "203.0.113.42" in ответ["body"], role
+
+    # Поле только для чтения: сохранение карточки его не меняет
+    django(люди["admin"], ("post", страница, {"name": "ip", "last_login_ip": "1.1.1.1"}))
+    assert sql("select last_login_ip from users where id = %s", [uid]) == [("203.0.113.42",)]
+
+    # Поддержка смотрит пользователей, но не изменяет — IP ей не показывается
+    _, поддержка = django(люди["support"], ("get", страница, None))
+    assert поддержка["status"] == 200
+    assert "203.0.113.42" not in поддержка["body"]
+
+    sql("delete from users where id = %s", [uid])
+
+
 def test_кнопки_не_обходят_правила(люди):
     """Себя не отключить, занятую почту не восстановить — и кнопкой тоже."""
     сам = люди["superadmin"]

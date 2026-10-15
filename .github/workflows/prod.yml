@@ -1,11 +1,15 @@
 # Боевые машины в Uztelecom Cloud: сайт; админка и фоновые задачи; база,
 # общая папка файлов и кэша (deploy/README.md).
 #
-# Вручную (Actions → prod → Run workflow) — всегда. До переезда боевой
-# сайт — Render, а эти машины — репетиция на своём адресе (переменная
-# PROD_DOMAIN, например new.savdex.uz) под паролем тестового сервера.
-# После переезда (переменная PROD_LIVE=true) — ещё и каждое слияние в
-# основную ветку, как раньше на Render.
+# Выкладка — релизами. Слияние в основную ветку уходит только на
+# тестовый сервер (staging.yml); на боевой — пачкой всё, что накопилось
+# с прошлого релиза:
+# - вручную: Actions → prod → Run workflow (кнопка «Релиз»);
+# - по расписанию: каждый вечер в 22:00 по Ташкенту, если включено
+#   (переменная PROD_NIGHTLY_RELEASE=true) и с прошлого релиза в основной
+#   ветке есть новое; нового нет — машины не трогаются.
+# Что вошло в релиз — в сводке запуска (Summary): список слитых PR с
+# прошлого удачного релиза.
 #
 # Что делает (галочки):
 # - «bootstrap» — подготовить чистые машины (deploy/server/bootstrap.sh
@@ -37,17 +41,16 @@
 #   vars.PROD_DOMAIN             адрес сайта; не savdex.uz — сайт под паролем
 #   vars.PROD_KNOWN_HOSTS        ключи машин (строки known_hosts) — подскажет первый запуск
 #   vars.PROD_LIVE               true после переезда: «копия с Render» запрещена
+#   vars.PROD_NIGHTLY_RELEASE    true — ночной релиз в 22:00 по Ташкенту
 #
 # Репозиторий публичный, журналы Actions видят все: пароли, ключи и
 # значения настроек в журнал не выводятся.
 name: prod
 
 on:
-  push:
-    branches: [claude/website-copy-new-design-xaxsr0]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+  schedule:
+    # 17:00 UTC — 22:00 по Ташкенту
+    - cron: '0 17 * * *'
   workflow_dispatch:
     inputs:
       ref:
@@ -79,9 +82,70 @@ permissions:
   contents: read
 
 jobs:
+  # Что войдёт в релиз: слитое с прошлого удачного релиза. По расписанию
+  # нового нет — выкладки нет
+  plan:
+    if: >-
+      vars.PROD_HOST != '' && (github.event_name == 'workflow_dispatch'
+      || (vars.PROD_LIVE == 'true' && vars.PROD_NIGHTLY_RELEASE == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Что выкладывается
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          # Прошлый релиз — последний удачный запуск этого workflow
+          prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod.yml/runs?status=success&per_page=20" \
+            --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID)][0].head_sha // \"\"")
+          count=-1
+          if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+            count=$(git rev-list --count --first-parent "$prev..$head")
+          fi
+          {
+            echo "## Релиз ${head:0:12}"
+            echo
+            if [ "$count" = 0 ]; then
+              echo "С прошлого релиза (${prev:0:12}) нового нет."
+            elif [ "$count" -gt 0 ]; then
+              echo "С прошлого релиза (${prev:0:12}) — $count:"
+              echo
+              git log --first-parent --format='%H' "$prev..$head" | while read -r commit; do
+                subject=$(git log -1 --format=%s "$commit")
+                title=$(git log -1 --format=%b "$commit" | sed -n '1{/./p}')
+                if [[ "$subject" =~ ^Merge\ pull\ request\ (#[0-9]+) ]]; then
+                  echo "- ${BASH_REMATCH[1]} ${title:-$subject}"
+                else
+                  echo "- $subject"
+                fi
+              done
+            else
+              echo "Прошлый релиз не найден — выкладывается ${head:0:12}."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          release=true
+          if [ "$EVENT" = schedule ] && [ "$count" = 0 ]; then
+            release=false
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
   deploy:
-    # Слияние выкладывается сюда только после переезда (PROD_LIVE=true)
-    if: vars.PROD_HOST != '' && (github.event_name == 'workflow_dispatch' || vars.PROD_LIVE == 'true')
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

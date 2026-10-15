@@ -220,3 +220,40 @@ def index(request: HttpRequest) -> HttpResponse:
         },
         seo,
     )
+
+
+#: Отзыв на экранах входа: не короче и не длиннее этого — иначе либо
+#: пустое «Всё хорошо», либо простыня, отодвигающая форму
+_AUTH_MIN, _AUTH_MAX = 40, 320
+
+
+def auth_review(locale: str) -> dict[str, Any] | None:
+    """
+    Отзыв о площадке для левой панели входа и регистрации: свежий
+    опубликованный, с оценкой от 4 и разумной длины. Нет такого — None,
+    и блок не показывается: выдумывать отзыв нельзя.
+    """
+    rows = _rows(
+        "select p.id, p.rating, p.body, p.created_at, u.name as user_name, "
+        "co.name as company_name from platform_reviews p "
+        "left join users u on u.id = p.user_id and u.deleted_at is null "
+        "left join companies co on co.id = p.company_id and co.deleted_at is null "
+        "where p.status = 'published' and p.rating >= 4 "
+        "and char_length(p.body) between %s and %s "
+        "order by p.created_at desc, p.id desc limit 1",
+        [_AUTH_MIN, _AUTH_MAX],
+    )
+
+    if not rows:
+        return None
+
+    translations = content.Translations(locale)
+    translations.prefetch([rows[0]["body"]], user=True)
+    card = _platform_card(rows[0], translations)
+
+    return {
+        "body": card["body"],
+        "author": card["author"],
+        "initials": card["initials"],
+        "rating": card["rating"],
+    }
