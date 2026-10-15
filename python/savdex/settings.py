@@ -193,6 +193,7 @@ INSTALLED_APPS = [
     "savdex.data.apps.DataConfig",
     "savdex.system.apps.SystemConfig",
     "savdex.finance.apps.FinanceConfig",
+    "savdex.ilmora.apps.IlmoraConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

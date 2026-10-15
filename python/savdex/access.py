@@ -64,6 +64,9 @@ SECTIONS: dict[str, str] = {
     "communications": "Коммуникации",
     "pipelines": "Этапы воронки",
     "prospects": "Потенциальные клиенты",
+    # Заявки на регистрацию в ILMORA (savdex/ilmora): ФИО, телефон, ПИНФЛ
+    # или ИНН — персональные данные, поэтому не всем ролям
+    "ilmora": "ILMORA — регистрации",
     "support": "Обращения в поддержку",
     "payments": "Счета и оплаты",
     "subscriptions": "Подписки",
@@ -107,6 +110,9 @@ _MATRIX: dict[str, dict[str, str]] = {
         "support": "w",
         "content": "w", "catalogs": "w", "broadcasts": "r",
         "maintenance": "w",
+        # Заявки ILMORA — только смотреть (и выгрузить, ниже): заявка
+        # с формы не правится
+        "ilmora": "r",
     },
     "sales": {
         "companies": "r", "listings": "r", "tenders": "r",
@@ -163,6 +169,7 @@ _EXTRAS: dict[str, tuple[str, ...]] = {
         "listings.export", "listings.import", "users.export",
         "tenders.export", "tenders.import",
         "reviews.import", "prospects.import",
+        "ilmora.export",
     ),
     # Залить файл потенциальных клиентов — отделу продаж
     "sales": ("prospects.import",),
