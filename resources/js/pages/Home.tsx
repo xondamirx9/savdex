@@ -400,7 +400,7 @@ export default function Home({
         <section className="section--tight">
             <div className="container">
                 <div className="section-bar">
-                    <h2>{block('products').heading}</h2>
+                    <h2 data-reveal="wipe">{block('products').heading}</h2>
                     <Link href={routes.catalog} className="section-bar-link">
                         {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                     </Link>
@@ -423,7 +423,7 @@ export default function Home({
         <section className="section--tight">
             <div className="container">
                 <div className="section-bar">
-                    <h2>{block('requests').heading}</h2>
+                    <h2 data-reveal="wipe">{block('requests').heading}</h2>
                     <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
                         {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                     </Link>
@@ -519,12 +519,12 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('categories').heading}</h2>
+                            <h2 data-reveal="wipe">{block('categories').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.categories_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="cat-grid" data-reveal-stagger>
+                        <div className="cat-grid" data-reveal-stagger="pop">
                             {/* Ряд — шесть плиток: разделы каталога, за ними
                                 услуги, «Другое» — последним */}
                             {mainCategories.map(categoryTile)}
@@ -564,7 +564,7 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('vip').heading}</h2>
+                            <h2 data-reveal="wipe">{block('vip').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -598,12 +598,12 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('suppliers').heading}</h2>
+                            <h2 data-reveal="wipe">{block('suppliers').heading}</h2>
                             <Link href={routes.companies} className="section-bar-link">
                                 {t('home.suppliers_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="supplier-grid" data-reveal-stagger>
+                        <div className="supplier-grid" data-reveal-stagger="scale">
                             {suppliers.map((s) => (
                                 <Link key={s.slug} href={routes.company(s.slug)} className="supplier-card">
                                     <span className="supplier-head">
@@ -635,10 +635,10 @@ export default function Home({
                     <div className="container">
                         <div className="section-head-left">
                             {how.eyebrow !== '' && <span className="eyebrow">{how.eyebrow}</span>}
-                            <h2 className="t-section">{how.heading}</h2>
+                            <h2 className="t-section" data-reveal="wipe">{how.heading}</h2>
                             {how.subheading !== '' && <p className="t-lead">{how.subheading}</p>}
                         </div>
-                        <div className="flow" data-reveal-stagger>
+                        <div className="flow" data-reveal-stagger="steps">
                             {(how.items ?? []).map((step, i) => (
                                 <div key={i} className="flow-step">
                                     <div className="flow-num">{i + 1}</div>
@@ -658,12 +658,12 @@ export default function Home({
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('reviews').heading}</h2>
+                            <h2 data-reveal="wipe">{block('reviews').heading}</h2>
                             <Link href={routes.reviews} className="section-bar-link">
                                 {t('home.reviews_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="review-grid" data-reveal-stagger>
+                        <div className="review-grid" data-reveal-stagger="flip">
                             {reviews.map((r) => (
                                 <ReviewCard key={`${r.kind}-${r.id}`} review={r} />
                             ))}
@@ -679,9 +679,9 @@ export default function Home({
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{faq.heading}</h2>
+                            <h2 data-reveal="wipe">{faq.heading}</h2>
                         </div>
-                        <div className="objection-grid" data-reveal-stagger="scale">
+                        <div className="objection-grid" data-reveal-stagger="unfold">
                             {(faq.items ?? []).map((item, i) => {
                                 const Icon = FAQ_ICONS[i % FAQ_ICONS.length];
 
@@ -709,13 +709,13 @@ export default function Home({
                         <div className="row-between wrap" style={{ alignItems: 'flex-end', marginBottom: 36 }}>
                             <div className="section-head-left" style={{ marginBottom: 0 }}>
                                 {blog.eyebrow !== '' && <span className="eyebrow">{blog.eyebrow}</span>}
-                                <h2 className="t-section">{blog.heading}</h2>
+                                <h2 className="t-section" data-reveal="wipe">{blog.heading}</h2>
                             </div>
                             <Link href={routes.news} className="btn btn-secondary">
                                 {t('home.blog_all')} <ArrowRight aria-hidden className="size-4" />
                             </Link>
                         </div>
-                        <div className="news-grid" data-reveal-stagger>
+                        <div className="news-grid" data-reveal-stagger="curtain">
                             {news.map((p) => (
                                 <Link
                                     key={p.slug}
@@ -750,7 +750,7 @@ export default function Home({
             {shown('cta') && (
                 <section className="section--tight">
                     <div className="container">
-                        <div className="cta-band">
+                        <div className="cta-band" data-reveal="zoom">
                             <h2 className="t-h1">{cta.heading}</h2>
                             {cta.subheading !== '' && <p className="t-lead">{cta.subheading}</p>}
                             <Link
