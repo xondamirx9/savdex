@@ -21,7 +21,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
-from savdex.web import inertia, locales
+from savdex.web import captcha, inertia, locales
 from savdex.web.cabinet import _redirect, _rows, _seo, _store, company_of, page
 from savdex.web.phpquery import laravel_input, text
 from savdex.web.request import context
@@ -104,7 +104,7 @@ def login(request: HttpRequest) -> HttpResponse:
     return inertia.render(
         ctx,
         "auth/Login",
-        {"status": _flash(ctx, "status")},
+        {"status": _flash(ctx, "status"), "captcha": captcha.enabled()},
         _seo(ctx).title(ctx.t("auth.login_title")),
     )
 
@@ -164,6 +164,7 @@ def register(request: HttpRequest) -> HttpResponse:
             "phone": phone,
             # Страна — первым полем: от неё зависит, можно ли пропустить код,
             # и код страны в номере телефона
+            "captcha": captcha.enabled(),
             "countries": [
                 {
                     "id": c["id"],

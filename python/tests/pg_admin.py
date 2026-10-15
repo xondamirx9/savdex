@@ -52,6 +52,9 @@ APP_KEY = "base64:" + base64.b64encode(KEY).decode()
     # Клиент Django в проверках ходит по http: с APP_ENV=production сайт
     # иначе отвечал бы на всё 301 на https:// (settings.FORCE_HTTPS)
     "SAVDEX_FORCE_HTTPS": "false",
+    # Капча (savdex/web/captcha.py) формам входа и регистрации в проверках
+    # не нужна; tests/test_captcha.py включает её через env запроса
+    "CAPTCHA_ENABLED": "false",
 }
 
 #: Django в отдельном процессе: входит по пропуску и выполняет шаги.

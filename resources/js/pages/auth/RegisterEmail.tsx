@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { Mail, Smartphone } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
@@ -28,6 +29,7 @@ export default function RegisterEmail({
     phoneAvailable = false,
     method: initialMethod = null,
     phone = null,
+    captcha = false,
 }: {
     email?: string | null;
     countryId?: number | null;
@@ -38,6 +40,8 @@ export default function RegisterEmail({
     method?: 'email' | 'phone' | null;
     /** Номер, на который код уже уходил («Изменить номер» со второго шага) */
     phone?: string | null;
+    /** Капча из картинок — и для почты, и для телефона (SMS платные) */
+    captcha?: boolean;
 }) {
     const [method, setMethod] = useState<'email' | 'phone' | null>(phoneAvailable ? initialMethod : 'email');
     const dialOf = (id: number | null) => countries.find((c) => c.id === id)?.phone_code ?? null;
@@ -45,16 +49,22 @@ export default function RegisterEmail({
         email: string;
         phone: string;
         country_id: number | null;
+        captcha: number[];
     }>({
         email: email ?? '',
         phone: phone ?? (dialOf(countryId) ? `${dialOf(countryId)} ` : ''),
         country_id: countryId,
+        captcha: [],
     });
     const byPhone = method === 'phone';
+    // Задание капчи одноразовое: после каждой отправки — новое
+    const [captchaKey, setCaptchaKey] = useState(0);
 
     function submit(e: FormEvent) {
         e.preventDefault();
-        post(byPhone ? routes.registerPhone : routes.registerEmail);
+        post(byPhone ? routes.registerPhone : routes.registerEmail, {
+            onFinish: () => setCaptchaKey((k) => k + 1),
+        });
     }
 
     return (
@@ -190,6 +200,19 @@ export default function RegisterEmail({
                             }}
                             error={errors.email}
                             hint={t('auth.reg_email_hint')}
+                        />
+                    )}
+
+                    {captcha && (
+                        <CaptchaGrid
+                            purpose="register"
+                            value={data.captcha}
+                            onChange={(cells) => {
+                                setData('captcha', cells);
+                                if (errors.captcha && cells.length > 0) clearErrors('captcha');
+                            }}
+                            error={errors.captcha}
+                            reloadKey={captchaKey}
                         />
                     )}
 

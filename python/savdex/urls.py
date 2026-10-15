@@ -26,6 +26,7 @@ from savdex.web import (
     billing,
     billing_actions,
     cabinet,
+    captcha,
     card_actions,
     catalog,
     chat_actions,
@@ -309,6 +310,8 @@ urlpatterns = [
         name="login",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?logout$", auth_actions.logout, name="logout"),
+    # Капча входа и регистрации: новое задание (savdex/web/captcha.py)
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?captcha$", captcha.challenge, name="captcha"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register$",
         auth_actions.either(auth.register, auth_actions.register),

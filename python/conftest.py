@@ -35,3 +35,12 @@ def django_db_modify_db_settings() -> None:
     # продолжит ходить в PostgreSQL по прежнему адресу
     connections.settings = connections.configure_settings(settings.DATABASES)
     del connections["default"]
+
+
+@pytest.fixture(autouse=True)
+def _без_капчи(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Капча (savdex/web/captcha.py) в проверках форм входа и регистрации
+    не нужна; tests/test_captcha.py включает её сам.
+    """
+    monkeypatch.setenv("CAPTCHA_ENABLED", "false")

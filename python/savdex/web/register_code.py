@@ -32,7 +32,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import analytics, code_lock, guard, inertia, mail, sms
+from savdex.web import analytics, captcha, code_lock, guard, inertia, mail, sms
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_COUNTRY,
@@ -197,6 +197,10 @@ def send_code(request: HttpRequest) -> HttpResponse:
 
     if errors:
         return invalid(ctx, errors)
+
+    # Капча — до письма: без неё бот рассылал бы коды на чужие адреса
+    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     # Пять неверных кодов на этот адрес — 15 минут и нового кода нет
     if (locked := code_lock.locked_message(ctx, code_lock.email(email))) is not None:
@@ -443,6 +447,10 @@ def send_phone(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, errors)
 
     assert phone is not None
+
+    # Капча — до SMS: каждое SMS платное, без неё бот гонял бы их на чужие номера
+    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     if (failed := _send_sms(ctx, phone)) is not None:
         return invalid(ctx, {"phone": [failed]})

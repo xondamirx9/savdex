@@ -2741,3 +2741,63 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
   .maint,.maint-glow,.maint-icon svg,.maint-dot,.maint-progress span{animation:none}
   .maint-progress span{left:30%}
 }
+
+/* ============================================================
+   Экраны входа и регистрации — тёмные (AuthLayout, вариант C)
+
+   Цвета форм переопределены здесь же переменными: и токены @theme
+   (--color-*), которыми пользуются утилиты Tailwind, и мост
+   savdex-base (--surface, --text…), — мост считается на :root, и без
+   повтора здесь поля остались бы белыми.
+   ============================================================ */
+.auth-dark{
+  --color-canvas:#070d1c; --color-surface:#0b1428; --color-ink:#e8edf7; --color-muted:#9aa4b8;
+  --color-line:#26314a; --color-line-strong:#34456b;
+  --color-primary-50:#13244d; --color-primary-100:#1d3466;
+  --color-success-bg:#0e2a1c; --color-success-text:#4ade80;
+  --color-warning-bg:#33260a; --color-danger-bg:#3b1219; --color-danger:#f87171;
+  --bg:#070d1c; --surface:#0b1428; --white:#0b1428; --text:#e8edf7; --text-muted:#9aa4b8;
+  --border:#26314a; --border-strong:#34456b; --primary-50:#13244d; --primary-100:#1d3466;
+  --success-bg:#0e2a1c; --success-text:#4ade80; --warning-bg:#33260a; --danger-bg:#3b1219; --danger:#f87171;
+  min-height:100vh; background:#070d1c; color:#e8edf7; color-scheme:dark;
+}
+/* Ссылки на тёмном — в app.css вне слоёв: утилиты Tailwind
+   (text-primary-700) стоят в слое сильнее, чем этот файл */
+.auth-dark .select-option[aria-selected="true"], .auth-dark .select-option-mark{color:#93c5fd}
+
+.auth-shell{display:grid;min-height:100vh;max-width:1440px;margin:0 auto;
+  grid-template-columns:1fr; padding:24px 20px}
+@media(min-width:1024px){
+  .auth-shell{grid-template-columns:minmax(0,1fr) 480px;gap:72px;padding:48px 72px;align-items:center}
+  .auth-shell--wide{grid-template-columns:minmax(0,1fr) 620px;gap:56px}
+}
+
+.auth-aside{display:none}
+@media(min-width:1024px){
+  .auth-aside{display:flex;flex-direction:column;align-self:stretch;gap:40px}
+}
+.auth-logo{display:inline-flex;align-self:flex-start}
+.auth-logo--mobile{margin-bottom:24px}
+@media(min-width:1024px){.auth-logo--mobile{display:none}}
+.auth-pitch{margin:auto 0;display:flex;flex-direction:column;gap:28px;max-width:600px}
+.auth-hero{font-size:clamp(36px,3.6vw,54px);line-height:1.08;font-weight:800;color:#fff;letter-spacing:-.01em}
+.auth-hero span{color:#60a5fa}
+.auth-benefits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px}
+.auth-benefits li{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;color:#b7c3d9}
+.auth-benefits svg{flex-shrink:0;margin-top:3px;color:#60a5fa}
+.auth-review{margin:0;padding:22px 24px;border-radius:18px;background:#0f1830;border:1px solid #1f2b47;
+  display:flex;flex-direction:column;gap:12px}
+.auth-stars{display:flex;gap:2px;color:#34456b}
+.auth-stars .is-on{color:#fbbf24;fill:#fbbf24}
+.auth-review blockquote{font-size:16px;line-height:1.6;color:#dbe4f3}
+.auth-review figcaption{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#fff}
+.auth-avatar{width:36px;height:36px;border-radius:50%;background:#1f2b47;color:#93c5fd;display:grid;place-items:center;font-size:13px;font-weight:700}
+.auth-copy{font-size:13px;color:#64748b}
+
+.auth-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.auth-card{width:100%;max-width:480px;margin:0 auto;box-sizing:border-box;padding:32px 24px;border-radius:24px;
+  background:#0f1830;border:1px solid #1f2b47;box-shadow:0 30px 80px rgba(2,6,23,.45)}
+.auth-shell--wide .auth-card{max-width:620px}
+@media(min-width:640px){.auth-card{padding:36px}}
+.auth-title{font-size:28px;line-height:1.2;font-weight:800;color:#fff}
+.auth-sub{margin-top:8px;font-size:14px;line-height:1.55;color:#9aa4b8}

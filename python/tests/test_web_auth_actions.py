@@ -92,6 +92,7 @@ def вход(
     body: dict[str, Any],
     payload: dict[str, Any] | None = None,
     cookies: dict[str, str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Форма Django: ответ, новая сессия из куки ответа, кука «запомнить» и база."""
     подготовка()
@@ -102,6 +103,7 @@ def вход(
         {СЕССИЯ: кука(СЕССИЯ, SID), **(cookies or {})},
         {**inertia(), "Referer": сайт + "/login", "User-Agent": "savdex-parity"},
         method="POST",
+        env=env,
         body=json.dumps(body),
         content_type="application/json",
     )

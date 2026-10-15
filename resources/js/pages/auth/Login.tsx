@@ -1,22 +1,31 @@
 import { useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { Alert, Button, PasswordInput, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 
-export default function Login({ status }: { status?: string }) {
+export default function Login({ status, captcha = false }: { status?: string; captcha?: boolean }) {
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
         remember: false as boolean,
+        captcha: [] as number[],
     });
+    // Задание капчи одноразовое: после каждой отправки — новое
+    const [captchaKey, setCaptchaKey] = useState(0);
 
     function submit(e: FormEvent) {
         e.preventDefault();
         // Пароль не должен остаться в памяти формы после отправки
-        post(routes.login, { onFinish: () => setData('password', '') });
+        post(routes.login, {
+            onFinish: () => {
+                setData('password', '');
+                setCaptchaKey((k) => k + 1);
+            },
+        });
     }
 
     return (
@@ -86,6 +95,16 @@ export default function Login({ status }: { status?: string }) {
                     />
                     {t('auth.remember_me')}
                 </label>
+
+                {captcha && (
+                    <CaptchaGrid
+                        purpose="login"
+                        value={data.captcha}
+                        onChange={(cells) => setData('captcha', cells)}
+                        error={errors.captcha}
+                        reloadKey={captchaKey}
+                    />
+                )}
 
                 <Button type="submit" size="lg" block loading={processing}>
                     {t('auth.login_button')}

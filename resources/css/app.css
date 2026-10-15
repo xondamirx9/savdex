@@ -234,3 +234,15 @@
         margin-bottom: 24px;
     }
 }
+
+/* Экраны входа тёмные (.auth-dark, savdex-components.css): ссылки
+   и «синий» текст светлее — #1a56db на тёмном не читается. Вне слоёв,
+   иначе утилита text-primary-700 из слоя utilities перебивает */
+.auth-dark a:not(.btn),
+.auth-dark .text-primary-700 {
+    color: #93c5fd;
+}
+.auth-dark a:not(.btn):hover {
+    color: #bfdbfe;
+}
+
