@@ -6,35 +6,13 @@
 # на Render означает несостоявшийся деплой. Поэтому образ собирается
 # здесь, до слияния, и проверяется не «собралось», а «работает в том,
 # что уедет на сервер». С этапа 8 PHP в образе нет: всё — Django.
+#
+# Часть общей проверки CI (.github/workflows/ci.yml), сам по себе не
+# запускается.
 name: docker
 
 on:
-  push:
-    paths:
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'docker/**'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - 'resources/**'
-      - 'public/**'
-      - 'python/pyproject.toml'
-      - 'python/uv.lock'
-      - 'python/savdex/**'
-      - '.github/workflows/docker.yml'
-  pull_request:
-    paths:
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'docker/**'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - 'resources/**'
-      - 'public/**'
-      - 'python/pyproject.toml'
-      - 'python/uv.lock'
-      - 'python/savdex/**'
-      - '.github/workflows/docker.yml'
+  workflow_call:
 
 jobs:
   image:

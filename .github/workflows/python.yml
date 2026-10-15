@@ -1,4 +1,5 @@
-# Проверки Python-половины площадки.
+# Проверки Python-половины площадки — часть общей проверки CI
+# (.github/workflows/ci.yml), сам по себе не запускается.
 #
 # Заведён вместе с каркасом Django (этап 0 переноса,
 # docs/migration-to-python.md).
@@ -12,21 +13,51 @@
 #
 # PHP не нужен (с переводом тестов на Python): схему проверочной базы
 # строит снимок savdex/bootstrap, данные — фабрики tests/factories.py.
+#
+# Тесты идут в четыре потока, у каждого своя машина и своя база: файлы
+# раскладывает .github/scripts/shards.py, каждый — ровно в один поток.
+# Одним потоком было 30–45 минут.
 name: python
 
 on:
-  push:
-    paths:
-      - 'python/**'
-      - '.github/workflows/python.yml'
+  workflow_call:
 
 defaults:
   run:
     working-directory: python
 
 jobs:
-  checks:
+  # Порядок нарочный: разбор кода быстрее проверки типов. Тесты идут
+  # параллельно, не дожидаясь: ждать их всё равно дольше всего
+  lint:
+    name: разбор и типы
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups
+
+      - name: Разбор кода
+        run: uv run ruff check .
+
+      - name: Оформление
+        run: uv run ruff format --check .
+
+      - name: Типы
+        run: uv run mypy savdex
+
+  tests:
+    name: тесты ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    strategy:
+      # Упавший поток не останавливает остальные: видно все ошибки сразу
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -54,19 +85,12 @@ jobs:
 
       - run: uv sync --all-groups
 
-      # Порядок нарочный: разбор кода быстрее проверки типов, а та
-      # быстрее тестов. Ошибка находится раньше и дешевле
-      - name: Разбор кода
-        run: uv run ruff check .
-
-      - name: Оформление
-        run: uv run ruff format --check .
-
-      - name: Типы
-        run: uv run mypy savdex
-
       - name: Тесты
-        run: uv run pytest -q
+        run: |
+          files=$(python3 ../.github/scripts/shards.py "${{ matrix.shard }}" 4)
+          echo "Файлов в потоке: $(wc -w <<< "$files")"
+          # shellcheck disable=SC2086
+          uv run pytest -q $files
         env:
           SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
           SAVDEX_PARITY_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
