@@ -51,7 +51,7 @@ function PhoneCode({ phone, status }: { phone: string; status?: string | null })
 
     return (
         <AuthLayout title={t('auth.register_title')} heading={t('auth.reg_sms_heading')}>
-            <RegisterSteps current={2} />
+            <RegisterSteps current={2} method="phone" />
 
             <div className="space-y-5">
                 <div className="bg-primary-50 rounded-card flex gap-3.5 p-4">
@@ -146,7 +146,7 @@ function EmailCode({
 
     return (
         <AuthLayout title={t('auth.register_title')} heading={t('auth.reg_code_heading')}>
-            <RegisterSteps current={2} />
+            <RegisterSteps current={2} method="email" />
 
             <div className="space-y-5">
                 <div className="bg-primary-50 rounded-card flex gap-3.5 p-4">

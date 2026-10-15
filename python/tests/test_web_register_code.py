@@ -572,8 +572,12 @@ def _открыть(сайт: str, path: str, register: dict[str, Any], env: dic
 @pytest.mark.parametrize(
     ("path", "ключи", "способ", "есть_телефон"),
     [
-        ("/register", True, "email", True),
+        # Только пришёл — способ не выбран: сначала кнопки «Почта» и «Телефон»
+        ("/register", True, None, True),
         ("/register?method=phone", True, "phone", True),
+        ("/register?method=email", True, "email", True),
+        # Без ключей Telnyx выбора нет — сразу почта
+        ("/register", False, "email", False),
         # Без ключей Telnyx вкладки «Телефон» нет
         ("/register?method=phone", False, "email", False),
     ],
