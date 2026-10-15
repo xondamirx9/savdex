@@ -5,6 +5,10 @@
 #
 #   backup.sh db      копия базы: pg_dump, проверка, шифрование gpg —
 #                     <префикс>/db/savdex-ГГГГ-ММ-ДД.dump.gpg, 90 дней
+#   backup.sh db МЕТКА  то же, но отдельным файлом со временем и меткой —
+#                     savdex-ГГГГ-ММ-ДД-ЧЧММ-МЕТКА.dump.gpg; ночную копию
+#                     того же дня не заменяет. Так снимает копию выкладка
+#                     на боевые машины перед схемой базы (метка release)
 #   backup.sh files   загруженные файлы: только новые и изменённые,
 #                     зашифрованы rclone crypt — <префикс>/files/
 #
@@ -28,6 +32,11 @@ RCLONE_IMAGE=rclone/rclone:1.68
 KEEP_DAYS=90
 
 what=${1:?db или files}
+label=${2:-}
+if [ -n "$label" ] && ! [[ "$label" =~ ^[a-z0-9-]{1,32}$ ]]; then
+    echo "Метка копии — латиница, цифры и дефис: «$label» не подходит" >&2
+    exit 1
+fi
 
 if [ ! -s "$ENV_DIR/backup.env" ]; then
     echo "$(date -Iseconds) ОШИБКА: нет $ENV_DIR/backup.env — копия не снята." >&2
@@ -70,7 +79,11 @@ mkdir -p "$WORK"
 case "$what" in
     db)
         stamp=$(date +%Y-%m-%d)
-        plain="$WORK/savdex.dump"
+        if [ -n "$label" ]; then
+            stamp="$(date +%Y-%m-%d-%H%M)-$label"
+        fi
+        # Своё имя у каждой копии: ночная и копия перед релизом могут совпасть по времени
+        plain="$WORK/savdex-$stamp.dump"
         file="savdex-$stamp.dump.gpg"
         trap 'rm -f "$plain"' EXIT
         compose=(docker compose -f "$SRC/deploy/prod/db/compose.yml" --env-file "$ENV_DIR/compose.env")
