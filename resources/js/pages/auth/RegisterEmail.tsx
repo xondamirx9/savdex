@@ -3,6 +3,7 @@ import { Mail, Smartphone } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
+import { IlmoraRegisterLink } from '@/components/ilmora/IlmoraRegisterLink';
 import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
 import { Link } from '@/components/ui/Link';
@@ -84,6 +85,7 @@ export default function RegisterEmail({
                       ? 'auth.reg_phone_subheading'
                       : 'auth.reg_email_subheading',
             )}
+            aside={<IlmoraRegisterLink />}
         >
             <RegisterSteps current={1} method={method} />
 

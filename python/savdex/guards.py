@@ -216,6 +216,10 @@ OWNED_TABLES: frozenset[str] = frozenset(
         # События продукта для аналитики (ТЗ-03, миграция 2026_10_21_100000,
         # savdex/product_events.py)
         "product_events",
+        # Заявки на регистрацию в ILMORA с формы Savdex (миграция
+        # 2026_10_26_100000, savdex/ilmora): таблица появилась после ухода
+        # Laravel, ведёт её только Django
+        "ilmora_registrations",
     }
 )
 

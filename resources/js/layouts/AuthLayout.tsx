@@ -29,6 +29,7 @@ export function AuthLayout({
     title,
     heading,
     subheading,
+    aside,
     children,
 }: {
     /**
@@ -40,6 +41,12 @@ export function AuthLayout({
     title: string;
     heading: string;
     subheading?: string;
+    /**
+     * Своё под аргументами левой панели — только у той страницы, что его
+     * передала (кнопка ILMORA на первом шаге регистрации, но не на входе).
+     * На телефоне панели нет — то же стоит под формой.
+     */
+    aside?: ReactNode;
     children: ReactNode;
 }) {
     /*
@@ -82,6 +89,8 @@ export function AuthLayout({
                                     </li>
                                 ))}
                             </ul>
+
+                            {aside && <div className="auth-aside-extra">{aside}</div>}
 
                             {/* Настоящий опубликованный отзыв о площадке; нет такого —
                                 блока нет, выдумывать отзыв нельзя */}
@@ -127,6 +136,8 @@ export function AuthLayout({
 
                             <div className="mt-6">{children}</div>
                         </div>
+
+                        {aside && <div className="auth-aside-extra auth-aside-extra--mobile">{aside}</div>}
                     </main>
                 </div>
             </div>
