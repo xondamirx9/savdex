@@ -158,10 +158,12 @@ def test_сброс_пароля_токен_и_почта(сайт):
     assert props["token"] == "tok-1" and props["email"] == "a@b.uz"
 
 
-def test_способы_восстановления(сайт):
+def test_восстановление_начинается_с_почты_или_телефона(сайт):
     ответ, _ = зайти(сайт, "/forgot-password", сессия())
+    props = пропсы(ответ)
 
-    assert пропсы(ответ)["channels"] == ["mail"]
+    # Способ выбирается по аккаунту — после шага «Почта или телефон»
+    assert (props["step"], props["options"], props["sentTo"]) == ("find", [], None)
 
 
 @pytest.mark.parametrize("path", ["/login", "/forgot-password"])

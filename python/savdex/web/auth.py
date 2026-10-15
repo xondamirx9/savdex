@@ -21,7 +21,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
-from savdex.web import inertia, locales
+from savdex.web import captcha, inertia, locales
 from savdex.web.cabinet import _redirect, _rows, _seo, _store, company_of, page
 from savdex.web.phpquery import laravel_input, text
 from savdex.web.request import context
@@ -104,7 +104,7 @@ def login(request: HttpRequest) -> HttpResponse:
     return inertia.render(
         ctx,
         "auth/Login",
-        {"status": _flash(ctx, "status")},
+        {"status": _flash(ctx, "status"), "captcha": captcha.enabled()},
         _seo(ctx).title(ctx.t("auth.login_title")),
     )
 
@@ -133,12 +133,21 @@ def register(request: HttpRequest) -> HttpResponse:
                 locales.url(ctx.root, "/cabinet/billing?plan=" + plan, ctx.locale),
             )
 
+    from savdex.web import sms
     from savdex.web.directory import listed_countries
 
-    # «Изменить почту» со второго шага — адрес и страна уже в полях
+    # «Изменить почту» или «Изменить номер» со второго шага — всё уже в полях
     store = _store(ctx)
     email = store.get("register.email") if store is not None else None
     country_id = store.get("register.country_id") if store is not None else None
+    phone = store.get("register.sms_phone") if store is not None else None
+    method = store.get("register.method") if store is not None else None
+
+    # Ссылка «Зарегистрируйтесь по телефону» со второго шага — ?method=phone
+    if _query(ctx, "method") in ("email", "phone"):
+        method = _query(ctx, "method")
+
+    phones = {r["id"]: r["phone_code"] for r in _rows("select id, phone_code from countries")}
 
     return inertia.render(
         ctx,
@@ -146,9 +155,23 @@ def register(request: HttpRequest) -> HttpResponse:
         {
             "email": email,
             "countryId": country_id,
-            # Страна — первым полем: от неё зависит, можно ли пропустить код
+            # Способ регистрации: почта или телефон (код по SMS, когда Telnyx настроен)
+            "phoneAvailable": sms.configured(),
+            # Способ, если его уже выбрали (вернулись со второго шага, ссылка
+            # «Зарегистрируйтесь по телефону»); None — только пришёл: страница
+            # сначала спрашивает «почта или телефон». Без SMS выбора нет — почта
+            "method": _register_method(method, email, phone, sms.configured()),
+            "phone": phone,
+            # Страна — первым полем: от неё зависит, можно ли пропустить код,
+            # и код страны в номере телефона
+            "captcha": captcha.enabled(),
             "countries": [
-                {"id": c["id"], "name": c["name"], "code": c["code"]}
+                {
+                    "id": c["id"],
+                    "name": c["name"],
+                    "code": c["code"],
+                    "phone_code": phones.get(c["id"]),
+                }
                 for c in listed_countries(ctx.locale)
             ],
         },
@@ -179,6 +202,57 @@ def reset_channels() -> list[str]:
     ]
 
 
+def _mask_email(email: str) -> str:
+    """aziz@mail.ru → a•••@mail.ru: человек узнаёт свой адрес, чужой — нет."""
+    name, _, domain = email.partition("@")
+
+    return (name[:1] + "•••@" + domain) if domain else email
+
+
+def _mask_phone(phone: str) -> str:
+    """+998901234567 → +998•••4567."""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+
+    return f"+{digits[:3]}•••{digits[-4:]}" if len(digits) >= 8 else phone
+
+
+def _reset_step(ctx: Context) -> dict[str, Any]:
+    """
+    Шаг «Забыли пароль»: find — почта или телефон; choose — выбор способа
+    (подтверждены и почта, и телефон); code — код из SMS.
+    """
+    from savdex.web import sms
+    from savdex.web.account_actions import _found, reset_options
+
+    store = _store(ctx)
+    sent = store.get("reset.sms_phone") if store is not None else None
+
+    if isinstance(sent, str) and sent != "":
+        return {"step": "code", "sentTo": _mask_phone(sent), "options": []}
+
+    user = _found(ctx) if store is not None else None
+    options = reset_options(user) if user is not None else []
+
+    if user is None or len(options) < 2:
+        return {"step": "find", "sentTo": None, "options": []}
+
+    phone = sms.normalize(str(user["phone"] or "")) or ""
+
+    return {
+        "step": "choose",
+        "sentTo": None,
+        "options": [
+            {
+                "channel": channel,
+                "to": _mask_email(str(user["email"]))
+                if channel == "mail"
+                else ("" if channel == "telegram" else _mask_phone(phone)),
+            }
+            for channel in options
+        ],
+    }
+
+
 def forgot_password(request: HttpRequest) -> HttpResponse:
     """PasswordResetController::request."""
     ctx = guest(request)
@@ -189,7 +263,11 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
     return inertia.render(
         ctx,
         "auth/ForgotPassword",
-        {"status": _flash(ctx, "status"), "channels": reset_channels()},
+        {
+            "status": _flash(ctx, "status"),
+            # Почта или телефон → способ по учётке → письмо или код из SMS
+            **_reset_step(ctx),
+        },
         _seo(ctx),
     )
 
@@ -414,3 +492,19 @@ def _blocked_reason(ctx: Context) -> str | None:
         return ctx.t("messages.review.blocked")
 
     return None
+
+
+def _register_method(
+    method: object, email: object, phone: object, phone_available: bool
+) -> str | None:
+    """Способ регистрации на первом шаге: email, phone или None — ещё не выбран."""
+    if not phone_available:
+        return "email"
+
+    if method in ("email", "phone"):
+        return str(method)
+
+    if phone:
+        return "phone"
+
+    return "email" if email else None

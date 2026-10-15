@@ -15,11 +15,12 @@ from __future__ import annotations
 import os
 import secrets
 import string
+from typing import Any
 
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_cache
-from savdex.web import eloquent, locales, ui
+from savdex.web import code_lock, eloquent, locales, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, previous
@@ -78,6 +79,114 @@ def profile(request: HttpRequest) -> HttpResponse:
         response.status_code = 303
 
     return response
+
+
+# ── Подтверждение телефона по SMS (Telnyx, savdex/web/sms.py) ─────
+
+#: Номер, на который из профиля ушёл код
+SESSION_PHONE = "settings.sms_phone"
+
+
+def _profile_phone(user: dict[str, Any]) -> str | None:
+    """Номер профиля в международном виде; без «+» — с кодом страны компании."""
+    from savdex.web import sms
+    from savdex.web.register_code import _dial_code
+
+    country = _rows("select country_id from companies where id = %s", [user["company_id"] or 0])
+
+    return sms.normalize(
+        str(user["phone"] or ""), _dial_code(country[0]["country_id"] if country else None)
+    )
+
+
+@form()
+def phone_send(request: HttpRequest) -> HttpResponse:
+    """«Подтвердить по SMS»: код на номер профиля. Каждое SMS платное."""
+    from savdex.web import sms
+
+    ctx = action(request, throttle=5, throttle_minutes=10, throttle_prefix="settings-sms")
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+
+    if user["phone_verified_at"] is not None or not sms.configured():
+        return back(ctx)
+
+    phone = _profile_phone(user)
+
+    if phone is None:
+        return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
+
+    if sms.verified_elsewhere(phone, user["id"]):
+        return invalid(ctx, {"phone": [ctx.t("messages.register.phone_taken")]})
+
+    if (locked := code_lock.locked_message(ctx, code_lock.phone(phone))) is not None:
+        return invalid(ctx, {"phone": [locked]})
+
+    if sms.daily_limit_reached(phone):
+        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_limit")]})
+
+    if not sms.send_code(phone):
+        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_failed")]})
+
+    _store(ctx).put(SESSION_PHONE, phone)
+    flash(ctx, "success", ctx.t("messages.register.sms_sent", phone=phone))
+
+    return back(ctx)
+
+
+@form()
+def phone_confirm(request: HttpRequest) -> HttpResponse:
+    """
+    Код из SMS верный — телефон подтверждён. Код пропускали при регистрации —
+    метка «Не подтверждено» и лимит снимаются: человек подтвердил номер.
+    """
+    from savdex.web import sms
+    from savdex.web.account_actions import confirm_skipped
+
+    ctx = action(request, throttle=10, throttle_minutes=1, throttle_prefix="settings-sms-code")
+    assert ctx.user is not None
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+    store = _store(ctx)
+    phone = store.get(SESSION_PHONE)
+
+    if user["phone_verified_at"] is not None:
+        return back(ctx)
+
+    # Код уходил на номер, который с тех пор сменили в профиле, — заново
+    if not isinstance(phone, str) or phone != _profile_phone(user):
+        return invalid(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
+
+    code = str(input_of(request).get("sms_code") or "").strip()
+
+    if code == "":
+        return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
+
+    target = code_lock.phone(phone)
+
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return invalid(ctx, {"sms_code": [locked]})
+
+    if not sms.check_code(phone, code):
+        message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")
+
+        return invalid(ctx, {"sms_code": [message]})
+
+    if sms.verified_elsewhere(phone, user["id"]):
+        return invalid(ctx, {"sms_code": [ctx.t("messages.register.phone_taken")]})
+
+    eloquent.save(
+        ctx,
+        "users",
+        user,
+        {"phone": phone, "phone_verified_at": eloquent.now()},
+        section="users",
+        model="User",
+    )
+    confirm_skipped(user["id"])
+    store.forget(SESSION_PHONE)
+    flash(ctx, "success", ctx.t("messages.settings.phone_confirmed"))
+
+    return back(ctx)
 
 
 # ── Telegram ─────────────────────────────────────────────────────────

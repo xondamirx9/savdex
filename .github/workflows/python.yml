@@ -33,9 +33,9 @@ jobs:
     name: разбор и типы
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -77,20 +77,26 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
       - run: uv sync --all-groups
 
       - name: Тесты
+        # Упавшие тесты — ещё и аннотациями: видны на странице запуска без журнала
         run: |
+          set -o pipefail
           files=$(python3 ../.github/scripts/shards.py "${{ matrix.shard }}" 4)
           echo "Файлов в потоке: $(wc -w <<< "$files")"
           # shellcheck disable=SC2086
-          uv run pytest -q $files
+          uv run pytest -q -rfE $files 2>&1 | tee /tmp/pytest.txt || {
+            status=$?
+            grep -E '^(FAILED|ERROR) ' /tmp/pytest.txt | head -30 | sed 's/^/::error title=Тест::/'
+            exit $status
+          }
         env:
           SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
           SAVDEX_PARITY_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test

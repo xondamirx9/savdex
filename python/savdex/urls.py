@@ -26,6 +26,7 @@ from savdex.web import (
     billing,
     billing_actions,
     cabinet,
+    captcha,
     card_actions,
     catalog,
     chat_actions,
@@ -309,6 +310,8 @@ urlpatterns = [
         name="login",
     ),
     re_path(r"^(?:(?:uz|en|zh|tr)/)?logout$", auth_actions.logout, name="logout"),
+    # Капча входа и регистрации: новое задание (savdex/web/captcha.py)
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?captcha$", captcha.challenge, name="captcha"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register$",
         auth_actions.either(auth.register, auth_actions.register),
@@ -336,6 +339,11 @@ urlpatterns = [
         name="register.code.skip",
     ),
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/phone$",
+        register_code.send_phone,
+        name="register.phone",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register/sms$",
         register_code.send_sms,
         name="register.sms",
@@ -356,6 +364,36 @@ urlpatterns = [
         name="password.request",
     ),
     # Пароль и почта: формы (этап 5, шаг 46, группа forms)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/find$",
+        account_actions.forgot_find,
+        name="password.find",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/send$",
+        account_actions.forgot_send,
+        name="password.send",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/sms/resend$",
+        account_actions.forgot_sms_resend,
+        name="password.sms.resend",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/restart$",
+        account_actions.forgot_restart,
+        name="password.restart",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/sms$",
+        account_actions.forgot_sms,
+        name="password.sms",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/sms/confirm$",
+        account_actions.forgot_sms_confirm,
+        name="password.sms.confirm",
+    ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?reset-password$",
         account_actions.reset_password,
@@ -464,6 +502,16 @@ urlpatterns = [
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/profile$",
         settings_actions.profile,
         name="cabinet.settings.profile",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/phone/send$",
+        settings_actions.phone_send,
+        name="cabinet.settings.phone.send",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/phone/confirm$",
+        settings_actions.phone_confirm,
+        name="cabinet.settings.phone.confirm",
     ),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/telegram$",

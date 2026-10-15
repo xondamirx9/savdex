@@ -21,11 +21,13 @@ import hashlib
 import logging
 import os
 import re
+from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from savdex import laravel_cache
+from savdex.web import code_lock
 
 log = logging.getLogger("savdex.sms")
 
@@ -67,6 +69,53 @@ def normalize(raw: str, dial_code: str | None = None) -> str | None:
     return "+" + digits if 8 <= len(digits) <= 15 else None
 
 
+def verified_elsewhere(phone: str, user_id: int | None = None) -> bool:
+    """
+    Номер уже подтверждён другой учёткой (сравнение по цифрам: в учётках
+    номер мог быть вписан с пробелами и скобками). Один подтверждённый
+    номер — одна учётка: по нему восстанавливают пароль. Удалённая учётка
+    номер не держит: человек может зарегистрироваться с ним заново.
+    """
+    from savdex.web.cabinet import _rows
+
+    digits = re.sub(r"\D+", "", phone)
+
+    return bool(
+        _rows(
+            "select 1 from users where phone_verified_at is not null and deleted_at is null"
+            " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = %s"
+            " and id <> %s limit 1",
+            [digits, user_id or 0],
+        )
+    )
+
+
+def verified_user(raw: str) -> dict[str, Any] | None:
+    """
+    Учётка с этим подтверждённым номером — для входа и «Забыли пароль».
+    Сначала номер целиком (с кодом страны); не нашёлся — без кода страны
+    («90 123 45 67»): по концу номера, если такая учётка одна.
+    """
+    from savdex.web.cabinet import _rows
+
+    digits = re.sub(r"\D+", "", raw or "")
+
+    if len(digits) < 7:
+        return None
+
+    query = (
+        "select * from users where phone_verified_at is not null and deleted_at is null"
+        " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') "
+    )
+    rows = _rows(query + "= %s order by id limit 1", [digits])
+
+    if not rows and len(digits) >= 9:
+        rows = _rows(query + "like %s order by id limit 2", ["%" + digits])
+        rows = rows if len(rows) == 1 else []
+
+    return rows[0] if rows else None
+
+
 def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_env('TELNYX_API_KEY')}"}
 
@@ -83,6 +132,11 @@ def _sent_today(phone: str) -> int:
     value = laravel_cache.get(_daily_key(phone), any_store=True)
 
     return value if isinstance(value, int) else 0
+
+
+def locked_minutes(phone: str) -> int:
+    """Пять неверных кодов на номер — минуты блокировки (code_lock); 0 — нет."""
+    return code_lock.locked_minutes(code_lock.phone(phone))
 
 
 def daily_limit_reached(phone: str) -> bool:
@@ -118,10 +172,29 @@ def send_code(phone: str) -> bool:
 
 
 def check_code(phone: str, code: str) -> bool:
-    """POST /verifications/by_phone_number/{номер}/actions/verify: код верный — True."""
+    """
+    POST /verifications/by_phone_number/{номер}/actions/verify: код верный —
+    True. Неверный засчитывается номеру (code_lock): после пяти — 15 минут
+    Telnyx уже не спрашиваем.
+    """
     if not configured() or not re.fullmatch(r"\d{4,10}", code or ""):
         return False
 
+    if locked_minutes(phone) > 0:
+        return False
+
+    if _verify(phone, code):
+        code_lock.clear(code_lock.phone(phone))
+
+        return True
+
+    code_lock.fail(code_lock.phone(phone))
+
+    return False
+
+
+def _verify(phone: str, code: str) -> bool:
+    """Сам запрос к Telnyx: сбой сети или ответа — False."""
     try:
         response = httpx.post(
             _url(f"/verifications/by_phone_number/{quote(phone, safe='')}/actions/verify"),
