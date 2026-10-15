@@ -495,7 +495,7 @@ def confirm_sms(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
     if not sms.check_code(phone, code):
-        return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
+        return _with_errors(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
 
     _session(ctx).put(SESSION_SMS_VERIFIED, {"phone": phone})
 
