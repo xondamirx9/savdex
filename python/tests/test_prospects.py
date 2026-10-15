@@ -388,7 +388,8 @@ def test_без_почтовика_не_отправить(люди, чисто)
         ("post", LIST, {**выбор, "post": "yes", "subject": "Тема", "body": "Текст"}),
         # Как на боевом сейчас: почта сайта (Brevo) настроена, своей у
         # рассылки нет — через почту сайта рассылка не идёт
-        env={"MAIL_MAILER": "smtp", "APP_ENV": "production"},
+        # Без перевода на HTTPS: в production он включён, а тест ходит по HTTP
+        env={"MAIL_MAILER": "smtp", "APP_ENV": "production", "SAVDEX_FORCE_HTTPS": "false"},
     )
 
     assert "Почта для рассылки ещё не настроена" in ответ["body"]

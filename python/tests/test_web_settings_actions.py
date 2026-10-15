@@ -249,3 +249,113 @@ def test_привязка_уводит_к_боту(сайт, monkeypatch):
         assert laravel_cache.get(ключ) == uid
     finally:
         laravel_cache.file_path(ключ).unlink(missing_ok=True)
+
+
+# ── Подтверждение телефона по SMS (Telnyx, заглушка из test_sms) ────
+
+
+@pytest.fixture(scope="module")
+def telnyx() -> Iterator[str]:
+    from .test_sms import заглушка_telnyx
+
+    with заглушка_telnyx() as url:
+        yield url
+
+
+def _смс(telnyx: str) -> dict[str, str]:
+    return {
+        "TELNYX_API_KEY": "key-1",
+        "TELNYX_VERIFY_PROFILE_ID": "profile-1",
+        "TELNYX_API_URL": telnyx,
+    }
+
+
+def неподтверждённый(пропустил: bool = True) -> Callable[[], None]:
+    """Номер не подтверждён; код из письма пропускали при регистрации."""
+
+    def run() -> None:
+        человек()()
+        sql(
+            "update users set phone_verified_at = null, email_verified_at = null, "
+            "email_code_skipped = %s where email = 'person@savdex.uz'",
+            [пропустил],
+        )
+        sql("delete from users where email = 'other@savdex.uz'")
+
+    return run
+
+
+def _телефон() -> Any:
+    return sql(
+        "select phone, phone_verified_at is not null, email_code_skipped from users "
+        "where email = 'person@savdex.uz'"
+    )
+
+
+def test_смс_на_номер_профиля(сайт, telnyx):
+    uid = учётка("person@savdex.uz")
+    итог = отправить(
+        сайт,
+        "/cabinet/settings/phone/send",
+        неподтверждённый(),
+        _телефон,
+        uid=uid,
+        env=_смс(telnyx),
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert сессия["settings"]["sms_phone"] == "+998901112233"
+    assert сессия["success"] == "Код отправлен в SMS на +998901112233."
+    # Пока кода не ввели — не подтверждён
+    assert итог["база"] == [("+998 90 111-22-33", False, True)]
+
+
+def test_смс_номер_занят(сайт, telnyx):
+    uid = учётка("person@savdex.uz")
+
+    def занять() -> None:
+        неподтверждённый()()
+        учётка("other@savdex.uz", phone="998901112233", phone_verified_at="2026-09-01 10:00:00")
+
+    try:
+        итог = отправить(сайт, "/cabinet/settings/phone/send", занять, uid=uid, env=_смс(telnyx))
+    finally:
+        sql("delete from users where email = 'other@savdex.uz'")
+
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert list(сессия["errors"]["default"]["messages"]) == ["phone"]
+    assert "settings" not in сессия
+
+
+@pytest.mark.parametrize(
+    ("отправлен", "код", "стало"),
+    [
+        # Верный код: номер подтверждён (в международном виде), метка снята
+        ("+998901112233", "12345", ("+998901112233", True, False)),
+        ("+998901112233", "99999", ("+998 90 111-22-33", False, True)),
+        # Код уходил на прежний номер — не в счёт
+        ("+998901110000", "12345", ("+998 90 111-22-33", False, True)),
+    ],
+)
+def test_код_из_смс_в_профиле(сайт, telnyx, отправлен, код, стало):
+    uid = учётка("person@savdex.uz")
+    итог = отправить(
+        сайт,
+        "/cabinet/settings/phone/confirm",
+        неподтверждённый(),
+        _телефон,
+        uid=uid,
+        данные={"settings": {"sms_phone": отправлен}},
+        body={"sms_code": код},
+        env=_смс(telnyx),
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["база"] == [стало]
+
+    if стало[1]:
+        assert сессия["success"] == "Телефон подтверждён."
+        assert "sms_phone" not in сессия.get("settings", {})
+    else:
+        assert list(сессия["errors"]["default"]["messages"]) == ["sms_code"]

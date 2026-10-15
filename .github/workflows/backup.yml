@@ -137,7 +137,7 @@ jobs:
           shred -u savdex.dump
 
       - name: Сохранение на 30 дней
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: savdex-db-${{ steps.dump.outputs.stamp }}
           path: savdex-${{ steps.dump.outputs.stamp }}.dump.gpg

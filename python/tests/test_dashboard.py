@@ -385,7 +385,8 @@ def test_новые_компании_по_направлению(люди):
         city_id=город,
         phone="+998901112233",
         verification_level=2,
-        created_at=назад(days=3),
+        # Минута запаса: см. test_лиды_свои_и_ничьи_старые_сверху
+        created_at=назад(days=3, minutes=1),
     )
     _компания("Закупки Плюс", primary_role="buyer", created_at=назад(days=2))
     _компания("Всё Сразу", primary_role="both", created_at=назад(days=1))
