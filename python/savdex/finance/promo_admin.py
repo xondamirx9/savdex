@@ -33,6 +33,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from savdex.adminsite import PerRequest, SavdexModelAdmin, _admin_of, register
 from savdex.billing.models import Plan
@@ -345,7 +346,15 @@ class PromoCodeAdmin(SavdexModelAdmin):
         if numeric(object_id) and self._toggle(request, int(object_id)):
             self.message_user(request, "Сохранено.", messages.SUCCESS)
 
-        return HttpResponseRedirect(request.headers.get("Referer") or self._list())
+        # Назад — только на свой адрес: Referer задаёт браузер посетителя
+        back = request.headers.get("Referer", "")
+
+        if not url_has_allowed_host_and_scheme(
+            back, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            back = self._list()
+
+        return HttpResponseRedirect(back)
 
     def issue(self, request: HttpRequest, data: dict[str, Any]) -> list[str]:
         """

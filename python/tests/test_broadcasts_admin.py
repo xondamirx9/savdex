@@ -79,6 +79,27 @@ def test_черновик_и_тариф(люди):
     assert журнал("created")["section"] == "broadcasts"
 
 
+@pytest.mark.parametrize(
+    ("url", "годится"),
+    [
+        ("/news/oplata", True),
+        ("https://savdex.uz/pricing", True),
+        ("", True),
+        ("javascript:alert(1)", False),
+        (" JavaScript:alert(1)", False),
+        ("data:text/html,x", False),
+        ("//evil.example/", False),
+        ("/\\evil.example/", False),
+        ("https:evil.example", False),
+    ],
+)
+def test_ссылка_только_на_сайт_или_https(люди, url, годится):
+    _, ответ = django(люди["superadmin"], ("post", LIST + "add/", _форма(url=url)))
+
+    assert (ответ["status"] == 302) is годится, ответ["body"][:2000]
+    assert len(sql("select id from broadcasts")) == (1 if годится else 0)
+
+
 def test_охват_и_отправка(люди):
     _клиенты()
     django(люди["superadmin"], ("post", LIST + "add/", _форма(audience="all")))

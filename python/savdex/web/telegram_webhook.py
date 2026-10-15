@@ -1,7 +1,10 @@
 """
 Вебхук Telegram-бота: сюда Telegram присылает сообщения и нажатия кнопок.
 
-Секрет — в самом адресе; чужой секрет — 404. Разговор (привязка по ИНН,
+Секрет — в самом адресе и, вторым, в заголовке
+X-Telegram-Bot-Api-Secret-Token (его Telegram ставит, если адрес
+зарегистрирован с secret_token: manage.py telegram_webhook); чужой
+секрет или нет заголовка — 404. Разговор (привязка по ИНН,
 меню уведомлений) — savdex/telegram_bot.py. Ответ всегда пустой с кодом
 204: Telegram повторяет доставку, пока не получит 2xx, — ошибка в разборе
 одного сообщения не должна превращаться в бесконечный повтор.
@@ -19,6 +22,7 @@ from django.http import HttpRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from savdex import telegram_bot
+from savdex.web import messaging
 from savdex.web.forms import input_of
 from savdex.web.request import context
 
@@ -41,6 +45,13 @@ def webhook(request: HttpRequest, secret: str) -> HttpResponse:
     expected = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
 
     if expected == "" or not hmac.compare_digest(expected.encode(), secret.encode()):
+        return not_found(ctx)
+
+    # Секрет адреса виден в логах доступа — без заголовка, который знают
+    # только Telegram и сайт (messaging.webhook_header_token), тоже 404
+    header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+
+    if not hmac.compare_digest(messaging.webhook_header_token().encode(), header.encode()):
         return not_found(ctx)
 
     update = input_of(request)

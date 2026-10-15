@@ -192,7 +192,53 @@ case "$ROLE" in
         done
         ;;
 esac
+
+# Порт, опубликованный Docker на частный адрес, ufw не закрывает: его
+# видит любая машина частной сети. Цепочка DOCKER-USER — место, которое
+# Docker оставляет для своих правил: база (5432) — только сайту и
+# админке, приложение админки (10000) — только Caddy машины сайта.
+# Контейнеры самой машины (мосты docker0, br-*) не трогаем. Правила —
+# в after.rules ufw: переживают перезагрузку; блок между метками
+# заменяется при повторном запуске
+docker_guard() {
+    local port="$1"
+    shift
+    local ip
+    printf -- '-A DOCKER-USER -p tcp --dport %s -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN\n' "$port"
+    printf -- '-A DOCKER-USER -p tcp --dport %s -i docker0 -j RETURN\n' "$port"
+    printf -- '-A DOCKER-USER -p tcp --dport %s -i br-+ -j RETURN\n' "$port"
+    for ip in "$@"; do
+        printf -- '-A DOCKER-USER -p tcp --dport %s -s %s -j RETURN\n' "$port" "$ip"
+    done
+    printf -- '-A DOCKER-USER -p tcp --dport %s -j DROP\n' "$port"
+}
+
+guard_rules=""
+case "$ROLE" in
+    db) guard_rules=$(docker_guard 5432 "$WEB_IP" "$ADMIN_IP") ;;
+    admin)
+        if [ -n "${WEB_IP:-}" ]; then
+            guard_rules=$(docker_guard 10000 "$WEB_IP")
+        else
+            echo "ВНИМАНИЕ: WEB_IP не задан — порт админки 10000 открыт всей частной сети. Запустите с WEB_IP=<частный адрес сайта>." >&2
+        fi
+        ;;
+esac
+
+if [ -n "$guard_rules" ]; then
+    sed -i '/^# BEGIN savdex docker-user/,/^# END savdex docker-user/d' /etc/ufw/after.rules
+    cat >> /etc/ufw/after.rules <<RULES
+# BEGIN savdex docker-user
+*filter
+:DOCKER-USER - [0:0]
+${guard_rules}
+-A DOCKER-USER -j RETURN
+COMMIT
+# END savdex docker-user
+RULES
+fi
 ufw --force enable >/dev/null
+ufw reload >/dev/null
 
 echo "── Готово: $(lsb_release -ds 2>/dev/null || echo Linux), $(docker --version), $(docker compose version)"
 echo "Ключ этой машины (для known_hosts в GitHub):"

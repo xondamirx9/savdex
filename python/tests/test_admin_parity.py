@@ -400,3 +400,27 @@ def test_деплой_не_сбрасывает_пароль():
 
     assert второй.returncode == 0 and "уже есть" in второй.stdout
     assert _sql("select password, updated_at from users where email = %s", [email]) == было
+
+
+def test_пароль_из_окружения():
+    """
+    --password-from-env (docker/render-entrypoint.sh): пароль — из
+    ADMIN_PASSWORD, а не аргументом (тот виден в /proc/*/cmdline), и
+    в журнал запуска он не печатается.
+    """
+    email = "env-pass@savdex.uz"
+    пароль = "Из-окружения-2026!"
+    _sql("delete from users where email = %s", [email])
+
+    итог = subprocess.run(
+        [sys.executable, "manage.py", "admin", email, "--password-from-env"],
+        cwd=PYTHON,
+        env={**ОКРУЖЕНИЕ, "ADMIN_PASSWORD": пароль},
+        capture_output=True,
+        text=True,
+    )
+
+    assert итог.returncode == 0 and "создан" in итог.stdout, итог.stderr
+    assert пароль not in итог.stdout and "(из ADMIN_PASSWORD)" in итог.stdout
+    [(хеш,)] = _sql("select password from users where email = %s", [email])
+    assert bcrypt.checkpw(пароль.encode(), ("$2b$" + хеш[4:]).encode())

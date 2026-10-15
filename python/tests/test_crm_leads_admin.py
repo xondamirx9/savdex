@@ -262,6 +262,25 @@ def test_в_ответственные_только_с_правом(люди):
     assert "Сотрудник moderator" not in форма["body"]
 
 
+def test_продавец_не_передаёт_лид_через_форму(люди):
+    """Передача лида — только тому, кто видит раздел целиком (как assign/)."""
+    pk = _лид("Мой лид", люди["sales"])
+
+    _, форма, ответ = django(
+        люди["sales"],
+        ("get", LEADS + "add/", None),
+        (
+            "post",
+            f"{LEADS}{pk}/change/",
+            {"title": "Мой лид", "source": "call", "status": "new", "owner": str(люди["sales2"])},
+        ),
+    )
+
+    assert "Другой продавец" not in форма["body"]
+    assert ответ["status"] == 200, "форма с ошибкой, а не сохранение"
+    assert sql("select owner_id from crm_leads where id = %s", [pk]) == [(люди["sales"],)]
+
+
 # ── Сделки ──────────────────────────────────────────────────────────
 
 

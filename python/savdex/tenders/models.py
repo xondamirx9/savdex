@@ -1,5 +1,5 @@
 """
-Закупка — копия правил App\\Models\\Tender для админки Django.
+Тендер (закупка) — копия правил App\\Models\\Tender для админки Django.
 
 Таблица заведена миграциями Laravel (managed = False). Что делает
 модель при записи, как Eloquent:
@@ -28,11 +28,16 @@ from savdex.guards import allowed_writes
 from savdex.tenders.slug import make_slug
 from savdex.web.search_text import index
 
+#: Подписи — как в кабинете компании (cabinet.tenders.statuses): черновик
+#: компания видит как «На модерации», archived — «Завершён» (владелец
+#: нажал «Завершить», итог — в outcome), archive — «Архив»: администратор
+#: убрал тендер с сайта, владелец сам его не вернёт
 STATUSES = {
-    "draft": "Черновик",
+    "draft": "Черновик / на модерации",
     "published": "Опубликован",
-    "archived": "Завершён / в архиве",
     "expired": "Истёк",
+    "archived": "Завершён",
+    "archive": "Архив",
 }
 
 #: Чем закончился тендер — отмечает владелец кнопкой «Завершить» в кабинете
@@ -127,11 +132,11 @@ class Tender(Timestamped):
         managed = False
         db_table = "tenders"
         ordering = ("-id",)
-        verbose_name = "закупка"
-        verbose_name_plural = "закупки"
+        verbose_name = "тендер"
+        verbose_name_plural = "тендеры"
 
     def __str__(self) -> str:
-        return self.title if self.pk else "новая закупка"
+        return self.title if self.pk else "новый тендер"
 
     def reindex(self) -> None:
         """Событие saving у Tender: search_text заново."""

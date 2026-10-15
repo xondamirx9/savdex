@@ -115,6 +115,11 @@ jobs:
               grep -q "\.xlsx" /tmp/run.txt
               BCRYPT_ROUNDS=4 .venv/bin/python manage.py admin ci@savdex.uz --role=support | tee /tmp/admin.txt
               grep -q "Администратор создан" /tmp/admin.txt
+              # Демо-данные тестового сервера (deploy/server/staging-reset.sh):
+              # на боевом — отказ; дальше страницы проверяются с ними
+              if APP_ENV=production .venv/bin/python manage.py demo; then exit 1; fi
+              APP_ENV=staging BCRYPT_ROUNDS=4 .venv/bin/python manage.py demo | tee /tmp/demo.txt
+              grep -q "компаний 24" /tmp/demo.txt
             '
 
       # Контейнер целиком, как его запускает Render: скрипт запуска,

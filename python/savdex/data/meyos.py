@@ -135,7 +135,10 @@ def feed(request: HttpRequest) -> HttpResponse:
     state = current()
     given = request.GET.get("key", "")
 
-    if not (state.enabled and state.key and hmac.compare_digest(given, state.key)):
+    # Байтами: строки с не-ASCII compare_digest не сравнивает (TypeError, 500)
+    if not (
+        state.enabled and state.key and hmac.compare_digest(given.encode(), state.key.encode())
+    ):
         return _json({"error": "not_found"}, status=404)
 
     response = _json(payload())

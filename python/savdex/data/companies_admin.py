@@ -56,6 +56,20 @@ from savdex.text import plural as _plural
 
 MIN_BLOCK_REASON = 10
 
+#: Решения по компании: уровень проверки, партнёрство, блокировка,
+#: витрина. Правка карточки (companies.edit) их не даёт — менеджер
+#: передаёт на модерацию, но не модерирует сам (docs/admin-roles.md, 5.4)
+DECISIONS = ("verify", "partner", "block", "hide")
+
+
+def _decides(request: HttpRequest) -> bool:
+    """Модератор (companies.moderate) или Admin: «блокирует компании» (5.2)."""
+    staff = _admin_of(request)
+
+    return staff.can("companies.moderate") or (
+        staff.role == "admin" and staff.can("companies.edit")
+    )
+
 
 def _type_choices() -> list[tuple[str, str]]:
     """Company::typeOptions: справочник типов, пока пуст — запасной список."""
@@ -628,6 +642,10 @@ class CompanyAdmin(SavdexModelAdmin):
 
         page = reverse("savdex_admin:data_companyrecord_change", args=[company.pk])
         todo = request.POST.get("act", "")
+
+        if todo in DECISIONS and not _decides(request):
+            raise PermissionDenied
+
         before = self.snapshot(company)
 
         if todo == "verify":
@@ -729,6 +747,7 @@ class CompanyAdmin(SavdexModelAdmin):
 
         if isinstance(company, CompanyRecord):
             extra["can_act"] = self.has_change_permission(request, company)
+            extra["can_decide"] = extra["can_act"] and _decides(request)
             extra["levels"] = list(LEVELS.items())
             extra["tiers"] = list(PARTNER_TIERS.items())
             extra["trashed"] = company.deleted_at is not None

@@ -10,6 +10,12 @@ Telegram отвечает «Not Found», и ошибку ищут в сайте.
   manage.py telegram_webhook            сообщить Telegram адрес бота
   manage.py telegram_webhook --info     что Telegram знает о боте сейчас
   manage.py telegram_webhook --delete   снять адрес
+
+Вместе с адресом Telegram получает secret_token и шлёт его в заголовке
+каждого сообщения; без заголовка вебхук отвечает 404. Поэтому после
+выкладки, где проверка заголовка появилась впервые (или сменился
+TELEGRAM_WEBHOOK_SECRET), команду нужно запустить заново — иначе бот
+не получает сообщений.
 """
 
 from __future__ import annotations

@@ -1,7 +1,8 @@
 """
 Telegram-бот на Django: привязка по ИНН и меню уведомлений.
 
-- чужой секрет — 404; бот не настроен — 204 и тишина;
+- чужой секрет или нет заголовка X-Telegram-Bot-Api-Secret-Token — 404;
+  бот не настроен — 204 и тишина;
 - человек открыл бота сам: ИНН → почта его учётной записи в компании →
   код из письма → чат привязан к его учётной записи (не к владельцу);
 - кнопка кабинета: ИНН сверяется с его компанией, кода нет; чужой ИНН —
@@ -14,6 +15,8 @@ Telegram-бот на Django: привязка по ИНН и меню уведо
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -32,6 +35,8 @@ from .web_site import адрес, открыть
 pytestmark = нужна_база
 
 СЕКРЕТ = "hook-secret-1"
+#: Заголовок X-Telegram-Bot-Api-Secret-Token — как messaging.webhook_header_token
+ЗАГОЛОВОК = hmac.new(СЕКРЕТ.encode(), b"telegram-webhook-header", hashlib.sha256).hexdigest()
 
 #: Токены привязки, которые проверки кладут в общий файловый кэш
 ТОКЕНЫ = ("tok123", "tok456", "other")
@@ -79,12 +84,19 @@ class Бот:
             **extra,
         }
 
-    def прислать(self, update: Any, path: str | None = None, **env: str) -> int:
+    def прислать(
+        self, update: Any, path: str | None = None, заголовок: str = ЗАГОЛОВОК, **env: str
+    ) -> int:
+        headers = {"Accept": "application/json"}
+
+        if заголовок:
+            headers["X-Telegram-Bot-Api-Secret-Token"] = заголовок
+
         ответ = открыть(
             self.сайт,
             path or f"/telegram/webhook/{СЕКРЕТ}",
             None,
-            {"Accept": "application/json"},
+            headers,
             self.окружение(**env),
             method="POST",
             body=update if isinstance(update, str) else json.dumps(update),
@@ -187,6 +199,16 @@ def test_чужой_секрет(сайт, tmp_path, фирма):
         бот.прислать({"message": {"chat": {"id": 1}, "text": "/start"}}, "/telegram/webhook/x")
         == 404
     )
+    assert бот.новые() == []
+
+
+@pytest.mark.parametrize("заголовок", ["", "x" * 64])
+def test_без_заголовка_секрета(сайт, tmp_path, фирма, заголовок):
+    """Секрет адреса утёк из логов — без заголовка Telegram сообщение не принимается."""
+    бот = Бот(сайт, tmp_path)
+    update = {"message": {"chat": {"id": 1}, "text": "/start"}}
+
+    assert бот.прислать(update, заголовок=заголовок) == 404
     assert бот.новые() == []
 
 

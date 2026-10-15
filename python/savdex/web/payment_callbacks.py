@@ -339,6 +339,13 @@ class _Merchant:
         if payment is None or payment["status"] == "paid":
             return self.error(ERROR_ALREADY_PAID)
 
+        # Как payable() у create: счёт успели отменить (failed) — тариф не
+        # выдаём, транзакцию гасим, и Uzum вернёт деньги покупателю
+        if payment["status"] != "pending":
+            _save_tx(self.ctx, tx, {"state": CANCELLED, "cancelled_at": eloquent.now()})
+
+            return self.error(ERROR_INVOICE_CANCELLED)
+
         settlement.mark_paid(
             self.ctx, payment, {"provider": "uzum", "external_id": tx["provider_transaction_id"]}
         )
@@ -436,6 +443,11 @@ def _merchant(ctx: Context, request: HttpRequest) -> HttpResponse:
         return merchant.error(ERROR_AUTH, status=401)
 
     configured = os.environ.get("PAYMENTS_UZUM_SERVICE_ID") or ""
+
+    # Без serviceId запрос держит только Basic-авторизация. Отказывать
+    # нельзя: на боевом переменная может быть не задана, и оплата встанет
+    if configured == "":
+        log.warning("payment.uzum.service_id_missing")
 
     if configured != "" and _php_string(merchant.input("serviceId") or "") != configured:
         return merchant.error(ERROR_BAD_SERVICE_ID)
@@ -537,9 +549,19 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
         return _gateway_response(False)
 
     status = "paid" if state == "SUCCESS" else "pending"
-    found = _rows(
-        "select * from payments where number = %s or external_id = %s limit 1",
-        [order_id, order_id],
+    # Успех перепроверен у Uzum — счёт можно найти и по номеру. Прочие
+    # состояния ничем не подтверждены, а номер счёта угадывается
+    # (SVD-000123): поддельный «PROCESSING» по чужому номеру записал бы
+    # живую транзакцию, и отмена счёта не вернула бы промокод
+    # (orders._live_card_transaction). Поэтому — только по orderId,
+    # который выдал Uzum и знают лишь он и владелец счёта
+    found = (
+        _rows(
+            "select * from payments where number = %s or external_id = %s limit 1",
+            [order_id, order_id],
+        )
+        if status == "paid"
+        else _rows("select * from payments where external_id = %s limit 1", [order_id])
     ) or _rows(
         # Заказ, заведённый раньше последнего «Оплатить» по тому же счёту:
         # номер в счёте уже другой, но заказ записан в журнал счёта

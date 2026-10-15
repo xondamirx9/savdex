@@ -36,6 +36,9 @@ class User(models.Model):
     #: Код из письма пропущен при регистрации (страна с «Регистрация без кода»)
     email_code_skipped = models.BooleanField("код пропущен", default=False, editable=False)
     last_login_at = UTCDateTimeField("последний вход", null=True, blank=True)
+    #: Адрес последнего входа (savdex/audit.client_ip) — в карточке только
+    #: тем, кто может изменять пользователей (UserAdmin)
+    last_login_ip = models.CharField("IP последнего входа", max_length=45, null=True, blank=True)
     created_at = UTCDateTimeField("зарегистрирован", null=True, blank=True)
     updated_at = UTCDateTimeField("изменён", null=True, blank=True)
     deleted_at = UTCDateTimeField("отключён", null=True, blank=True)

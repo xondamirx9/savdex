@@ -36,6 +36,12 @@ class Command(BaseCommand):
         )
         parser.add_argument("--password", default="", help="Свой пароль вместо сгенерированного")
         parser.add_argument(
+            "--password-from-env",
+            action="store_true",
+            help="Пароль из переменной ADMIN_PASSWORD: в аргументе он виден в списке "
+            "процессов (/proc/*/cmdline)",
+        )
+        parser.add_argument(
             "--database", default="default", help="Имя подключения из settings.DATABASES"
         )
         parser.add_argument(
@@ -67,7 +73,8 @@ class Command(BaseCommand):
                     return
 
         # Пустой --password, как и в PHP, значит «сгенерировать»
-        password = _filled(options["password"]) or admins.generate_password()
+        given = os.environ.get("ADMIN_PASSWORD", "") if options["password_from_env"] else ""
+        password = _filled(given or options["password"]) or admins.generate_password()
 
         try:
             granted = admins.grant(
@@ -95,7 +102,9 @@ class Command(BaseCommand):
             [
                 ("Адрес", _url("/admin")),
                 ("Почта", granted.email),
-                ("Пароль", granted.password),
+                # Пароль из окружения в журнал запуска не печатается: его
+                # и так знает тот, кто задал переменную
+                ("Пароль", "(из ADMIN_PASSWORD)" if _filled(given) else granted.password),
                 ("Роль", granted.role_label),
             ],
         ):

@@ -12,16 +12,19 @@ IMAP (SUPPORT_IMAP_HOST, _PORT, _USERNAME, _PASSWORD, _FOLDER) и по кажд�
   пишет тот же человек (почта обращения или его учётной записи): чужое
   письмо с подсмотренным номером заводит своё обращение. Закрытое или
   ждавшее клиента обращение снова открыто; цитата прошлой переписки
-  отрезается;
+  отрезается. Номер в теме и прежние письма клиента — только у письма,
+  чей отправитель подтверждён (DKIM/SPF/DMARC в Authentication-Results,
+  authentic): «From» подделывается свободно;
 - иначе — новое обращение «Почта»: тема, имя и почта отправителя; есть
-  на площадке пользователь с этой почтой — обращение сразу его и его
-  компании;
+  на площадке пользователь с этой почтой и отправитель подтверждён —
+  обращение сразу его и его компании;
 - вложения — в закрытое хранилище (storage/app/private/support/…),
   скачиваются из админки;
 - одно письмо дважды не заводится (Message-ID в support_messages);
-- автоответы, рассылки и письма самому себе пропускаются; отказ доставки
-  нашего ответа («адрес не существует») — внутренней заметкой в его
-  обращение.
+- автоответы, рассылки, письма самому себе и с адресов no-reply
+  пропускаются, как и письма отправителей из спам-фильтра
+  (savdex/support/spam.py); отказ доставки нашего ответа («адрес не
+  существует») — внутренней заметкой в его обращение.
 
 Письмо помечается прочитанным, когда записано; письмо, на котором разбор
 упал, — ещё и флажком: его видно в ящике.
@@ -56,6 +59,7 @@ from django.utils import timezone
 from savdex import audit
 from savdex.catalog import now
 from savdex.laravel_storage import private_root
+from savdex.support import spam
 from savdex.support.models import (
     STATUS_CLOSED,
     STATUS_OPEN,
@@ -92,6 +96,10 @@ _OUR_ID = re.compile(r"<support-(\d{1,18})-(\d{1,18})\.[0-9a-f]+@[^>]+>")
 
 #: Отправители отказов доставки
 _DAEMONS = ("mailer-daemon", "postmaster")
+
+#: Адреса, на которые не отвечают: no-reply, noreply, do-not-reply,
+#: donotreply… — уведомления сервисов, а не вопросы клиентов
+_NO_REPLY = re.compile(r"^(?:no|do[-_.]?not)[-_.]?reply(?:[-_.+\d].*)?$")
 
 
 # ── Настройки ──────────────────────────────────────────────────────
@@ -237,6 +245,8 @@ class Letter:
     automatic: bool = False
     bounce: bool = False
     raw: bytes = b""
+    #: Отправитель подтверждён (authentic): можно к учётной записи и в обращение
+    authentic: bool = False
 
 
 def _ids(value: str | None) -> list[str]:
@@ -251,6 +261,59 @@ def _header(message: EmailMessage, name: str) -> str:
         raw = message.get_all(name, failobj=[])
 
         return str(raw[0]) if raw else ""
+
+
+#: «dkim=pass header.d=mebel.uz», «spf=pass smtp.mailfrom=aziz@mebel.uz»
+_AUTH_DOMAIN = re.compile(r"\b(?:header\.d|header\.i|smtp\.mailfrom|header\.from)=([^\s;()]+)")
+
+
+def _aligned(domain: str, sender: str) -> bool:
+    """Домен подписи — домен отправителя или его поддомен (и наоборот)."""
+    domain = domain.rsplit("@", 1)[-1].strip(".").lower()
+
+    return bool(domain) and (
+        domain == sender or sender.endswith("." + domain) or domain.endswith("." + sender)
+    )
+
+
+def authentic(message: EmailMessage, from_email: str) -> bool:
+    """
+    Письмо правда от того, кто в «From»: почтовый сервер ящика проверил
+    подпись DKIM или SPF, и домен совпал с адресом отправителя (или
+    прошла DMARC — это то же с совпадением).
+
+    «From» подделывается свободно. Без этой проверки чужое письмо «от
+    клиента» привязалось бы к его учётной записи и компании или дописалось
+    бы в его обращение по номеру «[№123]» из темы.
+
+    Верхний Authentication-Results — тот, что поставил наш сервер; ниже
+    могут быть присланные самим отправителем. SUPPORT_MAIL_AUTHSERV_ID
+    (например, mx.zohomail.com) — ещё и сверить, чей он.
+    """
+    headers = message.get_all("Authentication-Results", failobj=[])
+    sender = from_email.rsplit("@", 1)[-1].lower()
+
+    if not headers or "@" not in from_email:
+        return False
+
+    service, *results = str(headers[0]).split(";")
+    expected = _env("SUPPORT_MAIL_AUTHSERV_ID").lower()
+
+    if expected and service.strip().split()[0:1] != [expected]:
+        return False
+
+    for result in results:
+        result = " ".join(result.split()).lower()
+
+        if result.startswith("dmarc=pass"):
+            return True
+
+        if result.startswith(("dkim=pass", "spf=pass")) and any(
+            _aligned(domain, sender) for domain in _AUTH_DOMAIN.findall(result)
+        ):
+            return True
+
+    return False
 
 
 def _safe_name(name: str, number: int) -> str:
@@ -313,6 +376,7 @@ def parse(raw: bytes) -> Letter:
         ),
         bounce=bounce,
         raw=raw,
+        authentic=authentic(message, from_email.strip().lower()),
     )
 
 
@@ -341,14 +405,28 @@ def _same_person(ticket: Ticket, email: str) -> bool:
 
 
 def thread_of(letter: Letter) -> Ticket | None:
-    """Обращение, которое письмо продолжает, — если пишет тот же человек."""
+    """Обращение, которое письмо продолжает, — если пишет тот же человек.
+
+    Без подтверждённого отправителя (authentic) — только ответ на наше
+    письмо: в нашем Message-ID случайная часть, её не угадать. Номер
+    «[№123]» из темы и Message-ID прежних писем клиента подсмотреть можно.
+    """
     candidates: list[int] = []
 
-    for message_id in letter.replies_to:
-        if match := _OUR_ID.fullmatch(message_id):
-            candidates.append(int(match.group(1)))
+    ours = [m for m in letter.replies_to if _OUR_ID.fullmatch(m)]
 
-    if letter.replies_to:
+    if letter.authentic:
+        candidates += [int(_OUR_ID.fullmatch(m).group(1)) for m in ours]  # type: ignore[union-attr]
+    elif ours:
+        # Похожий на наш — ещё не наш: случайную часть сверяем с отправленным
+        sent = (
+            Message.objects.filter(email_message_id__in=ours[:50], from_staff=True)
+            .order_by("-id")
+            .values_list("ticket_id", flat=True)
+        )
+        candidates += [int(pk) for pk in sent]
+
+    if letter.replies_to and letter.authentic:
         earlier = (
             Message.objects.filter(email_message_id__in=letter.replies_to[:50])
             .order_by("-id")
@@ -356,7 +434,7 @@ def thread_of(letter: Letter) -> Ticket | None:
         )
         candidates += [int(pk) for pk in earlier]
 
-    if match := _TAG.search(letter.subject):
+    if letter.authentic and (match := _TAG.search(letter.subject)):
         candidates.append(int(match.group(1)))
 
     for pk in dict.fromkeys(candidates):
@@ -454,6 +532,12 @@ def accept(raw: bytes) -> Outcome:
     if letter.automatic:
         return Outcome("skipped", reason="автоответ или рассылка")
 
+    if _NO_REPLY.match(letter.from_email.split("@", 1)[0]):
+        return Outcome("skipped", reason="адрес без ответа (no-reply)")
+
+    if spam.is_blocked(letter.from_email):
+        return Outcome("skipped", reason="отправитель в спам-фильтре")
+
     stamp = now()
 
     with transaction.atomic():
@@ -461,7 +545,10 @@ def accept(raw: bytes) -> Outcome:
         created = ticket is None
 
         if ticket is None:
-            user_id, company_id = _user_by_email(letter.from_email)
+            # Неподтверждённый отправитель — обращение ничьё: «From» подделывают
+            user_id, company_id = (
+                _user_by_email(letter.from_email) if letter.authentic else (None, None)
+            )
             subject = _TAG.sub("", letter.subject).strip() or "(без темы)"
             ticket = Ticket(
                 subject=subject[:200],

@@ -18,7 +18,8 @@ interface Row {
     deadline: string | null;
     /** Дней до срока у тендера на витрине */
     days_left: number | null;
-    status: 'draft' | 'published' | 'archived' | 'expired';
+    /** archive — «Архив»: тендер убрал с сайта администратор */
+    status: 'draft' | 'published' | 'archived' | 'expired' | 'archive';
     status_label: string;
     outcome: Outcome | null;
     outcome_label: string | null;
@@ -35,6 +36,7 @@ const STATUS_BADGE: Record<Row['status'], string> = {
     published: 'badge-verified',
     archived: 'badge-neutral',
     expired: 'badge-warning',
+    archive: 'badge-neutral',
 };
 
 /** «Продлить»: любое число дней — вписать или нажать готовый вариант */
@@ -311,6 +313,7 @@ export default function TendersIndex({
 
                             {tender.status === 'draft' && <p className="hint">{t('cabinet.tenders.moderated')}</p>}
                             {tender.status === 'expired' && <p className="hint">{t('cabinet.tenders.expired_hint')}</p>}
+                            {tender.status === 'archive' && <p className="hint">{t('cabinet.tenders.archive_hint')}</p>}
                             {tender.outcome_label && (
                                 <p className="t-sm">
                                     <b>{tender.outcome_label}</b>

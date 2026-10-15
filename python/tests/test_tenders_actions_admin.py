@@ -92,8 +92,43 @@ def test_опубликовать_и_в_архив_отмеченные(люди
     assert sql("select title, status, to_char(published_at, 'YYYY') from tenders order by id") == [
         ("Кирпич", "published", "2026"),
         ("Цемент", "published", sql("select to_char(now(), 'YYYY')")[0][0]),
-        ("Арматура", "archived", None),
+        ("Арматура", "archive", None),
     ]
+
+
+def test_кто_разместил_и_на_сайте(люди):
+    """Кабинетный — компания и человек; на странице тендера — просмотры, продлён, завершён."""
+    [(company,)] = sql(
+        "insert into companies (name, slug, status, created_at, updated_at) values "
+        "('ООО «Стройзаказ»', 'stroyzakaz-admin', 'active', now(), now()) returning id"
+    )
+    [(author,)] = sql(
+        "insert into users (name, email, password, status, company_id, created_at, updated_at) "
+        "values ('Алишер', 'alisher-tender@savdex.uz', 'x', 'active', %s, now(), now()) "
+        "returning id",
+        [company],
+    )
+    кабинетный = _тендер(
+        "Цемент",
+        status="published",
+        source="cabinet",
+        author_id=author,
+        views_count=17,
+        extended_at="2026-10-01 09:00:00",
+    )
+    _тендер("Кирпич", source="admin")
+
+    _, список, страница = django(
+        люди["moderator"],
+        ("get", LIST, None),
+        ("get", f"{LIST}{кабинетный}/change/", None),
+    )
+
+    assert "ООО «Стройзаказ»" in список["body"].replace("&laquo;", "«").replace("&raquo;", "»")
+    assert "Алишер" in список["body"] and "Администратор / Excel" in список["body"]
+    body = страница["body"]
+    assert "Просмотры на сайте" in body and ">17<" in body.replace(" ", "")
+    assert "01.10.2026" in body
 
 
 def test_удаление_только_суперадмин(люди):

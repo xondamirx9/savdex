@@ -162,6 +162,11 @@ class UserAdmin(SavdexModelAdmin):
 
         if obj is None:
             sets.append(("Пароль", {"fields": ("password", "must_change_password")}))
+        else:
+            # Когда и откуда входил — для разбора подозрительных входов.
+            # IP — только тем, кто может изменять пользователей (суперадмин,
+            # администратор): поддержке с правом просмотра он не нужен
+            sets.append(("Вход", {"fields": ("last_login_at", "last_login_ip")}))
 
         return sets
 
@@ -194,6 +199,9 @@ class UserAdmin(SavdexModelAdmin):
                 "created_at",
                 "last_login_at",
             )
+
+        if obj is not None:
+            return ("last_login_at", "last_login_ip")
 
         return ()
 

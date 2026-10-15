@@ -52,6 +52,29 @@ class BroadcastForm(forms.ModelForm):  # type: ignore[type-arg]
         if "body" in self.fields:
             self.fields["body"].widget = forms.Textarea(attrs={"rows": 4})
 
+    def clean_url(self) -> str | None:
+        """
+        Ссылка уведомления — адрес на сайте («/cabinet») или http(s)://…:
+        javascript: и прочие схемы в ссылке у тысяч получателей — XSS.
+        """
+        url = (self.cleaned_data.get("url") or "").strip()
+
+        if url == "":
+            return None
+
+        scheme = url.split(":", 1)[0].lower() if ":" in url.split("/", 1)[0] else ""
+        local = url.startswith("/") and not url.startswith(("//", "/\\"))
+
+        if not local and scheme not in ("http", "https"):
+            raise forms.ValidationError(
+                "Ссылка — адрес на сайте с «/» в начале или полный адрес с https://."
+            )
+
+        if scheme and not url.lower().startswith(f"{scheme}://"):
+            raise forms.ValidationError("Полный адрес — с https:// в начале.")
+
+        return url
+
     def clean(self) -> dict[str, Any]:
         data: dict[str, Any] = super().clean() or {}
 

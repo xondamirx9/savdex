@@ -1,12 +1,17 @@
 # Тестовый сервер staging.savdex.uz в Uztelecom Cloud (deploy/README.md).
 #
-# Каждое слияние в основную ветку выкладывается и сюда: Render — боевой
-# сайт, эта машина — тестовый. Вручную (Actions → staging → Run workflow)
-# можно выложить любую ветку, чтобы проверить её до слияния, один раз —
-# подготовить чистую машину (галочка «bootstrap»), а галочкой «копия
-# боевой базы» — залить на тестовый свежую копию данных с Render
-# (deploy/server/load-db.sh; база тестового при этом стирается), галочкой
-# «копия файлов» — загруженные файлы с диска Render (deploy/server/load-files.sh).
+# Каждое слияние в основную ветку выкладывается и сюда. Вручную
+# (Actions → staging → Run workflow) можно выложить любую ветку, чтобы
+# проверить её до слияния, один раз — подготовить чистую машину
+# (галочка «bootstrap»).
+#
+# Данные тестового — свои, на диске самой машины, не боевые: галочка
+# «сбросить на демо-данные» (и «да» в подтверждении) стирает базу и
+# файлы тестового и заводит придуманные компании, объявления и отзывы
+# (deploy/server/staging-reset.sh, manage.py demo). Галочка «ключи почты
+# и SMS» один раз переносит с боевой машины настройки MAIL_* и TELNYX_*:
+# письма и SMS с тестового уходят по-настоящему — поэтому только после
+# сброса на демо-данные.
 #
 # Образ собирается на самой машине (deploy/server/deploy.sh): так с
 # GitHub уходит только код, а не образ в сотни мегабайт.
@@ -16,18 +21,16 @@
 #
 # Секреты и переменные (Settings → Secrets and variables → Actions):
 #   secrets.DEPLOY_SSH_KEY     закрытый SSH-ключ, открытая часть — в машине
+#                              (тот же, что у боевых машин)
 #   secrets.STAGING_PASSWORD   пароль на тестовый сайт (логин savdex)
-#   secrets.BACKUP_DATABASE_URL  адрес боевой базы — для галочки «копия
-#                              боевой базы» (тот же, что у ночных копий)
 #   vars.STAGING_HOST          публичный IP машины
 #   vars.STAGING_HOST_KEY      ключ машины («ssh-ed25519 AAAA…») — защищает
 #                              от подмены сервера; первая выкладка подскажет его
 #   vars.STAGING_DOMAIN        адрес сайта, по умолчанию staging.savdex.uz
 #   vars.STAGING_BOOTSTRAP_USER  пользователь образа ОС для подготовки
 #                              машины (root или ubuntu), по умолчанию root
-#   vars.RENDER_SSH            адрес SSH службы на Render (srv-…@ssh.oregon.render.com) —
-#                              для галочки «копия файлов»; ключ — DEPLOY_SSH_KEY
-#   vars.RENDER_SSH_HOST_KEY   ключ сервера SSH Render — только если служба не в Орегоне
+#   vars.PROD_HOST, PROD_KNOWN_HOSTS  боевая машина сайта — для галочки
+#                              «ключи почты и SMS» (как в prod.yml)
 #
 # Репозиторий публичный, журналы Actions видят все: пароли и ключи
 # в журнал не выводятся — пароль уходит на сервер через stdin.
@@ -49,12 +52,16 @@ on:
         description: 'Сначала подготовить чистую машину (один раз)'
         type: boolean
         default: false
-      prod_db:
-        description: 'Загрузить копию боевой базы (база тестового стирается)'
+      demo_reset:
+        description: 'Сбросить на демо-данные (база и файлы тестового стираются)'
         type: boolean
         default: false
-      prod_files:
-        description: 'Загрузить копию файлов с Render (файлы тестового заменяются)'
+      confirm:
+        description: 'Для сброса — напишите «да»'
+        required: false
+        default: ''
+      prod_keys:
+        description: 'Перенести с боевой ключи почты и SMS (MAIL_*, TELNYX_*)'
         type: boolean
         default: false
 
@@ -154,78 +161,58 @@ jobs:
           # Что на самом деле запущено: тег образа и коммит последней выкладки
           echo "::notice title=Запущено::$(ssh -l deploy staging 'tail -1 /opt/savdex/releases.log')"
 
-      - name: Копия боевой базы
-        if: inputs.prod_db
+      - name: Демо-данные
+        if: inputs.demo_reset
         env:
-          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
-          set -euo pipefail
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::Нет секрета BACKUP_DATABASE_URL (docs/backups.md)"
+          if [ "$CONFIRM" != "да" ]; then
+            echo "::error::Сброс стирает базу и файлы тестового — напишите «да» в поле подтверждения."
             exit 1
           fi
-          url="$DATABASE_URL"
-          case "$url" in
-            *sslmode=*) ;;
-            *\?*) url="$url&sslmode=require" ;;
-            *) url="$url?sslmode=require" ;;
-          esac
-          # Версия PostgreSQL тестового (deploy/staging/compose.yml) должна
-          # совпадать с боевой: копию снимает pg_dump той же версии, и
-          # pg_restore тестового её читает
-          staging_pg=$(grep -oE 'image: postgres:[0-9]+' deploy/staging/compose.yml | grep -oE '[0-9]+$')
-          major=$(docker run --rm -e URL="$url" "postgres:$staging_pg" sh -c 'psql -Atq "$URL" -c "show server_version_num"' | cut -c1-2)
-          echo "Боевая база: PostgreSQL $major, тестовая: $staging_pg"
-          if [ "$major" != "$staging_pg" ]; then
-            echo "::error::Боевая база — PostgreSQL $major, а тестовая — $staging_pg. Поднимите версию в deploy/staging/compose.yml."
-            exit 1
-          fi
-          umask 077
-          docker run --rm -e URL="$url" -v "$RUNNER_TEMP:/out" "postgres:$staging_pg" \
-            sh -c 'pg_dump --format=custom --compress=9 --file=/out/prod.dump "$URL"'
-          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/prod.dump"
-          size=$(stat -c %s "$RUNNER_TEMP/prod.dump")
-          echo "Копия: $((size / 1024)) КБ"
-          if [ "$size" -lt 50000 ]; then
-            echo "::error::Копия подозрительно мала — проверьте BACKUP_DATABASE_URL."
-            exit 1
-          fi
-          ssh -l deploy staging 'install -d -m 700 /opt/savdex/restore'
-          scp -o User=deploy "$RUNNER_TEMP/prod.dump" staging:/opt/savdex/restore/prod.dump
-          rm -f "$RUNNER_TEMP/prod.dump"
-          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-db.sh /opt/savdex/restore/prod.dump'
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/staging-reset.sh'
 
-      - name: Копия файлов
-        if: inputs.prod_files
+      - name: Ключи почты и SMS с боевого
+        if: inputs.prod_keys
         env:
-          RENDER_SSH: ${{ vars.RENDER_SSH }}
-          # Ключ сервера SSH Render в Орегоне — из документации Render
-          # (render.com/docs/ssh, SHA256:KkZPgnApmttFYSkdJsCi7B01sgZPMI6kY53MDbbanGM);
-          # служба в другом регионе — свой ключ в переменной RENDER_SSH_HOST_KEY
-          RENDER_HOST_KEY: ${{ vars.RENDER_SSH_HOST_KEY || 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFON8eay2FgHDBIVOLxWn/AWnsDJhCVvlY1igWEFoLD2' }}
+          PROD_HOST: ${{ vars.PROD_HOST }}
+          PROD_KNOWN_HOSTS: ${{ vars.PROD_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          if [ -z "$RENDER_SSH" ]; then
-            echo "::error::Нет переменной RENDER_SSH — адреса SSH службы на Render (deploy/README.md)"
+          # Письма и SMS отсюда пойдут по-настоящему: только когда на
+          # тестовом демо-данные, а не копия боевой базы с людьми
+          if ! ssh -l deploy staging 'test -f /opt/savdex/demo-data'; then
+            echo "::error::На тестовом нет отметки о демо-данных — сначала сброс (галочка «сбросить на демо-данные» и «да»)."
             exit 1
           fi
-          printf '%s %s\n' "${RENDER_SSH#*@}" "$RENDER_HOST_KEY" >> ~/.ssh/known_hosts
-          # Ключ — тот же DEPLOY_SSH_KEY: его открытая часть добавлена
-          # в Render (Account Settings → SSH Public Keys). Загрузки лежат
-          # на постоянном диске службы: /var/data/storage/{public,private}
+          if [ -z "$PROD_HOST" ]; then
+            echo "::error::Нет переменной PROD_HOST"
+            exit 1
+          fi
+          if [ -n "$PROD_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$PROD_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -t ed25519 "$PROD_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          prod() {
+            ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UpdateHostKeys=no "deploy@$PROD_HOST" "$@"
+          }
+          if ! prod true; then
+            echo "::error::Нет доступа к боевой машине $PROD_HOST по SSH (ключ DEPLOY_SSH_KEY, PROD_KNOWN_HOSTS)."
+            exit 1
+          fi
+          # Значения — только в файле раннера и на тестовом, в журнал не
+          # выводятся; «От кого» у тестового — свой, с пометкой
           umask 077
-          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UpdateHostKeys=no -o ServerAliveInterval=30 "$RENDER_SSH" \
-            'tar -C /var/data/storage -czf - public private' > "$RUNNER_TEMP/files.tgz"
-          gzip -t "$RUNNER_TEMP/files.tgz"
-          files=$(tar -tzf "$RUNNER_TEMP/files.tgz" | grep -vc '/$' || true)
-          size=$(stat -c %s "$RUNNER_TEMP/files.tgz")
-          echo "Копия: $files файлов, $((size / 1024 / 1024)) МБ"
-          if [ "$files" -lt 1 ]; then
-            echo "::error::В копии нет ни одного файла — проверьте RENDER_SSH."
+          prod "grep -E '^(MAIL|TELNYX)_[A-Z_]+=' /opt/savdex/env/app.env || true" \
+            | grep -v -E '^MAIL_(FROM_NAME|LOG_PATH)=' > "$RUNNER_TEMP/keys.env" || true
+          if ! grep -q '^TELNYX_API_KEY=' "$RUNNER_TEMP/keys.env" || ! grep -q '^MAIL_PASSWORD=' "$RUNNER_TEMP/keys.env"; then
+            rm -f "$RUNNER_TEMP/keys.env"
+            echo "::error::На боевой машине нет MAIL_PASSWORD или TELNYX_API_KEY в настройках."
             exit 1
           fi
-          ssh -l deploy staging 'install -d -m 700 /opt/savdex/restore'
-          scp -o User=deploy "$RUNNER_TEMP/files.tgz" staging:/opt/savdex/restore/files.tgz
-          rm -f "$RUNNER_TEMP/files.tgz"
-          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/load-files.sh /opt/savdex/restore/files.tgz'
+          echo "MAIL_FROM_NAME='SAVDEX (тест)'" >> "$RUNNER_TEMP/keys.env"
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/env-merge.sh' < "$RUNNER_TEMP/keys.env"
+          rm -f "$RUNNER_TEMP/keys.env"
+          ssh -l deploy staging 'bash /opt/savdex/src/deploy/server/staging-restart.sh'

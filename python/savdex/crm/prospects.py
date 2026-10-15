@@ -1101,7 +1101,8 @@ def run(stamp: datetime | None = None, limit: int | None = None) -> Pass:
 
 def unsubscribe(pk: int, token: str) -> Prospect | None:
     """Ссылка из письма: верный ключ — больше не писать. Неверный — None."""
-    if not hmac.compare_digest(token, unsubscribe_token(pk)):
+    # Байтами: строки с не-ASCII compare_digest не сравнивает (TypeError, 500)
+    if not hmac.compare_digest(token.encode(), unsubscribe_token(pk).encode()):
         return None
 
     prospect = Prospect.everything.filter(pk=pk).first()
