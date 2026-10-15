@@ -27,7 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import analytics, eloquent, guard, locales, throttle
+from savdex.web import analytics, captcha, eloquent, guard, locales, throttle
 from savdex.web.actions import form
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -220,6 +220,12 @@ def login(request: HttpRequest) -> HttpResponse:
 
     if errors:
         return invalid(ctx, errors)
+
+    # Капча — до пароля: неверно отмеченные картинки не считаются неудачным
+    # входом и ничего не говорят о пароле. После проверки полей: с пустой
+    # почтой задание не гасится зря
+    if (problem := captcha.verify(_session(ctx), "login", data.get("captcha"))) is not None:
+        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     email = str(data["email"]).strip(" \t\n\r\0\x0b").lower()
     throttle = LoginThrottle(email, client_ip(request) or "")
