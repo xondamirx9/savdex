@@ -112,17 +112,6 @@
 /* ── Страница ── */
 
 .ilmora {
-    /* Общие компоненты (капча) берут цвета из переменных Tailwind */
-    --color-surface: #fff;
-    --color-canvas: var(--c-sage);
-    --color-line: #dcd6c8;
-    --color-line-strong: #c7bea9;
-    --color-muted: #5b6662;
-    --color-ink: var(--c-charcoal);
-    --color-primary-700: var(--c-forest);
-    --color-primary-500: var(--c-champagne);
-    --color-danger: var(--ilmora-error);
-
     min-height: 100vh;
     background: var(--c-ivory);
     color: var(--c-charcoal);

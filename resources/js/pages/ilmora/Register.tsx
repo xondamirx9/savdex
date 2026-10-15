@@ -1,7 +1,6 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { Check, Loader2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { IlmoraLayout } from '@/components/ilmora/IlmoraLayout';
 import { Link } from '@/components/ui/Link';
 import { t } from '@/lib/i18n';
@@ -20,12 +19,10 @@ export default function IlmoraRegister({
     done = false,
     ilmoraUrl,
     phonePrefix = '+998',
-    captcha = false,
 }: {
     done?: boolean;
     ilmoraUrl: string;
     phonePrefix?: string;
-    captcha?: boolean;
 }) {
     return (
         <IlmoraLayout title={t('ilmora.title')}>
@@ -33,7 +30,7 @@ export default function IlmoraRegister({
                 {done ? (
                     <Done url={ilmoraUrl} />
                 ) : (
-                    <RegisterForm phonePrefix={phonePrefix} captcha={captcha} />
+                    <RegisterForm phonePrefix={phonePrefix} />
                 )}
             </div>
 
@@ -61,7 +58,7 @@ function Done({ url }: { url: string }) {
 
 type Field = keyof IlmoraForm;
 
-function RegisterForm({ phonePrefix, captcha }: { phonePrefix: string; captcha: boolean }) {
+function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
     const { flash } = usePage<SharedProps>().props;
     const { data, setData, post, processing, errors, setError, clearErrors, transform } = useForm<IlmoraForm>({
         phone: '',
@@ -71,13 +68,10 @@ function RegisterForm({ phonePrefix, captcha }: { phonePrefix: string; captcha: 
         tin: '',
         offer_read: false,
         offer_sign: false,
-        captcha: [],
     });
     // Поля, которые человек уже покинул: ошибка под ними — сразу, не дожидаясь отправки
     const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
     const [submitted, setSubmitted] = useState(false);
-    // Задание капчи одноразовое: после каждой отправки — новое
-    const [captchaKey, setCaptchaKey] = useState(0);
 
     const client = validateIlmora(data);
     const shown = (field: Field): string | undefined =>
@@ -111,7 +105,7 @@ function RegisterForm({ phonePrefix, captcha }: { phonePrefix: string; captcha: 
             return;
         }
 
-        post(routes.ilmoraRegister, { onFinish: () => setCaptchaKey((k) => k + 1) });
+        post(routes.ilmoraRegister);
     }
 
     const [before, after] = t('ilmora.offer_read').split(':offer');
@@ -259,19 +253,6 @@ function RegisterForm({ phonePrefix, captcha }: { phonePrefix: string; captcha: 
                     </label>
                     <Note id="ilmora-sign-note" error={shown('offer_sign')} />
                 </div>
-
-                {captcha && (
-                    <CaptchaGrid
-                        purpose="ilmora"
-                        value={data.captcha}
-                        onChange={(cells) => {
-                            setData('captcha', cells);
-                            if (errors.captcha && cells.length > 0) clearErrors('captcha');
-                        }}
-                        error={errors.captcha}
-                        reloadKey={captchaKey}
-                    />
-                )}
 
                 <button type="submit" className="ilmora-button" disabled={processing}>
                     {processing && <Loader2 aria-hidden className="size-4 animate-spin" />}

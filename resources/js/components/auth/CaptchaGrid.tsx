@@ -20,7 +20,7 @@ export function CaptchaGrid({
     error,
     reloadKey = 0,
 }: {
-    purpose: 'login' | 'register' | 'ilmora';
+    purpose: 'login' | 'register';
     value: number[];
     onChange: (cells: number[]) => void;
     error?: string;

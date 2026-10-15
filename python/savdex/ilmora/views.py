@@ -2,7 +2,7 @@
 Страницы ILMORA на сайте Savdex.
 
 - /register/ilmora-register — форма заявки (GET) и её отправка (POST,
-  throttle:10,10,ilmora-register, капча — как у первого шага регистрации).
+  throttle:10,10,ilmora-register; капчи нет — без SMS и подтверждений).
   Заявка сохраняется, затем — экран «Заявка принята» с кнопкой «Перейти
   в ILMORA». Аккаунт Savdex не заводится, вход не выполняется;
 - /ilmora/offer — публичная оферта (текст — offer/<язык>.txt).
@@ -26,7 +26,7 @@ from django.http import HttpRequest, HttpResponse
 from savdex.audit import client_ip
 from savdex.ilmora import site_url
 from savdex.ilmora.form import PHONE_PREFIX, Application, validate
-from savdex.web import captcha, eloquent, inertia
+from savdex.web import eloquent, inertia
 from savdex.web.actions import form
 from savdex.web.forms import action, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -88,7 +88,6 @@ def page(request: HttpRequest) -> HttpResponse:
             "done": done,
             "ilmoraUrl": site_url(),
             "phonePrefix": PHONE_PREFIX,
-            "captcha": captcha.enabled(),
         },
         _seo(ctx, ctx.t("ilmora.title")),
     )
@@ -113,10 +112,6 @@ def submit(request: HttpRequest) -> HttpResponse:
 
     if application is None:
         return invalid(ctx, errors)
-
-    # Капча — после полей: с ошибкой в номере задание не гасится зря
-    if (problem := captcha.verify(_session(ctx), "ilmora", data.get("captcha"))) is not None:
-        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     number = save(ctx, application)
     log.info("ILMORA: заявка #%s (%s)", number, application.person_type)

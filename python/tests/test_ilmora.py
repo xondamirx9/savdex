@@ -313,6 +313,19 @@ def test_заявка_сохраняется(сайт, body, prefix, строк�
 
 
 @нужна_база
+def test_без_капчи(сайт):
+    """Капчи у ILMORA нет: заявка проходит и там, где капча входа включена."""
+    sql("delete from ilmora_registrations")
+    _счётчик_с_нуля()
+
+    итог = отправка(сайт, ВЕРНО, CAPTCHA_ENABLED="true")
+
+    assert len(итог["база"]) == 1
+    данные = страница(открыть(сайт, PATH, env={"CAPTCHA_ENABLED": "true"})["body"])
+    assert "captcha" not in данные["props"]
+
+
+@нужна_база
 def test_ошибки_под_полями(сайт):
     sql("delete from ilmora_registrations")
     _счётчик_с_нуля()

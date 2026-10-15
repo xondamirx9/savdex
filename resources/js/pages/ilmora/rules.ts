@@ -14,7 +14,6 @@ export type IlmoraForm = {
     tin: string;
     offer_read: boolean;
     offer_sign: boolean;
-    captcha: number[];
 };
 
 export type IlmoraErrors = Partial<Record<keyof IlmoraForm, string>>;
