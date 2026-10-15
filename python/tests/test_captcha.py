@@ -194,7 +194,9 @@ def _окно(сайт: str, введено: str) -> tuple[dict[str, Any], dict[
         сайт,
         "/captcha/verify?for=register",
         {СЕССИЯ: кука(СЕССИЯ, SID)},
-        {**JSON, "X-XSRF-TOKEN": ТОКЕН},
+        # Токен открытым текстом — X-CSRF-TOKEN; X-XSRF-TOKEN браузер шлёт
+        # зашифрованным, прямо из куки (forms._token_from_request)
+        {**JSON, "X-CSRF-TOKEN": ТОКЕН},
         env=КАПЧА,
         method="POST",
         body=json.dumps({"captcha": введено}),
