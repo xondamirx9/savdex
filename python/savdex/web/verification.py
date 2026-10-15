@@ -4,7 +4,7 @@ VerifyEmailCode со стороны Django (этап 5, шаг 45).
 
 Код — шесть цифр (100000–999999), в кэше Laravel хешем bcrypt под
 ключом email_verification_code.<номер> на 15 минут; пять неверных
-попыток — код гасится. Письмо: код и подписанная ссылка
+кодов подряд — 15 минут блокировки (code_lock). Письмо: код и подписанная ссылка
 /verify-email/<номер>/<sha1 почты> на 60 минут.
 """
 
@@ -20,7 +20,6 @@ from savdex.web import guard, mail, signed
 from savdex.web.shared import Context
 
 TTL_MINUTES = 15
-MAX_ATTEMPTS = 5
 #: config('auth.verification.expire')
 LINK_MINUTES = 60
 
@@ -38,21 +37,13 @@ def issue(user_id: int) -> str:
 
 
 def check(user_id: int, code: str) -> bool:
-    """EmailVerificationCode::check: верный код одноразов."""
+    """
+    EmailVerificationCode::check: верный код одноразов. Неверные считает
+    code_lock (на адрес почты): пять подряд — 15 минут блокировки.
+    """
     entry = laravel_cache.get(_key(user_id), any_store=True)
 
-    if not isinstance(entry, dict):
-        return False
-
-    if int(entry.get("attempts") or 0) >= MAX_ATTEMPTS:
-        laravel_cache.forget_file(_key(user_id))
-
-        return False
-
-    if not guard.check(code, str(entry.get("hash") or "")):
-        entry["attempts"] = int(entry.get("attempts") or 0) + 1
-        laravel_cache.put(_key(user_id), entry, TTL_MINUTES * 60)
-
+    if not isinstance(entry, dict) or not guard.check(code, str(entry.get("hash") or "")):
         return False
 
     laravel_cache.forget_file(_key(user_id))

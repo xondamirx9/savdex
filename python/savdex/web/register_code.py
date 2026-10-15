@@ -3,15 +3,19 @@
 RegisteredUserController::sendCode, code, confirmCode, resendCode и details.
 
 1. Почта (/register, POST /register/email) — адрес проверяется, на него
-   уходит код; адрес — в сессии (register.email).
+   уходит код; адрес — в сессии (register.email). Или телефон (POST
+   /register/phone) — код уходит в SMS (Telnyx), номер — register.sms_phone.
 2. Код (/register/code) — шесть цифр из письма; верный — адрес
-   подтверждён (register.verified_email).
+   подтверждён (register.verified_email). По телефону — код из SMS
+   (POST /register/sms/confirm): номер подтверждён (register.sms_verified).
 3. Анкета (/register/details, POST /register — auth_actions.register):
-   только с подтверждённым адресом.
+   только с подтверждённым адресом или номером. По телефону почта — поле
+   анкеты, без подтверждения: подтвердить её можно потом в профиле.
 
 Код для адреса, у которого ещё нет учётки, — EmailVerificationCode::
 issueForEmail: в кэше Laravel хешем под register_email_code.<sha1 почты>
-на 15 минут, пять неверных попыток — код гасится. Все шаги — за guest:
+на 15 минут. Пять неверных кодов подряд — 15 минут блокировки адреса
+(code_lock): ни ввести код, ни получить новый. Все шаги — за guest:
 вошедший уходит на главную.
 
 Сверка с настоящим Laravel — tests/test_web_register_code.py.
@@ -28,11 +32,12 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import analytics, captcha, guard, inertia, mail, sms
+from savdex.web import analytics, captcha, code_lock, guard, inertia, mail, sms
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_COUNTRY,
     SESSION_EMAIL,
+    SESSION_METHOD,
     SESSION_SKIPPED,
     SESSION_SMS_PHONE,
     SESSION_SMS_VERIFIED,
@@ -52,9 +57,8 @@ from savdex.web.validation import validate
 
 log = logging.getLogger("savdex.register")
 
-#: EmailVerificationCode::TTL_MINUTES и MAX_ATTEMPTS
+#: EmailVerificationCode::TTL_MINUTES
 TTL_MINUTES = 15
-MAX_ATTEMPTS = 5
 
 
 # ── Код для адреса ──────────────────────────────────────────────────
@@ -74,22 +78,15 @@ def issue(email: str) -> str:
 
 
 def check(email: str, code: str) -> bool:
-    """EmailVerificationCode::checkForEmail: верный код одноразов."""
+    """
+    EmailVerificationCode::checkForEmail: верный код одноразов. Неверные
+    считает code_lock — на адрес, а не на код: пять подряд — 15 минут
+    блокировки, и новый код её не снимает.
+    """
     key = _key(email)
     entry = laravel_cache.get(key, any_store=True)
 
-    if not isinstance(entry, dict):
-        return False
-
-    if int(entry.get("attempts") or 0) >= MAX_ATTEMPTS:
-        laravel_cache.forget_file(key)
-
-        return False
-
-    if not guard.check(code, str(entry.get("hash") or "")):
-        entry["attempts"] = int(entry.get("attempts") or 0) + 1
-        laravel_cache.put(key, entry, TTL_MINUTES * 60)
-
+    if not isinstance(entry, dict) or not guard.check(code, str(entry.get("hash") or "")):
         return False
 
     laravel_cache.forget_file(key)
@@ -205,11 +202,16 @@ def send_code(request: HttpRequest) -> HttpResponse:
     if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
         return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
+    # Пять неверных кодов на этот адрес — 15 минут и нового кода нет
+    if (locked := code_lock.locked_message(ctx, code_lock.email(email))) is not None:
+        return invalid(ctx, {"email": [locked]})
+
     # Письмо не ушло — остаёмся на первом шаге с понятной ошибкой
     if not _mail_code(ctx, email):
         return invalid(ctx, {"email": [ctx.t("messages.register.email_send_failed")]})
 
     store = _session(ctx)
+    store.put(SESSION_METHOD, "email")
     store.put(SESSION_EMAIL, email)
     store.put(SESSION_COUNTRY, country)
     store.forget(SESSION_VERIFIED)
@@ -240,6 +242,27 @@ def code_page(request: HttpRequest) -> HttpResponse:
     if isinstance(ctx, HttpResponse):
         return ctx
 
+    phone = _phone(ctx)
+
+    # По телефону: код из SMS на номер первого шага
+    if phone is not None:
+        return inertia.render(
+            ctx,
+            "auth/RegisterCode",
+            {
+                "method": "phone",
+                "phone": phone,
+                "email": None,
+                "status": _flash(ctx, "status"),
+                "demoCode": None,
+                "canSkip": False,
+                "phoneAvailable": True,
+                "chinaMailbox": False,
+                "sender": None,
+            },
+            _seo(ctx),
+        )
+
     email = _email(ctx)
 
     if email is None:
@@ -249,19 +272,16 @@ def code_page(request: HttpRequest) -> HttpResponse:
         ctx,
         "auth/RegisterCode",
         {
+            "method": "email",
+            "phone": None,
             "email": email,
             "status": _flash(ctx, "status"),
             # Только на демо-стенде без почты (_mail_code)
             "demoCode": _flash(ctx, "demo_code"),
             # Страна с галочкой «Регистрация без кода» — «Продолжить без кода»
             "canSkip": code_optional(_session(ctx).get(SESSION_COUNTRY)),
-            # Код по SMS (Telnyx) — для всех стран, когда ключи заданы
-            "sms": {
-                "enabled": sms.configured(),
-                # Номер, на который код уже ушёл: показываем поле для кода
-                "sentTo": _session(ctx).get(SESSION_SMS_PHONE),
-                "dialCode": _dial_code(_session(ctx).get(SESSION_COUNTRY)),
-            },
+            # Письмо не приходит — ссылка «Зарегистрируйтесь по телефону»
+            "phoneAvailable": sms.configured(),
             # Китайский ящик (qq.com, 163.com…): письма идут дольше и чаще
             # в «Спам» — своя подсказка и адрес отправителя для белого списка
             "chinaMailbox": mail.is_chinese_mailbox(email),
@@ -306,9 +326,19 @@ def confirm_code(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    if not check(email, _php_string(data.get("code"))):
-        return _with_errors(ctx, {"code": [ctx.t("messages.auth.code_invalid")]})
+    target = code_lock.email(email)
 
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"code": [locked]})
+
+    if not check(email, _php_string(data.get("code"))):
+        code_lock.fail(target)
+
+        return _with_errors(
+            ctx, {"code": [code_lock.failure_message(ctx, target, "messages.auth.code_invalid")]}
+        )
+
+    code_lock.clear(target)
     _session(ctx).put(SESSION_VERIFIED, email)
 
     return _to(ctx, "/register/details")
@@ -329,7 +359,9 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     if email is None:
         return _to(ctx, "/register")
 
-    if _mail_code(ctx, email):
+    if (locked := code_lock.locked_message(ctx, code_lock.email(email))) is not None:
+        flash(ctx, "error", locked)
+    elif _mail_code(ctx, email):
         flash(ctx, "status", ctx.t("messages.auth.mail_resent"))
     else:
         flash(ctx, "error", ctx.t("messages.register.email_send_failed"))
@@ -337,7 +369,7 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     return back(ctx)
 
 
-# ── Код по SMS (Telnyx Verify, savdex/web/sms.py) ───────────────────
+# ── Регистрация по телефону (Telnyx Verify, savdex/web/sms.py) ─────
 
 
 def _dial_code(country_id: Any) -> str | None:  # noqa: ANN401
@@ -355,11 +387,37 @@ def _dial_code(country_id: Any) -> str | None:  # noqa: ANN401
     return ("+" + code.lstrip("+")) if code else None
 
 
+def _phone(ctx: Context) -> str | None:
+    """Номер первого шага, если человек регистрируется по телефону."""
+    store = _session(ctx)
+    phone = store.get(SESSION_SMS_PHONE)
+
+    if store.get(SESSION_METHOD) != "phone":
+        return None
+
+    return phone if isinstance(phone, str) and phone != "" else None
+
+
+def _send_sms(ctx: Context, phone: str) -> str | None:
+    """Код на номер; не ушёл — текст ошибки. Каждое SMS платное."""
+    if (locked := code_lock.locked_message(ctx, code_lock.phone(phone))) is not None:
+        return locked
+
+    if sms.daily_limit_reached(phone):
+        return ctx.t("messages.register.sms_limit")
+
+    if not sms.send_code(phone):
+        return ctx.t("messages.register.sms_failed")
+
+    return None
+
+
 @form()
-def send_sms(request: HttpRequest) -> HttpResponse:
+def send_phone(request: HttpRequest) -> HttpResponse:
     """
-    «Получить код по SMS»: Telnyx шлёт код на номер. Каждое SMS платное —
-    поэтому частота с адреса сети и не больше sms.MAX_PER_DAY в сутки на номер.
+    Шаг 1, «Телефон»: страна и номер — Telnyx шлёт код. Частота с адреса
+    сети и не больше sms.MAX_PER_DAY SMS в сутки на номер. Номер, уже
+    подтверждённый другой учёткой, второй раз не регистрируется.
     """
     ctx = action(
         request, auth=False, throttle=5, throttle_minutes=10, throttle_prefix="register-sms"
@@ -368,38 +426,75 @@ def send_sms(request: HttpRequest) -> HttpResponse:
     if (refused := _guest(ctx)) is not None:
         return refused
 
-    store = _session(ctx)
-    email = _email(ctx)
-
-    if email is None:
+    if not sms.configured():
         return _to(ctx, "/register")
 
-    if not sms.configured():
-        return _to(ctx, "/register/code")
+    data = input_of(request)
+    country = _country_id(data.get("country_id"))
+    errors: dict[str, list[str]] = {}
 
-    phone = sms.normalize(
-        _php_string(input_of(request).get("phone")), _dial_code(store.get(SESSION_COUNTRY))
-    )
+    if country is None:
+        errors["country_id"] = [ctx.t("messages.company.country_required")]
+
+    phone = sms.normalize(_php_string(data.get("phone")), _dial_code(country))
 
     if phone is None:
-        return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
+        errors["phone"] = [ctx.t("messages.phone_format")]
+    elif sms.verified_elsewhere(phone):
+        errors["phone"] = [ctx.t("messages.register.phone_taken")]
 
-    if sms.daily_limit_reached(phone):
-        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_limit")]})
+    if errors:
+        return invalid(ctx, errors)
 
-    if not sms.send_code(phone):
-        return invalid(ctx, {"phone": [ctx.t("messages.register.sms_failed")]})
+    assert phone is not None
 
+    # Капча — до SMS: каждое SMS платное, без неё бот гонял бы их на чужие номера
+    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
+
+    if (failed := _send_sms(ctx, phone)) is not None:
+        return invalid(ctx, {"phone": [failed]})
+
+    store = _session(ctx)
+    store.put(SESSION_METHOD, "phone")
     store.put(SESSION_SMS_PHONE, phone)
+    store.put(SESSION_COUNTRY, country)
+    store.forget(SESSION_EMAIL)
+    store.forget(SESSION_VERIFIED)
+    store.forget(SESSION_SKIPPED)
     store.forget(SESSION_SMS_VERIFIED)
+    analytics.queue(ctx, "sign_up_start", {"plan_param": analytics.intended_plan(ctx)})
     flash(ctx, "status", ctx.t("messages.register.sms_sent", phone=phone))
 
     return _to(ctx, "/register/code")
 
 
 @form()
+def send_sms(request: HttpRequest) -> HttpResponse:
+    """Шаг 2 по телефону: «Отправить код ещё раз» на номер первого шага."""
+    ctx = action(
+        request, auth=False, throttle=5, throttle_minutes=10, throttle_prefix="register-sms"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    phone = _phone(ctx)
+
+    if phone is None:
+        return _to(ctx, "/register")
+
+    if (failed := _send_sms(ctx, phone)) is not None:
+        flash(ctx, "error", failed)
+    else:
+        flash(ctx, "status", ctx.t("messages.register.sms_sent", phone=phone))
+
+    return back(ctx)
+
+
+@form()
 def confirm_sms(request: HttpRequest) -> HttpResponse:
-    """Код из SMS верный — анкета открыта, номер подтверждён (учётка без метки)."""
+    """Код из SMS верный — номер подтверждён, анкета открыта."""
     from savdex.web.account_actions import _with_errors
 
     ctx = action(
@@ -409,25 +504,27 @@ def confirm_sms(request: HttpRequest) -> HttpResponse:
     if (refused := _guest(ctx)) is not None:
         return refused
 
-    store = _session(ctx)
-    email = _email(ctx)
-    phone = store.get(SESSION_SMS_PHONE)
+    phone = _phone(ctx)
 
-    if email is None:
+    if phone is None:
         return _to(ctx, "/register")
-
-    if not isinstance(phone, str) or phone == "":
-        return _to(ctx, "/register/code")
 
     code = _php_string(input_of(request).get("sms_code")).strip()
 
     if code == "":
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
-    if not sms.check_code(phone, code):
-        return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.code_invalid")]})
+    target = code_lock.phone(phone)
 
-    store.put(SESSION_SMS_VERIFIED, {"email": email, "phone": phone})
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"sms_code": [locked]})
+
+    if not sms.check_code(phone, code):
+        message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")
+
+        return _with_errors(ctx, {"sms_code": [message]})
+
+    _session(ctx).put(SESSION_SMS_VERIFIED, {"phone": phone})
 
     return _to(ctx, "/register/details")
 
@@ -476,10 +573,20 @@ def details(request: HttpRequest) -> HttpResponse:
         return ctx
 
     store = _session(ctx)
-    verified, skipped = registration_email(store)
+    phone = sms_phone(store)
 
-    if verified is None:
-        return _to(ctx, "/register/code" if store.get(SESSION_EMAIL) is not None else "/register")
+    # По телефону: номер подтверждён, почту человек впишет в анкете
+    if phone is not None:
+        verified, skipped = "", False
+    else:
+        email, skipped = registration_email(store)
+
+        if email is None:
+            started = store.get(SESSION_EMAIL) is not None or _phone(ctx) is not None
+
+            return _to(ctx, "/register/code" if started else "/register")
+
+        verified = email
 
     names = _named("categories", ctx.locale)
     city_names = _named("cities", ctx.locale)
@@ -500,8 +607,8 @@ def details(request: HttpRequest) -> HttpResponse:
             # Страна с первого шага; код пропущен — сменить её нельзя
             "countryId": store.get(SESSION_COUNTRY),
             "skipped": skipped,
-            # Номер подтверждён кодом из SMS — в анкете он закреплён
-            "smsPhone": sms_phone(store),
+            # Регистрация по телефону: номер закреплён, почта — поле анкеты
+            "smsPhone": phone,
             # Юрлицо выбирает, чем торгует, — разделы каталога верхнего уровня
             "categories": categories,
             # Город физлица и фрилансера — из справочника страны или «Другой»

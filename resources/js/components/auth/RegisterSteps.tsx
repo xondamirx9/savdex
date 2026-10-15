@@ -5,9 +5,19 @@ import { t } from '@/lib/i18n';
 /**
  * Полоска «Почта → Код → Данные» над формами регистрации.
  * Пройденные шаги отмечены галочкой, текущий — номером на синем.
+ * Первый шаг назван по способу: «Почта», «Телефон» или «Способ» —
+ * пока человек его не выбрал.
  */
-export function RegisterSteps({ current }: { current: 1 | 2 | 3 }) {
-    const steps = [t('auth.reg_step_email'), t('auth.reg_step_code'), t('auth.reg_step_details')];
+export function RegisterSteps({
+    current,
+    method = 'email',
+}: {
+    current: 1 | 2 | 3;
+    method?: 'email' | 'phone' | null;
+}) {
+    const first =
+        method === 'phone' ? 'auth.reg_step_phone' : method === null ? 'auth.reg_step_method' : 'auth.reg_step_email';
+    const steps = [t(first), t('auth.reg_step_code'), t('auth.reg_step_details')];
 
     return (
         <nav aria-label={t('auth.reg_step_of', { current, total: steps.length })} className="mb-6">
