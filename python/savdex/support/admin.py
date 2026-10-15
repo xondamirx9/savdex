@@ -18,6 +18,10 @@
 - «Закрыть» и «Открыть снова»; дата закрытия — сама (Ticket::saving);
 - удаление — в корзину, только суперадмин.
 
+Своё: «Спам» (в обращении и над отмеченными) — обращение в корзину,
+отправитель в спам-фильтр, его письма больше не становятся обращениями;
+«Спам-фильтр» над очередью — список адресов и «Вернуть» (savdex/support/spam.py).
+
 Отличия: переписка видна на странице обращения (у Filament её не было
 видно нигде), и ответ пишет в журнал одну строку — с изменениями и
 пометкой «Ответ клиенту» или «Внутренняя заметка» (у Filament две:
@@ -34,6 +38,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import connections, transaction
 from django.db.models import Count, Q, QuerySet
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -47,6 +52,7 @@ from savdex.crm.admin import TONES, CrmAdmin, OpenFilter, _badge, employees, whe
 from savdex.crm.models import Company
 from savdex.laravel_storage import private_root
 from savdex.support import mail as support_mail
+from savdex.support import spam
 from savdex.support.models import (
     CHANNELS,
     PRIORITIES,
@@ -55,6 +61,7 @@ from savdex.support.models import (
     STATUS_WAITING,
     STATUS_WORKING,
     STATUSES,
+    BlockedSender,
     Message,
     Ticket,
 )
@@ -129,6 +136,7 @@ class TicketAdmin(CrmAdmin):
     title_add = "Завести обращение"
     title_change = "Обращение"
     change_form_template = "admin/support/ticket/change_form.html"
+    change_list_template = "admin/support/ticket/change_list.html"
 
     form = TicketForm
     fieldsets = (
@@ -147,7 +155,7 @@ class TicketAdmin(CrmAdmin):
     list_select_related = ("user", "company", "assignee")
     search_fields = ("subject", "author_name")
     ordering = ("-created_at", "-id")
-    actions = ("take_selected",)
+    actions = ("take_selected", "spam_selected")
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Ticket]:
         queryset: QuerySet[Ticket] = super().get_queryset(request)
@@ -241,8 +249,13 @@ class TicketAdmin(CrmAdmin):
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         # Кнопка «Взять» в строке — только с правом правки
         self._can_take = self.has_edit(request)
+        extra = {
+            **(extra_context or {}),
+            "spam_url": reverse("savdex_admin:support_ticket_spam_list"),
+            "spam_count": BlockedSender.objects.count(),
+        }
 
-        return super().changelist_view(request, extra_context)
+        return super().changelist_view(request, extra)
 
     # ── Взять, ответить, закрыть ──
 
@@ -335,6 +348,54 @@ class TicketAdmin(CrmAdmin):
 
         return support_mail.reply(ticket, message)
 
+    def mark_spam(self, request: HttpRequest, ticket: Ticket) -> str | None:
+        """«Спам»: обращение в корзину, отправитель в фильтр. Без почты — None."""
+        email = support_mail.recipient(ticket)
+
+        if not email:
+            return None
+
+        address = spam.normalized(email)
+        blocked = spam.mark(ticket, address, _admin_of(request).id)
+        audit.record(
+            connections["default"],
+            action="deleted",
+            section=self.section,
+            actor=_admin_of(request),
+            subject_type=self.laravel_model,
+            subject_id=ticket.pk,
+            subject_label=ticket.subject,
+            note=f"Спам: письма с {address} больше не становятся обращениями"
+            if blocked
+            else f"Спам ({address} уже в спам-фильтре)",
+            ip=audit.client_ip(request),
+        )
+
+        return address
+
+    @admin.action(
+        description="Спам — убрать и не принимать письма отправителя", permissions=["take"]
+    )
+    def spam_selected(self, request: HttpRequest, queryset: QuerySet[Ticket]) -> None:
+        tickets = list(queryset)
+        done = [address for ticket in tickets if (address := self.mark_spam(request, ticket))]
+        skipped = len(tickets) - len(done)
+
+        if done:
+            self.message_user(
+                request,
+                f"Убрано в спам: {len(done)}. Письма с этих адресов больше не станут "
+                "обращениями — вернуть можно в «Спам-фильтре».",
+                messages.SUCCESS,
+            )
+
+        if skipped:
+            self.message_user(
+                request,
+                f"Без почты отправителя, не тронуто: {skipped}.",
+                messages.WARNING,
+            )
+
     @admin.action(description="Взять себе", permissions=["take"])
     def take_selected(self, request: HttpRequest, queryset: QuerySet[Ticket]) -> None:
         done = sum(self.take(request, ticket) for ticket in queryset)
@@ -346,6 +407,21 @@ class TicketAdmin(CrmAdmin):
 
     def get_urls(self) -> list[Any]:
         return [
+            path(
+                "spam/",
+                self.admin_site.admin_view(self.spam_list_view),
+                name="support_ticket_spam_list",
+            ),
+            path(
+                "spam/release/",
+                self.admin_site.admin_view(self.spam_release_view),
+                name="support_ticket_spam_release",
+            ),
+            path(
+                "<path:object_id>/spam/",
+                self.admin_site.admin_view(self.spam_view),
+                name="support_ticket_spam",
+            ),
             path(
                 "<path:object_id>/take/",
                 self.admin_site.admin_view(self.take_view),
@@ -405,6 +481,76 @@ class TicketAdmin(CrmAdmin):
         self.message_user(request, "Статус изменён.", messages.SUCCESS)
 
         return self._back(request, ticket)
+
+    def spam_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        ticket = self._one(request, object_id)
+        address = self.mark_spam(request, ticket)
+
+        if address is None:
+            self.message_user(
+                request, "У обращения нет почты отправителя — блокировать нечего.", messages.ERROR
+            )
+
+            return HttpResponseRedirect(
+                reverse("savdex_admin:support_ticket_change", args=[ticket.pk])
+            )
+
+        self.message_user(
+            request,
+            f"Обращение убрано в спам. Письма с {address} больше не станут обращениями — "
+            "вернуть можно в «Спам-фильтре».",
+            messages.SUCCESS,
+        )
+
+        return HttpResponseRedirect(reverse("savdex_admin:support_ticket_changelist"))
+
+    def spam_list_view(self, request: HttpRequest) -> HttpResponse:
+        """Спам-фильтр: заблокированные адреса и «Вернуть»."""
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        senders = [
+            {"sender": sender, "removed": spam.removed_count(sender.email)}
+            for sender in BlockedSender.objects.select_related("blocked_by")
+        ]
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Спам-фильтр",
+            "opts": self.model._meta,
+            "senders": senders,
+            "can_release": self.has_edit(request),
+        }
+
+        return TemplateResponse(request, "admin/support/ticket/spam.html", context)
+
+    def spam_release_view(self, request: HttpRequest) -> HttpResponse:
+        if request.method != "POST" or not self.has_edit(request):
+            raise PermissionDenied
+
+        released = spam.release(request.POST.get("email", ""))
+
+        if released is None:
+            self.message_user(request, "Этого адреса в спам-фильтре уже нет.", messages.WARNING)
+        else:
+            audit.record(
+                connections["default"],
+                action="restored",
+                section=self.section,
+                actor=_admin_of(request),
+                subject_label=released.email,
+                note=f"Спам-фильтр: письма с {released.email} снова принимаются, "
+                f"возвращено обращений: {released.tickets}",
+                ip=audit.client_ip(request),
+            )
+            self.message_user(
+                request,
+                f"Письма с {released.email} снова принимаются. "
+                f"Возвращено обращений: {released.tickets}.",
+                messages.SUCCESS,
+            )
+
+        return HttpResponseRedirect(reverse("savdex_admin:support_ticket_spam_list"))
 
     def reply_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
         ticket = self._one(request, object_id)
@@ -495,6 +641,7 @@ class TicketAdmin(CrmAdmin):
                 ]
 
             extra["client_email"] = support_mail.recipient(ticket)
+            extra["can_spam"] = editable and bool(extra["client_email"])
             extra["can_take"] = editable and ticket.assignee_id is None
             extra["can_reply"] = editable
             extra["can_toggle"] = editable

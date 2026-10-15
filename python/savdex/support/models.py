@@ -11,6 +11,9 @@
   открыто снова — снимается;
 - кто обратился — из учётной записи, иначе имя из обращения;
 - сообщение без мягкого удаления; внутренняя заметка клиенту не видна.
+
+Своё, Django: спам-фильтр (support_blocked_senders) и отметка spam_at у
+обращения, убранного как спам (savdex/support/spam.py).
 """
 
 from __future__ import annotations
@@ -88,6 +91,8 @@ class Ticket(SoftDeleting):
     )
     last_reply_at = UTCDateTimeField("последний ответ", null=True, blank=True, editable=False)
     closed_at = UTCDateTimeField("закрыто", null=True, blank=True, editable=False)
+    #: Убрано как спам (и в корзине): «Вернуть» в спам-фильтре восстановит
+    spam_at = UTCDateTimeField("спам", null=True, blank=True, editable=False)
 
     class Meta:
         managed = False
@@ -152,3 +157,29 @@ class Message(Timestamped):
 
     def __str__(self) -> str:
         return self.body[:60]
+
+
+class BlockedSender(Timestamped):
+    """Спам-фильтр поддержки: письма с этого адреса не становятся обращениями."""
+
+    email = models.CharField("адрес", max_length=160, unique=True)
+    blocked_by = models.ForeignKey(
+        User,
+        verbose_name="кто заблокировал",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        db_column="blocked_by",
+        related_name="+",
+    )
+
+    class Meta:
+        managed = False
+        db_table = "support_blocked_senders"
+        verbose_name = "заблокированный отправитель"
+        verbose_name_plural = "спам-фильтр"
+        ordering = ("-created_at", "-id")
+
+    def __str__(self) -> str:
+        return self.email
