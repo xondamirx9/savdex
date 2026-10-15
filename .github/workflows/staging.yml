@@ -85,7 +85,7 @@ jobs:
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 1
@@ -145,7 +145,8 @@ jobs:
       - name: Код на сервере
         run: |
           sha=$(git rev-parse HEAD)
-          echo "Коммит $sha"
+          # Аннотацией: видна на странице запуска без журнала
+          echo "::notice title=Коммит::$(git log -1 --format='%h %s')"
           ssh -l deploy staging "set -e
             test -d /opt/savdex/src/.git || git clone --no-checkout --filter=blob:none '$REPO_URL' /opt/savdex/src
             git -C /opt/savdex/src fetch --depth 1 origin '$sha'
@@ -157,6 +158,8 @@ jobs:
         run: |
           printf '%s\n' "$STAGING_PASSWORD" \
             | ssh -l deploy staging "SITE_DOMAIN='$SITE_DOMAIN' bash /opt/savdex/src/deploy/server/deploy.sh --password-stdin"
+          # Что на самом деле запущено: тег образа и коммит последней выкладки
+          echo "::notice title=Запущено::$(ssh -l deploy staging 'tail -1 /opt/savdex/releases.log')"
 
       - name: Демо-данные
         if: inputs.demo_reset

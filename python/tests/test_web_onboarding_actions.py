@@ -610,6 +610,8 @@ def сброс_удаления(**поля: Any) -> Callable[[], None]:
     def run() -> None:
         sql("delete from admin_actions")
         sql("delete from listings")
+        sql("update companies set deleted_at = null where slug = 'mine'")
+        sql("update users set deleted_at = now() where email = 'colleague@savdex.uz'")
         mine = _номер("companies", "mine")
         for status in ("active", "active", "draft", "archived"):
             объявление(company_id=mine, status=status)
@@ -638,6 +640,7 @@ def снимок_удаления() -> Any:
             "from listings order by id"
         ),
         "journal": _журнал(),
+        "company_deleted": sql("select deleted_at is not null from companies where slug = 'mine'"),
     }
 
 
@@ -694,6 +697,27 @@ def test_удалить_учётку(сайт, body, поля):
     assert [(a, s, label) for a, s, label, _ in db["journal"]] == (
         [("updated", "users", f"Покупатель {ПОЧТА}")] if поля.get("is_admin") else []
     )
+    # Владелец, и в компании больше никого — компания удалена: её ИНН или
+    # ПИНФЛ свободны для новой регистрации
+    assert db["company_deleted"] == [(архив,)]
+
+
+def test_удалить_учётку_компания_с_сотрудником(сайт):
+    """В компании остался сотрудник — она живёт дальше."""
+    from .test_web_forms import учётка
+
+    mine = _номер("companies", "mine")
+    uid = пользователь(company_id=mine, company_role="owner")
+
+    def подготовить() -> None:
+        сброс_удаления(company_id=mine, company_role="owner")()
+        учётка("colleague@savdex.uz", company_id=mine, company_role="manager")
+        sql("update users set deleted_at = null where email = 'colleague@savdex.uz'")
+
+    итог = удаление(сайт, подготовить, uid, {"password": ПАРОЛЬ})
+
+    assert итог["db"]["user"] == [(True, True, False)]
+    assert итог["db"]["company_deleted"] == [(False,)]
 
 
 def удаление(

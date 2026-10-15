@@ -27,6 +27,8 @@ interface Props {
         email_verified: boolean;
         phone_verified: boolean;
     };
+    /** Код по SMS: настроен ли и на какой номер уже ушёл */
+    sms?: { available: boolean; sentTo: string | null };
     notifications: Notification[];
     telegram: { available: boolean; linked: boolean; username: string | null };
     security: { two_factor: boolean; last_login_at: string | null; last_login_ip: string | null };
@@ -51,7 +53,16 @@ const LOCALES = [
     ['tr', 'Türkçe'],
 ];
 
-export default function Settings({ profile, notifications, telegram, security, is_owner, categories, feed }: Props) {
+export default function Settings({
+    profile,
+    sms,
+    notifications,
+    telegram,
+    security,
+    is_owner,
+    categories,
+    feed,
+}: Props) {
     // У физлица и фрилансера всё о себе — в «Моём профиле» и меняется там
     // когда угодно: второй блок «Данные компании» с полями организации им не нужен
     const person = Boolean(usePage<SharedProps>().props.auth?.company?.person);
@@ -65,6 +76,8 @@ export default function Settings({ profile, notifications, telegram, security, i
     const unlink = useForm({});
     const form = useForm({ name: profile.name, phone: profile.phone ?? '', locale: profile.locale });
     const remove = useForm({ password: '' });
+    const smsSend = useForm({});
+    const smsCheck = useForm({ sms_code: '' });
     const pick = useForm<{ categories: number[] }>({ categories: chosen });
     const feedForm = useForm<{ on: boolean }>({ on: feed });
 
@@ -232,6 +245,59 @@ export default function Settings({ profile, notifications, telegram, security, i
                                 <p className="hint">
                                     {profile.phone_verified ? t('cabinet.settings.phone_verified') : t('cabinet.settings.phone_unverified')}{t('cabinet.settings.phone_note')}
                                 </p>
+                            )}
+                            {(smsSend.errors as Record<string, string | undefined>).phone && (
+                                <p className="hint" style={{ color: 'var(--danger)' }}>
+                                    {(smsSend.errors as Record<string, string | undefined>).phone}
+                                </p>
+                            )}
+                            {/* Подтверждение номера кодом из SMS: сохранённый номер, не вписанный сейчас */}
+                            {!profile.phone_verified && sms?.available && form.data.phone === (profile.phone ?? '') && (
+                                <div className="stack-8 mt-8">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm"
+                                        disabled={smsSend.processing || !profile.phone}
+                                        onClick={() =>
+                                            smsSend.post(routes.cabinetSettings + '/phone/send', { preserveScroll: true })
+                                        }
+                                    >
+                                        {sms.sentTo ? t('cabinet.settings.phone_sms_resend') : t('cabinet.settings.phone_sms_send')}
+                                    </button>
+                                    {sms.sentTo && (
+                                        <div className="row" style={{ gap: 8 }}>
+                                            <input
+                                                className="input"
+                                                inputMode="numeric"
+                                                autoComplete="one-time-code"
+                                                maxLength={10}
+                                                aria-label={t('auth.reg_sms_code_label', { phone: sms.sentTo })}
+                                                placeholder={t('auth.reg_sms_code_label', { phone: sms.sentTo })}
+                                                value={smsCheck.data.sms_code}
+                                                onChange={(e) => {
+                                                    smsCheck.setData('sms_code', e.target.value.replace(/\D/g, ''));
+                                                    if (smsCheck.errors.sms_code) smsCheck.clearErrors('sms_code');
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary btn-sm"
+                                                disabled={smsCheck.processing || smsCheck.data.sms_code.length < 4}
+                                                onClick={() =>
+                                                    smsCheck.post(routes.cabinetSettings + '/phone/confirm', {
+                                                        preserveScroll: true,
+                                                        onSuccess: () => smsCheck.reset(),
+                                                    })
+                                                }
+                                            >
+                                                {t('cabinet.settings.phone_sms_confirm')}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {smsCheck.errors.sms_code && (
+                                        <p className="hint" style={{ color: 'var(--danger)' }}>{smsCheck.errors.sms_code}</p>
+                                    )}
+                                </div>
                             )}
                         </div>
 

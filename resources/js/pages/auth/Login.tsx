@@ -41,14 +41,17 @@ export default function Login({ status, captcha = false }: { status?: string; ca
             )}
 
             <form onSubmit={submit} className="space-y-5" noValidate>
+                {/* Почта или подтверждённый телефон (регистрация по телефону):
+                    type="text", иначе браузер не пустит номер в поле почты */}
                 <TextInput
-                    label={t('auth.email_short_label')}
-                    type="email"
+                    label={t('auth.login_identifier')}
+                    type="text"
+                    inputMode="email"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
                     name="email"
-                    autoComplete="email"
+                    autoComplete="username"
                     required
                     value={data.email}
                     onChange={(e) => setData('email', e.target.value)}
@@ -58,6 +61,7 @@ export default function Login({ status, captcha = false }: { status?: string; ca
                      * см. AuthenticatedSessionController (NEG-02, NEG-06d).
                      */
                     error={errors.email}
+                    hint={t('auth.login_identifier_hint')}
                     autoFocus
                 />
 

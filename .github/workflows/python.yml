@@ -46,9 +46,9 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -66,7 +66,14 @@ jobs:
         run: uv run mypy savdex
 
       - name: Тесты
-        run: uv run pytest -q
+        # Упавшие тесты — ещё и аннотациями: видны на странице запуска без журнала
+        run: |
+          set -o pipefail
+          uv run pytest -q -rfE 2>&1 | tee /tmp/pytest.txt || {
+            status=$?
+            grep -E '^(FAILED|ERROR) ' /tmp/pytest.txt | head -30 | sed 's/^/::error title=Тест::/'
+            exit $status
+          }
         env:
           SAVDEX_TEST_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test
           SAVDEX_PARITY_PG_URL: postgres://savdex:savdex@127.0.0.1:5432/savdex_test

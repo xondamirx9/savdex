@@ -1287,8 +1287,61 @@ a.listing-title:hover{color:var(--primary-700);text-decoration:none}
 .go-arrow{transition:transform .3s cubic-bezier(.16,1,.3,1)}
 .lift:hover .go-arrow,a:hover>.go-arrow{transform:translateX(4px)}
 
+/* Шторка: заголовок раздела открывается слева направо, как будто
+   с него стягивают ткань. clip-path, а не накладка цвета фона —
+   работает на любом фоне (белом, сером, тёмном) и не перекрывает
+   соседей. Запас в .2em — чтобы не срезать хвосты букв у/д/р */
+[data-reveal='wipe']{opacity:1;transform:none;clip-path:inset(-.2em 100% -.2em -.2em);
+  transition:clip-path 1s cubic-bezier(.65,0,.35,1)}
+[data-reveal='wipe'].is-visible{clip-path:inset(-.2em -.2em -.2em -.2em)}
+
+/* Переворот: карточка встаёт из наклона назад, как страница
+   перекидного календаря. Перспектива — на сетке, чтобы у всех
+   карточек была одна точка схода */
+[data-reveal-stagger='flip']{perspective:1200px}
+[data-reveal-stagger='flip']>*{opacity:0;transform:rotateX(-70deg);transform-origin:50% 0;
+  transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .8s cubic-bezier(.16,1,.3,1)}
+[data-reveal-stagger='flip'].is-visible>*{opacity:1;transform:none}
+
+/* Длинные сетки (категории, новости): каскад и дальше шестой карточки */
+[data-reveal-stagger].is-visible>*:nth-child(7){transition-delay:420ms}
+[data-reveal-stagger].is-visible>*:nth-child(8){transition-delay:490ms}
+[data-reveal-stagger].is-visible>*:nth-child(n+9){transition-delay:560ms}
+
+/* «Как это работает»: линия между шагами заполняется цветом, пока
+   шаги появляются, а номер шага «щёлкает», когда линия до него дошла.
+   На компьютере линия горизонтальная — через центры номеров (в ряд
+   четыре колонки с промежутком 20px); на телефоне — вертикальные
+   отрезки между шагами, они уже есть в разметке телефона */
+.flow-num{z-index:1}
+.flow.is-visible .flow-num{animation:flow-pop .5s cubic-bezier(.34,1.56,.64,1) both}
+.flow.is-visible>:nth-child(2) .flow-num{animation-delay:.35s}
+.flow.is-visible>:nth-child(3) .flow-num{animation-delay:.7s}
+.flow.is-visible>:nth-child(4) .flow-num{animation-delay:1.05s}
+@keyframes flow-pop{0%{transform:scale(.4)}100%{transform:none}}
+@media (min-width:1201px){
+  .flow{position:relative}
+  .flow-num{position:relative}
+  .flow::before,.flow::after{content:'';position:absolute;top:25px;height:2px;left:18px;
+    right:calc((100% - 60px) / 4 - 18px)}
+  .flow::before{background:var(--border)}
+  .flow::after{background:var(--primary-700);transform:scaleX(0);transform-origin:left;
+    transition:transform 1.1s cubic-bezier(.65,0,.35,1)}
+  .flow.is-visible::after{transform:none}
+}
+@media (max-width:768px){
+  .flow-step:not(:last-child)::before{background:var(--primary-700);transform:scaleY(0);
+    transform-origin:top;transition:transform .45s cubic-bezier(.65,0,.35,1)}
+  .flow.is-visible .flow-step:not(:last-child)::before{transform:none}
+  .flow.is-visible>:nth-child(2)::before{transition-delay:.35s}
+  .flow.is-visible>:nth-child(3)::before{transition-delay:.7s}
+}
+
 @media (prefers-reduced-motion:reduce){
   [data-reveal],[data-reveal-stagger]>*{opacity:1!important;transform:none!important}
+  [data-reveal='wipe']{clip-path:none!important}
+  .flow::after,.flow-step::before{transform:none!important}
+  .flow.is-visible .flow-num{animation:none}
   .lift:hover{transform:none}
 }
 

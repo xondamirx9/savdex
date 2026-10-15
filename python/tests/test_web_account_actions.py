@@ -520,12 +520,17 @@ def test_смена_пароля_выходит_на_других_устройс
 # ── Подтверждение почты ─────────────────────────────────────────────
 
 
-def _код(код: str = "123456", попытки: int = 0) -> Callable[[], None]:
+def _код(код: str = "123456", неверных: int = 0) -> Callable[[], None]:
+    """Код в кэше; неверных — столько неверных кодов на адрес уже было (code_lock)."""
+
     def run() -> None:
+        from savdex.web import code_lock
+
         uid = пользователь(email_verified_at=None)
-        laravel_cache.put(
-            f"email_verification_code.{uid}", {"hash": _хеш(код), "attempts": попытки}, 900
-        )
+        laravel_cache.put(f"email_verification_code.{uid}", {"hash": _хеш(код), "attempts": 0}, 900)
+
+        for _ in range(неверных):
+            code_lock.fail(code_lock.email(ПОЧТА))
 
     return run
 
@@ -534,6 +539,7 @@ def _код(код: str = "123456", попытки: int = 0) -> Callable[[], Non
 НЕ_ПОДОШЁЛ = {
     "code": ["Код не подошёл или устарел. Отправьте письмо повторно и введите код из него."]
 }
+ЗАБЛОКИРОВАН = {"code": ["Слишком много неверных попыток. Попробуйте снова через 15 мин."]}
 
 
 @pytest.mark.parametrize(
@@ -543,12 +549,14 @@ def _код(код: str = "123456", попытки: int = 0) -> Callable[[], Non
         ({"code": "12345"}, _код(), None, ({"code": ["Код — шесть цифр"]}, {"attempts": 0})),
         ({"code": "12345a"}, _код(), None, ({"code": ["Код — шесть цифр"]}, {"attempts": 0})),
         ({"code": 123456.0}, _код(), None, "/cabinet"),
-        # Неверный — попытка засчитана
-        ({"code": "000000"}, _код(), None, (НЕ_ПОДОШЁЛ, {"attempts": 1})),
+        # Неверный — код на месте, попытку считает code_lock
+        ({"code": "000000"}, _код(), None, (НЕ_ПОДОШЁЛ, {"attempts": 0})),
+        # Пятый неверный подряд — 15 минут блокировки
+        ({"code": "000000"}, _код(неверных=4), None, (ЗАБЛОКИРОВАН, {"attempts": 0})),
         ({"code": "123456"}, _код(), None, "/cabinet"),
         ({"code": 123456}, _код(), None, "/cabinet"),
-        # Попытки кончились — код больше не действует
-        ({"code": "123456"}, _код(попытки=5), None, (НЕ_ПОДОШЁЛ, None)),
+        # Заблокирован — и верный код не принимается, код на месте
+        ({"code": "123456"}, _код(неверных=5), None, (ЗАБЛОКИРОВАН, {"attempts": 0})),
         (
             {"code": "123456"},
             lambda: пользователь(email_verified_at=None),
@@ -773,3 +781,243 @@ def test_сброс_возвращает_аккаунт_хозяину_почт�
         "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
         [ПОЧТА],
     ) == [(0,)]
+
+
+# ── Забыли пароль: код по SMS (Telnyx, заглушка из test_sms) ────────
+
+
+@pytest.fixture(scope="module")
+def telnyx() -> Iterator[str]:
+    from .test_sms import заглушка_telnyx
+
+    with заглушка_telnyx() as url:
+        yield url
+
+
+def _смс(telnyx: str) -> dict[str, str]:
+    return {
+        **ОКРУЖЕНИЕ_DJANGO,
+        "TELNYX_API_KEY": "key-1",
+        "TELNYX_VERIFY_PROFILE_ID": "profile-1",
+        "TELNYX_API_URL": telnyx,
+    }
+
+
+def _по_телефону(подтверждён: bool = True) -> Callable[[], None]:
+    """Регистрация по телефону: номер подтверждён, почта — нет."""
+
+    def run() -> None:
+        пользователь()
+        sql(
+            "update users set email_verified_at = null, phone = '+998 90 111-22-33', "
+            "phone_verified_at = %s where email = %s",
+            ["2026-09-01 10:00:00" if подтверждён else None, ПОЧТА],
+        )
+
+    return run
+
+
+@pytest.mark.parametrize(("подтверждён", "уходит"), [(True, True), (False, False)])
+def test_забыли_пароль_по_смс(сайт, telnyx, подтверждён, уходит):
+    from .test_sms import ЗАПРОСЫ
+
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms",
+        подготовка(_по_телефону(подтверждён)),
+        body={"phone": "+998 90 111 22 33"},
+        env=_смс(telnyx),
+    )
+
+    # Ответ один при любом номере, а SMS — только на подтверждённый
+    assert куда(сайт, итог) == (302, "/forgot-password")
+    assert сессия(итог)["reset"] == {"sms_phone": "+998901112233"}
+    assert сессия(итог)["status"].startswith("Если этот номер подтверждён")
+    assert [з["body"]["phone_number"] for з in ЗАПРОСЫ] == (["+998901112233"] if уходит else [])
+
+
+@pytest.mark.parametrize(("код", "верный"), [("12345", True), ("99999", False)])
+def test_код_сброса_из_смс(сайт, telnyx, код, верный):
+    uid = учётка(ПОЧТА)
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms/confirm",
+        подготовка(_по_телефону()),
+        снимок,
+        данные={"reset": {"sms_phone": "+998901112233"}},
+        body={"sms_code": код},
+        env=_смс(telnyx),
+    )
+
+    if верный:
+        # На страницу нового пароля — тот же токен брокера, что и в письме
+        статус, location = куда(сайт, итог)
+        assert статус == 302
+        assert re.fullmatch(
+            r"/reset-password/[0-9a-f]{64}\?email=account%40savdex\.uz", location or ""
+        )
+        assert сессия(итог)["reset"] == {"sms_user": uid}
+        assert итог["база"]["tokens"] == [(ПОЧТА, True, True)]
+    else:
+        assert ошибки(итог) == {
+            "sms_code": ["Код не подошёл или устарел. Отправьте SMS ещё раз и введите новый код."]
+        }
+        assert итог["база"]["tokens"] == []
+
+
+def test_сброс_по_смс_почту_не_возвращает(сайт):
+    """
+    Сброс кодом из SMS доказывает номер, а не почту: телефон остаётся,
+    почта — неподтверждённой. Все входы закрываются, как и при сбросе письмом.
+    """
+
+    def шаг() -> None:
+        _токен()()
+        _по_телефону()()
+        sql(
+            "insert into sessions (id, user_id, payload, last_activity) "
+            "select 'чужая-сессия', id, '', 0 from users where email = %s",
+            [ПОЧТА],
+        )
+
+    uid = пользователь()
+    итог = форма(
+        сайт, "/reset-password", шаг, данные={"reset": {"sms_user": uid}}, body=ВЕРНЫЙ_СБРОС
+    )
+
+    assert куда(сайт, итог) == (302, "/login")
+    assert "reset" not in сессия(итог) or "sms_user" not in сессия(итог)["reset"]
+    assert sql(
+        "select email_verified_at is null, phone, phone_verified_at is not null "
+        "from users where email = %s",
+        [ПОЧТА],
+    ) == [(True, "+998 90 111-22-33", True)]
+    assert sql(
+        "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
+        [ПОЧТА],
+    ) == [(0,)]
+
+
+# ── «Забыли пароль»: почта или телефон — способ по аккаунту ─────────
+
+
+def _аккаунт(почта: bool, телефон: bool) -> Callable[[], None]:
+    """Почта и телефон подтверждены или нет; телефон — +998 90 111-22-33."""
+
+    def run() -> None:
+        пользователь()
+        sql(
+            "update users set email_verified_at = %s, phone = '+998 90 111-22-33', "
+            "phone_verified_at = %s where email = %s",
+            [
+                "2026-01-01 00:00:00" if почта else None,
+                "2026-09-01 10:00:00" if телефон else None,
+                ПОЧТА,
+            ],
+        )
+
+    return run
+
+
+def _найти(сайт: str, telnyx: str, login: str, шаг: Callable[[], None]) -> dict[str, Any]:
+    from .test_sms import ЗАПРОСЫ
+
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/find",
+        подготовка(шаг),
+        снимок,
+        body={"login": login},
+        env=_смс(telnyx),
+    )
+    итог["смс"] = [з["body"]["phone_number"] for з in ЗАПРОСЫ if "phone_number" in з["body"]]
+
+    return итог
+
+
+@pytest.mark.parametrize(
+    ("login", "почта", "телефон", "куда"),
+    [
+        # По почте, телефон не подтверждён — ссылка на почту
+        (ПОЧТА, True, False, "mail"),
+        # Почта не подтверждена (код при регистрации пропущен), телефона нет — тоже почта
+        (ПОЧТА, False, False, "mail"),
+        # По телефону, почта не подтверждена — только SMS, и по почте, и по номеру
+        (ПОЧТА, False, True, "sms"),
+        ("+998 90 111 22 33", False, True, "sms"),
+        # Подтверждены оба — выбор
+        (ПОЧТА, True, True, "choose"),
+        ("90 111 22 33", True, True, "choose"),
+        # Номер не подтверждён — по нему не ищем
+        ("+998901112233", True, False, None),
+        ("nobody@savdex.uz", True, True, None),
+    ],
+)
+def test_забыли_пароль_способ(сайт, telnyx, login, почта, телефон, куда):
+    uid = учётка(ПОЧТА)
+    итог = _найти(сайт, telnyx, login, _аккаунт(почта, телефон))
+    данные = сессия(итог)
+
+    assert итог["ответ"]["headers"]["location"].endswith("/forgot-password")
+    assert (len(итог["база"]["mail"]) == 1) is (куда == "mail")
+    assert итог["смс"] == (["+998901112233"] if куда == "sms" else [])
+
+    if куда == "sms":
+        assert данные["reset"]["sms_phone"] == "+998901112233"
+    if куда == "choose":
+        assert данные["reset"] == {"found": uid}
+    if куда is None:
+        assert данные["status"].startswith("Если аккаунт с такими данными есть")
+        assert "found" not in данные.get("reset", {})
+
+
+@pytest.mark.parametrize("канал", ["mail", "sms"])
+def test_забыли_пароль_выбор(сайт, telnyx, канал):
+    from .test_sms import ЗАПРОСЫ
+
+    uid = учётка(ПОЧТА)
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/send",
+        подготовка(_аккаунт(True, True)),
+        снимок,
+        данные={"reset": {"found": uid}},
+        body={"channel": канал},
+        env=_смс(telnyx),
+    )
+
+    assert (len(итог["база"]["mail"]) == 1) is (канал == "mail")
+    assert len(ЗАПРОСЫ) == (1 if канал == "sms" else 0)
+
+
+def test_забыли_пароль_страница_выбора(сайт, telnyx):
+    """Выбор показывает адреса скрытыми: a•••@savdex.uz и +998•••2233."""
+    from .web_site import страница
+
+    uid = учётка(ПОЧТА)
+    итог = отправить(
+        сайт,
+        "/forgot-password",
+        подготовка(_аккаунт(True, True)),
+        данные={"reset": {"found": uid}},
+        method="GET",
+        env=_смс(telnyx),
+        headers={"Referer": сайт + "/login", "User-Agent": "savdex-parity"},
+    )
+    props = страница(итог["ответ"]["body"])["props"]
+
+    assert props["step"] == "choose"
+    assert [(o["channel"], o["to"]) for o in props["options"]][:2] == [
+        ("mail", "a•••@savdex.uz"),
+        ("sms", "+998•••2233"),
+    ]
+
+
+def test_письмо_не_для_аккаунта_по_телефону(сайт):
+    """Зарегистрировался по телефону, почту не подтвердил — ссылка письмом не уходит."""
+    итог = форма(сайт, "/forgot-password", _аккаунт(False, True), body={"email": ПОЧТА})
+
+    assert итог["база"]["mail"] == []

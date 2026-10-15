@@ -182,10 +182,10 @@ def регистрация(
         адрес_ = body["email"].strip().lower()
         данные["register"] = {"email": адрес_, "verified_email": адрес_}
 
-    # Номер подтверждён кодом из SMS (Telnyx), почта — нет
-    if смс is not None and isinstance(body.get("email"), str):
-        адрес_ = body["email"].strip().lower()
-        данные["register"] = {"email": адрес_, "sms_verified": {"email": адрес_, "phone": смс}}
+    # Регистрация по телефону: номер подтверждён кодом из SMS (Telnyx),
+    # почта — из анкеты, без подтверждения
+    if смс is not None:
+        данные["register"] = {"method": "phone", "sms_phone": смс, "sms_verified": {"phone": смс}}
 
     # Код пропущен (страна с «Регистрация без кода»): страна — с первого шага
     if без_кода is not None and isinstance(body.get("email"), str):
@@ -634,7 +634,10 @@ def test_город_человека_в_профиле(сайт):
 
 
 def test_регистрация_по_смс(сайт):
-    """Номер подтверждён кодом из SMS: учётка полноценная, телефон — подтверждённый."""
+    """
+    По телефону: номер подтверждён кодом из SMS — учётка полноценная, телефон
+    подтверждённый; почта из анкеты — не подтверждена (подтвердят в профиле).
+    """
     итог = регистрация(
         сайт, {**ВЕРНО, "phone": "+998 99 000-00-00"}, подтверждена=False, смс="+998901234567"
     )
@@ -645,3 +648,36 @@ def test_регистрация_по_смс(сайт):
         "u.email_code_skipped, k.email_unconfirmed from users u "
         "join companies k on k.id = u.company_id where u.email like '%%@reg.savdex.uz'"
     ) == [("+998901234567", True, True, False, False)]
+
+
+@pytest.mark.parametrize("email", ["", "aziz.reg.savdex.uz", "taken@savdex.uz"])
+def test_регистрация_по_смс_почта_обязательна(сайт, email):
+    итог = регистрация(
+        сайт,
+        {**ВЕРНО, "email": email},
+        подтверждена=False,
+        занята=True,
+        отключена=False,
+        смс="+998901234567",
+    )
+
+    assert list(_сессия(итог)["errors"]["default"]["messages"]) == ["email"]
+    assert len(итог["users"]) == 1
+
+
+def test_регистрация_по_смс_номер_заняли(сайт):
+    """Номер подтвердила другая учётка, пока человек заполнял анкету."""
+    sql("delete from users where email = 'phone@savdex.uz'")
+    sql(
+        "insert into users (name, email, password, status, phone, phone_verified_at, "
+        "created_at, updated_at) values ('Был', 'phone@savdex.uz', 'x', 'active', "
+        "'998901234567', now(), now(), now())"
+    )
+
+    try:
+        итог = регистрация(сайт, ВЕРНО, подтверждена=False, смс="+998901234567")
+    finally:
+        sql("delete from users where email = 'phone@savdex.uz'")
+
+    assert list(_сессия(итог)["errors"]["default"]["messages"]) == ["phone"]
+    assert итог["users"] == []
