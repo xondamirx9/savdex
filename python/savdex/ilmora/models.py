@@ -3,7 +3,8 @@
 
 Таблицу заводит миграция 2026_10_26_100000, пишет только форма сайта
 (savdex/ilmora/views.py) — обычной вставкой. Админка заявку не правит
-и не удаляет: время принятия оферты — юридическое подтверждение.
+и не удаляет: время подписания договора — юридическое подтверждение.
+Столбцы offer_* названы так, когда документ ещё был «офертой».
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ class Registration(models.Model):
     full_name = models.CharField("ФИО", max_length=150)
     pinfl = models.CharField("ПИНФЛ", max_length=14, null=True)
     tin = models.CharField("ИНН", max_length=9, null=True)
-    offer_accepted_at = UTCDateTimeField("ознакомился с офертой")
-    offer_signed_at = UTCDateTimeField("подписал оферту")
-    offer_version = models.CharField("версия оферты", max_length=32)
+    offer_accepted_at = UTCDateTimeField("ознакомился с договором")
+    offer_signed_at = UTCDateTimeField("подписал договор")
+    offer_version = models.CharField("версия договора", max_length=32)
     locale = models.CharField("язык", max_length=8, null=True)
     ip = models.CharField("IP-адрес", max_length=45, null=True)
     user_agent = models.CharField("браузер", max_length=500, null=True)

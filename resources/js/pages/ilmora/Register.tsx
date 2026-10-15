@@ -1,17 +1,19 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { Check, Loader2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { IlmoraLayout } from '@/components/ilmora/IlmoraLayout';
 import { Link } from '@/components/ui/Link';
 import { t } from '@/lib/i18n';
-import { localize } from '@/lib/locale';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
-import { formatPhone, phoneDigits, validateIlmora, type IlmoraForm } from './rules';
+import { clearDraft, loadDraft, saveDraft } from './draft';
+import { cleanName, formatPhone, phoneDigits, validateIlmora, type IlmoraForm } from './rules';
 
 /**
  * Регистрация в ILMORA через Savdex (python/savdex/ilmora/views.py).
- * Телефон, ФИО, физлицо или юрлицо с ПИНФЛ или ИНН и две галочки оферты.
+ * Телефон, ФИО, физлицо или юрлицо с ПИНФЛ или ИНН и две галочки договора.
+ * Анкета хранится черновиком во вкладке (draft.ts): ушёл читать договор —
+ * вернулся к заполненной форме.
  * Ошибки показываются сразу, но решает сервер. После отправки —
  * «Заявка принята» и кнопка в ILMORA; аккаунт Savdex не заводится.
  */
@@ -42,6 +44,9 @@ export default function IlmoraRegister({
 }
 
 function Done({ url }: { url: string }) {
+    // Заявка сохранена — черновик анкеты больше не нужен
+    useEffect(() => clearDraft(), []);
+
     return (
         <div className="ilmora-done">
             <span className="ilmora-done__icon" aria-hidden>
@@ -69,6 +74,21 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
         offer_read: false,
         offer_sign: false,
     });
+    // Черновик из вкладки — после первой отрисовки (на сервере хранилища нет);
+    // до этого не сохраняем, иначе пустая форма затёрла бы черновик
+    const restored = useRef(false);
+
+    useEffect(() => {
+        const draft = loadDraft();
+
+        if (draft) setData((was) => ({ ...was, ...draft }));
+        restored.current = true;
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (restored.current) saveDraft(data);
+    }, [data]);
+
     // Поля, которые человек уже покинул: ошибка под ними — сразу, не дожидаясь отправки
     const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
     const [submitted, setSubmitted] = useState(false);
@@ -108,7 +128,8 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
         post(routes.ilmoraRegister);
     }
 
-    const [before, after] = t('ilmora.offer_read').split(':offer');
+    const [before, after] = t('ilmora.contract_read').split(':contract');
+    const name = cleanName(data.full_name);
 
     return (
         <>
@@ -229,10 +250,8 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
                         />
                         <span>
                             {before}
-                            {/* В новой вкладке: заполненная форма не теряется */}
-                            <a href={localize(routes.ilmoraOffer)} target="_blank" rel="noopener">
-                                {t('ilmora.offer_link')}
-                            </a>
+                            {/* В той же вкладке: анкета остаётся черновиком и вернётся */}
+                            <Link href={routes.ilmoraContract}>{t('ilmora.contract_link')}</Link>
                             {after}
                         </span>
                     </label>
@@ -249,7 +268,11 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
                             aria-describedby="ilmora-sign-note"
                             onChange={(e) => change('offer_sign', e.target.checked)}
                         />
-                        <span>{t('ilmora.offer_sign')}</span>
+                        <span>
+                            {name
+                                ? t('ilmora.contract_sign_named', { name })
+                                : t('ilmora.contract_sign')}
+                        </span>
                     </label>
                     <Note id="ilmora-sign-note" error={shown('offer_sign')} />
                 </div>

@@ -2,7 +2,7 @@
 Регистрация в ILMORA через Savdex (savdex/ilmora).
 
 - проверка каждого поля: телефон, ФИО, тип лица, ПИНФЛ и ИНН (меньше и
-  больше цифр, буквы, одна цифра 14 раз), обе галочки оферты — понятная
+  больше цифр, буквы, одна цифра 14 раз), обе галочки договора — понятная
   причина под полем;
 - заявка физлица и юрлица ложится в ilmora_registrations: телефон
   +998XXXXXXXXX, ФИО без лишних пробелов, время обеих галочек; аккаунт
@@ -171,8 +171,8 @@ def test_номер_по_типу_лица():
 @pytest.mark.parametrize("значение", [False, None, "", "0", "no"])
 def test_без_галочек(значение):
     assert _ошибки(offer_read=значение, offer_sign=значение) == {
-        "offer_read": ["Подтвердите, что ознакомились с офертой"],
-        "offer_sign": ["Нужно принять оферту"],
+        "offer_read": ["Подтвердите, что ознакомились с договором"],
+        "offer_sign": ["Нужно подписать договор"],
     }
 
 
@@ -182,12 +182,8 @@ def test_ошибки_по_узбекски():
     }
 
 
-def test_тексты_на_всех_языках():
-    """Ключ ILMORA есть во всех пяти словарях; узбекский — свой, не русский."""
-    ключи = {
-        locale: json.dumps(ui.translations(locale)["ilmora"], sort_keys=True)
-        for locale in ("ru", "uz", "en", "tr", "zh")
-    }
+def test_тексты_только_на_двух_языках():
+    """У ILMORA два языка: ключи — в русском и узбекском словарях, в en, tr и zh их нет."""
 
     def пути(узел: Any, путь: str = "") -> set[str]:
         if isinstance(узел, dict):
@@ -197,10 +193,11 @@ def test_тексты_на_всех_языках():
 
     русские = пути(ui.translations("ru")["ilmora"])
 
-    for locale in ("uz", "en", "tr", "zh"):
-        assert пути(ui.translations(locale)["ilmora"]) == русские, locale
+    assert пути(ui.translations("uz")["ilmora"]) == русские
+    assert ui.translations("uz")["ilmora"] != ui.translations("ru")["ilmora"]
 
-    assert ключи["uz"] != ключи["ru"]
+    for locale in ("en", "tr", "zh"):
+        assert "ilmora" not in ui.translations(locale), locale
 
 
 # ── Форма на сайте ──────────────────────────────────────────────────
@@ -346,8 +343,8 @@ def test_ошибки_под_полями(сайт):
         "phone": ["После +998 нужно 9 цифр — введено 5"],
         "full_name": ["Укажите фамилию, имя и отчество — не меньше трёх слов"],
         "tin": ["ИНН должен содержать 9 цифр — введено 7"],
-        "offer_read": ["Подтвердите, что ознакомились с офертой"],
-        "offer_sign": ["Нужно принять оферту"],
+        "offer_read": ["Подтвердите, что ознакомились с договором"],
+        "offer_sign": ["Нужно подписать договор"],
     }
     assert итог["база"] == []
 
@@ -393,14 +390,38 @@ def test_страница_на_языке(сайт, path, язык, заголо
 
 
 @нужна_база
-def test_оферта_пока_заглушка(сайт):
-    данные = страница(открыть(сайт, "/ilmora/offer")["body"])
+@pytest.mark.parametrize(
+    ("path", "первая_строка"),
+    [
+        ("/ilmora/contract", "Я, :name, ознакомился(-ась) с настоящим договором"),
+        ("/uz/ilmora/contract", "Men, :name, ushbu shartnoma bilan tanishib chiqdim"),
+    ],
+)
+def test_договор_пока_заглушка(сайт, path, первая_строка):
+    """Договор: первая строка «Я, <ФИО>, …» (ФИО подставляет страница), текста пока нет."""
+    данные = страница(открыть(сайт, path)["body"])
+    договор = данные["props"]["translations"]["ilmora"]["contract"]
 
-    assert данные["component"] == "ilmora/Offer"
+    assert данные["component"] == "ilmora/Contract"
     assert данные["props"]["paragraphs"] == []
-    assert данные["props"]["translations"]["ilmora"]["offer"]["pending"] == (
-        "Текст оферты будет опубликован позже."
+    assert договор["preamble"].startswith(первая_строка)
+    assert договор["pending"] in (
+        "Полный текст договора будет опубликован позже.",
+        "Shartnomaning to‘liq matni keyinroq e’lon qilinadi.",
     )
+
+
+@нужна_база
+def test_текст_договора_из_файла(сайт, tmp_path, monkeypatch):
+    """Абзацы — через пустую строку, пробелы внутри схлопываются, [ФИО] остаётся меткой."""
+    from savdex.ilmora import views
+
+    (tmp_path / "ru.txt").write_text("Я, [ФИО],  принимаю\nусловия.\n\n\nВторой абзац.\n")
+    monkeypatch.setattr(views, "CONTRACT_DIR", tmp_path)
+
+    assert views.contract_text("ru") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
+    assert views.contract_text("en") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
+    assert views.contract_text("uz") == []
 
 
 # ── Админка ─────────────────────────────────────────────────────────

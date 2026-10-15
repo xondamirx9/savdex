@@ -5,7 +5,8 @@
   throttle:10,10,ilmora-register; капчи нет — без SMS и подтверждений).
   Заявка сохраняется, затем — экран «Заявка принята» с кнопкой «Перейти
   в ILMORA». Аккаунт Savdex не заводится, вход не выполняется;
-- /ilmora/offer — публичная оферта (текст — offer/<язык>.txt).
+- /ilmora/contract — договор (текст — contract/<язык>.txt). Первая строка —
+  «Я, <ФИО>, …»: ФИО подставляет браузер из анкеты, на сервер оно не уходит.
 
 У ILMORA два языка — русский и узбекский: на /en, /zh и /tr страницы
 показываются по-русски.
@@ -38,15 +39,16 @@ log = logging.getLogger("savdex.ilmora")
 #: Языки ILMORA; остальные — по-русски
 LOCALES = ("ru", "uz")
 
-#: Какой текст оферты принимали. Опубликуют настоящий — сменить здесь
+#: Какой текст договора принимали. Опубликуют настоящий — сменить здесь
 #: (например на «2026-11-01»): у старых заявок останется «draft»
-OFFER_VERSION = "draft"
+CONTRACT_VERSION = "draft"
 
-#: Тексты оферты: offer/ru.txt и offer/uz.txt. Пусто — «будет опубликован позже»
-OFFER_DIR = Path(__file__).resolve().parent / "offer"
+#: Тексты договора: contract/ru.txt и contract/uz.txt. Пусто — «будет
+#: опубликован позже»; [ФИО] в тексте подставляет страница
+CONTRACT_DIR = Path(__file__).resolve().parent / "contract"
 
 PATH = "/register/ilmora-register"
-OFFER_PATH = "/ilmora/offer"
+CONTRACT_PATH = "/ilmora/contract"
 #: Метка в сессии после сохранения: следующий показ страницы — «Заявка
 #: принята». Не флеш: на /en, /zh и /tr между отправкой и страницей бывает
 #: ещё переход на запомненный язык, и флеш пропадал бы на нём
@@ -139,7 +141,7 @@ def save(ctx: Context, application: Application) -> int:
                 application.tin,
                 now,
                 now,
-                OFFER_VERSION,
+                CONTRACT_VERSION,
                 ctx.locale,
                 client_ip(ctx.request),
                 agent[:500] if agent else None,
@@ -149,9 +151,9 @@ def save(ctx: Context, application: Application) -> int:
         return int(cursor.fetchone()[0])
 
 
-def offer_text(locale: str) -> list[str]:
-    """Абзацы оферты (пустая строка между ними); файла или текста нет — []."""
-    path = OFFER_DIR / f"{locale if locale in LOCALES else 'ru'}.txt"
+def contract_text(locale: str) -> list[str]:
+    """Абзацы договора (пустая строка между ними); файла или текста нет — []."""
+    path = CONTRACT_DIR / f"{locale if locale in LOCALES else 'ru'}.txt"
 
     try:
         text = path.read_text(encoding="utf-8")
@@ -161,8 +163,8 @@ def offer_text(locale: str) -> list[str]:
     return [" ".join(part.split()) for part in text.split("\n\n") if part.strip()]
 
 
-def offer(request: HttpRequest) -> HttpResponse:
-    """Публичная оферта ILMORA. Пока текста нет — «будет опубликован позже»."""
+def contract(request: HttpRequest) -> HttpResponse:
+    """Договор ILMORA. Пока текста нет — «будет опубликован позже»."""
     from savdex.web.request import context
 
     found = context(request)
@@ -174,7 +176,7 @@ def offer(request: HttpRequest) -> HttpResponse:
 
     return inertia.render(
         ctx,
-        "ilmora/Offer",
-        {"paragraphs": offer_text(ctx.locale), "version": OFFER_VERSION},
-        _seo(ctx, ctx.t("ilmora.offer.title")),
+        "ilmora/Contract",
+        {"paragraphs": contract_text(ctx.locale), "version": CONTRACT_VERSION},
+        _seo(ctx, ctx.t("ilmora.contract.title")),
     )

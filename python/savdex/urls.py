@@ -359,13 +359,13 @@ urlpatterns = [
         register_code.details,
         name="register.details",
     ),
-    # Регистрация в ILMORA: заявка без аккаунта Savdex и оферта (savdex/ilmora)
+    # Регистрация в ILMORA: заявка без аккаунта Savdex и договор (savdex/ilmora)
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register/ilmora-register$",
         auth_actions.either(ilmora.page, ilmora.submit),
         name="ilmora.register",
     ),
-    re_path(r"^(?:(?:uz|en|zh|tr)/)?ilmora/offer$", ilmora.offer, name="ilmora.offer"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?ilmora/contract$", ilmora.contract, name="ilmora.contract"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",
         auth_actions.either(auth.forgot_password, account_actions.forgot_password),

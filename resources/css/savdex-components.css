@@ -2858,5 +2858,6 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
 /* Своё под аргументами левой панели входа (AuthLayout, проп aside): кнопка
    ILMORA на первом шаге регистрации. На телефоне панели нет — под формой */
 .auth-aside-extra{display:flex;flex-direction:column;gap:12px}
+.auth-aside-extra:empty{display:none}
 .auth-aside-extra--mobile{width:100%;max-width:480px;margin:20px auto 0}
 @media(min-width:1024px){.auth-aside-extra--mobile{display:none}}

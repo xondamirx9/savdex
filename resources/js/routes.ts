@@ -68,7 +68,7 @@ export const routes = {
     registerDetails: '/register/details',
     /** Регистрация в ILMORA через Savdex: заявка без аккаунта Savdex */
     ilmoraRegister: '/register/ilmora-register',
-    ilmoraOffer: '/ilmora/offer',
+    ilmoraContract: '/ilmora/contract',
     passwordRequest: '/forgot-password',
     passwordForced: '/password/change',
     verifyNotice: '/verify-email',

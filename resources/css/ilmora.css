@@ -1,6 +1,6 @@
 /*
- * ILMORA на сайте Savdex: регистрация (/register/ilmora-register), оферта
- * (/ilmora/offer) и кнопка-плашка на первом шаге регистрации Savdex.
+ * ILMORA на сайте Savdex: регистрация (/register/ilmora-register), договор
+ * (/ilmora/contract) и кнопка-плашка на первом шаге регистрации Savdex.
  *
  * Цвета и шрифты сняты с демо-сайта ILMORA. Всё — внутри .ilmora,
  * .ilmora-logo и .ilmora-cta: остальной сайт эти правила не задевают.
@@ -487,7 +487,7 @@
 
 /* ── Оферта ── */
 
-.ilmora-offer {
+.ilmora-contract {
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -495,7 +495,19 @@
     font-size: 15px;
     line-height: 1.7;
 }
-.ilmora-offer__pending {
+.ilmora-contract__name {
+    font-weight: 600;
+    color: var(--c-forest);
+    text-decoration: underline;
+    text-decoration-color: var(--c-champagne);
+    text-underline-offset: 4px;
+}
+.ilmora-contract__name--missing {
+    font-weight: 400;
+    color: #8a918e;
+    text-decoration: none;
+}
+.ilmora-contract__pending {
     padding: 16px 18px;
     border-radius: 0.75rem;
     background: var(--c-sage);
