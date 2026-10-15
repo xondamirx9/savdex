@@ -198,7 +198,11 @@ def _csrf_ok(request: HttpRequest, store: session.Store) -> bool:
 
     token = _token_from_request(request, input_of(request))
 
-    return isinstance(token, str) and hmac.compare_digest(store.token, token)
+    # Байты, а не строки: compare_digest со строкой не из ASCII бросает
+    # TypeError — вместо 419 был бы 500
+    return isinstance(token, str) and hmac.compare_digest(
+        str(store.token).encode(), token.encode(errors="surrogatepass")
+    )
 
 
 def action(

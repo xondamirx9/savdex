@@ -425,6 +425,11 @@ def _allowed_specs(category_id: int | None) -> list[str]:
     return [specs.PREFIX + f for f in specs._set_for(parent_slug, child_slug)]
 
 
+#: Поля характеристик в одном автосохранении: у категории их единицы, а
+#: без предела один запрос на 2,5 МБ писал бы сто тысяч строк
+MAX_ATTRIBUTES = 50
+
+
 def _category_fields(category_id: int | None) -> dict[str, dict[str, Any]]:
     """Поля раздела объявления (category_fields) по ключу — их показывает мастер."""
     if category_id is None:
@@ -578,7 +583,7 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
     allowed = _allowed_specs(listing["category_id"])
     own_fields = _category_fields(listing["category_id"])
 
-    for raw_key, value in items:
+    for raw_key, value in list(items)[:MAX_ATTRIBUTES]:
         key = str(raw_key)
 
         if key.startswith(specs.PREFIX):

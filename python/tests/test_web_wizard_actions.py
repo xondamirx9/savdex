@@ -493,13 +493,17 @@ def test_публикация_отказ(сайт, было, лимит, оши�
 
 
 def снимок_черновика() -> Any:
-    return {
+    итог = {
         **снимок(),
         "attributes": sql(
             "select listing_id, key, value from listing_attributes order by listing_id, key"
         ),
         "tags": sql("select tags::text, type, wizard_step from listings order by id"),
     }
+    # Поле «grade» у цемента — только на время проверки (с_деталями)
+    sql("delete from category_fields where key = 'grade'")
+
+    return итог
 
 
 def с_деталями() -> None:
@@ -509,6 +513,13 @@ def с_деталями() -> None:
         "insert into listing_attributes (listing_id, key, value, created_at, updated_at) values "
         "(1, 'spec_weight', '50 kg', now(), now()), (1, 'spec_voltage', '220', now(), now()), "
         "(1, 'grade', 'M400', now(), now())"
+    )
+    # «grade» — поле категории цемента: его автосохранение пишет, чужие ключи — нет
+    sql("delete from category_fields where key = 'grade'")
+    sql(
+        "insert into category_fields (category_id, key, label, created_at, updated_at) "
+        "values (%s, 'grade', 'Марка', now(), now())",
+        [_категория()],
     )
 
 

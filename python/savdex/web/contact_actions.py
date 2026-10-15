@@ -161,6 +161,19 @@ def _field(value: str) -> str:
     return "".join(out)
 
 
+#: Начало, с которого Excel читает ячейку как формулу (как admin_export)
+_FORMULA = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe(value: str) -> str:
+    """
+    Чужой текст (название компании, заголовок объявления), который Excel
+    принял бы за формулу — «=HYPERLINK(…)», — с апострофом: открыть
+    выгрузку не значит выполнить чужое.
+    """
+    return "'" + value if value.startswith(_FORMULA) else value
+
+
 def _fputcsv(fields: list[str]) -> str:
     return ";".join(_field(f) for f in fields) + "\n"
 
@@ -214,13 +227,14 @@ def export(request: HttpRequest) -> HttpResponse:
         lines.append(
             _fputcsv(
                 [
-                    r["c_name"] or "",
+                    _safe(r["c_name"] or ""),
+                    # Телефон проверен по образцу: цифры, пробелы, скобки — не формула
                     ", ".join(c["value"] for c in own if c["type"] == "phone"),
-                    ", ".join(c["value"] for c in own if c["type"] == "email"),
-                    r["l_title"] or "",
+                    _safe(", ".join(c["value"] for c in own if c["type"] == "email")),
+                    _safe(r["l_title"] or ""),
                     r["created_at"].strftime("%d.%m.%Y"),
                     statuses.get(r["status"], r["status"] or ""),
-                    r["note"] or "",
+                    _safe(r["note"] or ""),
                 ]
             )
         )

@@ -24,6 +24,25 @@ if [ "${DB_CONNECTION:-sqlite}" != "pgsql" ]; then
     exit 1
 fi
 
+# Боевой сайт — только ролью Django (права на нужное, python/savdex/bootstrap/grants.sql).
+# Без DJANGO_DATABASE_URL settings.py молча взял бы TARGET_DB_URL или
+# DATABASE_URL — строку владельца базы, и любая ошибка в коде получала бы
+# все права. Падаем до Apache: Render оставит работать прежний контейнер.
+# Разовый запуск «migrate» роль сайта не нужен — он работает владельцем
+if [ "${APP_ENV:-production}" = "production" ] && [ -z "${DJANGO_DATABASE_URL:-}" ] \
+    && [ "${1:-}" != "migrate" ]; then
+    echo "ОШИБКА: не задан DJANGO_DATABASE_URL (роль savdex_django). Сайт не запускается владельцем базы." >&2
+    exit 1
+fi
+
+# Список своих хостов: без него Django принимает любой Host. Ссылки
+# в письмах защищены и так (root_of в python/savdex/web/request.py),
+# но лишний предохранитель не мешает. Сами не выводим: проверка
+# здоровья хостинга приходит с неизвестным заранее Host и получила бы 400
+if [ "${APP_ENV:-production}" = "production" ] && [ -z "${DJANGO_ALLOWED_HOSTS:-}" ]; then
+    echo "ВНИМАНИЕ: DJANGO_ALLOWED_HOSTS не задан — Django принимает любой Host. Задайте домены сайта через запятую." >&2
+fi
+
 # ── Порт и имя сервера ──────────────────────────────────────────────
 #
 # Render говорит, на каком порту слушать, через $PORT (по умолчанию
@@ -105,6 +124,12 @@ ServerName ${server_name}
 # Умолчание — 300 секунд: зависший запрос держит поток пять минут.
 # Django обрывает запрос на тех же 130 секундах (gunicorn --timeout).
 Timeout 130
+
+# Без версии Apache и системы в заголовке Server и на страницах ошибок.
+# Здесь, а не в savdex-python.conf: conf-enabled/security.conf Debian
+# читается после него и вернул бы «ServerTokens OS»
+ServerTokens Prod
+ServerSignature Off
 CONF
 
 # ── Ключ ────────────────────────────────────────────────────────────
@@ -198,8 +223,10 @@ migrate() {
     # сбрасывал бы пароль.
     if [ -n "${ADMIN_EMAIL:-}" ]; then
         local ADMIN_ARGS=("$ADMIN_EMAIL" --if-missing)
+        # Пароль — через окружение, не аргументом: аргументы видны
+        # в списке процессов контейнера (/proc/*/cmdline)
         if [ -n "${ADMIN_PASSWORD:-}" ]; then
-            ADMIN_ARGS+=(--password "$ADMIN_PASSWORD")
+            ADMIN_ARGS+=(--password-from-env)
         fi
         py_owner admin "${ADMIN_ARGS[@]}"
     fi

@@ -184,6 +184,11 @@ def test_закрыть_и_открыть(сайт, verb, status, admin):
             {"result_url": "shop.uz"},
             {"result_url": ["Ссылка должна начинаться с http:// или https://"]},
         ),
+        # Другие протоколы — нет: ссылка выводится как <a href>
+        (
+            {"result_url": "file://server/share"},
+            {"result_url": ["Ссылка должна начинаться с http:// или https://"]},
+        ),
         (
             {"result_url": "https://" + "a" * 250 + ".uz"},
             {"result_url": ["Не длиннее 255 символов."]},

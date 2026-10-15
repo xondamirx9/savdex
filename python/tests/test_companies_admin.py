@@ -306,6 +306,29 @@ def test_продажи_смотрят_но_не_решают(люди):
     assert sql("select verification_level from companies") == [(0,)]
 
 
+@pytest.mark.parametrize(
+    "данные",
+    [
+        {"act": "verify", "level": "3"},
+        {"act": "partner", "tier": "multi", "sort": "1"},
+        {"act": "block", "reason": "Продавал чужой товар под своим именем"},
+        {"act": "hide"},
+    ],
+)
+def test_менеджер_правит_но_не_модерирует(люди, данные):
+    """Решения по компании — модератору и Admin, не менеджеру с companies.edit."""
+    pk = _компания()
+
+    _, карточка = django(люди["supplier_manager"], ("get", f"{LIST}{pk}/change/", None))
+    ответ = _действие(люди["supplier_manager"], pk, **данные)
+
+    assert карточка["status"] == 200 and 'value="verify"' not in карточка["body"]
+    assert ответ["status"] == 403
+    assert sql("select verification_level, partner_tier, status from companies") == [
+        (0, None, "active")
+    ]
+
+
 def test_корзина(люди):
     pk = _компания()
 

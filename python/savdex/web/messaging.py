@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -170,6 +172,21 @@ def webhook_secret() -> str:
     return _env("TELEGRAM_WEBHOOK_SECRET")
 
 
+def webhook_header_token() -> str:
+    """
+    secret_token для setWebhook: Telegram присылает его в заголовке
+    X-Telegram-Bot-Api-Secret-Token. Секрет из адреса оседает в логах
+    доступа — заголовок в них не пишется, поэтому он из того же секрета,
+    но другой (HMAC; 64 знака 0-9a-f — Telegram такие принимает).
+    """
+    secret = webhook_secret()
+
+    if secret == "":
+        return ""
+
+    return hmac.new(secret.encode(), b"telegram-webhook-header", hashlib.sha256).hexdigest()
+
+
 def webhook_url() -> str | None:
     """TelegramGateway::webhookUrl — адрес, на который Telegram присылает сообщения боту."""
     secret = webhook_secret()
@@ -219,7 +236,10 @@ def register_webhook() -> tuple[bool, str]:
             "Не заданы TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME или TELEGRAM_WEBHOOK_SECRET."
         )
 
-    return _call("setWebhook", {"url": url, "drop_pending_updates": True})
+    return _call(
+        "setWebhook",
+        {"url": url, "drop_pending_updates": True, "secret_token": webhook_header_token()},
+    )
 
 
 def delete_webhook() -> tuple[bool, str]:

@@ -16,7 +16,7 @@
 # Что закрыто:
 #   - логин/пароль на прокси;
 #   - файрвол пускает к прокси только исходящие диапазоны Render;
-#   - прокси ходит только на *.uzumcheckout.uz (CONNECT на 443);
+#   - прокси ходит только на uzumcheckout.uz и *.uzumcheckout.uz (CONNECT на 443);
 #   - трафик до Uzum — сквозной TLS, прокси видит только адрес назначения.
 set -euo pipefail
 
@@ -25,7 +25,9 @@ PROXY_PASS="${PROXY_PASS:-$(openssl rand -hex 16)}"
 PROXY_PORT="${PROXY_PORT:-3128}"
 # Исходящие адреса Render (Connect → Outbound на странице сервиса)
 ALLOW_FROM="${ALLOW_FROM:-74.220.48.0/24 74.220.56.0/24}"
-UPSTREAM_PATTERN="${UPSTREAM_PATTERN:-*uzumcheckout.uz}"
+# Сам домен и его поддомены. «*uzumcheckout.uz» пропускал бы и
+# evil-uzumcheckout.uz; шаблоны — через пробел, в фильтре по строке
+UPSTREAM_PATTERN="${UPSTREAM_PATTERN:-uzumcheckout.uz *.uzumcheckout.uz}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
@@ -55,7 +57,8 @@ FilterDefaultDeny Yes
 Filter "/etc/tinyproxy/filter"
 EOF
 
-echo "${UPSTREAM_PATTERN}" > /etc/tinyproxy/filter
+# shellcheck disable=SC2086 # шаблоны разделяются пробелом, «*» — без раскрытия
+(set -f; printf "%s\n" ${UPSTREAM_PATTERN}) > /etc/tinyproxy/filter
 
 # Файрвол: SSH для вас, порт прокси — только для Render
 ufw allow OpenSSH

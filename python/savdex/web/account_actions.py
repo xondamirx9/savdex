@@ -99,7 +99,12 @@ def force_password(request: HttpRequest) -> HttpResponse:
         ctx,
         "users",
         user,
-        {"password": fresh_hash, "must_change_password": False},
+        {
+            "password": fresh_hash,
+            # Кука «запомнить» на других устройствах — недействительна
+            "remember_token": random_string(60),
+            "must_change_password": False,
+        },
         section="users",
         model="User",
         casts={"must_change_password": "bool"},
