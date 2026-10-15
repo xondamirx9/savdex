@@ -199,7 +199,7 @@ def send_code(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, errors)
 
     # Капча — до письма: без неё бот рассылал бы коды на чужие адреса
-    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+    if (problem := captcha.confirm(_session(ctx), "register", data.get("captcha"))) is not None:
         return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     # Пять неверных кодов на этот адрес — 15 минут и нового кода нет
@@ -449,7 +449,7 @@ def send_phone(request: HttpRequest) -> HttpResponse:
     assert phone is not None
 
     # Капча — до SMS: каждое SMS платное, без неё бот гонял бы их на чужие номера
-    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+    if (problem := captcha.confirm(_session(ctx), "register", data.get("captcha"))) is not None:
         return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     if (failed := _send_sms(ctx, phone)) is not None:

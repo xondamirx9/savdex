@@ -104,7 +104,7 @@ def login(request: HttpRequest) -> HttpResponse:
     return inertia.render(
         ctx,
         "auth/Login",
-        {"status": _flash(ctx, "status"), "captcha": captcha.enabled()},
+        {"status": _flash(ctx, "status")},
         _seo(ctx).title(ctx.t("auth.login_title")),
     )
 
