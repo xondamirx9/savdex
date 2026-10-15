@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
@@ -18,19 +19,24 @@ export default function RegisterEmail({
     email,
     countryId = null,
     countries = [],
+    captcha = false,
 }: {
     email?: string | null;
     countryId?: number | null;
     countries?: CountryOption[];
+    captcha?: boolean;
 }) {
     const { data, setData, post, processing, errors, clearErrors } = useForm<{
         email: string;
         country_id: number | null;
-    }>({ email: email ?? '', country_id: countryId });
+        captcha: number[];
+    }>({ email: email ?? '', country_id: countryId, captcha: [] });
+    // Задание капчи одноразовое: после каждой отправки — новое
+    const [captchaKey, setCaptchaKey] = useState(0);
 
     function submit(e: FormEvent) {
         e.preventDefault();
-        post(routes.registerEmail);
+        post(routes.registerEmail, { onFinish: () => setCaptchaKey((k) => k + 1) });
     }
 
     return (
@@ -71,6 +77,19 @@ export default function RegisterEmail({
                     error={errors.email}
                     hint={t('auth.reg_email_hint')}
                 />
+
+                {captcha && (
+                    <CaptchaGrid
+                        purpose="register"
+                        value={data.captcha}
+                        onChange={(cells) => {
+                            setData('captcha', cells);
+                            if (errors.captcha && cells.length > 0) clearErrors('captcha');
+                        }}
+                        error={errors.captcha}
+                        reloadKey={captchaKey}
+                    />
+                )}
 
                 <Button
                     type="submit"

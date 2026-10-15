@@ -28,7 +28,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import analytics, guard, inertia, mail, sms
+from savdex.web import analytics, captcha, guard, inertia, mail, sms
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_COUNTRY,
@@ -200,6 +200,10 @@ def send_code(request: HttpRequest) -> HttpResponse:
 
     if errors:
         return invalid(ctx, errors)
+
+    # Капча — до письма: без неё бот рассылал бы коды на чужие адреса
+    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+        return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     # Письмо не ушло — остаёмся на первом шаге с понятной ошибкой
     if not _mail_code(ctx, email):

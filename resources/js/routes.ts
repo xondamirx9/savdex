@@ -55,6 +55,8 @@ export const routes = {
             ? '/login'
             : `/login?back=${encodeURIComponent(window.location.pathname + window.location.search)}`,
     logout: '/logout',
+    /** Новое задание капчи: ?for=login|register (JSON) */
+    captcha: '/captcha',
     register: '/register',
     registerEmail: '/register/email',
     registerCode: '/register/code',
