@@ -139,6 +139,10 @@ def test_фотографий_мало_рисуем(tmp_path: Any, monkeypatch: 
 
 # ── На PostgreSQL: выдача задания и вход ────────────────────────────
 
+#: Запросы идут в отдельный процесс с окружением tests/pg_admin.ОКРУЖЕНИЕ,
+#: где капча выключена, — включаем её для каждого запроса
+КАПЧА = {"CAPTCHA_ENABLED": "true"}
+
 
 @pytest.fixture(scope="module")
 def сайт() -> Any:
@@ -156,6 +160,7 @@ def test_выдача_задания(сайт: str) -> None:
         "/captcha?for=login",
         {СЕССИЯ: кука(СЕССИЯ, SID)},
         {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+        env=КАПЧА,
     )
     data = json.loads(ответ["body"])
     payload = json.loads(строка(SID)["payload"])
@@ -172,7 +177,7 @@ def test_выдача_задания(сайт: str) -> None:
 
 @нужна_база
 def test_выдача_задания_неизвестной_формы(сайт: str) -> None:
-    assert открыть(сайт, "/captcha?for=admin")["status"] == 404
+    assert открыть(сайт, "/captcha?for=admin", env=КАПЧА)["status"] == 404
 
 
 @нужна_база
@@ -187,6 +192,7 @@ def test_вход_с_капчей(сайт: str, отмечено: list[int], в
         сброс(),
         body={**ВЕРНО, "captcha": отмечено},
         payload={"captcha": {"login": {"answer": "1,4,7", "expires": int(time.time()) + 600}}},
+        env=КАПЧА,
     )
 
     assert итог["status"] == 302
