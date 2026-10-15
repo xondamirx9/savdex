@@ -1,15 +1,28 @@
 # Боевые машины в Uztelecom Cloud: сайт; админка и фоновые задачи; база,
 # общая папка файлов и кэша (deploy/README.md).
 #
-# Выкладка — релизами. Слияние в основную ветку уходит только на
-# тестовый сервер (staging.yml); на боевой — пачкой всё, что накопилось
-# с прошлого релиза:
-# - вручную: Actions → prod → Run workflow (кнопка «Релиз»);
-# - по расписанию: каждый вечер в 22:00 по Ташкенту, если включено
-#   (переменная PROD_NIGHTLY_RELEASE=true) и с прошлого релиза в основной
-#   ветке есть новое; нового нет — машины не трогаются.
+# Выкладка — релизами, только по кнопке: Actions → prod → Run workflow.
+# Слияние в основную ветку уходит только на тестовый сервер (staging.yml);
+# на боевой — пачкой всё, что накопилось с прошлого релиза.
+#
+# Что выкладывается — КАНДИДАТ: последний коммит основной ветки, который
+# прошёл «CI» и проверку снаружи на тестовом (запись в GitHub →
+# Environments → staging, её делает staging.yml). Не конец основной
+# ветки: слитое позже, ещё не проверенное на тестовом, ждёт следующего
+# релиза. Поле «ref» — выложить другую ветку или коммит в обход кандидата
+# (на крайний случай; в сводке — предупреждение).
+#
+# Образ — тот же, что работал на тестовом: копируется с тестового сервера
+# (docker save → load, проверка по ID образа). Нет его там — собирается
+# на машине админки заново, с предупреждением.
+#
+# Перед схемой базы — копия базы в хранилище с меткой release
+# (deploy/server/backup.sh db release). Не снялась — релиз останавливается
+# до любых изменений; галочка «без копии базы» — на крайний случай.
+#
 # Что вошло в релиз — в сводке запуска (Summary): список слитых PR с
-# прошлого удачного релиза.
+# прошлого релиза. Удачный релиз — запись в GitHub → Environments →
+# production: по ней следующий релиз считает, что нового.
 #
 # Что делает (галочки):
 # - «bootstrap» — подготовить чистые машины (deploy/server/bootstrap.sh
@@ -41,22 +54,23 @@
 #   vars.PROD_DOMAIN             адрес сайта; не savdex.uz — сайт под паролем
 #   vars.PROD_KNOWN_HOSTS        ключи машин (строки known_hosts) — подскажет первый запуск
 #   vars.PROD_LIVE               true после переезда: «копия с Render» запрещена
-#   vars.PROD_NIGHTLY_RELEASE    true — ночной релиз в 22:00 по Ташкенту
+#   vars.STAGING_HOST, STAGING_HOST_KEY  тестовый сервер — образ берётся с него
 #
 # Репозиторий публичный, журналы Actions видят все: пароли, ключи и
 # значения настроек в журнал не выводятся.
 name: prod
 
 on:
-  schedule:
-    # 17:00 UTC — 22:00 по Ташкенту
-    - cron: '0 17 * * *'
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Ветка или коммит (пусто — основная ветка)'
+        description: 'Ветка или коммит в обход кандидата (пусто — кандидат с тестового)'
         required: false
         default: ''
+      no_backup:
+        description: 'Без копии базы перед релизом (только если копия не снимается)'
+        type: boolean
+        default: false
       bootstrap:
         description: 'Сначала подготовить чистые машины'
         type: boolean
@@ -82,22 +96,21 @@ permissions:
   contents: read
 
 jobs:
-  # Что войдёт в релиз: слитое с прошлого удачного релиза. По расписанию
-  # нового нет — выкладки нет
+  # Что выкладывается: кандидат с тестового (или «ref» в обход) и что
+  # вошло в релиз — слитое с прошлого релиза
   plan:
-    if: >-
-      vars.PROD_HOST != '' && (github.event_name == 'workflow_dispatch'
-      || (vars.PROD_LIVE == 'true' && vars.PROD_NIGHTLY_RELEASE == 'true'))
+    if: vars.PROD_HOST != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
+      deployments: read
     outputs:
-      release: ${{ steps.plan.outputs.release }}
+      sha: ${{ steps.plan.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          # Основная ветка целиком: кандидат и прошлый релиз — её коммиты
           fetch-depth: 0
           persist-credentials: false
 
@@ -105,49 +118,108 @@ jobs:
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
-          head=$(git rev-parse HEAD)
-          # Прошлый релиз — последний удачный запуск этого workflow
-          prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod.yml/runs?status=success&per_page=20" \
-            --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID)][0].head_sha // \"\"")
-          count=-1
-          if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
-            count=$(git rev-list --count --first-parent "$prev..$head")
+          main=$(git rev-parse HEAD)
+
+          # Последняя удачная запись выкладки в окружение (staging,
+          # production) — её коммит; нет — пусто
+          last_deployment() {
+            local env="$1" id sha state
+            while read -r id sha; do
+              state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
+              if [ "$state" = success ]; then
+                echo "$sha"
+                return 0
+              fi
+            done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$env&per_page=30" \
+                       --jq '.[] | "\(.id) \(.sha)"')
+          }
+
+          if [ -n "$REF" ]; then
+            sha=$(git rev-parse --verify -q "origin/$REF^{commit}" || git rev-parse --verify -q "$REF^{commit}" || true)
+            if [ -z "$sha" ]; then
+              echo "::error::Нет ветки или коммита «$REF»"
+              exit 1
+            fi
+            echo "::warning title=Не кандидат::Выкладывается «$REF» (${sha:0:12}) в обход кандидата — на тестовом этот коммит, может быть, не проверялся"
+            origin="в обход кандидата: «$REF»"
+          else
+            sha=$(last_deployment staging)
+            if [ -z "$sha" ]; then
+              echo "::error::Нет кандидата в релиз: тестовый ещё ни разу не прошёл «CI» и проверку снаружи по новой схеме (Environments → staging). Дождитесь выкладки на тестовый или впишите ветку в поле «ref»."
+              exit 1
+            fi
+            # Кандидат — коммит самой основной ветки (слияние PR), а не
+            # коммит слитой в неё ветки: тестовый выкладывает только такие
+            # (не через «| grep -q»: grep выходит на первом совпадении, git
+            # получает SIGPIPE, и pipefail валит верную проверку)
+            first_parent=$(git rev-list --first-parent "$main")
+            if ! grep -qx "$sha" <<< "$first_parent"; then
+              echo "::error::Кандидат ${sha:0:12} не из основной ветки — так быть не должно, релиз остановлен."
+              exit 1
+            fi
+            origin="кандидат с тестового"
           fi
+
+          # Прошлый релиз — последняя удачная запись production; до первой
+          # такой записи — последний удачный запуск этого workflow
+          prev=$(last_deployment production)
+          if [ -z "$prev" ]; then
+            prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/prod.yml/runs?status=success&per_page=20" \
+              --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID)][0].head_sha // \"\"")
+          fi
+
+          # Слитые PR между двумя коммитами — по одному в строке
+          merged() {
+            git log --first-parent --format='%H' "$1..$2" | while read -r commit; do
+              subject=$(git log -1 --format=%s "$commit")
+              title=$(git log -1 --format=%b "$commit" | sed -n '1{/./p}')
+              if [[ "$subject" =~ ^Merge\ pull\ request\ (#[0-9]+) ]]; then
+                echo "- ${BASH_REMATCH[1]} ${title:-$subject}"
+              else
+                echo "- $subject"
+              fi
+            done
+          }
+
           {
-            echo "## Релиз ${head:0:12}"
+            echo "## Релиз ${sha:0:12}"
             echo
-            if [ "$count" = 0 ]; then
-              echo "С прошлого релиза (${prev:0:12}) нового нет."
-            elif [ "$count" -gt 0 ]; then
-              echo "С прошлого релиза (${prev:0:12}) — $count:"
-              echo
-              git log --first-parent --format='%H' "$prev..$head" | while read -r commit; do
-                subject=$(git log -1 --format=%s "$commit")
-                title=$(git log -1 --format=%b "$commit" | sed -n '1{/./p}')
-                if [[ "$subject" =~ ^Merge\ pull\ request\ (#[0-9]+) ]]; then
-                  echo "- ${BASH_REMATCH[1]} ${title:-$subject}"
-                else
-                  echo "- $subject"
-                fi
-              done
+            echo "Что выкладывается: $origin — \`${sha:0:12}\` $(git log -1 --format=%s "$sha")"
+            echo
+            if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then
+              count=$(git rev-list --count --first-parent "$prev..$sha")
+              if [ "$count" = 0 ]; then
+                echo "С прошлого релиза (${prev:0:12}) нового нет — выкладка той же версии."
+              else
+                echo "С прошлого релиза (${prev:0:12}) — $count:"
+                echo
+                merged "$prev" "$sha"
+              fi
             else
-              echo "Прошлый релиз не найден — выкладывается ${head:0:12}."
+              echo "Прошлый релиз не найден."
+            fi
+            # Слитое позже кандидата: ещё идёт «CI» или тестовый — в
+            # следующий релиз
+            if [ -z "$REF" ] && [ "$sha" != "$main" ]; then
+              echo
+              echo "Ещё не на тестовом (войдёт в следующий релиз):"
+              echo
+              merged "$sha" "$main"
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          release=true
-          if [ "$EVENT" = schedule ] && [ "$count" = 0 ]; then
-            release=false
-          fi
-          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: plan
-    if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # Запись удачного релиза — Environments → production
+      deployments: write
     env:
       HOST: ${{ vars.PROD_HOST }}
       WEB_IP: ${{ vars.PROD_WEB_IP }}
@@ -155,12 +227,15 @@ jobs:
       DB_IP: ${{ vars.PROD_DB_IP }}
       SITE_DOMAIN: ${{ vars.PROD_DOMAIN || 'new.savdex.uz' }}
       KNOWN_HOSTS: ${{ vars.PROD_KNOWN_HOSTS }}
+      STAGING_HOST: ${{ vars.STAGING_HOST }}
+      STAGING_HOST_KEY: ${{ vars.STAGING_HOST_KEY }}
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
 
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          # Коммит релиза — кандидат с тестового (или «ref»), его выбрал plan
+          ref: ${{ needs.plan.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -263,6 +338,13 @@ jobs:
           # (prod-build.sh шлёт образ по частной сети)
           if ! grep -q "^$WEB_IP " ~/.ssh/known_hosts; then
             printf '%s %s\n' "$WEB_IP" "$(grep "^$HOST " ~/.ssh/known_hosts | cut -d' ' -f2-)" >> ~/.ssh/known_hosts
+          fi
+          # Тестовый — за образом; его ключ закреплён переменной, без неё
+          # образ просто соберётся заново. Блок — только с адресом: пустой
+          # HostName ssh считает ошибкой всего файла
+          if [ -n "$STAGING_HOST" ] && [ -n "$STAGING_HOST_KEY" ]; then
+            printf 'Host staging\n  HostName %s\n  User deploy\n  ConnectTimeout 20\n' "$STAGING_HOST" >> ~/.ssh/config
+            printf '%s %s\n' "$STAGING_HOST" "$STAGING_HOST_KEY" >> ~/.ssh/known_hosts
           fi
 
       - name: Подготовить машины
@@ -409,9 +491,54 @@ jobs:
           ssh db 'SAVDEX_DATA_DIR=/srv/savdex SAVDEX_TOOL_IMAGE=postgres:18 \
             bash /opt/savdex/src/deploy/server/load-files.sh /opt/savdex/restore/files.tgz'
 
+      - name: Копия базы перед релизом
+        if: ${{ !inputs.no_backup }}
+        run: |
+          set -euo pipefail
+          # Дальше меняется схема базы (migrate): до неё — свежая копия в
+          # хранилище, отдельным файлом с меткой release (docs/backups.md)
+          if ! ssh db 'bash /opt/savdex/src/deploy/server/backup.sh db release'; then
+            echo "::error title=Копия базы::Копия перед релизом не снялась — релиз остановлен, сайт и база не тронуты. Выложить без копии — галочка «без копии базы» (только если копия не снимается)."
+            exit 1
+          fi
+
+      - name: Образ с тестового
+        run: |
+          set -euo pipefail
+          tag=$(git rev-parse HEAD | cut -c1-12)
+          # Тот же образ, что работал на тестовом, — а не собранный заново:
+          # docker save там, docker load на машине админки, проверка по ID.
+          # Нет его на тестовом — prod-build.sh соберёт образ на машине
+          # админки, как раньше
+          if ssh admin "docker image inspect savdex:$tag" > /dev/null 2>&1; then
+            echo "::notice title=Образ::savdex:$tag уже есть на машине админки"
+            exit 0
+          fi
+          if [ -z "$STAGING_HOST" ] || [ -z "$STAGING_HOST_KEY" ]; then
+            echo "::warning title=Образ::Нет переменных STAGING_HOST и STAGING_HOST_KEY — образ соберётся на машине админки заново"
+            exit 0
+          fi
+          if ! id=$(ssh staging "docker image inspect -f '{{.Id}}' savdex:$tag" 2>/dev/null); then
+            echo "::warning title=Образ::На тестовом нет savdex:$tag — образ соберётся на машине админки заново"
+            exit 0
+          fi
+          start=$(date +%s)
+          if ! ssh staging "docker save savdex:$tag | gzip -1" | ssh admin 'gunzip | docker load' > /dev/null; then
+            echo "::warning title=Образ::Не удалось перенести образ с тестового — соберётся на машине админки заново"
+            exit 0
+          fi
+          got=$(ssh admin "docker image inspect -f '{{.Id}}' savdex:$tag")
+          if [ "$got" != "$id" ]; then
+            echo "::error title=Образ::На машине админки другой образ savdex:$tag ($got), чем на тестовом ($id)"
+            exit 1
+          fi
+          echo "::notice title=Образ::savdex:$tag — тот же, что на тестовом (${id:7:12}), перенесён за $(( $(date +%s) - start )) с"
+
       - name: Сборка образа
         run: |
           set -euo pipefail
+          # Образ уже перенесён с тестового — prod-build.sh не собирает, а
+          # только отправляет его на машину сайта
           ssh admin "WEB_IP='$WEB_IP' bash /opt/savdex/src/deploy/server/prod-build.sh"
 
       - name: Админка и схема базы
@@ -435,7 +562,6 @@ jobs:
           printf '%s\n' "$password" \
             | ssh web "SAVDEX_ROLE=web DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
                 bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
-          echo "Готово: https://$SITE_DOMAIN" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Проверка снаружи
         env:
@@ -454,7 +580,7 @@ jobs:
             [ "$(code /up)" = 200 ] && break
             sleep 5
           done
-          for path in /up / /catalog /companies /py/admin/login/; do
+          for path in /up / /catalog /companies /login /register /py/admin/login/; do
             status=$(code "$path")
             echo "https://$SITE_DOMAIN$path — $status"
             if [ "$status" != 200 ]; then
@@ -464,3 +590,20 @@ jobs:
           done
           # Админка — с машины админки: на её странице входа — форма Django
           curl -fsS "${auth[@]}" "https://$SITE_DOMAIN/py/admin/login/" | grep -q 'name="_token"'
+
+      - name: Релиз записан
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          # Запись в GitHub → Environments → production: по ней следующий
+          # релиз считает, что нового
+          id=$(jq -n --arg ref "$sha" '{ref: $ref, environment: "production", auto_merge: false,
+                 required_contexts: [], production_environment: true,
+                 description: "Релиз на боевых машинах"}' \
+               | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" \
+            -f state=success -f environment_url="https://$SITE_DOMAIN" \
+            -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
+          echo "Готово: https://$SITE_DOMAIN — \`${sha:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
