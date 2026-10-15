@@ -27,6 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_session
 from savdex.guards import allowed_writes
 from savdex.web import (
+    code_lock,
     eloquent,
     guard,
     locales,
@@ -298,7 +299,13 @@ def forgot_sms(request: HttpRequest) -> HttpResponse:
     if phone is None:
         return invalid(ctx, {"phone": [ctx.t("messages.phone_format")]})
 
-    if sms.verified_user(phone) is not None and not sms.daily_limit_reached(phone):
+    # SMS — только на подтверждённый номер, не заблокированный пятью неверными
+    # кодами (code_lock) и в пределах суток; ответ один при любом исходе
+    if (
+        sms.verified_user(phone) is not None
+        and sms.locked_minutes(phone) == 0
+        and not sms.daily_limit_reached(phone)
+    ):
         sms.send_code(phone)
 
     store = _session(ctx)
@@ -335,10 +342,17 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
     if code == "":
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
+    target = code_lock.phone(phone)
+
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"sms_code": [locked]})
+
     user = sms.verified_user(phone)
 
     if user is None or not sms.check_code(phone, code):
-        return _with_errors(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
+        message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")
+
+        return _with_errors(ctx, {"sms_code": [message]})
 
     email = str(user["email"])
     token = create_reset_token(email)
@@ -508,9 +522,19 @@ def verify_code(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    if not verification.check(user["id"], _string(data.get("code"))):
-        return _with_errors(ctx, {"code": [ctx.t("messages.auth.code_invalid")]})
+    target = code_lock.email(str(user["email"]))
 
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"code": [locked]})
+
+    if not verification.check(user["id"], _string(data.get("code"))):
+        code_lock.fail(target)
+
+        return _with_errors(
+            ctx, {"code": [code_lock.failure_message(ctx, target, "messages.auth.code_invalid")]}
+        )
+
+    code_lock.clear(target)
     _mark_verified(ctx, user)
     flash(ctx, "success", ctx.t("messages.auth.verified"))
 
@@ -526,6 +550,12 @@ def verify_send(request: HttpRequest) -> HttpResponse:
 
     if user["email_verified_at"] is not None:
         return _to(ctx, "/cabinet")
+
+    # Пять неверных кодов — 15 минут и нового письма нет (code_lock)
+    if (locked := code_lock.locked_message(ctx, code_lock.email(str(user["email"])))) is not None:
+        flash(ctx, "error", locked)
+
+        return back(ctx)
 
     verification.send(ctx, user)
     flash(ctx, "status", ctx.t("messages.auth.mail_resent"))

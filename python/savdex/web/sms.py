@@ -27,6 +27,7 @@ from urllib.parse import quote
 import httpx
 
 from savdex import laravel_cache
+from savdex.web import code_lock
 
 log = logging.getLogger("savdex.sms")
 
@@ -37,12 +38,6 @@ TIMEOUT = 15
 #: Сколько SMS на один номер в сутки: каждое SMS платное, а номер
 #: в форму может вписать кто угодно
 MAX_PER_DAY = 5
-
-#: Неверных кодов подряд на номер — дальше код сгорает до нового SMS, как у
-#: кода из письма (register_code.MAX_ATTEMPTS). Иначе код перебирали бы с
-#: разных адресов сети: предел частоты — на адрес, а не на номер
-MAX_FAILURES = 5
-FAILURES_TTL = 15 * 60
 
 
 def _env(name: str) -> str:
@@ -139,27 +134,9 @@ def _sent_today(phone: str) -> int:
     return value if isinstance(value, int) else 0
 
 
-def _failures_key(phone: str) -> str:
-    return "sms_failed." + hashlib.sha1(phone.encode()).hexdigest()
-
-
-def _failures(phone: str) -> int:
-    value = laravel_cache.get(_failures_key(phone), any_store=True)
-
-    return value if isinstance(value, int) else 0
-
-
-def too_many_failures(phone: str) -> bool:
-    """Неверных кодов на этот номер — MAX_FAILURES: код сгорел, нужно новое SMS."""
-    return _failures(phone) >= MAX_FAILURES
-
-
-def failed_message_key(phone: str) -> str:
-    """Ключ текста ошибки неверного кода: попытки кончились — «запросите новый»."""
-    if too_many_failures(phone):
-        return "messages.auth.sms_code_exhausted"
-
-    return "messages.auth.sms_code_invalid"
+def locked_minutes(phone: str) -> int:
+    """Пять неверных кодов на номер — минуты блокировки (code_lock); 0 — нет."""
+    return code_lock.locked_minutes(code_lock.phone(phone))
 
 
 def daily_limit_reached(phone: str) -> bool:
@@ -190,8 +167,6 @@ def send_code(phone: str) -> bool:
         return False
 
     laravel_cache.put(_daily_key(phone), _sent_today(phone) + 1, 24 * 3600)
-    # Новый код — счёт неверных попыток заново
-    laravel_cache.put(_failures_key(phone), 0, FAILURES_TTL)
 
     return True
 
@@ -199,19 +174,23 @@ def send_code(phone: str) -> bool:
 def check_code(phone: str, code: str) -> bool:
     """
     POST /verifications/by_phone_number/{номер}/actions/verify: код верный —
-    True. Неверный засчитывается номеру; после MAX_FAILURES Telnyx уже не
-    спрашиваем, пока не уйдёт новое SMS (too_many_failures).
+    True. Неверный засчитывается номеру (code_lock): после пяти — 15 минут
+    Telnyx уже не спрашиваем.
     """
     if not configured() or not re.fullmatch(r"\d{4,10}", code or ""):
         return False
 
-    if too_many_failures(phone):
+    if locked_minutes(phone) > 0:
         return False
 
-    accepted = _verify(phone, code)
-    laravel_cache.put(_failures_key(phone), 0 if accepted else _failures(phone) + 1, FAILURES_TTL)
+    if _verify(phone, code):
+        code_lock.clear(code_lock.phone(phone))
 
-    return accepted
+        return True
+
+    code_lock.fail(code_lock.phone(phone))
+
+    return False
 
 
 def _verify(phone: str, code: str) -> bool:

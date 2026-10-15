@@ -133,37 +133,62 @@ def test_суточный_предел(окружение):
     assert not sms.daily_limit_reached("+8613812345679")
 
 
-def test_неверный_код_сгорает_после_пяти(окружение):
+def test_пять_неверных_блокируют_на_15_минут(окружение, monkeypatch):
     """
-    Пять неверных кодов на номер — дальше даже верный не принимается и
-    Telnyx не спрашиваем: код перебирали бы с разных адресов сети.
-    Новое SMS — счёт заново.
+    Пять неверных кодов на номер — 15 минут даже верный не принимается и
+    Telnyx не спрашиваем; новое SMS блокировку не снимает. Потом — заново.
     """
+    import time
+
+    from savdex.web import code_lock
+
+    хранилище: dict[str, Any] = {}
+    monkeypatch.setattr(sms.laravel_cache, "get", lambda key, **_: хранилище.get(key))
+    monkeypatch.setattr(
+        sms.laravel_cache, "put", lambda key, value, ttl: хранилище.__setitem__(key, value)
+    )
+    monkeypatch.setattr(sms.laravel_cache, "forget_file", lambda key: хранилище.pop(key, None))
+    сейчас = [1_000_000.0]
+    monkeypatch.setattr(time, "time", lambda: сейчас[0])
     номер = "+8613812345678"
 
-    for _ in range(sms.MAX_FAILURES):
-        assert sms.failed_message_key(номер) == "messages.auth.sms_code_invalid"
+    for _ in range(code_lock.MAX_FAILURES - 1):
         assert sms.check_code(номер, "99999") is False
+        assert sms.locked_minutes(номер) == 0
+
+    assert sms.check_code(номер, "99999") is False
+    assert sms.locked_minutes(номер) == 15
 
     запросов = len(ЗАПРОСЫ)
-    assert sms.too_many_failures(номер)
-    assert sms.failed_message_key(номер) == "messages.auth.sms_code_exhausted"
     assert sms.check_code(номер, "12345") is False
     assert len(ЗАПРОСЫ) == запросов
+    # Новое SMS блокировку не снимает
+    sms.send_code(номер)
+    assert sms.locked_minutes(номер) == 15
     # Другой номер — свой счёт
     assert sms.check_code("+8613812345679", "12345") is True
 
-    assert sms.send_code(номер)
-    assert not sms.too_many_failures(номер)
+    сейчас[0] += 14 * 60 + 1
+    assert sms.locked_minutes(номер) == 1
+    сейчас[0] += 60
+    assert sms.locked_minutes(номер) == 0
     assert sms.check_code(номер, "12345") is True
 
 
-def test_верный_код_обнуляет_счёт(окружение):
+def test_верный_код_обнуляет_счёт(окружение, monkeypatch):
+    from savdex.web import code_lock
+
+    хранилище: dict[str, Any] = {}
+    monkeypatch.setattr(sms.laravel_cache, "get", lambda key, **_: хранилище.get(key))
+    monkeypatch.setattr(
+        sms.laravel_cache, "put", lambda key, value, ttl: хранилище.__setitem__(key, value)
+    )
+    monkeypatch.setattr(sms.laravel_cache, "forget_file", lambda key: хранилище.pop(key, None))
     номер = "+8613812345678"
 
-    for _ in range(sms.MAX_FAILURES - 1):
+    for _ in range(code_lock.MAX_FAILURES - 1):
         sms.check_code(номер, "99999")
 
     assert sms.check_code(номер, "12345") is True
     assert sms.check_code(номер, "99999") is False
-    assert not sms.too_many_failures(номер)
+    assert sms.locked_minutes(номер) == 0

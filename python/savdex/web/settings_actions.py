@@ -20,7 +20,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import laravel_cache
-from savdex.web import eloquent, locales, ui
+from savdex.web import code_lock, eloquent, locales, ui
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows
 from savdex.web.forms import _store, action, back, flash, input_of, invalid, previous
@@ -119,6 +119,9 @@ def phone_send(request: HttpRequest) -> HttpResponse:
     if sms.verified_elsewhere(phone, user["id"]):
         return invalid(ctx, {"phone": [ctx.t("messages.register.phone_taken")]})
 
+    if (locked := code_lock.locked_message(ctx, code_lock.phone(phone))) is not None:
+        return invalid(ctx, {"phone": [locked]})
+
     if sms.daily_limit_reached(phone):
         return invalid(ctx, {"phone": [ctx.t("messages.register.sms_limit")]})
 
@@ -158,8 +161,15 @@ def phone_confirm(request: HttpRequest) -> HttpResponse:
     if code == "":
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
+    target = code_lock.phone(phone)
+
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return invalid(ctx, {"sms_code": [locked]})
+
     if not sms.check_code(phone, code):
-        return invalid(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
+        message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")
+
+        return invalid(ctx, {"sms_code": [message]})
 
     if sms.verified_elsewhere(phone, user["id"]):
         return invalid(ctx, {"sms_code": [ctx.t("messages.register.phone_taken")]})

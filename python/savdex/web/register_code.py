@@ -14,7 +14,8 @@ RegisteredUserController::sendCode, code, confirmCode, resendCode и details.
 
 Код для адреса, у которого ещё нет учётки, — EmailVerificationCode::
 issueForEmail: в кэше Laravel хешем под register_email_code.<sha1 почты>
-на 15 минут, пять неверных попыток — код гасится. Все шаги — за guest:
+на 15 минут. Пять неверных кодов подряд — 15 минут блокировки адреса
+(code_lock): ни ввести код, ни получить новый. Все шаги — за guest:
 вошедший уходит на главную.
 
 Сверка с настоящим Laravel — tests/test_web_register_code.py.
@@ -31,7 +32,7 @@ from typing import Any
 from django.http import HttpRequest, HttpResponse
 
 from savdex import laravel_cache
-from savdex.web import analytics, guard, inertia, mail, sms
+from savdex.web import analytics, code_lock, guard, inertia, mail, sms
 from savdex.web.actions import form
 from savdex.web.auth_actions import (
     SESSION_COUNTRY,
@@ -56,9 +57,8 @@ from savdex.web.validation import validate
 
 log = logging.getLogger("savdex.register")
 
-#: EmailVerificationCode::TTL_MINUTES и MAX_ATTEMPTS
+#: EmailVerificationCode::TTL_MINUTES
 TTL_MINUTES = 15
-MAX_ATTEMPTS = 5
 
 
 # ── Код для адреса ──────────────────────────────────────────────────
@@ -78,22 +78,15 @@ def issue(email: str) -> str:
 
 
 def check(email: str, code: str) -> bool:
-    """EmailVerificationCode::checkForEmail: верный код одноразов."""
+    """
+    EmailVerificationCode::checkForEmail: верный код одноразов. Неверные
+    считает code_lock — на адрес, а не на код: пять подряд — 15 минут
+    блокировки, и новый код её не снимает.
+    """
     key = _key(email)
     entry = laravel_cache.get(key, any_store=True)
 
-    if not isinstance(entry, dict):
-        return False
-
-    if int(entry.get("attempts") or 0) >= MAX_ATTEMPTS:
-        laravel_cache.forget_file(key)
-
-        return False
-
-    if not guard.check(code, str(entry.get("hash") or "")):
-        entry["attempts"] = int(entry.get("attempts") or 0) + 1
-        laravel_cache.put(key, entry, TTL_MINUTES * 60)
-
+    if not isinstance(entry, dict) or not guard.check(code, str(entry.get("hash") or "")):
         return False
 
     laravel_cache.forget_file(key)
@@ -204,6 +197,10 @@ def send_code(request: HttpRequest) -> HttpResponse:
 
     if errors:
         return invalid(ctx, errors)
+
+    # Пять неверных кодов на этот адрес — 15 минут и нового кода нет
+    if (locked := code_lock.locked_message(ctx, code_lock.email(email))) is not None:
+        return invalid(ctx, {"email": [locked]})
 
     # Письмо не ушло — остаёмся на первом шаге с понятной ошибкой
     if not _mail_code(ctx, email):
@@ -325,9 +322,19 @@ def confirm_code(request: HttpRequest) -> HttpResponse:
     if errors:
         return invalid(ctx, errors)
 
-    if not check(email, _php_string(data.get("code"))):
-        return _with_errors(ctx, {"code": [ctx.t("messages.auth.code_invalid")]})
+    target = code_lock.email(email)
 
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"code": [locked]})
+
+    if not check(email, _php_string(data.get("code"))):
+        code_lock.fail(target)
+
+        return _with_errors(
+            ctx, {"code": [code_lock.failure_message(ctx, target, "messages.auth.code_invalid")]}
+        )
+
+    code_lock.clear(target)
     _session(ctx).put(SESSION_VERIFIED, email)
 
     return _to(ctx, "/register/details")
@@ -348,7 +355,9 @@ def resend_code(request: HttpRequest) -> HttpResponse:
     if email is None:
         return _to(ctx, "/register")
 
-    if _mail_code(ctx, email):
+    if (locked := code_lock.locked_message(ctx, code_lock.email(email))) is not None:
+        flash(ctx, "error", locked)
+    elif _mail_code(ctx, email):
         flash(ctx, "status", ctx.t("messages.auth.mail_resent"))
     else:
         flash(ctx, "error", ctx.t("messages.register.email_send_failed"))
@@ -387,6 +396,9 @@ def _phone(ctx: Context) -> str | None:
 
 def _send_sms(ctx: Context, phone: str) -> str | None:
     """Код на номер; не ушёл — текст ошибки. Каждое SMS платное."""
+    if (locked := code_lock.locked_message(ctx, code_lock.phone(phone))) is not None:
+        return locked
+
     if sms.daily_limit_reached(phone):
         return ctx.t("messages.register.sms_limit")
 
@@ -494,8 +506,15 @@ def confirm_sms(request: HttpRequest) -> HttpResponse:
     if code == "":
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
+    target = code_lock.phone(phone)
+
+    if (locked := code_lock.locked_message(ctx, target)) is not None:
+        return _with_errors(ctx, {"sms_code": [locked]})
+
     if not sms.check_code(phone, code):
-        return _with_errors(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
+        message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")
+
+        return _with_errors(ctx, {"sms_code": [message]})
 
     _session(ctx).put(SESSION_SMS_VERIFIED, {"phone": phone})
 
