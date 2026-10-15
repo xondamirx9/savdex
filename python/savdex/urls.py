@@ -312,6 +312,7 @@ urlpatterns = [
     re_path(r"^(?:(?:uz|en|zh|tr)/)?logout$", auth_actions.logout, name="logout"),
     # Капча входа и регистрации: новое задание (savdex/web/captcha.py)
     re_path(r"^(?:(?:uz|en|zh|tr)/)?captcha$", captcha.challenge, name="captcha"),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?captcha/verify$", captcha.check, name="captcha.verify"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?register$",
         auth_actions.either(auth.register, auth_actions.register),

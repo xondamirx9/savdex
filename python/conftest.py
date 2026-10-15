@@ -40,7 +40,7 @@ def django_db_modify_db_settings() -> None:
 @pytest.fixture(autouse=True)
 def _без_капчи(monkeypatch: pytest.MonkeyPatch) -> None:
     """
-    Капча (savdex/web/captcha.py) в проверках форм входа и регистрации
-    не нужна; tests/test_captcha.py включает её сам.
+    Капча регистрации (savdex/web/captcha.py) в проверках форм не нужна;
+    tests/test_captcha.py включает её сам.
     """
     monkeypatch.setenv("CAPTCHA_ENABLED", "false")

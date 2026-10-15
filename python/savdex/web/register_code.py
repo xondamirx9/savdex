@@ -202,7 +202,7 @@ def send_code(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, errors)
 
     # Капча — до письма: без неё бот рассылал бы коды на чужие адреса
-    if (problem := captcha.verify(_session(ctx), "register", data.get("captcha"))) is not None:
+    if (problem := captcha.confirm(_session(ctx), "register", data.get("captcha"))) is not None:
         return invalid(ctx, {"captcha": [ctx.t(f"captcha.errors.{problem}")]})
 
     # Письмо не ушло — остаёмся на первом шаге с понятной ошибкой

@@ -1,6 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
-import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
+import { CaptchaField } from '@/components/auth/CaptchaField';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
@@ -29,8 +29,8 @@ export default function RegisterEmail({
     const { data, setData, post, processing, errors, clearErrors } = useForm<{
         email: string;
         country_id: number | null;
-        captcha: number[];
-    }>({ email: email ?? '', country_id: countryId, captcha: [] });
+        captcha: string;
+    }>({ email: email ?? '', country_id: countryId, captcha: '' });
     // Задание капчи одноразовое: после каждой отправки — новое
     const [captchaKey, setCaptchaKey] = useState(0);
 
@@ -79,12 +79,12 @@ export default function RegisterEmail({
                 />
 
                 {captcha && (
-                    <CaptchaGrid
+                    <CaptchaField
                         purpose="register"
                         value={data.captcha}
-                        onChange={(cells) => {
-                            setData('captcha', cells);
-                            if (errors.captcha && cells.length > 0) clearErrors('captcha');
+                        onChange={(text) => {
+                            setData('captcha', text);
+                            if (errors.captcha && text !== '') clearErrors('captcha');
                         }}
                         error={errors.captcha}
                         reloadKey={captchaKey}
