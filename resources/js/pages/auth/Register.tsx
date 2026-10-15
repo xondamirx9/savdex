@@ -95,6 +95,8 @@ export default function Register({
         pinfl: '',
         service_section: '',
         name: '',
+        // Регистрация по телефону: почта — здесь, подтвердить её можно потом в профиле
+        email: '',
         phone: smsPhone ?? (firstCountry?.phone_code ? `${firstCountry.phone_code} ` : ''),
         password: '',
         password_confirmation: '',
@@ -181,14 +183,17 @@ export default function Register({
             <RegisterSteps current={3} />
 
             {/* Почта уже подтверждена кодом (или код пропущен) — здесь её только показываем */}
-            <div className="bg-primary-50 rounded-card mb-5 flex items-center gap-3 p-3.5 text-sm">
-                <MailCheck aria-hidden className="text-primary-700 size-5 shrink-0" />
-                <span className="min-w-0">
-                    {t(skipped || smsPhone ? 'auth.reg_email_unconfirmed' : 'auth.reg_email_verified')}: <b className="break-all">{email}</b>
-                </span>
-            </div>
+            {!smsPhone && (
+                <div className="bg-primary-50 rounded-card mb-5 flex items-center gap-3 p-3.5 text-sm">
+                    <MailCheck aria-hidden className="text-primary-700 size-5 shrink-0" />
+                    <span className="min-w-0">
+                        {t(skipped ? 'auth.reg_email_unconfirmed' : 'auth.reg_email_verified')}:{' '}
+                        <b className="break-all">{email}</b>
+                    </span>
+                </div>
+            )}
             {/* Адрес успели занять между шагами — ошибка почты без поля */}
-            {(errors as Record<string, string | undefined>).email && (
+            {!smsPhone && (errors as Record<string, string | undefined>).email && (
                 <p className="text-danger -mt-3 mb-5 text-[13px]" role="alert">
                     {(errors as Record<string, string | undefined>).email}
                 </p>
@@ -333,6 +338,24 @@ export default function Register({
                         hint={
                             freelancer && uzOrUnknown ? t('auth.pinfl_hint_required') : t('auth.pinfl_hint_optional')
                         }
+                    />
+                )}
+
+                {smsPhone && (
+                    <TextInput
+                        label={t('auth.reg_email_label')}
+                        type="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        name="email"
+                        autoComplete="email"
+                        required
+                        placeholder={t('auth.email_placeholder')}
+                        value={data.email}
+                        onChange={(e) => update('email', e.target.value)}
+                        error={(errors as Record<string, string | undefined>).email}
+                        hint={t('auth.reg_email_later')}
                     />
                 )}
 

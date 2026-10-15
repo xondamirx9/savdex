@@ -177,6 +177,7 @@ ICONS = {
     "finance.WalletTransaction": "banknotes",
     "finance.PromoCode": "receipt-percent",
     "finance.Subscription": "arrow-path",
+    "ilmora.Registration": "user-plus",
 }
 DEFAULT_ICON = "rectangle-stack"
 
@@ -380,6 +381,8 @@ MENU_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "crm.deal",
             "crm.prospect",
             "crm.prospectmailing",
+            # Заявки на регистрацию в ILMORA (savdex/ilmora)
+            "ilmora.registration",
             "crm.contact",
             "crm.task",
             "crm.communication",

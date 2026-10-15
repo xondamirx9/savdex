@@ -22,11 +22,13 @@ export function useReveal(deps: unknown[] = []) {
             return;
         }
 
+        // Что наблюдаем → какие элементы показать, когда оно появилось
+        const watched = new Map<Element, HTMLElement[]>();
         const io = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
                     if (!entry.isIntersecting) return;
-                    entry.target.classList.add('is-visible');
+                    (watched.get(entry.target) ?? []).forEach((el) => el.classList.add('is-visible'));
                     io.unobserve(entry.target);
                 });
             },
@@ -43,7 +45,12 @@ export function useReveal(deps: unknown[] = []) {
                 el.classList.add('is-visible');
                 return;
             }
-            io.observe(el);
+            // Шторка закрывает заголовок через clip-path, а Chrome считает
+            // обрезанный так элемент невидимым — наблюдатель не сработал бы
+            // никогда. За шторкой следим по её родителю
+            const watch = el.dataset.reveal === 'wipe' && el.parentElement ? el.parentElement : el;
+            watched.set(watch, [...(watched.get(watch) ?? []), el]);
+            io.observe(watch);
         });
 
         return () => io.disconnect();

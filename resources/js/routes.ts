@@ -55,14 +55,22 @@ export const routes = {
             ? '/login'
             : `/login?back=${encodeURIComponent(window.location.pathname + window.location.search)}`,
     logout: '/logout',
+    /** Новое задание капчи регистрации: ?for=register (JSON) */
+    captcha: '/captcha',
+    /** Проверка введённого в окне «Я не робот»: ?for=register (JSON) */
+    captchaVerify: '/captcha/verify',
     register: '/register',
     registerEmail: '/register/email',
     registerCode: '/register/code',
     registerCodeResend: '/register/code/resend',
     registerCodeSkip: '/register/code/skip',
+    registerPhone: '/register/phone',
     registerSms: '/register/sms',
     registerSmsConfirm: '/register/sms/confirm',
     registerDetails: '/register/details',
+    /** Регистрация в ILMORA через Savdex: заявка без аккаунта Savdex */
+    ilmoraRegister: '/register/ilmora-register',
+    ilmoraOffer: '/ilmora/offer',
     passwordRequest: '/forgot-password',
     passwordForced: '/password/change',
     verifyNotice: '/verify-email',

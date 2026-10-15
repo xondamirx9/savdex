@@ -524,7 +524,7 @@ export default function Home({
                                 {t('home.categories_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="cat-grid" data-reveal-stagger="pop">
+                        <div className="cat-grid" data-reveal-stagger>
                             {/* Ряд — шесть плиток: разделы каталога, за ними
                                 услуги, «Другое» — последним */}
                             {mainCategories.map(categoryTile)}
@@ -603,7 +603,7 @@ export default function Home({
                                 {t('home.suppliers_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="supplier-grid" data-reveal-stagger="scale">
+                        <div className="supplier-grid" data-reveal-stagger>
                             {suppliers.map((s) => (
                                 <Link key={s.slug} href={routes.company(s.slug)} className="supplier-card">
                                     <span className="supplier-head">
@@ -638,7 +638,7 @@ export default function Home({
                             <h2 className="t-section" data-reveal="wipe">{how.heading}</h2>
                             {how.subheading !== '' && <p className="t-lead">{how.subheading}</p>}
                         </div>
-                        <div className="flow" data-reveal-stagger="steps">
+                        <div className="flow" data-reveal-stagger>
                             {(how.items ?? []).map((step, i) => (
                                 <div key={i} className="flow-step">
                                     <div className="flow-num">{i + 1}</div>
@@ -663,7 +663,7 @@ export default function Home({
                                 {t('home.reviews_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
                         </div>
-                        <div className="review-grid" data-reveal-stagger="flip">
+                        <div className="review-grid" data-reveal-stagger>
                             {reviews.map((r) => (
                                 <ReviewCard key={`${r.kind}-${r.id}`} review={r} />
                             ))}
@@ -681,7 +681,7 @@ export default function Home({
                         <div className="section-bar">
                             <h2 data-reveal="wipe">{faq.heading}</h2>
                         </div>
-                        <div className="objection-grid" data-reveal-stagger="unfold">
+                        <div className="objection-grid" data-reveal-stagger="flip">
                             {(faq.items ?? []).map((item, i) => {
                                 const Icon = FAQ_ICONS[i % FAQ_ICONS.length];
 
@@ -715,7 +715,7 @@ export default function Home({
                                 {t('home.blog_all')} <ArrowRight aria-hidden className="size-4" />
                             </Link>
                         </div>
-                        <div className="news-grid" data-reveal-stagger="curtain">
+                        <div className="news-grid" data-reveal-stagger>
                             {news.map((p) => (
                                 <Link
                                     key={p.slug}
@@ -750,7 +750,7 @@ export default function Home({
             {shown('cta') && (
                 <section className="section--tight">
                     <div className="container">
-                        <div className="cta-band" data-reveal="zoom">
+                        <div className="cta-band">
                             <h2 className="t-h1">{cta.heading}</h2>
                             {cta.subheading !== '' && <p className="t-lead">{cta.subheading}</p>}
                             <Link
