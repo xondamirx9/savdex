@@ -1,0 +1,568 @@
+/*
+ * ILMORA на сайте Savdex: регистрация (/register/ilmora-register), оферта
+ * (/ilmora/offer) и кнопка-плашка на первом шаге регистрации Savdex.
+ *
+ * Цвета и шрифты сняты с демо-сайта ILMORA. Всё — внутри .ilmora,
+ * .ilmora-logo и .ilmora-cta: остальной сайт эти правила не задевают.
+ * Шрифты — со своего сервера (@fontsource в сборке), не с чужого CDN.
+ */
+
+.ilmora,
+.ilmora-cta {
+    --c-forest: #163c35;
+    --c-ivory: #f7f5f0;
+    --c-champagne: #c8ad7f;
+    --c-charcoal: #202725;
+    --c-sage: #e3ebe5;
+    --ilmora-serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    --ilmora-sans: 'Inter', 'Manrope', system-ui, sans-serif;
+    --ilmora-error: #a8322b;
+}
+
+/* ── Знак ── */
+
+.ilmora-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.ilmora-logo__mark {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: rgb(247 245 240 / 0.15);
+    border: 1px solid rgb(247 245 240 / 0.3);
+    color: var(--c-champagne, #c8ad7f);
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    font-size: 21px;
+    font-weight: 400;
+    line-height: 1;
+}
+.ilmora-logo__word {
+    color: var(--c-ivory, #f7f5f0);
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    line-height: 1;
+}
+.ilmora-logo--compact .ilmora-logo__word {
+    font-size: 19px;
+}
+
+/* ── Кнопка на регистрации Savdex: светлая полупрозрачная плашка ── */
+
+.ilmora-cta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 600px;
+    padding: 14px 18px;
+    border-radius: 16px;
+    background: rgb(255 255 255 / 0.07);
+    border: 1px solid rgb(255 255 255 / 0.16);
+    color: #fff;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s;
+}
+.ilmora-cta:hover {
+    background: rgb(255 255 255 / 0.12);
+    border-color: rgb(200 173 127 / 0.6);
+}
+.ilmora-cta:focus-visible {
+    outline: 3px solid rgb(200 173 127 / 0.6);
+    outline-offset: 2px;
+}
+.ilmora-cta__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-left: 16px;
+    border-left: 1px solid rgb(255 255 255 / 0.16);
+}
+.ilmora-cta__title {
+    /* Цвет ссылок тёмного экрана входа (.auth-dark a) сюда не доходит */
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.ilmora-cta__hint {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #b7c3d9;
+}
+/* На узком экране знак — без слова: надпись и так говорит «ILMORA» */
+@media (max-width: 479px) {
+    .ilmora-cta .ilmora-logo__word {
+        display: none;
+    }
+}
+.ilmora-cta__arrow {
+    flex-shrink: 0;
+    margin-left: auto;
+    color: var(--c-champagne);
+}
+
+/* ── Страница ── */
+
+.ilmora {
+    min-height: 100vh;
+    background: var(--c-ivory);
+    color: var(--c-charcoal);
+    color-scheme: light;
+    font-family: var(--ilmora-sans);
+    -webkit-font-smoothing: antialiased;
+}
+.ilmora-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+}
+@media (min-width: 1024px) {
+    .ilmora-shell {
+        grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    }
+}
+
+.ilmora-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px 20px 28px;
+    background: var(--c-forest);
+    color: var(--c-ivory);
+}
+@media (min-width: 1024px) {
+    .ilmora-aside {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        gap: 40px;
+        padding: 48px 56px;
+    }
+}
+.ilmora-aside__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+.ilmora-aside__pitch {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 520px;
+}
+@media (min-width: 1024px) {
+    .ilmora-aside__pitch {
+        margin: auto 0;
+        gap: 24px;
+    }
+}
+.ilmora-aside__title {
+    font-family: var(--ilmora-serif);
+    font-size: clamp(30px, 3.4vw, 52px);
+    font-weight: 400;
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+}
+.ilmora-aside__rule {
+    width: 56px;
+    height: 1px;
+    background: var(--c-champagne);
+}
+.ilmora-aside__lead {
+    font-size: 15px;
+    line-height: 1.6;
+    color: rgb(247 245 240 / 0.78);
+}
+.ilmora-aside__foot {
+    font-size: 13px;
+    color: rgb(247 245 240 / 0.6);
+}
+
+.ilmora-langs {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgb(247 245 240 / 0.25);
+}
+.ilmora-langs a {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: rgb(247 245 240 / 0.75);
+}
+.ilmora-langs a:hover {
+    color: var(--c-ivory);
+}
+.ilmora-langs a[aria-current='true'] {
+    background: var(--c-ivory);
+    color: var(--c-forest);
+}
+
+.ilmora-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 28px 16px 40px;
+}
+@media (min-width: 640px) {
+    .ilmora-main {
+        padding: 48px 32px;
+    }
+}
+.ilmora-card {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 540px;
+    padding: 28px 20px;
+    border-radius: 1.25rem;
+    background: #fffdf9;
+    border: 1px solid rgb(32 39 37 / 0.08);
+    box-shadow: 0 24px 60px rgb(22 60 53 / 0.08);
+}
+@media (min-width: 640px) {
+    .ilmora-card {
+        padding: 40px;
+    }
+}
+.ilmora-title {
+    font-family: var(--ilmora-serif);
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--c-charcoal);
+}
+.ilmora-sub {
+    margin-top: 8px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: #5b6662;
+}
+.ilmora-back {
+    font-size: 14px;
+    color: #5b6662;
+}
+.ilmora-back:hover {
+    color: var(--c-forest);
+    text-decoration: underline;
+}
+
+/* ── Поля ── */
+
+.ilmora-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 28px;
+}
+.ilmora-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+.ilmora-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--c-charcoal);
+}
+.ilmora-hint {
+    font-size: 13px;
+    color: #5b6662;
+}
+.ilmora-error {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ilmora-error);
+}
+.ilmora-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border-radius: 0.75rem;
+    border: 1px solid #dcd6c8;
+    background: #fff;
+    color: var(--c-charcoal);
+    font: inherit;
+    font-size: 16px;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.ilmora-input::placeholder {
+    color: #9aa19e;
+}
+.ilmora-input:focus,
+.ilmora-phone:focus-within {
+    outline: none;
+    border-color: var(--c-champagne);
+    box-shadow: 0 0 0 3px rgb(200 173 127 / 0.3);
+}
+.ilmora-input[aria-invalid='true'],
+.ilmora-phone[data-invalid='true'] {
+    border-color: var(--ilmora-error);
+}
+
+.ilmora-phone {
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid #dcd6c8;
+    background: #fff;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.ilmora-phone__prefix {
+    display: flex;
+    align-items: center;
+    padding: 0 12px 0 14px;
+    background: var(--c-sage);
+    color: var(--c-forest);
+    font-size: 16px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+.ilmora-phone .ilmora-input {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.ilmora-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.ilmora-switch label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 10px 12px;
+    border-radius: 0.75rem;
+    border: 1px solid #dcd6c8;
+    background: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    text-align: center;
+    cursor: pointer;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        color 0.15s;
+}
+.ilmora-switch label:hover {
+    border-color: var(--c-champagne);
+}
+.ilmora-switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.ilmora-switch label:has(input:checked) {
+    background: var(--c-forest);
+    border-color: var(--c-forest);
+    color: var(--c-ivory);
+}
+.ilmora-switch label:has(input:focus-visible) {
+    box-shadow: 0 0 0 3px rgb(200 173 127 / 0.45);
+}
+.ilmora-switch[data-invalid='true'] label {
+    border-color: var(--ilmora-error);
+}
+
+.ilmora-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    cursor: pointer;
+}
+.ilmora-check input {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    accent-color: var(--c-forest);
+    cursor: pointer;
+}
+.ilmora-check a {
+    color: var(--c-forest);
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: var(--c-champagne);
+    text-underline-offset: 3px;
+}
+.ilmora-check a:hover {
+    text-decoration-color: var(--c-forest);
+}
+
+.ilmora-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 14px 20px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--c-champagne);
+    color: var(--c-charcoal);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+        background-color 0.15s,
+        box-shadow 0.15s;
+}
+.ilmora-button:hover {
+    background: #bea170;
+}
+.ilmora-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(22 60 53 / 0.35);
+}
+.ilmora-button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.ilmora-alert {
+    margin-top: 20px;
+    padding: 12px 14px;
+    border-radius: 0.75rem;
+    background: #f8e9e7;
+    color: var(--ilmora-error);
+    font-size: 14px;
+}
+
+/* ── Заявка принята ── */
+
+.ilmora-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    text-align: center;
+}
+.ilmora-done__icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--c-sage);
+    color: var(--c-forest);
+}
+.ilmora-done .ilmora-button {
+    margin-top: 12px;
+}
+
+/* ── Оферта: документ ── */
+
+.ilmora-card--doc {
+    max-width: 760px;
+}
+.ilmora-doc {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 15px;
+    line-height: 1.65;
+}
+.ilmora-doc__title {
+    margin-top: 8px;
+    font-family: var(--ilmora-serif);
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+.ilmora-doc__subtitle {
+    margin-top: -6px;
+    text-align: center;
+    color: #5b6662;
+}
+.ilmora-doc__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 16px;
+    margin: 8px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e6e1d6;
+    font-size: 14px;
+    color: #5b6662;
+}
+.ilmora-doc__section {
+    margin-top: 16px;
+    font-family: var(--ilmora-serif);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--c-forest);
+}
+.ilmora-doc__right {
+    align-self: flex-end;
+    max-width: 420px;
+    text-align: right;
+}
+.ilmora-doc__rule {
+    margin: 28px 0 12px;
+    border: 0;
+    border-top: 1px dashed #c7bea9;
+}
+.ilmora-doc__value {
+    font-weight: 600;
+    color: var(--c-forest);
+    text-decoration: underline;
+    text-decoration-color: var(--c-champagne);
+    text-underline-offset: 4px;
+}
+.ilmora-doc__blank {
+    color: #8a918e;
+    letter-spacing: 0.04em;
+}
+.ilmora-doc__box {
+    margin-right: 6px;
+    font-size: 18px;
+    color: #8a918e;
+}
+.ilmora-doc__box.is-on {
+    color: var(--c-forest);
+}
+.ilmora-doc__pending {
+    margin-top: 24px;
+    padding: 16px 18px;
+    border-radius: 0.75rem;
+    background: var(--c-sage);
+    color: var(--c-forest);
+}

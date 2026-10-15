@@ -18,6 +18,7 @@ from django.urls import path, re_path
 from savdex import adminlogin, adminpanel, adminsite, visitor
 from savdex.crm import unsubscribe as prospect_unsubscribe
 from savdex.data.meyos import feed as meyos_feed
+from savdex.ilmora import views as ilmora
 from savdex.web import (
     account_actions,
     actions,
@@ -359,6 +360,13 @@ urlpatterns = [
         register_code.details,
         name="register.details",
     ),
+    # Регистрация в ILMORA: заявка без аккаунта Savdex и оферта (savdex/ilmora)
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?register/ilmora-register$",
+        auth_actions.either(ilmora.page, ilmora.submit),
+        name="ilmora.register",
+    ),
+    re_path(r"^(?:(?:uz|en|zh|tr)/)?ilmora/offer$", ilmora.offer, name="ilmora.offer"),
     re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password$",
         auth_actions.either(auth.forgot_password, account_actions.forgot_password),
