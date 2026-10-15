@@ -102,25 +102,31 @@ export default function RegisterEmail({
                                     clearErrors();
                                 }}
                                 className={cn(
-                                    'rounded-card flex flex-col items-center gap-2 border px-3 text-center transition',
+                                    'group rounded-card flex cursor-pointer flex-col items-center gap-2 border px-3 text-center',
+                                    'transition duration-150 ease-out',
                                     'focus-visible:ring-primary-500 focus-visible:ring-2 focus-visible:outline-none',
                                     // Пока не выбрано — крупные карточки; выбрано — компактный переключатель
                                     method === null ? 'py-6' : 'py-3.5',
                                     selected
                                         ? 'border-primary-700 bg-primary-50 text-primary-900'
-                                        : 'bg-surface border-line hover:border-line-strong',
+                                        : 'bg-surface border-line hover:border-primary-500 hover:-translate-y-0.5 hover:shadow-md',
                                 )}
                             >
                                 <span
                                     className={cn(
                                         'flex items-center justify-center rounded-full',
                                         method === null ? 'size-12' : 'size-9',
-                                        selected ? 'bg-primary-700 text-white' : 'bg-primary-50 text-primary-700',
+                                        'transition-colors duration-150',
+                                        selected
+                                            ? 'bg-primary-700 text-white'
+                                            : 'bg-primary-50 text-primary-700 group-hover:bg-primary-700 group-hover:text-white',
                                     )}
                                 >
                                     <Icon aria-hidden className={method === null ? 'size-6' : 'size-5'} />
                                 </span>
-                                <span className="text-[15px] font-semibold">{t(label)}</span>
+                                <span className="group-hover:text-primary-700 text-[15px] font-semibold transition-colors">
+                                    {t(label)}
+                                </span>
                                 {method === null && <span className="text-muted text-xs">{t(hint)}</span>}
                             </button>
                         );
