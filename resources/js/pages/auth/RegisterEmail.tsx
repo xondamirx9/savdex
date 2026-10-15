@@ -1,7 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { Mail, Smartphone } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
-import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
+import { CaptchaField } from '@/components/auth/CaptchaField';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
 import { IlmoraRegisterLink } from '@/components/ilmora/IlmoraRegisterLink';
 import { CountryField } from '@/components/CountryField';
@@ -50,15 +50,15 @@ export default function RegisterEmail({
         email: string;
         phone: string;
         country_id: number | null;
-        captcha: number[];
+        captcha: string;
     }>({
         email: email ?? '',
         phone: phone ?? (dialOf(countryId) ? `${dialOf(countryId)} ` : ''),
         country_id: countryId,
-        captcha: [],
+        captcha: '',
     });
     const byPhone = method === 'phone';
-    // Задание капчи одноразовое: после каждой отправки — новое
+    // Пропуск капчи одноразовый: после каждой отправки галочка снимается
     const [captchaKey, setCaptchaKey] = useState(0);
 
     function submit(e: FormEvent) {
@@ -206,12 +206,12 @@ export default function RegisterEmail({
                     )}
 
                     {captcha && (
-                        <CaptchaGrid
+                        <CaptchaField
                             purpose="register"
                             value={data.captcha}
-                            onChange={(cells) => {
-                                setData('captcha', cells);
-                                if (errors.captcha && cells.length > 0) clearErrors('captcha');
+                            onChange={(token) => {
+                                setData('captcha', token);
+                                if (errors.captcha && token !== '') clearErrors('captcha');
                             }}
                             error={errors.captcha}
                             reloadKey={captchaKey}
