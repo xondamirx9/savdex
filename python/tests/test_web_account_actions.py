@@ -897,3 +897,127 @@ def test_сброс_по_смс_почту_не_возвращает(сайт):
         "select count(*) from sessions s join users u on u.id = s.user_id where u.email = %s",
         [ПОЧТА],
     ) == [(0,)]
+
+
+# ── «Забыли пароль»: почта или телефон — способ по аккаунту ─────────
+
+
+def _аккаунт(почта: bool, телефон: bool) -> Callable[[], None]:
+    """Почта и телефон подтверждены или нет; телефон — +998 90 111-22-33."""
+
+    def run() -> None:
+        пользователь()
+        sql(
+            "update users set email_verified_at = %s, phone = '+998 90 111-22-33', "
+            "phone_verified_at = %s where email = %s",
+            [
+                "2026-01-01 00:00:00" if почта else None,
+                "2026-09-01 10:00:00" if телефон else None,
+                ПОЧТА,
+            ],
+        )
+
+    return run
+
+
+def _найти(сайт: str, telnyx: str, login: str, шаг: Callable[[], None]) -> dict[str, Any]:
+    from .test_sms import ЗАПРОСЫ
+
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/find",
+        подготовка(шаг),
+        снимок,
+        body={"login": login},
+        env=_смс(telnyx),
+    )
+    итог["смс"] = [з["body"]["phone_number"] for з in ЗАПРОСЫ if "phone_number" in з["body"]]
+
+    return итог
+
+
+@pytest.mark.parametrize(
+    ("login", "почта", "телефон", "куда"),
+    [
+        # По почте, телефон не подтверждён — ссылка на почту
+        (ПОЧТА, True, False, "mail"),
+        # Почта не подтверждена (код при регистрации пропущен), телефона нет — тоже почта
+        (ПОЧТА, False, False, "mail"),
+        # По телефону, почта не подтверждена — только SMS, и по почте, и по номеру
+        (ПОЧТА, False, True, "sms"),
+        ("+998 90 111 22 33", False, True, "sms"),
+        # Подтверждены оба — выбор
+        (ПОЧТА, True, True, "choose"),
+        ("90 111 22 33", True, True, "choose"),
+        # Номер не подтверждён — по нему не ищем
+        ("+998901112233", True, False, None),
+        ("nobody@savdex.uz", True, True, None),
+    ],
+)
+def test_забыли_пароль_способ(сайт, telnyx, login, почта, телефон, куда):
+    uid = учётка(ПОЧТА)
+    итог = _найти(сайт, telnyx, login, _аккаунт(почта, телефон))
+    данные = сессия(итог)
+
+    assert итог["ответ"]["headers"]["location"].endswith("/forgot-password")
+    assert (len(итог["база"]["mail"]) == 1) is (куда == "mail")
+    assert итог["смс"] == (["+998901112233"] if куда == "sms" else [])
+
+    if куда == "sms":
+        assert данные["reset"]["sms_phone"] == "+998901112233"
+    if куда == "choose":
+        assert данные["reset"] == {"found": uid}
+    if куда is None:
+        assert данные["status"].startswith("Если аккаунт с такими данными есть")
+        assert "found" not in данные.get("reset", {})
+
+
+@pytest.mark.parametrize("канал", ["mail", "sms"])
+def test_забыли_пароль_выбор(сайт, telnyx, канал):
+    from .test_sms import ЗАПРОСЫ
+
+    uid = учётка(ПОЧТА)
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/send",
+        подготовка(_аккаунт(True, True)),
+        снимок,
+        данные={"reset": {"found": uid}},
+        body={"channel": канал},
+        env=_смс(telnyx),
+    )
+
+    assert (len(итог["база"]["mail"]) == 1) is (канал == "mail")
+    assert len(ЗАПРОСЫ) == (1 if канал == "sms" else 0)
+
+
+def test_забыли_пароль_страница_выбора(сайт, telnyx):
+    """Выбор показывает адреса скрытыми: a•••@savdex.uz и +998•••2233."""
+    from .web_site import страница
+
+    uid = учётка(ПОЧТА)
+    итог = отправить(
+        сайт,
+        "/forgot-password",
+        подготовка(_аккаунт(True, True)),
+        данные={"reset": {"found": uid}},
+        method="GET",
+        env=_смс(telnyx),
+        headers={"Referer": сайт + "/login", "User-Agent": "savdex-parity"},
+    )
+    props = страница(итог["ответ"]["body"])["props"]
+
+    assert props["step"] == "choose"
+    assert [(o["channel"], o["to"]) for o in props["options"]][:2] == [
+        ("mail", "a•••@savdex.uz"),
+        ("sms", "+998•••2233"),
+    ]
+
+
+def test_письмо_не_для_аккаунта_по_телефону(сайт):
+    """Зарегистрировался по телефону, почту не подтвердил — ссылка письмом не уходит."""
+    итог = форма(сайт, "/forgot-password", _аккаунт(False, True), body={"email": ПОЧТА})
+
+    assert итог["база"]["mail"] == []

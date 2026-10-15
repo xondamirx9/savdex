@@ -201,13 +201,55 @@ def reset_channels() -> list[str]:
     ]
 
 
-def _reset_sms(ctx: Context) -> dict[str, Any]:
+def _mask_email(email: str) -> str:
+    """aziz@mail.ru → a•••@mail.ru: человек узнаёт свой адрес, чужой — нет."""
+    name, _, domain = email.partition("@")
+
+    return (name[:1] + "•••@" + domain) if domain else email
+
+
+def _mask_phone(phone: str) -> str:
+    """+998901234567 → +998•••4567."""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+
+    return f"+{digits[:3]}•••{digits[-4:]}" if len(digits) >= 8 else phone
+
+
+def _reset_step(ctx: Context) -> dict[str, Any]:
+    """
+    Шаг «Забыли пароль»: find — почта или телефон; choose — выбор способа
+    (подтверждены и почта, и телефон); code — код из SMS.
+    """
     from savdex.web import sms
+    from savdex.web.account_actions import _found, reset_options
 
     store = _store(ctx)
     sent = store.get("reset.sms_phone") if store is not None else None
 
-    return {"available": sms.configured(), "sentTo": sent if isinstance(sent, str) else None}
+    if isinstance(sent, str) and sent != "":
+        return {"step": "code", "sentTo": _mask_phone(sent), "options": []}
+
+    user = _found(ctx) if store is not None else None
+    options = reset_options(user) if user is not None else []
+
+    if user is None or len(options) < 2:
+        return {"step": "find", "sentTo": None, "options": []}
+
+    phone = sms.normalize(str(user["phone"] or "")) or ""
+
+    return {
+        "step": "choose",
+        "sentTo": None,
+        "options": [
+            {
+                "channel": channel,
+                "to": _mask_email(str(user["email"]))
+                if channel == "mail"
+                else ("" if channel == "telegram" else _mask_phone(phone)),
+            }
+            for channel in options
+        ],
+    }
 
 
 def forgot_password(request: HttpRequest) -> HttpResponse:
@@ -222,9 +264,8 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
         "auth/ForgotPassword",
         {
             "status": _flash(ctx, "status"),
-            "channels": reset_channels(),
-            # Код по SMS на подтверждённый номер: настроен ли и куда уже ушёл
-            "sms": _reset_sms(ctx),
+            # Почта или телефон → способ по учётке → письмо или код из SMS
+            **_reset_step(ctx),
         },
         _seo(ctx),
     )

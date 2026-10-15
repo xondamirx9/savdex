@@ -362,6 +362,26 @@ urlpatterns = [
     ),
     # Пароль и почта: формы (этап 5, шаг 46, группа forms)
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/find$",
+        account_actions.forgot_find,
+        name="password.find",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/send$",
+        account_actions.forgot_send,
+        name="password.send",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/sms/resend$",
+        account_actions.forgot_sms_resend,
+        name="password.sms.resend",
+    ),
+    re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?forgot-password/restart$",
+        account_actions.forgot_restart,
+        name="password.restart",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?forgot-password/sms$",
         account_actions.forgot_sms,
         name="password.sms",

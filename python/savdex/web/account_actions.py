@@ -183,6 +183,11 @@ def _send_reset_mail(ctx: Context, email: str) -> None:
     if user is None:
         return
 
+    # Зарегистрировался по телефону и почту не подтвердил — восстановление
+    # только по SMS (reset_options): почту мог вписать и чужую
+    if "mail" not in reset_options(user):
+        return
+
     email = str(user["email"])
     record = _reset_record(email)
 
@@ -266,6 +271,195 @@ def forgot_password(request: HttpRequest) -> HttpResponse:
     flash(ctx, "status", ctx.t(f"messages.auth.reset_sent_{channel}"))
 
     return back(ctx)
+
+
+# ── Забыли пароль: почта или телефон — способ по учётке ────────────
+
+#: Учётка, чей пароль восстанавливают (шаг «Почта или телефон» пройден)
+SESSION_RESET_FOUND = "reset.found"
+
+
+def reset_options(user: dict[str, Any]) -> list[str]:
+    """
+    Куда можно прислать восстановление этой учётке:
+    - почта — если подтверждена или телефон не подтверждён (зарегистрировался
+      по почте и телефон в профиле не подтверждал);
+    - SMS — если телефон подтверждён (регистрация по телефону или «Подтвердить
+      по SMS» в профиле);
+    - Telegram и WhatsApp — как раньше, только при подтверждённой почте.
+    Подтверждены и почта, и телефон — человек выбирает сам.
+    """
+    from savdex.web import sms
+    from savdex.web.auth import reset_channels
+
+    email_ok = user["email_verified_at"] is not None
+    phone_ok = user["phone_verified_at"] is not None and (user["phone"] or "") != ""
+    messengers = reset_channels()
+    options: list[str] = []
+
+    if email_ok or not phone_ok:
+        options.append("mail")
+
+    if phone_ok and sms.configured():
+        options.append("sms")
+
+    if email_ok and "telegram" in messengers and user["telegram_chat_id"] is not None:
+        options.append("telegram")
+
+    if email_ok and phone_ok and "whatsapp" in messengers:
+        options.append("whatsapp")
+
+    return options
+
+
+def _found(ctx: Context) -> dict[str, Any] | None:
+    """Учётка шага «Почта или телефон» — живая, из базы заново."""
+    found = _session(ctx).get(SESSION_RESET_FOUND)
+
+    if not isinstance(found, int):
+        return None
+
+    rows = _rows("select * from users where id = %s and deleted_at is null", [found])
+
+    return rows[0] if rows else None
+
+
+def _send_reset(ctx: Context, user: dict[str, Any], channel: str) -> HttpResponse:
+    """Отправить выбранным способом: почта и мессенджеры — ссылка, SMS — код."""
+    from savdex.web import sms
+
+    if channel == "sms":
+        phone = sms.normalize(str(user["phone"] or ""))
+
+        if phone is None:
+            return _to(ctx, "/forgot-password")
+
+        store = _session(ctx)
+
+        if (locked := code_lock.locked_message(ctx, code_lock.phone(phone))) is not None:
+            flash(ctx, "error", locked)
+        elif sms.daily_limit_reached(phone):
+            flash(ctx, "error", ctx.t("messages.register.sms_limit"))
+        elif not sms.send_code(phone):
+            flash(ctx, "error", ctx.t("messages.register.sms_failed"))
+        else:
+            store.put(SESSION_RESET_PHONE, phone)
+            store.forget(SESSION_RESET_USER)
+            flash(ctx, "status", ctx.t("messages.auth.reset_sent_sms"))
+
+        return _to(ctx, "/forgot-password")
+
+    if channel == "mail":
+        _send_reset_mail(ctx, str(user["email"]))
+    else:
+        _send_reset_message(ctx, str(user["email"]), channel)
+
+    _session(ctx).forget(SESSION_RESET_FOUND)
+    flash(ctx, "status", ctx.t(f"messages.auth.reset_sent_{channel}"))
+
+    return _to(ctx, "/forgot-password")
+
+
+@form()
+def forgot_find(request: HttpRequest) -> HttpResponse:
+    """
+    «Забыли пароль», шаг 1: почта или телефон. Один способ — сразу туда;
+    подтверждены и почта, и телефон — выбор (шаг 2). Телефон годится только
+    подтверждённый. Не нашлось — тот же ответ, что и у отправленной ссылки.
+    """
+    from savdex.web import sms
+
+    ctx = action(
+        request, auth=False, throttle=6, throttle_minutes=1, throttle_prefix="password-email"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    raw = _string(input_of(request).get("login")).strip(" \t\n\r\0\x0b")
+
+    if raw == "":
+        return invalid(ctx, {"login": [ctx.t("messages.auth.login_required")]})
+
+    if "@" in raw:
+        if validate({"email": raw}, {"email": ["email"]}, ctx.locale):
+            return invalid(ctx, {"login": [ctx.t("messages.auth.login_invalid")]})
+
+        user = guard.user_by_email(raw.lower())
+    elif sms.normalize(raw) is not None:
+        user = sms.verified_user(raw)
+    else:
+        return invalid(ctx, {"login": [ctx.t("messages.auth.login_invalid")]})
+
+    store = _session(ctx)
+    store.forget(SESSION_RESET_PHONE)
+    options = reset_options(user) if user is not None else []
+
+    if not options:
+        store.forget(SESSION_RESET_FOUND)
+        flash(ctx, "status", ctx.t("messages.auth.reset_sent_any"))
+
+        return _to(ctx, "/forgot-password")
+
+    assert user is not None
+    store.put(SESSION_RESET_FOUND, int(user["id"]))
+
+    if len(options) == 1:
+        return _send_reset(ctx, user, options[0])
+
+    return _to(ctx, "/forgot-password")
+
+
+@form()
+def forgot_send(request: HttpRequest) -> HttpResponse:
+    """Шаг 2: выбранный способ из доступных этой учётке."""
+    ctx = action(
+        request, auth=False, throttle=6, throttle_minutes=1, throttle_prefix="password-email"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    user = _found(ctx)
+    channel = _string(input_of(request).get("channel"))
+
+    if user is None or channel not in reset_options(user):
+        return _to(ctx, "/forgot-password")
+
+    return _send_reset(ctx, user, channel)
+
+
+@form()
+def forgot_sms_resend(request: HttpRequest) -> HttpResponse:
+    """Экран кода из SMS: «Отправить SMS ещё раз» на тот же номер."""
+    ctx = action(
+        request, auth=False, throttle=3, throttle_minutes=10, throttle_prefix="password-sms"
+    )
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    user = _found(ctx)
+
+    if user is None or "sms" not in reset_options(user):
+        return _to(ctx, "/forgot-password")
+
+    return _send_reset(ctx, user, "sms")
+
+
+@form()
+def forgot_restart(request: HttpRequest) -> HttpResponse:
+    """«Другой аккаунт» / «Изменить»: к шагу «Почта или телефон»."""
+    ctx = action(request, auth=False)
+
+    if (refused := _guest(ctx)) is not None:
+        return refused
+
+    store = _session(ctx)
+    store.forget(SESSION_RESET_FOUND)
+    store.forget(SESSION_RESET_PHONE)
+
+    return _to(ctx, "/forgot-password")
 
 
 # ── Забыли пароль: код по SMS на подтверждённый номер ───────────────
@@ -357,6 +551,7 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
     email = str(user["email"])
     token = create_reset_token(email)
     store.forget(SESSION_RESET_PHONE)
+    store.forget(SESSION_RESET_FOUND)
     store.put(SESSION_RESET_USER, user["id"])
 
     return _to(ctx, f"/reset-password/{quote(token, safe='')}?email={quote(email, safe='')}")
