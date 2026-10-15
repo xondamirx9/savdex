@@ -1,6 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Check } from 'lucide-react';
+import { Check, Star } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -48,7 +48,7 @@ export function AuthLayout({
      * и лимит регистраций. Без неё кнопка молча ничего не делала —
      * со стороны это «регистрация не проходит».
      */
-    const { flash } = usePage<SharedProps>().props;
+    const { flash, authReview } = usePage<SharedProps>().props;
 
     return (
         <>
@@ -58,68 +58,77 @@ export function AuthLayout({
                 {t('auth.skip_to_form')}
             </a>
 
-            <div
-                className={cn(
-                    'grid min-h-screen',
-                    /* Широкий режим расширяет саму колонку формы, а не
-                       блок внутри неё: ограничивала ширину колонка
-                       (460 px минус поля — те же 380), и max-width
-                       у внутреннего блока ничего не менял. */
-                    wide ? 'lg:grid-cols-[1fr_640px]' : 'lg:grid-cols-[1fr_460px]',
-                )}
-            >
-                <aside className="bg-primary-700 hidden flex-col p-14 text-white lg:flex">
-                    <Link href="/" aria-label={t('auth.home_aria')}>
-                        <Logo inverted />
-                    </Link>
-
-                    <div className="my-auto">
-                        {/* Не заголовок, а маркетинговый текст: структурный h1
-                            страницы — это «Создайте аккаунт» в форме справа.
-                            Заголовочный тег здесь давал в DOM h2 раньше h1
-                            и ломал навигацию по заголовкам в скринридере.
-
-                            Числа тоже нет намеренно: захардкоженное «1 240 компаний»
-                            разойдётся с базой в первый же день. */}
-                        <p className="text-h1 mb-5 leading-tight font-bold text-white">
-                            {t('auth.hero_line1')}
-                            <br />
-                            {t('auth.hero_line2')}
-                        </p>
-                        <ul className="space-y-1">
-                            {benefits().map((text) => (
-                                <li key={text} className="flex items-start gap-3 py-3 text-[15px] text-white/90">
-                                    <Check aria-hidden className="mt-0.5 size-5 shrink-0" />
-                                    {text}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <p className="text-sm text-white/65">{t('auth.copyright')}</p>
-                </aside>
-
-                <main
-                    id="form"
-                    className="bg-surface flex flex-col justify-center overflow-y-auto px-5 py-8 sm:px-10 lg:px-10 lg:py-12"
-                >
-                    <div className={cn('mx-auto w-full', wide ? 'max-w-[520px]' : 'max-w-[380px]')}>
-                        <Link href="/" className="mb-7 inline-block lg:hidden" aria-label={t('auth.home_aria')}>
-                            <Logo />
+            {/* Тёмный экран входа (вариант C): слева заголовок, выгоды и
+                отзыв о площадке, справа карточка формы. Цвета форм
+                переопределены переменными в .auth-dark — поля, списки
+                и кнопки на всех экранах входа темнеют сами */}
+            <div className="auth-dark">
+                <div className={cn('auth-shell', wide && 'auth-shell--wide')}>
+                    <aside className="auth-aside">
+                        <Link href="/" className="auth-logo" aria-label={t('auth.home_aria')}>
+                            <Logo inverted />
                         </Link>
 
-                        <h1 className="text-h2 font-bold">{heading}</h1>
-                        {subheading && <p className="text-muted mt-2 text-sm">{subheading}</p>}
+                        <div className="auth-pitch">
+                            {/* Не заголовок: структурный h1 страницы — в форме справа */}
+                            <p className="auth-hero">
+                                {t('auth.hero_line1')} <span>{t('auth.hero_line2')}</span>
+                            </p>
+                            <ul className="auth-benefits">
+                                {benefits().map((text) => (
+                                    <li key={text}>
+                                        <Check aria-hidden className="size-4" />
+                                        {text}
+                                    </li>
+                                ))}
+                            </ul>
 
-                        {flash?.error && (
-                            <Alert tone="danger" className="mt-6">
-                                {flash.error}
-                            </Alert>
-                        )}
+                            {/* Настоящий опубликованный отзыв о площадке; нет такого —
+                                блока нет, выдумывать отзыв нельзя */}
+                            {authReview && (
+                                <figure className="auth-review">
+                                    <span className="auth-stars" aria-label={`${authReview.rating} / 5`}>
+                                        {Array.from({ length: 5 }, (_, i) => (
+                                            <Star
+                                                key={i}
+                                                aria-hidden
+                                                className={cn('size-4', i < authReview.rating && 'is-on')}
+                                            />
+                                        ))}
+                                    </span>
+                                    <blockquote>«{authReview.body}»</blockquote>
+                                    <figcaption>
+                                        <span className="auth-avatar" aria-hidden>
+                                            {authReview.initials}
+                                        </span>
+                                        {authReview.author}
+                                    </figcaption>
+                                </figure>
+                            )}
+                        </div>
 
-                        <div className="mt-6">{children}</div>
-                    </div>
-                </main>
+                        <p className="auth-copy">{t('auth.copyright')}</p>
+                    </aside>
+
+                    <main id="form" className="auth-main">
+                        <Link href="/" className="auth-logo auth-logo--mobile" aria-label={t('auth.home_aria')}>
+                            <Logo inverted />
+                        </Link>
+
+                        <div className="auth-card">
+                            <h1 className="auth-title">{heading}</h1>
+                            {subheading && <p className="auth-sub">{subheading}</p>}
+
+                            {flash?.error && (
+                                <Alert tone="danger" className="mt-6">
+                                    {flash.error}
+                                </Alert>
+                            )}
+
+                            <div className="mt-6">{children}</div>
+                        </div>
+                    </main>
+                </div>
             </div>
         </>
     );

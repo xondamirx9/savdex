@@ -408,6 +408,20 @@ def initials(name: str | None) -> str:
     return "".join(w[:1].upper() for w in words[:2])
 
 
+#: Экраны входа и регистрации (AuthLayout): только на них нужен отзыв
+_AUTH_PATHS = ("/login", "/register", "/forgot-password", "/reset-password", "/verify-email")
+
+
+def _auth_review(ctx: Context) -> dict[str, Any] | None:
+    """Отзыв о площадке для левой панели входа — только на её экранах."""
+    if not any(ctx.path == p or ctx.path.startswith(p + "/") for p in _AUTH_PATHS):
+        return None
+
+    from savdex.web.reviews import auth_review
+
+    return auth_review(ctx.locale)
+
+
 def _cabinet_counts(ctx: Context) -> dict[str, int] | None:
     from savdex.web.cabinet import counts
 
@@ -667,6 +681,7 @@ def shared(ctx: Context) -> dict[str, Any]:
         },
         "brandLogo": appearance_logo(values),
         "maintenance": maintenance(values),
+        "authReview": _auth_review(ctx),
         "locale": ctx.locale,
         "translations": None if ctx.inertia else ui.translations(ctx.locale),
         "localeLinks": locale_links(ctx),
