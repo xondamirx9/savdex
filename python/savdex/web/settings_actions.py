@@ -159,7 +159,7 @@ def phone_confirm(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, {"sms_code": [ctx.t("messages.auth.code_required")]})
 
     if not sms.check_code(phone, code):
-        return invalid(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
+        return invalid(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
 
     if sms.verified_elsewhere(phone, user["id"]):
         return invalid(ctx, {"sms_code": [ctx.t("messages.register.phone_taken")]})

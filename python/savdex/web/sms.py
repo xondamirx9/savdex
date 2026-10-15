@@ -38,6 +38,12 @@ TIMEOUT = 15
 #: в форму может вписать кто угодно
 MAX_PER_DAY = 5
 
+#: Неверных кодов подряд на номер — дальше код сгорает до нового SMS, как у
+#: кода из письма (register_code.MAX_ATTEMPTS). Иначе код перебирали бы с
+#: разных адресов сети: предел частоты — на адрес, а не на номер
+MAX_FAILURES = 5
+FAILURES_TTL = 15 * 60
+
 
 def _env(name: str) -> str:
     return (os.environ.get(name) or "").strip()
@@ -133,6 +139,29 @@ def _sent_today(phone: str) -> int:
     return value if isinstance(value, int) else 0
 
 
+def _failures_key(phone: str) -> str:
+    return "sms_failed." + hashlib.sha1(phone.encode()).hexdigest()
+
+
+def _failures(phone: str) -> int:
+    value = laravel_cache.get(_failures_key(phone), any_store=True)
+
+    return value if isinstance(value, int) else 0
+
+
+def too_many_failures(phone: str) -> bool:
+    """Неверных кодов на этот номер — MAX_FAILURES: код сгорел, нужно новое SMS."""
+    return _failures(phone) >= MAX_FAILURES
+
+
+def failed_message_key(phone: str) -> str:
+    """Ключ текста ошибки неверного кода: попытки кончились — «запросите новый»."""
+    if too_many_failures(phone):
+        return "messages.auth.sms_code_exhausted"
+
+    return "messages.auth.sms_code_invalid"
+
+
 def daily_limit_reached(phone: str) -> bool:
     """На этот номер сегодня уже ушло MAX_PER_DAY SMS."""
     return _sent_today(phone) >= MAX_PER_DAY
@@ -161,15 +190,32 @@ def send_code(phone: str) -> bool:
         return False
 
     laravel_cache.put(_daily_key(phone), _sent_today(phone) + 1, 24 * 3600)
+    # Новый код — счёт неверных попыток заново
+    laravel_cache.put(_failures_key(phone), 0, FAILURES_TTL)
 
     return True
 
 
 def check_code(phone: str, code: str) -> bool:
-    """POST /verifications/by_phone_number/{номер}/actions/verify: код верный — True."""
+    """
+    POST /verifications/by_phone_number/{номер}/actions/verify: код верный —
+    True. Неверный засчитывается номеру; после MAX_FAILURES Telnyx уже не
+    спрашиваем, пока не уйдёт новое SMS (too_many_failures).
+    """
     if not configured() or not re.fullmatch(r"\d{4,10}", code or ""):
         return False
 
+    if too_many_failures(phone):
+        return False
+
+    accepted = _verify(phone, code)
+    laravel_cache.put(_failures_key(phone), 0 if accepted else _failures(phone) + 1, FAILURES_TTL)
+
+    return accepted
+
+
+def _verify(phone: str, code: str) -> bool:
+    """Сам запрос к Telnyx: сбой сети или ответа — False."""
     try:
         response = httpx.post(
             _url(f"/verifications/by_phone_number/{quote(phone, safe='')}/actions/verify"),

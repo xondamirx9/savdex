@@ -667,6 +667,34 @@ def test_код_из_смс(сайт, telnyx, код, верный):
         assert "sms_verified" not in сессия["register"]
 
 
+def test_код_из_смс_попытки_кончились(сайт, telnyx):
+    """Пять неверных кодов подряд — и верный не проходит, пока не уйдёт новое SMS."""
+
+    def запрос(код: str, подготовить: Callable[[], None]) -> dict[str, Any]:
+        return отправить(
+            сайт,
+            "/register/sms/confirm",
+            подготовить,
+            данные={"register": dict(ПО_ТЕЛЕФОНУ)},
+            body={"sms_code": код},
+            env=_смс(telnyx),
+            headers=inertia(Referer=сайт + "/register/code"),
+        )
+
+    # Кэш чистится только перед первым: в нём и счёт неверных попыток
+    запрос("99999", подготовка())
+
+    for _ in range(4):
+        запрос("99999", lambda: None)
+
+    сессия = json.loads(запрос("12345", lambda: None)["сессия"]["payload"])
+
+    assert сессия["errors"]["default"]["messages"]["sms_code"] == [
+        "Слишком много неверных попыток. Отправьте SMS ещё раз и введите новый код."
+    ]
+    assert "sms_verified" not in сессия["register"]
+
+
 def test_код_из_смс_только_по_телефону(сайт, telnyx):
     register = {"email": АДРЕС, "method": "email", "sms_phone": "+8613812345678"}
     итог = _по_смс(сайт, telnyx, "/register/sms/confirm", {"sms_code": "12345"}, register)

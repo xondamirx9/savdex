@@ -131,3 +131,39 @@ def test_суточный_предел(окружение):
     assert sms.daily_limit_reached("+8613812345678")
     # Другой номер — свой счёт
     assert not sms.daily_limit_reached("+8613812345679")
+
+
+def test_неверный_код_сгорает_после_пяти(окружение):
+    """
+    Пять неверных кодов на номер — дальше даже верный не принимается и
+    Telnyx не спрашиваем: код перебирали бы с разных адресов сети.
+    Новое SMS — счёт заново.
+    """
+    номер = "+8613812345678"
+
+    for _ in range(sms.MAX_FAILURES):
+        assert sms.failed_message_key(номер) == "messages.auth.sms_code_invalid"
+        assert sms.check_code(номер, "99999") is False
+
+    запросов = len(ЗАПРОСЫ)
+    assert sms.too_many_failures(номер)
+    assert sms.failed_message_key(номер) == "messages.auth.sms_code_exhausted"
+    assert sms.check_code(номер, "12345") is False
+    assert len(ЗАПРОСЫ) == запросов
+    # Другой номер — свой счёт
+    assert sms.check_code("+8613812345679", "12345") is True
+
+    assert sms.send_code(номер)
+    assert not sms.too_many_failures(номер)
+    assert sms.check_code(номер, "12345") is True
+
+
+def test_верный_код_обнуляет_счёт(окружение):
+    номер = "+8613812345678"
+
+    for _ in range(sms.MAX_FAILURES - 1):
+        sms.check_code(номер, "99999")
+
+    assert sms.check_code(номер, "12345") is True
+    assert sms.check_code(номер, "99999") is False
+    assert not sms.too_many_failures(номер)

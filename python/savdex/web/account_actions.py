@@ -338,7 +338,7 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
     user = sms.verified_user(phone)
 
     if user is None or not sms.check_code(phone, code):
-        return _with_errors(ctx, {"sms_code": [ctx.t("messages.auth.sms_code_invalid")]})
+        return _with_errors(ctx, {"sms_code": [ctx.t(sms.failed_message_key(phone))]})
 
     email = str(user["email"])
     token = create_reset_token(email)
