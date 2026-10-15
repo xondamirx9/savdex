@@ -579,6 +579,8 @@ def delete_account(request: HttpRequest) -> HttpResponse:
     """
     SettingsController::destroy (auth): пароль ещё раз; у владельца
     объявления компании — в архив; выход, мягкое удаление, сессия заново.
+    Почта, подтверждённый телефон, ИНН и ПИНФЛ освобождаются: с ними можно
+    зарегистрироваться заново (компания — если в ней больше никого).
     """
     ctx = action(request)
     assert ctx.user is not None
@@ -615,11 +617,22 @@ def delete_account(request: HttpRequest) -> HttpResponse:
 
     # $user->delete(): SoftDeletes — deleted_at и updated_at; вошедшего уже нет,
     # журнал администратора не пишется
-    with allowed_writes("users"), connection.cursor() as cursor:
+    with allowed_writes("users", "companies"), connection.cursor() as cursor:
         cursor.execute(
             "update users set deleted_at = %s, updated_at = %s where id = %s",
             [now, now, user["id"]],
         )
+
+        # Владелец, и в компании больше никого — компания (профиль физлица
+        # и фрилансера тоже) удаляется вместе с ним: иначе её ИНН или ПИНФЛ
+        # оставались «заняты», и заново зарегистрироваться было нельзя
+        if user["company_role"] == "owner" and user["company_id"] is not None:
+            cursor.execute(
+                "update companies set deleted_at = %s, updated_at = %s "
+                "where id = %s and deleted_at is null and not exists ("
+                "select 1 from users where company_id = %s and deleted_at is null)",
+                [now, now, user["company_id"], user["company_id"]],
+            )
 
     store.invalidate()
     store.regenerate_token()

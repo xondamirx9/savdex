@@ -600,11 +600,13 @@ def test_телефон_не_ушёл(сайт, telnyx, body, ошибки):
     assert "register" not in сессия or "sms_phone" not in сессия["register"]
 
 
-def test_телефон_занят(сайт, telnyx):
+@pytest.mark.parametrize("удалён", [False, True])
+def test_телефон_занят(сайт, telnyx, удалён):
     sql(
         "insert into users (name, email, password, status, phone, phone_verified_at, "
-        "created_at, updated_at) values ('Был', 'phone@reg.savdex.uz', 'x', 'active', "
-        "'+86 138 1234 5678', now(), now(), now())"
+        "deleted_at, created_at, updated_at) values ('Был', 'phone@reg.savdex.uz', 'x', "
+        "'active', '+86 138 1234 5678', now(), %s, now(), now())",
+        ["2026-10-01 00:00:00" if удалён else None],
     )
 
     try:
@@ -615,9 +617,14 @@ def test_телефон_занят(сайт, telnyx):
 
     сессия = json.loads(итог["сессия"]["payload"])
 
-    assert сессия["errors"]["default"]["messages"]["phone"] == [
-        "Этот номер уже подтверждён в другом аккаунте. Войдите или восстановите пароль."
-    ]
+    if удалён:
+        # Учётку удалили — номер свободен: регистрация с ним заново
+        assert итог["ответ"]["headers"]["location"] == сайт + "/register/code"
+        assert сессия["register"]["sms_phone"] == "+8613812345678"
+    else:
+        assert сессия["errors"]["default"]["messages"]["phone"] == [
+            "Этот номер уже подтверждён в другом аккаунте. Войдите или восстановите пароль."
+        ]
 
 
 def test_экран_кода(сайт, telnyx):

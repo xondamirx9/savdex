@@ -72,7 +72,8 @@ def verified_elsewhere(phone: str, user_id: int | None = None) -> bool:
     """
     Номер уже подтверждён другой учёткой (сравнение по цифрам: в учётках
     номер мог быть вписан с пробелами и скобками). Один подтверждённый
-    номер — одна учётка: по нему восстанавливают пароль.
+    номер — одна учётка: по нему восстанавливают пароль. Удалённая учётка
+    номер не держит: человек может зарегистрироваться с ним заново.
     """
     from savdex.web.cabinet import _rows
 
@@ -80,7 +81,7 @@ def verified_elsewhere(phone: str, user_id: int | None = None) -> bool:
 
     return bool(
         _rows(
-            "select 1 from users where phone_verified_at is not null"
+            "select 1 from users where phone_verified_at is not null and deleted_at is null"
             " and regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = %s"
             " and id <> %s limit 1",
             [digits, user_id or 0],
