@@ -888,14 +888,20 @@ ul.messagelist li {
     box-shadow: var(--sx-card-shadow), var(--sx-ring);
     background-color: var(--message-success-bg);
     color: var(--sx-success-text);
+    /* Значок Django стоит фоном на 40px от края, а отступ текста здесь
+       44px — значок (16px) ложился на первую букву: «Доступ выдан»
+       читалось как «✓оступ». Ставим его в начало отступа, по центру */
+    background-position: 16px 50%;
 }
 
 ul.messagelist li.warning {
+    background-position: 16px 50%;
     background-color: var(--message-warning-bg);
     color: var(--sx-warning-text);
 }
 
 ul.messagelist li.error {
+    background-position: 16px 50%;
     background-color: var(--message-error-bg);
     color: var(--sx-danger-strong);
 }
