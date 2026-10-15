@@ -341,6 +341,53 @@ def test_заблокирован_нового_кода_нет(сайт, path):
         assert сессия["error"] == ЗАБЛОКИРОВАН
 
 
+def test_после_блокировки_новый_код_и_дальше(сайт):
+    """
+    15 минут прошли: «Отправить код ещё раз» — новое письмо, верный код из
+    него — третий шаг (анкета).
+    """
+    from savdex import laravel_cache
+    from savdex.web import code_lock
+
+    def прошло() -> None:
+        # Блокировка была и истекла: срок — секунду назад
+        laravel_cache.put(code_lock._key(code_lock.email(АДРЕС)), {"failures": 5, "until": 1}, 900)
+
+    def подготовить() -> None:
+        подготовка()()
+        прошло()
+
+    письмо = отправить(
+        сайт,
+        "/register/code/resend",
+        подготовить,
+        снимок(сайт),
+        данные=_ждёт(),
+        env=ОКРУЖЕНИЕ_DJANGO,
+        headers=inertia(Referer=сайт + "/register/code"),
+    )
+
+    assert len(письмо["база"]["mail"]) == 1 and письмо["база"]["entry"]["from_mail"]
+    assert json.loads(письмо["сессия"]["payload"])["status"]
+
+    import re
+
+    письма = [_разбор(п) for п in _письма(ЖУРНАЛ_DJANGO.read_text())]
+    код = re.search(r"# (\d{6})", письма[0]["text"]).group(1)  # type: ignore[union-attr]
+    итог = отправить(
+        сайт,
+        "/register/code",
+        lambda: None,
+        данные=_ждёт(),
+        body={"code": код},
+        env=ОКРУЖЕНИЕ_DJANGO,
+        headers=inertia(Referer=сайт + "/register/code"),
+    )
+
+    assert итог["ответ"]["headers"]["location"] == сайт + "/register/details"
+    assert '"verified_email":"aziz@reg.savdex.uz"' in итог["сессия"]["payload"]
+
+
 def test_код_без_почты(сайт):
     итог = шаг(сайт, "/register/code", body={"code": КОД}, код=КОД)
 
