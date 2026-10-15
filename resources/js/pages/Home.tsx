@@ -400,7 +400,7 @@ export default function Home({
         <section className="section--tight">
             <div className="container">
                 <div className="section-bar">
-                    <h2>{block('products').heading}</h2>
+                    <h2 data-reveal="wipe">{block('products').heading}</h2>
                     <Link href={routes.catalog} className="section-bar-link">
                         {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                     </Link>
@@ -423,7 +423,7 @@ export default function Home({
         <section className="section--tight">
             <div className="container">
                 <div className="section-bar">
-                    <h2>{block('requests').heading}</h2>
+                    <h2 data-reveal="wipe">{block('requests').heading}</h2>
                     <Link href={`${routes.catalog}?type=demand`} className="section-bar-link">
                         {t('home.requests_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                     </Link>
@@ -519,7 +519,7 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('categories').heading}</h2>
+                            <h2 data-reveal="wipe">{block('categories').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.categories_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -564,7 +564,7 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('vip').heading}</h2>
+                            <h2 data-reveal="wipe">{block('vip').heading}</h2>
                             <Link href={routes.catalog} className="section-bar-link">
                                 {t('home.latest_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -598,7 +598,7 @@ export default function Home({
                 <section className="section--tight">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('suppliers').heading}</h2>
+                            <h2 data-reveal="wipe">{block('suppliers').heading}</h2>
                             <Link href={routes.companies} className="section-bar-link">
                                 {t('home.suppliers_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -635,7 +635,7 @@ export default function Home({
                     <div className="container">
                         <div className="section-head-left">
                             {how.eyebrow !== '' && <span className="eyebrow">{how.eyebrow}</span>}
-                            <h2 className="t-section">{how.heading}</h2>
+                            <h2 className="t-section" data-reveal="wipe">{how.heading}</h2>
                             {how.subheading !== '' && <p className="t-lead">{how.subheading}</p>}
                         </div>
                         <div className="flow" data-reveal-stagger>
@@ -658,7 +658,7 @@ export default function Home({
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{block('reviews').heading}</h2>
+                            <h2 data-reveal="wipe">{block('reviews').heading}</h2>
                             <Link href={routes.reviews} className="section-bar-link">
                                 {t('home.reviews_all')} <ArrowRight aria-hidden className="go-arrow size-4" />
                             </Link>
@@ -679,9 +679,9 @@ export default function Home({
                 <section className="section">
                     <div className="container">
                         <div className="section-bar">
-                            <h2>{faq.heading}</h2>
+                            <h2 data-reveal="wipe">{faq.heading}</h2>
                         </div>
-                        <div className="objection-grid" data-reveal-stagger="scale">
+                        <div className="objection-grid" data-reveal-stagger="flip">
                             {(faq.items ?? []).map((item, i) => {
                                 const Icon = FAQ_ICONS[i % FAQ_ICONS.length];
 
@@ -709,7 +709,7 @@ export default function Home({
                         <div className="row-between wrap" style={{ alignItems: 'flex-end', marginBottom: 36 }}>
                             <div className="section-head-left" style={{ marginBottom: 0 }}>
                                 {blog.eyebrow !== '' && <span className="eyebrow">{blog.eyebrow}</span>}
-                                <h2 className="t-section">{blog.heading}</h2>
+                                <h2 className="t-section" data-reveal="wipe">{blog.heading}</h2>
                             </div>
                             <Link href={routes.news} className="btn btn-secondary">
                                 {t('home.blog_all')} <ArrowRight aria-hidden className="size-4" />
