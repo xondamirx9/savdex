@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
 import { CaptchaGrid } from '@/components/auth/CaptchaGrid';
 import { RegisterSteps } from '@/components/auth/RegisterSteps';
+import { IlmoraRegisterLink } from '@/components/ilmora/IlmoraRegisterLink';
 import { CountryField } from '@/components/CountryField';
 import { Button, TextInput } from '@/components/ui';
 import { Link } from '@/components/ui/Link';
@@ -44,6 +45,7 @@ export default function RegisterEmail({
             title={t('auth.register_title')}
             heading={t('auth.reg_email_heading')}
             subheading={t('auth.reg_email_subheading')}
+            aside={<IlmoraRegisterLink />}
         >
             <RegisterSteps current={1} />
 

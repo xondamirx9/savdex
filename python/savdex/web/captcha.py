@@ -34,8 +34,9 @@ from savdex.audit import client_ip
 from savdex.web import session, throttle
 from savdex.web.request import context
 
-#: Для чего задание: у входа и регистрации свои — вкладки не гасят друг другу
-PURPOSES = ("login", "register")
+#: Для чего задание: у входа и регистрации свои — вкладки не гасят друг другу.
+#: ilmora — заявка на регистрацию в ILMORA (savdex/ilmora/views.py)
+PURPOSES = ("login", "register", "ilmora")
 TARGETS = ("traffic_light", "crosswalk", "storefront")
 GRID = 3
 #: Сторона клетки в пикселях; рисуется вдвое крупнее и с запасом под наклон

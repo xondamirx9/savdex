@@ -177,6 +177,7 @@ ICONS = {
     "finance.WalletTransaction": "banknotes",
     "finance.PromoCode": "receipt-percent",
     "finance.Subscription": "arrow-path",
+    "ilmora.Registration": "user-plus",
 }
 DEFAULT_ICON = "rectangle-stack"
 

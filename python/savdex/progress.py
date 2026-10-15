@@ -149,6 +149,8 @@ STAGES: tuple[Stage, ...] = (
             # Telegram-бот кабинета: привязка по ИНН и новинки по категориям
             "telegram_bot_chats",
             "telegram_feed_items",
+            # Заявки на регистрацию в ILMORA: появилась после ухода Laravel
+            "ilmora_registrations",
         ),
     ),
     Stage(

@@ -2801,3 +2801,9 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
 @media(min-width:640px){.auth-card{padding:36px}}
 .auth-title{font-size:28px;line-height:1.2;font-weight:800;color:#fff}
 .auth-sub{margin-top:8px;font-size:14px;line-height:1.55;color:#9aa4b8}
+
+/* Своё под аргументами левой панели входа (AuthLayout, проп aside): кнопка
+   ILMORA на первом шаге регистрации. На телефоне панели нет — под формой */
+.auth-aside-extra{display:flex;flex-direction:column;gap:12px}
+.auth-aside-extra--mobile{width:100%;max-width:480px;margin:20px auto 0}
+@media(min-width:1024px){.auth-aside-extra--mobile{display:none}}
