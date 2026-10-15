@@ -122,6 +122,8 @@ export interface SharedProps extends InertiaPageProps {
      * в админке настройкой maintenance_until; null — работ нет.
      */
     maintenance?: { until: string } | null;
+    /** Отзыв о площадке для экранов входа; есть только там и только если найден. */
+    authReview?: { body: string; author: string; initials: string; rating: number } | null;
     locale: string;
     /** Адреса этой же страницы на других языках — для переключателя. */
     localeLinks: LocaleLink[];
