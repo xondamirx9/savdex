@@ -2,7 +2,7 @@
 Регистрация в ILMORA через Savdex (savdex/ilmora).
 
 - проверка каждого поля: телефон, ФИО, тип лица, ПИНФЛ и ИНН (меньше и
-  больше цифр, буквы, одна цифра 14 раз), обе галочки договора — понятная
+  больше цифр, буквы, одна цифра 14 раз), обе галочки оферты — понятная
   причина под полем;
 - заявка физлица и юрлица ложится в ilmora_registrations: телефон
   +998XXXXXXXXX, ФИО без лишних пробелов, время обеих галочек; аккаунт
@@ -171,8 +171,10 @@ def test_номер_по_типу_лица():
 @pytest.mark.parametrize("значение", [False, None, "", "0", "no"])
 def test_без_галочек(значение):
     assert _ошибки(offer_read=значение, offer_sign=значение) == {
-        "offer_read": ["Подтвердите, что ознакомились с договором"],
-        "offer_sign": ["Нужно подписать договор"],
+        "offer_read": [
+            "Подтвердите, что ознакомились с офертой и согласны на обработку персональных данных"
+        ],
+        "offer_sign": ["Подтвердите, что отметка — ваша подпись под заявлением"],
     }
 
 
@@ -297,7 +299,7 @@ def test_заявка_сохраняется(сайт, body, prefix, строк�
             **строка,
             "offer_accepted_at": True,
             "offer_signed_at": True,
-            "offer_version": "draft",
+            "offer_version": "2026-10-15",
             "ip": IP,
             "user_agent": "ilmora-test",
         }
@@ -343,8 +345,10 @@ def test_ошибки_под_полями(сайт):
         "phone": ["После +998 нужно 9 цифр — введено 5"],
         "full_name": ["Укажите фамилию, имя и отчество — не меньше трёх слов"],
         "tin": ["ИНН должен содержать 9 цифр — введено 7"],
-        "offer_read": ["Подтвердите, что ознакомились с договором"],
-        "offer_sign": ["Нужно подписать договор"],
+        "offer_read": [
+            "Подтвердите, что ознакомились с офертой и согласны на обработку персональных данных"
+        ],
+        "offer_sign": ["Подтвердите, что отметка — ваша подпись под заявлением"],
     }
     assert итог["база"] == []
 
@@ -391,37 +395,55 @@ def test_страница_на_языке(сайт, path, язык, заголо
 
 @нужна_база
 @pytest.mark.parametrize(
-    ("path", "первая_строка"),
+    ("path", "заголовок", "заявление"),
     [
-        ("/ilmora/contract", "Я, :name, ознакомился(-ась) с настоящим договором"),
-        ("/uz/ilmora/contract", "Men, :name, ushbu shartnoma bilan tanishib chiqdim"),
+        ("/ilmora/offer", "# ПУБЛИЧНАЯ ОФЕРТА", "# ЗАЯВЛЕНИЕ"),
+        ("/uz/ilmora/offer", "# OMMAVIY OFERTA", "# ARIZA"),
     ],
 )
-def test_договор_пока_заглушка(сайт, path, первая_строка):
-    """Договор: первая строка «Я, <ФИО>, …» (ФИО подставляет страница), текста пока нет."""
+def test_оферта_с_заявлением(сайт, path, заголовок, заявление):
+    """Оферта и заявление на языке страницы; пустые места — метки, их заполняет браузер."""
     данные = страница(открыть(сайт, path)["body"])
-    договор = данные["props"]["translations"]["ilmora"]["contract"]
+    абзацы = данные["props"]["paragraphs"]
+    текст = "\n".join(абзацы)
 
-    assert данные["component"] == "ilmora/Contract"
-    assert данные["props"]["paragraphs"] == []
-    assert договор["preamble"].startswith(первая_строка)
-    assert договор["pending"] in (
-        "Полный текст договора будет опубликован позже.",
-        "Shartnomaning to‘liq matni keyinroq e’lon qilinadi.",
-    )
+    assert данные["component"] == "ilmora/Offer"
+    assert данные["props"]["version"] == "2026-10-15"
+    assert абзацы[0] == заголовок and заявление in абзацы
+    for метка in ("[ФИО]", "[НОМЕР_НАЗВАНИЕ]", "[НОМЕР]", "[ТЕЛЕФОН]", "[ДАТА]"):
+        assert метка in текст, метка
+    assert "[ОТМЕТКА_ОФЕРТА]" in текст and "[ОТМЕТКА_ПОДПИСЬ]" in текст
+    # Редакция — 15.10.2026; процента посещаемости и пометок «уточнить» нет
+    assert "«15»" in текст and "___ %" not in текст and "___ foiz" not in текст
+    assert "уточнить" not in текст and "aniqlashtirish" not in текст
+
+
+def test_тексты_галочек_как_в_оферте():
+    """Галочки анкеты — дословно раздел 4.1 оферты (там же они в заявлении)."""
+    from savdex.ilmora import views
+
+    for locale in ("ru", "uz"):
+        оферта = " ".join(views.offer_text(locale))
+        анкета = ui.translations(locale)["ilmora"]
+        ссылка = анкета["offer_link"]
+
+        assert анкета["offer_read"].replace(":offer", ссылка) in оферта.replace(
+            "публичной офертой", ссылка
+        ).replace("ommaviy ofertasi", ссылка), locale
+        assert анкета["offer_sign"] in оферта, locale
 
 
 @нужна_база
-def test_текст_договора_из_файла(сайт, tmp_path, monkeypatch):
-    """Абзацы — через пустую строку, пробелы внутри схлопываются, [ФИО] остаётся меткой."""
+def test_текст_оферты_из_файла(сайт, tmp_path, monkeypatch):
+    """Абзацы — через пустую строку, пробелы внутри схлопываются, метки остаются."""
     from savdex.ilmora import views
 
     (tmp_path / "ru.txt").write_text("Я, [ФИО],  принимаю\nусловия.\n\n\nВторой абзац.\n")
-    monkeypatch.setattr(views, "CONTRACT_DIR", tmp_path)
+    monkeypatch.setattr(views, "OFFER_DIR", tmp_path)
 
-    assert views.contract_text("ru") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
-    assert views.contract_text("en") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
-    assert views.contract_text("uz") == []
+    assert views.offer_text("ru") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
+    assert views.offer_text("en") == ["Я, [ФИО], принимаю условия.", "Второй абзац."]
+    assert views.offer_text("uz") == []
 
 
 # ── Админка ─────────────────────────────────────────────────────────

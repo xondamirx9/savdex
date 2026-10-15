@@ -2,8 +2,8 @@ import type { IlmoraForm } from './rules';
 
 /**
  * Черновик анкеты ILMORA в sessionStorage этой вкладки: человек уходит
- * читать договор (/ilmora/contract) и возвращается к заполненной форме, а
- * страница договора берёт из черновика ФИО для строки «Я, <ФИО>, …».
+ * читать оферту (/ilmora/offer) и возвращается к заполненной форме, а
+ * страница оферты заполняет из черновика пустые места заявления.
  *
  * sessionStorage, а не localStorage: черновик с ПИНФЛ живёт, пока открыта
  * вкладка, и не остаётся на чужом компьютере. После отправки — стирается.
@@ -37,11 +37,4 @@ export function clearDraft(): void {
     } catch {
         // То же
     }
-}
-
-/** ФИО из черновика — для страницы договора; нет — пусто */
-export function draftName(): string {
-    const name = loadDraft()?.full_name;
-
-    return typeof name === 'string' ? name.trim().split(/\s+/).filter(Boolean).join(' ') : '';
 }

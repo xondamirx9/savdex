@@ -9,8 +9,8 @@
   ў ғ қ ҳ, oʻ gʻ), апострофы ʻ ' ‘ ’ ʼ и дефис внутри слова;
 - физлицо — ПИНФЛ (14 цифр, правило регистрации Savdex:
   web/auth_actions._pinfl), юрлицо — ИНН (9 цифр);
-- обе галочки договора (поля offer_read и offer_sign — имена столбцов
-  базы остались от «оферты»).
+- обе галочки из раздела 4.1 оферты: ознакомлен с офертой (с согласием
+  на обработку персональных данных) и отметка — подпись под заявлением.
 
 Под каждым полем — одна понятная причина: «ИНН должен содержать 9 цифр —
 введено 7».
@@ -167,10 +167,10 @@ def validate(ctx: Context, data: dict[str, Any]) -> tuple[Application | None, di
             errors["tin"] = [problem]
 
     if not accepted(data.get("offer_read")):
-        errors["offer_read"] = [ctx.t("ilmora.errors.contract_read")]
+        errors["offer_read"] = [ctx.t("ilmora.errors.offer_read")]
 
     if not accepted(data.get("offer_sign")):
-        errors["offer_sign"] = [ctx.t("ilmora.errors.contract_sign")]
+        errors["offer_sign"] = [ctx.t("ilmora.errors.offer_sign")]
 
     if errors:
         return None, errors

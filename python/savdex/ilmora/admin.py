@@ -2,10 +2,10 @@
 Раздел админки «ILMORA — регистрации»: заявки с формы /register/ilmora-register.
 
 Только чтение: заявку не создают, не правят и не удаляют — время принятия
-подписания договора в ней юридическое. Новые сверху, по 50 на страницу; поиск по ФИО,
+принятия оферты в ней юридическое. Новые сверху, по 50 на страницу; поиск по ФИО,
 телефону, ПИНФЛ и ИНН; отборы по типу лица, дате и повторам. Повтор —
 другая заявка с тем же телефоном, ПИНФЛ или ИНН: не запрещён, но виден
-плашкой «повтор». Карточка — все поля, включая время подписания договора, IP и язык.
+плашкой «повтор». Карточка — все поля, включая время принятия оферты, IP и язык.
 
 Право — ilmora.view (суперадмин и администратор, savdex/access.py): тут
 ПИНФЛ. Выгрузка в Excel и CSV — отдельное право ilmora.export, каждая
@@ -74,9 +74,9 @@ EXPORT: list[tuple[str, Any]] = [
     ("Тип лица", lambda r: PERSON_TYPES.get(r.person_type, r.person_type)),
     ("ПИНФЛ", lambda r: r.pinfl),
     ("ИНН", lambda r: r.tin),
-    ("Ознакомился с договором", lambda r: r.offer_accepted_at),
-    ("Подписал договор", lambda r: r.offer_signed_at),
-    ("Версия договора", lambda r: r.offer_version),
+    ("Ознакомился с офертой", lambda r: r.offer_accepted_at),
+    ("Подписал заявление", lambda r: r.offer_signed_at),
+    ("Редакция оферты", lambda r: r.offer_version),
     ("Язык", lambda r: r.locale),
     ("IP-адрес", lambda r: r.ip),
     ("Повтор", lambda r: "да" if r.phone_repeat or r.number_repeat else ""),
@@ -161,18 +161,18 @@ class RegistrationAdmin(SavdexModelAdmin):
 
         return format_html("{} {}", label, value)
 
-    @admin.display(description="договор")
+    @admin.display(description="оферта")
     def offer(self, obj: Registration) -> str:
         if obj.offer_accepted_at is not None and obj.offer_signed_at is not None:
             return _badge("ознакомлен и подписал", "success")
 
         return _badge("нет", "danger")
 
-    @admin.display(description="ознакомился с договором")
+    @admin.display(description="ознакомился с офертой")
     def offer_accepted(self, obj: Registration) -> str:
         return _offer(obj.offer_accepted_at)
 
-    @admin.display(description="подписал договор")
+    @admin.display(description="подписал заявление")
     def offer_signed(self, obj: Registration) -> str:
         return _offer(obj.offer_signed_at)
 

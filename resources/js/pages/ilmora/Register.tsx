@@ -7,13 +7,13 @@ import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 import { clearDraft, loadDraft, saveDraft } from './draft';
-import { cleanName, formatPhone, phoneDigits, validateIlmora, type IlmoraForm } from './rules';
+import { formatPhone, phoneDigits, validateIlmora, type IlmoraForm } from './rules';
 
 /**
  * Регистрация в ILMORA через Savdex (python/savdex/ilmora/views.py).
- * Телефон, ФИО, физлицо или юрлицо с ПИНФЛ или ИНН и две галочки договора.
- * Анкета хранится черновиком во вкладке (draft.ts): ушёл читать договор —
- * вернулся к заполненной форме.
+ * Телефон, ФИО, физлицо или юрлицо с ПИНФЛ или ИНН и две галочки из раздела
+ * 4.1 оферты. Анкета хранится черновиком во вкладке (draft.ts): ушёл читать
+ * оферту — вернулся к заполненной форме.
  * Ошибки показываются сразу, но решает сервер. После отправки —
  * «Заявка принята» и кнопка в ILMORA; аккаунт Savdex не заводится.
  */
@@ -128,8 +128,7 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
         post(routes.ilmoraRegister);
     }
 
-    const [before, after] = t('ilmora.contract_read').split(':contract');
-    const name = cleanName(data.full_name);
+    const [before, after] = t('ilmora.offer_read').split(':offer');
 
     return (
         <>
@@ -251,7 +250,7 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
                         <span>
                             {before}
                             {/* В той же вкладке: анкета остаётся черновиком и вернётся */}
-                            <Link href={routes.ilmoraContract}>{t('ilmora.contract_link')}</Link>
+                            <Link href={routes.ilmoraOffer}>{t('ilmora.offer_link')}</Link>
                             {after}
                         </span>
                     </label>
@@ -268,11 +267,7 @@ function RegisterForm({ phonePrefix }: { phonePrefix: string }) {
                             aria-describedby="ilmora-sign-note"
                             onChange={(e) => change('offer_sign', e.target.checked)}
                         />
-                        <span>
-                            {name
-                                ? t('ilmora.contract_sign_named', { name })
-                                : t('ilmora.contract_sign')}
-                        </span>
+                        <span>{t('ilmora.offer_sign')}</span>
                     </label>
                     <Note id="ilmora-sign-note" error={shown('offer_sign')} />
                 </div>

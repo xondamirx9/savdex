@@ -1,6 +1,6 @@
 /*
- * ILMORA на сайте Savdex: регистрация (/register/ilmora-register), договор
- * (/ilmora/contract) и кнопка-плашка на первом шаге регистрации Savdex.
+ * ILMORA на сайте Savdex: регистрация (/register/ilmora-register), оферта
+ * (/ilmora/offer) и кнопка-плашка на первом шаге регистрации Savdex.
  *
  * Цвета и шрифты сняты с демо-сайта ILMORA. Всё — внутри .ilmora,
  * .ilmora-logo и .ilmora-cta: остальной сайт эти правила не задевают.
@@ -485,29 +485,82 @@
     margin-top: 12px;
 }
 
-/* ── Оферта ── */
+/* ── Оферта: документ ── */
 
-.ilmora-contract {
+.ilmora-card--doc {
+    max-width: 760px;
+}
+.ilmora-doc {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    margin-top: 24px;
+    gap: 12px;
     font-size: 15px;
-    line-height: 1.7;
+    line-height: 1.65;
 }
-.ilmora-contract__name {
+.ilmora-doc__title {
+    margin-top: 8px;
+    font-family: var(--ilmora-serif);
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+.ilmora-doc__subtitle {
+    margin-top: -6px;
+    text-align: center;
+    color: #5b6662;
+}
+.ilmora-doc__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 16px;
+    margin: 8px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e6e1d6;
+    font-size: 14px;
+    color: #5b6662;
+}
+.ilmora-doc__section {
+    margin-top: 16px;
+    font-family: var(--ilmora-serif);
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--c-forest);
+}
+.ilmora-doc__right {
+    align-self: flex-end;
+    max-width: 420px;
+    text-align: right;
+}
+.ilmora-doc__rule {
+    margin: 28px 0 12px;
+    border: 0;
+    border-top: 1px dashed #c7bea9;
+}
+.ilmora-doc__value {
     font-weight: 600;
     color: var(--c-forest);
     text-decoration: underline;
     text-decoration-color: var(--c-champagne);
     text-underline-offset: 4px;
 }
-.ilmora-contract__name--missing {
-    font-weight: 400;
+.ilmora-doc__blank {
     color: #8a918e;
-    text-decoration: none;
+    letter-spacing: 0.04em;
 }
-.ilmora-contract__pending {
+.ilmora-doc__box {
+    margin-right: 6px;
+    font-size: 18px;
+    color: #8a918e;
+}
+.ilmora-doc__box.is-on {
+    color: var(--c-forest);
+}
+.ilmora-doc__pending {
+    margin-top: 24px;
     padding: 16px 18px;
     border-radius: 0.75rem;
     background: var(--c-sage);
