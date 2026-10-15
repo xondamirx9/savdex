@@ -157,7 +157,10 @@ def register(request: HttpRequest) -> HttpResponse:
             "countryId": country_id,
             # Способ регистрации: почта или телефон (код по SMS, когда Telnyx настроен)
             "phoneAvailable": sms.configured(),
-            "method": method if method == "phone" and sms.configured() else "email",
+            # Способ, если его уже выбрали (вернулись со второго шага, ссылка
+            # «Зарегистрируйтесь по телефону»); None — только пришёл: страница
+            # сначала спрашивает «почта или телефон». Без SMS выбора нет — почта
+            "method": _register_method(method, email, phone, sms.configured()),
             "phone": phone,
             # Страна — первым полем: от неё зависит, можно ли пропустить код,
             # и код страны в номере телефона
@@ -447,3 +450,19 @@ def _blocked_reason(ctx: Context) -> str | None:
         return ctx.t("messages.review.blocked")
 
     return None
+
+
+def _register_method(
+    method: object, email: object, phone: object, phone_available: bool
+) -> str | None:
+    """Способ регистрации на первом шаге: email, phone или None — ещё не выбран."""
+    if not phone_available:
+        return "email"
+
+    if method in ("email", "phone"):
+        return str(method)
+
+    if phone:
+        return "phone"
+
+    return "email" if email else None
