@@ -1,0 +1,119 @@
+# Общая проверка: одна обязательная проверка «CI» на каждый коммит каждой
+# ветки (deploy/README.md, «Как код попадает на сайт»).
+#
+#   что изменилось  только документация (docs/, *.md) — дальше ничего
+#                   тяжёлого не нужно;
+#   python          разбор кода и типы; тесты в четыре потока
+#                   (.github/workflows/python.yml);
+#   образ           сборка образа и прогон внутри него
+#                   (.github/workflows/docker.yml);
+#   TypeScript      типы фронтенда (tsc);
+#   CI              итог: зелёный, только если всё нужное прошло.
+#
+# Правило ветки в GitHub требует для слияния зелёную «CI» — одну
+# проверку, а не каждую по имени: пропущенная из-за документации часть
+# не держит PR, упавшая — держит.
+#
+# Запускается на push, а не на pull_request: проверка нужна и веткам без
+# PR (их выкладывают на тестовые адреса), а PR берёт результат своего
+# последнего коммита. Свежесть относительно основной ветки обеспечивает
+# правило «ветка должна быть обновлена перед слиянием».
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+concurrency:
+  # Новый коммит в ветку отменяет недоделанную проверку старого. В основной
+  # ветке — нет: по каждому её коммиту решается выкладка на тестовый
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/website-copy-new-design-xaxsr0' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: что изменилось
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: diff
+        env:
+          MAIN: claude/website-copy-new-design-xaxsr0
+        run: |
+          set -euo pipefail
+          # Основная ветка проверяется всегда целиком: по её зелёной
+          # проверке коммит уходит на тестовый
+          if [ "$GITHUB_REF_NAME" = "$MAIN" ]; then
+            echo "Основная ветка — проверка целиком"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Ветка — по всем её изменениям относительно основной, а не по
+          # последнему коммиту: иначе правка README после красного
+          # коммита дала бы зелёную проверку непроверенному коду
+          base=$(git merge-base "origin/$MAIN" HEAD)
+          changed=$(git diff --name-only "$base" HEAD)
+          code=true
+          if [ -n "$changed" ] && ! grep -qvE '^docs/|\.md$' <<< "$changed"; then
+            code=false
+          fi
+          echo "Изменено файлов относительно основной ветки: $(grep -c . <<< "$changed" || true)"
+          echo "Код менялся: $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  python:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/python.yml
+
+  image:
+    name: образ
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/docker.yml
+
+  frontend:
+    name: TypeScript
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Как в образе (Dockerfile, node:22-alpine)
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Типы фронтенда
+        run: npx tsc --noEmit
+
+  ci:
+    name: CI
+    needs: [changes, python, image, frontend]
+    # Итог нужен всегда — и когда часть пропущена, и когда упала:
+    # без него правило ветки ждало бы проверку, которой нет
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Итог
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          if ! jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" > /dev/null; then
+            echo "::error::Проверка не пройдена — подробности в упавшей части выше"
+            exit 1
+          fi
