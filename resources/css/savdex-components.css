@@ -306,7 +306,7 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
   display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:var(--r-btn);
   font-size:14px;color:var(--text);text-align:left;min-height:40px}
 .dropdown-item:hover{background:var(--bg);text-decoration:none}
-.dropdown-item[aria-selected="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
+.dropdown-item[aria-selected="true"],.dropdown-item[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
 
 /* Меню пользователя */
 .user-menu-btn{
@@ -2832,14 +2832,19 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
   --auth-shadow:0 30px 80px rgba(2,6,23,.45);
 }
 
-/* Переключатель темы — в правом верхнем углу экрана */
-.auth-theme{position:absolute;top:16px;right:16px;z-index:5;width:40px;height:40px;border-radius:12px;
+/* Язык и тема — группой в правом верхнем углу экрана */
+.auth-tools{position:absolute;top:16px;right:16px;z-index:20;display:flex;align-items:center;gap:8px}
+@media(min-width:1024px){.auth-tools{top:28px;right:28px}}
+.auth-theme{width:40px;height:40px;border-radius:12px;
   display:grid;place-items:center;cursor:pointer;color:var(--auth-strong);
   background:var(--auth-card);border:1px solid var(--auth-card-line);
   transition:background-color .2s ease,border-color .2s ease,transform .2s ease}
 .auth-theme:hover{border-color:var(--auth-accent);transform:rotate(-12deg)}
 .auth-theme:focus-visible{outline:2px solid var(--auth-accent);outline-offset:2px}
-@media(min-width:1024px){.auth-theme{top:28px;right:28px}}
+/* Кнопка языка — в пару к кнопке темы: та же высота, подложка и рамка */
+.auth-tools .btn-ghost{height:40px;padding:0 12px;gap:6px;border-radius:12px;font-size:14px;font-weight:600;
+  color:var(--auth-strong);background:var(--auth-card);border:1px solid var(--auth-card-line)}
+.auth-tools .btn-ghost:hover{color:var(--auth-strong);background:var(--auth-card);border-color:var(--auth-accent)}
 
 /* Ссылки на тёмном — в app.css вне слоёв: утилиты Tailwind
    (text-primary-700) стоят в слое сильнее, чем этот файл */

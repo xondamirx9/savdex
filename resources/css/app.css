@@ -245,4 +245,12 @@
 .auth-dark a:not(.btn):hover {
     color: #bfdbfe;
 }
+/* Пункты меню языка — не ссылки в тексте: светлые, выбранный — голубой */
+.auth-dark a.dropdown-item {
+    color: #e8edf7;
+}
+.auth-dark a.dropdown-item[aria-current='true'],
+.auth-dark a.dropdown-item:hover {
+    color: #93c5fd;
+}
 

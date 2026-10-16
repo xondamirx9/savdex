@@ -2,6 +2,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Check, Moon, Star, Sun } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { LangSwitcher } from '@/components/LangSwitcher';
 import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
@@ -69,7 +70,7 @@ export function AuthLayout({
      * и лимит регистраций. Без неё кнопка молча ничего не делала —
      * со стороны это «регистрация не проходит».
      */
-    const { flash, authReview } = usePage<SharedProps>().props;
+    const { flash, authReview, locale, localeLinks } = usePage<SharedProps>().props;
     const [theme, setTheme] = useState<AuthTheme>(storedTheme);
     const dark = theme === 'dark';
 
@@ -96,15 +97,21 @@ export function AuthLayout({
                 по кнопке в углу. В тёмной цвета форм переопределены
                 переменными в .auth-dark — поля, списки и кнопки темнеют сами */}
             <div className={cn('auth-screen', dark && 'auth-dark')}>
-                <button
-                    type="button"
-                    className="auth-theme"
-                    onClick={toggleTheme}
-                    aria-label={dark ? t('auth.theme_light') : t('auth.theme_dark')}
-                    title={dark ? t('auth.theme_light') : t('auth.theme_dark')}
-                >
-                    {dark ? <Sun aria-hidden className="size-5" /> : <Moon aria-hidden className="size-5" />}
-                </button>
+                {/* В углу — язык и тема. Язык выбирают и до входа: человек со
+                    ссылкой на русскую страницу должен суметь перейти на свой,
+                    не возвращаясь на главную */}
+                <div className="auth-tools">
+                    <LangSwitcher locale={locale ?? 'ru'} links={localeLinks ?? []} />
+                    <button
+                        type="button"
+                        className="auth-theme"
+                        onClick={toggleTheme}
+                        aria-label={dark ? t('auth.theme_light') : t('auth.theme_dark')}
+                        title={dark ? t('auth.theme_light') : t('auth.theme_dark')}
+                    >
+                        {dark ? <Sun aria-hidden className="size-5" /> : <Moon aria-hidden className="size-5" />}
+                    </button>
+                </div>
 
                 <div className={cn('auth-shell', wide && 'auth-shell--wide')}>
                     <aside className="auth-aside">
