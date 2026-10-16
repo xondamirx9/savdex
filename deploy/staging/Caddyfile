@@ -19,3 +19,7 @@
 		format console
 	}
 }
+
+# Превью ветки (preview.savdex.uz): файл есть, пока превью включено
+# (deploy/server/preview.sh). Нет файла — нет и сайта превью
+import /etc/caddy/sites/*.caddy

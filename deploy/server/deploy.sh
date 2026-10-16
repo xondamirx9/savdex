@@ -89,12 +89,17 @@ if [ ! -s "$ENV_DIR/auth.caddy" ]; then
 fi
 # Caddy в контейнере читает файл не от deploy
 chmod 644 "$ENV_DIR/auth.caddy"
+# Сайт превью ветки — сюда его кладёт preview.sh. Каталог — до запуска
+# Caddy: иначе Docker создаст его сам, от root, и deploy писать не сможет
+mkdir -p "$ENV_DIR/sites"
 
 # ── Сборка ─────────────────────────────────────────────────────────
 sha=$(git -C "$SRC" rev-parse HEAD)
 tag=${sha:0:12}
 echo "── Сборка образа savdex:$tag"
-DOCKER_BUILDKIT=1 docker build --pull -t "savdex:$tag" "$SRC"
+# Одна сборка за раз: превью ветки (preview.sh) собирается на этой же
+# машине, а две сборки сразу не помещаются в память
+flock "$APP_HOME/build.lock" env DOCKER_BUILDKIT=1 docker build --pull -t "savdex:$tag" "$SRC"
 
 compose() {
     SAVDEX_TAG="$1" docker compose -f "$COMPOSE_FILE" --env-file "$ENV_DIR/compose.env" "${@:2}"

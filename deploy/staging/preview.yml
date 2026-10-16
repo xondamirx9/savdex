@@ -1,0 +1,70 @@
+# Превью ветки (preview.savdex.uz) — на машине тестового сервера, рядом
+# с ним, но отдельно (deploy/README.md, «Превью веток»).
+#
+# preview-app — образ из кода ветки (deploy/server/preview.sh), без
+#   фоновых задач и с двумя процессами Django: память машины общая с
+#   тестовым, и превью её много не берёт (mem_limit).
+# preview-db — своя PostgreSQL 18 с демо-данными: база тестового превью
+#   не видна и не трогается.
+#
+# HTTPS и пароль — у Caddy тестового: он и превью в общей сети
+# savdex-preview-edge (её создаёт deploy/staging/compose.yml), где больше
+# никого нет. Имена служб — свои, не app и db: Caddy тестового видит обе
+# сети, и одинаковые имена смешали бы тестовый с превью.
+#
+# Пароли и ключи — в /opt/savdex/preview/env (права 600), их создаёт
+# preview.sh при первом запуске.
+#
+#   PREVIEW_TAG=<версия> docker compose -f deploy/staging/preview.yml \
+#       --env-file /opt/savdex/preview/env/compose.env up -d
+
+name: savdex-preview
+
+services:
+  preview-app:
+    image: savdex-preview:${PREVIEW_TAG:?версия образа}
+    restart: unless-stopped
+    env_file:
+      - ${PREVIEW_HOME:-/opt/savdex/preview}/env/app.env
+    volumes:
+      - ${PREVIEW_HOME:-/opt/savdex/preview}/data:/var/data
+    networks:
+      - default
+      - edge
+    depends_on:
+      preview-db:
+        condition: service_healthy
+    # Предел памяти: превью не вытеснит тестовый, а упрётся само
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:10000/up', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+      start_period: 300s
+    stop_grace_period: 40s
+
+  preview-db:
+    image: postgres:18
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40"]
+    environment:
+      POSTGRES_DB: savdex
+      POSTGRES_USER: savdex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?пароль владельца базы}
+      DJANGO_DB_PASSWORD: ${DJANGO_DB_PASSWORD:?пароль роли savdex_django}
+    volumes:
+      - ${PREVIEW_HOME:-/opt/savdex/preview}/pg:/var/lib/postgresql
+      - ../postgres-initdb:/docker-entrypoint-initdb.d:ro
+    mem_limit: 512m
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "savdex", "-d", "savdex"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+networks:
+  edge:
+    external: true
+    name: savdex-preview-edge

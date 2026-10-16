@@ -1,0 +1,217 @@
+# Превью ветки на preview.savdex.uz (deploy/README.md, «Превью веток»):
+# посмотреть ветку до слияния, не трогая тестовый. Только вручную:
+# Actions → preview → Run workflow, имя ветки — в поле «ref».
+#
+# Превью живёт на машине тестового сервера, но отдельно от него: свои
+# контейнеры и своя база с демо-данными (deploy/staging/preview.yml), тот
+# же пароль на сайт. Превью одно: новая ветка заменяет прежнюю.
+# - другая ветка (или галочка «данные с нуля») — база превью заново, на
+#   демо-данных; та же ветка ещё раз — данные остаются;
+# - галочка «выключить превью» — освободить память машины (она общая с
+#   тестовым); данные остаются до следующего превью.
+#
+# Скрипты превью — из основной ветки (этого запуска), а не из ветки
+# превью: в старой ветке их может не быть. Код ветки собирается на
+# машине (deploy/server/preview.sh).
+#
+# Нужна DNS-запись: preview.savdex.uz → IP тестового сервера (A-запись
+# «preview» у Ahost). Секреты и переменные — те же, что у staging.yml;
+# vars.PREVIEW_DOMAIN — другой адрес превью, по умолчанию preview.savdex.uz.
+#
+# Удачное превью — запись выкладки в GitHub (Environments → preview): на
+# странице PR этой ветки появляется ссылка «View deployment».
+name: preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ветка для превью'
+        required: false
+        default: ''
+      reset:
+        description: 'Данные превью — с нуля (без галочки та же ветка сохраняет свои)'
+        type: boolean
+        default: false
+      stop:
+        description: 'Выключить превью (освободить память машины)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: preview
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Запись превью — Environments → preview
+  deployments: write
+
+jobs:
+  preview:
+    if: vars.STAGING_HOST != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HOST: ${{ vars.STAGING_HOST }}
+      HOST_KEY: ${{ vars.STAGING_HOST_KEY }}
+      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN || 'preview.savdex.uz' }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+      REF: ${{ inputs.ref }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Все ветки — чтобы найти ветку из поля «ref»
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Что в превью
+        id: what
+        if: ${{ !inputs.stop }}
+        run: |
+          set -euo pipefail
+          if [ -z "$REF" ]; then
+            echo "::error::Впишите ветку в поле «ref»"
+            exit 1
+          fi
+          # Имя ветки уходит в команду на сервере — только безопасные знаки
+          if ! [[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::Странное имя ветки «$REF»: можно латиницу, цифры и . _ / -"
+            exit 1
+          fi
+          sha=$(git rev-parse --verify -q "origin/$REF^{commit}" || git rev-parse --verify -q "$REF^{commit}" || true)
+          if [ -z "$sha" ]; then
+            echo "::error::Нет ветки «$REF»"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Превью::$REF — $(git log -1 --format='%h %s' "$sha")"
+          # Без DNS-записи Caddy не получит сертификат, и превью не откроется
+          ip=$(getent ahostsv4 "$PREVIEW_DOMAIN" | awk 'NR == 1 {print $1}' || true)
+          if [ "$ip" != "$HOST" ]; then
+            echo "::error title=DNS::$PREVIEW_DOMAIN указывает на «${ip:-никуда}», а нужно на тестовый сервер $HOST. Добавьте у Ahost A-запись preview → $HOST и подождите, пока она разойдётся."
+            exit 1
+          fi
+
+      - name: SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::error::Нет секрета DEPLOY_SSH_KEY (deploy/README.md)"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          # Как в staging.yml: ключ из секрета собирается заново — заголовок,
+          # тело base64 по 70 знаков, конец (переносы Windows, одна строка)
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          header=$(printf '%s' "$key" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1 || true)
+          if [ -z "$header" ]; then
+            echo "::error::В секрете DEPLOY_SSH_KEY не закрытый ключ: нет строки «-----BEGIN … PRIVATE KEY-----»."
+            exit 1
+          fi
+          body=$(printf '%s' "$key" | sed -e 's/-----BEGIN [A-Z ]*-----//' -e 's/-----END [A-Z ]*-----//' | tr -d ' \t\n')
+          umask 077
+          { echo "$header"; printf '%s' "$body" | fold -w 70; echo; echo "${header/BEGIN/END}"; } > ~/.ssh/id_deploy
+          if ! ssh-keygen -y -f ~/.ssh/id_deploy > /dev/null; then
+            echo "::error::Ключ в секрете DEPLOY_SSH_KEY не читается — вставьте файл savdex-deploy (без .pub) заново."
+            exit 1
+          fi
+          if [ -z "$HOST_KEY" ]; then
+            echo "::error::Нет переменной STAGING_HOST_KEY — ключа тестового сервера (её подсказывает запуск staging)."
+            exit 1
+          fi
+          printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CONF
+          Host staging
+            HostName $HOST
+            User deploy
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          CONF
+
+      - name: Скрипты превью на сервере
+        run: |
+          set -euo pipefail
+          # Из основной ветки: compose превью, скрипт, создание роли базы
+          tar -cz deploy/staging/preview.yml deploy/postgres-initdb \
+              deploy/server/preview.sh deploy/server/env-merge.sh \
+            | ssh staging 'set -e
+                rm -rf /opt/savdex/preview/tooling
+                mkdir -p /opt/savdex/preview/tooling
+                tar -xz -C /opt/savdex/preview/tooling'
+
+      - name: Выключить превью
+        if: inputs.stop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ssh staging 'bash /opt/savdex/preview/tooling/deploy/server/preview.sh stop'
+          # Запись превью в GitHub — «неактивна»: ссылка на PR больше не ведёт
+          id=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=preview&per_page=1" --jq '.[0].id // empty')
+          if [ -n "$id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=inactive > /dev/null
+          fi
+          echo "Превью выключено." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Превью
+        if: ${{ !inputs.stop }}
+        env:
+          SHA: ${{ steps.what.outputs.sha }}
+          RESET: ${{ inputs.reset }}
+        run: |
+          set -euo pipefail
+          flag=""
+          if [ "$RESET" = true ]; then
+            flag=--reset
+          fi
+          ssh staging "REPO_URL='$REPO_URL' PREVIEW_DOMAIN='$PREVIEW_DOMAIN' \
+            bash /opt/savdex/preview/tooling/deploy/server/preview.sh deploy '$SHA' '$REF' $flag"
+
+      - name: Проверка снаружи
+        if: ${{ !inputs.stop }}
+        env:
+          STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Как посетитель: из интернета, по HTTPS, с паролем тестового. В
+          # первый раз Caddy сначала получает сертификат — до пары минут
+          auth=(-u "savdex:$STAGING_PASSWORD")
+          code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${auth[@]}" "https://$PREVIEW_DOMAIN$1" || true; }
+          for _ in $(seq 1 30); do
+            [ "$(code /up)" = 200 ] && break
+            sleep 5
+          done
+          failed=0
+          for path in /up / /catalog /companies /login /register /py/admin/login/; do
+            status=$(code "$path")
+            echo "https://$PREVIEW_DOMAIN$path — $status"
+            if [ "$status" != 200 ]; then
+              echo "::error title=Проверка снаружи::$path отвечает $status"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+      - name: Запись превью
+        if: ${{ !inputs.stop }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.what.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Environments → preview; прежняя запись превью сама станет
+          # неактивной (auto_inactive)
+          id=$(jq -n --arg ref "$SHA" --arg description "Превью ветки $REF" \
+                 '{ref: $ref, environment: "preview", auto_merge: false, required_contexts: [],
+                   transient_environment: true, production_environment: false,
+                   description: $description[:140]}' \
+               | gh api "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" \
+            -f state=success -f environment_url="https://$PREVIEW_DOMAIN" \
+            -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
+          echo "Превью: https://$PREVIEW_DOMAIN — ветка \`$REF\`, коммит \`${SHA:0:12}\` $(git log -1 --format=%s "$SHA")" >> "$GITHUB_STEP_SUMMARY"

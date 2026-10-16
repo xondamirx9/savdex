@@ -10,6 +10,9 @@
 #   данными; наружу не открыта,
 #   её видит только app по внутренней сети Docker.
 #
+# preview.savdex.uz — превью ветки: свои контейнеры (deploy/staging/preview.yml),
+#   отдаёт их этот же Caddy.
+#
 # Пароли и ключи — в /opt/savdex/env (права 600), не в репозитории:
 # их создаёт deploy.sh при первой выкладке.
 #
@@ -32,8 +35,14 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Пароль сайта (basic_auth с хешем) — файл, который пишет deploy.sh
       - ${SAVDEX_HOME:-/opt/savdex}/env/auth.caddy:/etc/caddy/auth.caddy:ro
+      # Сайт превью ветки (preview.caddy) — пока превью включено; пишет
+      # deploy/server/preview.sh
+      - ${SAVDEX_HOME:-/opt/savdex}/env/sites:/etc/caddy/sites:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - default
+      - preview
     depends_on:
       - app
 
@@ -80,6 +89,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+networks:
+  # Caddy и превью ветки (deploy/staging/preview.yml) — и больше никого:
+  # превью не видит ни базу, ни приложение тестового
+  preview:
+    name: savdex-preview-edge
 
 volumes:
   caddy_data:
