@@ -1,7 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { Check, Star } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Check, Moon, Star, Sun } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
@@ -18,6 +18,20 @@ const benefits = (): string[] => [
     t('auth.benefit_no_fee'),
     t('auth.benefit_contact'),
 ];
+
+type AuthTheme = 'dark' | 'light';
+
+/** Выбор темы помнит браузер; по умолчанию экран тёмный */
+const THEME_KEY = 'savdex-auth-theme';
+
+function storedTheme(): AuthTheme {
+    try {
+        return typeof window !== 'undefined' && window.localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+    } catch {
+        // Приватный режим или запрет хранилища — просто тёмная
+        return 'dark';
+    }
+}
 
 /**
  * Раскладка экранов входа и регистрации.
@@ -56,6 +70,18 @@ export function AuthLayout({
      * со стороны это «регистрация не проходит».
      */
     const { flash, authReview } = usePage<SharedProps>().props;
+    const [theme, setTheme] = useState<AuthTheme>(storedTheme);
+    const dark = theme === 'dark';
+
+    function toggleTheme() {
+        const next: AuthTheme = dark ? 'light' : 'dark';
+        setTheme(next);
+        try {
+            window.localStorage.setItem(THEME_KEY, next);
+        } catch {
+            // Не сохранилось — тема всё равно сменится до перезагрузки
+        }
+    }
 
     return (
         <>
@@ -65,15 +91,25 @@ export function AuthLayout({
                 {t('auth.skip_to_form')}
             </a>
 
-            {/* Тёмный экран входа (вариант C): слева заголовок, выгоды и
-                отзыв о площадке, справа карточка формы. Цвета форм
-                переопределены переменными в .auth-dark — поля, списки
-                и кнопки на всех экранах входа темнеют сами */}
-            <div className="auth-dark">
+            {/* Экран входа (вариант C): слева заголовок, выгоды и отзыв о
+                площадке, справа карточка формы. Тёмный по умолчанию, светлый —
+                по кнопке в углу. В тёмной цвета форм переопределены
+                переменными в .auth-dark — поля, списки и кнопки темнеют сами */}
+            <div className={cn('auth-screen', dark && 'auth-dark')}>
+                <button
+                    type="button"
+                    className="auth-theme"
+                    onClick={toggleTheme}
+                    aria-label={dark ? t('auth.theme_light') : t('auth.theme_dark')}
+                    title={dark ? t('auth.theme_light') : t('auth.theme_dark')}
+                >
+                    {dark ? <Sun aria-hidden className="size-5" /> : <Moon aria-hidden className="size-5" />}
+                </button>
+
                 <div className={cn('auth-shell', wide && 'auth-shell--wide')}>
                     <aside className="auth-aside">
                         <Link href="/" className="auth-logo" aria-label={t('auth.home_aria')}>
-                            <Logo inverted />
+                            <Logo inverted={dark} />
                         </Link>
 
                         <div className="auth-pitch">
@@ -121,7 +157,7 @@ export function AuthLayout({
 
                     <main id="form" className="auth-main">
                         <Link href="/" className="auth-logo auth-logo--mobile" aria-label={t('auth.home_aria')}>
-                            <Logo inverted />
+                            <Logo inverted={dark} />
                         </Link>
 
                         <div className="auth-card">
