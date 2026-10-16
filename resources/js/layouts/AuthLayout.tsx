@@ -2,6 +2,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Check, Star } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { LangSwitcher } from '@/components/LangSwitcher';
 import { Alert, Logo } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { t } from '@/lib/i18n';
@@ -55,7 +56,11 @@ export function AuthLayout({
      * и лимит регистраций. Без неё кнопка молча ничего не делала —
      * со стороны это «регистрация не проходит».
      */
-    const { flash, authReview } = usePage<SharedProps>().props;
+    const { flash, authReview, locale, localeLinks } = usePage<SharedProps>().props;
+
+    // Язык выбирают и до входа: человек со ссылкой на русскую страницу
+    // должен суметь перейти на свой, не возвращаясь на главную
+    const lang = <LangSwitcher locale={locale ?? 'ru'} links={localeLinks ?? []} />;
 
     return (
         <>
@@ -71,6 +76,10 @@ export function AuthLayout({
                 и кнопки на всех экранах входа темнеют сами */}
             <div className="auth-dark">
                 <div className={cn('auth-shell', wide && 'auth-shell--wide')}>
+                    {/* На компьютере — в правом верхнем углу, на одной линии
+                        с логотипом левой панели */}
+                    <div className="auth-lang">{lang}</div>
+
                     <aside className="auth-aside">
                         <Link href="/" className="auth-logo" aria-label={t('auth.home_aria')}>
                             <Logo inverted />
@@ -120,9 +129,13 @@ export function AuthLayout({
                     </aside>
 
                     <main id="form" className="auth-main">
-                        <Link href="/" className="auth-logo auth-logo--mobile" aria-label={t('auth.home_aria')}>
-                            <Logo inverted />
-                        </Link>
+                        {/* На телефоне левой панели нет: логотип и язык — строкой над формой */}
+                        <div className="auth-mobile-bar">
+                            <Link href="/" className="auth-logo" aria-label={t('auth.home_aria')}>
+                                <Logo inverted />
+                            </Link>
+                            {lang}
+                        </div>
 
                         <div className="auth-card">
                             <h1 className="auth-title">{heading}</h1>

@@ -306,7 +306,7 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
   display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:var(--r-btn);
   font-size:14px;color:var(--text);text-align:left;min-height:40px}
 .dropdown-item:hover{background:var(--bg);text-decoration:none}
-.dropdown-item[aria-selected="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
+.dropdown-item[aria-selected="true"],.dropdown-item[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
 
 /* Меню пользователя */
 .user-menu-btn{
@@ -2830,8 +2830,17 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
   .auth-aside{display:flex;flex-direction:column;align-self:stretch;gap:40px}
 }
 .auth-logo{display:inline-flex;align-self:flex-start}
-.auth-logo--mobile{margin-bottom:24px}
-@media(min-width:1024px){.auth-logo--mobile{display:none}}
+/* Язык: на компьютере — в углу над карточкой, на высоте логотипа левой
+   панели; на телефоне — строкой с логотипом над формой */
+.auth-shell{position:relative}
+.auth-lang{display:none}
+.auth-mobile-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}
+@media(min-width:1024px){
+  .auth-lang{display:flex;align-items:center;position:absolute;top:48px;right:72px;height:34px;z-index:20}
+  .auth-mobile-bar{display:none}
+}
+.auth-lang .btn-ghost,.auth-mobile-bar .btn-ghost{color:#b7c3d9;border:1px solid #26314a;height:36px}
+.auth-lang .btn-ghost:hover,.auth-mobile-bar .btn-ghost:hover{color:#fff;background:#13244d;border-color:#34456b}
 .auth-pitch{margin:auto 0;display:flex;flex-direction:column;gap:28px;max-width:600px}
 .auth-hero{font-size:clamp(36px,3.6vw,54px);line-height:1.08;font-weight:800;color:#fff;letter-spacing:-.01em}
 .auth-hero span{color:#60a5fa}
