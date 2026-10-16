@@ -66,7 +66,7 @@ timedatectl set-timezone Asia/Tashkent 2>/dev/null || true
 apt-get update -q
 apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
 apt-get -y -q install --no-install-recommends \
-    docker.io docker-compose-v2 docker-buildx git ufw fail2ban unattended-upgrades ca-certificates \
+    docker.io docker-compose-v2 docker-buildx git ufw fail2ban unattended-upgrades ca-certificates curl \
     "${extra_packages[@]}"
 
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'CONF'

@@ -48,6 +48,7 @@
 #   secrets.BACKUP_DATABASE_URL  база Render — для «копии с Render»
 #   secrets.BACKUP_PASSPHRASE    пароль шифрования копий (docs/backups.md)
 #   secrets.S3_ACCESS_KEY, S3_SECRET_KEY, vars.S3_ENDPOINT — хранилище Uztelecom
+#   secrets.HC_PING_DB, HC_PING_FILES  сигналы копий в Healthchecks.io (docs/monitoring.md)
 #   vars.RENDER_SSH              адрес SSH службы Render — настройки и файлы
 #   vars.PROD_HOST               публичный IP сети savdex-prod
 #   vars.PROD_WEB_IP, PROD_ADMIN_IP, PROD_DB_IP  частные адреса машин (10.…)
@@ -394,6 +395,9 @@ jobs:
           S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
           S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          # Сигналы копий в Healthchecks.io (docs/monitoring.md); нет — без них
+          HC_PING_DB: ${{ secrets.HC_PING_DB }}
+          HC_PING_FILES: ${{ secrets.HC_PING_FILES }}
         run: |
           set -euo pipefail
           # Ключи хранилища и пароль шифрования копий — на машину базы,
@@ -405,6 +409,8 @@ jobs:
               printf 'S3_ACCESS_KEY=%q\n' "$S3_ACCESS_KEY"
               printf 'S3_SECRET_KEY=%q\n' "$S3_SECRET_KEY"
               printf 'BACKUP_PASSPHRASE=%q\n' "$BACKUP_PASSPHRASE"
+              if [ -n "$HC_PING_DB" ]; then printf 'HC_PING_DB=%q\n' "$HC_PING_DB"; fi
+              if [ -n "$HC_PING_FILES" ]; then printf 'HC_PING_FILES=%q\n' "$HC_PING_FILES"; fi
             } | ssh db 'umask 077; mkdir -p /opt/savdex/env; cat > /opt/savdex/env/backup.env'
           else
             echo "::warning::Нет ключей хранилища или BACKUP_PASSPHRASE — копии с машины базы не пойдут."
