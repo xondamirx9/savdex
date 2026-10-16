@@ -169,15 +169,27 @@ jobs:
       - name: Не новее ли уже на тестовом
         id: fresh
         if: github.event_name == 'workflow_run'
+        env:
+          MAIN: ${{ github.event.workflow_run.head_branch }}
         run: |
+          set -euo pipefail
           # Проверки двух слияний подряд могут закончиться не по порядку:
-          # коммит, который старше уже выложенного, тестовый не заменяет
+          # коммит, который старше уже выложенного, тестовый не заменяет.
+          # Но только если выложен коммит самой основной ветки: вручную
+          # выложенная ветка, даже с этим коммитом внутри, заменяется —
+          # тестовый для основной ветки, ветки смотрят в превью
           sha=$(git rev-parse HEAD)
           current=$(ssh -l deploy staging 'cat /opt/savdex/current-tag 2>/dev/null' || true)
+          # Не через «| grep -q»: grep выходит на первом совпадении, git
+          # получает SIGPIPE, и pipefail валит проверку
+          main_line=$(git rev-list --first-parent "origin/$MAIN")
           if [ -n "$current" ] && [ "${sha:0:12}" != "$current" ] \
+            && grep -q "^$current" <<< "$main_line" \
             && git merge-base --is-ancestor "$sha" "$current" 2>/dev/null; then
             echo "::notice title=Пропуск::На тестовом уже $current — он новее ${sha:0:12}"
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$current" ] && ! grep -q "^$current" <<< "$main_line"; then
+            echo "::notice title=Замена::На тестовом была вручную выложенная ветка ($current) — её заменяет основная"
           fi
 
       - name: Код на сервере
