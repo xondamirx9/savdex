@@ -109,6 +109,21 @@
     color: var(--c-champagne);
 }
 
+/* Светлая тема экрана входа (кнопка темы в AuthLayout): полупрозрачная
+   белая плашка на светлом фоне не видна — плашка в цвет ILMORA, тёмно-
+   зелёная, и всё на ней остаётся светлым, как на тёмном экране */
+.auth-screen:not(.auth-dark) .ilmora-cta {
+    background: var(--c-forest);
+    border-color: var(--c-forest);
+}
+.auth-screen:not(.auth-dark) .ilmora-cta:hover {
+    background: #1d4d44;
+    border-color: var(--c-champagne);
+}
+.auth-screen:not(.auth-dark) .ilmora-cta__hint {
+    color: #cfe0d8;
+}
+
 /* ── Страница ── */
 
 .ilmora {
