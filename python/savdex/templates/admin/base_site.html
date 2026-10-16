@@ -47,6 +47,14 @@
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title }}{% endblock %}
 
 {% block branding %}
+{% comment %}
+  Бургер: на узком экране (до 1024 px) меню разделов выезжает слева по
+  нажатию. Без меню на странице (вход, всплывающие окна) кнопку прячет
+  скрипт в блоке footer.
+{% endcomment %}
+<button type="button" class="sx-burger" id="sx-burger" aria-controls="nav-sidebar" aria-expanded="false" aria-label="Меню разделов" hidden>
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+</button>
 <div id="site-name"><a href="{% url 'admin:index' %}" class="sx-brand">{% if savdex_logo %}<img src="{{ savdex_logo }}" alt="" class="sx-brand-logo" height="32" style="height:32px;width:auto">{% endif %}<span>{{ site_header }}</span></a></div>
 {% endblock %}
 
@@ -68,3 +76,52 @@
 {% endblock %}
 
 {% block nav-global %}{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+{% comment %}
+  Бургер-меню: класс sx-nav-open на <html> открывает меню слева поверх
+  страницы (оформление — admin-theme.css). Закрывается крестиком-бургером,
+  нажатием на затемнение, клавишей Esc и переходом по пункту меню.
+{% endcomment %}
+<div class="sx-nav-backdrop" id="sx-nav-backdrop" hidden></div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var burger = document.getElementById('sx-burger');
+    var nav = document.getElementById('nav-sidebar');
+    var backdrop = document.getElementById('sx-nav-backdrop');
+
+    if (!burger || !nav || !backdrop) return;
+    burger.hidden = false;
+
+    function set(open) {
+      root.classList.toggle('sx-nav-open', open);
+      burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      backdrop.hidden = !open;
+      if (open) {
+        var filter = document.getElementById('nav-filter');
+        if (filter) filter.focus({preventScroll: true});
+      }
+    }
+
+    burger.addEventListener('click', function () {
+      set(!root.classList.contains('sx-nav-open'));
+    });
+    backdrop.addEventListener('click', function () { set(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && root.classList.contains('sx-nav-open')) {
+        set(false);
+        burger.focus();
+      }
+    });
+    nav.addEventListener('click', function (e) {
+      if (e.target.closest('a')) set(false);
+    });
+    // Стало широко (повернули планшет) — меню снова на своём месте слева
+    window.matchMedia('(min-width: 1025px)').addEventListener('change', function (m) {
+      if (m.matches) set(false);
+    });
+  })();
+</script>
+{% endblock %}
