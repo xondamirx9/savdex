@@ -201,17 +201,23 @@ if [ "$free_mb" -lt "$MIN_FREE_MB" ]; then
 fi
 
 # ── Код ветки и образ ──────────────────────────────────────────────
-test -d "$SRC/.git" || git clone --no-checkout --filter=blob:none "$REPO_URL" "$SRC"
-git -C "$SRC" fetch --depth 1 origin "$sha"
-git -C "$SRC" checkout --force --detach FETCH_HEAD
+# Код — открытым на чтение (umask 022, не 077 выше): образ копирует
+# файлы с их правами, а сайт в контейнере работает от www-data — закрытый
+# код он не прочитает («No module named 'savdex.wsgi'»)
+(
+    umask 022
+    test -d "$SRC/.git" || git clone --no-checkout --filter=blob:none "$REPO_URL" "$SRC"
+    git -C "$SRC" fetch --depth 1 origin "$sha"
+    git -C "$SRC" checkout --force --detach FETCH_HEAD
+)
+# Файлы, которые прежний запуск выложил закрытыми и checkout не трогает
+chmod -R go+rX "$SRC"
 
-if docker image inspect "savdex-preview:$tag" > /dev/null 2>&1; then
-    echo "── Образ savdex-preview:$tag уже собран"
-else
-    echo "── Сборка образа savdex-preview:$tag"
-    # Одна сборка за раз — с тестовым (deploy.sh) тоже
-    flock "$APP_HOME/build.lock" env DOCKER_BUILDKIT=1 docker build --pull -t "savdex-preview:$tag" "$SRC"
-fi
+echo "── Сборка образа savdex-preview:$tag"
+# Каждый раз, даже если образ с этим тегом есть: из кэша это секунды, а
+# образ с прежними правами файлов не переиспользуется. Одна сборка за
+# раз — с тестовым (deploy.sh) тоже
+flock "$APP_HOME/build.lock" env DOCKER_BUILDKIT=1 docker build --pull -t "savdex-preview:$tag" "$SRC"
 
 # ── Данные: другая ветка — с нуля ──────────────────────────────────
 # Файл branch — ветка, чьи данные сейчас в превью; пишется, когда превью
