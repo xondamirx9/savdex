@@ -306,7 +306,7 @@ a.chip:hover{border-color:var(--primary-500);background:var(--primary-50);text-d
   display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:var(--r-btn);
   font-size:14px;color:var(--text);text-align:left;min-height:40px}
 .dropdown-item:hover{background:var(--bg);text-decoration:none}
-.dropdown-item[aria-selected="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
+.dropdown-item[aria-selected="true"],.dropdown-item[aria-current="true"]{background:var(--primary-50);color:var(--primary-700);font-weight:600}
 
 /* Меню пользователя */
 .user-menu-btn{
@@ -2812,8 +2812,40 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
   --bg:#070d1c; --surface:#0b1428; --white:#0b1428; --text:#e8edf7; --text-muted:#9aa4b8;
   --border:#26314a; --border-strong:#34456b; --primary-50:#13244d; --primary-100:#1d3466;
   --success-bg:#0e2a1c; --success-text:#4ade80; --warning-bg:#33260a; --danger-bg:#3b1219; --danger:#f87171;
-  min-height:100vh; background:#070d1c; color:#e8edf7; color-scheme:dark;
+  color-scheme:dark;
 }
+
+/* Светлая тема экранов входа — по кнопке в углу. Цвета экрана — свои
+   переменные --auth-*; формы берут обычные светлые токены сайта */
+.auth-screen{
+  --auth-bg:#f4f7fc; --auth-card:#fff; --auth-card-line:#e2e8f0; --auth-strong:#0f172a;
+  --auth-accent:#1a56db; --auth-benefit:#475569; --auth-quote:#334155; --auth-sub:#5b6475;
+  --auth-avatar-bg:#e8efff; --auth-avatar-fg:#1a56db; --auth-star-off:#cbd5e1;
+  --auth-shadow:0 24px 60px rgba(15,23,42,.08);
+  position:relative; min-height:100vh; background:var(--auth-bg); color:var(--color-ink);
+  transition:background-color .3s ease;
+}
+.auth-dark.auth-screen{color:#e8edf7;
+  --auth-bg:#070d1c; --auth-card:#0f1830; --auth-card-line:#1f2b47; --auth-strong:#fff;
+  --auth-accent:#60a5fa; --auth-benefit:#b7c3d9; --auth-quote:#dbe4f3; --auth-sub:#9aa4b8;
+  --auth-avatar-bg:#1f2b47; --auth-avatar-fg:#93c5fd; --auth-star-off:#34456b;
+  --auth-shadow:0 30px 80px rgba(2,6,23,.45);
+}
+
+/* Язык и тема — группой в правом верхнем углу экрана */
+.auth-tools{position:absolute;top:16px;right:16px;z-index:20;display:flex;align-items:center;gap:8px}
+@media(min-width:1024px){.auth-tools{top:28px;right:28px}}
+.auth-theme{width:40px;height:40px;border-radius:12px;
+  display:grid;place-items:center;cursor:pointer;color:var(--auth-strong);
+  background:var(--auth-card);border:1px solid var(--auth-card-line);
+  transition:background-color .2s ease,border-color .2s ease,transform .2s ease}
+.auth-theme:hover{border-color:var(--auth-accent);transform:rotate(-12deg)}
+.auth-theme:focus-visible{outline:2px solid var(--auth-accent);outline-offset:2px}
+/* Кнопка языка — в пару к кнопке темы: та же высота, подложка и рамка */
+.auth-tools .btn-ghost{height:40px;padding:0 12px;gap:6px;border-radius:12px;font-size:14px;font-weight:600;
+  color:var(--auth-strong);background:var(--auth-card);border:1px solid var(--auth-card-line)}
+.auth-tools .btn-ghost:hover{color:var(--auth-strong);background:var(--auth-card);border-color:var(--auth-accent)}
+
 /* Ссылки на тёмном — в app.css вне слоёв: утилиты Tailwind
    (text-primary-700) стоят в слое сильнее, чем этот файл */
 .auth-dark .select-option[aria-selected="true"], .auth-dark .select-option-mark{color:#93c5fd}
@@ -2833,27 +2865,28 @@ body:has(.mobile-menu.open) .filter-fab{display:none}
 .auth-logo--mobile{margin-bottom:24px}
 @media(min-width:1024px){.auth-logo--mobile{display:none}}
 .auth-pitch{margin:auto 0;display:flex;flex-direction:column;gap:28px;max-width:600px}
-.auth-hero{font-size:clamp(36px,3.6vw,54px);line-height:1.08;font-weight:800;color:#fff;letter-spacing:-.01em}
-.auth-hero span{color:#60a5fa}
+.auth-hero{font-size:clamp(36px,3.6vw,54px);line-height:1.08;font-weight:800;color:var(--auth-strong);letter-spacing:-.01em}
+.auth-hero span{color:var(--auth-accent)}
 .auth-benefits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px}
-.auth-benefits li{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;color:#b7c3d9}
-.auth-benefits svg{flex-shrink:0;margin-top:3px;color:#60a5fa}
-.auth-review{margin:0;padding:22px 24px;border-radius:18px;background:#0f1830;border:1px solid #1f2b47;
+.auth-benefits li{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;color:var(--auth-benefit)}
+.auth-benefits svg{flex-shrink:0;margin-top:3px;color:var(--auth-accent)}
+.auth-review{margin:0;padding:22px 24px;border-radius:18px;background:var(--auth-card);border:1px solid var(--auth-card-line);
   display:flex;flex-direction:column;gap:12px}
-.auth-stars{display:flex;gap:2px;color:#34456b}
+.auth-stars{display:flex;gap:2px;color:var(--auth-star-off)}
 .auth-stars .is-on{color:#fbbf24;fill:#fbbf24}
-.auth-review blockquote{font-size:16px;line-height:1.6;color:#dbe4f3}
-.auth-review figcaption{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#fff}
-.auth-avatar{width:36px;height:36px;border-radius:50%;background:#1f2b47;color:#93c5fd;display:grid;place-items:center;font-size:13px;font-weight:700}
+.auth-review blockquote{font-size:16px;line-height:1.6;color:var(--auth-quote)}
+.auth-review figcaption{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--auth-strong)}
+.auth-avatar{width:36px;height:36px;border-radius:50%;background:var(--auth-avatar-bg);color:var(--auth-avatar-fg);display:grid;place-items:center;font-size:13px;font-weight:700}
 .auth-copy{font-size:13px;color:#64748b}
 
 .auth-main{display:flex;flex-direction:column;justify-content:center;min-width:0}
 .auth-card{width:100%;max-width:480px;margin:0 auto;box-sizing:border-box;padding:32px 24px;border-radius:24px;
-  background:#0f1830;border:1px solid #1f2b47;box-shadow:0 30px 80px rgba(2,6,23,.45)}
+  background:var(--auth-card);border:1px solid var(--auth-card-line);box-shadow:var(--auth-shadow);
+  transition:background-color .3s ease,border-color .3s ease}
 .auth-shell--wide .auth-card{max-width:620px}
 @media(min-width:640px){.auth-card{padding:36px}}
-.auth-title{font-size:28px;line-height:1.2;font-weight:800;color:#fff}
-.auth-sub{margin-top:8px;font-size:14px;line-height:1.55;color:#9aa4b8}
+.auth-title{font-size:28px;line-height:1.2;font-weight:800;color:var(--auth-strong)}
+.auth-sub{margin-top:8px;font-size:14px;line-height:1.55;color:var(--auth-sub)}
 
 /* Своё под аргументами левой панели входа (AuthLayout, проп aside): кнопка
    ILMORA на первом шаге регистрации. На телефоне панели нет — под формой */

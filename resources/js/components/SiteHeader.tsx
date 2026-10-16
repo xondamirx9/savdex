@@ -1,11 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
+import { LangSwitcher } from '@/components/LangSwitcher';
 import { Link } from '@/components/ui/Link';
 import {
     FileUser,
     Building2,
     ChevronDown,
     CircleUserRound,
-    Globe,
     Heart,
     LayoutDashboard,
     LayoutGrid,
@@ -215,56 +215,6 @@ function NavDropdown({ item, active }: { item: MenuItem; active: boolean }) {
                     document.body,
                 )}
         </span>
-    );
-}
-
-/**
- * Переключатель языка.
- *
- * Обычные ссылки на ту же страницу с другим префиксом, а не кнопки:
- * такую ссылку видит поисковик, её можно скопировать и открыть в
- * соседней вкладке. Переход намеренно полный, без Inertia: вместе
- * со страницей должен приехать словарь нового языка.
- */
-function LangSwitcher({ locale, links }: { locale: string; links: SharedProps['localeLinks'] }) {
-    const [open, setOpen] = useState(false);
-    const ref = useDismiss(() => setOpen(false));
-    const current = links.find((l) => l.code === locale) ?? links[0];
-
-    // Страница ошибки может прийти без общих пропсов — переключателю
-    // без списка языков нечего показывать, и падать из-за этого нельзя
-    if (!current) return null;
-
-    return (
-        <div className="dropdown lang-switch" ref={ref}>
-            <button
-                className="btn btn-ghost btn-sm"
-                aria-expanded={open}
-                aria-haspopup="true"
-                aria-label={`${t('nav.language')}: ${current.label}`}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setOpen((v) => !v);
-                }}
-            >
-                <Globe aria-hidden className="size-4" />
-                {current.short}
-                <ChevronDown aria-hidden className="size-3.5" />
-            </button>
-            <div className={cn('dropdown-menu', open && 'open')} aria-label={t('nav.language')}>
-                {links.map((l) => (
-                    <a
-                        key={l.code}
-                        href={l.url}
-                        className="dropdown-item"
-                        hrefLang={l.code}
-                        aria-current={l.code === current.code ? 'true' : undefined}
-                    >
-                        {l.label}
-                    </a>
-                ))}
-            </div>
-        </div>
     );
 }
 
@@ -839,7 +789,7 @@ export function SiteHeader() {
 
                         <HeaderSearch categories={categories} idPrefix="hd" />
 
-                        <LangSwitcher locale={locale} links={localeLinks} />
+                        <LangSwitcher locale={locale} links={localeLinks} className="lang-switch" />
 
                         <div className="hd-actions">
                             {/* Избранное — только вошедшим: гостю сердечко
