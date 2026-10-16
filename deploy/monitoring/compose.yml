@@ -1,0 +1,52 @@
+# Агент мониторинга Grafana Alloy — на каждой боевой машине
+# (docs/monitoring.md, шаг 2). Ставит и обновляет его
+# deploy/server/monitoring.sh при выкладке.
+#
+# Сеть и процессы — машины (network_mode/pid: host): агенту видны её
+# процессор, память, диски и сеть, а не только его контейнера. /proc,
+# /sys и корень — только на чтение; сокет Docker — чтобы видеть
+# контейнеры (память, падения). Наружу агент ничего не открывает: его
+# страница — на 127.0.0.1:12345.
+#
+# Настройки — каталог /opt/savdex/monitoring (base.alloy и файл роли
+# машины), ключи Grafana Cloud — /opt/savdex/env/monitoring.env (600).
+#
+#   docker compose -f deploy/monitoring/compose.yml up -d
+
+name: savdex-monitoring
+
+services:
+  alloy:
+    image: grafana/alloy:v1.20.1
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    # Группы процессов (cgroup) — машины: по ним cAdvisor видит память и
+    # процессор каждого контейнера, а не только самого агента
+    cgroup: host
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      # Без отчётов Grafana о том, какие компоненты включены
+      - --disable-reporting
+      - /etc/alloy
+    env_file:
+      - ${SAVDEX_HOME:-/opt/savdex}/env/monitoring.env
+    volumes:
+      - ${SAVDEX_HOME:-/opt/savdex}/monitoring:/etc/alloy:ro
+      - alloy_data:/var/lib/alloy/data
+      - /proc:/host/proc:ro
+      - /sys:/sys:ro
+      - /:/host/root:ro,rslave
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Контейнеры Docker cAdvisor находит через containerd
+      - /run/containerd:/run/containerd:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      # Подписи дисков (модель, серийный номер) — для графиков дисков
+      - /run/udev:/run/udev:ro
+    # Агент не должен отнимать память у сайта и базы
+    mem_limit: 256m
+
+volumes:
+  alloy_data:

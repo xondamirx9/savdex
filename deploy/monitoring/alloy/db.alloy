@@ -1,0 +1,19 @@
+// Машина базы: сверх base.alloy — PostgreSQL. Жива ли база, сколько
+// соединений из 100, размер, блокировки. Роль savdex_monitor — только
+// чтение статистики (pg_monitor), данных таблиц она не видит; её и
+// пароль создаёт deploy/server/prod-db.sh, адрес — monitoring.sh
+prometheus.exporter.postgres "db" {
+	data_source_names = [sys.env("PG_MONITOR_DSN")]
+
+	// Только своя база, без перебора всех баз сервера
+	autodiscovery {
+		enabled = false
+	}
+}
+
+prometheus.scrape "db" {
+	targets         = prometheus.exporter.postgres.db.targets
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+	job_name        = "postgres"
+	scrape_interval = "60s"
+}

@@ -136,6 +136,12 @@ if [ "$ROLE" = web ]; then
     # mount, а замена файла переименованием осталась бы ему невидимой
     cat > "$ENV_DIR/Caddyfile" <<CADDY
 # Пишет deploy/server/prod-app.sh при каждой выкладке — не править руками
+{
+	# Счётчики запросов и время ответа — для агента мониторинга
+	# (deploy/monitoring/alloy/web.alloy)
+	metrics
+}
+
 $SITE_DOMAIN {
 	import /etc/caddy/auth.caddy
 	encode zstd gzip
@@ -167,6 +173,12 @@ $SITE_DOMAIN {
 		output stdout
 		format console
 	}
+}
+
+# Цифры Caddy — агенту мониторинга этой же машины: порт 9180 опубликован
+# только на 127.0.0.1 (compose.web.yml), снаружи его не видно
+http://:9180 {
+	metrics
 }
 CADDY
     if [ "$SITE_DOMAIN" = savdex.uz ]; then
