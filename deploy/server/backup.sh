@@ -19,6 +19,11 @@
 # BACKUP_PASSPHRASE — тот же пароль, что у ночных копий Render, без него
 # копию не открыть.
 #
+# Сигналы в Healthchecks.io (docs/monitoring.md): ночная копия базы — на
+# HC_PING_DB, копия файлов — на HC_PING_FILES (тоже из backup.env, если
+# заданы): начало, удача или сбой. Сигнала нет вовремя — тревога в
+# Telegram: копия не снялась, упала или зависла.
+#
 # rclone — из образа Docker, от root контейнера: файлы в общей папке
 # принадлежат www-data, и не всё из них может читать deploy.
 set -euo pipefail
@@ -46,6 +51,37 @@ fi
 . "$ENV_DIR/backup.env"
 : "${S3_ENDPOINT:?}" "${S3_BUCKET:?}" "${S3_ACCESS_KEY:?}" "${S3_SECRET_KEY:?}" "${BACKUP_PASSPHRASE:?}"
 prefix=${BACKUP_PREFIX:-uz}
+
+# ── Сигналы в Healthchecks.io ──────────────────────────────────────
+# Копия с меткой (перед релизом) сигнала не шлёт: она не по расписанию
+# и заслонила бы собой пропущенную ночную
+hc_url=""
+if [ "$what" = db ] && [ -z "$label" ]; then
+    hc_url=${HC_PING_DB:-}
+elif [ "$what" = files ]; then
+    hc_url=${HC_PING_FILES:-}
+fi
+hc_ping() {
+    [ -n "$hc_url" ] || return 0
+    curl -fsS -m 10 --retry 3 -o /dev/null "$hc_url$1" 2>/dev/null \
+        || echo "$(date -Iseconds) ВНИМАНИЕ: сигнал в Healthchecks не ушёл" >&2
+}
+# Конец — удача или сбой, по коду выхода; заодно — без расшифрованной
+# копии базы на диске
+plain=""
+finish() {
+    local status=$?
+    if [ -n "$plain" ]; then
+        rm -f "$plain"
+    fi
+    if [ "$status" -eq 0 ]; then
+        hc_ping ""
+    else
+        hc_ping /fail
+    fi
+}
+trap finish EXIT
+hc_ping /start
 
 # Хранилище — remote «s3», зашифрованные файлы поверх него — «files».
 # Значения уходят в контейнер через окружение (-e ИМЯ без значения):
@@ -85,7 +121,6 @@ case "$what" in
         # Своё имя у каждой копии: ночная и копия перед релизом могут совпасть по времени
         plain="$WORK/savdex-$stamp.dump"
         file="savdex-$stamp.dump.gpg"
-        trap 'rm -f "$plain"' EXIT
         compose=(docker compose -f "$SRC/deploy/prod/db/compose.yml" --env-file "$ENV_DIR/compose.env")
 
         "${compose[@]}" exec -T db pg_dump -U savdex --format=custom --compress=9 savdex > "$plain"

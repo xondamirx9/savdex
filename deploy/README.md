@@ -327,7 +327,9 @@ cron пользователя `deploy`):
 - файлы — каждый час, только новые и изменённые, зашифрованы
   (rclone crypt, тот же пароль) — `uz/files/`.
 
-Восстановление — [docs/backups.md](../docs/backups.md).
+Восстановление — [docs/backups.md](../docs/backups.md). Ночная копия базы
+и копия файлов шлют сигналы в Healthchecks.io: не снялась — тревога в
+Telegram ([docs/monitoring.md](../docs/monitoring.md)).
 
 ### Что нужно один раз
 
