@@ -51,6 +51,10 @@ if [ ! -s "$ENV_DIR/compose.env" ]; then
     } > "$ENV_DIR/compose.env"
 fi
 set_var "$ENV_DIR/compose.env" DB_BIND "$DB_IP"
+# Пароль роли мониторинга (savdex_monitor, ниже) — тоже один раз
+if ! grep -q '^MONITOR_DB_PASSWORD=' "$ENV_DIR/compose.env"; then
+    echo "MONITOR_DB_PASSWORD=$(secret)" >> "$ENV_DIR/compose.env"
+fi
 
 # shellcheck disable=SC1091
 . "$ENV_DIR/compose.env"
@@ -78,6 +82,22 @@ if [ "$(docker inspect -f '{{.State.Health.Status}}' "$container" 2>/dev/null)" 
     docker logs --tail 40 "$container" >&2 || true
     exit 1
 fi
+
+echo "── Роль мониторинга savdex_monitor"
+# Для агента мониторинга (deploy/monitoring/alloy/db.alloy): только
+# статистика сервера (pg_monitor) — данных таблиц роль не видит. SQL —
+# через stdin: пароля нет в списке процессов
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -q -U savdex -d savdex <<SQL
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'savdex_monitor') THEN
+        CREATE ROLE savdex_monitor LOGIN;
+    END IF;
+END
+\$\$;
+ALTER ROLE savdex_monitor WITH LOGIN CONNECTION LIMIT 3 PASSWORD '${MONITOR_DB_PASSWORD}';
+GRANT pg_monitor TO savdex_monitor;
+SQL
 
 echo "── Резервные копии — в расписание"
 # Время — по часам машины (Asia/Tashkent, bootstrap.sh). Строки

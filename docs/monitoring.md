@@ -7,7 +7,7 @@
 |---|---|---|
 | **UptimeRobot** | сайт отвечает снаружи: раз в 5 минут `https://savdex.uz/up` | в UptimeRobot (ниже) |
 | **Healthchecks.io** | резервные копии снимаются: ночная копия базы и копия файлов каждый час | сигналы — [deploy/server/backup.sh](../deploy/server/backup.sh), проверки — в Healthchecks |
-| **Grafana Cloud** (следующий шаг) | процессор, память и диск машин, база, ошибки сайта | — |
+| **Grafana Cloud** | процессор, память, диск и сеть машин; память и падения контейнеров; база; запросы и ошибки сайта | агент — [deploy/monitoring](../deploy/monitoring), ставит релиз; графики и тревоги — в Grafana Cloud |
 
 ## Как это работает
 
@@ -49,3 +49,50 @@
 
 Проверить, что всё дошло: в Healthchecks у проверок — время последнего
 сигнала; ночная — после 03:40, файлы — каждый час в :17.
+
+## Grafana Cloud: графики
+
+На каждой боевой машине — агент **Grafana Alloy**
+([deploy/monitoring/compose.yml](../deploy/monitoring/compose.yml)).
+Раз в минуту он отправляет в Grafana Cloud:
+
+| Машина | Что | Настройки |
+|---|---|---|
+| все | процессор, память, диски, сеть; память, процессор и перезапуски контейнеров | [base.alloy](../deploy/monitoring/alloy/base.alloy) |
+| сайт (`web`) | Caddy: запросы, коды ответа (5xx — ошибки), время ответа | [web.alloy](../deploy/monitoring/alloy/web.alloy) |
+| база (`db`) | PostgreSQL: жива ли, соединения, размер, блокировки | [db.alloy](../deploy/monitoring/alloy/db.alloy) |
+
+**Только цифры, без журналов.** В журналах сайта бывают почты и
+телефоны людей, а персональные данные граждан Узбекистана должны
+храниться в Узбекистане. Цифры вида «диск занят на 63%» персональных
+данных не содержат.
+
+- У каждого ряда — метка `machine` (`web`, `admin`, `db`).
+- Базу агент читает ролью `savdex_monitor`: только статистика сервера
+  (`pg_monitor`), данных таблиц она не видит. Роль и пароль создаёт
+  [prod-db.sh](../deploy/server/prod-db.sh).
+- Caddy отдаёт цифры на `127.0.0.1:9180` — только агенту своей машины.
+- Бесплатный тариф — 10 000 рядов; агенты трёх машин дают около 2 000.
+
+**Как ставится:** каждый релиз (Actions → prod), шаг «Мониторинг»:
+[deploy/server/monitoring.sh](../deploy/server/monitoring.sh) ставит
+или обновляет агента на машинах сайта, админки и базы и через минуту
+проверяет, что Grafana Cloud принимает цифры. Не принимает (неверный
+токен и т. п.) — предупреждение в запуске; релиз от этого не падает.
+
+**Что нужно один раз** — в Grafana Cloud (регион EU Germany):
+Connections → Hosted Prometheus metrics → «From my local Prometheus
+server» → «Use an API token»: имя `savdex-alloy`. Из показанных
+настроек `remote_write` — в GitHub → Settings → Secrets and variables
+→ Actions:
+
+| Значение | Куда |
+|---|---|
+| `url` | переменная `GRAFANA_PROM_URL` |
+| `username` (число) | переменная `GRAFANA_PROM_USER` |
+| `password` (токен `glc_…`) | секрет `GRAFANA_ALLOY_TOKEN` |
+
+**Где смотреть:** Grafana Cloud → Dashboards → New → Import, номера
+готовых панелей: **1860** (машины), **14282** (контейнеры), **9628**
+(PostgreSQL). Источник данных — `grafanacloud-…-prom`.
+

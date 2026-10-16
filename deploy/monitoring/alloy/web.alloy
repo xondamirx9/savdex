@@ -1,0 +1,21 @@
+// Машина сайта: сверх base.alloy — Caddy. Сколько запросов, сколько из
+// них с ошибкой 5xx, как быстро отвечает сайт. Цифры Caddy отдаёт на
+// 127.0.0.1:9180 — только этой машине (deploy/server/prod-app.sh,
+// deploy/prod/app/compose.web.yml)
+prometheus.scrape "caddy" {
+	targets         = [{"__address__" = "127.0.0.1:9180"}]
+	forward_to      = [prometheus.relabel.caddy.receiver]
+	job_name        = "caddy"
+	scrape_interval = "60s"
+}
+
+// Только запросы и время ответа — без внутренностей Go и самого Caddy
+prometheus.relabel "caddy" {
+	forward_to = [prometheus.remote_write.cloud.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "caddy_http_(request_duration_seconds_(bucket|sum|count)|requests_in_flight)|up"
+		action        = "keep"
+	}
+}
