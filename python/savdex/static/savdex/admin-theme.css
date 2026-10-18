@@ -2220,3 +2220,126 @@ a.sx-row-btn.is-primary:hover {
 #content-main ~ form.module {
     clear: both;
 }
+
+/* ── Узкий экран: шапка и бургер-меню ──
+   До 1024 px Django ставит шапку в колонку, а #container — колонка
+   флекса: шапку сжимало до 64 px, и ссылки сотрудника вылезали вниз
+   под меню разделов. Шапка больше не сжимается. Меню разделов на узком
+   экране — выдвижное, по кнопке-бургеру (base_site.html); на телефоне
+   Django его вообще прятал, и открыть раздел было нечем */
+#header {
+    flex-shrink: 0;
+}
+
+.sx-burger {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    /* #container #header: responsive.css Django подключается после темы
+       и ставит шапку в колонку — тем же весом её не перебить */
+    #container #header {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        column-gap: 12px;
+        row-gap: 6px;
+    }
+
+    #site-name {
+        margin: 0;
+    }
+
+    #user-tools {
+        flex: 1 1 100%;
+        margin: 0;
+        text-align: left;
+        line-height: 1.6;
+        white-space: normal;
+    }
+
+    .sx-burger:not([hidden]) {
+        display: inline-grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        background: var(--sx-surface);
+        color: var(--sx-text);
+        cursor: pointer;
+    }
+
+    .sx-burger:hover,
+    .sx-burger[aria-expanded="true"] {
+        background: var(--sx-surface-2);
+    }
+
+    .sx-burger:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+    }
+
+    /* Свёртка меню Django («» слева) на узком экране не нужна — вместо неё бургер */
+    #toggle-nav-sidebar {
+        display: none;
+    }
+
+    /* Меню — выдвижная панель слева поверх страницы. display: block
+       перебивает Django, который на телефоне меню прятал совсем */
+    .main > #nav-sidebar,
+    .main.shifted > #nav-sidebar {
+        display: block;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1000;
+        width: min(320px, 86vw);
+        max-height: none;
+        height: 100dvh;
+        margin: 0;
+        visibility: hidden;
+        transform: translateX(-100%);
+        transition: transform .22s ease, visibility 0s linear .22s;
+        box-shadow: none;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .sx-nav-open .main > #nav-sidebar {
+        visibility: visible;
+        transform: none;
+        transition: transform .22s ease;
+        box-shadow: 0 0 40px rgb(0 0 0 / .35);
+    }
+
+    /* Содержимое — на всю ширину: место меню больше не занято */
+    .main > #nav-sidebar + .content,
+    .main.shifted > #nav-sidebar + .content {
+        max-width: 100%;
+    }
+
+    .sx-nav-backdrop:not([hidden]) {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgb(2 6 23 / .55);
+    }
+
+    /* Под открытым меню страница не прокручивается */
+    .sx-nav-open,
+    .sx-nav-open body {
+        overflow: hidden;
+    }
+}
+
+@media (max-width: 1024px) and (prefers-reduced-motion: reduce) {
+    .main > #nav-sidebar,
+    .sx-nav-open .main > #nav-sidebar {
+        transition: none;
+    }
+}
+

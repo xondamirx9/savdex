@@ -1,0 +1,107 @@
+// Агент мониторинга на боевых машинах (docs/monitoring.md, шаг 2):
+// цифры — в Grafana Cloud, раз в минуту. Только цифры: журналы, где
+// бывают почты и телефоны людей, с машин не уходят.
+//
+// Этот файл — на всех машинах: сама машина и её контейнеры. Роль
+// машины добавляет своё: web.alloy — Caddy, db.alloy — PostgreSQL
+// (deploy/server/monitoring.sh кладёт нужные рядом).
+//
+// Бесплатный тариф Grafana Cloud — 10 000 рядов: собирается только то,
+// по чему есть графики и тревоги.
+
+// ── Куда: Grafana Cloud ───────────────────────────────────────────
+prometheus.remote_write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_PROM_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_PROM_USER")
+			password = sys.env("GRAFANA_ALLOY_TOKEN")
+		}
+	}
+
+	// Метка машины — web, admin или db: по ней графики и тревоги
+	external_labels = {
+		machine = sys.env("SAVDEX_MACHINE"),
+	}
+}
+
+// ── Машина: процессор, память, диск, сеть ────────────────────────
+// /proc, /sys и корень машины — смонтированы в контейнер агента
+// (deploy/monitoring/compose.yml)
+prometheus.exporter.unix "host" {
+	procfs_path = "/host/proc"
+	sysfs_path  = "/sys"
+	rootfs_path = "/host/root"
+
+	set_collectors = [
+		"cpu",
+		"diskstats",
+		"filefd",
+		"filesystem",
+		"loadavg",
+		"meminfo",
+		"netdev",
+		"pressure",
+		"sockstat",
+		"time",
+		"uname",
+		"vmstat",
+	]
+
+	filesystem {
+		mount_points_exclude = "^/(dev|proc|run|sys|snap|var/lib/docker/.+)($|/)"
+		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs)$"
+	}
+
+	// Мосты и виртуальные карты Docker — не сеть машины
+	netdev {
+		device_exclude = "^(lo|docker0|br-.*|veth.*)$"
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = prometheus.exporter.unix.host.targets
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+	job_name        = "node"
+	scrape_interval = "60s"
+}
+
+// ── Контейнеры: память, процессор, падения ───────────────────────
+prometheus.exporter.cadvisor "containers" {
+	docker_host            = "unix:///var/run/docker.sock"
+	docker_only            = true
+	store_container_labels = false
+}
+
+prometheus.scrape "containers" {
+	targets         = prometheus.exporter.cadvisor.containers.targets
+	forward_to      = [prometheus.relabel.containers.receiver]
+	job_name        = "containers"
+	scrape_interval = "60s"
+}
+
+// Из сотен рядов cAdvisor — пять: этого хватает на «кто съел память»
+// и «контейнер упал / перезапустился»
+prometheus.relabel "containers" {
+	forward_to = [prometheus.remote_write.cloud.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "container_(cpu_usage_seconds_total|memory_working_set_bytes|oom_events_total|start_time_seconds|last_seen)"
+		action        = "keep"
+	}
+
+	// Только контейнеры с именем (savdex-app-1, savdex-db-db-1…), не
+	// служебные cgroup
+	rule {
+		source_labels = ["name"]
+		regex         = ""
+		action        = "drop"
+	}
+
+	rule {
+		regex  = "id|image"
+		action = "labeldrop"
+	}
+}
