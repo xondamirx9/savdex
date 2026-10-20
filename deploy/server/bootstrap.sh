@@ -9,6 +9,12 @@
 #
 #   SAVDEX_ROLE=staging|web|admin|db [WEB_IP=… ADMIN_IP=…] bash bootstrap.sh
 #
+# Машина сайта за Cloudflare (docs/cloudflare.md):
+#   SAVDEX_ROLE=web SAVDEX_CLOUDFLARE=1 CLOUDFLARE_IPS="<адреса через пробел>"
+# — HTTP и HTTPS открыты только адресам Cloudflare (deploy/server/
+# cloudflare-ips.txt, передаёт prod.yml), в обход него сайт не открыть.
+# SAVDEX_CLOUDFLARE=0 (или без неё) — снова открыты всем.
+#
 # Роль — что будет на машине (deploy/README.md):
 # - staging (по умолчанию) — тестовый сервер целиком;
 # - web — сайт: HTTP и HTTPS снаружи, общая папка файлов с машины базы;
@@ -54,6 +60,20 @@ case "$ROLE" in
         ;;
 esac
 echo "── Роль машины: $ROLE"
+
+CLOUDFLARE=${SAVDEX_CLOUDFLARE:-0}
+read -r -a cf_ips <<< "${CLOUDFLARE_IPS:-}"
+if [ "$CLOUDFLARE" = 1 ]; then
+    if [ "$ROLE" != web ]; then
+        echo "SAVDEX_CLOUDFLARE — только для машины сайта (web), а не $ROLE" >&2
+        exit 1
+    fi
+    # Пустой список закрыл бы сайт для всех
+    if [ "${#cf_ips[@]}" -lt 10 ]; then
+        echo "Нет адресов Cloudflare (CLOUDFLARE_IPS) — файрвол не меняется" >&2
+        exit 1
+    fi
+fi
 
 extra_packages=()
 case "$ROLE" in
@@ -180,11 +200,46 @@ echo "── Файрвол"
 # публикуются только 80 и 443 (Caddy), а база и приложение — только на
 # частный адрес машины
 ufw allow OpenSSH >/dev/null
+
+# Правила «только Cloudflare» помечены комментарием: при смене режима
+# или списка адресов прежние снимаются целиком
+drop_cloudflare_rules() {
+    local n
+    while n=$(ufw status numbered | grep 'savdex-cloudflare' | head -n 1 \
+        | sed -E 's/^\[ *([0-9]+)\].*/\1/') && [ -n "$n" ]; do
+        ufw --force delete "$n" >/dev/null
+    done
+}
+
 case "$ROLE" in
-    staging|web)
+    staging)
         ufw allow 80/tcp >/dev/null
         ufw allow 443/tcp >/dev/null
         ufw allow 443/udp >/dev/null
+        ;;
+    web)
+        if [ "$CLOUDFLARE" = 1 ]; then
+            # Список мог смениться: прежние правила — долой (сайт пока
+            # открыт правилами «всем» или новыми ниже)
+            ufw allow 80/tcp >/dev/null
+            ufw allow 443/tcp >/dev/null
+            drop_cloudflare_rules
+            # Сначала — адреса Cloudflare, потом снять «всем»: сайт не
+            # закрывается ни на миг. Cloudflare ходит к сайту только по
+            # TCP (HTTP/3 — лишь до посетителя): 443/udp закрыт
+            for ip in "${cf_ips[@]}"; do
+                ufw allow proto tcp from "$ip" to any port 80,443 comment savdex-cloudflare >/dev/null
+            done
+            ufw --force delete allow 80/tcp >/dev/null 2>&1 || true
+            ufw --force delete allow 443/tcp >/dev/null 2>&1 || true
+            ufw --force delete allow 443/udp >/dev/null 2>&1 || true
+            echo "── Файрвол: HTTP и HTTPS — только Cloudflare (${#cf_ips[@]} сетей)"
+        else
+            ufw allow 80/tcp >/dev/null
+            ufw allow 443/tcp >/dev/null
+            ufw allow 443/udp >/dev/null
+            drop_cloudflare_rules
+        fi
         ;;
     db)
         for ip in "$WEB_IP" "$ADMIN_IP"; do
@@ -216,6 +271,22 @@ docker_guard() {
 guard_rules=""
 case "$ROLE" in
     db) guard_rules=$(docker_guard 5432 "$WEB_IP" "$ADMIN_IP") ;;
+    web)
+        # Порты Caddy Docker публикует в обход ufw: за Cloudflare здесь
+        # же — только его адреса (IPv4; IPv6 Docker не публикует через
+        # NAT — его фильтрует ufw выше)
+        if [ "$CLOUDFLARE" = 1 ]; then
+            v4=()
+            for ip in "${cf_ips[@]}"; do
+                [[ "$ip" == *:* ]] || v4+=("$ip")
+            done
+            guard_rules=$(
+                docker_guard 80 "${v4[@]}"
+                docker_guard 443 "${v4[@]}"
+                printf -- '-A DOCKER-USER -p udp --dport 443 -j DROP\n'
+            )
+        fi
+        ;;
     admin)
         if [ -n "${WEB_IP:-}" ]; then
             guard_rules=$(docker_guard 10000 "$WEB_IP")
@@ -225,8 +296,14 @@ case "$ROLE" in
         ;;
 esac
 
+# Прежний блок снимается всегда: выключили Cloudflare — его правил нет
+sed -i '/^# BEGIN savdex docker-user/,/^# END savdex docker-user/d' /etc/ufw/after.rules
+# ufw reload добавляет правила after.rules, но не убирает снятые оттуда:
+# на машине сайта (выключили Cloudflare) — снять самим
+if [ "$ROLE" = web ]; then
+    iptables -F DOCKER-USER 2>/dev/null || true
+fi
 if [ -n "$guard_rules" ]; then
-    sed -i '/^# BEGIN savdex docker-user/,/^# END savdex docker-user/d' /etc/ufw/after.rules
     cat >> /etc/ufw/after.rules <<RULES
 # BEGIN savdex docker-user
 *filter

@@ -132,6 +132,35 @@ if [ "$ROLE" = web ]; then
     fi
     unset password
 
+    # Сайт за Cloudflare (SAVDEX_CLOUDFLARE=1, docs/cloudflare.md): к
+    # Caddy подключается Cloudflare, адрес посетителя — в его заголовке
+    # CF-Connecting-IP. Caddy верит заголовку только от адресов Cloudflare
+    # (cloudflare-ips.txt); от остальных адрес — тот, кто подключился.
+    # Приложению адрес уходит одним значением X-Forwarded-For
+    # ({client_ip}): присланный посетителем X-Forwarded-For до него не
+    # доходит
+    edge_global=""
+    edge_site=$'\t# Cloudflare перед сайтом нет: его заголовки с адресом посетителя\n\t# ставить некому — пришедшие убираются\n\trequest_header -CF-Connecting-IP\n\trequest_header -True-Client-IP'
+    if [ "${SAVDEX_CLOUDFLARE:-0}" = 1 ]; then
+        ranges=$(grep -Ev '^[[:space:]]*(#|$)' "$SRC/deploy/server/cloudflare-ips.txt" | tr '\n' ' ')
+        edge_global=$'\tservers {\n\t\ttrusted_proxies static '"$ranges"$'\n\t\ttrusted_proxies_strict\n\t\tclient_ip_headers CF-Connecting-IP\n\t}'
+        # True-Client-IP Cloudflare без Enterprise пропускает от посетителя
+        edge_site=$'\t# За Cloudflare: адрес посетителя — CF-Connecting-IP (выше)\n\trequest_header -True-Client-IP'
+        echo "── Сайт за Cloudflare: адрес посетителя — из CF-Connecting-IP"
+    fi
+
+    # Сертификат между Cloudflare и Caddy — Origin CA от Cloudflare
+    # (env/tls, кладёт prod.yml из секретов). Без него — Let's Encrypt,
+    # как раньше
+    mkdir -p "$ENV_DIR/tls"
+    edge_tls=""
+    if [ -s "$ENV_DIR/tls/origin.crt" ] && [ -s "$ENV_DIR/tls/origin.key" ]; then
+        edge_tls=$'\ttls /etc/caddy/tls/origin.crt /etc/caddy/tls/origin.key'
+        echo "── Сертификат: Cloudflare Origin CA"
+    elif [ "${SAVDEX_CLOUDFLARE:-0}" = 1 ]; then
+        echo "ВНИМАНИЕ: сайт за Cloudflare без Origin-сертификата (секреты CF_ORIGIN_CERT и CF_ORIGIN_KEY) — Let's Encrypt продлевается только через Cloudflare." >&2
+    fi
+
     # Тот же файл (не новый): Caddy в контейнере видит его через bind
     # mount, а замена файла переименованием осталась бы ему невидимой
     cat > "$ENV_DIR/Caddyfile" <<CADDY
@@ -140,17 +169,15 @@ if [ "$ROLE" = web ]; then
 	# Счётчики запросов и время ответа — для агента мониторинга
 	# (deploy/monitoring/alloy/web.alloy)
 	metrics
+$edge_global
 }
 
 $SITE_DOMAIN {
 	import /etc/caddy/auth.caddy
+$edge_tls
 	encode zstd gzip
 
-	# Cloudflare перед сайтом нет: его заголовки с адресом посетителя
-	# ставить некому — пришедшие убираются. Адрес — в X-Forwarded-For,
-	# его Caddy пишет сам
-	request_header -CF-Connecting-IP
-	request_header -True-Client-IP
+$edge_site
 
 	# Админка — на своей машине (частная сеть). Остальное — сайт.
 	# Пока приложение перезапускается (выкладка), его порт закрыт: Caddy
@@ -158,12 +185,14 @@ $SITE_DOMAIN {
 	@admin path /py/admin /py/admin/* /py/login /py/logout
 	handle @admin {
 		reverse_proxy $ADMIN_IP:10000 {
+			header_up X-Forwarded-For {client_ip}
 			lb_try_duration 60s
 			lb_try_interval 500ms
 		}
 	}
 	handle {
 		reverse_proxy app:10000 {
+			header_up X-Forwarded-For {client_ip}
 			lb_try_duration 60s
 			lb_try_interval 500ms
 		}

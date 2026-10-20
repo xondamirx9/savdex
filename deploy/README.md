@@ -335,6 +335,13 @@ cron пользователя `deploy`):
 и копия файлов шлют сигналы в Healthchecks.io: не снялась — тревога в
 Telegram ([docs/monitoring.md](../docs/monitoring.md)).
 
+### Cloudflare
+
+Сайт можно спрятать за Cloudflare: переменная `PROD_CLOUDFLARE=true` —
+Caddy берёт адрес посетителя из `CF-Connecting-IP` (только от адресов
+Cloudflare), а «подготовить машины» открывает 80 и 443 машины сайта
+только Cloudflare. Включение по шагам и откат — [docs/cloudflare.md](../docs/cloudflare.md).
+
 ### Что нужно один раз
 
 1. **UzCloud:** сеть `savdex-prod` и три машины из таблицы выше (Ubuntu

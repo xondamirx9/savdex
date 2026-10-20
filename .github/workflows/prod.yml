@@ -58,6 +58,10 @@
 #   vars.PROD_KNOWN_HOSTS        ключи машин (строки known_hosts) — подскажет первый запуск
 #   vars.PROD_LIVE               true после переезда: «копия с Render» запрещена
 #   vars.STAGING_HOST, STAGING_HOST_KEY  тестовый сервер — образ берётся с него
+#   vars.PROD_CLOUDFLARE         true — сайт за Cloudflare: адрес посетителя из
+#                                CF-Connecting-IP; с «подготовить машины» — 80 и
+#                                443 открыты только Cloudflare (docs/cloudflare.md)
+#   secrets.CF_ORIGIN_CERT, CF_ORIGIN_KEY  Origin-сертификат Cloudflare для Caddy
 #
 # Репозиторий публичный, журналы Actions видят все: пароли, ключи и
 # значения настроек в журнал не выводятся.
@@ -232,6 +236,8 @@ jobs:
       KNOWN_HOSTS: ${{ vars.PROD_KNOWN_HOSTS }}
       STAGING_HOST: ${{ vars.STAGING_HOST }}
       STAGING_HOST_KEY: ${{ vars.STAGING_HOST_KEY }}
+      # Сайт за Cloudflare (docs/cloudflare.md)
+      CLOUDFLARE: ${{ vars.PROD_CLOUDFLARE == 'true' && '1' || '0' }}
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
 
     steps:
@@ -354,15 +360,21 @@ jobs:
         if: inputs.bootstrap
         run: |
           set -euo pipefail
+          # Машине сайта за Cloudflare — его адреса: файрвол пускает только их
+          cf_ips=$(grep -Ev '^[[:space:]]*(#|$)' deploy/server/cloudflare-ips.txt | tr '\n' ' ')
           for role in web admin db; do
+            edge=""
             case "$role" in
-              web) target=(-o User=root "$HOST") ;;
+              web)
+                target=(-o User=root "$HOST")
+                edge="SAVDEX_CLOUDFLARE=$CLOUDFLARE CLOUDFLARE_IPS='$cf_ips'"
+                ;;
               admin) target=(-o User=root -o ProxyJump="root@$HOST" "$ADMIN_IP") ;;
               db) target=(-o User=root -o ProxyJump="root@$HOST" "$DB_IP") ;;
             esac
             echo "── Машина $role"
             ssh "${target[@]}" 'cat > /tmp/savdex-bootstrap.sh' < deploy/server/bootstrap.sh
-            ssh "${target[@]}" "SAVDEX_ROLE=$role WEB_IP=$WEB_IP ADMIN_IP=$ADMIN_IP bash /tmp/savdex-bootstrap.sh && rm -f /tmp/savdex-bootstrap.sh"
+            ssh "${target[@]}" "SAVDEX_ROLE=$role WEB_IP=$WEB_IP ADMIN_IP=$ADMIN_IP $edge bash /tmp/savdex-bootstrap.sh && rm -f /tmp/savdex-bootstrap.sh"
           done
 
       - name: Связь машины админки с машиной сайта
@@ -556,6 +568,22 @@ jobs:
           ssh admin "SAVDEX_ROLE=admin DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
             bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --migrate"
 
+      - name: Сертификат Cloudflare
+        env:
+          CF_ORIGIN_CERT: ${{ secrets.CF_ORIGIN_CERT }}
+          CF_ORIGIN_KEY: ${{ secrets.CF_ORIGIN_KEY }}
+        run: |
+          set -euo pipefail
+          # Origin CA — сертификат между Cloudflare и Caddy (docs/cloudflare.md).
+          # Секретов нет — файлы убираются, Caddy берёт Let's Encrypt
+          if [ -n "$CF_ORIGIN_CERT" ] && [ -n "$CF_ORIGIN_KEY" ]; then
+            ssh web 'umask 077; mkdir -p /opt/savdex/env/tls; cat > /opt/savdex/env/tls/origin.crt' <<< "$CF_ORIGIN_CERT"
+            ssh web 'umask 077; cat > /opt/savdex/env/tls/origin.key' <<< "$CF_ORIGIN_KEY"
+            echo "Origin-сертификат Cloudflare — на машине сайта."
+          else
+            ssh web 'rm -f /opt/savdex/env/tls/origin.crt /opt/savdex/env/tls/origin.key'
+          fi
+
       - name: Сайт
         env:
           STAGING_PASSWORD: ${{ secrets.STAGING_PASSWORD }}
@@ -569,7 +597,7 @@ jobs:
           fi
           printf '%s\n' "$password" \
             | ssh web "SAVDEX_ROLE=web DB_IP='$DB_IP' ADMIN_IP='$ADMIN_IP' SITE_DOMAIN='$SITE_DOMAIN' \
-                bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
+                SAVDEX_CLOUDFLARE='$CLOUDFLARE' bash /opt/savdex/src/deploy/server/prod-app.sh '$tag' --password-stdin"
 
       - name: Проверка снаружи
         env:

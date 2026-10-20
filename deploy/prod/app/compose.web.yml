@@ -20,6 +20,9 @@ services:
       - ${SAVDEX_HOME:-/opt/savdex}/env/Caddyfile:/etc/caddy/Caddyfile:ro
       # Пароль на сайт на время репетиции переезда (пустой файл — без пароля)
       - ${SAVDEX_HOME:-/opt/savdex}/env/auth.caddy:/etc/caddy/auth.caddy:ro
+      # Origin-сертификат Cloudflare (docs/cloudflare.md); пустая папка —
+      # сертификат Let's Encrypt
+      - ${SAVDEX_HOME:-/opt/savdex}/env/tls:/etc/caddy/tls:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
