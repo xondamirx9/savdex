@@ -1,0 +1,62 @@
+# Тревоги Grafana Cloud → Telegram-группа (docs/monitoring.md, шаг 3):
+# правила из deploy/monitoring/alerts.yaml — в Grafana, скриптом
+# deploy/monitoring/grafana-alerts.py.
+#
+# - PR, где менялись тревоги, — только проверка: файл правил разбирается,
+#   ключи подходят (Grafana принимает ключ, бот видит группу). В Grafana
+#   ничего не меняется, в группу ничего не пишется;
+# - слияние таких изменений в основную ветку и Actions → alerts → Run
+#   workflow — загрузка в Grafana и сообщение в группу «тревоги обновлены».
+#
+# Нужны:
+#   vars.GRAFANA_URL            адрес стека, https://….grafana.net
+#   secrets.GRAFANA_SA_TOKEN    ключ сервисного аккаунта Grafana (роль Admin)
+#   secrets.TELEGRAM_BOT_TOKEN  токен бота от @BotFather
+#   secrets.TELEGRAM_CHAT_ID    номер группы, с минусом
+# Значения в журнал не выводятся.
+name: alerts
+
+on:
+  pull_request:
+    paths:
+      - deploy/monitoring/alerts.yaml
+      - deploy/monitoring/grafana-alerts.py
+      - .github/workflows/alerts.yml
+  push:
+    branches: [claude/website-copy-new-design-xaxsr0]
+    paths:
+      - deploy/monitoring/alerts.yaml
+      - deploy/monitoring/grafana-alerts.py
+      - .github/workflows/alerts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Загрузки — по очереди, проверки PR — каждая своя
+concurrency:
+  group: alerts-${{ github.event_name == 'pull_request' && github.ref || 'apply' }}
+  cancel-in-progress: false
+
+jobs:
+  alerts:
+    # У PR из чужой копии репозитория секретов нет — проверять нечего
+    if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GRAFANA_URL: ${{ vars.GRAFANA_URL }}
+      GRAFANA_SA_TOKEN: ${{ secrets.GRAFANA_SA_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Проверка
+        run: uv run --no-project --with pyyaml==6.0.2 python -I deploy/monitoring/grafana-alerts.py check
+
+      - name: Загрузка в Grafana
+        if: github.event_name != 'pull_request'
+        run: uv run --no-project --with pyyaml==6.0.2 python -I deploy/monitoring/grafana-alerts.py apply

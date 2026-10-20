@@ -1,0 +1,140 @@
+# Тревоги Grafana Cloud → Telegram-группа (docs/monitoring.md, шаг 3).
+#
+# В Grafana их загружает deploy/monitoring/grafana-alerts.py: Actions →
+# alerts (сам — при слиянии в основную ветку, если этот файл менялся).
+# В Grafana правила только для чтения: правка — здесь и через PR, иначе
+# следующая загрузка затрёт ручную.
+#
+# Цифры — от агентов на машинах (deploy/monitoring/alloy), у каждого ряда
+# метка machine: web, admin или db. Сайт снаружи проверяет UptimeRobot,
+# резервные копии — Healthchecks.io; здесь — то, чего они не видят.
+#
+# Поля правила:
+#   uid      — постоянный ключ: по нему Grafana узнаёт правило при
+#              повторной загрузке (сменился — старое удалится, новое
+#              появится, история тревоги начнётся заново)
+#   expr     — запрос PromQL, мгновенное значение
+#   when     — условие тревоги: «> число» или «< число»
+#   for      — сколько условие должно держаться, прежде чем тревога уйдёт
+#   no_data  — пустой запрос: ok (по умолчанию) или alerting
+#   severity — critical (🔴) или warning (🟠)
+#   summary  — текст в Telegram; {{ $labels.… }} — метки ряда,
+#              {{ $values.A.Value }} — значение запроса
+
+folder: SavdEx
+group: savdex
+interval: 1m
+# Канал и маршрут: всё — в одну группу, повтор, пока тревога не прошла,
+# — раз в 4 часа
+contact_point: SavdEx Telegram
+repeat_interval: 4h
+
+rules:
+  - uid: savdex-machine-down
+    title: Машина не на связи
+    # Машины, что присылали цифры за последние сутки, но молчат сейчас
+    # (ряд пропадает через 5 минут тишины). Ряда нет — тревоги нет:
+    # пустой ответ здесь — норма
+    expr: |
+      group by (machine) (max_over_time(up{job="integrations/unix"}[1d]))
+      unless group by (machine) (up{job="integrations/unix"})
+    when: '> 0'
+    for: 2m
+    severity: critical
+    summary: 'Машина {{ $labels.machine }} не на связи больше 5 минут: выключена, нет сети или упал агент мониторинга'
+
+  - uid: savdex-disk-full
+    title: Диск заполняется
+    expr: |
+      max by (machine, mountpoint) (
+        1 - node_filesystem_avail_bytes{job="integrations/unix"}
+          / node_filesystem_size_bytes{job="integrations/unix"}
+      )
+    when: '> 0.85'
+    for: 10m
+    severity: warning
+    summary: 'Диск {{ $labels.mountpoint }} на машине {{ $labels.machine }} заполнен на {{ humanizePercentage $values.A.Value }}'
+
+  - uid: savdex-memory-high
+    title: Мало памяти
+    expr: |
+      1 - node_memory_MemAvailable_bytes{job="integrations/unix"}
+        / node_memory_MemTotal_bytes{job="integrations/unix"}
+    when: '> 0.9'
+    for: 10m
+    severity: warning
+    summary: 'Память машины {{ $labels.machine }} занята на {{ humanizePercentage $values.A.Value }} больше 10 минут'
+
+  - uid: savdex-cpu-high
+    title: Процессор загружен
+    expr: |
+      1 - avg by (machine) (rate(node_cpu_seconds_total{job="integrations/unix", mode="idle"}[5m]))
+    when: '> 0.9'
+    for: 15m
+    severity: warning
+    summary: 'Процессор машины {{ $labels.machine }} загружен на {{ humanizePercentage $values.A.Value }} больше 15 минут'
+
+  - uid: savdex-postgres-down
+    title: База не отвечает
+    # pg_up — агент на машине базы достучался до PostgreSQL (1) или нет (0)
+    expr: max by (machine) (pg_up)
+    when: '< 1'
+    for: 2m
+    severity: critical
+    summary: 'PostgreSQL не отвечает больше 2 минут: сайт и админка без базы'
+
+  - uid: savdex-postgres-connections
+    title: База — кончаются соединения
+    expr: |
+      sum by (machine) (pg_stat_activity_count)
+        / max by (machine) (pg_settings_max_connections)
+    when: '> 0.8'
+    for: 5m
+    severity: warning
+    summary: 'База: занято {{ humanizePercentage $values.A.Value }} соединений из максимума — новые запросы скоро получат отказ'
+
+  - uid: savdex-caddy-down
+    title: Caddy не отвечает
+    # Агент машины сайта не достучался до Caddy (127.0.0.1:9180). Сам сайт
+    # снаружи проверяет ещё и UptimeRobot
+    expr: max by (machine) (up{job="caddy"})
+    when: '< 1'
+    for: 2m
+    severity: critical
+    summary: 'Caddy на машине {{ $labels.machine }} не отвечает — сайт, скорее всего, недоступен'
+
+  - uid: savdex-http-5xx
+    title: Сайт отдаёт ошибки
+    # Не меньше 10 ошибок 5xx за 10 минут и больше 5% всех ответов: одна
+    # ошибка при пяти посетителях — ещё не тревога
+    expr: |
+      (sum by (machine) (increase(caddy_http_request_duration_seconds_count{code=~"5.."}[10m])) >= 10)
+      and
+      (
+        sum by (machine) (rate(caddy_http_request_duration_seconds_count{code=~"5.."}[10m]))
+          / sum by (machine) (rate(caddy_http_request_duration_seconds_count[10m]))
+        > 0.05
+      )
+    when: '> 0'
+    for: 0s
+    severity: critical
+    summary: 'Сайт отдал {{ printf "%.0f" $values.A.Value }} ответов с ошибкой 5xx за 10 минут'
+
+  - uid: savdex-container-oom
+    title: Контейнер убит за нехватку памяти
+    expr: |
+      max by (machine, name) (increase(container_oom_events_total[10m]))
+    when: '> 0'
+    for: 0s
+    severity: critical
+    summary: 'Контейнер {{ $labels.name }} на машине {{ $labels.machine }} упал: не хватило памяти'
+
+  - uid: savdex-container-restarts
+    title: Контейнер перезапускается
+    # Выкладка перезапускает контейнер один раз — тревога только на петлю
+    expr: |
+      max by (machine, name) (changes(container_start_time_seconds[30m]))
+    when: '> 3'
+    for: 0s
+    severity: critical
+    summary: 'Контейнер {{ $labels.name }} на машине {{ $labels.machine }} перезапустился {{ printf "%.0f" $values.A.Value }} раз за 30 минут'
