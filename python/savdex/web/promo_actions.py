@@ -34,6 +34,10 @@ class _InsufficientUnitsError(Exception):
     """Единиц на счёте меньше цены продвижения."""
 
 
+class _SlotsTakenError(Exception):
+    """Места продвижения в категории заняли, пока шла покупка."""
+
+
 def _free_slot(kind: dict[str, Any], category_id: int | None) -> bool:
     """PromotionType::hasFreeSlot: мест не ограничено или занято меньше."""
     if kind["slots"] is None:
@@ -118,6 +122,14 @@ def store(request: HttpRequest) -> HttpResponse:
 
     try:
         with transaction.atomic():
+            # Места ограничены: покупки одного вида — по очереди, иначе две
+            # одновременные увидели бы одно свободное место и заняли бы оба
+            if kind["slots"] is not None:
+                _rows("select id from promotion_types where id = %s for update", [kind["id"]])
+
+                if not _free_slot(kind, listing["category_id"]):
+                    raise _SlotsTakenError
+
             if not wallet_store.spend(
                 wallet["id"],
                 "promo_units",
@@ -162,6 +174,10 @@ def store(request: HttpRequest) -> HttpResponse:
             "error",
             ctx.t("messages.promo.not_enough", need=kind["cost_units"], have=wallet["promo_units"]),
         )
+
+        return back(ctx)
+    except _SlotsTakenError:
+        flash(ctx, "error", ctx.t("messages.promo.slots_taken", name=kind["name"]))
 
         return back(ctx)
     except IntegrityError:

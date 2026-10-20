@@ -65,6 +65,12 @@ services:
         value: ru
       - key: APP_DEBUG
         value: "false"
+      # Адрес посетителя (python/savdex/audit.py): балансировщик Render
+      # дописывает справа в X-Forwarded-For того, кто к нему подключился.
+      # Это Cloudflare — тогда адрес из CF-Connecting-IP; кто-то другой
+      # (запрос напрямую на *.onrender.com) — его адрес, а не присланный
+      - key: SAVDEX_PROXY_HOPS
+        value: "1"
       # false на боевой площадке: иначе демонстрационные компании и
       # объявления досеваются в живую базу при каждом деплое
       - key: SEED_DEMO

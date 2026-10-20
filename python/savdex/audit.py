@@ -93,9 +93,24 @@ def label(attributes: Mapping[str, Any], basename: str, key: Any) -> str:  # noq
 
 
 #: Заголовки с адресом посетителя, которые ставит край сети (Cloudflare
-#: перед Render) поверх присланного клиентом: подделать их нельзя.
+#: перед Render) поверх присланного клиентом. Читаются, только если
+#: запрос пришёл с адреса Cloudflare (CLOUDFLARE_NETWORKS): в обход
+#: Cloudflare — напрямую на *.onrender.com или на сервер без него —
+#: заголовок пишет сам посетитель. True-Client-IP не читается: без
+#: тарифа Enterprise Cloudflare пропускает присланный клиентом как есть.
 #: SAVDEX_CLIENT_IP_HEADERS — свой список через запятую, пусто — не читать
-CLIENT_IP_HEADERS = "CF-Connecting-IP,True-Client-IP"
+CLIENT_IP_HEADERS = "CF-Connecting-IP"
+
+#: Адреса Cloudflare (https://www.cloudflare.com/ips/).
+#: SAVDEX_EDGE_NETWORKS — свой список через запятую
+CLOUDFLARE_NETWORKS = (
+    "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
+    "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
+    "197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,"
+    "104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,"
+    "2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,"
+    "2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+)
 
 
 def _ip(value: object) -> str | None:
@@ -115,6 +130,24 @@ def _hops() -> int:
         return 0
 
 
+def _from_edge(peer: str | None) -> bool:
+    """Пришёл ли запрос с края сети (Cloudflare) — тогда его заголовку можно верить."""
+    if peer is None:
+        return False
+
+    address = ipaddress.ip_address(peer)
+    networks = os.environ.get("SAVDEX_EDGE_NETWORKS", CLOUDFLARE_NETWORKS)
+
+    for value in (n.strip() for n in networks.split(",")):
+        try:
+            if value and address in ipaddress.ip_network(value, strict=False):
+                return True
+        except ValueError:
+            continue
+
+    return False
+
+
 def client_ip(request: HttpRequest | None) -> str | None:
     """
     Адрес посетителя — для журнала, сессий и замков от перебора.
@@ -122,21 +155,25 @@ def client_ip(request: HttpRequest | None) -> str | None:
     Render не чистит присланный клиентом X-Forwarded-For, а дописывает к
     нему справа: самый левый адрес (как Request::ip() у Laravel с
     trustProxies('*')) посетитель выбирает сам и обходит замок по IP.
-    Поэтому сначала — заголовок края сети (CF-Connecting-IP), затем
-    X-Forwarded-For с заданным числом своих прокси справа
-    (SAVDEX_PROXY_HOPS), и только без них — по-старому, самый левый.
+    Поэтому сначала — заголовок края сети (CF-Connecting-IP), если
+    запрос пришёл с адреса Cloudflare, затем X-Forwarded-For с заданным
+    числом своих прокси справа (SAVDEX_PROXY_HOPS), и только без них —
+    по-старому, самый левый.
     """
     if request is None:
         return None
 
-    names = os.environ.get("SAVDEX_CLIENT_IP_HEADERS", CLIENT_IP_HEADERS)
-
-    for name in (n.strip() for n in names.split(",")):
-        if name and (found := _ip(request.headers.get(name, ""))) is not None:
-            return found
-
     chain = [part.strip() for part in str(request.META.get("HTTP_X_FORWARDED_FOR", "")).split(",")]
     hops = _hops()
+    # Кто подключился к нашим прокси: его адрес они дописали справа
+    peer = _ip(chain[-hops]) if 0 < hops <= len(chain) else _ip(request.META.get("REMOTE_ADDR"))
+    names = os.environ.get("SAVDEX_CLIENT_IP_HEADERS", CLIENT_IP_HEADERS)
+
+    if _from_edge(peer):
+        for name in (n.strip() for n in names.split(",")):
+            if name and (found := _ip(request.headers.get(name, ""))) is not None:
+                return found
+
     candidate = chain[-hops] if 0 < hops <= len(chain) else chain[0]
 
     for value in (candidate, request.META.get("REMOTE_ADDR")):

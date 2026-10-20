@@ -183,7 +183,14 @@ def _intended(ctx: Context, default: str) -> HttpResponse:
     saved = store.get("url.intended")
     store.forget("url.intended")
 
-    return _to(ctx, saved if isinstance(saved, str) else default)
+    # Сюда попадает и Referer гостя — после входа только на свой сайт:
+    # «https://savdex.uz.evil.com» начинается с корня, но сайт чужой
+    if not isinstance(saved, str) or (
+        saved.startswith("http") and saved != ctx.root and not saved.startswith(ctx.root + "/")
+    ):
+        saved = default
+
+    return _to(ctx, saved)
 
 
 def _guest(ctx: Context) -> HttpResponse | None:

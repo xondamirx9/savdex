@@ -3,19 +3,17 @@
 # Каждую ночь в 03:30 по Ташкенту (22:30 UTC) — копия базы savdex-db
 # с Render: pg_dump только читает и ничего не блокирует, сайт её не
 # замечает. Копия проверяется восстановлением в пустую базу, шифруется
-# паролем и хранится 30 дней как артефакт этого запуска.
+# паролем и хранится 90 дней в хранилище S3 Uztelecom (Ташкент).
 #
-# Репозиторий публичный: артефакт может скачать кто угодно, поэтому
-# без шифрования копия не выкладывается. Пароль — секрет
-# BACKUP_PASSPHRASE (не короче 20 знаков); без него копию не открыть
-# никому, в том числе нам — хранить его отдельно, не только в GitHub.
+# Артефактом запуска копия не выкладывается: репозиторий публичный,
+# артефакт скачал бы кто угодно и подбирал бы пароль у себя сколько
+# угодно долго. Нет ключей хранилища — запуск красный, копия не уходит
+# никуда. Пароль — секрет BACKUP_PASSPHRASE (не короче 20 знаков); без
+# него копию не открыть никому, в том числе нам — хранить его отдельно,
+# не только в GitHub.
 #
 # В журнал запуска не пишется ничего из базы — ни списка таблиц, ни
 # числа записей: журнал публичного репозитория тоже виден всем.
-#
-# Вторая копия того же зашифрованного файла — в хранилище S3 Uztelecom
-# (Ташкент), 90 дней: не зависит ни от GitHub, ни от Render. Пока ключей
-# хранилища нет, этот шаг пропускается с предупреждением.
 #
 # Секреты и переменные (Settings → Secrets and variables → Actions):
 #   BACKUP_DATABASE_URL — External Database URL базы savdex-db из Render
@@ -47,6 +45,9 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
       PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
       # pg_dump новее сервера снимает копию с любой версии PostgreSQL
       # не старше себя — Render может поднять версию базы без нас
       PG_IMAGE: postgres:18
@@ -76,6 +77,12 @@ jobs:
           fi
           if [ "${#PASSPHRASE}" -lt 20 ]; then
             echo "::error::BACKUP_PASSPHRASE короче 20 знаков — для копии в публичном репозитории это слишком слабо."
+            exit 1
+          fi
+          # Без хранилища копию положить некуда: в артефакты публичного
+          # репозитория она не идёт — лучше красный запуск и письмо
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$S3_ENDPOINT" ]; then
+            echo "::error::Нет ключей хранилища Uztelecom (S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT) — копию сохранить некуда (docs/backups.md)."
             exit 1
           fi
 
@@ -136,34 +143,18 @@ jobs:
             savdex.dump 3<<<"$PASSPHRASE"
           shred -u savdex.dump
 
-      - name: Сохранение на 30 дней
-        uses: actions/upload-artifact@v7
-        with:
-          name: savdex-db-${{ steps.dump.outputs.stamp }}
-          path: savdex-${{ steps.dump.outputs.stamp }}.dump.gpg
-          retention-days: 30
-          compression-level: 0
-          if-no-files-found: error
-
       - name: Копия в хранилище Uztelecom
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
           AWS_DEFAULT_REGION: ${{ vars.S3_REGION || 'us-east-1' }}
           # Новые aws-cli шлют контрольные суммы, которых S3-совместимые
           # хранилища не знают; считаются только там, где без них нельзя
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
           S3_BUCKET: ${{ vars.S3_BUCKET || 'savdex' }}
           STAMP: ${{ steps.dump.outputs.stamp }}
           KEEP_DAYS: 90
         run: |
           set -euo pipefail
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$S3_ENDPOINT" ]; then
-            echo "::warning::Нет ключей хранилища Uztelecom (S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT) — копия только в артефактах GitHub."
-            exit 0
-          fi
           s3() { aws --endpoint-url "$S3_ENDPOINT" "$@"; }
           aws configure set default.s3.addressing_style path
 
