@@ -135,6 +135,20 @@ done
 # ── Ключи и пароли превью: создаются один раз ─────────────────────
 secret() { openssl rand -hex 24; }
 
+# Журнал Actions публичный: из строк журнала убираются пароли в адресах
+# (postgresql://user:pass@), значения ключей и токенов, длинные секреты,
+# почты и телефоны (база может быть копией боевой)
+redact() {
+    sed -E \
+        -e 's#(://)[^/@[:space:]]+@#\1[скрыто]@#g' \
+        -e 's/(Bearer|Basic)[[:space:]]+[[:alnum:]._~+\/=-]+/\1 [скрыто]/g' \
+        -e 's/((key|token|secret|passw[a-z]*|pwd|auth[a-z]*|signature|dsn)[[:alnum:]_-]*[\x22\x27]?[[:space:]]*[:=][[:space:]]*[\x22\x27]?)[^[:space:]\x22\x27,;&]+/\1[скрыто]/Ig' \
+        -e 's/[0-9]{6,}:[[:alnum:]_-]{30,}/[токен]/g' \
+        -e 's/[[:alnum:]+\/_-]{32,}={0,2}/[скрыто]/g' \
+        -e 's/[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}/[почта]/g' \
+        -e 's/\+?[0-9][0-9 ()-]{7,}[0-9]/[номер]/g'
+}
+
 set_var() {
     local file="$1" key="$2" value="$3"
     if grep -q "^${key}=" "$file" 2>/dev/null; then
@@ -174,6 +188,9 @@ if [ ! -s "$ENV_DIR/app.env" ]; then
 fi
 set_var "$ENV_DIR/app.env" APP_URL "https://$DOMAIN"
 set_var "$ENV_DIR/app.env" DJANGO_ALLOWED_HOSTS "$DOMAIN,127.0.0.1,localhost"
+# Cloudflare перед превью нет: адрес посетителя — только из
+# X-Forwarded-For, который Caddy пишет сам (python/savdex/audit.py)
+set_var "$ENV_DIR/app.env" SAVDEX_CLIENT_IP_HEADERS ""
 
 # Почта и SMS — те же ключи, что у тестового, и только когда тестовый на
 # демо-данных (staging.yml переносит их туда только так): данные превью
@@ -239,8 +256,7 @@ echo "── Запуск savdex-preview:$tag"
 compose "$tag" up -d --remove-orphans
 if ! wait_healthy "$tag"; then
     echo "ОШИБКА: превью не поднялось. Последние строки журнала:" >&2
-    compose "$tag" logs --tail 80 preview-app 2>&1 \
-        | sed -E 's/[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}/[почта]/g; s/\+?[0-9][0-9 ()-]{7,}[0-9]/[номер]/g' >&2 || true
+    compose "$tag" logs --tail 80 preview-app 2>&1 | redact >&2 || true
     # Неподнявшееся превью память не держит
     compose "$tag" stop || true
     exit 1
@@ -268,6 +284,11 @@ $DOMAIN {
 	import /etc/caddy/auth.caddy
 
 	encode zstd gzip
+
+	# Cloudflare перед сайтом нет: его заголовки с адресом посетителя
+	# ставить некому — пришедшие убираются
+	request_header -CF-Connecting-IP
+	request_header -True-Client-IP
 
 	reverse_proxy preview-app:10000
 

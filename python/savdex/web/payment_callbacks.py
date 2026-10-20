@@ -585,6 +585,11 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
     if existing and existing[0]["state"] == PERFORMED:
         return _gateway_response(True)
 
+    # Неподтверждённое состояние не оживляет отменённую транзакцию и не
+    # затирает её журнал: отмена — конечное состояние, как и оплата
+    if existing and existing[0]["state"] == CANCELLED and status != "paid":
+        return _gateway_response(True)
+
     fields = {
         "payment_id": payment["id"],
         "amount_minor": None,

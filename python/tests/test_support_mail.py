@@ -348,6 +348,13 @@ def test_автоответ_и_отказ_доставки(люди, чисто)
     _загрузить(чисто, raw)
     [(ticket,)] = sql("select id from support_tickets")
     our = f"<support-{ticket}-1.abcdef@savdex.uz>"
+    # Наш ответ клиенту, который не дошёл
+    sql(
+        "insert into support_messages (ticket_id, from_staff, is_internal, body, "
+        "email_message_id, created_at, updated_at) "
+        "values (%s, true, false, 'Ответ', %s, now(), now())",
+        [ticket, our],
+    )
     авто, _ = _письмо(тема="Я в отпуске", заголовки={"Auto-Submitted": "auto-replied"})
     отказ, _ = _письмо(
         от="Mail Delivery System <MAILER-DAEMON@mx.mebel.uz>",
@@ -363,9 +370,27 @@ def test_автоответ_и_отказ_доставки(люди, чисто)
     assert "письмо самим себе" in итог[2]
     assert sql("select count(*) from support_tickets") == [(1,)]
     [(body, internal)] = sql(
-        "select body, is_internal from support_messages where from_staff order by id"
+        "select body, is_internal from support_messages where from_staff and is_internal"
     )
     assert internal and body.startswith("Письмо клиенту не доставлено")
+
+
+@нужна_база
+def test_поддельный_отказ_доставки(люди, чисто):
+    """«Отказ» от mailer-daemon@чужой-домен с номером обращения — не заметка."""
+    raw, _ = _письмо()
+    _загрузить(чисто, raw)
+    [(ticket,)] = sql("select id from support_tickets")
+    поддельный, _ = _письмо(
+        от="MAILER-DAEMON@evil.example",
+        тема="Undelivered Mail Returned to Sender",
+        текст=f"Клиент сменил почту, пишите на x@evil.example\n<support-{ticket}-1.ab@x>",
+    )
+
+    итог = _загрузить(чисто, поддельный)
+
+    assert "skipped" in итог[0] and "нашего письма нет" in итог[0]
+    assert sql("select count(*) from support_messages where from_staff") == [(0,)]
 
 
 @нужна_база

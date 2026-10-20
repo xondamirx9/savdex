@@ -10,6 +10,11 @@
 
 	encode zstd gzip
 
+	# Cloudflare перед сайтом нет: его заголовки с адресом посетителя
+	# ставить некому — пришедшие убираются
+	request_header -CF-Connecting-IP
+	request_header -True-Client-IP
+
 	# Заголовки X-Forwarded-For/-Proto/-Host от посетителя Caddy
 	# отбрасывает и ставит свои (trusted_proxies не задан)
 	reverse_proxy app:10000

@@ -490,16 +490,28 @@ class Outcome:
 
 
 def _bounce(letter: Letter) -> Outcome:
-    """Отказ доставки нашего ответа — внутренней заметкой в его обращение."""
-    match = _OUR_ID.search(letter.raw.decode("utf-8", "replace"))
+    """Отказ доставки нашего ответа — внутренней заметкой в его обращение.
 
-    if match is None:
+    «Отказ» присылает кто угодно: письмо от mailer-daemon@любой-домен с
+    номером обращения в тексте. Поэтому, как и в thread_of, похожий на
+    наш Message-ID — ещё не наш: случайную часть сверяем с отправленным,
+    и обращение берём у найденного письма, а не из номера в тексте.
+    """
+    ids = [m.group(0) for m in _OUR_ID.finditer(letter.raw.decode("utf-8", "replace"))]
+
+    if not ids:
         return Outcome("skipped", reason="отказ доставки не нашему ответу")
 
-    ticket = Ticket.objects.filter(pk=int(match.group(1))).first()
+    sent = (
+        Message.objects.filter(email_message_id__in=ids[:50], from_staff=True)
+        .order_by("-id")
+        .values_list("ticket_id", flat=True)
+        .first()
+    )
+    ticket = Ticket.objects.filter(pk=sent).first() if sent is not None else None
 
     if ticket is None:
-        return Outcome("skipped", reason="отказ доставки: обращения нет")
+        return Outcome("skipped", reason="отказ доставки: нашего письма нет")
 
     detail = " ".join(letter.text.split())[:500]
     Message(
@@ -521,6 +533,9 @@ def accept(raw: bytes) -> Outcome:
         return Outcome("skipped", reason="уже загружено")
 
     if letter.bounce:
+        if spam.is_blocked(letter.from_email):
+            return Outcome("skipped", reason="отправитель в спам-фильтре")
+
         return _bounce(letter)
 
     if not letter.from_email or "@" not in letter.from_email:

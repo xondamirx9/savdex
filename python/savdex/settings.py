@@ -75,6 +75,17 @@ SECRET_KEY_IS_REAL = bool(os.environ.get("DJANGO_SECRET_KEY") or _app_key())
 # local: образ (Dockerfile) и Render задают production сами
 DEBUG = os.environ.get("APP_ENV", "local") in ("local", "testing")
 
+# Ключ разработчика известен всем: им же подписаны куки сообщений, токены
+# отписки и коды Telegram — на боевом их подделал бы кто угодно. Без
+# настоящего ключа боевой сайт не запускается (render-entrypoint создаёт
+# APP_KEY сам, если его нет в панели)
+if not DEBUG and not SECRET_KEY_IS_REAL:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "Не задан ни DJANGO_SECRET_KEY, ни APP_KEY — боевой сайт без ключа не запускается."
+    )
+
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",") if h]
 
 # За Apache и балансировщиком Render: HTTPS снимается снаружи, до Django
@@ -92,8 +103,11 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # - чужим сайтам встраивать страницы площадки нельзя (кликджекинг):
 #   X-Frame-Options и frame-ancestors — только свой сайт (предпросмотр
 #   мини-сайта в кабинете — iframe того же адреса).
-# SAVDEX_FORCE_HTTPS=false выключает HTTPS-часть, если домен ещё без TLS
-FORCE_HTTPS = os.environ.get("SAVDEX_FORCE_HTTPS", "true" if not DEBUG else "false").lower() in (
+# SAVDEX_FORCE_HTTPS=false выключает HTTPS-часть, если домен ещё без TLS.
+# Пустое значение (так в .env.example) — умолчание, а не «выключить»
+FORCE_HTTPS = (
+    os.environ.get("SAVDEX_FORCE_HTTPS") or ("true" if not DEBUG else "false")
+).lower() in (
     "1",
     "true",
     "yes",
