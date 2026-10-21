@@ -1,0 +1,7 @@
+# Сообщить об уязвимости SavdEx / Report a security vulnerability (RFC 9116).
+# Срок (Expires) продлевать раз в год — просроченный файл сканеры не читают.
+Contact: mailto:savdexuz@gmail.com
+Contact: https://t.me/savdex_admin
+Expires: 2027-10-21T00:00:00Z
+Preferred-Languages: ru, uz, en
+Canonical: https://savdex.uz/.well-known/security.txt

@@ -319,6 +319,14 @@ def start(request: HttpRequest) -> tuple[Store, laravel_session.Visitor] | None:
     if "_token" not in store.data:
         store.data["_token"] = random_string()
 
+    # Адрес сайта — для флага Secure кук (_set_cookie). Страница сайта
+    # (request.context) задаёт его и сама, а вход в админку, капча и
+    # колбэки идут мимо неё: без адреса кука сессии — общая с сайтом —
+    # уходила без Secure и могла утечь по http://
+    from savdex.web.request import root_of  # request импортирует session
+
+    store.root = root_of(request)
+
     visitor = _authenticate(request, store, key_list)
     store.user_id = visitor.user_id
     result = (store, visitor)

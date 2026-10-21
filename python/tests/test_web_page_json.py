@@ -20,3 +20,13 @@ def test_нет_знака_меньше():
 
     assert "<" not in text
     assert json.loads(text) == {"props": {"review": ОПАСНОЕ, "list": [ОПАСНОЕ]}}
+
+
+def test_кириллица_как_есть():
+    """Словарь интерфейса — в каждой странице: \\uXXXX втрое раздувал её."""
+    text = page_json({"props": {"name": "Поставщик", "path": "/catalog"}})
+
+    assert "Поставщик" in text and "\\u04" not in text
+    # «/» по-прежнему экранирован, как у json_encode PHP
+    assert "\\/catalog" in text
+    assert json.loads(text) == {"props": {"name": "Поставщик", "path": "/catalog"}}

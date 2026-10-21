@@ -159,6 +159,13 @@ jobs:
           test "$(to http://127.0.0.1:18080/about/)" = "301 http://127.0.0.1:18080/about"
           # /index.php/<адрес> — на чистый адрес
           test "$(to http://127.0.0.1:18080/index.php/about)" = "301 http://127.0.0.1:18080/about"
+          # Контакт для сообщений об уязвимостях (RFC 9116) — файл из public/
+          curl -fsS http://127.0.0.1:18080/.well-known/security.txt | grep -q '^Contact: '
+          # За HTTPS (Caddy, Render) — сразу на https://, без шага через http://
+          test "$(to -H 'X-Forwarded-Proto: https' http://127.0.0.1:18080/about/)" \
+            = "301 https://127.0.0.1:18080/about"
+          test "$(to -H 'X-Forwarded-Proto: https' http://127.0.0.1:18080/index.php/about)" \
+            = "301 https://127.0.0.1:18080/about"
           # Служебный адрес Render — на свой домен (CanonicalHost)
           test "$(to -H 'Host: savdex-ci.onrender.com' http://127.0.0.1:18080/about)" \
             = "301 http://127.0.0.1:18080/about"
