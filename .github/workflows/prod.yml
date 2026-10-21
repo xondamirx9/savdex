@@ -36,7 +36,10 @@
 #   в поле подтверждения; после переезда (PROD_LIVE=true) — запрещено;
 # - каждый запуск — база (prod-db.sh, копии в S3 по расписанию), сборка
 #   образа на машине админки и отправка его на машину сайта
-#   (prod-build.sh), схема базы, админка, сайт (prod-app.sh).
+#   (prod-build.sh), схема базы, админка, сайт (prod-app.sh);
+# - «проверить восстановление» — после релиза поднять последнюю ночную
+#   копию базы во временной базе и сверить с боевой (backup.sh check; по
+#   расписанию — и так каждое утро).
 #
 # В GitHub Actions машины видны так: машина сайта — по публичному IP
 # сети savdex-prod (на неё переадресованы порты 22, 80 и 443), машины
@@ -48,7 +51,8 @@
 #   secrets.BACKUP_DATABASE_URL  база Render — для «копии с Render»
 #   secrets.BACKUP_PASSPHRASE    пароль шифрования копий (docs/backups.md)
 #   secrets.S3_ACCESS_KEY, S3_SECRET_KEY, vars.S3_ENDPOINT — хранилище Uztelecom
-#   secrets.HC_PING_DB, HC_PING_FILES  сигналы копий в Healthchecks.io (docs/monitoring.md)
+#   secrets.HC_PING_DB, HC_PING_FILES, HC_PING_RESTORE  сигналы копий и
+#                                проверки восстановления в Healthchecks.io (docs/monitoring.md)
 #   vars.GRAFANA_PROM_URL, GRAFANA_PROM_USER, secrets.GRAFANA_ALLOY_TOKEN — агент
 #                                мониторинга Grafana Alloy (docs/monitoring.md)
 #   vars.RENDER_SSH              адрес SSH службы Render — настройки и файлы
@@ -90,6 +94,10 @@ on:
         description: 'Для копии с Render — напишите «да»'
         required: false
         default: ''
+      restore_check:
+        description: 'После релиза — проверить восстановление из ночной копии базы'
+        type: boolean
+        default: false
 
 concurrency:
   group: prod
@@ -400,6 +408,7 @@ jobs:
           # Сигналы копий в Healthchecks.io (docs/monitoring.md); нет — без них
           HC_PING_DB: ${{ secrets.HC_PING_DB }}
           HC_PING_FILES: ${{ secrets.HC_PING_FILES }}
+          HC_PING_RESTORE: ${{ secrets.HC_PING_RESTORE }}
         run: |
           set -euo pipefail
           # Ключи хранилища и пароль шифрования копий — на машину базы,
@@ -413,6 +422,7 @@ jobs:
               printf 'BACKUP_PASSPHRASE=%q\n' "$BACKUP_PASSPHRASE"
               if [ -n "$HC_PING_DB" ]; then printf 'HC_PING_DB=%q\n' "$HC_PING_DB"; fi
               if [ -n "$HC_PING_FILES" ]; then printf 'HC_PING_FILES=%q\n' "$HC_PING_FILES"; fi
+              if [ -n "$HC_PING_RESTORE" ]; then printf 'HC_PING_RESTORE=%q\n' "$HC_PING_RESTORE"; fi
             } | ssh db 'umask 077; mkdir -p /opt/savdex/env; cat > /opt/savdex/env/backup.env'
           else
             echo "::warning::Нет ключей хранилища или BACKUP_PASSPHRASE — копии с машины базы не пойдут."
@@ -650,3 +660,24 @@ jobs:
             -f state=success -f environment_url="https://$SITE_DOMAIN" \
             -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
           echo "Готово: https://$SITE_DOMAIN — \`${sha:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверка восстановления
+        # Галочка «проверить восстановление»: последняя ночная копия базы —
+        # из хранилища во временную базу на машине базы и сверка с боевой
+        # (deploy/server/backup.sh check; по расписанию — каждое утро).
+        # Релиз уже выложен и записан: сбой здесь — предупреждение, а не
+        # упавший релиз. Вывод — без данных из базы
+        if: inputs.restore_check
+        run: |
+          set -uo pipefail
+          if out=$(ssh db 'bash /opt/savdex/src/deploy/server/backup.sh check' 2>&1); then
+            echo "$out"
+            result=$(printf '%s\n' "$out" | grep -m 1 'Проверка восстановления:' | sed 's/^.*Проверка восстановления: //')
+            echo "::notice title=Восстановление из копии::$result"
+            echo "Восстановление из копии: $result" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            reason=$(printf '%s\n' "$out" | grep -m 1 'ОШИБКА' | sed 's/^.*ОШИБКА[^:]*: //')
+            echo "::warning title=Восстановление из копии::${reason:-проверка не прошла — журнал выше}"
+          fi
+          exit 0
