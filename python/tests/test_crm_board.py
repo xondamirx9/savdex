@@ -166,6 +166,86 @@ def test_продавец_свои_и_ничьи_модератор_все_и_н
     assert поддержка["status"] == 403
 
 
+def _стройбаза() -> int:
+    sql("delete from companies where slug = 'stroybaza'")
+    [(company,)] = sql(
+        "insert into companies (name, slug, status, created_at, updated_at) "
+        "values ('Стройбаза', 'stroybaza', 'active', now(), now()) returning id"
+    )
+
+    return int(company)
+
+
+def test_модератор_видит_лида_без_контактов(люди):
+    pk = _лид(
+        "Цемент М400",
+        люди["sales"],
+        source="call",
+        company_id=_стройбаза(),
+        contact_name="Иван Петров",
+        contact_phone="+998901112233",
+        contact_email="ivan@stroybaza.uz",
+        note="Ждёт скидку от объёма",
+    )
+
+    _, доска, архив, лид, поиск = django(
+        люди["moderator"],
+        ("get", LEADS, None),
+        ("get", LEADS + "archive/", None),
+        ("get", f"{LEADS}{pk}/change/", None),
+        ("get", LEADS + "?q=901112233", None),
+    )
+
+    for ответ in (доска, архив, лид):
+        assert ответ["status"] == 200
+        assert "Цемент М400" in ответ["body"] and "Стройбаза" in ответ["body"]
+        assert "Иван Петров" in ответ["body"]
+        assert "901112233" not in ответ["body"] and "ivan@stroybaza.uz" not in ответ["body"]
+        assert "Ждёт скидку" not in ответ["body"]
+    assert "Звонок" in архив["body"] and "Звонок" in лид["body"], "откуда лид — видно"
+    assert "Цемент М400" not in поиск["body"], "по телефону не ищет: выдал бы, чей номер"
+
+    _, доска, лид, поиск = django(
+        люди["admin"],
+        ("get", LEADS, None),
+        ("get", f"{LEADS}{pk}/change/", None),
+        ("get", LEADS + "?q=901112233", None),
+    )
+
+    assert "901112233" in доска["body"]
+    assert "ivan@stroybaza.uz" in лид["body"] and "Ждёт скидку" in лид["body"]
+    assert "Цемент М400" in поиск["body"]
+
+
+def test_модератор_видит_сделку_без_суммы(люди):
+    pk = _сделка(
+        "Поставка арматуры",
+        люди["sales"],
+        company_id=_стройбаза(),
+        amount=46386000,
+        note="Скидка по договору",
+    )
+
+    _, доска, архив, сделка = django(
+        люди["moderator"],
+        ("get", DEALS, None),
+        ("get", DEALS + "archive/", None),
+        ("get", f"{DEALS}{pk}/change/", None),
+    )
+
+    for ответ in (доска, архив, сделка):
+        assert ответ["status"] == 200
+        assert "Поставка арматуры" in ответ["body"] and "Стройбаза" in ответ["body"]
+        assert "46 386 000" not in ответ["body"] and "46386000" not in ответ["body"]
+        assert "Скидка по договору" not in ответ["body"]
+    assert "Итого" not in архив["body"]
+
+    _, доска, архив = django(люди["admin"], ("get", DEALS, None), ("get", DEALS + "archive/", None))
+
+    assert "46 386 000" in доска["body"]
+    assert "Итого" in архив["body"] and "46 386 000" in архив["body"]
+
+
 def test_окно_спрашивает_поля_этапа(люди):
     _лид("Лид", люди["sales"])
 

@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from .pg_admin import django, sql, журнал, нужна_база, свежая_база, сотрудник
+from .pg_admin import КОРЕНЬ, django, sql, журнал, нужна_база, свежая_база, сотрудник
 
 pytestmark = нужна_база
 
@@ -121,7 +121,8 @@ def test_принять_документ(люди):
     _, страница = django(люди["moderator"], ("get", f"{DOCS}{pk}/change/", None))
     ответ = _решить(люди["moderator"], f"{DOCS}{pk}/", "approve")
 
-    assert f'href="/files/{pk}"' in страница["body"]
+    # Своя ссылка админки: на сайте документ проверки открыт только компании
+    assert f'href="{DOCS}{pk}/file/"' in страница["body"]
     assert ответ["status"] == 302
     assert sql("select moderation_status, moderated_by from company_documents") == [
         ("approved", люди["moderator"])
@@ -135,6 +136,34 @@ def test_принять_документ(люди):
     )
     assert changes["after"]["moderation_status"] == "approved"
     assert sql("select verification_level from companies") == [(0,)], "уровень не меняется"
+
+
+def test_файл_документа_открывает_тот_кто_проверяет(люди):
+    диск = КОРЕНЬ / "storage/app/private/documents"
+    диск.mkdir(parents=True, exist_ok=True)
+    (диск / "admin-test.txt").write_text("Скан лицензии", encoding="utf-8")
+    company = _компания()
+    pk = _документ(company, file_path="documents/admin-test.txt")
+    без_файла = _документ(company, file_path="documents/nothing-here.pdf")
+    материал = _документ(company, type="presentation", file_path="documents/admin-test.txt")
+
+    try:
+        _, модератор, нет_файла, не_документ = django(
+            люди["moderator"],
+            ("get", f"{DOCS}{pk}/file/", None),
+            ("get", f"{DOCS}{без_файла}/file/", None),
+            ("get", f"{DOCS}{материал}/file/", None),
+        )
+        _, администратор = django(люди["admin"], ("get", f"{DOCS}{pk}/file/", None))
+        _, поддержка = django(люди["support"], ("get", f"{DOCS}{pk}/file/", None))
+    finally:
+        (диск / "admin-test.txt").unlink()
+
+    assert модератор["status"] == 200 and модератор["body"] == "Скан лицензии"
+    assert администратор["status"] == 200, "администратор смотрит раздел — и файл"
+    assert нет_файла["status"] == 404
+    assert не_документ["status"] == 403, "материалы — не из этого раздела"
+    assert поддержка["status"] == 403, "без раздела «Документы на проверку» — нет"
 
 
 def test_отклонить_документ_с_причиной(люди):

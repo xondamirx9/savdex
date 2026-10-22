@@ -1,7 +1,7 @@
 """
 Скачивание файлов на Django: файлы компании
-(/files/<номер>: своим — всё, прочим — показанное на визитке,
-фотографии — inline) и файлы IT-задачи (/it-services/files/<номер>:
+(/files/<номер>: своим — всё, прочим — материалы с визитки, документы
+проверки — никогда; фотографии — inline) и файлы IT-задачи (/it-services/files/<номер>:
 только вошедшим; закрытой задачи — только заказчику). Проверяются статус,
 тип, размер, Content-Disposition (ASCII-запас и filename*) и байты.
 
@@ -55,6 +55,7 @@ def сайт() -> Iterator[str]:
         (other, "catalog", "Каталог «Цемент» 2027", "docs/a.pdf", True, "approved"),
         (other, "license", "Лицензия/ТЗ", "docs/b.docx", True, "pending"),
         (other, "certificate", "Сертификат", "docs/c.png", True, "approved"),
+        (other, "other", "Фото склада", "docs/c.png", True, "approved"),
         (other, "price_list", "Прайс", "docs/d.txt", False, "approved"),
         (other, "other", "..", "docs/e.zip", True, "approved"),
         (mine, "license", "Своя лицензия", "docs/b.docx", False, "pending"),
@@ -179,8 +180,11 @@ def _нет() -> dict[str, Any]:
     ),
     # Лицензия на проверке у чужой компании — никому, кроме её людей
     ("Лицензия/ТЗ", "other"): (_нет(), _нет()),
+    # Документ проверки, одобренный и на визитке, — всё равно только
+    # своим: в нём ИНН, печати, подписи (модератор — из админки)
+    ("Сертификат", "other"): (_нет(), _нет()),
     # Фотография — inline, имя файла с диска
-    ("Сертификат", "other"): (
+    ("Фото склада", "other"): (
         _файл("docs/c.png", "image/png", "inline; filename=c.png"),
         _файл("docs/c.png", "image/png", "inline; filename=c.png"),
     ),
@@ -204,6 +208,7 @@ def _нет() -> dict[str, Any]:
         ("Каталог «Цемент» 2027", "other"),
         ("Лицензия/ТЗ", "other"),
         ("Сертификат", "other"),
+        ("Фото склада", "other"),
         ("Прайс", "other"),
         ("..", "other"),
         ("Своя лицензия", "mine"),

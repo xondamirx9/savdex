@@ -185,6 +185,8 @@ def test_визитка_гостю(сайт, path, locale):
     # Материал (прайс) — сразу; документы — после одобрения; пропавший с диска не виден
     assert [f["title"] for f in props["files"]] == ["Лицензия", "Прайс", "Качество"]
     assert [f["expired"] for f in props["files"]] == [True, False, False]
+    # Скан документа проверки — не в галерею: файл чужим не отдаётся
+    assert [f["is_image"] for f in props["files"]] == [False, False, False]
     # Отзывы — опубликованные; автор удалён — без имени
     assert [r["rating"] for r in props["reviews"]] == [5, 3]
     assert props["reviews"][0]["author"] == "Андижан Текстиль"

@@ -140,7 +140,8 @@ _MATRIX: dict[str, dict[str, str]] = {
         "companies": "m", "listings": "m", "tenders": "m", "ittasks": "m",
         "documents": "m", "resumes": "m", "reviews": "m", "complaints": "m",
         # Доски лидов и сделок — все, но только смотреть: переводить
-        # карточки по этапам модератор не может
+        # карточки по этапам модератор не может, а телефонов, почт, сумм
+        # и заметок не видит (_DETAILS_HIDDEN)
         "leads": "r", "deals": "r",
         "catalogs": "r",
         "maintenance": "w",
@@ -200,6 +201,22 @@ def abilities_for(role: str | None) -> list[str]:
 def scope_is_own(role: str | None, section: str) -> bool:
     """AdminAccess::scopeIsOwn(): видит ли роль в разделе только свои записи."""
     return _MATRIX.get(role or "", {}).get(section, "").endswith("o")
+
+
+#: Разделы, где роль видит записи, но не подробности: имя, источник и
+#: компанию — да; телефон, почту, суммы и заметки — нет. Модератору
+#: доски лидов и сделок нужны, чтобы понимать, от кого пришёл контент, а
+#: базу контактов клиентов видеть ему незачем (решение владельца,
+#: 22 октября 2026; admin-roles.md §5.6). Такого в PHP не было — matrix
+#: и parity-тест это не затрагивает
+_DETAILS_HIDDEN: dict[str, frozenset[str]] = {
+    MODERATOR: frozenset({"leads", "deals"}),
+}
+
+
+def details_hidden(role: str | None, section: str) -> bool:
+    """Прячутся ли от роли телефоны, почты, суммы и заметки записей раздела."""
+    return section in _DETAILS_HIDDEN.get(role or "", frozenset())
 
 
 def _strings(value: Any) -> list[str]:  # noqa: ANN401
@@ -268,3 +285,7 @@ class Admin:
     def scope_is_own(self, section: str) -> bool:
         """User::adminScopeIsOwn()."""
         return not self.is_superadmin and scope_is_own(self.role, section)
+
+    def sees_details(self, section: str) -> bool:
+        """Видны ли телефоны, почты, суммы и заметки записей раздела."""
+        return self.is_superadmin or not details_hidden(self.role, section)

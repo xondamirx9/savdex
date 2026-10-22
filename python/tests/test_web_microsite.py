@@ -397,3 +397,38 @@ def test_контакты_из_регистрации(сайт):
         # Почта в «Моих контактах» скрыта — не подставляется
         ("whatsapp", "+998 93 111-11-11", "https://wa.me/998931111111"),
     ]
+
+
+def test_документ_проверки_без_ссылки_на_файл(сайт):
+    """
+    Лицензия на мини-сайте — «проверена», но без адреса и не в галерее:
+    её файл чужим не отдаётся (downloads._company_file).
+    """
+    сброс()()
+    [(cid,)] = sql("select id from companies where slug = 'mine'")
+    диск = Path(КОРЕНЬ) / "storage/app/private/docs-microsite"
+    диск.mkdir(parents=True, exist_ok=True)
+    (диск / "scan.png").write_bytes(b"png")
+    (диск / "price.pdf").write_bytes(b"pdf")
+
+    for вид, title, файл in [
+        ("license", "Лицензия", "scan.png"),
+        ("price_list", "Прайс", "price.pdf"),
+        ("other", "Склад", "scan.png"),
+    ]:
+        sql(
+            "insert into company_documents (company_id, type, title, file_path, file_size, "
+            "mime, is_public, moderation_status, created_at, updated_at) values "
+            "(%s, %s, %s, %s, 10, 'x', true, 'approved', now(), now())",
+            [cid, вид, title, f"docs-microsite/{файл}"],
+        )
+
+    try:
+        props = мини_сайт(открыть(сайт, "/s/mine"))
+    finally:
+        sql("delete from company_documents where company_id = %s", [cid])
+
+    файлы = {f["title"]: f for f in props["files"]}
+    assert файлы["Лицензия"]["url"] is None and файлы["Лицензия"]["is_image"] is False
+    assert файлы["Прайс"]["url"] == f"/files/{файлы['Прайс']['id']}"
+    assert файлы["Склад"]["is_image"] is True, "фото склада — материал, в галерею"

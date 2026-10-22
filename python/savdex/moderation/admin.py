@@ -34,7 +34,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import connection, transaction
 from django.db.models import Q, QuerySet
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -979,9 +979,11 @@ class CompanyDocumentAdmin(SavdexModelAdmin):
 
     @admin.display(description="файл")
     def file(self, obj: CompanyDocument) -> str:
-        # Решать, не открыв документ, нельзя — ссылка на скачивание
+        # Решать, не открыв документ, нельзя — ссылка на скачивание. Своя,
+        # а не /files/: на сайте документ проверки открыт только компании
         return format_html(
-            '<a href="/files/{}" target="_blank" rel="noopener">Открыть файл</a>', obj.pk
+            '<a href="{}" target="_blank" rel="noopener">Открыть файл</a>',
+            reverse("savdex_admin:moderation_companydocument_file", args=[obj.pk]),
         )
 
     # ── Решения ──
@@ -1007,8 +1009,31 @@ class CompanyDocumentAdmin(SavdexModelAdmin):
                 self.admin_site.admin_view(self.decide_view),
                 name="moderation_companydocument_decide",
             ),
+            path(
+                "<path:object_id>/file/",
+                self.admin_site.admin_view(self.file_view),
+                name="moderation_companydocument_file",
+            ),
             *super().get_urls(),
         ]
+
+    def file_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
+        """Файл документа — тому, кто видит раздел «Документы на проверку»."""
+        from savdex.web.downloads import document_response
+
+        document = self.get_object(request, object_id)
+
+        if not isinstance(document, CompanyDocument) or not self.has_view_permission(
+            request, document
+        ):
+            raise PermissionDenied
+
+        response = document_response(document.file_path or "", document.title)
+
+        if response is None:
+            raise Http404("Файла нет на диске")
+
+        return response
 
     def decide_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
         if request.method != "POST" or not self.can_decide(request):

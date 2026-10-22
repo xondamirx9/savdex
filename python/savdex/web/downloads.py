@@ -139,8 +139,14 @@ def company_file(request: HttpRequest, document_id: str) -> HttpResponse:
 
 def _company_file(ctx: Context, document_id: int) -> HttpResponse:
     """
-    Своим — всё, прочим — показанное на визитке действующей компании:
+    Своим — всё, прочим — материалы с визитки действующей компании:
     у заблокированной и удалённой визитки нет, нет и файлов.
+
+    Документы проверки (свидетельство, лицензии, сертификаты) — только
+    своим, даже одобренные: в них ИНН, печати и подписи, компания даёт
+    их на проверку, а не для публикации. Модератор открывает их из
+    админки (CompanyDocumentAdmin.file_view), на визитке — только тип,
+    срок и «проверено».
     """
     rows = _rows(
         "select d.*, c.status as company_status from company_documents d "
@@ -155,19 +161,22 @@ def _company_file(ctx: Context, document_id: int) -> HttpResponse:
     document = rows[0]
     own = _viewer_company(ctx) == document["company_id"]
     material = document["type"] in ("presentation", "price_list", "catalog", "other")
-    visible = (
-        document["company_status"] == "active"
-        and document["is_public"]
-        and (material or document["moderation_status"] == "approved")
-    )
+    visible = document["company_status"] == "active" and document["is_public"] and material
 
     if not own and not visible:
         return not_found(ctx)
 
-    path = private_root() / document["file_path"]
+    response = document_response(str(document["file_path"] or ""), str(document["title"]))
 
-    if not path.is_file():
-        return not_found(ctx)
+    return response if response is not None else not_found(ctx)
+
+
+def document_response(file_path: str, title: str) -> HttpResponse | None:
+    """Файл компании с приватного диска; None — файла на диске нет."""
+    path = private_root() / file_path
+
+    if not file_path or not path.is_file():
+        return None
 
     extension = path.suffix.lstrip(".")
 
@@ -175,7 +184,7 @@ def _company_file(ctx: Context, document_id: int) -> HttpResponse:
     if extension.lower() in ("jpg", "jpeg", "png", "webp"):
         return _file_response(path, "inline", path.name)
 
-    name = _human_name(str(document["title"]))
+    name = _human_name(title)
 
     return _file_response(path, "attachment", (name or "file") + "." + extension)
 

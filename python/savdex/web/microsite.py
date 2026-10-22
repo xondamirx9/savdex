@@ -327,18 +327,22 @@ def _files(ctx: Context, company_id: int) -> list[dict[str, Any]]:
             continue
 
         label = ctx.t(f"cabinet.files.types.{d['type']}")
+        material = d["type"] in MATERIAL_TYPES
         result.append(
             {
                 "id": d["id"],
                 "title": d["title"],
-                "is_image": _extension(str(d["file_path"] or "")).lower()
-                in ("jpg", "jpeg", "png", "webp"),
+                # Документ проверки — не в галерею: его файл чужим не отдаётся
+                "is_image": material
+                and _extension(str(d["file_path"] or "")).lower() in ("jpg", "jpeg", "png", "webp"),
                 "type_label": label
                 if label != f"ui.cabinet.files.types.{d['type']}"
                 else d["type"],
                 "size": _file_size(d["file_size"], ctx.locale),
-                # Относительный адрес: скачивание открыто и на домене мини-сайтов
-                "url": f"/files/{d['id']}",
+                # Относительный адрес: скачивание открыто и на домене
+                # мини-сайтов. Документ проверки — без файла, только
+                # «проверено» (downloads._company_file)
+                "url": f"/files/{d['id']}" if material else None,
             }
         )
 
