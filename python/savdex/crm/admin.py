@@ -418,7 +418,12 @@ class LeadForm(forms.ModelForm):  # type: ignore[type-arg]
     def clean(self) -> dict[str, Any]:
         data: dict[str, Any] = super().clean() or {}
 
-        if data.get("status") == "lost" and not data.get("lost_reason"):
+        # Поля нет у того, кому заметки не видны (OnBoard.detail_fields)
+        if (
+            data.get("status") == "lost"
+            and not data.get("lost_reason")
+            and "lost_reason" in self.fields
+        ):
             self.add_error("lost_reason", "Укажите причину отказа.")
 
         return data
@@ -504,6 +509,37 @@ class OnBoard(Scoped):
 
     archive_title: ClassVar[str]
     change_list_template = "admin/crm/archive.html"
+    #: Что не видит роль без подробностей (Admin.sees_details): поля
+    #: карточки и столбцы списка с телефонами, почтами, суммами, заметками
+    detail_fields: ClassVar[tuple[str, ...]] = ()
+    detail_columns: ClassVar[tuple[str, ...]] = ()
+
+    def sees_details(self, request: HttpRequest) -> bool:
+        return _admin_of(request).sees_details(self.section)
+
+    def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:  # noqa: ANN401
+        fieldsets = super().get_fieldsets(request, obj)
+
+        if self.sees_details(request):
+            return fieldsets
+
+        trimmed = []
+
+        for title, options in fieldsets:
+            fields = tuple(f for f in options.get("fields", ()) if f not in self.detail_fields)
+
+            if fields:
+                trimmed.append((title, {**options, "fields": fields}))
+
+        return trimmed
+
+    def get_list_display(self, request: HttpRequest) -> Any:  # noqa: ANN401
+        shown = super().get_list_display(request)
+
+        if self.sees_details(request):
+            return shown
+
+        return tuple(column for column in shown if column not in self.detail_columns)
 
     def owner_field(self, request: HttpRequest, **kwargs: Any) -> forms.ModelChoiceField:  # type: ignore[type-arg]
         """
@@ -710,6 +746,8 @@ class LeadAdmin(OnBoard):
         ("Работа по лиду", {"fields": ("note", "lost_reason")}),
     )
     list_display = ("lead", "who", "phone", "state", "owner_name", "created_at")
+    detail_fields = ("contact_phone", "contact_email", "note", "lost_reason")
+    detail_columns = ("phone",)
     list_filter = (LeadOutcome, LeadStage, "source", LeadOwner)
     list_select_related = ("company", "contact", "owner")
     search_fields = ("title",)
@@ -962,7 +1000,12 @@ class DealForm(forms.ModelForm):  # type: ignore[type-arg]
     def clean(self) -> dict[str, Any]:
         data: dict[str, Any] = super().clean() or {}
 
-        if data.get("stage") == "lost" and not data.get("lost_reason"):
+        # Поля нет у того, кому заметки не видны (OnBoard.detail_fields)
+        if (
+            data.get("stage") == "lost"
+            and not data.get("lost_reason")
+            and "lost_reason" in self.fields
+        ):
             self.add_error("lost_reason", "Укажите причину проигрыша.")
 
         return data
@@ -1019,6 +1062,8 @@ class DealAdmin(OnBoard):
         ("Работа по сделке", {"fields": ("note", "lost_reason")}),
     )
     list_display = ("deal", "total", "state", "owner_name", "expected")
+    detail_fields = ("amount", "currency", "note", "lost_reason")
+    detail_columns = ("total",)
     list_filter = (DealOutcome, DealStage, DealMine)
     list_select_related = ("company", "owner")
     search_fields = ("title",)
@@ -1062,8 +1107,13 @@ class DealAdmin(OnBoard):
     def changelist_view(self, request: HttpRequest, extra_context: Any = None) -> HttpResponse:  # noqa: ANN401
         response = super().changelist_view(request, extra_context)
 
-        # «Итого» под суммой, как Sum у Filament — по отобранным
-        if isinstance(response, TemplateResponse) and response.context_data is not None:
+        # «Итого» под суммой, как Sum у Filament — по отобранным; кому
+        # суммы не видны — и итога нет
+        if (
+            isinstance(response, TemplateResponse)
+            and response.context_data is not None
+            and self.sees_details(request)
+        ):
             changelist = response.context_data.get("cl")
 
             if changelist is not None:

@@ -259,7 +259,12 @@ def filtered(admin_: Scoped, request: HttpRequest) -> QuerySet[Any]:
         fields = ["title", "company__name"]
 
         if admin_.model is Lead:
-            fields += ["contact_name", "contact_phone", "contact__name"]
+            fields += ["contact_name", "contact__name"]
+
+            # По телефону ищет только тот, кому телефоны видны: иначе
+            # поиск выдал бы, чей это номер
+            if staff.sees_details(admin_.section):
+                fields.append("contact_phone")
 
         queryset = queryset.filter(search.match(fields, query))
 
@@ -271,6 +276,7 @@ def _card(admin_: Scoped, obj: Any, stage: Stage | None, rights: dict[str, bool]
     late = bool(stage and stage.is_open and stage.limit_days and days > stage.limit_days)
     info = admin_.model._meta
     is_lead = isinstance(obj, Lead)
+    is_deal = isinstance(obj, Deal)
 
     if is_lead:
         contact = obj.contact if obj.contact_id else None
@@ -279,6 +285,14 @@ def _card(admin_: Scoped, obj: Any, stage: Stage | None, rights: dict[str, bool]
         phone = (contact.phone if live and contact is not None else None) or obj.contact_phone or ""
     else:
         who, phone = "", ""
+
+    # Без подробностей (Admin.sees_details): имя и компания — да,
+    # телефон и сумма — нет
+    if not rights["details"]:
+        phone = ""
+        is_deal_money = False
+    else:
+        is_deal_money = is_deal
 
     name = f"savdex_admin:{info.app_label}_{info.model_name}"
 
@@ -295,9 +309,9 @@ def _card(admin_: Scoped, obj: Any, stage: Stage | None, rights: dict[str, bool]
         "phone": phone,
         "owner": obj.owner.name if obj.owner is not None else "",
         "owner_id": obj.owner_id or "",
-        "money": obj.money() if isinstance(obj, Deal) else "",
-        "amount": obj.amount if isinstance(obj, Deal) else "",
-        "currency": obj.currency if isinstance(obj, Deal) else "",
+        "money": obj.money() if is_deal_money else "",
+        "amount": obj.amount if is_deal_money else "",
+        "currency": obj.currency if is_deal_money else "",
         "expected": obj.expected_close_at.strftime("%Y-%m-%d")
         if isinstance(obj, Deal) and obj.expected_close_at
         else "",
@@ -331,6 +345,7 @@ def build(admin_: Scoped, request: HttpRequest) -> dict[str, Any]:
         "claim": staff.can(f"{section}.edit") and admin_.model is Lead,
         "convert": staff.can("deals.create"),
         "assign": staff.can(f"{section}.edit") and not staff.scope_is_own(section),
+        "details": staff.sees_details(section),
     }
 
     if admin_.model is Lead:
