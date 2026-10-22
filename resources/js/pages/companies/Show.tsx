@@ -387,25 +387,44 @@ export default function CompanyShow({
                                 {t('company.documents')}
                             </h2>
                             <div className="files-grid">
-                                {files.filter((f) => !f.is_image).map((f) => (
-                                    <a key={f.id} href={`/files/${f.id}`} className="file-card">
-                                        <span className="ico-box ico-box-sm">
-                                            <FileText aria-hidden className="size-4" />
-                                        </span>
-                                        <span style={{ minWidth: 0, flex: 1 }}>
-                                            <span className="file-title">{f.title}</span>
-                                            <span className="t-caption muted">
-                                                {f.type_label}
-                                                {f.size && ` · ${f.size}`}
-                                                {f.valid_until && ` · ${t('company.valid_until', { date: f.valid_until })}`}
+                                {files.filter((f) => !f.is_image).map((f) => {
+                                    const body = (
+                                        <>
+                                            <span className="ico-box ico-box-sm">
+                                                <FileText aria-hidden className="size-4" />
                                             </span>
-                                        </span>
-                                        {/* Просроченный документ не молчим: он не подтверждает
-                                            ничего, и партнёр должен это видеть до звонка */}
-                                        {f.expired && <span className="badge badge-danger">{t('company.expired')}</span>}
-                                        <Download aria-hidden className="size-4 shrink-0 muted" />
-                                    </a>
-                                ))}
+                                            <span style={{ minWidth: 0, flex: 1 }}>
+                                                <span className="file-title">{f.title}</span>
+                                                <span className="t-caption muted">
+                                                    {f.type_label}
+                                                    {f.size && ` · ${f.size}`}
+                                                    {f.valid_until && ` · ${t('company.valid_until', { date: f.valid_until })}`}
+                                                </span>
+                                            </span>
+                                            {/* Просроченный документ не молчим: он не подтверждает
+                                                ничего, и партнёр должен это видеть до звонка */}
+                                            {f.expired && <span className="badge badge-danger">{t('company.expired')}</span>}
+                                        </>
+                                    );
+
+                                    // Документ проверки (свидетельство, лицензия) — без файла:
+                                    // его скачивают только сама компания и модератор
+                                    return f.is_material ? (
+                                        <a key={f.id} href={`/files/${f.id}`} className="file-card">
+                                            {body}
+                                            <Download aria-hidden className="size-4 shrink-0 muted" />
+                                        </a>
+                                    ) : (
+                                        <div key={f.id} className="file-card">
+                                            {body}
+                                            {!f.expired && (
+                                                <span className="badge badge-verified">
+                                                    <CheckCircle2 aria-hidden className="size-3.5" /> {t('cabinet.company.doc_approved')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

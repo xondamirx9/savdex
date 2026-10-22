@@ -250,8 +250,10 @@ def _files(ctx: Context, company_id: int) -> list[dict[str, Any]]:
                 "id": d["id"],
                 "title": d["title"],
                 "type": d["type"],
-                "is_image": _extension(str(d["file_path"] or "")).lower()
-                in ("jpg", "jpeg", "png", "webp"),
+                # Документ проверки — не в галерею: его файл чужим не
+                # отдаётся, на визитке — только тип, срок и «проверено»
+                "is_image": material
+                and _extension(str(d["file_path"] or "")).lower() in ("jpg", "jpeg", "png", "webp"),
                 "type_label": label
                 if label != f"ui.cabinet.files.types.{d['type']}"
                 else d["type"],

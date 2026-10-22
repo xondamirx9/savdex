@@ -80,7 +80,8 @@ type SiteFile = {
     is_image: boolean;
     type_label: string;
     size: string;
-    url: string;
+    /** null — документ проверки: файл чужим не отдаётся */
+    url: string | null;
 };
 
 type Reviews = {
@@ -395,8 +396,9 @@ function ProductTile({ product: p }: { product: SiteProduct }) {
 }
 
 function Documents({ files }: { files: SiteFile[] }) {
-    const images = files.filter((f) => f.is_image);
-    const docs = files.filter((f) => !f.is_image);
+    const isPhoto = (f: SiteFile): f is SiteFile & { url: string } => f.is_image && f.url !== null;
+    const images = files.filter(isPhoto);
+    const docs = files.filter((f) => !isPhoto(f));
 
     return (
         <>
@@ -411,9 +413,9 @@ function Documents({ files }: { files: SiteFile[] }) {
             )}
             {docs.length > 0 && (
                 <ul className="ms-docs">
-                    {docs.map((f) => (
-                        <li key={f.id}>
-                            <a href={f.url} className="ms-card ms-doc">
+                    {docs.map((f) => {
+                        const body = (
+                            <>
                                 <FileText aria-hidden className="size-5 shrink-0" />
                                 <span className="ms-doc-title">
                                     {f.title}
@@ -421,10 +423,27 @@ function Documents({ files }: { files: SiteFile[] }) {
                                         {f.type_label} · {f.size}
                                     </small>
                                 </span>
-                                <Download aria-hidden className="size-4 shrink-0" />
-                            </a>
-                        </li>
-                    ))}
+                            </>
+                        );
+
+                        // Документ проверки приходит без адреса: файл видят только
+                        // сама компания и модератор, здесь — «проверен»
+                        return (
+                            <li key={f.id}>
+                                {f.url ? (
+                                    <a href={f.url} className="ms-card ms-doc">
+                                        {body}
+                                        <Download aria-hidden className="size-4 shrink-0" />
+                                    </a>
+                                ) : (
+                                    <div className="ms-card ms-doc" title={t('cabinet.company.doc_approved')}>
+                                        {body}
+                                        <BadgeCheck aria-hidden className="size-4 shrink-0" />
+                                    </div>
+                                )}
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
         </>
