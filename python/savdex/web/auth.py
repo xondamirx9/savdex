@@ -202,55 +202,20 @@ def reset_channels() -> list[str]:
     ]
 
 
-def _mask_email(email: str) -> str:
-    """aziz@mail.ru → a•••@mail.ru: человек узнаёт свой адрес, чужой — нет."""
-    name, _, domain = email.partition("@")
-
-    return (name[:1] + "•••@" + domain) if domain else email
-
-
-def _mask_phone(phone: str) -> str:
-    """+998901234567 → +998•••4567."""
-    digits = "".join(ch for ch in phone if ch.isdigit())
-
-    return f"+{digits[:3]}•••{digits[-4:]}" if len(digits) >= 8 else phone
-
-
 def _reset_step(ctx: Context) -> dict[str, Any]:
     """
-    Шаг «Забыли пароль»: find — почта или телефон; choose — выбор способа
-    (подтверждены и почта, и телефон); code — код из SMS.
+    Шаг «Забыли пароль»: find — почта или телефон; sent — «Если аккаунт
+    есть, мы отправили…», поле для кода из SMS и «Отправить ещё раз».
+    Шаг и способы не зависят от того, нашлась ли учётка.
     """
-    from savdex.web import sms
-    from savdex.web.account_actions import _found, reset_options
+    from savdex.web.account_actions import SESSION_RESET_PHONE, SESSION_RESET_SENT, site_channels
 
     store = _store(ctx)
-    sent = store.get("reset.sms_phone") if store is not None else None
+    sent = store is not None and bool(
+        store.get(SESSION_RESET_SENT) or store.get(SESSION_RESET_PHONE)
+    )
 
-    if isinstance(sent, str) and sent != "":
-        return {"step": "code", "sentTo": _mask_phone(sent), "options": []}
-
-    user = _found(ctx) if store is not None else None
-    options = reset_options(user) if user is not None else []
-
-    if user is None or len(options) < 2:
-        return {"step": "find", "sentTo": None, "options": []}
-
-    phone = sms.normalize(str(user["phone"] or "")) or ""
-
-    return {
-        "step": "choose",
-        "sentTo": None,
-        "options": [
-            {
-                "channel": channel,
-                "to": _mask_email(str(user["email"]))
-                if channel == "mail"
-                else ("" if channel == "telegram" else _mask_phone(phone)),
-            }
-            for channel in options
-        ],
-    }
+    return {"step": "sent" if sent else "find", "channels": site_channels() if sent else []}
 
 
 def forgot_password(request: HttpRequest) -> HttpResponse:

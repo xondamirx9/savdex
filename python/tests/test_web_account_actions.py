@@ -834,7 +834,11 @@ def test_забыли_пароль_по_смс(сайт, telnyx, подтвер�
 
     # Ответ один при любом номере, а SMS — только на подтверждённый
     assert куда(сайт, итог) == (302, "/forgot-password")
-    assert сессия(итог)["reset"] == {"sms_phone": "+998901112233"}
+    assert сессия(итог)["reset"] == {
+        "sms_phone": "+998901112233",
+        "sent": True,
+        "login": "+998901112233",
+    }
     assert сессия(итог)["status"].startswith("Если этот номер подтверждён")
     assert [з["body"]["phone_number"] for з in ЗАПРОСЫ] == (["+998901112233"] if уходит else [])
 
@@ -939,6 +943,9 @@ def _найти(сайт: str, telnyx: str, login: str, шаг: Callable[[], Non
     return итог
 
 
+ОТВЕТ_ПОИСКА = "Если аккаунт с такими данными есть, мы отправили ссылку на почту или код в SMS."
+
+
 @pytest.mark.parametrize(
     ("login", "почта", "телефон", "куда"),
     [
@@ -949,9 +956,9 @@ def _найти(сайт: str, telnyx: str, login: str, шаг: Callable[[], Non
         # По телефону, почта не подтверждена — только SMS, и по почте, и по номеру
         (ПОЧТА, False, True, "sms"),
         ("+998 90 111 22 33", False, True, "sms"),
-        # Подтверждены оба — выбор
-        (ПОЧТА, True, True, "choose"),
-        ("90 111 22 33", True, True, "choose"),
+        # Подтверждены оба — тем, чем искали
+        (ПОЧТА, True, True, "mail"),
+        ("90 111 22 33", True, True, "sms"),
         # Номер не подтверждён — по нему не ищем
         ("+998901112233", True, False, None),
         ("nobody@savdex.uz", True, True, None),
@@ -965,57 +972,103 @@ def test_забыли_пароль_способ(сайт, telnyx, login, поч�
     assert итог["ответ"]["headers"]["location"].endswith("/forgot-password")
     assert (len(итог["база"]["mail"]) == 1) is (куда == "mail")
     assert итог["смс"] == (["+998901112233"] if куда == "sms" else [])
+    # Ответ один при любом исходе: текст и экран
+    assert данные["status"] == ОТВЕТ_ПОИСКА
+    assert данные["reset"]["sent"] is True
 
-    if куда == "sms":
-        assert данные["reset"]["sms_phone"] == "+998901112233"
-    if куда == "choose":
-        assert данные["reset"] == {"found": uid}
     if куда is None:
-        assert данные["status"].startswith("Если аккаунт с такими данными есть")
-        assert "found" not in данные.get("reset", {})
+        assert "found" not in данные["reset"]
+        assert "sms_phone" not in данные["reset"]
+    else:
+        assert данные["reset"]["found"] == uid
+        assert ("sms_phone" in данные["reset"]) is (куда == "sms")
 
 
-@pytest.mark.parametrize("канал", ["mail", "sms"])
-def test_забыли_пароль_выбор(сайт, telnyx, канал):
+@pytest.mark.parametrize(
+    ("канал", "есть", "уходит"),
+    [
+        ("mail", True, True),
+        ("sms", True, True),
+        # Учётки нет или у неё нет такого способа — не уходит, ответ тот же
+        ("mail", False, False),
+        ("sms", False, False),
+    ],
+)
+def test_забыли_пароль_ещё_раз(сайт, telnyx, канал, есть, уходит):
     from .test_sms import ЗАПРОСЫ
 
     uid = учётка(ПОЧТА)
     ЗАПРОСЫ.clear()
+    reset: dict[str, Any] = {"sent": True, "login": "x@savdex.uz"}
+
+    if есть:
+        reset["found"] = uid
+
     итог = отправить(
         сайт,
         "/forgot-password/send",
         подготовка(_аккаунт(True, True)),
         снимок,
-        данные={"reset": {"found": uid}},
+        данные={"reset": reset},
         body={"channel": канал},
         env=_смс(telnyx),
     )
 
-    assert (len(итог["база"]["mail"]) == 1) is (канал == "mail")
-    assert len(ЗАПРОСЫ) == (1 if канал == "sms" else 0)
+    assert итог["ответ"]["headers"]["location"].endswith("/forgot-password")
+    assert сессия(итог)["status"].startswith("Если")
+    assert len(итог["база"]["mail"]) == int(уходит and канал == "mail")
+    assert len(ЗАПРОСЫ) == int(уходит and канал == "sms")
 
 
-def test_забыли_пароль_страница_выбора(сайт, telnyx):
-    """Выбор показывает адреса скрытыми: a•••@savdex.uz и +998•••2233."""
+@pytest.mark.parametrize("есть", [True, False])
+def test_забыли_пароль_страница_отправили(сайт, telnyx, есть):
+    """Экран после поиска — один и тот же, есть учётка или нет: без адресов."""
     from .web_site import страница
 
     uid = учётка(ПОЧТА)
+    reset: dict[str, Any] = {"sent": True, "login": ПОЧТА}
+
+    if есть:
+        reset["found"] = uid
+
     итог = отправить(
         сайт,
         "/forgot-password",
         подготовка(_аккаунт(True, True)),
-        данные={"reset": {"found": uid}},
+        данные={"reset": reset},
         method="GET",
         env=_смс(telnyx),
         headers={"Referer": сайт + "/login", "User-Agent": "savdex-parity"},
     )
     props = страница(итог["ответ"]["body"])["props"]
 
-    assert props["step"] == "choose"
-    assert [(o["channel"], o["to"]) for o in props["options"]][:2] == [
-        ("mail", "a•••@savdex.uz"),
-        ("sms", "+998•••2233"),
-    ]
+    assert (props["step"], props["channels"][:2]) == ("sent", ["mail", "sms"])
+    assert "savdex.uz" not in json.dumps(props["channels"])
+
+
+def test_код_без_смс_не_подходит(сайт, telnyx):
+    """
+    Учётки нет — SMS не уходило, но код вводится так же и так же не
+    подходит; неверные считаются на введённое.
+    """
+    from .test_sms import ЗАПРОСЫ
+
+    ЗАПРОСЫ.clear()
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms/confirm",
+        подготовка(),
+        снимок,
+        данные={"reset": {"sent": True, "login": "nobody@savdex.uz"}},
+        body={"sms_code": "12345"},
+        env=_смс(telnyx),
+    )
+
+    assert ошибки(итог) == {
+        "sms_code": ["Код не подошёл или устарел. Отправьте SMS ещё раз и введите новый код."]
+    }
+    assert ЗАПРОСЫ == []
+    assert итог["база"]["tokens"] == []
 
 
 def test_письмо_не_для_аккаунта_по_телефону(сайт):

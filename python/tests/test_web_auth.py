@@ -162,8 +162,7 @@ def test_восстановление_начинается_с_почты_или_
     ответ, _ = зайти(сайт, "/forgot-password", сессия())
     props = пропсы(ответ)
 
-    # Способ выбирается по аккаунту — после шага «Почта или телефон»
-    assert (props["step"], props["options"], props["sentTo"]) == ("find", [], None)
+    assert (props["step"], props["channels"]) == ("find", [])
 
 
 @pytest.mark.parametrize("path", ["/login", "/forgot-password"])
