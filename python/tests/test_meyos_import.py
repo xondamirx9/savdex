@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import http.server
 import io
+import ipaddress
 import json
 import threading
 from pathlib import Path
@@ -74,9 +75,12 @@ def test_запись_в_поля_строки():
 def test_скачивание_фото(tmp_path, monkeypatch):
     """С публичного адреса — скачивается; внутренний — нет (без подмены проверки)."""
     png = _png()
+    хосты: list[str] = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            хосты.append(self.headers.get("Host", ""))
+
             if self.path == "/move":
                 self.send_response(302)
                 self.send_header("Location", "/a.png")
@@ -99,14 +103,50 @@ def test_скачивание_фото(tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="не публичный"):
             json_import.download(base + "/a.png", tmp_path, 1)
 
-        monkeypatch.setattr(json_import, "_public", lambda host: True)
+        monkeypatch.setattr(json_import, "_public_ip", lambda address: True)
         path = json_import.download(base + "/move", tmp_path, 2)
         assert Path(path).read_bytes() == png
+
+        # Адрес узнаётся один раз на каждый переход и подключение — к нему:
+        # имя, которого нет в DNS, скачивается с узнанного адреса, а сервер
+        # видит своё имя в Host
+        узнали: list[str] = []
+
+        def resolve(host: str, port: int) -> list[Any]:
+            узнали.append(host)
+
+            return [ipaddress.ip_address("127.0.0.1")]
+
+        monkeypatch.setattr(json_import, "_resolve", resolve)
+        хосты.clear()
+        имя = f"photos.invalid:{server.server_port}"
+        path = json_import.download(f"http://{имя}/move", tmp_path, 4)
+        assert Path(path).read_bytes() == png
+        assert узнали == ["photos.invalid", "photos.invalid"]
+        assert хосты == [имя, имя]
 
         with pytest.raises(ValueError, match="не http"):
             json_import.download("file:///etc/passwd", tmp_path, 3)
     finally:
         server.shutdown()
+
+
+@pytest.mark.parametrize(
+    "адрес", ["127.0.0.1", "10.1.2.3", "169.254.169.254", "::1", "::ffff:127.0.0.1", "fd00::1"]
+)
+def test_внутренний_адрес_не_скачивается(tmp_path, monkeypatch, адрес):
+    """Хоть один адрес хоста внутренний — ссылку не открываем вовсе."""
+    monkeypatch.setattr(
+        json_import.socket,
+        "getaddrinfo",
+        lambda *a, **k: [
+            (0, 0, 0, "", ("93.184.216.34", 80)),
+            (0, 0, 0, "", (адрес, 80)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="не публичный"):
+        json_import.download("http://photos.example/a.png", tmp_path, 1)
 
 
 # ── Загрузка ────────────────────────────────────────────────────────
