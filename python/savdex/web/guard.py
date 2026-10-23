@@ -13,10 +13,12 @@ updated_at) и кука remember_web_… на 400 дней. Выход: номе
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import hmac
 import os
 import re
+import secrets
 from typing import Any
 
 import bcrypt
@@ -60,6 +62,20 @@ def check(password: str, hashed: str | None) -> bool:
         return False
 
 
+@functools.cache
+def _nobody(cost: int) -> str:
+    """Хеш случайного пароля — той же стоимости, что у настоящих."""
+    return hash_password(secrets.token_urlsafe(16), cost)
+
+
+def check_nobody(password: str) -> None:
+    """
+    Сверка впустую, когда учётки нет: bcrypt — основная часть времени
+    входа, и без неё по задержке ответа было бы видно, есть ли такая почта.
+    """
+    check(password, _nobody(rounds()))
+
+
 def needs_rehash(hashed: str) -> bool:
     """password_needs_rehash: другой алгоритм или другая стоимость."""
     match = re.match(r"^\$2[aby]\$(\d{2})\$", hashed)
@@ -85,7 +101,12 @@ def attempt(ctx: Context, email: str, password: str) -> dict[str, Any] | None:
     """Auth::attempt без входа: пользователь при верном пароле (хеш — пересчитан)."""
     user = user_by_email(email)
 
-    if user is None or not check(password, user["password"]):
+    if user is None or not user["password"]:
+        check_nobody(password)
+
+        return None
+
+    if not check(password, user["password"]):
         return None
 
     # rehashPasswordIfRequired: forceFill(['password' => …])->save()
@@ -123,6 +144,10 @@ def attempt_forgiving(ctx: Context, email: str, password: str) -> dict[str, Any]
     )
 
     if not rows or not rows[0]["password"]:
+        # Столько же сверок, сколько у настоящей учётки: время ответа одно
+        for variant in keyboard_variants(password):
+            check_nobody(variant)
+
         return None
 
     user = rows[0]

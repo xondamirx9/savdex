@@ -1,6 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
-import { ArrowLeft, Mail, MessageSquare, RefreshCw, Send } from 'lucide-react';
+import { ArrowLeft, Mail, MessageSquare, Send } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Alert, Button, TextInput } from '@/components/ui';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -10,49 +10,35 @@ import { routes } from '@/routes';
 type Channel = 'mail' | 'sms' | 'telegram' | 'whatsapp';
 
 /**
- * Восстановление пароля в три шага.
+ * Восстановление пароля в два шага.
  *
- * 1. Почта или телефон — сайт находит аккаунт.
- * 2. Куда прислать — решает аккаунт: почта не подтверждена, а телефон да —
- *    только SMS; телефон не подтверждён — только почта; подтверждены оба —
- *    человек выбирает сам (этот шаг виден только тогда).
- * 3. Почта — ссылка в письме; SMS — код здесь же, он ведёт на ту же
- *    страницу нового пароля.
+ * 1. Почта или телефон.
+ * 2. «Если аккаунт с такими данными есть, мы отправили ссылку на почту или
+ *    код в SMS» — одинаково для всех, есть такой аккаунт или нет: ни текст,
+ *    ни шаг, ни способы «Отправить ещё раз» (включённые на сайте, а не у
+ *    аккаунта) его не выдают. Куда ушло — решает сервер: способом, которым
+ *    искали, если он есть у аккаунта. Код из SMS вводится здесь же и ведёт
+ *    на ту же страницу нового пароля, что и ссылка.
  *
  * Присылается ссылка или код, а не пароль: паролей площадка не хранит.
  */
 export default function ForgotPassword({
     status,
     step = 'find',
-    sentTo = null,
-    options = [],
+    channels = [],
 }: {
     status?: string | null;
-    step?: 'find' | 'choose' | 'code';
-    /** Номер, на который ушёл код (скрыт: +998•••4567) */
-    sentTo?: string | null;
-    /** Способы этого аккаунта, когда подтверждены и почта, и телефон */
-    options?: { channel: Channel; to: string }[];
+    step?: 'find' | 'sent';
+    /** Способы «Отправить ещё раз», включённые на сайте */
+    channels?: Channel[];
 }) {
     return (
         <AuthLayout
             title={t('auth.forgot_title')}
-            heading={t(
-                step === 'code'
-                    ? 'auth.forgot_sms_heading'
-                    : step === 'choose'
-                      ? 'auth.forgot_choose_heading'
-                      : 'auth.forgot_heading',
-            )}
+            heading={t(step === 'sent' ? 'auth.forgot_sent_heading' : 'auth.forgot_heading')}
             subheading={step === 'find' ? t('auth.forgot_subheading') : undefined}
         >
-            {step === 'code' && sentTo ? (
-                <CodeStep sentTo={sentTo} status={status} />
-            ) : step === 'choose' ? (
-                <ChooseStep options={options} />
-            ) : (
-                <FindStep status={status} />
-            )}
+            {step === 'sent' ? <SentStep status={status} channels={channels} /> : <FindStep status={status} />}
 
             <p className="text-muted mt-6 text-center text-sm">
                 <Link href={routes.login} className="text-primary-700 inline-flex items-center gap-1.5 hover:underline">
@@ -110,56 +96,10 @@ function FindStep({ status }: { status?: string | null }) {
 
 const ICONS = { mail: Mail, sms: MessageSquare, telegram: Send, whatsapp: MessageSquare };
 
-/** Шаг 2: подтверждены и почта, и телефон — куда прислать, выбирает человек. */
-function ChooseStep({ options }: { options: { channel: Channel; to: string }[] }) {
-    const send = useForm<{ channel: Channel | '' }>({ channel: '' });
-    const restart = useForm({});
-
-    function choose(channel: Channel) {
-        send.transform(() => ({ channel }));
-        send.post('/forgot-password/send', { preserveScroll: true });
-    }
-
-    return (
-        <div className="space-y-3">
-            {options.map(({ channel, to }) => {
-                const Icon = ICONS[channel];
-
-                return (
-                    <button
-                        key={channel}
-                        type="button"
-                        disabled={send.processing}
-                        onClick={() => choose(channel)}
-                        className="rounded-card border-border hover:border-primary-700 hover:bg-primary-50 flex w-full items-center gap-3.5 border p-4 text-left transition-colors disabled:opacity-60"
-                    >
-                        <Icon aria-hidden className="text-primary-700 size-6 shrink-0" />
-                        <span className="min-w-0">
-                            <b className="block">{t(`auth.forgot_via_${channel}`)}</b>
-                            {to && <span className="text-muted block text-sm break-all">{to}</span>}
-                        </span>
-                    </button>
-                );
-            })}
-
-            <Button
-                type="button"
-                variant="ghost"
-                size="lg"
-                block
-                loading={restart.processing}
-                onClick={() => restart.post('/forgot-password/restart')}
-            >
-                {t('auth.forgot_other_account')}
-            </Button>
-        </div>
-    );
-}
-
-/** Шаг 3 по SMS: код, «Отправить SMS ещё раз», «Другой аккаунт». */
-function CodeStep({ sentTo, status }: { sentTo: string; status?: string | null }) {
+/** Шаг 2: отправили (если аккаунт есть) — код из SMS, «Отправить ещё раз», «Другой аккаунт». */
+function SentStep({ status, channels }: { status?: string | null; channels: Channel[] }) {
     const code = useForm({ sms_code: '' });
-    const resend = useForm({});
+    const resend = useForm<{ channel: Channel | '' }>({ channel: '' });
     const restart = useForm({});
 
     function confirm(e: FormEvent) {
@@ -167,42 +107,69 @@ function CodeStep({ sentTo, status }: { sentTo: string; status?: string | null }
         code.post('/forgot-password/sms/confirm', { preserveScroll: true });
     }
 
-    function sendAgain(e: FormEvent) {
-        e.preventDefault();
-        resend.post('/forgot-password/sms/resend', { preserveScroll: true, onSuccess: () => code.reset() });
+    function sendAgain(channel: Channel) {
+        const options = { preserveScroll: true, onSuccess: () => code.reset() };
+
+        // SMS — свой адрес: у него своя, более редкая частота
+        if (channel === 'sms') {
+            resend.transform(() => ({}));
+            resend.post('/forgot-password/sms/resend', options);
+        } else {
+            resend.transform(() => ({ channel }));
+            resend.post('/forgot-password/send', options);
+        }
     }
 
     return (
         <div className="space-y-5">
-            {status && <Alert tone="success">{status}</Alert>}
+            {status && (
+                <div className="space-y-3">
+                    <Alert tone="success">{status}</Alert>
+                    <p className="text-muted text-sm leading-relaxed">{t('auth.forgot_sent_hint')}</p>
+                </div>
+            )}
 
-            <form onSubmit={confirm} className="space-y-4" noValidate>
-                <TextInput
-                    label={t('auth.reg_sms_code_label', { phone: sentTo })}
-                    name="sms_code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={10}
-                    autoFocus
-                    required
-                    value={code.data.sms_code}
-                    onChange={(e) => {
-                        code.setData('sms_code', e.target.value.replace(/\D/g, ''));
-                        if (code.errors.sms_code) code.clearErrors('sms_code');
-                    }}
-                    error={code.errors.sms_code}
-                />
-                <Button type="submit" size="lg" block loading={code.processing} disabled={code.data.sms_code.length < 4}>
-                    {t('auth.continue')}
-                </Button>
-            </form>
+            {channels.includes('sms') && (
+                <form onSubmit={confirm} className="space-y-4" noValidate>
+                    <TextInput
+                        label={t('auth.forgot_code_label')}
+                        name="sms_code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={10}
+                        required
+                        value={code.data.sms_code}
+                        onChange={(e) => {
+                            code.setData('sms_code', e.target.value.replace(/\D/g, ''));
+                            if (code.errors.sms_code) code.clearErrors('sms_code');
+                        }}
+                        error={code.errors.sms_code}
+                    />
+                    <Button type="submit" size="lg" block loading={code.processing} disabled={code.data.sms_code.length < 4}>
+                        {t('auth.continue')}
+                    </Button>
+                </form>
+            )}
 
-            <form onSubmit={sendAgain}>
-                <Button type="submit" variant="secondary" size="lg" block loading={resend.processing}>
-                    <RefreshCw aria-hidden className="size-4" />
-                    {t('auth.reg_sms_resend')}
-                </Button>
-            </form>
+            <div className="space-y-2">
+                <p className="text-muted text-sm">{t('auth.forgot_resend_title')}</p>
+                {channels.map((channel) => {
+                    const Icon = ICONS[channel];
+
+                    return (
+                        <button
+                            key={channel}
+                            type="button"
+                            disabled={resend.processing}
+                            onClick={() => sendAgain(channel)}
+                            className="rounded-card border-border hover:border-primary-700 hover:bg-primary-50 flex w-full items-center gap-3.5 border p-3.5 text-left transition-colors disabled:opacity-60"
+                        >
+                            <Icon aria-hidden className="text-primary-700 size-5 shrink-0" />
+                            <b>{t(`auth.forgot_via_${channel}`)}</b>
+                        </button>
+                    );
+                })}
+            </div>
 
             <Button
                 type="button"
