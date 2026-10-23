@@ -118,7 +118,9 @@ def люди() -> dict[str, int]:
 _адреса = itertools.count(10)
 
 
-def браузер(*steps: list[Any], ip: str | None = None) -> list[dict[str, Any]]:
+def браузер(
+    *steps: list[Any], ip: str | None = None, env: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     # Свой адрес на каждый браузер: счётчик частоты считает по IP
     ip = ip or f"203.0.113.{next(_адреса)}"
     вывод = subprocess.run(
@@ -132,6 +134,7 @@ def браузер(*steps: list[Any], ip: str | None = None) -> list[dict[str, A
             # счётчик частоты — в файловый кэш
             "SESSION_DRIVER": "database",
             "CACHE_STORE": "file",
+            **(env or {}),
         },
         capture_output=True,
         text=True,
@@ -191,6 +194,33 @@ def test_отказ_без_подсказки(люди, email, password):
     assert ответ["status"] == 422 and "Неверная почта или пароль." in ответ["body"]
     assert not ответ["admin_cookie"]
     assert json.loads(кто["body"])["authenticated"] is False
+
+
+def test_перебор_с_разных_адресов_отправляет_на_сайт(люди):
+    """
+    Двадцать неудач по учётке с чужих адресов: капчи у админки нет — даже
+    с верным паролем вход только через сайт; попытка не засчитывается.
+    """
+    sql("truncate login_attempts")
+
+    for n in range(20):
+        sql(
+            "insert into login_attempts (email, ip, successful, created_at) "
+            "values ('admin@savdex.uz', %s, false, now() - interval '1 minute')",
+            [f"198.51.100.{n + 1}"],
+        )
+
+    _, ответ, кто = браузер(
+        ["get", "/py/admin/login/", None],
+        вход("admin@savdex.uz"),
+        ["get", "/py/whoami", None],
+        env={"CAPTCHA_ENABLED": "true"},
+    )
+
+    assert ответ["status"] == 422 and "Войдите через" in ответ["body"]
+    assert not ответ["admin_cookie"]
+    assert json.loads(кто["body"])["authenticated"] is False
+    assert sql("select count(*) from login_attempts")[0][0] == 20
 
 
 def test_выданный_пароль_на_смену(люди):

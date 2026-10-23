@@ -371,25 +371,113 @@ def test_выход(сайт, admin, remember):
     assert len(итог["db"]["journal"]) == (1 if admin and remember else 0)
 
 
-def test_перебор_с_разных_адресов_запирает_учётку(сайт):
-    """
-    У каждого адреса свои пять попыток — но двадцать неудач по учётке со
-    всех адресов запирают её и для нового адреса, даже с верным паролем.
-    """
+#: Вход по капче: в тестах она выключена (pg_admin.ОКРУЖЕНИЕ)
+КАПЧА = {"CAPTCHA_ENABLED": "true"}
+КАПЧУ = "К этой учётной записи было много неудачных попыток входа. "
 
-    def подготовка() -> None:
-        сброс()()
 
-        for n in range(20):
+def перебор(неудач: int = 20, *, своих: int = 0) -> Callable[[], None]:
+    """Неудачи по учётке с чужих адресов (у каждого меньше пяти) и со своего."""
+
+    def run() -> None:
+        сброс(неудач=своих)()
+
+        for n in range(неудач):
             sql(
                 "insert into login_attempts (email, ip, successful, created_at) "
                 "values (%s, %s, false, now() - interval '1 minute')",
                 [ПОЧТА, f"198.51.100.{n + 1}"],
             )
 
-    итог = вход(сайт, "/login", подготовка, body=ВЕРНО)
+    return run
+
+
+def пропуск(token: str = "pass-1") -> dict[str, Any]:
+    """Пройденное окно «Я не робот» в сессии (captcha.check)."""
+    import time
+
+    return {"captcha_pass": {"login": {"token": token, "expires": int(time.time()) + 600}}}
+
+
+@pytest.mark.parametrize("captcha", ["", "чужой"])
+def test_перебор_с_разных_адресов_просит_капчу(сайт, captcha):
+    """
+    Двадцать неудач по учётке со всех адресов не запирают её, а требуют
+    капчу: без пропуска не пускает даже с верным паролем, пароль не
+    проверяется, попытка не засчитывается.
+    """
+    итог = вход(
+        сайт,
+        "/login",
+        перебор(),
+        body={**ВЕРНО, "captcha": captcha},
+        payload=пропуск(),
+        env=КАПЧА,
+    )
 
     assert итог["location"] == f"{сайт}/login"
+    assert итог["session"]["user_id"] is None
+    assert list(ошибки(итог)) == ["captcha"]
+    assert ошибки(итог)["captcha"][0].startswith(КАПЧУ if captcha == "" else "Проверка")
+    assert len(итог["db"]["attempts"]) == 20
+
+
+def test_хозяин_входит_через_капчу(сайт):
+    итог = вход(
+        сайт,
+        "/login",
+        перебор(),
+        body={**ВЕРНО, "captcha": "pass-1"},
+        payload=пропуск(),
+        env=КАПЧА,
+    )
+
+    assert итог["location"] == f"{сайт}/cabinet"
+    assert вошёл(итог, sql("select id from users where email = %s", [ПОЧТА])[0][0])
+    # Пропуск разовый
+    assert not json.loads(итог["session"]["payload"]).get("captcha_pass")
+
+
+def test_неверный_пароль_через_капчу_засчитан(сайт):
+    итог = вход(
+        сайт,
+        "/login",
+        перебор(),
+        body={**ВЕРНО, "password": "wrong", "captcha": "pass-1"},
+        payload=пропуск(),
+        env=КАПЧА,
+    )
+
+    assert ошибки(итог)["email"][0].startswith(НЕВЕРНО)
+    assert ошибки(итог)["captcha"][0].startswith(КАПЧУ)
+    assert len(итог["db"]["attempts"]) == 21
+
+
+def test_двадцатая_неудача_показывает_капчу(сайт):
+    итог = вход(сайт, "/login", перебор(19), body={**ВЕРНО, "password": "wrong"}, env=КАПЧА)
+
+    assert ошибки(итог)["email"][0].startswith(НЕВЕРНО)
+    assert ошибки(итог)["captcha"][0].startswith(КАПЧУ)
+
+
+def test_капча_выключена_учётку_не_запирает(сайт):
+    итог = вход(сайт, "/login", перебор(), body=ВЕРНО)
+
+    assert итог["location"] == f"{сайт}/cabinet"
+
+
+def test_адрес_перебора_заперт_и_с_капчей(сайт):
+    """Свои пять неудач с этого адреса — замок, капча его не снимает."""
+
+    итог = вход(
+        сайт,
+        "/login",
+        перебор(своих=5),
+        body={**ВЕРНО, "captcha": "pass-1"},
+        payload=пропуск(),
+        env=КАПЧА,
+    )
+
     assert итог["session"]["user_id"] is None
     assert ошибки(итог)["email"][0].startswith(МНОГО)
 

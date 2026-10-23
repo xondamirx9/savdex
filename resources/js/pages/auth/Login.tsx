@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { Mail, Smartphone } from 'lucide-react';
+import { CaptchaField } from '@/components/auth/CaptchaField';
 import { Link } from '@/components/ui/Link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Alert, Button, PasswordInput, TextInput } from '@/components/ui';
@@ -56,7 +57,21 @@ export default function Login({ status }: { status?: string }) {
         phone: '',
         password: '',
         remember: false as boolean,
+        captcha: '',
     });
+
+    /*
+     * Капча — только когда сервер её попросил: учётку перебирают с разных
+     * адресов (LoginThrottle). Попросил однажды — галочка остаётся до ухода
+     * со страницы, хотя ошибки формы сбрасываются при каждой отправке.
+     * Пропуск разовый: после отправки галочка снимается (captchaKey).
+     */
+    const [needCaptcha, setNeedCaptcha] = useState(false);
+    const [captchaKey, setCaptchaKey] = useState(0);
+
+    useEffect(() => {
+        if (errors.captcha) setNeedCaptcha(true);
+    }, [errors.captcha]);
 
     /*
      * Сервер принимает одно поле: почту или подтверждённый номер — он
@@ -69,6 +84,7 @@ export default function Login({ status }: { status?: string }) {
         email: (byPhone ? form.phone : form.email).trim(),
         password: form.password,
         remember: form.remember,
+        captcha: form.captcha,
     }));
 
     function choose(next: Method) {
@@ -92,7 +108,12 @@ export default function Login({ status }: { status?: string }) {
         }
 
         // Пароль не должен остаться в памяти формы после отправки
-        post(routes.login, { onFinish: () => setData('password', '') });
+        post(routes.login, {
+            onFinish: () => {
+                setData('password', '');
+                setCaptchaKey((k) => k + 1);
+            },
+        });
     }
 
     return (
@@ -234,6 +255,19 @@ export default function Login({ status }: { status?: string }) {
                     />
                     {t('auth.remember_me')}
                 </label>
+
+                {needCaptcha && (
+                    <CaptchaField
+                        purpose="login"
+                        value={data.captcha}
+                        onChange={(token) => {
+                            setData('captcha', token);
+                            if (errors.captcha && token !== '') clearErrors('captcha');
+                        }}
+                        error={errors.captcha}
+                        reloadKey={captchaKey}
+                    />
+                )}
 
                 <Button type="submit" size="lg" block loading={processing}>
                     {t('auth.login_button')}

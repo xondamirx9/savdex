@@ -6,6 +6,8 @@ App\\Services\\Auth\\LoginThrottle.
 Вход: единое сообщение для «нет такого» и «неверный пароль» с остатком
 попыток; пять неудач за 15 минут по связке почта + IP — блокировка с
 обратным отсчётом; заблокированного не пускает и с верным паролем.
+Перебор с разных адресов (двадцать неудач по учётке) учётку не
+запирает — вход в неё просит капчу.
 Успех: счётчик сброшен, сессия под новым номером, метка последнего
 входа, выданный пароль — на смену, иначе — туда, куда шёл (url.intended).
 
@@ -27,7 +29,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from savdex import laravel_cache
 from savdex.audit import client_ip
 from savdex.guards import allowed_writes
-from savdex.web import analytics, eloquent, guard, locales, sms, throttle
+from savdex.web import analytics, captcha, eloquent, guard, locales, sms, throttle
 from savdex.web.actions import form
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -40,9 +42,10 @@ from savdex.web.validation import validate
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 WINDOW_MINUTES = 15
-#: Неудач по самой учётке со всех адресов за то же окно: перебор пароля с
-#: тысяч адресов (у каждого — свои пять попыток) упирается сюда. С запасом:
-#: чужими неудачами хозяина почти не запереть, а сброс пароля открыт всегда
+#: Неудач по самой учётке со всех адресов за то же окно — дальше вход в
+#: неё только с капчей: перебор с тысяч адресов (у каждого — свои пять
+#: попыток) упирается в неё. Не замок: запереть можно было бы и хозяина,
+#: набрав чужой почтой двадцать неверных паролей
 ACCOUNT_MAX_ATTEMPTS = 20
 
 
@@ -75,29 +78,27 @@ class LoginThrottle:
             )
             return int(cursor.fetchone()[0])
 
-    def account_locked(self) -> bool:
-        return self.account_failures() >= ACCOUNT_MAX_ATTEMPTS
+    def needs_captcha(self) -> bool:
+        """Учётку перебирают с разных адресов; капча выключена — не просим."""
+        return captcha.enabled() and self.account_failures() >= ACCOUNT_MAX_ATTEMPTS
 
     def remaining(self) -> int:
-        if self.account_locked():
-            return 0
-
         return max(0, MAX_ATTEMPTS - self.failed_attempts())
 
     def locked(self) -> bool:
         return self.remaining() == 0
 
-    def _unlocks_after(self, by_ip: bool, limit: int) -> int:
-        """Самая ранняя из limit последних неудач плюс 15 минут — сколько секунд ждать."""
-        where = "email = %s and ip = %s" if by_ip else "email = %s"
-        params: list[Any] = [self.email, self.ip] if by_ip else [self.email]
+    def seconds_until_unlock(self) -> int:
+        """unlocksAt: самая ранняя из пяти последних неудач плюс 15 минут."""
+        if not self.locked():
+            return 0
 
         with connection.cursor() as cursor:
             cursor.execute(
-                f"select created_at from login_attempts where {where} "
+                "select created_at from login_attempts where email = %s and ip = %s "
                 "and successful = false and created_at >= %s "
                 "order by created_at desc limit %s",
-                [*params, _stamp(self._since()), limit],
+                [self.email, self.ip, _stamp(self._since()), MAX_ATTEMPTS],
             )
             # ->value(): первая строка выборки
             row = cursor.fetchone()
@@ -105,23 +106,6 @@ class LoginThrottle:
         unlocks = (row[0] if row else eloquent.now()) + timedelta(minutes=LOCKOUT_MINUTES)
 
         return max(0, int((unlocks - eloquent.now()).total_seconds()))
-
-    def seconds_until_unlock(self) -> int:
-        """unlocksAt: самая ранняя из пяти последних неудач плюс 15 минут."""
-        if not self.locked():
-            return 0
-
-        waits = []
-
-        if self.failed_attempts() >= MAX_ATTEMPTS:
-            waits.append(self._unlocks_after(True, MAX_ATTEMPTS))
-
-        if self.account_locked():
-            # Окно учётки скользит: замок снимается, когда старейшая из
-            # последних двадцати неудач выйдет из окна
-            waits.append(self._unlocks_after(False, ACCOUNT_MAX_ATTEMPTS))
-
-        return max(waits, default=0)
 
     def _record(self, successful: bool, user_agent: str | None) -> None:
         with allowed_writes("login_attempts"), connection.cursor() as cursor:
@@ -155,6 +139,14 @@ def _lockout(ctx: Context, throttle: LoginThrottle) -> str:
     minutes = math.ceil(throttle.seconds_until_unlock() / 60)
 
     return ctx.t("messages.auth.locked_out", minutes=max(1, minutes))
+
+
+def _captcha_problem(ctx: Context, problem: str) -> str:
+    """Галочки нет — объяснить, почему вход вдруг просит капчу."""
+    if problem == "not_confirmed":
+        return ctx.t("messages.auth.captcha_needed")
+
+    return ctx.t(f"captcha.errors.{problem}")
 
 
 # ── Общее ───────────────────────────────────────────────────────────
@@ -242,6 +234,13 @@ def login(request: HttpRequest) -> HttpResponse:
     if throttle.locked():
         return invalid(ctx, {"email": [_lockout(ctx, throttle)]})
 
+    # Учётку перебирают с разных адресов: пароль проверяем только после
+    # капчи. Без неё попытка не засчитывается
+    if throttle.needs_captcha() and (
+        problem := captcha.confirm(_session(ctx), "login", data.get("captcha"))
+    ):
+        return invalid(ctx, {"captcha": [_captcha_problem(ctx, problem)]})
+
     remember = _boolean(data.get("remember"))
     user = guard.attempt(ctx, email, str(data["password"])) or guard.attempt_forgiving(
         ctx, email, str(data["password"])
@@ -258,7 +257,13 @@ def login(request: HttpRequest) -> HttpResponse:
             )
         )
 
-        return invalid(ctx, {"email": [message]})
+        errors = {"email": [message]}
+
+        # Учётку перебирают: форма сразу покажет галочку к следующей попытке
+        if not fresh.locked() and fresh.needs_captcha():
+            errors["captcha"] = [_captcha_problem(ctx, "not_confirmed")]
+
+        return invalid(ctx, errors)
 
     store = _session(ctx)
     guard.login(ctx, store, user, remember)

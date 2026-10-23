@@ -176,8 +176,8 @@ def test_выдача_картинки(сайт: str) -> None:
 
 
 @нужна_база
-@pytest.mark.parametrize("purpose", ["login", "admin"])
-def test_картинка_только_для_регистрации(сайт: str, purpose: str) -> None:
+@pytest.mark.parametrize("purpose", ["admin", ""])
+def test_картинка_только_для_регистрации_и_входа(сайт: str, purpose: str) -> None:
     assert открыть(сайт, f"/captcha?for={purpose}", env=КАПЧА)["status"] == 404
 
 
@@ -280,7 +280,7 @@ def test_регистрация_с_капчей(сайт: str, пропуск_ф
 
 @нужна_база
 def test_вход_без_капчи(сайт: str) -> None:
-    """Капча включена, но вход её не спрашивает."""
+    """Капча включена, но вход её не спрашивает, пока учётку не перебирают."""
     итог = вход(сайт, "/login", сброс(), body=ВЕРНО, env=КАПЧА)
 
     assert итог["status"] == 302

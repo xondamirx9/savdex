@@ -37,7 +37,7 @@ export function CaptchaField({
     error,
     reloadKey = 0,
 }: {
-    purpose: 'register';
+    purpose: 'register' | 'login';
     /** Пропуск после пройденной проверки; пусто — галочки нет. */
     value: string;
     onChange: (token: string) => void;

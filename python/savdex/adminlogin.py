@@ -17,6 +17,8 @@ Filament, а вход на сайт пускает и в админку (adminpa
   страница входа в админку не подтверждает, что учётка существует;
 - пять попыток в минуту с адреса; плюс общий с сайтом замок по связке
   почта + IP (login_attempts);
+- учётку перебирают с разных адресов — капчи здесь нет, вход только
+  через сайт: там капча, а сессия общая;
 - с выданным паролем — сначала его смена на сайте (RequirePasswordChange).
 """
 
@@ -32,6 +34,10 @@ from savdex import bridge
 
 LOGIN = "/py/admin/login/"
 WRONG = "Неверная почта или пароль."
+VIA_SITE = (
+    "К этой учётной записи было много неудачных попыток входа. Войдите через "
+    "страницу входа на сайте — там нужно подтвердить, что вы не робот."
+)
 
 
 def _page(
@@ -116,6 +122,9 @@ def login_page(request: HttpRequest) -> HttpResponse:
 
     if throttle.locked():
         return _page(request, email=email, error=_lockout(ctx, throttle), status=422)
+
+    if throttle.needs_captcha():
+        return _page(request, email=email, error=VIA_SITE, status=422)
 
     user = guard.attempt(ctx, email, password)
     admin = bridge.load_admin(connections["default"], int(user["id"])) if user is not None else None
