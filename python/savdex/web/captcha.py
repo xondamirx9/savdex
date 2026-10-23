@@ -1,6 +1,7 @@
 """
-Капча на первом шаге регистрации, как у Google: галочка «Я не
-робот», по ней — окно с картинкой из букв и цифр.
+Капча на первом шаге регистрации и у входа в учётку, которую перебирают
+с разных адресов (auth_actions.LoginThrottle), как у Google: галочка
+«Я не робот», по ней — окно с картинкой из букв и цифр.
 
 Два шага. Окно: GET /captcha — картинка, POST /captcha/verify —
 проверка введённого; верно — одноразовый пропуск (captcha_pass.<для
@@ -36,9 +37,9 @@ from savdex.audit import client_ip
 from savdex.web import session, throttle
 from savdex.web.request import context
 
-#: Для чего задание. Пока только регистрация: она рассылает письма с кодом.
-#: Вход капчу не спрашивает — его держит LoginThrottle (auth_actions)
-PURPOSES = ("register",)
+#: Для чего задание: регистрация рассылает письма с кодом; вход просит
+#: капчу, когда учётку перебирают с разных адресов (auth_actions)
+PURPOSES = ("register", "login")
 #: Без 0/O, 1/I/L: их путают и люди, и шрифт
 ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 LENGTH = 5
