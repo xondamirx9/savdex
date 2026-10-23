@@ -313,16 +313,19 @@ def verify_email(request: HttpRequest) -> HttpResponse:
 def _intended(ctx: Context, default: str) -> HttpResponse:
     """
     redirect()->intended(route(default)): адрес из сессии (и прочь из
-    неё) или default; LocalizeUrl переводит адрес на хосте на язык запроса.
+    неё), если он свой (auth_actions.safe_intended), иначе default;
+    LocalizeUrl переводит адрес на хосте на язык запроса.
     """
+    from savdex.web.auth_actions import safe_intended
+
     store = _store(ctx)
     target = ctx.url(default)
 
     if store is not None:
-        saved = store.get("url.intended")
+        saved = safe_intended(ctx, store.get("url.intended"))
         store.forget("url.intended")
 
-        if isinstance(saved, str):
+        if saved is not None:
             target = saved
 
     if ctx.url_locale is not None and target.startswith(ctx.root):

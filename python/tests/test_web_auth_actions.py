@@ -296,16 +296,30 @@ def test_вход_по_телефону(сайт, номер, поля, пуск
         assert ошибки(итог)["email"][0].startswith(НЕВЕРНО)
 
 
-def test_вход_туда_куда_шёл(сайт):
+@pytest.mark.parametrize(
+    ("сохранено", "ожидание"),
+    [
+        ("<сайт>/cabinet/listings?status=active", "<сайт>/en/cabinet/listings?status=active"),
+        ("/cabinet/listings", "<сайт>/en/cabinet/listings"),
+        # Чужой адрес (url.intended пишется и из Referer) — в кабинет
+        ("https://evil.example/cabinet", "<сайт>/en/cabinet"),
+        ("//evil.example/cabinet", "<сайт>/en/cabinet"),
+        ("/\\evil.example", "<сайт>/en/cabinet"),
+        ("<сайт>.evil.example/cabinet", "<сайт>/en/cabinet"),
+        ("<сайт>@evil.example/cabinet", "<сайт>/en/cabinet"),
+        ("javascript:alert(1)", "<сайт>/en/cabinet"),
+    ],
+)
+def test_вход_туда_куда_шёл(сайт, сохранено, ожидание):
     итог = вход(
         сайт,
         "/en/login",
         сброс(),
         body=ВЕРНО,
-        payload={"url.intended": "http://savdex.test/cabinet/listings?status=active"},
+        payload={"url.intended": сохранено.replace("<сайт>", сайт)},
     )
 
-    assert итог["location"] == "http://savdex.test/cabinet/listings?status=active"
+    assert итог["location"] == ожидание.replace("<сайт>", сайт)
     [(uid,)] = sql("select id from users where email = %s", [ПОЧТА])
     assert вошёл(итог, uid)
     # Язык адреса формы остаётся в сессии
