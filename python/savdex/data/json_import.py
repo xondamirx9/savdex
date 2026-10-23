@@ -12,8 +12,11 @@
 Фотографии — ссылками: скачиваются по http(s), не больше MAX_PHOTOS на
 запись и MAX_PHOTO_BYTES каждая, и только с публичных адресов — ссылка
 на внутренний адрес сервера (localhost, 10.0.0.0/8…) не скачивается:
-JSON приходит от партнёра, а не пишется своими руками. Картинка, которая
-не скачалась или не открылась, — заметка, объявление загружается без неё.
+JSON приходит от партнёра, а не пишется своими руками. Адрес хоста
+узнаётся один раз, и подключение — именно к нему (download): иначе DNS
+партнёра мог бы на проверке ответить публичным адресом, а на скачивании —
+внутренним. Картинка, которая не скачалась или не открылась, — заметка,
+объявление загружается без неё.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from django.db import connection
@@ -153,33 +156,70 @@ def fields_of(item: Mapping[str, Any]) -> tuple[dict[str, str], dict[str, dict[s
 # ── Фотографии ──────────────────────────────────────────────────────
 
 
-def _public(host: str) -> bool:
-    """Все адреса хоста — публичные: ссылка не ведёт внутрь сервера."""
+def _resolve(host: str, port: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Адреса хоста; IPv4 внутри IPv6 (::ffff:127.0.0.1) — как IPv4."""
     try:
-        infos = socket.getaddrinfo(host, None)
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except (socket.gaierror, UnicodeError):
-        return False
+        return []
 
-    return bool(infos) and all(
-        ipaddress.ip_address(str(info[4][0]).split("%", 1)[0]).is_global for info in infos
-    )
+    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+
+    for info in infos:
+        address = ipaddress.ip_address(str(info[4][0]).split("%", 1)[0])
+
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            address = address.ipv4_mapped
+
+        addresses.append(address)
+
+    return addresses
+
+
+def _public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Адрес в интернете, а не внутри сервера или его сети."""
+    return address.is_global
+
+
+def _pinned(url: str) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """
+    Ссылка — на адрес, узнанный здесь же и проверенный: адрес запроса,
+    заголовок Host и для https — имя для SNI и проверки сертификата
+    (sni_hostname у httpcore). Не http(s) или адрес не публичный — ValueError.
+    """
+    parts = urlsplit(url)
+    host = parts.hostname
+
+    if parts.scheme not in ("http", "https") or not host:
+        raise ValueError("ссылка не http(s)")
+
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    addresses = _resolve(host, port)
+
+    # Все адреса хоста — публичные: какой бы ни выбрал, внутрь не попасть
+    if not addresses or not all(_public_ip(a) for a in addresses):
+        raise ValueError("адрес не публичный")
+
+    address = addresses[0]
+    netloc = f"[{address}]:{port}" if address.version == 6 else f"{address}:{port}"
+    named = f"[{host}]" if ":" in host else host
+    target = urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, ""))
+    headers = {"Host": f"{named}:{parts.port}" if parts.port else named}
+    extensions: dict[str, Any] = {"sni_hostname": host} if parts.scheme == "https" else {}
+
+    return target, headers, extensions
 
 
 def download(url: str, into: Path, number: int) -> Path:
     """Картинка по ссылке — во временный файл; не вышло — ValueError с причиной."""
     current = url
 
-    with httpx.Client(timeout=TIMEOUT, follow_redirects=False) as client:
+    # trust_env=False: прокси из окружения сам узнавал бы адрес хоста заново
+    with httpx.Client(timeout=TIMEOUT, follow_redirects=False, trust_env=False) as client:
         for _ in range(MAX_REDIRECTS + 1):
-            parts = urlsplit(current)
+            target, headers, extensions = _pinned(current)
 
-            if parts.scheme not in ("http", "https") or not parts.hostname:
-                raise ValueError("ссылка не http(s)")
-
-            if not _public(parts.hostname):
-                raise ValueError("адрес не публичный")
-
-            with client.stream("GET", current) as response:
+            with client.stream("GET", target, headers=headers, extensions=extensions) as response:
                 if response.is_redirect:
                     current = urljoin(current, response.headers.get("location", ""))
                     continue

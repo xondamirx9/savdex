@@ -566,9 +566,11 @@ def _код(код: str = "123456", неверных: int = 0) -> Callable[[], N
         (
             {"code": "123456"},
             _код(),
-            {"url": {"intended": "http://127.0.0.1/pricing"}},
-            "http://127.0.0.1/pricing",
+            {"url": {"intended": "/pricing"}},
+            "/pricing",
         ),
+        # Чужой адрес — нет: в кабинет (auth_actions.safe_intended)
+        ({"code": "123456"}, _код(), {"url": {"intended": "http://evil.example/x"}}, "/cabinet"),
         # Уже подтверждена — в кабинет без сообщения
         ({"code": "000000"}, lambda: пользователь(), None, None),
     ],

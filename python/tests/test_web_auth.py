@@ -265,7 +265,8 @@ def test_подтверждение_почты_ждёт(сайт):
         ("/uz/verify-email", None, "/uz/cabinet"),
         ("/verify-email", "/cabinet/billing?plan=pro", "/cabinet/billing?plan=pro"),
         ("/en/verify-email", "/cabinet/billing?plan=pro", "/en/cabinet/billing?plan=pro"),
-        ("/verify-email", "https://example.com/x", "https://example.com/x"),
+        # Чужой адрес — нет: в кабинет (auth_actions.safe_intended)
+        ("/verify-email", "https://example.com/x", "/cabinet"),
     ],
 )
 def test_почта_подтверждена_дальше(сайт, path, intended, ждём):

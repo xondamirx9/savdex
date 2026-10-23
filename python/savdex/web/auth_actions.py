@@ -169,13 +169,36 @@ def _to(ctx: Context, path: str) -> HttpResponse:
     return HttpResponseRedirect(target)
 
 
+def safe_intended(ctx: Context, saved: Any) -> str | None:  # noqa: ANN401
+    """
+    Адрес «вернуться после входа» — только свой: путь от корня или адрес
+    этого же сайта (ctx.root; кука сессии — только его, поддомены не в
+    счёт). Чужой — None: url.intended пишется и из Referer (XHR и формы
+    гостя), а его задаёт страница, откуда пришёл запрос, — после входа
+    человека уводило бы на чужой сайт. Как bridge.safe_next у админки.
+    """
+    if not isinstance(saved, str) or len(saved) > 2000:
+        return None
+
+    if re.search(r"[\x00-\x1f\x7f\\]", saved):
+        return None
+
+    if saved.startswith("/") and not saved.startswith("//"):
+        return ctx.root + saved
+
+    if saved == ctx.root or saved.startswith((ctx.root + "/", ctx.root + "?")):
+        return saved
+
+    return None
+
+
 def _intended(ctx: Context, default: str) -> HttpResponse:
-    """redirect()->intended(route(default))."""
+    """redirect()->intended(route(default)): только свой адрес (safe_intended)."""
     store = _session(ctx)
-    saved = store.get("url.intended")
+    saved = safe_intended(ctx, store.get("url.intended"))
     store.forget("url.intended")
 
-    return _to(ctx, saved if isinstance(saved, str) else default)
+    return _to(ctx, saved if saved is not None else default)
 
 
 def _guest(ctx: Context) -> HttpResponse | None:
