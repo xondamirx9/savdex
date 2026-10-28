@@ -81,6 +81,7 @@ hc_ping() {
 plain=""
 check_dir=""
 check_box=""
+files_log=""
 report=""
 finish() {
     local status=$?
@@ -93,11 +94,18 @@ finish() {
     if [ -n "$check_dir" ]; then
         rm -rf "$check_dir"
     fi
+    if [ -n "$files_log" ]; then
+        rm -f "$files_log"
+    fi
     if [ "$status" -eq 0 ]; then
         hc_ping "" "$report"
     else
-        hc_ping /fail "${report:-сбой, подробности — в журнале копий на машине базы}"
+        hc_ping /fail "${report:-сбой, подробности — в журнале копий на машине базы; свободно на диске: $(disk_free)}"
     fi
+}
+# Сколько места на диске машины базы — в сигнал о сбое
+disk_free() {
+    df -h --output=avail "$WORK" 2> /dev/null | tail -n 1 | tr -d ' ' || true
 }
 trap finish EXIT
 hc_ping /start
@@ -139,6 +147,32 @@ rclone() {
     rclone_run "$dir:$mount:ro" -- "$@"
 }
 
+# files_reason <вывод rclone> <код выхода> — почему копия не снялась,
+# одной строкой для Healthchecks и Telegram. Без имён файлов из вывода:
+# в именах загруженных файлов могут быть данные людей
+files_reason() {
+    local out="$1" code="$2" errors why
+    errors=$(grep -c ' ERROR : ' "$out" || true)
+    if grep -qi 'no space left on device' "$out"; then
+        why="на машине базы кончилось место"
+    elif grep -qiE 'QuotaExceeded|quota exceeded' "$out"; then
+        why="хранилище S3 переполнено"
+    elif grep -qiE 'InvalidAccessKeyId|SignatureDoesNotMatch|AccessDenied|403 Forbidden' "$out"; then
+        why="хранилище не принимает ключи — доступ запрещён"
+    elif grep -qiE 'no such host|connection refused|i/o timeout|TLS handshake|connection reset|status ?code: 5[0-9][0-9]' "$out"; then
+        why="хранилище $S3_ENDPOINT недоступно или отвечает ошибкой"
+    elif grep -qi 'source file is being updated' "$out"; then
+        why="файл менялся, пока копировался, — следующий час его докопирует"
+    elif grep -qi 'permission denied' "$out"; then
+        why="нет доступа к файлу в общей папке"
+    elif grep -qiE 'Cannot connect to the Docker daemon|failed to connect to the docker API|Unable to find image|pull access denied' "$out"; then
+        why="не запустился rclone в Docker"
+    else
+        why="причина не распознана"
+    fi
+    echo "$why (rclone: код $code, ошибок $errors; свободно на диске: $(disk_free)) — подробно в $WORK/backup.log"
+}
+
 umask 077
 mkdir -p "$WORK"
 
@@ -172,9 +206,18 @@ case "$what" in
         echo "$(date -Iseconds) Копия базы: $prefix/db/$file, $((size / 1024)) КБ"
         ;;
     files)
-        # Кэш (cache/) — не копия: он восстанавливается сам
+        # Кэш (cache/) — не копия: он восстанавливается сам. Вывод rclone —
+        # целиком в журнал на машине, а причина сбоя — ещё и в Healthchecks
+        files_log=$(mktemp "$WORK/files.XXXXXX")
+        code=0
         rclone "$STORAGE" /data copy /data files: --exclude "/cache/**" \
-            --stats-one-line --stats-log-level NOTICE
+            --stats-one-line --stats-log-level NOTICE > "$files_log" 2>&1 || code=$?
+        cat "$files_log"
+        if [ "$code" -ne 0 ]; then
+            report="копия файлов не снялась: $(files_reason "$files_log" "$code")"
+            echo "$(date -Iseconds) ОШИБКА: $report" >&2
+            exit "$code"
+        fi
         echo "$(date -Iseconds) Копия файлов: $prefix/files/"
         ;;
     check)
