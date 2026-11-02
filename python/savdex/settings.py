@@ -91,8 +91,9 @@ def _allowed_hosts() -> list[str]:
     """
     Свои хосты. Заданы в DJANGO_ALLOWED_HOSTS — они. Иначе «*» только у
     разработчика; на боевом и тестовом — домен из APP_URL, мини-сайты
-    (MICROSITE_DOMAIN с поддоменами), служебный адрес Render и локальные
-    адреса для проверок изнутри. Раньше умолчание было «*»: любой Host.
+    (MICROSITE_DOMAIN с поддоменами), служебные адреса Render (с них —
+    переход на свой домен) и локальные адреса для проверок изнутри.
+    Раньше умолчание было «*»: любой Host.
     """
     from urllib.parse import urlsplit
 
@@ -112,8 +113,9 @@ def _allowed_hosts() -> list[str]:
     if microsites := (os.environ.get("MICROSITE_DOMAIN") or "").strip().lower():
         hosts.append("." + microsites)
 
-    if render := (os.environ.get("RENDER_EXTERNAL_HOSTNAME") or "").strip():
-        hosts.append(render)
+    # Служебные адреса хостинга: с них CanonicalHost (web/fallback.py)
+    # уводит на свой домен — для этого запрос должен дойти до Django
+    hosts.append(".onrender.com")
 
     return hosts
 

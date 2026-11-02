@@ -2,7 +2,7 @@
 Свои хосты (settings.ALLOWED_HOSTS): «*» — только у разработчика.
 
 На боевом и тестовом без DJANGO_ALLOWED_HOSTS — домен из APP_URL,
-мини-сайты с поддоменами, служебный адрес Render и локальные адреса.
+мини-сайты с поддоменами, служебные адреса Render и локальные адреса.
 Раньше умолчание было «*»: Django принимал любой Host.
 
 Настройки читаются при запуске, поэтому каждый случай — отдельный процесс.
@@ -20,7 +20,7 @@ import pytest
 
 PYTHON = Path(__file__).resolve().parent.parent
 КОД = "import json; from savdex import settings; print(json.dumps(settings.ALLOWED_HOSTS))"
-ЛИШНЕЕ = ("DJANGO_ALLOWED_HOSTS", "APP_URL", "MICROSITE_DOMAIN", "RENDER_EXTERNAL_HOSTNAME")
+ЛИШНЕЕ = ("DJANGO_ALLOWED_HOSTS", "APP_URL", "MICROSITE_DOMAIN")
 
 
 def _хосты(**env: str) -> list[str]:
@@ -53,14 +53,13 @@ def _хосты(**env: str) -> list[str]:
         # Боевой без списка — свой домен и локальные адреса, не «*»
         (
             {"APP_ENV": "production", "APP_URL": "https://savdex.uz"},
-            ["localhost", "127.0.0.1", "[::1]", "savdex.uz"],
+            ["localhost", "127.0.0.1", "[::1]", "savdex.uz", ".onrender.com"],
         ),
         (
             {
                 "APP_ENV": "staging",
                 "APP_URL": "https://staging.savdex.uz/",
                 "MICROSITE_DOMAIN": "Savdex.Site",
-                "RENDER_EXTERNAL_HOSTNAME": "savdex.onrender.com",
             },
             [
                 "localhost",
@@ -68,7 +67,7 @@ def _хосты(**env: str) -> list[str]:
                 "[::1]",
                 "staging.savdex.uz",
                 ".savdex.site",
-                "savdex.onrender.com",
+                ".onrender.com",
             ],
         ),
     ],
