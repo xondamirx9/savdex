@@ -7,14 +7,16 @@
 (database/migrations/2026_07_29_130000_create_credit_packs_and_orders.php):
 managed = False, схему по-прежнему меняет только Laravel.
 
-Счёт на пакет (payments.credit_pack_id) ссылается на пакет, а кредиты
-при оплате начисляются по самому пакету (OrderService::grantCredits),
-а не по счёту. Поэтому:
+Счёт на пакет (payments.credit_pack_id) ссылается на пакет и сам хранит
+число кредитов (payments.credits, записывается при выставлении): оплата
+начисляет обещанное в счёте, а не то, что к тому времени окажется в
+пакете. Раньше начислялось по пакету, и от расхождения защищал запрет
+менять кредиты при счетах «ждёт оплаты», но и отменённый счёт может
+стать оплаченным. Теперь число кредитов в пакете менять можно всегда.
 
 - пакет, на который выставлен хоть один счёт, не удаляется. В Filament
   комментарий обещал «удаления нет», а кнопка «Удалить» на странице
-  правки была: удалённый пакет обнулялся у счетов, и неоплаченный счёт
-  после оплаты не начислял ни одного кредита — молча;
+  правки была: удалённый пакет обнулялся у счетов;
 - код не меняется после создания — по нему пакет узнаёт шлюз оплаты.
 """
 
@@ -22,7 +24,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from django.db import connection, models
+from django.db import models
 
 from savdex.catalog import Guarded, Reference
 
@@ -51,20 +53,6 @@ class CreditPack(Guarded):
 
     def __str__(self) -> str:
         return self.name if self.pk else "новый пакет"
-
-    def unpaid_invoices(self) -> int:
-        """Счета, по которым кредиты ещё будут начислены — по пакету, не по счёту."""
-        if self.pk is None:
-            return 0
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "select count(*) from payments where credit_pack_id = %s and status = 'pending'",
-                [self.pk],
-            )
-            row = cursor.fetchone()
-
-        return int(row[0]) if row else 0
 
 
 class Plan(Guarded):

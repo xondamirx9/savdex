@@ -3,7 +3,7 @@
 
 Три пакета заводит сама миграция Laravel (pack_10, pack_30, pack_100),
 на них и проверяется: права (раздел только у суперадмина и финансов),
-код, цены, запрет менять число кредитов при неоплаченных счетах,
+код, цены, число кредитов меняется и при выставленных счетах (оно записано в счёте),
 запрет удаления пакета со счетами и строки журнала admin_actions.
 
 Нужен PostgreSQL (SAVDEX_PARITY_PG_URL); общая
@@ -44,10 +44,10 @@ def _счёт(pack: int, status: str) -> None:
         "returning id"
     )
     sql(
-        "insert into payments (company_id, credit_pack_id, purpose, description, amount, "
-        "status, created_at, updated_at) values (%s, %s, 'credits', 'Пакет', 100000, %s, "
-        "now(), now())",
-        [company, pack, status],
+        "insert into payments (company_id, credit_pack_id, credits, purpose, description, "
+        "amount, status, created_at, updated_at) values (%s, %s, (select credits from "
+        "credit_packs where id = %s), 'credits', 'Пакет', 100000, %s, now(), now())",
+        [company, pack, pack, status],
     )
 
 
@@ -115,15 +115,17 @@ def test_код_латиницей_и_без_повторов(люди, code):
     assert "Только латиница" in ответ["body"] or "Пакет с таким кодом уже есть" in ответ["body"]
 
 
-def test_число_кредитов_не_меняется_при_неоплаченных_счетах(люди):
+def test_число_кредитов_меняется_и_при_выставленных_счетах(люди):
     """
-    Кредиты начисляются по пакету, а не по счёту: заплативший за
-    «30 контактов» получил бы другое число.
+    Число кредитов записано в каждом счёте при выставлении, и оплата
+    начисляет его, а не то, что окажется в пакете. Поэтому менять пакет
+    можно и при неоплаченных или отменённых счетах.
     """
     pk = _id("pack_30")
     _счёт(pk, "pending")
+    _счёт(pk, "failed")
 
-    _, отказ = django(
+    _, кредиты = django(
         люди["finance"],
         (
             "post",
@@ -131,9 +133,16 @@ def test_число_кредитов_не_меняется_при_неоплач
             _форма("pack_30", name="30 контактов", credits=25, price_usd="24"),
         ),
     )
-    assert отказ["status"] == 200
-    assert "На пакет выставлено неоплаченных счетов: 1" in отказ["body"]
-    assert sql("select credits from credit_packs where id = %s", [pk]) == [(30,)]
+    assert кредиты["status"] == 302, кредиты["body"][:3000]
+    assert журнал("updated")["changes"] == {
+        "before": {"credits": 30, "sort": 2},
+        "after": {"credits": 25, "sort": 4},
+    }
+    # Счета держат своё число
+    assert sql("select credits from payments where credit_pack_id = %s", [pk]) == [
+        (30,),
+        (30,),
+    ]
 
     # Цену менять можно: сумма уже записана в счёте
     _, цена = django(
@@ -141,13 +150,13 @@ def test_число_кредитов_не_меняется_при_неоплач
         (
             "post",
             f"{LIST}{pk}/change/",
-            _форма("pack_30", name="30 контактов", credits=30, price_usd="22"),
+            _форма("pack_30", name="30 контактов", credits=25, price_usd="22"),
         ),
     )
     assert цена["status"] == 302, цена["body"][:3000]
     assert журнал("updated")["changes"] == {
-        "before": {"price_usd": "24.00", "sort": 2},
-        "after": {"price_usd": "22.00", "sort": 4},
+        "before": {"price_usd": "24.00"},
+        "after": {"price_usd": "22.00"},
     }
 
 

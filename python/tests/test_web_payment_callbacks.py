@@ -685,6 +685,37 @@ def test_вебхук_сумма(сайт, касса, статус, счёт_, 
     assert bool(база["subscriptions"]) is (счёт_ == "paid")
 
 
+def test_вебхук_кредиты_из_счёта(сайт, касса):
+    """
+    Отменённый счёт на пакет оплачен позже, а в пакете тем временем
+    стало другое число кредитов: начисляется записанное в счёте.
+    """
+    касса.режим = "completed"
+
+    def подготовка() -> None:
+        сброс(счета=счёт("failed", "pack"))()
+        sql("update payments set credits = 7")
+        sql("update credit_packs set credits = 80 where code = 'm'")
+
+    try:
+        итог = вызов(
+            сайт,
+            касса,
+            "/payments/uzum/callback",
+            {"orderId": "ORD-SVD-000001", "operationState": "SUCCESS"},
+            подготовка,
+            вход=None,
+        )
+    finally:
+        sql("update credit_packs set credits = 50 where code = 'm'")
+
+    база = итог["база"]
+
+    assert (итог["ответ"]["status"], ответ(итог)) == ПРИНЯТ
+    assert [p[1] for p in база["payments"]] == ["paid"]
+    assert база["wallet_log"] == [("credits", 7, 7, "purchase", "App\\Models\\Payment", 1)]
+
+
 def test_вебхук_повтор(сайт, касса):
     """Проведённая транзакция второй раз не проводится."""
     касса.режим = "completed"
