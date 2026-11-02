@@ -117,9 +117,11 @@ def findings(start: datetime, end: datetime) -> list[dict[str, Any]]:
         elif len(done) > 1:
             note = f"{len(done)} проведённых транзакции"
             found.append(_row(DOUBLE_PERFORMED, payment, amount, total, note))
-        elif done and int(amount or 0) * 100 != int(done[0] or 0):
-            # Своя сторона — в сумах, шлюз — в тийинах
-            found.append(_row(AMOUNT_MISMATCH, payment, amount, int(done[0] or 0), None))
+        elif done and done[0] is not None and int(amount or 0) * 100 != int(done[0]):
+            # Своя сторона — в сумах, шлюз — в тийинах. Суммы шлюза нет
+            # (Uzum её не прислал) — сверять нечем, это не расхождение:
+            # как в payments/reconcile.py
+            found.append(_row(AMOUNT_MISMATCH, payment, amount, int(done[0]), None))
 
     order = list(KINDS)
     found.sort(key=lambda row: order.index(row["kind"]))

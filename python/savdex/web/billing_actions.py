@@ -241,7 +241,10 @@ def _paid_elsewhere(ctx: Context, payment: dict[str, Any]) -> bool:
     if not order_id or payment.get("provider") != "uzum":
         return False
 
-    if not payment_callbacks.order_completed(cashier.gateway(), str(order_id)):
+    completed, charged = payment_callbacks.order_status(cashier.gateway(), str(order_id))
+
+    # Списано не по счёту — не засчитываем: разбирают руками по сверке
+    if not completed or not payment_callbacks.amount_matches(payment, charged, str(order_id)):
         return False
 
     settlement.mark_paid(ctx, payment, {"provider": "uzum", "external_id": order_id})

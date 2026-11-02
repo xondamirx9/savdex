@@ -70,6 +70,10 @@ STATE_LABELS = {CREATED: "CREATED", PERFORMED: "CONFIRMED", CANCELLED: "REVERSED
 ORDER_COMPLETED = "COMPLETED"
 STATUS_KEYS = ("status", "orderStatus", "state", "paymentStatus", "operationState")
 
+#: Списанная сумма в ответе getOrderStatus, в тийинах: сначала проведённая
+#: часть, затем сумма заказа
+AMOUNT_KEYS = ("completedAmount", "amount", "totalAmount")
+
 
 # ── Общее ───────────────────────────────────────────────────────────
 
@@ -482,14 +486,29 @@ def _completed(node: dict[Any, Any]) -> bool:
     return any(_php_string(node.get(k) or "").upper() == ORDER_COMPLETED for k in STATUS_KEYS)
 
 
-def order_completed(config: UzumConfig, order_id: str) -> bool:
-    """UzumGateway::orderCompleted: списаны ли деньги — спрашиваем сам Uzum."""
+def _amount(node: dict[Any, Any]) -> int | None:
+    """Сумма заказа в тийинах из узла ответа Uzum; нет числа — None."""
+    for key in AMOUNT_KEYS:
+        value = node.get(key)
+
+        if _numeric(value):
+            return _php_int(value)
+
+    return None
+
+
+def order_status(config: UzumConfig, order_id: str) -> tuple[bool, int | None]:
+    """
+    UzumGateway::orderCompleted со списанной суммой: проведён ли заказ
+    (спрашиваем сам Uzum) и на сколько тийинов. Сумма — из того же узла
+    ответа, где стоит COMPLETED; Uzum её не прислал — None.
+    """
     import httpx
 
     from savdex.payments.uzum import СВЯЗЬ
 
     if order_id == "":
-        return False
+        return False, None
 
     try:
         if any(getattr(config, k).strip() == "" for k in ("base_url", "terminal_id", "secret_key")):
@@ -502,17 +521,55 @@ def order_completed(config: UzumConfig, order_id: str) -> bool:
             "payment.uzum.status_check_failed", extra={"order": order_id, "error": str(error)}
         )
 
-        return False
+        return False, None
 
     if _completed(result):
-        return True
+        return True, _amount(result)
 
-    if any(isinstance(v, dict) and _completed(v) for v in result.values()):
-        return True
+    for value in result.values():
+        if isinstance(value, dict) and _completed(value):
+            amount = _amount(value)
+
+            return True, _amount(result) if amount is None else amount
 
     log.warning("payment.uzum.status_unrecognized", extra={"order": order_id})
 
-    return False
+    return False, None
+
+
+def order_completed(config: UzumConfig, order_id: str) -> bool:
+    """UzumGateway::orderCompleted: списаны ли деньги — спрашиваем сам Uzum."""
+    return order_status(config, order_id)[0]
+
+
+def amount_matches(payment: dict[str, Any], amount: int | None, order_id: str) -> bool:
+    """
+    Списано ровно по счёту (сумы × 100 = тийины). Сумму Uzum не прислал —
+    сверить нечем: не отказываем (иначе встанет оплата), но пишем в журнал.
+    """
+    expected = int(payment["amount"] or 0) * 100
+
+    if amount is None:
+        log.warning(
+            "payment.uzum.amount_missing", extra={"payment": payment["number"], "order": order_id}
+        )
+
+        return True
+
+    if amount != expected:
+        log.error(
+            "payment.callback.amount_mismatch",
+            extra={
+                "payment": payment["number"],
+                "order": order_id,
+                "expected": expected,
+                "charged": amount,
+            },
+        )
+
+        return False
+
+    return True
 
 
 def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
@@ -542,11 +599,15 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
         return _gateway_response(False)
 
     state = state_raw.upper()
+    charged: int | None = None
 
-    if state == "SUCCESS" and not order_completed(config, order_id):
-        log.error("payment.callback.gateway_error", extra={"provider": provider})
+    if state == "SUCCESS":
+        completed, charged = order_status(config, order_id)
 
-        return _gateway_response(False)
+        if not completed:
+            log.error("payment.callback.gateway_error", extra={"provider": provider})
+
+            return _gateway_response(False)
 
     status = "paid" if state == "SUCCESS" else "pending"
     # Успех перепроверен у Uzum — счёт можно найти и по номеру. Прочие
@@ -592,7 +653,8 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
 
     fields = {
         "payment_id": payment["id"],
-        "amount_minor": None,
+        # Сумма — только перепроверенная у Uzum: тело вебхука не подписано
+        "amount_minor": charged,
         "currency": "UZS",
         "payload": audit._php_json(data),
     }
@@ -605,7 +667,12 @@ def _webhook(ctx: Context, request: HttpRequest) -> HttpResponse:
                 extra={"payment": payment["number"], "order": order_id},
             )
 
-        settlement.mark_paid(ctx, payment, {"provider": provider, "external_id": order_id})
+        # Списано не по счёту — не начисляем. Деньги взяты, поэтому
+        # транзакция всё равно проведена: сверка покажет «Деньги взяты,
+        # счёт не закрыт», и разбирают руками (доплата или возврат)
+        if amount_matches(payment, charged, order_id):
+            settlement.mark_paid(ctx, payment, {"provider": provider, "external_id": order_id})
+
         fields.update(state=PERFORMED, performed_at=eloquent.now())
     else:
         fields.update(state=CREATED)
