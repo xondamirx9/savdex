@@ -297,7 +297,7 @@ def снимок() -> Any:
         "payments": sql(
             "select company_id, purpose, plan_id, credit_pack_id, promo_code_id, number, "
             "description, amount, currency, provider, external_id, status, admin_note, "
-            "subscription_id from payments order by id"
+            "subscription_id, credits from payments order by id"
         ),
         "subscriptions": sql(
             "select plan_id, status, source, auto_renew, (ends_at - started_at)::text, "
@@ -443,6 +443,8 @@ def test_заказ(сайт, body, ждём, admin):
     # Номер счёта — из id; уведомление владельцу
     assert счета(база) == [(назначение, "SVD-000001", сумма, "invoice", None, "pending")]
     assert база["payments"][0][6] == описание
+    # Счёт на пакет хранит число кредитов: начислится оно, что бы ни стало с пакетом
+    assert база["payments"][0][14] == (50 if назначение == "credits" else None)
     assert сессия(итог)["success"] == СФОРМИРОВАН.format(n="SVD-000001", сумма=сумма_текст)
     # «…на 30 дн.» уже кончается точкой — второй перед «Оплатите» нет
     уведомление = описание.removesuffix(".") + ОПЛАТИТЕ

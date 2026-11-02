@@ -49,6 +49,8 @@ class Payment(models.Model):
     paid_at = UTCDateTimeField("оплачен", null=True)
     plan_id = models.BigIntegerField("тариф", null=True)
     credit_pack_id = models.BigIntegerField("пакет", null=True)
+    #: Кредитов в счёте на пакет — записано при выставлении, начисляется оно
+    credits = models.IntegerField("кредитов", null=True)
     promo_code_id = models.BigIntegerField("промокод", null=True)
     subscription_id = models.BigIntegerField("подписка", null=True)
     confirmed_by = models.ForeignKey(

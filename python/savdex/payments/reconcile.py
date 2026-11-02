@@ -193,14 +193,16 @@ def _check_credits(payment: dict[str, Any], credits: list[dict[str, Any]], fail:
     if len(credits) != 1:
         fail("credits_count", f"начислений кредитов — {len(credits)}, нужно одно")
 
-    pack = _one("select * from credit_packs where id = %s", [payment["credit_pack_id"]])
+    from savdex.web.settlement import invoice_credits
+
+    promised = invoice_credits(payment)
 
     for entry in credits[:1]:
         if entry["kind"] != "credits":
             fail("credits_kind", f"начислено не в кредиты, а в {entry['kind']}")
 
-        if pack is not None and entry["amount"] != pack["credits"]:
-            fail("credits_amount", f"начислено {entry['amount']}, в пакете — {pack['credits']}")
+        if promised is not None and entry["amount"] != promised:
+            fail("credits_amount", f"начислено {entry['amount']}, в счёте — {promised}")
 
         if entry["company_id"] != payment["company_id"]:
             fail("credits_company", "кредиты начислены другой компании")

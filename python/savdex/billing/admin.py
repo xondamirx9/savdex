@@ -48,6 +48,7 @@ class CreditPackForm(forms.ModelForm):  # type: ignore[type-arg]
             "code": "Латиницей, например pack_50. После создания не меняется — "
             "по нему пакет узнаёт шлюз оплаты",
             "name": "То, что видит покупатель: «30 контактов»",
+            "credits": "Уже выставленные счета начислят то число, что записано в них",
             "sort": "Меньше — выше в кабинете",
             "price_usd": "Пересчитывается в сумы по курсу ЦБ",
             "price_uzs": "Заполните, только если цену зафиксировали — тогда курс не применяется",
@@ -72,16 +73,8 @@ class CreditPackForm(forms.ModelForm):  # type: ignore[type-arg]
         if credits < 1:
             raise forms.ValidationError("Хотя бы один кредит.")
 
-        pack: CreditPack = self.instance
-        unpaid = pack.unpaid_invoices()
-
-        if pack.pk and credits != pack.credits and unpaid:
-            raise forms.ValidationError(
-                f"На пакет выставлено неоплаченных счетов: {unpaid}. Кредиты начисляются "
-                "по пакету, и за них пришло бы другое число контактов, чем в счёте. "
-                "Заведите новый пакет, а этот выключите."
-            )
-
+        # Менять можно и при выставленных счетах: число кредитов записано
+        # в каждом счёте, и оплата начислит обещанное там
         return credits
 
     def clean_price_usd(self) -> Decimal:

@@ -165,6 +165,9 @@ def order_credits(
         {
             "purpose": "credits",
             "credit_pack_id": pack["id"],
+            # Число кредитов — в самом счёте: начисляется оно, а не то, что
+            # к моменту оплаты окажется в пакете
+            "credits": int(pack["credits"]),
             "description": ctx.t("messages.order.pack", pack=pack["name"], credits=pack["credits"]),
             "amount": price_uzs(pack, CurrencyRate().usd()),
         },

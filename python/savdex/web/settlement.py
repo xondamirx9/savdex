@@ -121,19 +121,33 @@ def _grant_plan(
             )
 
 
+def invoice_credits(payment: dict[str, Any]) -> int | None:
+    """
+    Сколько кредитов обещано в счёте на пакет. Записано в самом счёте при
+    выставлении; у счёта без записи (выставлен до неё) — по пакету. Нет ни
+    того, ни другого — None.
+    """
+    if payment.get("credits") is not None:
+        return int(payment["credits"])
+
+    packs = _rows("select credits from credit_packs where id = %s", [payment.get("credit_pack_id")])
+
+    return int(packs[0]["credits"]) if packs else None
+
+
 def _grant_credits(
     payment: dict[str, Any], company: dict[str, Any], admin: dict[str, Any] | None
 ) -> None:
-    """OrderService::grantCredits: кредиты пакета — в кошелёк, с историей."""
-    packs = _rows("select * from credit_packs where id = %s", [payment["credit_pack_id"]])
+    """OrderService::grantCredits: кредиты счёта — в кошелёк, с историей."""
+    credits = invoice_credits(payment)
 
-    if not packs:
+    if credits is None:
         return
 
     grant(
         _wallet(company["id"]),
         "credits",
-        int(packs[0]["credits"]),
+        credits,
         "purchase",
         ("Payment", payment["id"]),
         admin["id"] if admin is not None else None,
@@ -191,14 +205,11 @@ def _record_payment(payment: dict[str, Any], admin: dict[str, Any] | None) -> No
     )
 
     if payment["purpose"] == "credits":
-        packs = _rows(
-            "select credits from credit_packs where id = %s", [payment.get("credit_pack_id")]
-        )
         product_events.record(
             "credits_purchased",
             company_id=payment["company_id"],
             plan=product_events.plan_code(payment["company_id"]),
-            props={**props, "credits": int(packs[0]["credits"]) if packs else None},
+            props={**props, "credits": invoice_credits(payment)},
         )
 
 
