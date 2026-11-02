@@ -388,8 +388,14 @@ def test_без_почтовика_не_отправить(люди, чисто)
         ("post", LIST, {**выбор, "post": "yes", "subject": "Тема", "body": "Текст"}),
         # Как на боевом сейчас: почта сайта (Brevo) настроена, своей у
         # рассылки нет — через почту сайта рассылка не идёт
-        # Без перевода на HTTPS: в production он включён, а тест ходит по HTTP
-        env={"MAIL_MAILER": "smtp", "APP_ENV": "production", "SAVDEX_FORCE_HTTPS": "false"},
+        # Без перевода на HTTPS: в production он включён, а тест ходит по HTTP.
+        # Хост тестового клиента Django — testserver: в production «*» нет
+        env={
+            "MAIL_MAILER": "smtp",
+            "APP_ENV": "production",
+            "SAVDEX_FORCE_HTTPS": "false",
+            "DJANGO_ALLOWED_HOSTS": "testserver",
+        },
     )
 
     assert "Почта для рассылки ещё не настроена" in ответ["body"]

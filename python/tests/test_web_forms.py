@@ -3,7 +3,7 @@
 страница ошибки), строка sessions после ответа (сообщения, ошибки
 проверки, ввод) и то, что записано в базу.
 
-Посредники: без токена CSRF — 419 (кроме Sec-Fetch-Site: same-origin),
+Посредники: без токена CSRF — 419 (кроме same-origin с Origin сайта),
 токен — из ввода, X-CSRF-TOKEN или зашифрованного X-XSRF-TOKEN; гость —
 на вход; частота (throttle:60,1 у избранного).
 
@@ -172,6 +172,11 @@ def _снимок_уведомлений(uid: int) -> Callable[[], Any]:
         {"X-Inertia": "true", "X-CSRF-TOKEN": "x" * 40},
         # Токен не из ASCII — тоже 419, а не 500 (compare_digest на строках)
         {"X-Inertia": "true", "X-CSRF-TOKEN": "é" * 40},
+        # «Свой» запрос — только с Origin самого сайта: без него или с
+        # чужим Sec-Fetch-Site не пропускает
+        {"Sec-Fetch-Site": "same-origin"},
+        {"Sec-Fetch-Site": "same-origin", "Origin": "https://evil.example"},
+        {"Sec-Fetch-Site": "same-origin", "Origin": "null"},
     ],
 )
 def test_без_токена_419(сайт, headers):
@@ -192,12 +197,14 @@ def test_без_токена_419(сайт, headers):
 @pytest.mark.parametrize(
     "headers",
     [
-        {"Sec-Fetch-Site": "same-origin"},
+        # Со своей страницы: Sec-Fetch-Site и Origin сайта («САЙТ» — адрес)
+        {"Sec-Fetch-Site": "same-origin", "Origin": "САЙТ"},
         {"X-CSRF-TOKEN": ТОКЕН},
         {"X-Inertia": "true", "X-XSRF-TOKEN": xsrf()},
     ],
 )
 def test_токен_принят(сайт, headers):
+    headers = {k: сайт if v == "САЙТ" else v for k, v in headers.items()}
     uid = учётка("forms-token@savdex.uz")
     итог = отправить(
         сайт,

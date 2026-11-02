@@ -233,8 +233,12 @@ def test_картинка_на_публичный_диск(люди, карти�
         ("hero_image", "fon.svg", SVG, False),
         ("logo_image", "znak.svg", SVG, True),
         ("logo_image", "znak.png", b"not an image at all", False),
+        # SVG со скриптом, обработчиком или внешней ссылкой — не принимается
+        ("logo_image", "znak.svg", SVG.replace(b"<rect", b"<script>alert(1)</script><rect"), None),
+        ("logo_image", "znak.svg", SVG.replace(b"<rect", b'<rect onclick="alert(1)"'), None),
+        ("logo_image", "znak.svg", SVG.replace(b"<rect", b'<image href="//e.tld/x"/><rect'), None),
     ],
-)
+)  # fmt: skip
 def test_какие_картинки_принимаются(люди, картинки, key, name, content, принят):
     """Вектор — только для логотипа, как в Filament; не картинка — нигде."""
     before = _value(key)
@@ -243,6 +247,10 @@ def test_какие_картинки_принимаются(люди, карти
     if принят:
         assert ответ["status"] == 302, ответ["body"][:3000]
         assert _value(key).endswith(".svg")
+    elif принят is None:
+        assert ответ["status"] == 200
+        assert "SVG со скриптами или внешними ссылками не принимается" in ответ["body"]
+        assert _value(key) == before
     else:
         assert ответ["status"] == 200
         assert "Нужна картинка PNG, JPEG или WebP" in ответ["body"]

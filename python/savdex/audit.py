@@ -148,6 +148,38 @@ def _from_edge(peer: str | None) -> bool:
     return False
 
 
+#: Свои сети: прокси и балансировщики, которые могут стоять между
+#: посетителем и сайтом. Адрес посетителя из них не бывает
+_INTERNAL = tuple(
+    ipaddress.ip_network(n)
+    for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "127.0.0.0/8",
+              "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10")
+)  # fmt: skip
+
+
+def _rightmost_outside(chain: list[str]) -> str:
+    """
+    Без SAVDEX_PROXY_HOPS: первый справа адрес не из своих сетей.
+
+    Раньше брался самый левый — его посетитель пишет сам, и прокси,
+    который дописывает справа (а не заменяет, как Caddy), отдавал бы
+    замок по IP в руки посетителя. Справа налево: свои прокси
+    пропускаются, первый внешний — тот, кто к ним подключился. Мусор в
+    цепочке — дальше не верим (пустая строка: возьмётся REMOTE_ADDR).
+    Вся цепочка из своих сетей — самый левый, как раньше.
+    """
+    for value in reversed(chain):
+        found = _ip(value)
+
+        if found is None:
+            return ""
+
+        if not any(ipaddress.ip_address(found) in net for net in _INTERNAL):
+            return found
+
+    return chain[0]
+
+
 def client_ip(request: HttpRequest | None) -> str | None:
     """
     Адрес посетителя — для журнала, сессий и замков от перебора.
@@ -157,8 +189,8 @@ def client_ip(request: HttpRequest | None) -> str | None:
     trustProxies('*')) посетитель выбирает сам и обходит замок по IP.
     Поэтому сначала — заголовок края сети (CF-Connecting-IP), если
     запрос пришёл с адреса Cloudflare, затем X-Forwarded-For с заданным
-    числом своих прокси справа (SAVDEX_PROXY_HOPS), и только без них —
-    по-старому, самый левый.
+    числом своих прокси справа (SAVDEX_PROXY_HOPS), а без них — первый
+    справа адрес не из своих сетей (_rightmost_outside).
     """
     if request is None:
         return None
@@ -174,7 +206,7 @@ def client_ip(request: HttpRequest | None) -> str | None:
             if name and (found := _ip(request.headers.get(name, ""))) is not None:
                 return found
 
-    candidate = chain[-hops] if 0 < hops <= len(chain) else chain[0]
+    candidate = chain[-hops] if 0 < hops <= len(chain) else _rightmost_outside(chain)
 
     for value in (candidate, request.META.get("REMOTE_ADDR")):
         if (found := _ip(value)) is not None:
