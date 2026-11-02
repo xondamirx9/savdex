@@ -44,6 +44,8 @@ class Касса:
 
     def __init__(self) -> None:
         self.режим = "ok"
+        #: Добавка к ответу getOrderStatus — например, списанная сумма
+        self.статус: dict[str, Any] = {}
         self.запросы: list[dict[str, Any]] = []
         касса = self
 
@@ -92,7 +94,11 @@ class Касса:
         if self.режим in ("completed", "processing"):
             return 200, {
                 "errorCode": 0,
-                "result": {"orderId": тело.get("orderId"), "orderStatus": self.режим.upper()},
+                "result": {
+                    "orderId": тело.get("orderId"),
+                    "orderStatus": self.режим.upper(),
+                    **self.статус,
+                },
             }
 
         if self.режим == "вложенная":

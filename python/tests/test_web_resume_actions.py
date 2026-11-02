@@ -15,6 +15,7 @@ import json
 import re
 import time
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -257,8 +258,16 @@ def _строка(row: tuple[Any, ...]) -> dict[str, Any]:
     }
 
 
-#: Опыт: 2018-03 … сейчас (вторая работа без конца перекрывает первую)
-ОПЫТ_ПОЛНОГО = 103
+def _месяцев_с(year: int, month: int) -> int:
+    """Месяцев от начала (year, month) до начала текущего месяца по UTC — как experience_months."""
+    today = datetime.now(UTC).date()
+
+    return (today.year - year) * 12 + today.month - month
+
+
+#: Опыт: 2018-03 … сейчас (вторая работа без конца перекрывает первую).
+#: От сегодняшней даты: числом (103) тест сломался 1 ноября 2026
+ОПЫТ_ПОЛНОГО = _месяцев_с(2018, 3)
 
 ПРАВКИ = [
     # (тело, ждём): ждём — поля сохранённого резюме или ошибки проверки
@@ -305,7 +314,8 @@ def _строка(row: tuple[Any, ...]) -> dict[str, Any]:
         {
             "title": "Инженер ПТО",
             "jobs": [{"company": "A", "position": "B", "start": "2019"}],
-            "experience_months": 93,
+            # «2019» — с января 2019 по сейчас
+            "experience_months": _месяцев_с(2019, 1),
             "title_i18n": None,
         },
     ),
