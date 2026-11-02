@@ -46,6 +46,36 @@ from savdex.guards import allowed_writes
 from savdex.text import numeric
 
 
+def _password_page(
+    model_admin: Any,  # noqa: ANN401
+    request: HttpRequest,
+    user: Any,  # noqa: ANN401
+    password: str,
+) -> HttpResponse:
+    """
+    Выданный пароль — один раз, прямо в ответе. Не сообщением Django:
+    сообщения хранятся в куке (CookieStorage), подписанной, но не
+    зашифрованной, — пароль открытым текстом ездил бы с каждым запросом
+    и оседал в журналах прокси.
+    """
+    response = TemplateResponse(
+        request,
+        "admin/accounts/user/password_issued.html",
+        {
+            **model_admin.admin_site.each_context(request),
+            "title": "Пароль выдан",
+            "opts": model_admin.model._meta,
+            "person": user,
+            "password": password,
+            "back": reverse("savdex_admin:accounts_user_change", args=[user.pk]),
+        },
+    )
+    # Ни браузер (кнопка «назад»), ни прокси страницу не хранят
+    response["Cache-Control"] = "no-store, private"
+
+    return response
+
+
 class StateFilter(admin.SimpleListFilter):
     """Действующие и отключённые — как TrashedFilter у Filament."""
 
@@ -211,12 +241,26 @@ class UserAdmin(SavdexModelAdmin):
             obj.must_change_password = bool(form.cleaned_data.get("must_change_password"))
             password = str(form.cleaned_data["password"])
             editing.write(obj, form.columns(), password=password)
-            # Пароль показывается один раз: хранить его в открытом виде негде
-            messages.warning(request, f"Пароль выдан — передайте лично: {password}")
+            # Пароль показывается один раз — страницей после сохранения
+            # (response_add), а не сообщением: сообщения живут в куке
+            request._savdex_issued_password = password  # type: ignore[attr-defined]
 
             return
 
         editing.write(obj, form.columns())
+
+    def response_add(
+        self,
+        request: HttpRequest,
+        obj: Any,  # noqa: ANN401
+        post_url_continue: str | None = None,
+    ) -> HttpResponse:
+        password = getattr(request, "_savdex_issued_password", None)
+
+        if password is None:
+            return super().response_add(request, obj, post_url_continue)
+
+        return _password_page(self, request, obj, str(password))
 
     def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:  # noqa: ANN401
         # Стандартное удаление Django стёрло бы и действующий аккаунт —
@@ -473,7 +517,9 @@ class UserAdmin(SavdexModelAdmin):
             messages.success(request, f"Почта подтверждена: {user.email}")
         elif todo == "password":
             password = editing.set_password(user)
-            messages.warning(request, f"Пароль выдан — передайте лично: {password}")
+            self.journal_changes(request, user, before)
+
+            return _password_page(self, request, user, password)
         elif todo == "status":
             # Заблокировать себя — остаться без доступа к панели
             if user.pk == _admin_of(request).id:

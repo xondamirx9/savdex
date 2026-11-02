@@ -15,6 +15,7 @@ Filament (удаление в два шага — tests/test_users_admin.py).
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -70,9 +71,17 @@ def _клиент(**поля: Any) -> int:
 
 
 def test_новый_пользователь(люди):
-    _, ответ = django(люди["admin"], ("post", LIST + "add/", _форма()))
+    _, ответ, дальше = django(
+        люди["admin"],
+        ("post", LIST + "add/", _форма()),
+        ("get", LIST, None),
+    )
 
-    assert ответ["status"] == 302, ответ["body"][:2000]
+    # Пароль — страницей один раз, не сообщением: сообщения живут в куке,
+    # и на следующей странице его уже нет
+    assert ответ["status"] == 200, ответ["body"][:2000]
+    assert "Пароль выдан" in ответ["body"] and "Abc12345xyz" in ответ["body"]
+    assert "Abc12345xyz" not in дальше["body"]
     [(email, password, must, is_admin)] = sql(
         "select email, password, must_change_password, is_admin from users "
         "where email like 'client%%'"
@@ -93,7 +102,8 @@ def test_почта_уникальна_среди_действующих(люд�
     )
 
     assert занята["status"] == 200 and "Такая почта уже занята" in занята["body"]
-    assert свободна["status"] == 302, "адрес отключённого аккаунта свободен"
+    assert свободна["status"] == 200, "адрес отключённого аккаунта свободен"
+    assert "Пароль выдан" in свободна["body"]
 
 
 def test_роль_правит_только_суперадмин(люди):
@@ -154,14 +164,19 @@ def test_подтвердить_почту(люди):
 def test_выдать_пароль_и_заблокировать(люди):
     pk = _клиент()
 
-    _, пароль, блок = django(
+    _, пароль, блок, карточка = django(
         люди["admin"],
         ("post", f"{LIST}{pk}/act/", {"act": "password"}),
         ("post", f"{LIST}{pk}/act/", {"act": "status"}),
+        ("get", f"{LIST}{pk}/change/", None),
     )
     _, себя = django(люди["admin"], ("post", f"{LIST}{люди['admin']}/act/", {"act": "status"}))
 
-    assert пароль["status"] == 302 and блок["status"] == 302
+    # Пароль — на странице ответа, один раз; в сообщения (куку) он не попал
+    assert пароль["status"] == 200 and блок["status"] == 302
+    выдан = re.search(r"<code[^>]*>([^<]+)</code>", пароль["body"])
+    assert выдан is not None and len(выдан.group(1)) == 12
+    assert выдан.group(1) not in карточка["body"] and выдан.group(1) not in блок["body"]
     [(password, must, status)] = sql(
         "select password, must_change_password, status from users where id = %s", [pk]
     )
@@ -207,7 +222,7 @@ def test_учётку_сотрудника_бережёт_roles_edit(люди):
     # пароль требует смены при входе, а люди модуля нужны дальше
     модератор = сотрудник("moderator")
     _, свой = django(суперадмин, ("post", f"{LIST}{модератор}/act/", {"act": "password"}))
-    assert свой["status"] == 302
+    assert свой["status"] == 200
     assert sql("select must_change_password from users where id = %s", [модератор]) == [(True,)]
     sql("delete from users where id = %s", [модератор])
 

@@ -191,9 +191,26 @@ def _token_from_request(request: HttpRequest, data: dict[str, Any]) -> Any:  # n
     return token
 
 
+def _same_origin(request: HttpRequest) -> bool:
+    """
+    Запрос со страницы самого сайта: Sec-Fetch-Site: same-origin и Origin —
+    тот же адрес, что видит сайт. Оба заголовка ставит браузер; одного
+    Sec-Fetch-Site мало — Origin сверяет, что «свой» значит именно этот
+    сайт. Без Origin (старый браузер) — проверка токеном.
+    """
+    from savdex.web.request import _root_from_headers
+
+    if request.headers.get("Sec-Fetch-Site") != "same-origin":
+        return False
+
+    origin = (request.headers.get("Origin") or "").strip().rstrip("/").lower()
+
+    return origin != "" and origin == _root_from_headers(request).lower()
+
+
 def _csrf_ok(request: HttpRequest, store: session.Store) -> bool:
-    """Sec-Fetch-Site: same-origin — пропуск; иначе токен из ввода или заголовка."""
-    if request.headers.get("Sec-Fetch-Site") == "same-origin":
+    """Запрос со своей страницы (_same_origin) — пропуск; иначе токен из ввода или заголовка."""
+    if _same_origin(request):
         return True
 
     token = _token_from_request(request, input_of(request))

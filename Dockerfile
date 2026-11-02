@@ -71,8 +71,12 @@ COPY docker/render-entrypoint.sh /usr/local/bin/render-entrypoint
 COPY docker/apache2-foreground /usr/local/bin/apache2-foreground
 RUN chmod +x /usr/local/bin/render-entrypoint /usr/local/bin/apache2-foreground
 
+# CACHE_STORE=file — счётчики ограничений частоты (python/savdex/web/
+# throttle.py) живут только в файловом кэше: забытая переменная не
+# должна молча выключать замки от перебора
 ENV APP_ENV=production \
     APP_DEBUG=false \
+    CACHE_STORE=file \
     LOG_CHANNEL=stderr \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

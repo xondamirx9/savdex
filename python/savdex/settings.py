@@ -86,7 +86,39 @@ if not DEBUG and not SECRET_KEY_IS_REAL:
         "Не задан ни DJANGO_SECRET_KEY, ни APP_KEY — боевой сайт без ключа не запускается."
     )
 
-ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",") if h]
+
+def _allowed_hosts() -> list[str]:
+    """
+    Свои хосты. Заданы в DJANGO_ALLOWED_HOSTS — они. Иначе «*» только у
+    разработчика; на боевом и тестовом — домен из APP_URL, мини-сайты
+    (MICROSITE_DOMAIN с поддоменами), служебный адрес Render и локальные
+    адреса для проверок изнутри. Раньше умолчание было «*»: любой Host.
+    """
+    from urllib.parse import urlsplit
+
+    given = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+    if given:
+        return given
+
+    if DEBUG:
+        return ["*"]
+
+    hosts = ["localhost", "127.0.0.1", "[::1]"]
+
+    if app := urlsplit(os.environ.get("APP_URL", "")).hostname:
+        hosts.append(app)
+
+    if microsites := (os.environ.get("MICROSITE_DOMAIN") or "").strip().lower():
+        hosts.append("." + microsites)
+
+    if render := (os.environ.get("RENDER_EXTERNAL_HOSTNAME") or "").strip():
+        hosts.append(render)
+
+    return hosts
+
+
+ALLOWED_HOSTS = _allowed_hosts()
 
 # За Apache и балансировщиком Render: HTTPS снимается снаружи, до Django
 # запрос доходит по HTTP. Какой был исходный протокол, говорит заголовок
