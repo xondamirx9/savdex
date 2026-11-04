@@ -929,12 +929,23 @@ def delete_account(request: HttpRequest) -> HttpResponse:
 
     if user["company_role"] == "owner" and user["company_id"] is not None:
         # $user->company->activeListings()->update(...): без событий моделей
-        with allowed_writes("listings"), connection.cursor() as cursor:
+        with allowed_writes("listings", "promotions"), connection.cursor() as cursor:
             cursor.execute(
                 "update listings set status = 'archived', updated_at = %s "
                 "where company_id = %s and status = 'active' and deleted_at is null "
                 "and exists (select 1 from companies c where c.id = %s and c.deleted_at is null)",
                 [now, user["company_id"], user["company_id"]],
+            )
+            # Продвижения ушедших в архив — завершены, как при снятии
+            # объявления (listing_actions._finish_promotions): иначе купленные
+            # места «ТОП главной» и «ТОП категории» оставались занятыми до
+            # конца срока, и другим их было не купить
+            cursor.execute(
+                "update promotions p set status = 'finished', active_key = null, "
+                "impressions_after = coalesce(l.impressions_count, p.impressions_before), "
+                "updated_at = %s from listings l where l.id = p.listing_id "
+                "and p.company_id = %s and p.status = 'active' and l.status <> 'active'",
+                [now, user["company_id"]],
             )
 
     store = _session(ctx)
