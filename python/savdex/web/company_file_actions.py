@@ -26,6 +26,7 @@ from savdex.web import eloquent, filetype
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
 from savdex.web.company_contact_actions import _php_boolean
+from savdex.web.company_profile_actions import not_owner
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.image_store import _random
 from savdex.web.listing_actions import _stamp
@@ -75,6 +76,9 @@ def store(request: HttpRequest) -> HttpResponse:
     """CompanyFileController::store (throttle:20,60)."""
     ctx = action(request, throttle=20, throttle_minutes=60, throttle_prefix="company-file")
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
 
     if company is None:
         flash(ctx, "error", ctx.t("messages.company.fill_first"))
@@ -181,6 +185,10 @@ def store(request: HttpRequest) -> HttpResponse:
 def update(request: HttpRequest, document_id: str) -> HttpResponse:
     """CompanyFileController::update: показ на визитке."""
     ctx = action(request)
+
+    if (refused := not_owner(ctx, company_of(ctx))) is not None:
+        return refused
+
     document = _owned(ctx, int(document_id))
 
     if document is None:
@@ -205,6 +213,10 @@ def update(request: HttpRequest, document_id: str) -> HttpResponse:
 def destroy(request: HttpRequest, document_id: str) -> HttpResponse:
     """CompanyFileController::destroy: файл с диска, строку — прочь."""
     ctx = action(request)
+
+    if (refused := not_owner(ctx, company_of(ctx))) is not None:
+        return refused
+
     document = _owned(ctx, int(document_id))
 
     if document is None:
