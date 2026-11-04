@@ -38,6 +38,7 @@ from savdex.web.actions import form
 from savdex.web.billing import _date, amount_label, price_uzs
 from savdex.web.cabinet import _rows, active_subscription, company_of
 from savdex.web.chat_actions import _unverified
+from savdex.web.company_profile_actions import not_owner
 from savdex.web.currency import CurrencyRate
 from savdex.web.forms import _store, action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _as_id
@@ -59,6 +60,10 @@ def cancel(request: HttpRequest) -> HttpResponse:
     """BillingController::cancel: автопродление — прочь, период остаётся."""
     ctx = action(request)
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
+
     subscription = active_subscription(company["id"]) if company is not None else None
 
     if subscription is None:
@@ -99,6 +104,10 @@ def resume(request: HttpRequest) -> HttpResponse:
     """BillingController::resume: только у оплаченной подписки."""
     ctx = action(request)
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
+
     subscription = active_subscription(company["id"]) if company is not None else None
 
     if subscription is None:
@@ -128,6 +137,9 @@ def remove_card(request: HttpRequest, card_id: str) -> HttpResponse:
     """BillingController::removeCard: основную при автопродлении — нельзя."""
     ctx = action(request)
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
 
     if company is None:
         return not_found(ctx)

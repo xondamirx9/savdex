@@ -22,6 +22,7 @@ from savdex.guards import allowed_writes
 from savdex.web import eloquent
 from savdex.web.actions import form
 from savdex.web.cabinet import _rows, company_of
+from savdex.web.company_profile_actions import not_owner
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
 from savdex.web.shared import Context
@@ -121,6 +122,9 @@ def store(request: HttpRequest) -> HttpResponse:
     ctx = action(request)
     company = company_of(ctx)
 
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
+
     if company is None:
         flash(ctx, "error", ctx.t("messages.company.fill_first"))
 
@@ -194,6 +198,10 @@ def store(request: HttpRequest) -> HttpResponse:
 def update(request: HttpRequest, contact_id: str) -> HttpResponse:
     """CompanyContactController::update."""
     ctx = action(request)
+
+    if (refused := not_owner(ctx, company_of(ctx))) is not None:
+        return refused
+
     contact = _owned(ctx, int(contact_id))
 
     if contact is None:
@@ -223,6 +231,10 @@ def update(request: HttpRequest, contact_id: str) -> HttpResponse:
 def destroy(request: HttpRequest, contact_id: str) -> HttpResponse:
     """CompanyContactController::destroy: последний телефон или почту — нельзя."""
     ctx = action(request)
+
+    if (refused := not_owner(ctx, company_of(ctx))) is not None:
+        return refused
+
     contact = _owned(ctx, int(contact_id))
 
     if contact is None:
