@@ -548,13 +548,18 @@ class Report:
 
 
 def _resolve(data: dict[str, Any]) -> Tender:
-    """TenderImporter::resolveRecord: по ссылке, иначе по заголовку и заказчику."""
+    """
+    TenderImporter::resolveRecord: по ссылке, иначе по заголовку и
+    заказчику — только среди тендеров администратора и загрузок. Тендер
+    компании из кабинета (source = cabinet) импорт не трогает: раньше
+    совпавшее название перезаписывало его данными файла и могло снять с
+    сайта (статус из файла).
+    """
     source = (data.get("source_url") or "").strip()
+    ours = Tender.objects.exclude(source="cabinet")
 
     if source:
-        return Tender.objects.filter(source_url=source).order_by("id").first() or Tender(
-            source_url=source
-        )
+        return ours.filter(source_url=source).order_by("id").first() or Tender(source_url=source)
 
     title = (data.get("title") or "").strip()
     customer = (data.get("customer") or "").strip() or None
@@ -562,7 +567,7 @@ def _resolve(data: dict[str, Any]) -> Tender:
     if not title:
         return Tender()
 
-    return Tender.objects.filter(title=title, customer=customer).order_by("id").first() or Tender(
+    return ours.filter(title=title, customer=customer).order_by("id").first() or Tender(
         title=title, customer=customer
     )
 
