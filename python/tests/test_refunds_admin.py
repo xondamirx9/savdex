@@ -374,3 +374,71 @@ def test_полный_возврат_тарифа_закрывает_подпи�
     assert sql("select status, auto_renew, ends_at <= now() from subscriptions") == [
         ("cancelled", False, True)
     ]
+
+
+def _продление() -> None:
+    """
+    Счёт 1 — первый период (подписка 1 закрыта продлением), счёт 2 —
+    досрочное продление (подписка 2 до «конец первой + 30 дней»), как
+    делает orders.assign. Тариф даёт 50 единиц продвижения за период.
+    """
+    sql("truncate subscriptions, wallets restart identity cascade")
+    сброс()
+    sql(
+        "insert into plans (code, name, price_usd, period_days, listing_days, listings_limit, "
+        "contacts_limit, promo_units, verification_days, sort, is_active, created_at, "
+        "updated_at) values ('business', 'Business', 20, 30, 30, 20, 20, 50, 1, 2, true, "
+        "now(), now()) on conflict (code) do nothing"
+    )
+    sql(
+        "insert into subscriptions (company_id, plan_id, status, started_at, ends_at, "
+        "auto_renew, source, created_at, updated_at) select c.id, p.id, s, now(), e, true, "
+        "'payment', now(), now() from companies c, plans p, (values "
+        "('expired', now() + interval '20 days'), ('active', now() + interval '50 days')) "
+        "v(s, e) where c.slug = 'buyer' and p.code = 'business' order by e"
+    )
+    sql(
+        "insert into payments (company_id, purpose, plan_id, subscription_id, number, "
+        "description, amount, currency, status, paid_at, created_at, updated_at) select "
+        "company_id, 'subscription', (select id from plans where code = 'business'), 2, "
+        "'SVD-000002', 'Продление', 1000000, 'UZS', 'paid', now(), now(), now() from payments"
+    )
+    sql(
+        "update payments set purpose = 'subscription', subscription_id = 1, "
+        "plan_id = (select id from plans where code = 'business') where id = 1"
+    )
+    sql(
+        "insert into wallets (company_id, promo_units, created_at, updated_at) "
+        "select id, 60, now(), now() from companies where slug = 'buyer'"
+    )
+
+
+@pytest.mark.parametrize(
+    ("счёт", "осталось_дней", "единиц"),
+    [
+        # Вернули продление — первый период остаётся целиком; его единицы
+        # продвижения ещё не выданы (выдаст смена периода)
+        (2, 20, 60),
+        # Вернули первый счёт — остаётся один оплаченный период, а не два;
+        # единицы идущего периода забираются
+        (1, 20, 10),
+    ],
+)
+def test_возврат_после_досрочного_продления(люди, счёт, осталось_дней, единиц):
+    """Возврат забирает ровно оплаченный счётом период (Н5)."""
+    _продление()
+    sql(
+        "insert into refunds (payment_id, company_id, amount, currency, reason, status, "
+        "created_at, updated_at) select id, company_id, 1000000, 'UZS', 'Клиент недоволен', "
+        "'requested', now(), now() from payments where id = %s",
+        [счёт],
+    )
+
+    _, ответ = django(люди["superadmin"], ("post", f"{LIST}1/approve/", {"note": ""}))
+
+    assert ответ["status"] == 302
+    assert sql(
+        "select status, round(extract(epoch from ends_at - now()) / 86400) "
+        "from subscriptions where id = 2"
+    ) == [("active", осталось_дней)]
+    assert sql("select promo_units from wallets") == [(единиц,)]
