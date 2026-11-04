@@ -154,16 +154,21 @@ def _reset_record(email: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-def create_reset_token(email: str) -> str:
-    """DatabaseTokenRepository::create: прежний токен прочь, новый — хешем в базу."""
+def create_reset_token(email: str, channel: str) -> str:
+    """
+    DatabaseTokenRepository::create: прежний токен прочь, новый — хешем в
+    базу. channel — как ушла ссылка (mail, sms, telegram, whatsapp): почту
+    подтверждает только сброс по ссылке из письма (reset_password).
+    """
     key = laravel_session.keys()[0] if laravel_session.keys() else b""
     token = hmac.new(key, random_string(40).encode(), hashlib.sha256).hexdigest()
 
     with allowed_writes("password_reset_tokens"), connection.cursor() as cursor:
         cursor.execute("delete from password_reset_tokens where email = %s", [email])
         cursor.execute(
-            "insert into password_reset_tokens (email, token, created_at) values (%s, %s, %s)",
-            [email, guard.make(token), _stamp(eloquent.now())],
+            "insert into password_reset_tokens (email, token, created_at, channel) "
+            "values (%s, %s, %s, %s)",
+            [email, guard.make(token), _stamp(eloquent.now()), channel],
         )
 
     return token
@@ -201,7 +206,7 @@ def _send_reset_mail(ctx: Context, email: str) -> None:
     ):
         return
 
-    token = create_reset_token(email)
+    token = create_reset_token(email, "mail")
     subject, body_html, body_text = mail.render(
         "reset",
         url=_reset_link(ctx, token, email),
@@ -224,7 +229,7 @@ def _send_reset_message(ctx: Context, email: str, channel: str) -> None:
     if user["email_verified_at"] is None:
         return
 
-    token = create_reset_token(str(user["email"]))
+    token = create_reset_token(str(user["email"]), channel)
     link = _reset_link(ctx, token, str(user["email"]))
 
     if channel == "telegram" and user["telegram_chat_id"] is not None:
@@ -592,7 +597,7 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
         return _with_errors(ctx, {"sms_code": [message]})
 
     email = str(user["email"])
-    token = create_reset_token(email)
+    token = create_reset_token(email, "sms")
     _forget(
         store, SESSION_RESET_PHONE, SESSION_RESET_FOUND, SESSION_RESET_SENT, SESSION_RESET_LOGIN
     )
@@ -669,15 +674,14 @@ def reset_password(request: HttpRequest) -> HttpResponse:
         "must_change_password": False,
     }
 
-    # Почта не подтверждена — ссылка могла прийти только письмом
-    # (_send_reset_message), значит сбросивший владеет адресом. Аккаунт —
-    # ему: почта подтверждена, а телефон и Telegram того, кто занял адрес
-    # без кода, отвязываются. Кроме сброса кодом из SMS (forgot_sms_confirm):
-    # он доказал номер, а не почту
+    # Ссылка пришла письмом (так записано в самом токене, а не в сессии
+    # браузера) — сбросивший владеет адресом. Почта не подтверждена —
+    # аккаунт ему: почта подтверждена, а телефон и Telegram того, кто занял
+    # адрес без кода, отвязываются. Сброс после кода из SMS доказал номер,
+    # а не почту — её не подтверждает, в каком бы браузере ни открыли ссылку
     store = _session(ctx)
-    by_sms = store.get(SESSION_RESET_USER) == user["id"]
     store.forget(SESSION_RESET_USER)
-    reclaimed = user["email_verified_at"] is None and not by_sms
+    reclaimed = user["email_verified_at"] is None and record.get("channel") == "mail"  # type: ignore[union-attr]
 
     if reclaimed:
         changes.update(

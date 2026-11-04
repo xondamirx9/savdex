@@ -400,13 +400,15 @@ def test_забыли_пароль_вошедшему_нельзя(сайт):
 # ── Сброс по токену ─────────────────────────────────────────────────
 
 
-def _токен(минут_назад: int = 0, token: str = ТОКЕН_СБРОСА) -> Callable[[], None]:
+def _токен(
+    минут_назад: int = 0, token: str = ТОКЕН_СБРОСА, channel: str = "mail"
+) -> Callable[[], None]:
     def run() -> None:
         пользователь(must_change_password=True)
         sql(
-            "insert into password_reset_tokens (email, token, created_at) "
-            "values (%s, %s, now() - make_interval(mins => %s))",
-            [ПОЧТА, _хеш(token), минут_назад],
+            "insert into password_reset_tokens (email, token, created_at, channel) "
+            "values (%s, %s, now() - make_interval(mins => %s), %s)",
+            [ПОЧТА, _хеш(token), минут_назад, channel],
         )
 
     return run
@@ -874,14 +876,17 @@ def test_код_сброса_из_смс(сайт, telnyx, код, верный)
         assert итог["база"]["tokens"] == []
 
 
-def test_сброс_по_смс_почту_не_возвращает(сайт):
+@pytest.mark.parametrize("тот_же_браузер", [True, False])
+def test_сброс_по_смс_почту_не_возвращает(сайт, тот_же_браузер):
     """
     Сброс кодом из SMS доказывает номер, а не почту: телефон остаётся,
     почта — неподтверждённой. Все входы закрываются, как и при сбросе письмом.
+    Ссылку открыли в другом браузере (метки в сессии нет) — всё равно так:
+    канал записан в самом токене.
     """
 
     def шаг() -> None:
-        _токен()()
+        _токен(channel="sms")()
         _по_телефону()()
         sql(
             "insert into sessions (id, user_id, payload, last_activity) "
@@ -890,9 +895,8 @@ def test_сброс_по_смс_почту_не_возвращает(сайт):
         )
 
     uid = пользователь()
-    итог = форма(
-        сайт, "/reset-password", шаг, данные={"reset": {"sms_user": uid}}, body=ВЕРНЫЙ_СБРОС
-    )
+    данные = {"reset": {"sms_user": uid}} if тот_же_браузер else None
+    итог = форма(сайт, "/reset-password", шаг, данные=данные, body=ВЕРНЫЙ_СБРОС)
 
     assert куда(сайт, итог) == (302, "/login")
     assert "reset" not in сессия(итог) or "sms_user" not in сессия(итог)["reset"]
