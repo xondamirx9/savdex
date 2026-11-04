@@ -1103,8 +1103,9 @@ def test_избранное(сайт, path):
         ("?status=draft", "draft", ["draft"]),
         ("?status=needs_changes", "needs_changes", ["needs_changes"]),
         ("?status=expired", "expired", ["expired"]),
-        # Архива среди вкладок нет — активные
-        ("?status=archived", "active", ["active"] * 4),
+        # Снятые с публикации — своя вкладка, а не пропадают из кабинета (Н12)
+        ("?status=archived", "archived", ["archived"]),
+        ("?status=moderation", "active", ["active"] * 4),
         ("?status=", "active", ["active"] * 4),
     ],
 )
@@ -1116,7 +1117,14 @@ def test_мои_объявления(сайт, query, вкладка, стату
 
     assert стр["component"] == "cabinet/listings/Index" and props["status"] == вкладка
     assert [x["status"] for x in listings] == статусы
-    assert list(props["tabs"]) == ["active", "draft", "needs_changes", "expired", "rejected"]
+    assert list(props["tabs"]) == [
+        "active",
+        "draft",
+        "needs_changes",
+        "expired",
+        "archived",
+        "rejected",
+    ]
 
     if вкладка == "needs_changes":
         assert listings[0]["moderation_note"] == "Добавьте фото"

@@ -357,7 +357,7 @@ export default function ListingsIndex({ listings, counts, tabs, status, limit }:
                                                         >
                                                             {t('cabinet.listings.resubmit')}
                                                         </button>
-                                                    ) : row.expiring_soon || row.status === 'expired' ? (
+                                                    ) : row.expiring_soon || row.status === 'expired' || row.status === 'archived' ? (
                                                         <button
                                                             className="btn btn-primary btn-sm"
                                                             onClick={() =>

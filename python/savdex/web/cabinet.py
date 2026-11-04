@@ -1253,8 +1253,10 @@ def favorites_props(ctx: Context) -> dict[str, Any]:
 
 # ── Мои объявления /cabinet/listings (Cabinet\ListingController::index)
 
-#: Вкладки — порядок как в интерфейсе; «На модерации» нет (постмодерация)
-LISTING_TABS = ("active", "draft", "needs_changes", "expired", "rejected")
+#: Вкладки — порядок как в интерфейсе; «На модерации» нет (постмодерация).
+#: «Снятые» — снятые с публикации (archived): без вкладки они пропадали из
+#: кабинета, хотя их можно продлить и вернуть на витрину
+LISTING_TABS = ("active", "draft", "needs_changes", "expired", "archived", "rejected")
 
 
 def listings(request: HttpRequest) -> HttpResponse:
