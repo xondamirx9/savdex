@@ -137,6 +137,9 @@ class UserForm(forms.ModelForm):  # type: ignore[type-arg]
     #: раздел). Объявленные поля Django оставляет в форме, даже если их нет
     #: на странице, — без этого присланное «is_admin» записалось бы
     allowed: ClassVar[frozenset[str] | None] = None
+    #: Кто сохраняет (ставит раздел): кого он вправе повышать и снижать —
+    #: accounts/hierarchy.py
+    actor: ClassVar[access.Admin | None] = None
 
     class Meta:
         model = User
@@ -202,6 +205,14 @@ class UserForm(forms.ModelForm):  # type: ignore[type-arg]
 
         if "is_admin" in self.fields and data.get("is_admin") and not data.get("admin_role"):
             self.add_error("admin_role", "Выберите роль в админке.")
+
+        if self.actor is not None and not self.errors:
+            from savdex.accounts import hierarchy
+
+            refused = hierarchy.refusal(self.actor, self.instance, self.columns())
+
+            if refused is not None:
+                self.add_error(None, refused)
 
         return data
 
