@@ -33,6 +33,7 @@ from savdex.web.cabinet import (
     company_plan,
     site_theme,
 )
+from savdex.web.company_profile_actions import not_owner
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
 from savdex.web.shared import Context
@@ -211,6 +212,10 @@ def unpublish(request: HttpRequest) -> HttpResponse:
     """SiteController::unpublish: и без тарифа — это отказ от услуги."""
     ctx = action(request)
     company = company_of(ctx)
+
+    if (refused := not_owner(ctx, company)) is not None:
+        return refused
+
     site = _site(company["id"]) if company is not None else None
 
     if site is not None:

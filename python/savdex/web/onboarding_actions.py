@@ -41,6 +41,7 @@ from savdex.web.company_profile_actions import (
     _tin,
     _unique_tin,
     normalize_tin,
+    not_owner,
 )
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _stamp
@@ -72,7 +73,11 @@ def company(request: HttpRequest) -> HttpResponse:
 
     existing = onboarding_company_of(user["company_id"])
 
+    # Дополнить профиль готовой компании — как правка профиля: только владелец
     if existing is not None:
+        if (refused := not_owner(ctx, existing)) is not None:
+            return refused
+
         return _complete(ctx, existing)
 
     legal_form = _account_type(user)
