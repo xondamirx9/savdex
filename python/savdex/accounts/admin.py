@@ -38,7 +38,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from savdex import access, audit
-from savdex.accounts import editing
+from savdex.accounts import editing, hierarchy
 from savdex.accounts.models import STATUSES, User
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.catalog import now
@@ -93,6 +93,28 @@ class StateFilter(admin.SimpleListFilter):
             return queryset.filter(deleted_at__isnull=False)
 
         return queryset
+
+
+def _act_values(todo: str, user: User) -> dict[str, Any]:
+    """Кнопки «Выдать пароль» и «Заблокировать» — как столбцы для hierarchy."""
+    if todo == "password":
+        return {"password": True}
+
+    return {"status": "blocked" if user.status == "active" else "active"}
+
+
+def _panel_access(user: User | None) -> dict[str, Any]:
+    """Что пишется в журнал «Роли и права»: доступ, роль, личные права."""
+    from savdex.accounts.roles_admin import _flatten, _permissions
+
+    if user is None:
+        return {"доступ в панель": "нет", "admin_role": None, "права": "нет"}
+
+    return {
+        "доступ в панель": "есть" if user.is_admin else "нет",
+        "admin_role": user.admin_role,
+        "права": _flatten(_permissions(user)),
+    }
 
 
 @register(User, section="users")
@@ -210,6 +232,7 @@ class UserAdmin(SavdexModelAdmin):
         form = super().get_form(request, obj, change=change, **kwargs)
         # Только поля своих разделов формы: роль и личные права — с roles.edit
         form.allowed = frozenset(flatten_fieldsets(self.get_fieldsets(request, obj)))
+        form.actor = _admin_of(request)
 
         return form
 
@@ -237,6 +260,9 @@ class UserAdmin(SavdexModelAdmin):
 
     def save_model(self, request: HttpRequest, obj: Any, form: Any, change: bool) -> None:  # noqa: ANN401
         """Только поля формы — прямым запросом; новый — с паролем."""
+        # Из базы: к save_model форма уже переписала поля obj
+        was = _panel_access(User.objects.filter(pk=obj.pk).first() if change else None)
+
         if not change:
             obj.must_change_password = bool(form.cleaned_data.get("must_change_password"))
             password = str(form.cleaned_data["password"])
@@ -244,10 +270,37 @@ class UserAdmin(SavdexModelAdmin):
             # Пароль показывается один раз — страницей после сохранения
             # (response_add), а не сообщением: сообщения живут в куке
             request._savdex_issued_password = password  # type: ignore[attr-defined]
+        else:
+            editing.write(obj, form.columns())
 
+        self._journal_access(request, obj, was)
+
+    def _journal_access(self, request: HttpRequest, user: User, was: dict[str, Any]) -> None:
+        """
+        Доступ, роль и личные права, изменённые формой, — ещё и строкой
+        раздела «Роли и права», как при выдаче там: кто кому что выдал
+        видно в одном месте, а не только среди правок пользователя.
+        """
+        now_ = _panel_access(user)
+
+        if now_ == was:
             return
 
-        editing.write(obj, form.columns())
+        audit.record(
+            connections["default"],
+            action="granted" if now_["доступ в панель"] == "есть" else "revoked",
+            section="roles",
+            actor=_admin_of(request),
+            subject_type=self.laravel_model,
+            subject_id=user.pk,
+            subject_label=audit.label(self.attributes(user), "User", user.pk),
+            changes={
+                "before": {k: v for k, v in was.items() if now_[k] != v},
+                "after": {k: v for k, v in now_.items() if was[k] != v},
+            },
+            note="Из раздела «Пользователи»",
+            ip=audit.client_ip(request),
+        )
 
     def response_add(
         self,
@@ -285,6 +338,18 @@ class UserAdmin(SavdexModelAdmin):
         return super(SavdexModelAdmin, self).get_actions(request)
 
     # ── Список ──
+
+    def lookup_allowed(self, lookup: str, value: str, request: HttpRequest) -> bool:
+        """
+        Отбор в адресе списка (?last_login_ip__startswith=…) Django разрешает
+        по любому полю модели. IP входа видит только тот, кто может изменять
+        пользователей (get_fieldsets), — и отбирать по нему тоже: иначе
+        поддержка узнавала бы IP по цифре, сужая отбор.
+        """
+        if lookup.split("__", 1)[0] == "last_login_ip" and not _admin_of(request).can("users.edit"):
+            return False
+
+        return super().lookup_allowed(lookup, value, request)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[User]:
         queryset: QuerySet[User] = super().get_queryset(request)
@@ -341,6 +406,12 @@ class UserAdmin(SavdexModelAdmin):
             # Отключить себя — остаться без доступа к панели
             if user.pk == me:
                 self.message_user(request, "Себя отключить нельзя.", messages.WARNING)
+                continue
+
+            refused = hierarchy.refusal(_admin_of(request), user, {"deleted": True})
+
+            if refused is not None:
+                self.message_user(request, f"{user.email}: {refused}", messages.ERROR)
                 continue
 
             stamp = now()
@@ -512,6 +583,14 @@ class UserAdmin(SavdexModelAdmin):
         if todo in ("password", "status") and self._staff_guarded(request, user):
             raise PermissionDenied
 
+        if todo in ("password", "status"):
+            values = _act_values(todo, user)
+
+            if (refused := hierarchy.refusal(_admin_of(request), user, values)) is not None:
+                messages.error(request, refused)
+
+                return HttpResponseRedirect(page)
+
         if todo == "verify" and user.email_verified_at is None:
             self._verify_email(request, user)
             messages.success(request, f"Почта подтверждена: {user.email}")
@@ -616,8 +695,15 @@ class UserAdmin(SavdexModelAdmin):
             editable = self.has_change_permission(request, user)
             extra["can_verify"] = editable and user.email_verified_at is None
             guarded = self._staff_guarded(request, user)
-            extra["can_password"] = editable and not guarded
-            extra["can_status"] = editable and not guarded and user.pk != _admin_of(request).id
+            staff = _admin_of(request)
+
+            def allowed(todo: str) -> bool:
+                return hierarchy.refusal(staff, user, _act_values(todo, user)) is None
+
+            extra["can_password"] = editable and not guarded and allowed("password")
+            extra["can_status"] = (
+                editable and not guarded and user.pk != staff.id and allowed("status")
+            )
             extra["can_disable"] = (
                 self.has_disable_permission(request) and user.pk != _admin_of(request).id
             )

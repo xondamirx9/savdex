@@ -440,13 +440,15 @@ def test_забыли_пароль_вошедшему_нельзя(сайт):
 # ── Сброс по токену ─────────────────────────────────────────────────
 
 
-def _токен(минут_назад: int = 0, token: str = ТОКЕН_СБРОСА) -> Callable[[], None]:
+def _токен(
+    минут_назад: int = 0, token: str = ТОКЕН_СБРОСА, channel: str = "mail"
+) -> Callable[[], None]:
     def run() -> None:
         пользователь(must_change_password=True)
         sql(
-            "insert into password_reset_tokens (email, token, created_at) "
-            "values (%s, %s, now() - make_interval(mins => %s))",
-            [ПОЧТА, _хеш(token), минут_назад],
+            "insert into password_reset_tokens (email, token, created_at, channel) "
+            "values (%s, %s, now() - make_interval(mins => %s), %s)",
+            [ПОЧТА, _хеш(token), минут_назад, channel],
         )
 
     return run
@@ -916,14 +918,50 @@ def test_код_сброса_из_смс(сайт, telnyx, код, верный)
         assert итог["база"]["tokens"] == []
 
 
-def test_сброс_по_смс_почту_не_возвращает(сайт):
+@pytest.mark.parametrize("номер_есть", [True, False])
+def test_блокировка_кода_не_выдаёт_номер(сайт, telnyx, номер_есть):
+    """
+    Пятый неверный код блокирует ввод одинаково, есть такой номер на сайте
+    или нет: иначе по блокировке было бы видно, чей номер зарегистрирован.
+    """
+    from savdex.web import code_lock
+
+    def шаг() -> None:
+        if номер_есть:
+            _по_телефону()()
+        else:
+            пользователь()
+            sql("update users set phone = null, phone_verified_at = null")
+
+        for _ in range(code_lock.MAX_FAILURES - 1):
+            code_lock.fail(code_lock.phone("+998901112233"))
+
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms/confirm",
+        подготовка(шаг),
+        снимок,
+        данные={"reset": {"sms_phone": "+998901112233"}},
+        body={"sms_code": "99999"},
+        env=_смс(telnyx),
+    )
+
+    assert ошибки(итог) == {
+        "sms_code": ["Слишком много неверных попыток. Попробуйте снова через 15 мин."]
+    }
+
+
+@pytest.mark.parametrize("тот_же_браузер", [True, False])
+def test_сброс_по_смс_почту_не_возвращает(сайт, тот_же_браузер):
     """
     Сброс кодом из SMS доказывает номер, а не почту: телефон остаётся,
     почта — неподтверждённой. Все входы закрываются, как и при сбросе письмом.
+    Ссылку открыли в другом браузере (метки в сессии нет) — всё равно так:
+    канал записан в самом токене.
     """
 
     def шаг() -> None:
-        _токен()()
+        _токен(channel="sms")()
         _по_телефону()()
         sql(
             "insert into sessions (id, user_id, payload, last_activity) "
@@ -932,9 +970,8 @@ def test_сброс_по_смс_почту_не_возвращает(сайт):
         )
 
     uid = пользователь()
-    итог = форма(
-        сайт, "/reset-password", шаг, данные={"reset": {"sms_user": uid}}, body=ВЕРНЫЙ_СБРОС
-    )
+    данные = {"reset": {"sms_user": uid}} if тот_же_браузер else None
+    итог = форма(сайт, "/reset-password", шаг, данные=данные, body=ВЕРНЫЙ_СБРОС)
 
     assert куда(сайт, итог) == (302, "/login")
     assert "reset" not in сессия(итог) or "sms_user" not in сессия(итог)["reset"]

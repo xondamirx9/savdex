@@ -279,3 +279,14 @@ def test_поддержка_смотрит_выгрузка_по_праву(лю
     assert правка["status"] == 403
     assert "Имя,Почта,Телефон" in выгрузка["body"] and "client@example.com" in выгрузка["body"]
     assert без_права["status"] == 403
+
+
+def test_поддержка_не_отбирает_по_ip(люди):
+    """IP входа видит тот, кто изменяет пользователей, — и отбирает по нему тоже (Ж8)."""
+    адрес = LIST + "?last_login_ip__startswith=1"
+
+    _, поддержка = django(люди["support"], ("get", адрес, None))
+    _, админ = django(люди["admin"], ("get", адрес, None))
+
+    assert поддержка["status"] == 400
+    assert админ["status"] == 200

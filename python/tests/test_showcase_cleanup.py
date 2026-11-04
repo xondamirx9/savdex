@@ -167,3 +167,12 @@ def test_отчёт_и_применение(tmp_path):
     assert "в запросы — 0, описаний — 0, скрыто компаний — 0" in _команда(
         "apply", "--dir", str(отчёт)
     )
+
+
+def test_формулы_в_отчёте_экранируются(tmp_path):
+    """Название «=HYPERLINK(…)» в CSV — с апострофом: Excel не выполнит его."""
+    путь = tmp_path / "companies.csv"
+    sc._write(путь, [{"id": 7, "name": '=HYPERLINK("http://x","y")', "reason": "-1+1"}])
+
+    assert _строки(путь) == [{"id": "7", "name": '\'=HYPERLINK("http://x","y")', "reason": "'-1+1"}]
+    assert sc.approved_ids(путь) == [7]

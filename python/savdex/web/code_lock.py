@@ -57,13 +57,21 @@ def fail(target: str) -> int:
     if (minutes := locked_minutes(target)) > 0:
         return minutes
 
-    failures = int(_entry(target).get("failures") or 0) + 1
-    entry: dict[str | int, laravel_cache.Value] = {"failures": failures}
+    def count(previous: object) -> laravel_cache.Value:
+        # Под блокировкой файла: параллельные неверные коды считаются все,
+        # а не перетирают друг друга одним «failures: 1»
+        entry = previous if isinstance(previous, dict) else {}
+        failures = int(entry.get("failures") or 0) + 1
+        result: dict[str | int, laravel_cache.Value] = {"failures": failures}
 
-    if failures >= MAX_FAILURES:
-        entry["until"] = int(time.time()) + LOCK_SECONDS
+        if isinstance(entry.get("until"), int):
+            result["until"] = entry["until"]
+        elif failures >= MAX_FAILURES:
+            result["until"] = int(time.time()) + LOCK_SECONDS
 
-    laravel_cache.put(_key(target), entry, LOCK_SECONDS)
+        return result
+
+    laravel_cache.update(_key(target), count, LOCK_SECONDS)
 
     return locked_minutes(target)
 

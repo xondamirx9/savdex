@@ -34,6 +34,7 @@ from savdex.web.seo import Seo
 from savdex.web.shared import Context
 from savdex.web.validation import Check, _passes, validate
 from savdex.web.views import not_found
+from savdex.web.visibility import company_visible
 
 #: Больше визиток компании не нужно: по одной на сотрудника с запасом
 LIMIT = 20
@@ -277,8 +278,9 @@ def show(request: HttpRequest, token: str) -> HttpResponse:
     card = found[0]
     own = ctx.user is not None and ctx.user["company_id"] == card["company_id"]
 
-    # Заблокированную компанию площадка не показывает — и её визитку тоже
-    if card["owner_status"] == "blocked" and not own:
+    # Скрытую, заблокированную и ещё не проверенную компанию площадка не
+    # показывает — и её визитку тоже (visibility.company_visible)
+    if not own and not company_visible({"status": card["owner_status"], "deleted_at": None}):
         return not_found(ctx)
 
     if not own:

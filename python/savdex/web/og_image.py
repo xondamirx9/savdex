@@ -22,6 +22,7 @@ from savdex.laravel_storage import public_root
 from savdex.web.cabinet import _rows
 from savdex.web.request import context
 from savdex.web.shared import _php_round
+from savdex.web.visibility import live_company
 
 WIDTH = 1200
 HEIGHT = 630
@@ -73,7 +74,13 @@ def listing(request: HttpRequest, listing_id: str) -> HttpResponse:
     if isinstance(ctx, HttpResponse):
         return ctx
 
-    found = _rows("select id from listings where id = %s and deleted_at is null", [int(listing_id)])
+    # Только то, что видно на витрине: черновик, снятое с публикации и
+    # объявление скрытой компании картинку для соцсетей не отдают
+    found = _rows(
+        "select l.id from listings l where l.id = %s and l.deleted_at is null "
+        f"and l.status = 'active' and {live_company('l')}",
+        [int(listing_id)],
+    )
 
     if not found:
         return not_found(ctx)

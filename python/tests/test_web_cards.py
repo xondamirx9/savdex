@@ -211,10 +211,12 @@ def test_визитка_не_найдена(сайт):
     assert зайти(сайт, "/card/" + "Z" * 16)[0]["status"] == 404
 
 
-def test_визитка_заблокированной_компании(сайт):
+@pytest.mark.parametrize("статус", ["blocked", "hidden"])
+def test_визитка_заблокированной_компании(сайт, статус):
+    """Заблокированная и скрытая компания — визитки нет (Ж10)."""
     _чисто()
     token = _визитка("other", token="F" * 16)
-    sql("update companies set status = 'blocked' where slug = 'other'")
+    sql("update companies set status = %s where slug = 'other'", [статус])
 
     try:
         assert зайти(сайт, f"/card/{token}")[0]["status"] == 404

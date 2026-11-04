@@ -17,10 +17,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 SUPERADMIN = "superadmin"
+#: Мегаадмин — те же права, что у суперадмина, плюс одно: только он
+#: назначает и снимает суперадминов. Самого мегаадмина в панели не
+#: назначить и не снять — только на сервере, командой manage.py admin
+#: (accounts/hierarchy.py)
+MEGAADMIN = "megaadmin"
 MODERATOR = "moderator"
 
 #: AdminAccess::ROLES — порядок тоже, он печатается в подсказках
 ROLES: dict[str, str] = {
+    "megaadmin": "Мегаадмин",
     "superadmin": "Суперадмин",
     "admin": "Администратор",
     "sales": "Отдел продаж",
@@ -31,6 +37,9 @@ ROLES: dict[str, str] = {
     "support": "Поддержка",
     "content_manager": "Контент-менеджер",
 }
+
+#: Роли, которые предлагает панель: мегаадмина назначают только на сервере
+PANEL_ROLES: dict[str, str] = {code: label for code, label in ROLES.items() if code != MEGAADMIN}
 
 #: AdminAccess::ACTIONS
 ACTIONS: dict[str, str] = {
@@ -187,7 +196,7 @@ def all_abilities() -> list[str]:
 
 def abilities_for(role: str | None) -> list[str]:
     """AdminAccess::abilitiesFor(): права роли; неизвестная — ничего."""
-    if role == SUPERADMIN:
+    if role in (SUPERADMIN, MEGAADMIN):
         return all_abilities()
 
     abilities: list[str] = []
@@ -255,7 +264,12 @@ class Admin:
 
     @property
     def is_superadmin(self) -> bool:
-        return self.is_admin and self.role == SUPERADMIN
+        """Все права без исключения — суперадмин и мегаадмин."""
+        return self.is_admin and self.role in (SUPERADMIN, MEGAADMIN)
+
+    @property
+    def is_megaadmin(self) -> bool:
+        return self.is_admin and self.role == MEGAADMIN
 
     @property
     def role_label(self) -> str | None:

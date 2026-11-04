@@ -148,8 +148,8 @@ def _выполнить(подготовка: list[str], email: str, *args: str)
 )
 
 РОЛИ = (
-    "superadmin, admin, sales, supplier_manager, buyer_manager, moderator, finance, support, "
-    "content_manager"
+    "megaadmin, superadmin, admin, sales, supplier_manager, buyer_manager, moderator, finance, "
+    "support, content_manager"
 )
 
 

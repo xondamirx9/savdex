@@ -48,6 +48,8 @@ def задание(answer: str = "K7MPX", через: int = 600) -> Store:
         ("K7MP", "wrong"),
         ("K7MPXX", "wrong"),
         ("K7MPY", "wrong"),
+        # Не латиница — «неверно», а не ошибка 500 (compare_digest и str)
+        ("К7МРХ", "wrong"),
         (["K7MPX"], "required"),
         (12345, "required"),
         ("", "required"),
