@@ -305,6 +305,7 @@ def publish(request: HttpRequest, listing_id: str) -> HttpResponse:
     now = eloquent.now()
     changes = {k: data[k] for k in fields if k in data}
     changes.update(_price_kind(data, negotiable))
+    _mask_free_text(changes)
 
     # Валюта обязательна в базе: пустая — остаётся прежней
     if changes.get("currency") is None:
@@ -478,6 +479,21 @@ def _price_kind(data: dict[str, Any], negotiable: bool) -> dict[str, Any]:
     return {"price_from": price_from and not negotiable, "price_to": upper}
 
 
+#: Свободный текст объявления: контакты в нём — мимо платного раскрытия
+_FREE_TEXT = ("title", "description", "delivery_terms", "payment_terms")
+
+
+def _mask_free_text(changes: dict[str, Any]) -> None:
+    """
+    Телефон, почта, ссылка или ник в названии и описании — «[•••]», как в
+    текстовых полях раздела (_attribute_value) и в чате: иначе контакты
+    видны всем бесплатно, а раскрытие продаётся.
+    """
+    for key in _FREE_TEXT:
+        if isinstance(changes.get(key), str):
+            changes[key] = mask_contacts(changes[key])
+
+
 def _keep_publishable(listing: dict[str, Any], changes: dict[str, Any]) -> None:
     """
     Объявление на витрине правится вживую: правка, которую не пропустила бы
@@ -569,6 +585,8 @@ def autosave(request: HttpRequest, listing_id: str) -> HttpResponse:
             kind.pop("price_to")
 
         changes.update(kind)
+
+    _mask_free_text(changes)
 
     if listing["status"] == "active":
         _keep_publishable(listing, changes)
