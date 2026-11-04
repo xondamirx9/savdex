@@ -500,6 +500,37 @@ def test_подтверждение_выдаёт_купленное(сайт, к
     assert len(база["events"]) == len(база["notifications"])
 
 
+def test_подтверждение_без_компании_не_списывает(сайт, касса):
+    """
+    Компанию удалили, пока покупатель платил: зачислить некуда — Uzum
+    получает отказ, транзакция гасится, деньги вернутся (Н8). Раньше
+    подтверждение уходило и деньги списывались, ничего не выдав.
+    """
+
+    def подготовка() -> None:
+        сброс(счета=счёт("pending", "business"), транзакция=СВЕЖАЯ)()
+        sql("update companies set deleted_at = now() where id = (select company_id from payments)")
+
+    try:
+        итог = вызов(
+            сайт,
+            касса,
+            "/payments/uzum/callback/confirm",
+            тело("confirm", transId="T-1"),
+            подготовка,
+        )
+    finally:
+        sql("update companies set deleted_at = null")
+
+    база = итог["база"]
+    ответ = json.loads(итог["ответ"]["body"])
+
+    assert ответ.get("status") != "CONFIRMED"
+    assert ответ.get("errorCode") == 10009
+    assert база["transactions"][0][3] == "cancelled"
+    assert база["subscriptions"] == []
+
+
 def test_подтверждение_с_промокодом_и_кошельком(сайт, касса):
     """Промокод счёта привязывается к подписке; кредиты прибавляются к прежним."""
     тариф = вызов(
