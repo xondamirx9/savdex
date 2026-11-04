@@ -525,6 +525,7 @@ class UserAdmin(SavdexModelAdmin):
             if user.pk == _admin_of(request).id:
                 raise PermissionDenied
 
+            # Блокировка закрывает все входы — внутри editing.write
             editing.write(user, {"status": "blocked" if user.status == "active" else "active"})
             messages.success(request, "Статус изменён.")
         else:

@@ -233,6 +233,11 @@ def write(user: User, values: dict[str, Any], *, password: str | None = None) ->
     """
     stamp = timezone.now().replace(microsecond=0)
     naive = stamp.replace(tzinfo=None)
+    # Блокировка — любым путём (кнопка, форма): все входы закрываются, чтобы
+    # после разблокировки старые сессии (и украденные тоже) не ожили
+    blocking = (
+        user.pk is not None and values.get("status") == "blocked" and user.status != "blocked"
+    )
     written = {
         column: json.dumps(value, ensure_ascii=False)
         if column == "admin_permissions" and value is not None
@@ -269,9 +274,33 @@ def write(user: User, values: dict[str, Any], *, password: str | None = None) ->
 
     user.updated_at = stamp
 
+    if blocking:
+        end_everywhere(int(user.pk))
+
+
+def end_everywhere(user_id: int) -> None:
+    """
+    Выйти на всех устройствах: сессии сайта закрываются, токен «Запомнить
+    меня» — новый (по старой куке новый вход не откроется). Вход в админку
+    привязан к паролю (bridge.stamp) — после «Выдать пароль» он закрыт и так,
+    а заблокированного не пускает проверка статуса на каждом запросе.
+    """
+    from savdex.web.session import end_user_sessions, random_string
+
+    end_user_sessions(user_id)
+
+    with allowed_writes("users"), connection.cursor() as cursor:
+        cursor.execute(
+            "update users set remember_token = %s where id = %s", [random_string(60), user_id]
+        )
+
 
 def set_password(user: User) -> str:
-    """«Выдать пароль»: новый, 12 знаков без символов, смена при входе обязательна."""
+    """
+    «Выдать пароль»: новый, 12 знаков без символов, смена при входе
+    обязательна. Прежние входы закрываются: пароль выдают, когда старый
+    мог знать чужой, — укравший сессию не должен остаться и сменить пароль.
+    """
     password = generate_password(12)
     stamp = timezone.now().replace(microsecond=0, tzinfo=None)
 
@@ -282,6 +311,7 @@ def set_password(user: User) -> str:
             [hash_password(password), stamp, user.pk],
         )
 
+    end_everywhere(int(user.pk))
     user.must_change_password = True
 
     return password
