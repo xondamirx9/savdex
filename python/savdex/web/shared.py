@@ -683,11 +683,28 @@ def shared(ctx: Context) -> dict[str, Any]:
         "maintenance": maintenance(values),
         "authReview": _auth_review(ctx),
         "locale": ctx.locale,
-        "translations": None if ctx.inertia else ui.translations(ctx.locale),
+        "translations": _translations(ctx),
         "localeLinks": locale_links(ctx),
         "localeSuggest": suggest,
         "analytics": _analytics(ctx, company),
     }
+
+
+#: Язык словаря, который уже у браузера (resources/js/app.tsx)
+TRANSLATIONS_HEADER = "X-Savdex-Translations"
+
+
+def _translations(ctx: Context) -> dict[str, Any] | None:
+    """
+    Словарь интерфейса: при полной загрузке — всегда; при переходе Inertia
+    — только если у браузера словарь другого языка. Раньше переходы
+    словарь не получали вовсе, и после смены языка в настройках надписи
+    оставались на старом до перезагрузки.
+    """
+    if ctx.inertia and ctx.request.headers.get(TRANSLATIONS_HEADER) in (None, ctx.locale):
+        return None
+
+    return ui.translations(ctx.locale)
 
 
 def _analytics(ctx: Context, company: dict[str, Any] | None) -> dict[str, Any]:

@@ -386,6 +386,55 @@ def до(дней: int) -> str:
 # ── Заказ без кассы ─────────────────────────────────────────────────
 
 
+def test_двойное_оплатить_не_даёт_второго_счёта(сайт):
+    """
+    Два «Оплатить» подряд (двойной щелчок, две вкладки): второй запрос
+    ждёт первого и видит его счёт, а не заводит второй (Н4). Здесь
+    «первый» — поток теста: держит блокировку заказа компании и, пока
+    запрос сайта ждёт, выставляет тот же счёт.
+    """
+    import time
+
+    import psycopg
+
+    from .pg_admin import АДРЕС
+
+    план = _plan("business")
+    компания_ = _id("companies", "slug = 'mine'")
+    взял = threading.Event()
+
+    def первый() -> None:
+        with psycopg.connect(АДРЕС) as соединение:
+            соединение.execute(
+                "select pg_advisory_xact_lock(hashtextextended('billing.order', %s))",
+                [компания_],
+            )
+            взял.set()
+            time.sleep(1.5)
+            соединение.execute(
+                "insert into payments (company_id, purpose, plan_id, description, amount, "
+                "status, number, provider, created_at, updated_at) values (%s, "
+                "'subscription', %s, 'Тариф', 1000, 'pending', 'SVD-000900', 'invoice', "
+                "now(), now())",
+                [компания_, план],
+            )
+            соединение.commit()
+
+    поток = threading.Thread(target=первый)
+
+    def подготовка() -> None:
+        сброс()()
+        поток.start()
+        взял.wait(5)
+
+    итог = заказать(сайт, {"kind": "plan", "id": план}, подготовка)
+    поток.join()
+
+    assert итог["ответ"]["status"] == 302
+    assert сессия(итог)["warning"].startswith(ЖДЁТ)
+    assert sql("select number from payments where status = 'pending'") == [("SVD-000900",)]
+
+
 @pytest.mark.parametrize(
     ("body", "ждём"),
     [

@@ -165,6 +165,13 @@ class PaymentAdmin(SavdexModelAdmin):
         # Кнопки — строкой под статусом, каждая не шире своей подписи.
         # Были обычные .button подряд в узкой колонке: подпись ломалась
         # внутри кнопки, и «Отменить счёт» налезал на «Деньги пришли»
+        if obj.status == "failed" and self._can_edit:
+            buttons = format_html(
+                '<span class="sx-row-actions sx-payment-actions">'
+                '<a class="sx-row-btn is-primary" href="{}">Деньги пришли</a></span>',
+                reverse("savdex_admin:finance_payment_confirm", args=[obj.pk]),
+            )
+
         if obj.status == "pending" and self._can_edit:
             buttons = format_html(
                 '<span class="sx-row-actions sx-payment-actions">'
@@ -225,8 +232,10 @@ class PaymentAdmin(SavdexModelAdmin):
             *super().get_urls(),
         ]
 
-    def _pending(self, request: HttpRequest, object_id: str) -> dict[str, Any] | None:
-        """Строка счёта, как её видят службы сайта; только ждущий оплаты."""
+    def _pending(
+        self, request: HttpRequest, object_id: str, statuses: tuple[str, ...] = ("pending",)
+    ) -> dict[str, Any] | None:
+        """Строка счёта, как её видят службы сайта; только в одном из statuses."""
         if not self.has_edit(request):
             raise PermissionDenied
 
@@ -237,7 +246,7 @@ class PaymentAdmin(SavdexModelAdmin):
 
         rows = _rows("select * from payments where id = %s", [pk])
 
-        return rows[0] if rows and rows[0]["status"] == "pending" else None
+        return rows[0] if rows and rows[0]["status"] in statuses else None
 
     def _back(self, request: HttpRequest) -> HttpResponse:
         back = request.POST.get("back") or ""
@@ -270,8 +279,12 @@ class PaymentAdmin(SavdexModelAdmin):
         )
 
     def confirm_view(self, request: HttpRequest, object_id: str) -> HttpResponse:
-        """Деньги пришли: подписка активируется, кредиты ложатся на кошелёк."""
-        payment = self._pending(request, object_id)
+        """
+        Деньги пришли: подписка активируется, кредиты ложатся на кошелёк.
+        И по счёту «Не прошёл» — опоздавший перевод по закрытому сроком
+        счёту (payments/periods.py); раньше страница его не пускала.
+        """
+        payment = self._pending(request, object_id, ("pending", "failed"))
 
         if payment is None:
             self.message_user(request, "Счёт уже не ждёт оплаты.", messages.WARNING)

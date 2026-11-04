@@ -44,8 +44,13 @@ def _random(length: int) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def _read(data: bytes) -> Image.Image:
-    """ImageStore::read: размер из заголовка до распаковки."""
+def _read(data: bytes, largest: Mapping[str, Any] | None = None) -> Image.Image:
+    """
+    ImageStore::read: размер из заголовка до распаковки. largest — самая
+    большая рамка, в которую картинку потом впишут: JPEG тогда
+    распаковывается сразу уменьшенным (draft — 1/2, 1/4, 1/8, не меньше
+    рамки), и фото 8000×6000 не занимает в памяти 140 МБ.
+    """
     try:
         image = Image.open(io.BytesIO(data))
     except Exception as e:  # любой сбой разбора — «не картинка»
@@ -55,6 +60,9 @@ def _read(data: bytes) -> Image.Image:
 
     if width * height > MAX_PIXELS:
         raise UnreadableImageError("Слишком большое изображение")
+
+    if largest is not None and image.format == "JPEG":
+        image.draft("RGB", (int(largest["w"]), int(largest["h"])))
 
     try:
         image.load()
@@ -78,13 +86,18 @@ def _fit(image: Image.Image, max_width: int, max_height: int) -> Image.Image:
     return image.resize(size, Image.Resampling.LANCZOS)
 
 
-def store(data: bytes, directory: str, size: Mapping[str, Any]) -> str:
-    """ImageStore::store: путь на публичном диске, как его хранит Laravel."""
-    image = _read(data)
+def _prepared(data: bytes, largest: Mapping[str, Any]) -> Image.Image:
+    """Распаковать один раз и привести к RGB или RGBA (прозрачность сохраняется)."""
+    image = _read(data, largest)
     has_alpha = image.mode in ("RGBA", "LA", "PA") or (
         image.mode == "P" and "transparency" in image.info
     )
-    image = image.convert("RGBA" if has_alpha else "RGB")
+
+    return image.convert("RGBA" if has_alpha else "RGB")
+
+
+def _save(image: Image.Image, directory: str, size: Mapping[str, Any]) -> str:
+    """Вписать в рамку size, записать WebP на публичный диск — путь."""
     resized = _fit(image, int(size["w"]), int(size["h"]))
     out = io.BytesIO()
 
@@ -105,11 +118,21 @@ def store(data: bytes, directory: str, size: Mapping[str, Any]) -> str:
     return path
 
 
+def store(data: bytes, directory: str, size: Mapping[str, Any]) -> str:
+    """ImageStore::store: путь на публичном диске, как его хранит Laravel."""
+    return _save(_prepared(data, size), directory, size)
+
+
 def store_with_thumb(data: bytes, directory: str) -> dict[str, str]:
-    """ImageStore::storeWithThumb: оригинал и уменьшенная копия."""
+    """
+    ImageStore::storeWithThumb: оригинал и уменьшенная копия — из одной
+    распаковки. Раньше файл распаковывался дважды, на каждую копию.
+    """
+    image = _prepared(data, PHOTO)
+
     return {
-        "path": store(data, directory, PHOTO),
-        "thumb_path": store(data, f"{directory}/thumb", THUMB),
+        "path": _save(image, directory, PHOTO),
+        "thumb_path": _save(image, f"{directory}/thumb", THUMB),
     }
 
 

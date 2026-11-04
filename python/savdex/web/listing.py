@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import UTC, datetime
 from typing import Any
 
 from django.db import connection
@@ -326,7 +327,10 @@ def _show(ctx: Context, slug: str) -> HttpResponse:
     user = ctx.user
     viewer = user["company_id"] if user is not None else None
     owner = viewer == row["company_id"]
-    preview = row["status"] != "active"
+    # Срок вышел, а задача расписания ещё не сняла — для чужих тоже не на витрине
+    preview = row["status"] != "active" or not visibility.listing_live(
+        row, datetime.now(UTC).replace(tzinfo=None)
+    )
 
     companies = _rows(
         "select * from companies where id = %s and deleted_at is null", [row["company_id"]]

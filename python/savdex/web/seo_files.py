@@ -338,6 +338,11 @@ def _part(ctx: Context, name: str) -> list[dict[str, Any]] | None:
 
     found = re.fullmatch(r"listings-(\d+)", name)
 
+    # Номер части — не больше, чем частей бывает: «listings-99999999999999»
+    # давал смещение за пределами bigint, и база отвечала ошибкой (500)
+    if found and len(found.group(1)) > 7:
+        return None
+
     if found:
         rows = _listings(ctx, int(found.group(1)))
 

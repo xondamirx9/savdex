@@ -22,7 +22,7 @@ from savdex.guards import allowed_writes
 from savdex.web import eloquent, ui
 from savdex.web import wallet as wallet_store
 from savdex.web.actions import form
-from savdex.web.cabinet import _rows, company_of
+from savdex.web.cabinet import PER_CATEGORY, _rows, company_of
 from savdex.web.forms import action, back, flash, input_of, invalid
 from savdex.web.listing_actions import _as_id, _notify_company, _stamp, refuse_blocked
 from savdex.web.resume_actions import _exists
@@ -48,7 +48,7 @@ def _free_slot(kind: dict[str, Any], category_id: int | None) -> bool:
     )
     params: list[Any] = [kind["id"]]
 
-    if category_id is not None:
+    if category_id is not None and kind["code"] in PER_CATEGORY:
         query += " and category_id = %s"
         params.append(category_id)
 

@@ -382,3 +382,28 @@ def test_дешевле_по_курсу_а_не_по_числу(сайт, monkey
     )
 
     assert строки == [(30, "EUR"), (500000, "UZS"), (100, "USD")]
+
+
+def test_истёкшее_по_сроку_не_показывается(сайт):
+    """
+    Срок вышел, а задача расписания ещё не сняла объявление: в каталоге и
+    на его странице гостю его уже нет (Н14).
+    """
+    [(lid, slug, было)] = sql(
+        "select id, slug, expires_at from listings where status = 'active' "
+        "and deleted_at is null order by id limit 1"
+    )
+    sql(
+        "update listings set expires_at = now() at time zone 'UTC' - interval '1 hour' "
+        "where id = %s",
+        [lid],
+    )
+
+    try:
+        props = каталог(сайт, "/catalog")["props"]
+        страница_ = открыть(сайт, f"/listing/{slug}", None, IP, ФАЙЛОВЫЙ)
+    finally:
+        sql("update listings set expires_at = %s where id = %s", [было, lid])
+
+    assert props["total"] == 26
+    assert страница_["status"] == 404

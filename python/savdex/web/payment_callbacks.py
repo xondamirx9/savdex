@@ -350,9 +350,23 @@ class _Merchant:
 
             return self.error(ERROR_INVOICE_CANCELLED)
 
-        settlement.mark_paid(
+        granted, _ = settlement.mark_paid(
             self.ctx, payment, {"provider": "uzum", "external_id": tx["provider_transaction_id"]}
         )
+
+        # Зачисление не прошло (компанию удалили, счёт успели оплатить) —
+        # не подтверждаем: подтверждённую Uzum спишет, ничего не выдав.
+        # Транзакция гасится, и деньги вернутся покупателю
+        if not granted:
+            _save_tx(self.ctx, tx, {"state": CANCELLED, "cancelled_at": eloquent.now()})
+            fresh = _payment(tx["payment_id"])
+
+            return self.error(
+                ERROR_ALREADY_PAID
+                if fresh is not None and fresh["status"] == "paid"
+                else ERROR_INVOICE_CANCELLED
+            )
+
         now = eloquent.now()
         _save_tx(self.ctx, tx, {"state": PERFORMED, "performed_at": now})
 

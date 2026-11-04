@@ -18,6 +18,7 @@ Refund и Payment) и своя строка службы с пометкой —
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from django.db import connection, transaction
@@ -200,12 +201,70 @@ def _revoke(ctx: Context, payment: dict[str, Any], actor: access.Admin) -> None:
                 ],
             )
     elif payment["purpose"] == "subscription" and payment.get("subscription_id"):
-        with allowed_writes("subscriptions"), connection.cursor() as cursor:
+        _revoke_period(payment, now)
+
+
+def _revoke_period(payment: dict[str, Any], now: str) -> None:
+    """
+    Тариф: забрать ровно оплаченный этим счётом период.
+
+    Досрочное продление (orders.assign) закрывает прежнюю подписку и
+    заводит новую до «конец прежней + период». Раньше возврат закрывал
+    только подписку своего счёта, и только действующую:
+    - вернули продление — пропадали и оплаченные дни первого счёта;
+    - вернули первый счёт — его подписка уже закрыта продлением, и
+      компания оставалась с двумя периодами за цену одного.
+    Теперь у действующей подписки того же тарифа срок короче на период
+    счёта; не осталось ничего — подписка закрыта. Единицы продвижения,
+    выданные за этот период, забираются (не ниже нуля).
+    """
+    sources = _rows(
+        "select s.plan_id, s.id from subscriptions s where s.id = %s", [payment["subscription_id"]]
+    )
+    plan_id = payment.get("plan_id") or (sources[0]["plan_id"] if sources else None)
+    plans = _rows("select period_days, promo_units from plans where id = %s", [plan_id])
+    current = _rows(
+        "select * from subscriptions where company_id = %s and plan_id = %s and status = 'active' "
+        "order by id desc limit 1 for update",
+        [payment["company_id"], plan_id],
+    )
+
+    if not current:
+        return
+
+    live = current[0]
+    days = int(plans[0]["period_days"] or 0) if plans else 0
+    ends = live["ends_at"]
+    left = ends - timedelta(days=days) if ends is not None and days > 0 else None
+    cut_whole = left is None or _stamp(left) <= now
+
+    with allowed_writes("subscriptions"), connection.cursor() as cursor:
+        if cut_whole:
             cursor.execute(
                 "update subscriptions set status = 'cancelled', auto_renew = false, "
                 "cancelled_at = %s, ends_at = least(coalesce(ends_at, %s), %s), "
-                "updated_at = %s where id = %s and status = 'active'",
-                [now, now, now, now, payment["subscription_id"]],
+                "updated_at = %s where id = %s",
+                [now, now, now, now, live["id"]],
+            )
+        else:
+            cursor.execute(
+                "update subscriptions set ends_at = %s, auto_renew = false, updated_at = %s "
+                "where id = %s",
+                [_stamp(left), now, live["id"]],
+            )
+
+    # Единицы периода выданы, если период уже идёт: подписка закрыта
+    # целиком или возвращён счёт прежнего, идущего сейчас периода. У
+    # продления, чей период ещё не начался, их выдаст смена периода —
+    # она теперь не наступит до нового срока
+    units = int(plans[0]["promo_units"] or 0) if plans else 0
+
+    if units > 0 and (cut_whole or live["id"] != payment["subscription_id"]):
+        with allowed_writes("wallets"), connection.cursor() as cursor:
+            cursor.execute(
+                "update wallets set promo_units = greatest(coalesce(promo_units, 0) - %s, 0), "
+                "updated_at = %s where company_id = %s",
+                [units, now, payment["company_id"]],
             )
 
 

@@ -177,8 +177,20 @@ def test_снятие_истёкших(компании, tmp_path):
 def test_день_не_повторяется(компании, tmp_path):
     from datetime import UTC, datetime
 
+    from savdex.schedule import job
+
     state = tmp_path / "state"
-    state.write_text(json.dumps({"expire_listings": datetime.now(UTC).date().isoformat()}))
+    # Ежечасное снятие (expire_listings_hourly) в этот час тоже уже прошло
+    сейчас = datetime.now(UTC).replace(tzinfo=None)
+    часовая = job("expire_listings_hourly")
+    state.write_text(
+        json.dumps(
+            {
+                "expire_listings": datetime.now(UTC).date().isoformat(),
+                "expire_listings_hourly": часовая.mark(часовая.due(сейчас)),
+            }
+        )
+    )
     подготовка(компании)
 
     # Бесконечный режим с проходом сегодня уже сделанным: одна проверка
@@ -228,3 +240,20 @@ def test_снятое_освобождает_место_продвижения(�
     assert sql("select status, active_key from promotions") == [("finished", None)]
     sql("truncate promotions restart identity cascade")
     sql("delete from promotion_types where id = %s", [kind])
+
+
+def test_снятие_каждый_час(компании, tmp_path):
+    """
+    Истёкшие снимаются каждый час, а не раз в сутки: до суток истёкшее
+    оставалось на витрине (Н14). Предупреждения — только в суточной задаче.
+    """
+    подготовка(компании)
+    вывод = django("--once", "expire_listings_hourly", state=tmp_path / "state")
+    статусы = {title: status for title, status, *_ in снимок()["listings"]}
+
+    assert "Снято с публикации: 3." in вывод
+    assert статусы["Цемент М500"] == "expired" and статусы["Газоблок D500"] == "active"
+    assert sql(
+        "select count(*) from user_notifications where type = 'listing_expiring' "
+        "and title like '%%через%%'"
+    ) == [(0,)]

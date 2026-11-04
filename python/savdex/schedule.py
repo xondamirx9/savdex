@@ -71,6 +71,18 @@ def expire_listings(now: datetime, due: datetime) -> str:
     return f"Снято с публикации: {expired}. Предупреждений отправлено: {warned}."
 
 
+def expire_listings_hourly(now: datetime, due: datetime) -> str:
+    """
+    Каждый час: снять объявления с вышедшим сроком. Раз в сутки (06:00)
+    истёкшее до суток оставалось на витрине — публичные списки смотрят
+    на статус. Предупреждения «истекает через три дня» — по-прежнему
+    раз в сутки (expire_listings): их окно рассчитано на суточный проход.
+    """
+    from savdex.web import listing_expiry
+
+    return f"Снято с публикации: {listing_expiry.expire(now)}."
+
+
 def expire_tenders(now: datetime, due: datetime) -> str:
     """Каждый час: тендеры из кабинета — предупредить за три дня, по сроку — «Истёк»."""
     from savdex import tender_expiry
@@ -299,6 +311,7 @@ JOBS: tuple[Job, ...] = (
     Job("ratings_recalculate", time(3, 0), recalculate_ratings),
     Job("audience_views_prune", time(4, 0), prune_audience_views),
     Job("expire_listings", time(6, 0), expire_listings),
+    Job("expire_listings_hourly", time(0, 20), expire_listings_hourly, every=1),
     Job("expire_tenders", time(0, 5), expire_tenders, every=1),
     Job("reviews_ask", time(6, 0), ask_for_reviews),
     # Деньги (шаг 72) и курсы с прозвоном (шаг 71) — вместо routes/console.php

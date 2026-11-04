@@ -34,6 +34,9 @@ from savdex.web.validation import _strtotime, validate, validated
 from savdex.web.views import not_found
 
 ACTIVE, CLOSED, COMPLETED = "active", "closed", "completed"
+#: Снята модератором («Снять» в админке — спам, нарушение): владелец её
+#: сам на витрину не вернёт — ни «Открыть снова», ни «Завершить»
+ARCHIVED = "archived"
 
 
 def _search_text(task: dict[str, Any]) -> dict[str, Any]:
@@ -96,6 +99,11 @@ def complete(request: HttpRequest, task_id: str) -> HttpResponse:
     if task is None:
         return not_found(ctx)
 
+    if task["status"] == ARCHIVED:
+        flash(ctx, "error", ctx.t("messages.it_task.archived_locked"))
+
+        return back(ctx)
+
     # Завершённая уже подведена: повторный запрос не переписывает итог и исполнителя
     if task["status"] == COMPLETED:
         flash(ctx, "success", ctx.t("messages.it_task.completed"))
@@ -157,6 +165,11 @@ def reopen(request: HttpRequest, task_id: str) -> HttpResponse:
 
     if (refused := refuse_blocked(ctx, task["company_id"])) is not None:
         return refused
+
+    if task["status"] == ARCHIVED:
+        flash(ctx, "error", ctx.t("messages.it_task.archived_locked"))
+
+        return back(ctx)
 
     if task["status"] != ACTIVE:
         _save(

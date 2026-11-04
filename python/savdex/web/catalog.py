@@ -232,6 +232,7 @@ def listings_tab(ctx: Context, query: Array, string: Callable[[str], str]) -> Ht
     where = [
         "l.status = 'active'" + visible,
         "l.deleted_at is null",
+        visibility.listing_live_sql(),
         visibility.company_sql(),
     ]
 

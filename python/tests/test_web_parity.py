@@ -83,6 +83,32 @@ def test_гость_с_сессией_и_языком_браузера(сайт)
         assert page["props"]["localeSuggest"] == suggest, path
 
 
+@pytest.mark.parametrize(
+    ("путь", "словарь_у_браузера", "пришлёт"),
+    [
+        # Тот же язык — словарь не гоняется на каждом переходе
+        ("/guide", "ru", False),
+        # Язык сменили без перезагрузки (настройки) — новый словарь (Н7)
+        ("/en/guide", "ru", True),
+        # Старый браузер без заголовка — как раньше, без словаря
+        ("/en/guide", None, False),
+    ],
+)
+def test_словарь_на_переходе(сайт, путь, словарь_у_браузера, пришлёт):
+    версия = страница(открыть(сайт, "/help")["body"])["version"]
+    headers = {"X-Inertia": "true", "X-Inertia-Version": версия}
+
+    if словарь_у_браузера is not None:
+        headers["X-Savdex-Translations"] = словарь_у_браузера
+
+    props = json.loads(открыть(сайт, путь, headers=headers)["body"])["props"]
+
+    assert (props["translations"] is not None) is пришлёт
+
+    if пришлёт:
+        assert props["translations"]["common"]["save"] == "Save"
+
+
 def test_переход_inertia(сайт):
     версия = страница(открыть(сайт, "/help")["body"])["version"]
 

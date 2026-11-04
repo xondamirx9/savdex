@@ -336,6 +336,27 @@ def test_отменить(люди, промокод):
 # ── Границы ─────────────────────────────────────────────────────────
 
 
+def test_опоздавший_перевод_по_закрытому_счёту(люди):
+    """
+    Счёт закрыт сроком («Не прошёл»), а перевод пришёл позже — деньги
+    зачисляются (Н10). Раньше страница «Деньги пришли» его не пускала.
+    """
+    uid = люди["finance"]
+    сброс()
+    sql("update payments set status = 'failed'")
+
+    _, список, ответ = django(
+        uid,
+        ("get", LIST + "?closed=1", None),
+        ("post", f"{LIST}1/confirm/", {"note": "п/п 215", "back": LIST}),
+    )
+
+    assert "Деньги пришли" in список["body"]
+    assert ответ["status"] == 302
+    assert снимок()["payments"][0][:3] == ("SVD-000001", "paid", True)
+    assert len(снимок()["subscriptions"]) == 1
+
+
 def test_оплаченный_не_трогается(люди):
     сброс()
     sql("update payments set status = 'paid', paid_at = now()")

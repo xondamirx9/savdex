@@ -720,6 +720,40 @@ def test_удалить_учётку_компания_с_сотрудником(
     assert итог["db"]["company_deleted"] == [(False,)]
 
 
+def test_удаление_освобождает_места_продвижения(сайт):
+    """
+    Владелец удалил аккаунт: объявления — в архив, их продвижения
+    завершены, и купленное место «ТОП главной» свободно для других (Н11).
+    """
+    mine = _номер("companies", "mine")
+    uid = пользователь(company_id=mine, company_role="owner")
+
+    def подготовить() -> None:
+        сброс_удаления(company_id=mine, company_role="owner")()
+        sql("delete from promotions")
+        sql(
+            "insert into promotion_types (code, name, description, cost_units, duration_days, "
+            "slots, created_at, updated_at) values ('home_top', 'ТОП главной', 'x', 12, 7, 6, "
+            "now(), now()) on conflict do nothing"
+        )
+        sql(
+            "insert into promotions (listing_id, company_id, promotion_type_id, units_spent, "
+            "status, starts_at, ends_at, active_key, created_at, updated_at) "
+            "select l.id, l.company_id, t.id, 12, 'active', now(), now() + interval '5 days', "
+            "l.id || ':' || t.id, now(), now() from listings l, promotion_types t "
+            "where l.company_id = %s and l.status = 'active' and t.code = 'home_top' limit 1",
+            [mine],
+        )
+
+    try:
+        итог = удаление(сайт, подготовить, uid, {"password": ПАРОЛЬ})
+
+        assert итог["status"] == 302
+        assert sql("select status, active_key from promotions") == [("finished", None)]
+    finally:
+        sql("delete from promotions")
+
+
 def удаление(
     сайт: str, подготовка: Callable[[], None], uid: int, body: dict[str, Any]
 ) -> dict[str, Any]:
