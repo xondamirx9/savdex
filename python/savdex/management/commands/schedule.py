@@ -51,8 +51,9 @@ class Command(BaseCommand):
 
             return
 
-        schedule.adopt(_now())
-
+        # Задачи дня, чей час прошёл, а отметки нет (первый запуск, потерянный
+        # файл), — выполняются сразу. Прежняя adopt отмечала их сделанными
+        # (наследие переезда с Laravel) — и при сбое файла день пропускался
         while True:
             close_old_connections()
             now = _now()

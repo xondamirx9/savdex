@@ -512,11 +512,19 @@ def _save_row(ctx: Context, data: dict[str, Any], report: Report) -> None:
     company, preset = _resolve(data)
 
     if company is not None:
+        # Пустая ячейка у существующей компании — «не знаю», а не «стереть»:
+        # раньше файл без телефона стирал телефон, почту и описание,
+        # которые компания заполнила сама
+        filled = {
+            key: value
+            for key, value in data.items()
+            if value is not None and not (isinstance(value, str) and value.strip() == "")
+        }
         changed = eloquent.save(
             ctx,
             "companies",
             company,
-            data,
+            filled,
             section="companies",
             model="Company",
             saving=_search_text,

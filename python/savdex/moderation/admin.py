@@ -574,7 +574,9 @@ class ReviewAdmin(SavdexModelAdmin):
         ReviewImporter: строка — отзыв. Компании ищутся по названию без
         учёта регистра; не нашлась — строка пропускается (завести отзыв о
         несуществующей компании хуже, чем не завести). Совпавшая пара
-        «автор — компания» без объявления обновляет существующий отзыв.
+        «автор — компания» обновляет отзыв, загруженный прежним импортом;
+        настоящий отзыв пары (покупателя, заведённый вручную) не трогается —
+        строка пропускается с причиной.
         """
         headers = list(table[0]) if table else []
         mapping = import_columns(headers)
@@ -596,8 +598,19 @@ class ReviewAdmin(SavdexModelAdmin):
                 failed.append((number, "компания не найдена или отзыв о себе"))
                 continue
 
+            # Настоящий отзыв этой пары (покупателя или заведённый вручную)
+            # импорт не трогает: раньше совпадение искалось среди всех
+            # отзывов, и строка файла затирала оценку и текст покупателя
+            if (
+                Review.objects.filter(company=about, author_company=author)
+                .exclude(origin="import")
+                .exists()
+            ):
+                failed.append((number, "у этой пары уже есть отзыв покупателя — не трогаю"))
+                continue
+
             review = Review.objects.filter(
-                company=about, author_company=author, listing__isnull=True
+                company=about, author_company=author, listing__isnull=True, origin="import"
             ).first()
             adding = review is None
             before = self.snapshot(review) if review is not None else {}

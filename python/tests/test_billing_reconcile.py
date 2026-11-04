@@ -87,6 +87,22 @@ settlement.mark_paid(ctx, fresh(payment), {})
 kind, _ = orders.redeem(ctx, "WAIT", company("d"), user("d"))
 assert kind == "payment"
 orders.cancel(ctx, fresh(orders.order_credits(ctx, company("d"), pack, user("d"))))
+# Досрочное продление того же тарифа: срок — от конца прежнего (Т5)
+settlement.mark_paid(
+    ctx, fresh(orders.order_plan(ctx, company("a"), plan, user("a"))),
+    {"provider": "uzum", "external_id": "T-2"},
+)
+# Полный возврат тарифа урезает срок подписки — это не расхождение (Т5)
+from savdex import access
+from savdex.finance import refunds
+
+boss = access.Admin(id=admin["id"], name=admin["name"], email=admin["email"], is_admin=True,
+                    role="superadmin", status="active")
+settlement.mark_paid(ctx, fresh(orders.order_plan(ctx, company("e"), plan, user("e"))), {})
+paid_e = one("select * from payments where company_id = %s and purpose = 'subscription'",
+             [ids["companies"]["e"]])
+refund = refunds.request_refund(ctx, boss, paid_e, int(paid_e["amount"]), "клиент передумал")
+refunds.approve(ctx, boss, refund, None)
 print("ok")
 """
 
@@ -130,7 +146,7 @@ def оплаты() -> Iterator[None]:
         "created_at, updated_at) values ('m', 'Средний', 50, 30, 350000, 1, true, now(), now())"
     )
     admin = пользователь(is_admin=True, admin_role="superadmin", email="boss@savdex.uz")
-    companies = {slug: компания(slug=slug) for slug in "abcd"}
+    companies = {slug: компания(slug=slug) for slug in "abcde"}
     users = {slug: пользователь(company_id=c) for slug, c in companies.items()}
     [(plan,)] = sql("select id from plans where code = 'business'")
     sql(
@@ -159,7 +175,9 @@ def test_проведённое_сходится(оплаты):
     код, найдено = сверка("--all")
 
     assert (код, найдено) == (0, [])
-    assert sql("select count(*) from payments where status = 'paid'")[0][0] == 4
+    # Четыре оплаты, досрочное продление и возвращённый тариф — расхождений нет (Т5)
+    assert sql("select count(*) from payments where status = 'paid'")[0][0] == 5
+    assert sql("select count(*) from payments where status = 'refunded'")[0][0] == 1
 
 
 def _номер(purpose: str, status: str, company: str) -> str:

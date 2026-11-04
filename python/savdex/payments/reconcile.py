@@ -167,9 +167,10 @@ def _check_plan(payment: dict[str, Any], granted: list[dict[str, Any]], fail: An
     if subscription["source"] != "payment" or subscription["granted_by"] != payment["confirmed_by"]:
         fail("plan_source", "подписка выдана не по оплате этого счёта")
 
-    if plan is not None:
+    if plan is not None and not _shortened_by_refund(payment):
         days = int(plan["period_days"])
-        expected = subscription["started_at"] + timedelta(days=days) if days > 0 else None
+        starts = _extended_from(subscription) or subscription["started_at"]
+        expected = starts + timedelta(days=days) if days > 0 else None
 
         if subscription["ends_at"] != expected:
             fail("plan_period", f"срок подписки не {days} дн. от начала")
@@ -186,6 +187,46 @@ def _check_plan(payment: dict[str, Any], granted: list[dict[str, Any]], fail: An
 
         if promo is None or promo["subscription_id"] != subscription["id"]:
             fail("plan_promo", "промокод счёта не связан с выданной подпиской")
+
+
+def _extended_from(subscription: dict[str, Any]) -> Any:  # noqa: ANN401
+    """
+    Досрочное продление (orders.assign): новый срок — от конца прежней
+    подписки того же тарифа, закрытой в момент выдачи этой. Конец прежней
+    или None, если продления не было. Без этого сверка каждый час звала
+    продление расхождением.
+    """
+    started = subscription["started_at"]
+    previous = _rows(
+        "select ends_at from subscriptions where company_id = %s and plan_id = %s "
+        "and id < %s and status = 'expired' and ends_at > %s "
+        "and cancelled_at between %s and %s order by id desc limit 1",
+        [
+            subscription["company_id"],
+            subscription["plan_id"],
+            subscription["id"],
+            started,
+            started - START_SLACK,
+            started + START_SLACK,
+        ],
+    )
+
+    return previous[0]["ends_at"] if previous else None
+
+
+def _shortened_by_refund(payment: dict[str, Any]) -> bool:
+    """
+    Срок подписки урезал возврат (finance/refunds.py): вернули этот счёт
+    или другой счёт той же компании за тот же тариф. Срок тогда законно
+    короче — это не расхождение.
+    """
+    return bool(
+        _rows(
+            "select 1 from refunds r join payments p on p.id = r.payment_id "
+            "where r.status = 'done' and p.company_id = %s and p.plan_id = %s limit 1",
+            [payment["company_id"], payment["plan_id"]],
+        )
+    )
 
 
 def _check_credits(payment: dict[str, Any], credits: list[dict[str, Any]], fail: Any) -> None:  # noqa: ANN401
