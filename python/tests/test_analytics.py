@@ -48,6 +48,18 @@ def test_тег_только_на_боевом(monkeypatch):
     assert "send_page_view:false" in теги[1]
     # Админка тег не отправляет
     assert analytics.head_tags("/admin/companies") == []
+    # И страницы с секретом в адресе: токен сброса, подтверждение почты,
+    # визитка, отписка — Google не получит ни адреса, ни событий
+    for path in (
+        "/reset-password/abc123",
+        "/en/reset-password/abc123",
+        "/verify-email/7/deadbeef",
+        "/card/AbCdEf0123456789",
+        "/unsubscribe/5/0123456789abcdef0123456789abcdef",
+    ):
+        assert analytics.head_tags(path) == [], path
+    # «Забыли пароль» без токена — обычная страница
+    assert analytics.head_tags("/forgot-password") != []
 
     # Явный номер — и на локальном; мусор вместо номера — тега нет
     monkeypatch.setenv("APP_ENV", "local")
