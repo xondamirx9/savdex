@@ -597,8 +597,19 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
         store, SESSION_RESET_PHONE, SESSION_RESET_FOUND, SESSION_RESET_SENT, SESSION_RESET_LOGIN
     )
     store.put(SESSION_RESET_USER, user["id"])
+    response = _to(ctx, f"/reset-password/{quote(token, safe='')}?email={quote(email, safe='')}")
 
-    return _to(ctx, f"/reset-password/{quote(token, safe='')}?email={quote(email, safe='')}")
+    # Страница сброса — полной загрузкой, а не переходом Inertia: на
+    # прошлой странице уже работает Google Analytics, и он записал бы адрес
+    # с токеном и почтой; на самой странице сброса тега нет
+    # (analytics.PRIVATE_PATHS)
+    if request.headers.get("X-Inertia"):
+        conflict = HttpResponse("", status=409)
+        conflict["X-Inertia-Location"] = response["Location"]
+
+        return conflict
+
+    return response
 
 
 @form()

@@ -46,6 +46,17 @@ def measurement_id() -> str:
     return DEFAULT_ID if os.environ.get("APP_ENV", "local") == "production" else ""
 
 
+#: Адреса с секретом в самом пути: ссылка сброса пароля (токен и почта),
+#: подтверждения почты, визитка по QR, отписка. Тега GA на них нет вовсе —
+#: ни просмотр, ни автоматические события Google («расширенная
+#: статистика» сама шлёт адрес страницы) не унесут токен и почту за
+#: границу, а тот, кто видит отчёты GA, не откроет чужую ссылку
+PRIVATE_PATHS = re.compile(
+    r"^/(?:(?:uz|en|zh|tr)/)?"
+    r"(?:reset-password/|verify-email/[^/]+/|card/|unsubscribe/)"
+)
+
+
 def head_tags(path: str) -> list[str]:
     """
     gtag.js сразу после <head>. Первый просмотр не считается тегом
@@ -56,7 +67,12 @@ def head_tags(path: str) -> list[str]:
     """
     ga = measurement_id()
 
-    if not ga or path.startswith("/admin") or path.startswith("/py/admin"):
+    if (
+        not ga
+        or path.startswith("/admin")
+        or path.startswith("/py/admin")
+        or PRIVATE_PATHS.match(path)
+    ):
         return []
 
     return [
