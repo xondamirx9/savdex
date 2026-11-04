@@ -70,6 +70,34 @@ def test_кто_видит(люди):
     assert продажи["status"] == 403
 
 
+def test_каждый_видит_только_свои_разделы(люди):
+    """
+    Журнал хранит, что изменилось (телефоны лидов, суммы возвратов):
+    сотрудник видит записи только тех разделов, которые может открыть сам.
+    """
+    лид = _запись(section="leads", subject_label="Лид Стройбаза")
+    возврат = _запись(section="refunds", subject_label="Возврат SVD-7")
+
+    _, админ_список, админ_возврат = django(
+        люди["admin"], ("get", LIST, None), ("get", f"{LIST}{возврат}/change/", None)
+    )
+    _, фин_список, фин_лид = django(
+        люди["finance"], ("get", LIST, None), ("get", f"{LIST}{лид}/change/", None)
+    )
+    _, супер = django(люди["superadmin"], ("get", LIST, None))
+
+    # Админ: лиды — да, возвраты — нет (и карточку по номеру не открыть)
+    assert "Лид Стройбаза" in админ_список["body"]
+    assert "Возврат SVD-7" not in админ_список["body"]
+    assert админ_возврат["status"] in (302, 404)
+    # Финансы: наоборот
+    assert "Возврат SVD-7" in фин_список["body"]
+    assert "Лид Стройбаза" not in фин_список["body"]
+    assert фин_лид["status"] in (302, 404)
+    # Суперадмин — всё
+    assert "Лид Стройбаза" in супер["body"] and "Возврат SVD-7" in супер["body"]
+
+
 def test_список_и_отборы(люди):
     _запись(subject_label="Стройбаза", section="companies", action="blocked", user_id=люди["admin"])
     _запись(
