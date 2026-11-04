@@ -1399,18 +1399,30 @@ def chats_props(ctx: Context) -> dict[str, Any]:
             for t in threads
         ]
     )
+    # Непрочитанные — одним запросом на все чаты: раньше по запросу на
+    # каждый, у компании со ста чатами — сто запросов на открытие страницы.
+    # Непрочитано то, что прислала другая сторона после своей отметки
+    # «прочитано» (у покупателя — buyer_read_at, у продавца — seller_read_at)
+    unread_by_thread = {
+        r["thread_id"]: int(r["n"])
+        for r in _rows(
+            "select m.thread_id, count(*) as n from messages m "
+            "join message_threads t on t.id = m.thread_id "
+            "where m.thread_id = any(%s) and m.company_id != %s and ("
+            "case when t.buyer_company_id = %s then t.buyer_read_at else t.seller_read_at end "
+            "is null or m.created_at > "
+            "case when t.buyer_company_id = %s then t.buyer_read_at else t.seller_read_at end"
+            ") group by m.thread_id",
+            [ids, cid, cid, cid],
+        )
+    }
     result = []
 
     for t in threads:
         mine_buyer = t["buyer_company_id"] == cid
         other = others.get(t["seller_company_id"] if mine_buyer else t["buyer_company_id"])
-        read_at = t["buyer_read_at"] if mine_buyer else t["seller_read_at"]
         message = last.get(t["id"])
-        unread = _count(
-            "select count(*) as n from messages where thread_id = %s and company_id != %s"
-            + (" and created_at > %s" if read_at is not None else ""),
-            [t["id"], cid, *([read_at] if read_at is not None else [])],
-        )
+        unread = unread_by_thread.get(t["id"], 0)
         result.append(
             {
                 "id": t["id"],

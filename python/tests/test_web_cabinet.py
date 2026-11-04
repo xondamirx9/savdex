@@ -1171,6 +1171,34 @@ def test_чаты(сайт, path):
     assert задача[0] in [t["listing"] for t in threads]
 
 
+def test_чаты_непрочитанные_одним_запросом(сайт):
+    """
+    Непрочитанные считаются одним запросом на все чаты (Т10) — и так же,
+    как раньше по чату: чужие сообщения после своей отметки «прочитано».
+    """
+    _чаты()
+    cid = _owner()
+    # В данных _чаты() у одного чата продавец прочитал первое сообщение
+    _, стр = зайти(сайт, "/cabinet/chats", владелец(сайт))
+    ожидание = {}
+
+    for tid, buyer, buyer_read, seller_read in sql(
+        "select id, buyer_company_id, buyer_read_at, seller_read_at from message_threads "
+        "where buyer_company_id = %s or seller_company_id = %s",
+        [cid, cid],
+    ):
+        read_at = buyer_read if buyer == cid else seller_read
+        [(n,)] = sql(
+            "select count(*) from messages where thread_id = %s and company_id != %s"
+            + (" and created_at > %s" if read_at is not None else ""),
+            [tid, cid, *([read_at] if read_at is not None else [])],
+        )
+        ожидание[tid] = n
+
+    assert {t["id"]: t["unread"] for t in стр["props"]["threads"]} == ожидание
+    assert any(ожидание.values()), "в данных есть непрочитанные"
+
+
 def test_чаты_без_компании(сайт):
     _, стр = зайти(сайт, "/cabinet/chats", без_компании("nocompany8@savdex.uz"))
 
