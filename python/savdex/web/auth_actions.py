@@ -197,8 +197,18 @@ def _intended(ctx: Context, default: str) -> HttpResponse:
     store = _session(ctx)
     saved = safe_intended(ctx, store.get("url.intended"))
     store.forget("url.intended")
+    response = _to(ctx, saved if saved is not None else default)
 
-    return _to(ctx, saved if saved is not None else default)
+    # Сохранённый адрес может быть не страницей Inertia — счёт, выгрузка,
+    # файл: переход Inertia открыл бы его окном поверх формы входа. Туда —
+    # полной загрузкой (409 и X-Inertia-Location), как Inertia::location
+    if saved is not None and ctx.request.headers.get("X-Inertia"):
+        conflict = HttpResponse("", status=409)
+        conflict["X-Inertia-Location"] = response["Location"]
+
+        return conflict
+
+    return response
 
 
 def _guest(ctx: Context) -> HttpResponse | None:

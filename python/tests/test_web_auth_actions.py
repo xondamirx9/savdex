@@ -111,7 +111,7 @@ def вход(
 
     return {
         "status": ответ["status"],
-        "location": ответ["headers"].get("location"),
+        "location": ответ["headers"].get("location") or ответ["headers"].get("x-inertia-location"),
         "cookies": sorted(ответ["cookies"]),
         "remember_value": _remember(ответ),
         "session": None
@@ -320,6 +320,9 @@ def test_вход_туда_куда_шёл(сайт, сохранено, ожи�
     )
 
     assert итог["location"] == ожидание.replace("<сайт>", сайт)
+    # Свой сохранённый адрес — полной загрузкой (409): это может быть счёт
+    # или выгрузка, а не страница Inertia, и она открылась бы окном (Н16)
+    assert итог["status"] == (302 if ожидание == "<сайт>/en/cabinet" else 409)
     [(uid,)] = sql("select id from users where email = %s", [ПОЧТА])
     assert вошёл(итог, uid)
     # Язык адреса формы остаётся в сессии

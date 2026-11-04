@@ -627,7 +627,9 @@ def test_код_подтверждения(сайт, body, шаг, данные,
         assert база["users"][0][5] is False
     else:
         # Подтверждена, код одноразовый — убран
-        assert куда(сайт, итог) == (302, итог_ or "/cabinet")
+        # Сохранённый адрес — полной загрузкой (409): он может быть не
+        # страницей Inertia (счёт, выгрузка), Н16
+        assert куда(сайт, итог) == (409 if итог_ == "/pricing" else 302, итог_ or "/cabinet")
         assert сессия(итог).get("success") == (None if итог_ is None else ПОДТВЕРЖДЕНА)
         assert база["users"][0][5] is True and база["code"] is None
 
