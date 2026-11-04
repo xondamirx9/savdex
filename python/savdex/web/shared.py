@@ -459,13 +459,26 @@ def _wallet_summary(company_id: int) -> dict[str, Any]:
     }
 
 
+def external_url(ctx: Context, url: str | None) -> str | None:
+    """
+    Внешняя ссылка уведомления (рассылка из админки) — только http(s) и не
+    свой сайт; иначе None. Такую открывает сам браузер, в новой вкладке:
+    /notifications/…/read на внешние адреса не переводит (это был бы
+    открытый редирект), и ссылка не открывалась вовсе.
+    """
+    if url is None or not re.match(r"https?://[^/\\\s]", url) or url.startswith(ctx.root + "/"):
+        return None
+
+    return url
+
+
 def _bell(ctx: Context, user_id: int) -> dict[str, Any]:
     unread = _rows(
         "select count(*) as n from user_notifications where user_id = %s and read_at is null",
         [user_id],
     )[0]["n"]
     latest = _rows(
-        "select id, type, tone, title, read_at, created_at from user_notifications "
+        "select id, type, tone, title, url, read_at, created_at from user_notifications "
         "where user_id = %s order by created_at desc, id desc limit 5",
         [user_id],
     )
@@ -478,6 +491,7 @@ def _bell(ctx: Context, user_id: int) -> dict[str, Any]:
                 "type": n["type"],
                 "tone": n["tone"],
                 "title": n["title"],
+                "external": external_url(ctx, n["url"]),
                 "read": n["read_at"] is not None,
                 "ago": ago(n["created_at"], ctx.locale),
             }
