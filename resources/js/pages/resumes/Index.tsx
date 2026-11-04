@@ -94,7 +94,7 @@ export default function ResumesIndex({ resumes, filters, options, cities, total,
                                     placeholder={t('resume.search_placeholder')}
                                     value={q}
                                     onChange={(e) => setQ(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && apply({ q })}
                                 />
                             </div>
                         </div>

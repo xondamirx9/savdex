@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
     Armchair,
     ArrowRight,
@@ -47,6 +47,7 @@ import { cn } from '@/lib/cn';
 import { formatDecimal, t, tChoice } from '@/lib/i18n';
 import { SERVICE_PAGE_BY_CODE } from '@/lib/serviceSections';
 import { routes } from '@/routes';
+import type { SharedProps } from '@/types';
 
 /**
  * Секция главной: тексты и видимость из админки («Главная страница»),
@@ -350,6 +351,10 @@ export default function Home({
     // компаний, объявления и категории — в «Товары», страны — на
     // страницу стран (в шапке её нет, попасть можно отсюда и из подвала)
     const block = (key: string): Block => blocks[key] ?? EMPTY_BLOCK;
+    // «Разместить» — как в шапке: вошедшему сразу мастер объявления.
+    // Регистрация вошедшего отправляла на главную, и кнопка не работала
+    const authed = Boolean(usePage<SharedProps>().props.auth?.user);
+    const postHref = authed ? routes.listingCreate : routes.register;
     const shown = (key: string): boolean => block(key).visible;
     const hero = block('hero');
     const how = block('how');
@@ -469,7 +474,7 @@ export default function Home({
                             {/* Одна кнопка — разместить. «Я продаю» и «Я покупаю»
                                 убраны: заявки и товары и так в меню шапки */}
                             <div className="hero-b2b-cta">
-                                <Link href={routes.register} className="btn btn-primary btn-lg">
+                                <Link href={postHref} className="btn btn-primary btn-lg">
                                     {t('home.cta_post')}
                                 </Link>
                             </div>
@@ -754,7 +759,7 @@ export default function Home({
                             <h2 className="t-h1">{cta.heading}</h2>
                             {cta.subheading !== '' && <p className="t-lead">{cta.subheading}</p>}
                             <Link
-                                href={routes.register}
+                                href={postHref}
                                 className="btn btn-lg"
                                 style={{ background: '#fff', color: 'var(--primary-700)' }}
                             >

@@ -16,6 +16,7 @@ import { CabinetLayout } from '@/layouts/CabinetLayout';
 import { cn } from '@/lib/cn';
 import { routes } from '@/routes';
 import { t, tChoice } from '@/lib/i18n';
+import { markRead } from '@/lib/notifications';
 
 interface Row {
     id: number;
@@ -24,6 +25,8 @@ interface Row {
     title: string;
     body: string | null;
     url: string | null;
+    /** Внешняя ссылка (http/https, не свой сайт): её открывает браузер, в новой вкладке */
+    external: string | null;
     is_broadcast: boolean;
     read: boolean;
     ago: string;
@@ -131,6 +134,24 @@ export default function Notifications({
 
                         // Уведомление без ссылки не делаем кнопкой: нажатие,
                         // которое никуда не ведёт, читается как поломка
+                        // Внешняя ссылка рассылки: обычная ссылка в новой
+                        // вкладке, прочитанным отмечаем запросом рядом. Через
+                        // /read она не открывалась — сервер не ведёт наружу
+                        if (n.external) {
+                            return (
+                                <a
+                                    key={n.id}
+                                    href={n.external}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={cn('card notif-row', !n.read && 'is-unread')}
+                                    onClick={() => markRead(n.id, n.read)}
+                                >
+                                    {inner}
+                                </a>
+                            );
+                        }
+
                         return n.url ? (
                             <Link
                                 key={n.id}

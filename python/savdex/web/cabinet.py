@@ -1175,6 +1175,8 @@ def notifications(request: HttpRequest) -> HttpResponse:
 
 
 def notifications_props(ctx: Context) -> dict[str, Any]:
+    from savdex.web.shared import external_url
+
     assert ctx.user is not None
     raw = laravel_input(ctx.query).get("filter")
     only_unread = isinstance(raw, str) and text(raw) == "unread"
@@ -1194,6 +1196,7 @@ def notifications_props(ctx: Context) -> dict[str, Any]:
                 "title": n["title"],
                 "body": n["body"],
                 "url": n["url"],
+                "external": external_url(ctx, n["url"]),
                 "is_broadcast": bool(n["is_broadcast"]),
                 "read": n["read_at"] is not None,
                 "ago": ago(n["created_at"], ctx.locale),

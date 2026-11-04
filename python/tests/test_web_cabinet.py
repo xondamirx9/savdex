@@ -1074,6 +1074,42 @@ def test_уведомления(сайт, query, filter_, заголовки):
     assert [n["title"] for n in props["notifications"]] == [f"Уведомление {i}" for i in заголовки]
 
 
+@pytest.mark.parametrize(
+    ("url", "внешняя"),
+    [
+        ("https://t.me/savdex_news", True),
+        ("http://example.uz/akciya", True),
+        ("/cabinet/reviews", False),
+        ("javascript:alert(1)", False),
+        ("//evil.example/x", False),
+    ],
+)
+def test_внешняя_ссылка_уведомления(сайт, url, внешняя):
+    """
+    Внешняя ссылка рассылки (http/https) — полем external: её откроет
+    браузер в новой вкладке (М4). Остальное — как раньше, через /read.
+    """
+    куки = владелец(сайт)
+    [(uid,)] = sql("select id from users where email = 'owner@savdex.uz'")
+    [(nid,)] = sql(
+        "insert into user_notifications (user_id, type, tone, title, url, is_broadcast, "
+        "created_at, updated_at) values (%s, 'broadcast', 'info', 'Акция', %s, true, "
+        "now() + interval '1 hour', now()) returning id",
+        [uid, url],
+    )
+
+    try:
+        _, стр = зайти(сайт, "/notifications", куки)
+    finally:
+        sql("delete from user_notifications where id = %s", [nid])
+
+    props = стр["props"]
+    [n] = [n for n in props["notifications"] if n["id"] == nid]
+    [b] = [b for b in props["bell"]["latest"] if b["id"] == nid]
+
+    assert n["external"] == b["external"] == (url if внешняя else None)
+
+
 # ── Избранное ───────────────────────────────────────────────────────
 
 

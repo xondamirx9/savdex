@@ -31,6 +31,7 @@ import { t } from '@/lib/i18n';
 import { servicePages } from '@/lib/serviceSections';
 import { useDismiss } from '@/lib/useDismiss';
 import { PARTNER_TIERS, TIER_LOOK } from '@/lib/partnerTiers';
+import { markRead } from '@/lib/notifications';
 import { routes } from '@/routes';
 import type { SharedProps } from '@/types';
 
@@ -479,26 +480,52 @@ function MessagesMenu({ data }: { data: NonNullable<SharedProps['bell']> }) {
                         {t('header.notifications_empty')}
                     </p>
                 ) : (
-                    items.map((n) => (
-                        <Link
-                            key={n.id}
-                            href={routes.notificationRead(n.id)}
-                            method="post"
-                            as="button"
-                            className={cn('dropdown-item notif-item', !n.read && 'is-unread')}
-                            role="menuitem"
-                            onClick={() => {
-                                setOpen(false);
-                                setShown(null);
-                            }}
-                        >
-                            <span className={cn('notif-mark', `tone-${n.tone}`)} aria-hidden />
-                            <span style={{ minWidth: 0 }}>
-                                <span className="notif-title">{n.title}</span>
-                                <span className="t-caption muted">{n.ago}</span>
-                            </span>
-                        </Link>
-                    ))
+                    items.map((n) => {
+                        const body = (
+                            <>
+                                <span className={cn('notif-mark', `tone-${n.tone}`)} aria-hidden />
+                                <span style={{ minWidth: 0 }}>
+                                    <span className="notif-title">{n.title}</span>
+                                    <span className="t-caption muted">{n.ago}</span>
+                                </span>
+                            </>
+                        );
+                        const close = () => {
+                            setOpen(false);
+                            setShown(null);
+                        };
+
+                        // Внешняя ссылка рассылки — в новой вкладке, прочитанным
+                        // отмечаем запросом рядом (lib/notifications)
+                        return n.external ? (
+                            <a
+                                key={n.id}
+                                href={n.external}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={cn('dropdown-item notif-item', !n.read && 'is-unread')}
+                                role="menuitem"
+                                onClick={() => {
+                                    close();
+                                    markRead(n.id, n.read);
+                                }}
+                            >
+                                {body}
+                            </a>
+                        ) : (
+                            <Link
+                                key={n.id}
+                                href={routes.notificationRead(n.id)}
+                                method="post"
+                                as="button"
+                                className={cn('dropdown-item notif-item', !n.read && 'is-unread')}
+                                role="menuitem"
+                                onClick={close}
+                            >
+                                {body}
+                            </Link>
+                        );
+                    })
                 )}
 
                 <Link

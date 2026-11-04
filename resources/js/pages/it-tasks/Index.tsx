@@ -267,7 +267,7 @@ export default function ItTasksIndex({ tasks, filters, types, total_all: totalAl
                                     style={{ paddingLeft: 42 }}
                                     value={q}
                                     onChange={(e) => setQ(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && apply({ q })}
                                 />
                                 <span aria-hidden className="board-search-ico">
                                     <Search className="size-5" />
