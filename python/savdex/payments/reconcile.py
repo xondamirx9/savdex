@@ -250,7 +250,7 @@ def _recipients() -> list[str]:
     return [
         r["email"]
         for r in _rows(
-            "select email from users where is_admin and admin_role = 'superadmin' "
+            "select email from users where is_admin and admin_role in ('superadmin', 'megaadmin') "
             "and deleted_at is null order by id"
         )
     ]
