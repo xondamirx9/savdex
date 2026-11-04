@@ -22,7 +22,7 @@ from django.utils.html import format_html, format_html_join
 from django.utils.timesince import timesince
 
 from savdex import access
-from savdex.adminsite import SavdexModelAdmin, register
+from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.crm.admin import _badge, when
 from savdex.journal.models import ACTIONS, AdminAction
 from savdex.text import numeric
@@ -71,12 +71,23 @@ def readable(value: Any) -> str:  # noqa: ANN401
     return str(value)
 
 
+def visible_sections(staff: access.Admin) -> set[str]:
+    """
+    Разделы, записи которых сотрудник видит в журнале: те, что он может
+    открыть сам. Журнал хранит, что изменилось, — телефоны и почты лидов,
+    суммы возвратов; без этого роль с правом на журнал видела всё.
+    """
+    return {section for section in access.SECTIONS if staff.can(f"{section}.view")}
+
+
 class SectionFilter(admin.SimpleListFilter):
     title = "раздел"
     parameter_name = "section"
 
     def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:  # noqa: ANN401
-        return list(access.SECTIONS.items())
+        allowed = visible_sections(_admin_of(request))
+
+        return [(k, v) for k, v in access.SECTIONS.items() if k in allowed]
 
     def queryset(
         self, request: HttpRequest, queryset: QuerySet[AdminAction]
@@ -144,6 +155,16 @@ class AdminActionAdmin(SavdexModelAdmin):
 
     fields = ("moment", "who", "what", "where", "subject", "wording", "ip", "diff")
     readonly_fields = fields
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[AdminAction]:
+        """Только записи разделов, которые сотрудник может открыть сам (и карточка тоже)."""
+        queryset = super().get_queryset(request)
+        staff = _admin_of(request)
+
+        if staff.is_superadmin:
+            return queryset
+
+        return queryset.filter(section__in=visible_sections(staff))
 
     # ── Только чтение ──
 
