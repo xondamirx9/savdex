@@ -308,10 +308,16 @@ def partners_tier(request: HttpRequest, tier: str) -> HttpResponse:
     )
 
 
+#: «Показать ещё» на странице стран — порция компаний. Раньше отдавались
+#: все оставшиеся разом: у страны их тысячи — тяжёлый ответ и запрос к базе
+COUNTRY_PAGE = 48
+
+
 def country_companies(request: HttpRequest, code: str) -> HttpResponse:
     """
     PageController::countryCompanies — «Показать ещё» на странице стран:
-    все компании страны после первых offset, JSON. Под throttle:60,1.
+    следующие COUNTRY_PAGE компаний страны после первых offset, JSON. Под
+    throttle:60,1.
     """
     from savdex.web.views import not_found
 
@@ -327,8 +333,8 @@ def country_companies(request: HttpRequest, code: str) -> HttpResponse:
         rows = _rows(
             f"select m.*, {_WITH_LISTINGS} from companies m where m.status = 'active' "
             "and m.deleted_at is null and m.country_id = %s "
-            "order by m.verification_level desc, m.rating desc, m.id offset %s",
-            [country[0]["id"], offset],
+            "order by m.verification_level desc, m.rating desc, m.id limit %s offset %s",
+            [country[0]["id"], COUNTRY_PAGE, offset],
         )
 
         return HttpResponse(

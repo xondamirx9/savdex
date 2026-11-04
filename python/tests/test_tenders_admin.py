@@ -258,3 +258,24 @@ def test_значок_на_сайте(люди):
     стр = страница(ответ["body"])
     assert стр["component"] == "tenders/Show"
     assert стр["props"]["tender"]["government"] is True
+
+
+def test_загрузка_не_трогает_тендер_из_кабинета(люди):
+    """
+    Тендер компании из кабинета с тем же названием и заказчиком импорт не
+    перезаписывает и с сайта не снимает — заводит свой (Т3).
+    """
+    sql("delete from tenders")
+    sql(
+        "insert into tenders (title, customer, slug, status, source, currency, budget, "
+        "published_at, created_at, updated_at) values ('Office chairs', 'Bank', "
+        "'office-chairs-1', 'published', 'cabinet', 'UZS', 700, now(), now(), now())"
+    )
+    строки = [["Title", "Customer", "Budget", "Status"], ["Office chairs", "Bank", "500", "draft"]]
+
+    _загрузить(люди["buyer_manager"], "tenders.csv", _csv(строки, ","))
+
+    assert sql("select status, budget::int from tenders where source = 'cabinet'") == [
+        ("published", 700)
+    ]
+    assert sql("select count(*) from tenders where source = 'admin'") == [(1,)]

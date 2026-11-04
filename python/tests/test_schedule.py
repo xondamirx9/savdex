@@ -75,7 +75,12 @@ def test_чистка_старше_90_дней(компании, tmp_path):
 ДНЕВНЫЕ = {"audience_views_prune", "expire_listings", "ratings_recalculate", "reviews_ask"}
 
 
-def test_первый_запуск_после_часа_день_пропускает(компании, tmp_path):
+def test_первый_запуск_после_часа_выполняет_задачи_дня(компании, tmp_path):
+    """
+    Отметки нет (первый запуск, потерянный или битый файл), а час задачи
+    прошёл — задача выполняется, а не отмечается сделанной (Т8). Прежняя
+    adopt, наследие переезда с Laravel, при сбое файла пропускала день.
+    """
     now = datetime.now(UTC)
 
     if now.hour < 6:
@@ -107,8 +112,7 @@ def test_первый_запуск_после_часа_день_пропуска
         loop.terminate()
         loop.wait(timeout=10)
 
-    # Суточные задачи дня отмечены пройденными, а не выполнены второй раз
-    # (повторяющиеся — раз в час и т. п. — проходят сразу, их безвредно повторить)
+    # Суточные задачи дня выполнены и отмечены пройденными
     отмечено = json.loads(state.read_text())
     assert {k: v for k, v in отмечено.items() if k in ДНЕВНЫЕ} == {
         "audience_views_prune": now.date().isoformat(),
@@ -116,7 +120,8 @@ def test_первый_запуск_после_часа_день_пропуска
         "ratings_recalculate": now.date().isoformat(),
         "reviews_ask": now.date().isoformat(),
     }
-    assert sql("select count(*) from audience_views") == [(5,)]
+    # Чистка просмотров прошла: старше 90 дней — прочь
+    assert sql("select count(*) from audience_views") == [(2,)]
 
 
 def рейтинги(компании: list[int]) -> None:
@@ -180,3 +185,28 @@ def test_список_задач(компании, tmp_path):
     assert "ratings_recalculate\t03:00" in вывод
     assert "audience_views_prune\t04:00" in вывод and "expire_listings\t06:00" in вывод
     assert "reviews_ask\t06:00" in вывод
+
+
+def test_отметка_пишется_целиком(tmp_path, monkeypatch):
+    """Файл отметок пишется через временный и переименование: без обрывков и хвостов (Т8)."""
+    import os
+
+    from savdex import schedule
+
+    state = tmp_path / "state" / "schedule.json"
+    monkeypatch.setenv("SAVDEX_SCHEDULE_STATE", str(state))
+    замены = []
+    настоящая = os.replace
+    monkeypatch.setattr(
+        schedule.os, "replace", lambda a, b: (замены.append((a, b)), настоящая(a, b))[1]
+    )
+
+    schedule.remember("ratings_recalculate", "2026-11-04")
+    schedule.remember("reviews_ask", "2026-11-04")
+
+    assert json.loads(state.read_text()) == {
+        "ratings_recalculate": "2026-11-04",
+        "reviews_ask": "2026-11-04",
+    }
+    assert len(замены) == 2 and all(Path(b) == state for _, b in замены)
+    assert sorted(p.name for p in state.parent.iterdir()) == ["schedule.json"]

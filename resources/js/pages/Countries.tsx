@@ -171,7 +171,8 @@ export default function Countries({ countries, planned }: { countries: CountryRo
  *
  * Сервер отдаёт сразу только первые компании — всего их больше
  * тысячи, и страница со всеми карточками грузилась бы долго.
- * Нажатие подгружает всех оставшихся компаний страны разом.
+ * Нажатие подгружает следующую порцию (сервер отдаёт по 48), и кнопка
+ * остаётся, пока показаны не все.
  */
 function CountrySection({ country: c }: { country: CountryRow }) {
     const [items, setItems] = useState(c.items);

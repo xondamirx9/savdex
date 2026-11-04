@@ -14,7 +14,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from savdex.adminsite import _admin_of
-from savdex.data.models import COMPANY_HIDDEN, LEVELS, CompanyRecord
+from savdex.data.models import COMPANY_HIDDEN, COMPANY_STATUSES, LEVELS, CompanyRecord
 from savdex.guards import allowed_writes
 from savdex.moderation.services import context_of, notify_company
 from savdex.web import image_store
@@ -174,6 +174,7 @@ def export_columns() -> list[tuple[str, Any]]:
             "Объявлений",
             lambda r: Listing.objects.filter(company_id=r.pk, deleted_at__isnull=True).count(),
         ),
-        ("Статус", lambda r: "Активна" if r.status == "active" else "Заблокирована"),
+        # Три статуса, как в разделе: скрытая с витрины — не заблокирована
+        ("Статус", lambda r: COMPANY_STATUSES.get(r.status, r.status)),
         ("Дата регистрации", lambda r: r.created_at),
     ]

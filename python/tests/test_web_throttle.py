@@ -130,6 +130,28 @@ def test_показать_ещё(сайт, path, ip, сдвиг):
     assert [c["slug"] for c in данные["items"]] == [c["slug"] for c in все["items"]][сдвиг:]
 
 
+def test_показать_ещё_порциями(сайт):
+    """«Показать ещё» отдаёт порцию, а не все компании страны разом (Т9)."""
+    [(uz,)] = sql("select id from countries where code = 'uz'")
+    sql(
+        "insert into companies (name, slug, status, country_id, created_at, updated_at) "
+        "select 'Порция ' || n, 'portion-' || n, 'active', %s, now(), now() "
+        "from generate_series(1, 60) n",
+        [uz],
+    )
+
+    try:
+        первая = json_ответ(сайт, "/countries/uz/companies", {"X-Forwarded-For": "198.51.100.7"})
+        вторая = json_ответ(
+            сайт, "/countries/uz/companies?offset=48", {"X-Forwarded-For": "198.51.100.8"}
+        )
+    finally:
+        sql("delete from companies where slug like 'portion-%%'")
+
+    # 69 компаний страны: 48 и остаток 21
+    assert (len(первая["items"]), len(вторая["items"])) == (48, 21)
+
+
 def test_нет_такой_страны(сайт):
     д = открыть(
         сайт, "/countries/xx/companies", headers={"X-Forwarded-For": "198.51.100.9"}, env=ФАЙЛОВЫЙ
