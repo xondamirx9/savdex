@@ -18,6 +18,7 @@ SQL — условия для where; Python — для строки, уже пр
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 ACTIVE = "active"
@@ -44,6 +45,22 @@ def author_visible(alias: str = "t") -> str:
         "or au.deleted_at is not null or ac.deleted_at is not null "
         f"or (ac.id is not null and ac.status <> '{ACTIVE}')))"
     )
+
+
+def listing_live_sql(alias: str = "l") -> str:
+    """
+    Условие where «срок объявления alias не вышел». Статус «Истёк» ставит
+    задача расписания (раз в час); до неё истёкшее по сроку уже не
+    показывается в каталоге и на своей странице. expires_at — UTC без пояса.
+    """
+    return f"({alias}.expires_at is null or {alias}.expires_at > (now() at time zone 'UTC'))"
+
+
+def listing_live(row: dict[str, Any], now: datetime) -> bool:
+    """Строка listings: срок не вышел (now — UTC без пояса)."""
+    expires = row.get("expires_at")
+
+    return expires is None or expires > now
 
 
 def company_visible(company: dict[str, Any] | None) -> bool:
