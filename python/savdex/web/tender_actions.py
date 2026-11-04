@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -42,7 +42,7 @@ from savdex.web.it_task_actions import _spoofed
 from savdex.web.it_tasks import _date, number_format
 from savdex.web.listing_actions import _stamp, refuse_blocked
 from savdex.web.search_text import index
-from savdex.web.shared import Context
+from savdex.web.shared import _TASHKENT, Context
 from savdex.web.validation import Check, _strtotime, validate, validated
 from savdex.web.views import not_found
 
@@ -127,7 +127,15 @@ def _category() -> Check:
 
 
 def _end_of_day(moment: datetime) -> datetime:
-    return moment.replace(hour=23, minute=59, second=59, microsecond=0)
+    """
+    Конец дня по Ташкенту для момента moment (UTC без пояса, как в базе) —
+    тоже UTC без пояса. Было «23:59:59 UTC» — 04:59 следующего дня по
+    Ташкенту: приём заявок закрывался на пять часов позже обещанного.
+    """
+    local = moment.replace(tzinfo=UTC).astimezone(_TASHKENT)
+    end = local.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    return end.astimezone(UTC).replace(tzinfo=None)
 
 
 def _default_deadline() -> datetime:
@@ -189,8 +197,10 @@ def _validated(
     if row["deadline_at"] is not None:
         parsed = _strtotime(row["deadline_at"])
         assert parsed is not None
-        # Приём заявок — до конца выбранного дня
-        row["deadline_at"] = parsed[0].strftime("%Y-%m-%d 23:59:59")
+        # Приём заявок — до конца выбранного дня по Ташкенту. В базе — UTC
+        # (как пишет Laravel): «23:59:59» без перевода закрывал приём в
+        # 04:59 следующего дня по Ташкенту
+        row["deadline_at"] = end_of_day_utc(parsed[0])
 
         if latest is not None and row["deadline_at"] > latest.strftime("%Y-%m-%d %H:%M:%S"):
             limit = _date(latest, ctx.locale)
@@ -199,6 +209,18 @@ def _validated(
             return {}, {"deadline_at": [message]}
 
     return row, {}
+
+
+def _tashkent_date(moment: datetime) -> date:
+    """Дата по Ташкенту для момента в UTC без пояса."""
+    return moment.replace(tzinfo=UTC).astimezone(_TASHKENT).date()
+
+
+def end_of_day_utc(day: datetime) -> str:
+    """Конец дня day по Ташкенту — строкой UTC для столбца timestamp."""
+    local = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=_TASHKENT)
+
+    return local.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _contacts(ctx: Context, company: dict[str, Any]) -> dict[str, Any]:
@@ -245,7 +267,7 @@ def _days_left(row: dict[str, Any]) -> int | None:
     if row["status"] != PUBLISHED or row["deadline_at"] is None:
         return None
 
-    left: int = (row["deadline_at"].date() - eloquent.now().date()).days
+    left: int = (_tashkent_date(row["deadline_at"]) - _tashkent_date(eloquent.now())).days
 
     return max(0, left)
 

@@ -27,7 +27,7 @@ from savdex.web.it_tasks import _date
 from savdex.web.phpquery import php_int
 from savdex.web.request import context
 from savdex.web.seo import Seo, _limit
-from savdex.web.shared import Context
+from savdex.web.shared import _TASHKENT, Context
 from savdex.web.visibility import author_visible
 
 PER_PAGE = 20
@@ -89,8 +89,11 @@ def card(
         "budget": float(row["budget"]) if row["budget"] is not None else None,
         "currency": row["currency"],
         "deadline": _date(row["deadline_at"], locale),
-        # Дней до конца приёма: полночь к полуночи, в UTC (часовой пояс приложения)
-        "days_left": (deadline.date() - now.date()).days if deadline is not None else None,
+        # Дней до конца приёма: полночь к полуночи, по Ташкенту — как и сам
+        # срок (tender_actions.end_of_day_utc)
+        "days_left": (deadline.astimezone(_TASHKENT).date() - now.astimezone(_TASHKENT).date()).days
+        if deadline is not None
+        else None,
         "closed": deadline is not None and deadline < now,
         "published": _date(row["published_at"], locale),
         # Госзакупка (этап 5, только Django): значок на карточке и странице
