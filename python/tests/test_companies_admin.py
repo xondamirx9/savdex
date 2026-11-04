@@ -358,6 +358,18 @@ def test_выгрузка(люди):
     assert журнал("exported")["section"] == "companies"
 
 
+def test_выгрузка_различает_скрытую_и_заблокированную(люди):
+    """В выгрузке скрытая с витрины — «Скрыта с витрины», а не «Заблокирована» (Т7)."""
+    _компания("Скрытая", status="hidden")
+    _компания("Нарушитель", status="blocked")
+
+    _, csv = django(люди["admin"], ("get", LIST + "export/?format=csv", None))
+    строки = {line.split(",")[1]: line for line in csv["body"].splitlines()[1:]}
+
+    assert "Скрыта с витрины" in строки["Скрытая"]
+    assert "Заблокирована" in строки["Нарушитель"]
+
+
 def test_эмблема(люди):
     без_логотипа = _компания("Стройбаза")
     с_логотипом = _компания("Кирпичный Двор", logo_path="companies/x/logo.webp")
