@@ -452,11 +452,11 @@ LIST = "/py/admin/ilmora/registration/"
 
 
 def test_право_раздела():
-    """ПИНФЛ — не всем: раздел видят суперадмин и администратор."""
+    """ПИНФЛ — не всем: раздел видят мегаадмин, суперадмин и администратор."""
     видят = {роль for роль in access.ROLES if "ilmora.view" in access.abilities_for(роль)}
     выгружают = {роль for роль in access.ROLES if "ilmora.export" in access.abilities_for(роль)}
 
-    assert видят == выгружают == {"superadmin", "admin"}
+    assert видят == выгружают == {"megaadmin", "superadmin", "admin"}
 
 
 def _заявка(**поля: Any) -> int:
