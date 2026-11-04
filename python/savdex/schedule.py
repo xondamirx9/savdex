@@ -354,24 +354,19 @@ def load() -> dict[str, str]:
 
 
 def remember(name: str, day: date | str) -> None:
+    """
+    Отметить пройденное. Запись — во временный файл и переименованием на
+    место: прерванная запись (падение, нет места) оставляла битый файл,
+    load() читал его как пустой, и задачи дня считались несделанными или,
+    пока была adopt, — сделанными и пропускались.
+    """
     state = load()
     state[name] = day if isinstance(day, str) else day.isoformat()
     path = state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, sort_keys=True))
-
-
-def adopt(now: datetime) -> None:
-    """
-    Суточные задачи без записи, чей час сегодня уже прошёл, — сделаны
-    Laravel. Повторяющиеся (раз в час, раз в четыре часа) безвредно
-    повторить: первый проход — сразу.
-    """
-    state = load()
-
-    for item in JOBS:
-        if item.every is None and item.name not in state and now >= item.due(now):
-            remember(item.name, now.date())
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(state, sort_keys=True))
+    os.replace(temporary, path)
 
 
 def pending(now: datetime) -> list[Job]:
