@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import { Check, FileText, Ticket, X } from 'lucide-react';
-import type { FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { formatNumber } from '@/components/cabinet';
 import { useConfirm } from '@/components/useConfirm';
 import { TextInput } from '@/components/ui';
@@ -59,8 +59,31 @@ export function usdPrice(value: number): string {
     return `$${formatNumber(value)}`;
 }
 
-function order(kind: 'plan' | 'credits', id: number) {
-    router.post('/cabinet/billing/order', { kind, id }, { preserveScroll: true });
+/**
+ * Запросы оплаты — по одному. Двойной щелчок по «Оплатить» или
+ * «Выставить счёт» отправлял два запроса: два счёта и два заказа в
+ * кассе. Пока запрос идёт, все кнопки оплаты выключены, а повторный
+ * щелчок ничего не отправляет (ref — на случай щелчков до перерисовки).
+ */
+function useOneAtATime() {
+    const [busy, setBusy] = useState<string | null>(null);
+    const running = useRef(false);
+
+    function post(key: string, url: string, data: Record<string, string | number> = {}) {
+        if (running.current) return;
+
+        running.current = true;
+        setBusy(key);
+        router.post(url, data, {
+            preserveScroll: true,
+            onFinish: () => {
+                running.current = false;
+                setBusy(null);
+            },
+        });
+    }
+
+    return { busy, post };
 }
 
 /**
@@ -154,6 +177,9 @@ export function BillingStore({
 }) {
     const orderLabel = checkout ? t('cabinet.billing.pay') : t('cabinet.billing.invoice_me');
     const { confirm, dialog } = useConfirm();
+    const { busy, post } = useOneAtATime();
+    const order = (kind: 'plan' | 'credits', id: number) =>
+        post(`${kind}:${id}`, '/cabinet/billing/order', { kind, id });
 
     return (
         <>
@@ -185,13 +211,9 @@ export function BillingStore({
                                         {checkout && (
                                             <button
                                                 className="btn btn-primary btn-sm"
-                                                onClick={() =>
-                                                    router.post(
-                                                        `/cabinet/billing/invoice/${inv.id}/pay`,
-                                                        {},
-                                                        { preserveScroll: true },
-                                                    )
-                                                }
+                                                disabled={busy !== null}
+                                                aria-busy={busy === `pay:${inv.id}`}
+                                                onClick={() => post(`pay:${inv.id}`, `/cabinet/billing/invoice/${inv.id}/pay`)}
                                             >
                                                 {t('cabinet.billing.pay')}
                                             </button>
@@ -208,6 +230,7 @@ export function BillingStore({
                                         </a>
                                         <button
                                             className="btn btn-ghost btn-sm"
+                                            disabled={busy !== null}
                                             onClick={() =>
                                                 confirm({
                                                     title: t('cabinet.billing.cancel_title', {
@@ -217,11 +240,7 @@ export function BillingStore({
                                                     confirmLabel: t('cabinet.billing.cancel_confirm'),
                                                     danger: true,
                                                     onConfirm: () =>
-                                                        router.post(
-                                                            `/cabinet/billing/invoice/${inv.id}/cancel`,
-                                                            {},
-                                                            { preserveScroll: true },
-                                                        ),
+                                                        post(`cancel:${inv.id}`, `/cabinet/billing/invoice/${inv.id}/cancel`),
                                                 })
                                             }
                                         >
@@ -310,6 +329,8 @@ export function BillingStore({
                                         {p.orderable && (
                                             <button
                                                 className="btn btn-primary btn-sm"
+                                                disabled={busy !== null}
+                                                aria-busy={busy === `plan:${p.id}`}
                                                 onClick={() => {
                                                     track('plan_selected', { plan_code: p.code, source: 'cabinet' });
                                                     order('plan', p.id);
@@ -350,6 +371,8 @@ export function BillingStore({
                                         </div>
                                         <button
                                             className="btn btn-secondary btn-sm"
+                                            disabled={busy !== null}
+                                            aria-busy={busy === `credits:${p.id}`}
                                             onClick={() => order('credits', p.id)}
                                         >
                                             {orderLabel}
