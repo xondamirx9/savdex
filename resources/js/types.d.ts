@@ -45,6 +45,8 @@ export interface NotificationItem {
     type: string;
     tone: 'info' | 'success' | 'warning' | 'danger';
     title: string;
+    /** Внешняя ссылка рассылки (http/https, не свой сайт) — открывается в новой вкладке */
+    external: string | null;
     read: boolean;
     ago: string;
 }

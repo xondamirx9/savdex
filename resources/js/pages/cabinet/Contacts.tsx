@@ -88,7 +88,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                 style={{ paddingLeft: 42 }}
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && filter({ q })}
+                                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && filter({ q })}
                                 onBlur={() => filter({ q })}
                             />
                             <span
@@ -204,7 +204,7 @@ export default function Contacts({ contacts, statuses, filters }: Props) {
                                                             autoFocus
                                                             onChange={(e) => setNote(e.target.value)}
                                                             onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') saveNote(row.id);
+                                                                if (e.key === 'Enter' && !e.nativeEvent.isComposing) saveNote(row.id);
                                                                 if (e.key === 'Escape') setEditing(null);
                                                             }}
                                                         />
