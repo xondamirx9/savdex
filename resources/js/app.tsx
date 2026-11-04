@@ -6,7 +6,7 @@ import twemojiFlagsFont from 'country-flag-emoji-polyfill/dist/TwemojiCountryFla
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { resolvePage } from '@/lib/pages';
 import { localize, setLocale } from '@/lib/locale';
-import { setTranslations } from '@/lib/i18n';
+import { setTranslations, translationsLocale } from '@/lib/i18n';
 import { startAnalytics } from '@/lib/analytics';
 
 const appName = import.meta.env.VITE_APP_NAME ?? 'SAVDEX';
@@ -51,6 +51,9 @@ router.on('before', (event) => {
     if (typeof visit.url === 'object' && visit.url instanceof URL) {
         visit.url.pathname = localize(visit.url.pathname);
     }
+
+    // Язык словаря у браузера: сменился язык — сервер пришлёт новый
+    visit.headers = { ...visit.headers, 'X-Savdex-Translations': translationsLocale() };
 });
 
 void createInertiaApp({

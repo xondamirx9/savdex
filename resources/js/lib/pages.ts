@@ -1,4 +1,5 @@
-import type { ComponentType } from 'react';
+import { createElement, type ComponentType } from 'react';
+import { setTranslations } from '@/lib/i18n';
 
 type PageModule = { default: ComponentType<Record<string, unknown>> };
 
@@ -24,5 +25,25 @@ export async function resolvePage(name: string): Promise<ComponentType<Record<st
         );
     }
 
-    return (await loader()).default;
+    const cached = wrapped.get(path);
+
+    if (cached) return cached;
+
+    const Page = (await loader()).default;
+    // Новый словарь (сменили язык без перезагрузки) — до отрисовки
+    // страницы: иначе надписи остались бы на прежнем языке
+    const WithTranslations = (props: Record<string, unknown>) => {
+        const translations = props.translations as Record<string, unknown> | null | undefined;
+
+        if (translations) setTranslations(translations, String(props.locale ?? 'ru'));
+
+        return createElement(Page, props);
+    };
+
+    wrapped.set(path, WithTranslations);
+
+    return WithTranslations;
 }
+
+/** Обёртка страницы — одна на страницу: иначе каждый переход пересоздавал бы её */
+const wrapped = new Map<string, ComponentType<Record<string, unknown>>>();
