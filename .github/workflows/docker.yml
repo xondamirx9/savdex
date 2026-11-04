@@ -318,6 +318,13 @@ jobs:
           py admin "from savdex import laravel_cache; laravel_cache.forget('ci:shared')"
           test "$(py web "from savdex import laravel_cache; print(laravel_cache.get('ci:shared'))")" = None
 
+      # Caddyfile боевых машин, тестового и превью — как их пишет выкладка:
+      # синтаксис (caddy validate) и предел тела запроса перед заглушкой
+      # приложения (Т4). Ошибка в нём видна только на машине, и при
+      # перезапуске Caddy сайт бы не поднялся
+      - name: Caddy — настройки выкладки
+        run: deploy/server/caddy-check.sh
+
       - name: Журнал контейнера
         if: always()
         run: |

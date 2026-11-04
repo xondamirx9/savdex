@@ -239,6 +239,20 @@ Settings → Rules → Rulesets → New ruleset → New branch ruleset:
 /opt/savdex/current-tag   какая версия работает; releases.log — история
 ```
 
+### Предел размера запроса
+
+Тело запроса больше 130 МиБ Caddy обрывает на входе — 413, и с
+Content-Length, и «кусками» (`request_body` в Caddyfile боевых машин,
+тестового и превью). За ним — предел самого сайта, 128 МиБ
+(`SAVDEX_MAX_REQUEST_MB`). Самая большая честная загрузка — 5 файлов
+IT-задачи по 20 МБ. Поднимаете предел сайта — поднимите и в Caddy, в
+трёх местах. В Apache предела нет: на запросы, которые он передаёт Django,
+`LimitRequestBody` не действует.
+
+Каждый Caddyfile проверяет CI (`deploy/server/caddy-check.sh`): собирает
+его так же, как выкладка, проверяет `caddy validate` и предел — на
+настоящих запросах. Битый Caddyfile на машину не уедет.
+
 ### Выкладка
 
 [.github/workflows/prod.yml](../.github/workflows/prod.yml) — релизами,
