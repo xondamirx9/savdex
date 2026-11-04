@@ -265,7 +265,8 @@ export default function CatalogIndex({ banner, listings, tenders, filters, sorts
                                 style={{ paddingLeft: 42 }}
                                 value={q}
                                 onChange={(e) => setQ(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && apply({ q })}
+                                // Enter выбора слова в китайском вводе — не поиск
+                                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && apply({ q })}
                             />
                             <span
                                 aria-hidden

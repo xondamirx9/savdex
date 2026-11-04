@@ -51,7 +51,9 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
     function submit(e: FormEvent) {
         e.preventDefault();
 
-        if (form.data.body.trim() === '') {
+        // Двойной Enter: второй не уходит, пока идёт первый — сообщение
+        // не задваивается
+        if (form.data.body.trim() === '' || form.processing) {
             return;
         }
 
@@ -116,7 +118,10 @@ export default function Chat({ thread, messages }: { thread: ThreadInfo; message
                         value={form.data.body}
                         onChange={(e) => form.setData('body', e.target.value)}
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            // Enter, которым подтверждают слово в китайском
+                            // или японском вводе (isComposing), — не отправка:
+                            // иначе сообщение уходило бы на полуслове
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                                 e.preventDefault();
                                 submit(e);
                             }

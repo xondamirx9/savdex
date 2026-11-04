@@ -171,7 +171,7 @@ export default function ItTaskForm({ task, files, serviceTypes, currencies }: Pr
                             value={tag}
                             onChange={(e) => setTag(e.target.value)}
                             onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ',') {
+                                if ((e.key === 'Enter' && !e.nativeEvent.isComposing) || e.key === ',') {
                                     e.preventDefault();
                                     addTag();
                                 }
