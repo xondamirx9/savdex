@@ -202,8 +202,10 @@ class PlatformMetrics:
         """Показатели, по которым проблему видно раньше, чем по выручке."""
         active_companies, with_active_listings = _row(
             "select count(*) filter (where c.status = 'active'), "
-            "count(*) filter (where exists (select 1 from listings l where l.company_id = c.id "
-            "and l.deleted_at is null and l.status = 'active')) "
+            # Обе цифры — по активным компаниям: в числитель попадали и
+            # заблокированные со скрытыми, и доля выходила за 100 %
+            "count(*) filter (where c.status = 'active' and exists (select 1 from listings l "
+            "where l.company_id = c.id and l.deleted_at is null and l.status = 'active')) "
             "from companies c where c.deleted_at is null"
         )
         moderation_queue, expiring_soon = _row(
