@@ -4,6 +4,7 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
 import twemojiFlagsFont from 'country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2?url';
 import { createRoot, hydrateRoot } from 'react-dom/client';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { resolvePage } from '@/lib/pages';
 import { localize, setLocale } from '@/lib/locale';
 import { setTranslations, translationsLocale } from '@/lib/i18n';
@@ -78,11 +79,20 @@ void createInertiaApp({
         // SSR отдаёт готовую разметку — её нужно гидрировать, а не рендерить
         // заново, иначе преимущество для SEO теряется, а разметка мигает.
         if (el.hasChildNodes()) {
-            hydrateRoot(el, <App {...props} />);
+            hydrateRoot(
+                el,
+                <ErrorBoundary>
+                    <App {...props} />
+                </ErrorBoundary>,
+            );
             return;
         }
 
-        createRoot(el).render(<App {...props} />);
+        createRoot(el).render(
+            <ErrorBoundary>
+                <App {...props} />
+            </ErrorBoundary>,
+        );
     },
     progress: { color: '#1d4ed8' },
 });
