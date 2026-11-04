@@ -28,6 +28,26 @@ export function track(name: string, params: Params = {}): void {
 }
 
 /**
+ * Адреса с секретом в пути (как PRIVATE_PATHS в savdex/web/analytics.py):
+ * ссылка сброса пароля, подтверждения почты, визитка по QR, отписка.
+ * С них аналитика не отправляется вовсе.
+ */
+const PRIVATE_PATH = /^\/(?:(?:uz|en|zh|tr)\/)?(?:reset-password\/|verify-email\/[^/]+\/|card\/|unsubscribe\/)/;
+
+/** Параметры адреса, которые в аналитику не уходят: токены, подписи, почта, телефон. */
+const SECRET_PARAMS = ['token', 'email', 'signature', 'expires', 'code', 'phone', 'hash'];
+
+/** Адрес страницы для аналитики — без секретных параметров. */
+export function safeLocation(href: string): string {
+    const url = new URL(href);
+
+    for (const key of SECRET_PARAMS) url.searchParams.delete(key);
+    url.hash = '';
+
+    return url.toString();
+}
+
+/**
  * Дождаться, пока Inertia обновит <head> новой страницы: заголовок
  * вкладки она ставит после отрисовки, и page_view с прошлым заголовком
  * записал бы переход не туда. Не дольше 300 мс — у страниц с тем же
@@ -67,14 +87,19 @@ export function startAnalytics(): void {
         const initial = first;
         first = false;
 
-        if (!analytics?.id || window.location.pathname.startsWith('/admin')) return;
+        if (
+            !analytics?.id ||
+            window.location.pathname.startsWith('/admin') ||
+            PRIVATE_PATH.test(window.location.pathname)
+        )
+            return;
 
         (initial ? (send: () => void) => send() : afterHead)(() => {
             window.gtag?.('set', {
                 user_properties: { plan: analytics.plan ?? 'guest', locale: props.locale ?? 'ru' },
             });
             track('page_view', {
-                page_location: window.location.href,
+                page_location: safeLocation(window.location.href),
                 page_title: document.title,
                 language: props.locale ?? 'ru',
             });
