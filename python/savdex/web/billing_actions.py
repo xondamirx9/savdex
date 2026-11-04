@@ -25,9 +25,11 @@ tests/test_web_billing_orders.py.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
-from django.db import connection
+from django.db import connection, transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 
 from savdex import product_events
@@ -367,6 +369,27 @@ def _checkout(ctx: Context, payment: dict[str, Any]) -> HttpResponse:
         return back(ctx)
 
 
+#: Ключ блокировки заказа: hashtextextended(ORDER_LOCK, номер компании)
+ORDER_LOCK = "billing.order"
+
+
+@contextmanager
+def one_at_a_time(company_id: int) -> Iterator[None]:
+    """
+    Заказ и оплата компании — по одному. Проверка «счёт уже есть» и
+    создание счёта (и заказа в Uzum) шли без блокировки: двойной щелчок
+    или две вкладки создавали второй счёт и второй заказ кассы. Теперь
+    второй запрос ждёт первого и видит его счёт. Блокировка — до конца
+    транзакции, на одну компанию.
+    """
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(
+            "select pg_advisory_xact_lock(hashtextextended(%s, %s))", [ORDER_LOCK, company_id]
+        )
+
+        yield
+
+
 @form()
 def order(request: HttpRequest) -> HttpResponse:
     """BillingController::order (verified, throttle:20,60)."""
@@ -394,8 +417,16 @@ def order(request: HttpRequest) -> HttpResponse:
         return invalid(ctx, errors)
 
     valid = validated(data, rules)
-    plan_order = valid["kind"] == "plan"
-    target = _as_id(valid["id"])
+
+    with one_at_a_time(company["id"]):
+        return _place_order(ctx, company, valid["kind"] == "plan", _as_id(valid["id"]))
+
+
+def _place_order(
+    ctx: Context, company: dict[str, Any], plan_order: bool, target: int
+) -> HttpResponse:
+    """Заказ под блокировкой компании (one_at_a_time)."""
+    assert ctx.user is not None
 
     # Незакрытый счёт на то же самое — не второй счёт, а «хочу оплатить»
     duplicate = _rows(
@@ -546,4 +577,14 @@ def pay(request: HttpRequest, payment_id: str) -> HttpResponse:
 
         return back(ctx)
 
-    return _checkout(ctx, found[0])
+    with one_at_a_time(company["id"]):
+        # Под блокировкой — заново: параллельный запрос мог уже завести
+        # заказ кассы (external_id) или счёт успели оплатить
+        again = _rows(
+            "select * from payments where id = %s and status = 'pending' limit 1", [found[0]["id"]]
+        )
+
+        if not again:
+            return back(ctx)
+
+        return _checkout(ctx, again[0])
