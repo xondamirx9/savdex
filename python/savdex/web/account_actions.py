@@ -63,12 +63,8 @@ def _with_errors(ctx: Context, errors: dict[str, list[str]]) -> HttpResponse:
 # ── Выданный пароль — сменить ───────────────────────────────────────
 
 
-@form()
-def force_password(request: HttpRequest) -> HttpResponse:
-    """ForcePasswordController::update (auth, throttle:10,60,password-forced)."""
-    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="password-forced")
-    assert ctx.user is not None
-    data = input_of(request)
+def _new_password_errors(ctx: Context, data: dict[str, Any]) -> dict[str, list[str]]:
+    """Новый пароль и его повтор — правила password_rule (общие с регистрацией)."""
     custom = {
         "password.required": ctx.t("messages.auth.password_new"),
         "password.confirmed": ctx.t("messages.auth.password_mismatch"),
@@ -87,16 +83,11 @@ def force_password(request: HttpRequest) -> HttpResponse:
         if merged:
             errors["password"] = merged
 
-    if errors:
-        return invalid(ctx, errors)
+    return errors
 
-    user = _row(ctx.user["id"])
-    password = str(data["password"])
 
-    # Новый пароль не должен совпадать с выданным
-    if guard.check(password, user["password"]):
-        return _with_errors(ctx, {"password": [ctx.t("messages.auth.password_same")]})
-
+def _store_password(ctx: Context, user: dict[str, Any], password: str) -> None:
+    """Новый пароль: другие устройства — прочь, эта сессия остаётся."""
     fresh_hash = guard.make(password)
     eloquent.save(
         ctx,
@@ -115,8 +106,27 @@ def force_password(request: HttpRequest) -> HttpResponse:
     # AuthenticateSession панели сверяет хеш пароля из сессии — уже новый
     store = _session(ctx)
     store.put("password_hash_web", fresh_hash)
-    # Другие устройства со старым паролем — прочь, эта сессия остаётся
     session.end_user_sessions(int(user["id"]), keep=store.id)
+
+
+@form()
+def force_password(request: HttpRequest) -> HttpResponse:
+    """ForcePasswordController::update (auth, throttle:10,60,password-forced)."""
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="password-forced")
+    assert ctx.user is not None
+    data = input_of(request)
+
+    if errors := _new_password_errors(ctx, data):
+        return invalid(ctx, errors)
+
+    user = _row(ctx.user["id"])
+    password = str(data["password"])
+
+    # Новый пароль не должен совпадать с выданным
+    if guard.check(password, user["password"]):
+        return _with_errors(ctx, {"password": [ctx.t("messages.auth.password_same")]})
+
+    _store_password(ctx, user, password)
 
     if user["is_admin"]:
         # Inertia::location('/admin'): панель — не страница Inertia; адрес — как есть
@@ -131,6 +141,41 @@ def force_password(request: HttpRequest) -> HttpResponse:
     flash(ctx, "success", ctx.t("messages.auth.password_changed"))
 
     return _to(ctx, "/cabinet")
+
+
+@form()
+def change_password(request: HttpRequest) -> HttpResponse:
+    """
+    «Сменить пароль» в кабинете: текущий пароль, новый и повтор. Раньше
+    кнопка вела на «Забыли пароль», а вошедшего оттуда отправляло на
+    главную — сменить пароль, зная его, было нельзя.
+    """
+    ctx = action(request, throttle=10, throttle_minutes=60, throttle_prefix="password-change")
+    assert ctx.user is not None
+    data = input_of(request)
+    errors = validate(
+        data,
+        {"current_password": ["required", "string"]},
+        ctx.locale,
+        {"current_password.required": ctx.t("messages.settings.password_confirm")},
+    )
+    errors.update(_new_password_errors(ctx, data))
+
+    if errors:
+        return invalid(ctx, errors)
+
+    user = _row(ctx.user["id"])
+
+    if not guard.check(_string(data["current_password"]), user["password"]):
+        return _with_errors(ctx, {"current_password": [ctx.t("messages.settings.password_wrong")]})
+
+    if guard.check(str(data["password"]), user["password"]):
+        return _with_errors(ctx, {"password": [ctx.t("messages.auth.password_same")]})
+
+    _store_password(ctx, user, str(data["password"]))
+    flash(ctx, "success", ctx.t("messages.auth.password_changed"))
+
+    return back(ctx)
 
 
 # ── Забыли пароль ───────────────────────────────────────────────────

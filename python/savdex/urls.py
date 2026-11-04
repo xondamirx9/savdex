@@ -460,6 +460,11 @@ urlpatterns = [
         name="cabinet.settings.company.support",
     ),
     re_path(
+        r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/password$",
+        account_actions.change_password,
+        name="cabinet.settings.password",
+    ),
+    re_path(
         r"^(?:(?:uz|en|zh|tr)/)?cabinet/settings/delete$",
         account_actions.delete_account,
         name="cabinet.settings.destroy",

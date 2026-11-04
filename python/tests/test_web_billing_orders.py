@@ -435,7 +435,6 @@ def test_двойное_оплатить_не_даёт_второго_счёта
     assert sql("select number from payments where status = 'pending'") == [("SVD-000900",)]
 
 
-
 @pytest.mark.parametrize(
     ("body", "ждём"),
     [

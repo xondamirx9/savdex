@@ -76,6 +76,8 @@ export default function Settings({
     const unlink = useForm({});
     const form = useForm({ name: profile.name, phone: profile.phone ?? '', locale: profile.locale });
     const remove = useForm({ password: '' });
+    const [changing, setChanging] = useState(false);
+    const passwordForm = useForm({ current_password: '', password: '', password_confirmation: '' });
     const smsSend = useForm({});
     const smsCheck = useForm({ sms_code: '' });
     const pick = useForm<{ categories: number[] }>({ categories: chosen });
@@ -412,9 +414,72 @@ export default function Settings({
                             </p>
                         )}
 
-                        <Link href={routes.passwordRequest} className="btn btn-secondary btn-block">
-                            <ShieldCheck aria-hidden className="size-4" /> {t('cabinet.settings.change_password')}
-                        </Link>
+                        {/* Смена пароля здесь же: текущий, новый, повтор. Раньше
+                            кнопка вела на «Забыли пароль», а оттуда вошедшего
+                            отправляло на главную */}
+                        {changing ? (
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    passwordForm.post(routes.cabinetSettings + '/password', {
+                                        preserveScroll: true,
+                                        onSuccess: () => {
+                                            passwordForm.reset();
+                                            setChanging(false);
+                                        },
+                                    });
+                                }}
+                                noValidate
+                            >
+                                {(
+                                    [
+                                        ['current_password', 'cabinet.settings.current_password', 'current-password'],
+                                        ['password', 'auth.new_password_label', 'new-password'],
+                                        ['password_confirmation', 'auth.password_confirm_label', 'new-password'],
+                                    ] as const
+                                ).map(([key, label, autoComplete], i) => (
+                                    <div className="field" key={key}>
+                                        <label className="label" htmlFor={`s-${key}`}>
+                                            {t(label)}
+                                        </label>
+                                        <input
+                                            id={`s-${key}`}
+                                            className="input"
+                                            type="password"
+                                            autoComplete={autoComplete}
+                                            autoFocus={i === 0}
+                                            value={passwordForm.data[key]}
+                                            onChange={(e) => passwordForm.setData(key, e.target.value)}
+                                        />
+                                        {passwordForm.errors[key] && (
+                                            <p className="hint" style={{ color: 'var(--danger)' }}>
+                                                {passwordForm.errors[key]}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                                <div className="row" style={{ gap: 10 }}>
+                                    <button type="submit" className="btn btn-primary btn-sm" disabled={passwordForm.processing}>
+                                        {t('common.save')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => {
+                                            passwordForm.reset();
+                                            passwordForm.clearErrors();
+                                            setChanging(false);
+                                        }}
+                                    >
+                                        {t('common.cancel')}
+                                    </button>
+                                </div>
+                            </form>
+                        ) : (
+                            <button type="button" className="btn btn-secondary btn-block" onClick={() => setChanging(true)}>
+                                <ShieldCheck aria-hidden className="size-4" /> {t('cabinet.settings.change_password')}
+                            </button>
+                        )}
                     </Panel>
 
                     {/* Удаление владельца снимает объявления всей компании,

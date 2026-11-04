@@ -256,6 +256,46 @@ def test_смена_пароля(сайт, body, ошибка):
     assert итог["база"]["journal"] == []
 
 
+@pytest.mark.parametrize(
+    ("body", "ошибки_"),
+    [
+        (
+            {"current_password": "не-тот", "password": НОВЫЙ, "password_confirmation": НОВЫЙ},
+            {"current_password": ["Неверный пароль"]},
+        ),
+        (
+            {"current_password": ПАРОЛЬ, "password": ПАРОЛЬ, "password_confirmation": ПАРОЛЬ},
+            {"password": ["Новый пароль совпадает с прежним. Придумайте другой"]},
+        ),
+        ({"current_password": ПАРОЛЬ, "password": НОВЫЙ, "password_confirmation": НОВЫЙ}, None),
+    ],
+)
+def test_смена_пароля_в_кабинете(сайт, body, ошибки_):
+    """
+    «Сменить пароль» в настройках: текущий, новый, повтор (Н6). Раньше
+    кнопка вела на «Забыли пароль», а вошедшего оттуда — на главную.
+    """
+    uid = пользователь()
+    итог = форма(
+        сайт,
+        "/cabinet/settings/password",
+        lambda: (пользователь(password=_хеш(ПАРОЛЬ)), _чужая_сессия()),
+        uid=uid,
+        body=body,
+    )
+
+    assert куда(сайт, итог) == (302, "/cabinet/settings")
+
+    if ошибки_ is None:
+        assert сессия(итог)["success"] == "Пароль изменён"
+        assert итог["база"]["other_sessions"] == 0
+        [(хеш,)] = sql("select password from users where id = %s", [uid])
+        assert _проверка(НОВЫЙ, хеш)
+    else:
+        assert ошибки(итог) == ошибки_
+        assert итог["база"]["other_sessions"] == 1
+
+
 @pytest.mark.parametrize(("заголовки", "status"), [("inertia", 409), ("form", 302)])
 def test_смена_пароля_администратора(сайт, заголовки, status):
     """Администратору — в панель: Inertia уходит туда по 409."""
