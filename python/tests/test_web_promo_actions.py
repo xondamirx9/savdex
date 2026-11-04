@@ -42,6 +42,8 @@ def сайт() -> Iterator[str]:
     for code, name, cost, days, slots in (
         ("top", "Поднятие в топ", 3, 7, 1),
         ("badge", "Значок", 2, 0, None),
+        ("home_top", "ТОП главной", 3, 7, 1),
+        ("category_top", "ТОП категории", 3, 7, 1),
     ):
         sql(
             "insert into promotion_types (code, name, description, cost_units, duration_days, "
@@ -212,6 +214,38 @@ def test_продвижение(сайт, что, подготовка, ошиб
     assert [(n[0], n[1], n[2]) for n in база["notifications"]] == [
         ("promotion", сообщение, "success")
     ]
+
+
+@pytest.mark.parametrize(("код", "продано"), [("home_top", False), ("category_top", True)])
+def test_места_главной_общие(сайт, код, продано):
+    """
+    Единственное место занято объявлением другой категории: «ТОП главной»
+    — один блок на всех, место занято; «ТОП категории» — в своей
+    категории свободно (Н9).
+    """
+
+    def подготовка() -> None:
+        сброс()()
+        sql(
+            "insert into promotions (listing_id, company_id, promotion_type_id, category_id, "
+            "units_spent, status, starts_at, active_key, created_at, updated_at) "
+            "select l.id, l.company_id, t.id, null, 3, 'active', now(), l.id || ':' || t.id, "
+            "now(), now() from listings l, promotion_types t "
+            "where l.title = 'Чужое' and t.code = %s",
+            [код],
+        )
+
+    итог = отправить(
+        сайт,
+        "/cabinet/promo",
+        подготовка,
+        снимок,
+        uid=владелец(),
+        body={"listing_id": _listing("Цемент М400"), "promotion_type_id": _type(код)},
+        headers=inertia(),
+    )
+
+    assert len(итог["база"]["promotions"]) == (2 if продано else 1)
 
 
 @pytest.mark.parametrize(

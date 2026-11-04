@@ -36,6 +36,13 @@ from savdex.web.shared import Context, ago, local_time
 DAYS = 30
 
 
+#: Виды, чьи места — в каждой категории свои («ТОП категории»: первые
+#: три в своей категории). У остальных места общие на всю площадку:
+#: «ТОП главной» — один блок на главной, 6 мест на всех. Раньше и его
+#: места считались по категории — можно было продать 7-е место из 6
+PER_CATEGORY = frozenset({"category_top"})
+
+
 def _rows(query: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
     with connection.cursor() as cursor:
         cursor.execute(query, params or [])
@@ -1508,8 +1515,14 @@ def promo_props(ctx: Context) -> dict[str, Any]:
                 "cost_label": _cost_label(ctx, t),
                 "icon": t["icon"],
                 "slots": t["slots"],
-                "taken": taken.get(t["id"], 0) if t["slots"] is not None else None,
-                "available": t["slots"] is None or taken.get(t["id"], 0) < t["slots"],
+                # Места в каждой категории свои — общий счёт не про них:
+                # свободно ли в категории объявления, проверит покупка
+                "taken": taken.get(t["id"], 0)
+                if t["slots"] is not None and t["code"] not in PER_CATEGORY
+                else None,
+                "available": t["slots"] is None
+                or t["code"] in PER_CATEGORY
+                or taken.get(t["id"], 0) < t["slots"],
             }
             for t in types
         ],
