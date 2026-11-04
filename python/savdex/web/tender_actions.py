@@ -622,7 +622,8 @@ def extend(request: HttpRequest, tender_id: str) -> HttpResponse:
 
     now = eloquent.now()
     start = tender["deadline_at"] if tender["deadline_at"] and tender["deadline_at"] > now else now
-    deadline = _end_of_day(start + timedelta(days=int(str(data["days"]))))
+    # Правило integer пропускает «30.0», а int("30.0") падает (500) — через Decimal
+    deadline = _end_of_day(start + timedelta(days=int(Decimal(str(data["days"]).strip()))))
     eloquent.save(
         ctx,
         "tenders",
