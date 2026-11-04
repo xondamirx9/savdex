@@ -15,13 +15,14 @@
 #    открывается, тело в 100 МиБ (самая большая честная загрузка) доходит,
 #    131 МиБ — 413, и с Content-Length, и «кусками» (Т4, request_body).
 #
-# Нужны docker и curl. Запуск: deploy/server/caddy-check.sh
+# Нужен только docker. Запуск: deploy/server/caddy-check.sh
 set -euo pipefail
 
 SRC=$(cd "$(dirname "$0")/../.." && pwd)
 CADDY_IMAGE=${CADDY_IMAGE:-caddy:2}
 APP_IMAGE=${APP_IMAGE:-python:3.12-alpine}
-PORT=${CADDY_CHECK_PORT:-18080}
+# Порт внутри сети контейнеров — машине он не нужен
+PORT=18080
 WORK=$(mktemp -d)
 NET=caddy-check-$$
 
@@ -107,41 +108,66 @@ PY
 docker network create "$NET" > /dev/null
 docker run -d --name "$NET-app" --network "$NET" --network-alias app \
     -v "$WORK/app.py:/app.py:ro" "$APP_IMAGE" python /app.py > /dev/null
-docker run -d --name "$NET-caddy" --network "$NET" -p "127.0.0.1:$PORT:$PORT" \
+# Порт на машину не публикуется: в CI его мог занять прошлый шаг. Запросы
+# шлёт контейнер из той же сети
+docker run -d --name "$NET-caddy" --network "$NET" --network-alias caddy \
     -v "$WORK/prod/Caddyfile:/etc/caddy/Caddyfile:ro" \
     -v "$WORK/prod/auth.caddy:/etc/caddy/auth.caddy:ro" \
     "$CADDY_IMAGE" > /dev/null
 
-url="http://127.0.0.1:$PORT"
-for _ in $(seq 1 30); do
-    curl -fsS -o /dev/null "$url/" 2> /dev/null && break
-    sleep 1
-done
+# Клиент: тело любого размера потоком, с Content-Length или «кусками»
+cat > "$WORK/client.py" <<'PY'
+import http.client
+import sys
+import time
 
-MiB=$((1024 * 1024))
-head -c $((100 * MiB)) /dev/zero > "$WORK/100"
-head -c $((131 * MiB)) /dev/zero > "$WORK/131"
+MiB = 1024 * 1024
+host, port = sys.argv[1], int(sys.argv[2])
 
-# check <что> <ожидаемый код> <curl…>
-failed=0
-check() {
-    local name=$1 want=$2 got
-    shift 2
-    got=$(curl -s -o /dev/null -w '%{http_code}' "$@" || true)
-    if [ "$got" = "$want" ]; then
-        echo "   ок: $name — $got"
-    else
-        echo "ОШИБКА: $name — $got, ждали $want" >&2
-        failed=1
-    fi
-}
+
+def send(method, path, mb=0, chunked=False):
+    conn = http.client.HTTPConnection(host, port, timeout=120)
+    block = b"\0" * MiB
+    try:
+        conn.putrequest(method, path)
+        if chunked:
+            conn.putheader("Transfer-Encoding", "chunked")
+        elif method == "POST":
+            conn.putheader("Content-Length", str(mb * MiB))
+        conn.endheaders()
+        for _ in range(mb):
+            conn.send(b"%x\r\n" % MiB + block + b"\r\n" if chunked else block)
+        if chunked:
+            conn.send(b"0\r\n\r\n")
+        return conn.getresponse().status
+    except OSError:
+        # Caddy оборвал соединение посреди тела, не дав прочесть ответ
+        return "обрыв"
+
+
+for _ in range(30):
+    try:
+        if send("GET", "/") == 200:
+            break
+    except Exception:
+        pass
+    time.sleep(1)
+
+failed = 0
+for name, want, args in (
+    ("страница", 200, ("GET", "/")),
+    ("100 МиБ", 200, ("POST", "/cabinet/it-tasks", 100)),
+    ("131 МиБ", 413, ("POST", "/cabinet/it-tasks", 131)),
+    ("131 МиБ кусками", 413, ("POST", "/cabinet/it-tasks", 131, True)),
+    ("131 МиБ в админку", 413, ("POST", "/py/admin/", 131)),
+):
+    got = send(*args)
+    print(("   ок: " if got == want else "ОШИБКА: ") + f"{name} — {got}, ждали {want}")
+    failed |= got != want
+
+sys.exit(failed)
+PY
 
 echo "── Боевой Caddyfile перед заглушкой приложения"
-check "страница" 200 "$url/"
-check "100 МиБ" 200 --data-binary "@$WORK/100" "$url/cabinet/it-tasks"
-check "131 МиБ" 413 --data-binary "@$WORK/131" "$url/cabinet/it-tasks"
-check "131 МиБ кусками" 413 -H "Transfer-Encoding: chunked" --data-binary "@$WORK/131" \
-    "$url/cabinet/it-tasks"
-check "131 МиБ в админку" 413 --data-binary "@$WORK/131" "$url/py/admin/"
-
-exit "$failed"
+docker run --rm --network "$NET" -v "$WORK/client.py:/client.py:ro" \
+    "$APP_IMAGE" python /client.py caddy "$PORT"
