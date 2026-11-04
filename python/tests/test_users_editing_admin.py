@@ -187,6 +187,43 @@ def test_выдать_пароль_и_заблокировать(люди):
     assert "password" not in str(журнал("blocked")["changes"])
 
 
+def _сессия_клиента(pk: int, sid: str) -> None:
+    sql(
+        "insert into sessions (id, user_id, ip_address, user_agent, payload, last_activity) "
+        "values (%s, %s, '198.51.100.7', 'phone', '', 0)",
+        [sid, pk],
+    )
+
+
+@pytest.mark.parametrize("act", ["password", "status"])
+def test_выдать_пароль_и_блокировка_закрывают_входы(люди, act):
+    """
+    «Выдать пароль» и блокировка закрывают все входы: сессии удалены, токен
+    «Запомнить меня» новый — укравший сессию не остаётся, а после
+    разблокировки старые входы не оживают.
+    """
+    pk = _клиент()
+    sql("update users set remember_token = 'old-remember-token' where id = %s", [pk])
+    _сессия_клиента(pk, f"stolen-{act}")
+
+    django(люди["admin"], ("post", f"{LIST}{pk}/act/", {"act": act}))
+
+    assert sql("select id from sessions where user_id = %s", [pk]) == []
+    [(remember,)] = sql("select remember_token from users where id = %s", [pk])
+    assert remember and remember != "old-remember-token"
+
+
+def test_разблокировка_не_трогает_входы(люди):
+    pk = _клиент()
+    sql("update users set status = 'blocked' where id = %s", [pk])
+    _сессия_клиента(pk, "after-unblock")
+
+    django(люди["admin"], ("post", f"{LIST}{pk}/act/", {"act": "status"}))
+
+    assert sql("select status from users where id = %s", [pk]) == [("active",)]
+    assert sql("select id from sessions where user_id = %s", [pk]) == [("after-unblock",)]
+
+
 def test_учётку_сотрудника_бережёт_roles_edit(люди):
     """
     Администратор без roles.edit не выдаёт суперадмину пароль, не меняет

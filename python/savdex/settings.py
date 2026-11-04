@@ -251,6 +251,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Запрос больше предела — 413 до чтения тела (savdex/web/request_limit.py)
+    "savdex.web.request_limit.RequestLimitMiddleware",
     # Встраивание в чужие страницы и лишние возможности браузера — нет
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "savdex.web.headers.SecurityHeadersMiddleware",
