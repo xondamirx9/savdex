@@ -42,7 +42,11 @@ def valid(url_without_query: str, query_string: str) -> bool:
     original = url_without_query + ("?" + "&".join(pairs) if pairs else "")
     given = dict(parse_qsl(query_string)).get("signature", "")
 
-    if not any(hmac.compare_digest(_sign(original, key), given) for key in _keys()):
+    # Байтами: compare_digest не принимает строки не из ASCII — подпись
+    # «%D1%84» в адресе давала ошибку 500 вместо отказа
+    if not any(
+        hmac.compare_digest(_sign(original, key).encode(), given.encode()) for key in _keys()
+    ):
         return False
 
     expires = dict(parse_qsl(query_string)).get("expires")

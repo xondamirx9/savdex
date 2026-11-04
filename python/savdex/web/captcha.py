@@ -104,7 +104,11 @@ def verify(store: session.Store, purpose: str, raw: Any) -> str | None:  # noqa:
 
     answer = str(entry.get("answer") or "")
 
-    return None if answer != "" and secrets.compare_digest(typed, answer) else "wrong"
+    # Байтами: compare_digest не принимает строки не из ASCII — ответ
+    # «тест» кириллицей давал ошибку 500 вместо «неверно»
+    matches = secrets.compare_digest(typed.encode(), answer.encode())
+
+    return None if answer != "" and matches else "wrong"
 
 
 def _int(value: Any) -> int:  # noqa: ANN401

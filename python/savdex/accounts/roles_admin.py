@@ -35,7 +35,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from savdex import access, audit
-from savdex.accounts import editing
+from savdex.accounts import editing, hierarchy
 from savdex.accounts.models import User
 from savdex.adminsite import SavdexModelAdmin, _admin_of, register
 from savdex.text import numeric
@@ -73,6 +73,12 @@ def _staff(user: User) -> access.Admin:
 
 def describe_role(role: str) -> str:
     """Roles::describeRole: какие разделы открывает роль."""
+    if role == access.MEGAADMIN:
+        return (
+            "Все разделы, плюс назначение и снятие суперадминов. Назначается только "
+            "на сервере командой manage.py admin."
+        )
+
     if role == access.SUPERADMIN:
         return "Все разделы без исключения, включая те, что появятся позже."
 
@@ -126,23 +132,6 @@ def _flatten(permissions: dict[str, list[str]]) -> str:
     return "; ".join(parts) if parts else "нет"
 
 
-def _last_superadmin(user: User, new_role: str | None) -> bool:
-    """Roles::mayChange наоборот: теряет ли панель последнего суперадмина."""
-    if (
-        not (user.is_admin and user.admin_role == access.SUPERADMIN)
-        or new_role == access.SUPERADMIN
-    ):
-        return False
-
-    return (
-        not User.objects.filter(
-            is_admin=True, admin_role=access.SUPERADMIN, status="active", deleted_at__isnull=True
-        )
-        .exclude(pk=user.pk)
-        .exists()
-    )
-
-
 class RoleFilter(admin.SimpleListFilter):
     title = "роль"
     parameter_name = "role"
@@ -160,7 +149,7 @@ class GrantForm(forms.Form):
         help_text="Доступ выдаётся существующему пользователю площадки — заводить вторую "
         "учётку незачем",
     )
-    admin_role = forms.ChoiceField(label="Роль", choices=list(access.ROLES.items()))
+    admin_role = forms.ChoiceField(label="Роль", choices=list(access.PANEL_ROLES.items()))
 
     def clean_email(self) -> User:
         email = str(self.cleaned_data["email"]).strip().lower()
@@ -287,6 +276,12 @@ class RolesAdmin(SavdexModelAdmin):
         if request.method == "POST" and form.is_valid():
             user: User = form.cleaned_data["email"]
             role = form.cleaned_data["admin_role"]
+            values = {"is_admin": True, "admin_role": role}
+
+            if (refused := hierarchy.refusal(_admin_of(request), user, values)) is not None:
+                form.add_error("admin_role", refused)
+
+        if request.method == "POST" and form.is_valid():
             self._write(request, user, {"is_admin": True, "admin_role": role})
             self._log(
                 request,
@@ -308,7 +303,7 @@ class RolesAdmin(SavdexModelAdmin):
                 "opts": self.model._meta,
                 "form": form,
                 "roles": [
-                    (code, label, describe_role(code)) for code, label in access.ROLES.items()
+                    (code, label, describe_role(code)) for code, label in access.PANEL_ROLES.items()
                 ],
             },
         )
@@ -338,12 +333,8 @@ class RolesAdmin(SavdexModelAdmin):
             if role not in access.ROLES:
                 return HttpResponseRedirect(page)
 
-            if _last_superadmin(user, role):
-                messages.error(
-                    request,
-                    "Это последний суперадмин. Сначала назначьте суперадминов кого-то ещё, "
-                    "иначе панель останется без владельца.",
-                )
+            if (refused := hierarchy.refusal(staff, user, {"admin_role": role})) is not None:
+                messages.error(request, refused)
 
                 return HttpResponseRedirect(page)
 
@@ -357,7 +348,7 @@ class RolesAdmin(SavdexModelAdmin):
             )
             messages.success(request, "Роль изменена.")
         elif todo == "rights":
-            if not staff.can("roles.edit") or user.admin_role == access.SUPERADMIN:
+            if not staff.can("roles.edit") or hierarchy.rank(True, user.admin_role) > 0:
                 raise PermissionDenied
 
             allowed = {code for code, _ in editing.grantable()}
@@ -378,11 +369,8 @@ class RolesAdmin(SavdexModelAdmin):
             if not staff.can("roles.delete"):
                 raise PermissionDenied
 
-            if user.is_admin and _last_superadmin(user, None):
-                messages.error(
-                    request,
-                    "Это последний суперадмин. Сначала назначьте суперадминов кого-то ещё.",
-                )
+            if (refused := hierarchy.refusal(staff, user, {"is_admin": False})) is not None:
+                messages.error(request, refused)
 
                 return HttpResponseRedirect(page)
 
@@ -416,11 +404,13 @@ class RolesAdmin(SavdexModelAdmin):
                 {
                     "rows": ability_rows(user),
                     "roles": [
-                        (code, label, describe_role(code)) for code, label in access.ROLES.items()
+                        (code, label, describe_role(code))
+                        for code, label in access.PANEL_ROLES.items()
                     ],
                     "current_role": user.admin_role,
                     "can_role": staff.can("roles.edit"),
-                    "can_rights": staff.can("roles.edit") and user.admin_role != access.SUPERADMIN,
+                    "can_rights": staff.can("roles.edit")
+                    and hierarchy.rank(True, user.admin_role) == 0,
                     "can_access": staff.can("roles.delete"),
                     "grantable": [
                         (code, label, code in permissions["grant"], code in permissions["revoke"])

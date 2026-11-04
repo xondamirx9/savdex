@@ -673,7 +673,8 @@ class OnBoard(Scoped):
 
             return HttpResponseRedirect(back)
 
-        form = board.form_for(stage, board.owners(self.section))(request.POST)
+        people = board.assignable(self.section, _admin_of(request))
+        form = board.form_for(stage, people)(request.POST)
 
         if not form.is_valid():
             problems = "; ".join(

@@ -97,7 +97,16 @@ def _path(name: str) -> list[str | None] | None:
         parts.append(inner if inner != "" else None)
         rest = rest[end + 1 :]
 
+        if len(parts) - 1 > MAX_NESTING:
+            return None
+
     return parts
+
+
+#: max_input_nesting_level PHP: параметр глубже — отбрасывается целиком.
+#: Без предела «a[[[[…» в несколько тысяч скобок упирался в предел
+#: рекурсии Python при сборке адреса — ошибка 500 на любой странице
+MAX_NESTING = 64
 
 
 _MANGLE = str.maketrans({" ": "_", ".": "_"})

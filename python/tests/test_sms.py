@@ -148,6 +148,11 @@ def test_пять_неверных_блокируют_на_15_минут(окр�
         sms.laravel_cache, "put", lambda key, value, ttl: хранилище.__setitem__(key, value)
     )
     monkeypatch.setattr(sms.laravel_cache, "forget_file", lambda key: хранилище.pop(key, None))
+    monkeypatch.setattr(
+        sms.laravel_cache,
+        "update",
+        lambda key, change, ttl: хранилище.__setitem__(key, change(хранилище.get(key))),
+    )
     сейчас = [1_000_000.0]
     monkeypatch.setattr(time, "time", lambda: сейчас[0])
     номер = "+8613812345678"
@@ -184,6 +189,11 @@ def test_верный_код_обнуляет_счёт(окружение, monke
         sms.laravel_cache, "put", lambda key, value, ttl: хранилище.__setitem__(key, value)
     )
     monkeypatch.setattr(sms.laravel_cache, "forget_file", lambda key: хранилище.pop(key, None))
+    monkeypatch.setattr(
+        sms.laravel_cache,
+        "update",
+        lambda key, change, ttl: хранилище.__setitem__(key, change(хранилище.get(key))),
+    )
     номер = "+8613812345678"
 
     for _ in range(code_lock.MAX_FAILURES - 1):

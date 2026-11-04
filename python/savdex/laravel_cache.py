@@ -28,6 +28,7 @@ import logging
 import math
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from django.conf import settings
@@ -251,6 +252,33 @@ def add(key: str, value: int | bool, seconds: int) -> bool:
         fcntl.flock(handle, fcntl.LOCK_UN)
 
     return not alive
+
+
+def update(key: str, change: Callable[[object], Value], seconds: int) -> Value:
+    """
+    Прочитать, изменить и записать под одной исключительной блокировкой
+    файла: параллельные запросы не перетрут друг друга (у put между
+    чтением и записью их могло пройти сколько угодно). change получает
+    прежнее значение (None — нет или истекло) и возвращает новое.
+    """
+    path = file_path(key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "a+b") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+
+        try:
+            handle.seek(0)
+            payload = _payload(handle.read())
+            value = change(None if payload is None else payload[0])
+            handle.seek(0)
+            handle.truncate()
+            handle.write(str(_expiration(seconds)).rjust(10, "0").encode() + _serialize(value))
+            handle.flush()
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+    return value
 
 
 def increment(key: str, amount: int = 1) -> int:

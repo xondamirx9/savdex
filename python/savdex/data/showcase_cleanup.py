@@ -35,6 +35,7 @@ from typing import Any
 from django.db import connection
 from django.utils import timezone
 
+from savdex.admin_export import _csv_safe
 from savdex.data.models import COMPANY_HIDDEN
 from savdex.guards import allowed_writes
 from savdex.web import platform
@@ -519,4 +520,6 @@ def _write(path: Path, rows: list[dict[str, Any]]) -> None:
 
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
-        writer.writerows(rows)
+        # Названия и тексты пишут посетители: «=HYPERLINK(…)» в Excel —
+        # формула. С апострофом, как в выгрузках админки
+        writer.writerows({k: _csv_safe(v) for k, v in row.items()} for row in rows)
