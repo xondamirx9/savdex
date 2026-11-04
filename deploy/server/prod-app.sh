@@ -146,6 +146,14 @@ $SITE_DOMAIN {
 	import /etc/caddy/auth.caddy
 	encode zstd gzip
 
+	# Предел тела запроса — на входе, до сайта (Т4). Чуть выше предела
+	# Django (SAVDEX_MAX_REQUEST_MB, 128 МиБ; самая большая честная
+	# загрузка — 5 файлов IT-задачи по 20 МБ). Caddy меряет само тело, а не
+	# заявленный Content-Length: запрос «кусками» тоже обрывается — 413
+	request_body {
+		max_size 130MiB
+	}
+
 	# Cloudflare перед сайтом нет: его заголовки с адресом посетителя
 	# ставить некому — пришедшие убираются. Адрес — в X-Forwarded-For,
 	# его Caddy пишет сам
