@@ -336,6 +336,14 @@ def test_объявление(сайт, listing, учтено, admin):
     assert база["journal"] == (журнал if admin else [])
 
 
+def _со_статусом(slug: str, status: str) -> Callable[[], None]:
+    def run() -> None:
+        сброс()()
+        sql("update companies set status = %s where slug = %s", [status, slug])
+
+    return run
+
+
 @pytest.mark.parametrize(
     ("случай", "status", "ошибка"),
     [
@@ -344,6 +352,8 @@ def test_объявление(сайт, listing, учтено, admin):
         # Блокировка выводит из сессии — заблокированного уводят на вход
         ("заблокирован", 302, None),
         ("нет такой", 404, None),
+        # Скрытая компания не видна — и раскрыть её нельзя (Ж10)
+        ("скрыта", 404, None),
     ],
 )
 def test_отказ(сайт, случай, status, ошибка):
@@ -355,7 +365,7 @@ def test_отказ(сайт, случай, status, ошибка):
     итог = отправить(
         сайт,
         f"/company/{slug}/unlock",
-        сброс(),
+        сброс() if случай != "скрыта" else _со_статусом("target", "hidden"),
         снимок,
         uid=uid,
         headers=inertia(),

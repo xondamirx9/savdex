@@ -36,6 +36,7 @@ from savdex.web.phpquery import php_int
 from savdex.web.shared import Context, email_ok
 from savdex.web.tenders import _admin
 from savdex.web.views import not_found
+from savdex.web.visibility import company_visible
 
 BLOCKED = "blocked"
 
@@ -280,7 +281,10 @@ def unlock(request: HttpRequest, slug: str) -> HttpResponse:
         "select * from companies where slug = %s and deleted_at is null limit 1", [slug]
     )
 
-    if not targets:
+    # Скрытая или ещё не проверенная компания посетителям не видна — и её
+    # контакты не раскрываются (visibility.company_visible). Заблокированной
+    # — свой ответ ниже (messages.unlock.target_blocked)
+    if not targets or (targets[0]["status"] != BLOCKED and not company_visible(targets[0])):
         return not_found(ctx)
 
     target = targets[0]

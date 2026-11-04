@@ -199,7 +199,8 @@ def _номер(slug: str) -> int:
         # Битый файл, только SVG и пропавший файл, без картинок — общая обложка
         ("l-2", "cover"),
         ("l-3", "cover"),
-        ("l-4", "cover"),
+        # Архивное чужим не показывается — и превью нет, как страницы (Ж10)
+        ("l-4", 404),
         (None, 404),
     ],
 )
@@ -302,3 +303,32 @@ def test_просмотр_не_меняет_дату_изменения(сайт
     открыть(сайт, "/listing/l-3")
 
     assert sql("select updated_at from listings where slug = 'l-3'") == before
+
+
+@pytest.mark.parametrize(
+    "скрыть",
+    [
+        "update listings set status = 'draft' where slug = 'l-1'",
+        "update companies set status = 'hidden' where id = "
+        "(select company_id from listings where slug = 'l-1')",
+    ],
+)
+def test_превью_скрытого_не_отдаётся(картинки, сайт, скрыть):
+    """Черновик и объявление скрытой компании — 404, как на витрине (Ж10)."""
+    номер = _номер("l-1")
+    [(статус, компания)] = sql(
+        "select l.status, c.status from listings l join companies c on c.id = l.company_id "
+        "where l.id = %s",
+        [номер],
+    )
+    sql(скрыть)
+
+    try:
+        assert открыть(сайт, f"/og/listing/{номер}.jpg")["status"] == 404
+    finally:
+        sql("update listings set status = %s where id = %s", [статус, номер])
+        sql(
+            "update companies set status = %s where id = "
+            "(select company_id from listings where id = %s)",
+            [компания, номер],
+        )

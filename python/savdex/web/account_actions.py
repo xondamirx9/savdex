@@ -588,8 +588,10 @@ def forgot_sms_confirm(request: HttpRequest) -> HttpResponse:
     user = sms.verified_user(phone) if phone is not None else None
 
     if phone is None or user is None or not sms.check_code(phone, code):
-        if phone is None:
-            # Неверный код засчитывает check_code, а его здесь не звали
+        if phone is None or user is None:
+            # Неверный код засчитывает check_code, а его здесь не звали.
+            # Номера на сайте нет — счёт и блокировка те же: иначе по
+            # блокировке после пяти попыток было бы видно, чей номер есть
             code_lock.fail(target)
 
         message = code_lock.failure_message(ctx, target, "messages.auth.sms_code_invalid")

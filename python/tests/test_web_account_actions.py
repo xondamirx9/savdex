@@ -876,6 +876,39 @@ def test_код_сброса_из_смс(сайт, telnyx, код, верный)
         assert итог["база"]["tokens"] == []
 
 
+@pytest.mark.parametrize("номер_есть", [True, False])
+def test_блокировка_кода_не_выдаёт_номер(сайт, telnyx, номер_есть):
+    """
+    Пятый неверный код блокирует ввод одинаково, есть такой номер на сайте
+    или нет: иначе по блокировке было бы видно, чей номер зарегистрирован.
+    """
+    from savdex.web import code_lock
+
+    def шаг() -> None:
+        if номер_есть:
+            _по_телефону()()
+        else:
+            пользователь()
+            sql("update users set phone = null, phone_verified_at = null")
+
+        for _ in range(code_lock.MAX_FAILURES - 1):
+            code_lock.fail(code_lock.phone("+998901112233"))
+
+    итог = отправить(
+        сайт,
+        "/forgot-password/sms/confirm",
+        подготовка(шаг),
+        снимок,
+        данные={"reset": {"sms_phone": "+998901112233"}},
+        body={"sms_code": "99999"},
+        env=_смс(telnyx),
+    )
+
+    assert ошибки(итог) == {
+        "sms_code": ["Слишком много неверных попыток. Попробуйте снова через 15 мин."]
+    }
+
+
 @pytest.mark.parametrize("тот_же_браузер", [True, False])
 def test_сброс_по_смс_почту_не_возвращает(сайт, тот_же_браузер):
     """

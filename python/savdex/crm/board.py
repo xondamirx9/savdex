@@ -66,6 +66,18 @@ def owners(section: str) -> QuerySet[User]:
     return User.objects.filter(pk__in=employees(f"{section}.edit")).order_by("name", "id")
 
 
+def assignable(section: str, staff: Any) -> QuerySet[User]:  # noqa: ANN401
+    """
+    Кого этот сотрудник может поставить ответственным в окне этапа.
+    Видит только свои карточки (продавец) — только себя: иначе он отдавал
+    бы лид или сделку коллеге мимо «Назначить ответственного», которое
+    ему закрыто.
+    """
+    people = owners(section)
+
+    return people.filter(pk=staff.id) if staff.scope_is_own(section) else people
+
+
 class _OwnerField(forms.ModelChoiceField):  # type: ignore[type-arg]
     def label_from_instance(self, obj: Any) -> str:  # noqa: ANN401
         return str(obj.name)
@@ -398,8 +410,9 @@ def build(admin_: Scoped, request: HttpRequest) -> dict[str, Any]:
         )
 
     people = owners(section)
+    mine = assignable(section, staff)
     targets = [
-        {"stage": stage, "form": form_for(stage, people)()}
+        {"stage": stage, "form": form_for(stage, mine)()}
         for stage in columns
         if not (admin_.model is Lead and stage.kind == "won")
     ]

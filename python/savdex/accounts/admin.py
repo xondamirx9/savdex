@@ -339,6 +339,18 @@ class UserAdmin(SavdexModelAdmin):
 
     # ── Список ──
 
+    def lookup_allowed(self, lookup: str, value: str, request: HttpRequest) -> bool:
+        """
+        Отбор в адресе списка (?last_login_ip__startswith=…) Django разрешает
+        по любому полю модели. IP входа видит только тот, кто может изменять
+        пользователей (get_fieldsets), — и отбирать по нему тоже: иначе
+        поддержка узнавала бы IP по цифре, сужая отбор.
+        """
+        if lookup.split("__", 1)[0] == "last_login_ip" and not _admin_of(request).can("users.edit"):
+            return False
+
+        return super().lookup_allowed(lookup, value, request)
+
     def get_queryset(self, request: HttpRequest) -> QuerySet[User]:
         queryset: QuerySet[User] = super().get_queryset(request)
 

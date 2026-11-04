@@ -96,3 +96,15 @@ def test_ввод_после_trim_strings():
         got[q] = (build_query(data), [str(k) for k, v in data.items() if v is None])
 
     assert got == ВВОД
+
+
+def test_глубже_64_скобок_отбрасывается():
+    """max_input_nesting_level PHP: глубокий параметр — прочь, без ошибки 500."""
+    from savdex.web.phpquery import MAX_NESTING, full_path, parse_query
+
+    глубоко = "a" + "[x]" * 5000 + "=1&b=2"
+
+    assert parse_query(глубоко) == {"b": "2"}
+    assert full_path("/", глубоко) == "/?b=2"
+    assert parse_query("a" + "[]" * MAX_NESTING + "=1") != {}
+    assert parse_query("a" + "[]" * (MAX_NESTING + 1) + "=1") == {}
