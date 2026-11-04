@@ -308,11 +308,20 @@ def _gte(
     return False
 
 
+#: Сколько байт начала файла смотреть, чтобы узнать тип: libmagic сам
+#: читает не больше 7 МБ (MAGIC_PARAM_BYTES_MAX), дальше — бесполезно
+SNIFF_BYTES = 8 * 1024 * 1024
+
+
 def _guess_extension(upload: Any) -> str | None:  # noqa: ANN401
-    """UploadedFile::guessExtension: по содержимому (finfo), не по имени."""
+    """
+    UploadedFile::guessExtension: по содержимому (finfo), не по имени.
+    Только начало файла: раньше файл читался в память целиком ещё до
+    проверки размера, и загрузка в гигабайт съедала память сервера.
+    """
     from savdex.web.filetype import guess_extension
 
-    data = upload.read()
+    data = upload.read(SNIFF_BYTES)
     upload.seek(0)
 
     return guess_extension(data)
