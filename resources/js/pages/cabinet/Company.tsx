@@ -1,4 +1,4 @@
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import { FieldError } from '@/components/FieldError';
 import { Link } from '@/components/ui/Link';
 import { Check, Eye, FileText, Info, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
@@ -15,6 +15,7 @@ import { COMPANY_TYPES, EMPLOYEE_RANGES, isFilled } from '@/lib/companyOptions';
 import { CityField, type CityValue } from '@/components/CityField';
 import { countryCode, tinLabel, type CountryOption } from '@/lib/countries';
 import { routes } from '@/routes';
+import type { SharedProps } from '@/types';
 
 interface Company {
     id: number;
@@ -222,9 +223,13 @@ export default function CompanyProfile({
      * только читаются: меняются они в настройках профиля и раз в полгода.
      * Остальное — и всё у физлица и фрилансера — меняется здесь когда угодно.
      */
-    const locked = (field: keyof Company) =>
+    const fixed = (field: keyof Company) =>
         company !== null && company.locked_fields.includes(field) && isFilled(company[field]);
-    const anyLocked = company !== null && (company.locked_fields as (keyof Company)[]).some(locked);
+    const anyLocked = company !== null && (company.locked_fields as (keyof Company)[]).some(fixed);
+    // Профиль, контакты и документы меняет только владелец: сотруднику —
+    // только смотреть (сервер ответит 403 и так)
+    const owner = usePage<SharedProps>().props.auth.company?.is_owner !== false;
+    const locked = (field: keyof Company) => !owner || fixed(field);
 
     function submit() {
         form.patch(routes.cabinetCompany, { preserveScroll: true });
@@ -303,14 +308,24 @@ export default function CompanyProfile({
 
             {company && <Tabs items={tabs} active={tab} onChange={setTab} label={t('cabinet.company.tabs_label')} />}
 
+            {company && !owner && (
+                <div className="alert alert-info" style={{ marginBottom: 20 }}>
+                    <Info aria-hidden className="size-4" />
+                    <span>{t('cabinet.company.owner_only')}</span>
+                </div>
+            )}
+
             {(!company || tab === 'main') && (
                 <div className="card" style={{ maxWidth: 720 }}>
+                    <fieldset disabled={!owner} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
                     {company && (
                         <div className="row" style={{ gap: 20, marginBottom: 24, alignItems: 'flex-start' }}>
                             <span className="listing-logo logo-64" style={{ width: 88, height: 88, fontSize: 26 }}>
                                 {company.logo ? <img src={company.logo} alt="" /> : company.initials}
                             </span>
                             <div>
+                                {owner && (
+                                <>
                                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                                     <button
                                         className="btn btn-secondary btn-sm"
@@ -350,6 +365,8 @@ export default function CompanyProfile({
                                 />
                                 <p className="hint">{t('cabinet.company.logo_hint')}</p>
                                 <FieldError name="logo" />
+                                </>
+                                )}
                             </div>
                         </div>
                     )}
@@ -366,6 +383,8 @@ export default function CompanyProfile({
                                         : 'linear-gradient(120deg,var(--primary-700),var(--primary-500))',
                                 }}
                             />
+                            {owner && (
+                            <>
                             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                                 <button
                                     className="btn btn-secondary btn-sm"
@@ -405,10 +424,12 @@ export default function CompanyProfile({
                             />
                             <p className="hint">{t('cabinet.company.cover_hint')}</p>
                             <FieldError name="cover" />
+                            </>
+                            )}
                         </div>
                     )}
 
-                    {anyLocked && (
+                    {anyLocked && owner && (
                         <div className="alert alert-info" style={{ marginBottom: 20 }}>
                             <Info aria-hidden className="size-4" />
                             <span>
@@ -717,9 +738,12 @@ export default function CompanyProfile({
                         {fieldError('it_specializations')}
                     </div>
 
-                    <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>
-                        {company ? t('cabinet.company.save') : t('cabinet.company.create')}
-                    </button>
+                    {owner && (
+                        <button className="btn btn-primary mt-24" type="button" disabled={form.processing} onClick={submit}>
+                            {company ? t('cabinet.company.save') : t('cabinet.company.create')}
+                        </button>
+                    )}
+                    </fieldset>
                 </div>
             )}
 
@@ -762,9 +786,11 @@ export default function CompanyProfile({
                         </div>
                     </div>
 
-                    <button className="btn btn-primary mt-24" onClick={() => setUploading(person ? 'other' : 'registration')}>
-                        <Upload aria-hidden className="size-4" /> {t('cabinet.company.upload_document')}
-                    </button>
+                    {owner && (
+                        <button className="btn btn-primary mt-24" onClick={() => setUploading(person ? 'other' : 'registration')}>
+                            <Upload aria-hidden className="size-4" /> {t('cabinet.company.upload_document')}
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -775,9 +801,11 @@ export default function CompanyProfile({
                             <h3 className="t-h3">{t('cabinet.company.files')}</h3>
                             <p className="t-sm muted mt-8">{t('cabinet.company.files_text')}</p>
                         </div>
-                        <button className="btn btn-primary" onClick={() => setUploading('presentation')}>
-                            <Upload aria-hidden className="size-4" /> {t('cabinet.files.upload_file')}
-                        </button>
+                        {owner && (
+                            <button className="btn btn-primary" onClick={() => setUploading('presentation')}>
+                                <Upload aria-hidden className="size-4" /> {t('cabinet.files.upload_file')}
+                            </button>
+                        )}
                     </div>
 
                     {documents.length === 0 ? (
@@ -843,6 +871,7 @@ export default function CompanyProfile({
                                         <input
                                             type="checkbox"
                                             checked={d.is_public}
+                                            disabled={!owner}
                                             onChange={(e) =>
                                                 router.patch(
                                                     `/cabinet/company/files/${d.id}`,
@@ -854,6 +883,7 @@ export default function CompanyProfile({
                                         <span className="hide-mobile">{t('cabinet.company.on_card')}</span>
                                     </label>
 
+                                    {owner && (
                                     <button
                                         className="btn btn-ghost btn-icon shrink-0"
                                         aria-label={t('cabinet.company.delete_file_aria', { title: d.title })}
@@ -872,6 +902,7 @@ export default function CompanyProfile({
                                     >
                                         <Trash2 aria-hidden className="size-5" />
                                     </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -952,9 +983,11 @@ export default function CompanyProfile({
                     title={t('cabinet.company.contacts')}
                     className="mt-24"
                     action={
-                        <button className="btn btn-secondary btn-sm" type="button" onClick={() => openContactEditor()}>
-                            <Plus aria-hidden className="size-4" /> {t('cabinet.company.contact_add')}
-                        </button>
+                        owner ? (
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => openContactEditor()}>
+                                <Plus aria-hidden className="size-4" /> {t('cabinet.company.contact_add')}
+                            </button>
+                        ) : undefined
                     }
                 >
                     {contacts.length > 0 && (
@@ -971,6 +1004,8 @@ export default function CompanyProfile({
                                                 ? t('cabinet.company.contact_public')
                                                 : t('cabinet.company.contact_paid')}
                                         </span>
+                                        {owner && (
+                                        <>
                                         <button
                                             className="btn btn-ghost btn-sm"
                                             type="button"
@@ -997,6 +1032,8 @@ export default function CompanyProfile({
                                         >
                                             <Trash2 aria-hidden className="size-4" />
                                         </button>
+                                        </>
+                                        )}
                                     </span>
                                 </li>
                             ))}
