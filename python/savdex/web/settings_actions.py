@@ -40,7 +40,8 @@ def profile(request: HttpRequest) -> HttpResponse:
         data,
         {
             "name": ["required", "string", "min:2", "max:120"],
-            "phone": ["required", "string", f"regex:{PHONE}"],
+            # Без телефона — можно: кто пришёл по почте, меняет язык и имя
+            "phone": ["nullable", "string", f"regex:{PHONE}"],
             "locale": ["required", "in:ru,uz,en,zh,tr"],
         },
         ctx.locale,
@@ -50,14 +51,19 @@ def profile(request: HttpRequest) -> HttpResponse:
         },
     )
 
+    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
+
+    # Номер не стирают формой: по нему входят и восстанавливают пароль
+    if data.get("phone") is None and user["phone"]:
+        errors = {**errors, "phone": [ctx.t("messages.settings.phone_keep")]}
+
     if errors:
         return invalid(ctx, errors)
 
-    user = _rows("select * from users where id = %s", [ctx.user["id"]])[0]
-    changes = {"name": data["name"], "phone": data["phone"], "locale": data["locale"]}
+    changes = {"name": data["name"], "phone": data.get("phone"), "locale": data["locale"]}
 
     # Смена номера сбрасывает подтверждение: подтверждён был старый
-    if data["phone"] != user["phone"]:
+    if changes["phone"] != user["phone"]:
         changes = {"phone_verified_at": None, **changes}
 
     eloquent.save(ctx, "users", user, changes, section="users", model="User")
