@@ -15,7 +15,8 @@ import pytest
 from .factories import компания
 from .pg_admin import sql, нужна_база, свежая_база
 from .test_web_forms import inertia, отправить, учётка
-from .web_site import адрес
+from .test_web_site_actions import тарифы
+from .web_site import адрес, вход, открыть, страница
 
 pytestmark = нужна_база
 
@@ -23,6 +24,7 @@ pytestmark = нужна_база
 @pytest.fixture(scope="module")
 def сайт() -> Iterator[str]:
     свежая_база()
+    тарифы()
     компания(slug="mine", name="Цемент Трейд", tin="301234567")
 
     with адрес() as root:
@@ -35,11 +37,55 @@ def _компания() -> int:
 
 def снимок() -> dict[str, Any]:
     return {
-        "contacts": sql("select count(*) from company_contacts")[0][0],
-        "documents": sql("select count(*) from company_documents")[0][0],
+        "contacts": sql("select id, type, value, label from company_contacts order by id"),
+        "documents": sql("select id, type, title, is_public from company_documents order by id"),
         "subscriptions": sql("select status, auto_renew from subscriptions order by id"),
+        "cards": sql("select id, last4 from payment_methods order by id"),
         "sites": sql("select status from company_sites order by id"),
     }
+
+
+def данные() -> None:
+    """У компании есть что менять: контакт, документ, подписка, карта, сайт — все с id 1."""
+    cid = _компания()
+
+    for table in (
+        "company_contacts",
+        "company_documents",
+        "subscriptions",
+        "payment_methods",
+        "company_sites",
+    ):
+        sql(f"delete from {table}")
+        sql(f"select setval('{table}_id_seq', 1, false)")
+
+    sql(
+        "insert into company_contacts (company_id, type, value, label, created_at, updated_at) "
+        "values (%s, 'phone', '+998901112233', 'Офис', now(), now())",
+        [cid],
+    )
+    sql(
+        "insert into company_documents (company_id, type, title, file_path, is_public, "
+        "created_at, updated_at) values (%s, 'license', 'Лицензия', 'docs/1.pdf', true, "
+        "now(), now())",
+        [cid],
+    )
+    sql(
+        "insert into subscriptions (company_id, plan_id, status, started_at, ends_at, "
+        "auto_renew, created_at, updated_at) values (%s, (select id from plans order by id "
+        "limit 1), 'active', now(), now() + interval '20 days', true, now(), now())",
+        [cid],
+    )
+    sql(
+        "insert into payment_methods (company_id, provider, token, last4, is_default, "
+        "created_at, updated_at) values (%s, 'uzum', 't', '4242', true, now(), now())",
+        [cid],
+    )
+    sql(
+        "insert into company_sites (company_id, subdomain, status, theme, created_at, "
+        "updated_at) values (%s, 'mine', 'published', '[]', now(), now())",
+        [cid],
+    )
 
 
 @pytest.mark.parametrize(
@@ -61,6 +107,9 @@ def test_сотруднику_нельзя(сайт, method, path, body):
     cid = _компания()
     сотрудник = учётка("staff@savdex.uz", company_id=cid, company_role="manager")
 
+    данные()
+    # Снимок до запроса: после него сравнивать не с чем
+    было = снимок()
     итог = отправить(
         сайт,
         path,
@@ -73,4 +122,15 @@ def test_сотруднику_нельзя(сайт, method, path, body):
     )
 
     assert итог["ответ"]["status"] == 403
-    assert итог["база"] == снимок()
+    assert итог["база"] == было
+
+
+@pytest.mark.parametrize(("role", "владелец"), [("owner", True), ("manager", False)])
+def test_страница_знает_владельца(сайт, role, владелец):
+    """По auth.company.is_owner кабинет прячет у сотрудника кнопки этих разделов."""
+    uid = учётка(f"{role}@savdex.uz", company_id=_компания(), company_role=role)
+
+    for path in ("/cabinet/company", "/cabinet/site", "/cabinet/billing"):
+        ответ = открыть(сайт, path, вход(uid))
+        assert ответ["status"] == 200, path
+        assert страница(ответ["body"])["props"]["auth"]["company"]["is_owner"] is владелец

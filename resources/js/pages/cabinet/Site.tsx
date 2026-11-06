@@ -1,4 +1,4 @@
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import {
     ArrowLeftRight,
     Check,
@@ -27,6 +27,7 @@ import { t } from '@/lib/i18n';
 import { localize } from '@/lib/locale';
 import { THEME_MESSAGE, type SiteTheme } from '@/pages/site/Show';
 import { routes } from '@/routes';
+import type { SharedProps } from '@/types';
 import { unitLabel } from '@/lib/units';
 
 /**
@@ -100,6 +101,7 @@ export default function Site({
     const frame = useRef<HTMLIFrameElement>(null);
     const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
 
+    const owner = usePage<SharedProps>().props.auth.company?.is_owner !== false;
     const current = form.data.theme;
     const published = site?.status === 'published';
 
@@ -148,6 +150,32 @@ export default function Site({
             )}
 
             <div className="site-editor">
+                {/* Мини-сайт меняет только владелец компании: сотруднику — без редактора */}
+                {!owner && (
+                    <div className="stack-16">
+                        <Panel
+                            title={t('cabinet.site.address')}
+                            action={
+                                <span className={published ? 'badge badge-verified' : 'badge badge-neutral'}>
+                                    {published ? t('cabinet.site.status_published') : t('cabinet.site.status_draft')}
+                                </span>
+                            }
+                        >
+                            <p className="t-sm">
+                                {address.prefix}
+                                <b>{subdomain}</b>
+                                {address.suffix}
+                            </p>
+                            {site?.published_at && (
+                                <p className="t-sm muted mt-8">{t('cabinet.site.published_at', { date: site.published_at })}</p>
+                            )}
+                            <Alert tone="info" className="mt-16">
+                                {t('cabinet.site.owner_only')}
+                            </Alert>
+                        </Panel>
+                    </div>
+                )}
+                {owner && (
                 <div className="stack-16">
                     <Panel
                         title={t('cabinet.site.address')}
@@ -348,6 +376,7 @@ export default function Site({
                         </div>
                     </Panel>
                 </div>
+                )}
 
                 <div className="site-preview-col">
                     <div className="row-between" style={{ marginBottom: 10 }}>

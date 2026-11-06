@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Link } from '@/components/ui/Link';
 import { Download, Lock, Plus, Trash2, Wallet } from 'lucide-react';
 import { useEffect } from 'react';
@@ -8,6 +8,7 @@ import { BillingStore, usdPrice, type Invoice, type PackOffer, type PlanOffer } 
 import { useConfirm } from '@/components/useConfirm';
 import { t } from '@/lib/i18n';
 import { routes } from '@/routes';
+import type { SharedProps } from '@/types';
 
 interface Props {
     plan: {
@@ -66,6 +67,7 @@ export default function Billing({
     selected,
 }: Props) {
     const { confirm, dialog } = useConfirm();
+    const owner = usePage<SharedProps>().props.auth.company?.is_owner !== false;
 
     /*
      * Пришли со страницы тарифов кнопкой «Выбрать»: окно оплаты
@@ -139,7 +141,9 @@ export default function Billing({
                         <a href="#store" className="btn btn-primary btn-sm">
                             {t('cabinet.billing.change_plan')}
                         </a>
-                        {subscription &&
+                        {/* Автопродление и карты меняет только владелец компании */}
+                        {owner &&
+                            subscription &&
                             (subscription.auto_renew ? (
                                 <button
                                     className="btn btn-ghost btn-sm"
@@ -247,6 +251,7 @@ export default function Billing({
                                     </span>
                                 </span>
                             </div>
+                            {owner && (
                             <button
                                 className="btn btn-ghost btn-icon"
                                 aria-label={t('cabinet.billing.unlink_aria', { card: card.masked })}
@@ -263,6 +268,7 @@ export default function Billing({
                             >
                                 <Trash2 aria-hidden className="size-5" />
                             </button>
+                            )}
                         </div>
                     ))
                 )}

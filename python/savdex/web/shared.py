@@ -80,8 +80,8 @@ class Context:
 
         rows = _rows(
             "select id, name, email, locale, email_verified_at, email_code_skipped, "
-            "phone_verified_at, must_change_password, is_admin, company_id from users "
-            "where id = %s and deleted_at is null",
+            "phone_verified_at, must_change_password, is_admin, company_id, company_role "
+            "from users where id = %s and deleted_at is null",
             [self.visitor.user_id],
         )
 
@@ -376,6 +376,9 @@ def _company(ctx: Context, company_id: int) -> tuple[dict[str, Any] | None, dict
         "blocked_reason": company["blocked_reason"],
         # Company::isPerson: в меню «Мой профиль», а не «Моя компания»
         "person": is_person(company),
+        # Контакты, документы, подписку и мини-сайт меняет только владелец
+        # (company_profile_actions.not_owner) — сотруднику кнопки не показываем
+        "is_owner": (ctx.user or {}).get("company_role") == "owner",
     }
 
     return card, company
