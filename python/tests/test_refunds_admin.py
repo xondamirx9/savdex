@@ -420,8 +420,8 @@ def _продление() -> None:
         # продвижения ещё не выданы (выдаст смена периода)
         (2, 20, 60),
         # Вернули первый счёт — остаётся один оплаченный период, а не два;
-        # единицы идущего периода забираются
-        (1, 20, 10),
+        # идущий месяц теперь оплачен продлением — его единицы остаются (Н19)
+        (1, 20, 60),
     ],
 )
 def test_возврат_после_досрочного_продления(люди, счёт, осталось_дней, единиц):
@@ -442,3 +442,44 @@ def test_возврат_после_досрочного_продления(лю�
         "from subscriptions where id = 2"
     ) == [("active", осталось_дней)]
     assert sql("select promo_units from wallets") == [(единиц,)]
+
+
+def _вернуть(люди, счёт: int) -> None:
+    """Заявка на полный возврат счёта и её одобрение суперадмином."""
+    [(rid,)] = sql(
+        "insert into refunds (payment_id, company_id, amount, currency, reason, status, "
+        "created_at, updated_at) select id, company_id, 1000000, 'UZS', 'Клиент недоволен', "
+        "'requested', now(), now() from payments where id = %s returning id",
+        [счёт],
+    )
+    _, ответ = django(люди["superadmin"], ("post", f"{LIST}{rid}/approve/", {"note": ""}))
+    assert ответ["status"] == 302
+
+
+def test_вернули_оба_счёта_единицы_забраны(люди):
+    """Н19: единицы остаются, пока оплачен срок; вернули всё — ни срока, ни единиц."""
+    _продление()
+
+    _вернуть(люди, 1)
+    assert sql("select status from subscriptions where id = 2") == [("active",)]
+    assert sql("select promo_units from wallets") == [(60,)]
+
+    _вернуть(люди, 2)
+    assert sql("select status, ends_at <= now() from subscriptions where id = 2") == [
+        ("cancelled", True)
+    ]
+    assert sql("select promo_units from wallets") == [(10,)]
+
+
+def test_возврат_единственного_счёта_забирает_единицы(люди):
+    """Один счёт, вернули посреди периода — подписка закрыта, квота периода забрана."""
+    _продление()
+    # Продления нет: только первый счёт и его действующая подписка
+    sql("delete from payments where id = 2")
+    sql("delete from subscriptions where id = 2")
+    sql("update subscriptions set status = 'active' where id = 1")
+
+    _вернуть(люди, 1)
+
+    assert sql("select status from subscriptions where id = 1") == [("cancelled",)]
+    assert sql("select promo_units from wallets") == [(10,)]
