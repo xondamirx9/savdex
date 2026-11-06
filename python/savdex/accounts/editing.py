@@ -245,9 +245,13 @@ def write(user: User, values: dict[str, Any], *, password: str | None = None) ->
     stamp = timezone.now().replace(microsecond=0)
     naive = stamp.replace(tzinfo=None)
     # Блокировка — любым путём (кнопка, форма): все входы закрываются, чтобы
-    # после разблокировки старые сессии (и украденные тоже) не ожили
+    # после разблокировки старые сессии (и украденные тоже) не ожили. Был ли
+    # он заблокирован — по базе: форма «Пользователи» ставит новый статус
+    # объекту ещё при проверке ввода, и по объекту блокировка не видна (Ж3)
     blocking = (
-        user.pk is not None and values.get("status") == "blocked" and user.status != "blocked"
+        user.pk is not None
+        and values.get("status") == "blocked"
+        and _stored_status(int(user.pk)) != "blocked"
     )
     written = {
         column: json.dumps(value, ensure_ascii=False)
@@ -287,6 +291,15 @@ def write(user: User, values: dict[str, Any], *, password: str | None = None) ->
 
     if blocking:
         end_everywhere(int(user.pk))
+
+
+def _stored_status(user_id: int) -> str | None:
+    """Статус учётки в базе — до записи."""
+    with connection.cursor() as cursor:
+        cursor.execute("select status from users where id = %s", [user_id])
+        row = cursor.fetchone()
+
+    return None if row is None else str(row[0])
 
 
 def end_everywhere(user_id: int) -> None:

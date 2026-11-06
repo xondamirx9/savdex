@@ -213,6 +213,41 @@ def test_выдать_пароль_и_блокировка_закрывают_в
     assert remember and remember != "old-remember-token"
 
 
+def test_блокировка_формой_закрывает_входы(люди):
+    """
+    Ж3: и через форму «Пользователи» (статус «Заблокирован» и «Сохранить»),
+    а не только кнопкой. Форма меняет статус у объекта ещё при проверке
+    ввода — «блокируем ли» решается по статусу в базе.
+    """
+    pk = _клиент()
+    sql("update users set remember_token = 'old-remember-token' where id = %s", [pk])
+    _сессия_клиента(pk, "stolen-form")
+    форма = {k: v for k, v in _форма(email="client@example.com", status="blocked").items()}
+    форма.pop("password")
+
+    _, ответ = django(люди["admin"], ("post", f"{LIST}{pk}/change/", форма))
+
+    assert ответ["status"] == 302, ответ["body"][:2000]
+    assert sql("select status from users where id = %s", [pk]) == [("blocked",)]
+    assert sql("select id from sessions where user_id = %s", [pk]) == []
+    [(remember,)] = sql("select remember_token from users where id = %s", [pk])
+    assert remember and remember != "old-remember-token"
+
+
+def test_разблокировка_формой_не_трогает_входы(люди):
+    pk = _клиент(status="blocked")
+    sql("update users set remember_token = 'kept-remember-token' where id = %s", [pk])
+    _сессия_клиента(pk, "after-unblock-form")
+    форма = _форма(email="client@example.com", status="active")
+    форма.pop("password")
+
+    django(люди["admin"], ("post", f"{LIST}{pk}/change/", форма))
+
+    assert sql("select status from users where id = %s", [pk]) == [("active",)]
+    assert sql("select id from sessions where user_id = %s", [pk]) == [("after-unblock-form",)]
+    assert sql("select remember_token from users where id = %s", [pk]) == [("kept-remember-token",)]
+
+
 def test_разблокировка_не_трогает_входы(люди):
     pk = _клиент()
     sql("update users set status = 'blocked' where id = %s", [pk])
