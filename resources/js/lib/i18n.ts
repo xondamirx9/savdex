@@ -20,6 +20,12 @@ let locale = 'ru';
 export function setTranslations(next: Dict, nextLocale: string): void {
     dict = next;
     locale = nextLocale;
+
+    // Язык сменили без перезагрузки — <html lang> тоже: программы чтения
+    // с экрана и переводчик браузера смотрят на него, а не на текст
+    if (typeof document !== 'undefined' && document.documentElement.lang !== nextLocale) {
+        document.documentElement.lang = nextLocale;
+    }
 }
 
 /** Язык словаря, который уже загружен. */

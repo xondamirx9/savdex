@@ -162,6 +162,62 @@ def test_профиль_на_языке(сайт, prefix):
     assert итог["база"]["user"] == [("Азиз Каримов", "+998 90 111-22-33", True, "tr", True)]
 
 
+#: Форма без поля «Телефон» совсем
+БЕЗ_ПОЛЯ = {"name": "Азиз Каримов", "locale": "uz"}
+
+#: Ответ на пустое поле, когда номер в профиле есть
+НЕ_СТЕРЕТЬ = "Номер нельзя стереть: по нему входят и восстанавливают пароль. Можно указать другой."
+
+
+def без_телефона() -> None:
+    человек()()
+    sql("update users set phone = null, phone_verified_at = null where email = 'person@savdex.uz'")
+
+
+@pytest.mark.parametrize("phone", [None, "", "  "])
+def test_язык_без_телефона(сайт, phone):
+    """Пришёл по почте, телефона нет — язык и имя меняются и так."""
+    body = {**ВЕРНО, "phone": phone} if phone is not None else БЕЗ_ПОЛЯ
+    итог = отправить(
+        сайт,
+        "/cabinet/settings/profile",
+        без_телефона,
+        снимок,
+        uid=учётка("person@savdex.uz"),
+        body=body,
+        method="PATCH",
+        headers=inertia(),
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["status"] == 303
+    assert "errors" not in сессия
+    assert итог["ответ"]["headers"]["location"].endswith("/uz/cabinet/settings")
+    assert сессия["locale"] == "uz"
+    assert итог["база"]["user"] == [("Азиз Каримов", None, False, "uz", True)]
+
+
+@pytest.mark.parametrize("phone", [None, ""])
+def test_номер_формой_не_стереть(сайт, phone):
+    """Номер был — пустое поле его не сотрёт: по нему входят."""
+    body = {**ВЕРНО, "phone": phone} if phone is not None else БЕЗ_ПОЛЯ
+    итог = отправить(
+        сайт,
+        "/cabinet/settings/profile",
+        человек(),
+        снимок,
+        uid=учётка("person@savdex.uz"),
+        body=body,
+        method="PATCH",
+        headers=inertia(),
+    )
+    сессия = json.loads(итог["сессия"]["payload"])
+
+    assert итог["ответ"]["status"] == 303
+    assert сессия["errors"]["default"]["messages"] == {"phone": [НЕ_СТЕРЕТЬ]}
+    assert итог["база"] == {"user": [БЫЛО], "journal": []}
+
+
 # ── Telegram ────────────────────────────────────────────────────────
 
 БОТ = {"TELEGRAM_BOT_TOKEN": "123:abc", "TELEGRAM_BOT_USERNAME": "@savdex_bot"}

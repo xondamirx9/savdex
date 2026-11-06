@@ -115,10 +115,15 @@ docker run -d --name "$NET-caddy" --network "$NET" --network-alias caddy \
     -v "$WORK/prod/auth.caddy:/etc/caddy/auth.caddy:ro" \
     "$CADDY_IMAGE" > /dev/null
 
-# Клиент: тело любого размера потоком, с Content-Length или «кусками»
+# Клиент: тело любого размера потоком, с Content-Length или «кусками».
+# Ответ читает отдельный поток, пока тело ещё уходит: Caddy может ответить
+# 413 сразу и закрыть соединение, не дочитав тело, — тогда отправка
+# обрывается, а ответ уже прочитан
 cat > "$WORK/client.py" <<'PY'
-import http.client
+import re
+import socket
 import sys
+import threading
 import time
 
 MiB = 1024 * 1024
@@ -126,23 +131,41 @@ host, port = sys.argv[1], int(sys.argv[2])
 
 
 def send(method, path, mb=0, chunked=False):
-    conn = http.client.HTTPConnection(host, port, timeout=120)
+    sock = socket.create_connection((host, port), timeout=120)
+    got = bytearray()
+    answered = threading.Event()
+
+    def read():
+        try:
+            while b"\r\n" not in got and (data := sock.recv(65536)):
+                got.extend(data)
+        except OSError:
+            pass
+        answered.set()
+
+    threading.Thread(target=read, daemon=True).start()
+    head = f"{method} {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
+    if chunked:
+        head += "Transfer-Encoding: chunked\r\n"
+    elif method == "POST":
+        head += f"Content-Length: {mb * MiB}\r\n"
     block = b"\0" * MiB
     try:
-        conn.putrequest(method, path)
-        if chunked:
-            conn.putheader("Transfer-Encoding", "chunked")
-        elif method == "POST":
-            conn.putheader("Content-Length", str(mb * MiB))
-        conn.endheaders()
+        sock.sendall(head.encode() + b"\r\n")
         for _ in range(mb):
-            conn.send(b"%x\r\n" % MiB + block + b"\r\n" if chunked else block)
-        if chunked:
-            conn.send(b"0\r\n\r\n")
-        return conn.getresponse().status
+            if answered.is_set():
+                break
+            sock.sendall(b"%x\r\n" % MiB + block + b"\r\n" if chunked else block)
+        if chunked and not answered.is_set():
+            sock.sendall(b"0\r\n\r\n")
     except OSError:
-        # Caddy оборвал соединение посреди тела, не дав прочесть ответ
-        return "обрыв"
+        # Caddy закрыл соединение посреди тела — ответ ловит поток чтения
+        pass
+    answered.wait(120)
+    sock.close()
+    status = re.match(rb"HTTP/1\.[01] (\d{3})", bytes(got))
+
+    return int(status.group(1)) if status else "обрыв"
 
 
 for _ in range(30):
