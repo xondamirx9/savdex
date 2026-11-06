@@ -602,3 +602,55 @@ def test_удалить_товар(сайт, номер, тариф):
     else:
         assert итог["ответ"]["status"] == 404
         assert итог["база"]["products"] == [ПРЕЖНИЙ] and итог["база"]["old_image"]
+
+
+# ── Только владелец (Ж4) ───────────────────────────────────────────
+
+
+def _сотрудник() -> int:
+    cid = int(sql("select id from companies where slug = 'mine'")[0][0])
+
+    return учётка("staff@savdex.uz", company_id=cid, company_role="manager")
+
+
+def _всё() -> Any:
+    return {**снимок(), **снимок_товаров()}
+
+
+def _фон_формой() -> dict[str, Any]:
+    тело, тип = multipart({"hero": ("hero.png", картинка(2400, 1200))})
+
+    return {"body": тело, "content_type": тип}
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "запрос"),
+    [
+        ("PATCH", "/cabinet/site", {"body": {"subdomain": "staff-site", "theme": ТЕМА}}),
+        ("POST", "/cabinet/site/publish", {}),
+        ("POST", "/cabinet/site/unpublish", {}),
+        ("POST", "/cabinet/site/hero", "фон"),
+        ("DELETE", "/cabinet/site/hero", {}),
+        ("POST", "/cabinet/site/products", {"body": ТОВАР}),
+        ("POST", "/cabinet/site/products/1", {"body": {**ТОВАР, "title": "Чужой"}}),
+        ("DELETE", "/cabinet/site/products/1", {}),
+    ],
+)
+def test_сотрудник_мини_сайт_не_меняет(сайт, method, path, запрос):
+    """Ни сохранить, ни опубликовать, ни снять, ни фон, ни товары — 403."""
+    товары(1)()
+    sql("update company_sites set status = 'published' where subdomain = 'mine'")
+    было = _всё()
+    итог = отправить(
+        сайт,
+        path,
+        lambda: None,
+        _всё,
+        uid=_сотрудник(),
+        method=method,
+        headers=inertia(),
+        **(_фон_формой() if запрос == "фон" else запрос),
+    )
+
+    assert итог["ответ"]["status"] == 403
+    assert итог["база"] == было
