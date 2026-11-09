@@ -50,13 +50,13 @@ jobs:
       S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
       # pg_dump новее сервера снимает копию с любой версии PostgreSQL
       # не старше себя — Render может поднять версию базы без нас
-      PG_IMAGE: postgres:18
+      PG_IMAGE: postgres:18.6
 
     # Пустая база для проверки: копия, которая не восстанавливается, —
     # не копия
     services:
       check:
-        image: postgres:18
+        image: postgres:18.6
         env:
           POSTGRES_PASSWORD: check
           POSTGRES_DB: restore_check
