@@ -246,6 +246,54 @@ def test_модератор_видит_сделку_без_суммы(люди):
     assert "Итого" in архив["body"] and "46 386 000" in архив["body"]
 
 
+def test_модератор_не_подбирает_подробности_фильтром_архива(люди):
+    """
+    Отбор в адресе архива по скрытому полю: модератор не узнаёт значение
+    по тому, осталась ли запись в выдаче; администратор отбирает как раньше.
+    """
+    компания = _стройбаза()
+    _лид(
+        "Цемент М400",
+        люди["sales"],
+        company_id=компания,
+        contact_phone="+998901112233",
+        contact_email="ivan@stroybaza.uz",
+        note="Ждёт скидку от объёма",
+        lost_reason="Дорого",
+    )
+    _сделка("Поставка арматуры", люди["sales"], company_id=компания, amount=46386000)
+
+    лиды = [
+        "contact_phone__contains=901112233",
+        "contact_phone__startswith=%2B99890",
+        "contact_email__startswith=ivan",
+        "note__icontains=%D1%81%D0%BA%D0%B8%D0%B4%D0%BA%D1%83",
+        "lost_reason__exact=%D0%94%D0%BE%D1%80%D0%BE%D0%B3%D0%BE",
+    ]
+    сделки = ["amount__gte=46386000", "amount__lte=46386000", "amount=46386000"]
+
+    ответы = django(
+        люди["moderator"],
+        *[("get", f"{LEADS}archive/?{q}", None) for q in лиды],
+        *[("get", f"{DEALS}archive/?{q}", None) for q in сделки],
+    )[1:]
+
+    for q, ответ in zip(лиды + сделки, ответы, strict=True):
+        assert "Цемент М400" not in ответ["body"], q
+        assert "Поставка арматуры" not in ответ["body"], q
+
+    _, лид, мимо, сделка = django(
+        люди["admin"],
+        ("get", f"{LEADS}archive/?contact_phone__contains=901112233", None),
+        ("get", f"{LEADS}archive/?contact_phone__contains=900000000", None),
+        ("get", f"{DEALS}archive/?amount__gte=46386000", None),
+    )
+
+    assert лид["status"] == 200 and "Цемент М400" in лид["body"]
+    assert мимо["status"] == 200 and "Цемент М400" not in мимо["body"]
+    assert сделка["status"] == 200 and "Поставка арматуры" in сделка["body"]
+
+
 def test_окно_спрашивает_поля_этапа(люди):
     _лид("Лид", люди["sales"])
 
