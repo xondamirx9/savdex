@@ -1,5 +1,6 @@
 """Тревоги Grafana Cloud → Telegram-группа (docs/monitoring.md, шаг 3).
 
+    python3 grafana-alerts.py rules   # только файл правил, без ключей (PR)
     python3 grafana-alerts.py check   # файл правил и ключи — ничего не меняет
     python3 grafana-alerts.py apply   # правила, шаблон, канал и маршрут — в Grafana
 
@@ -356,12 +357,14 @@ def telegram_token() -> str:
 
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    if mode not in ("check", "apply"):
+    if mode not in ("rules", "check", "apply"):
         print(__doc__, file=sys.stderr)
         return 2
     try:
         config = load_rules()
         print(f"── {RULES_FILE.name}: правил {len(config['rules'])}, разбирается")
+        if mode == "rules":
+            return 0
         values = keys()
         grafana = Grafana(values["GRAFANA_URL"], values["GRAFANA_SA_TOKEN"])
         telegram = Telegram(values["TELEGRAM_BOT_TOKEN"], values["TELEGRAM_CHAT_ID"])

@@ -9,8 +9,9 @@
 # прошёл «CI» и проверку снаружи на тестовом (запись в GitHub →
 # Environments → staging, её делает staging.yml). Не конец основной
 # ветки: слитое позже, ещё не проверенное на тестовом, ждёт следующего
-# релиза. Поле «ref» — выложить другую ветку или коммит в обход кандидата
-# (на крайний случай; в сводке — предупреждение).
+# релиза. Поле «ref» — выложить другой коммит основной ветки в обход
+# кандидата (откат; на крайний случай, в сводке — предупреждение). Не
+# слитую ветку — нельзя.
 #
 # Образ — тот же, что работал на тестовом: копируется с тестового сервера
 # (docker save → load, проверка по ID образа). Нет его там — собирается
@@ -45,7 +46,10 @@
 # сети savdex-prod (на неё переадресованы порты 22, 80 и 443), машины
 # админки и базы — через неё (ProxyJump) по частным адресам.
 #
-# Секреты и переменные (Settings → Secrets and variables → Actions):
+# Запуск — только с основной ветки. Секреты — в окружении production
+# (Settings → Environments → production: одобрение владельца, только
+# основная ветка); переменные — там же или в Settings → Secrets and
+# variables → Actions:
 #   secrets.DEPLOY_SSH_KEY       тот же ключ, что у тестового; открытая часть — в машинах
 #   secrets.STAGING_PASSWORD     пароль на сайт на время репетиции (логин savdex)
 #   secrets.BACKUP_DATABASE_URL  база Render — для «копии с Render»
@@ -71,7 +75,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Ветка или коммит в обход кандидата (пусто — кандидат с тестового)'
+        description: 'Коммит основной ветки в обход кандидата — откат (пусто — кандидат с тестового)'
         required: false
         default: ''
       no_backup:
@@ -109,8 +113,12 @@ permissions:
 jobs:
   # Что выкладывается: кандидат с тестового (или «ref» в обход) и что
   # вошло в релиз — слитое с прошлого релиза
+  #
+  # Запуск — только workflow основной ветки: ветка со своим prod.yml до
+  # секретов не дойдёт и так (окружение production пускает только
+  # основную ветку), здесь — понятная остановка вместо ожидания
   plan:
-    if: vars.PROD_HOST != ''
+    if: vars.PROD_HOST != '' && github.ref == 'refs/heads/claude/website-copy-new-design-xaxsr0'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,6 +160,12 @@ jobs:
             sha=$(git rev-parse --verify -q "origin/$REF^{commit}" || git rev-parse --verify -q "$REF^{commit}" || true)
             if [ -z "$sha" ]; then
               echo "::error::Нет ветки или коммита «$REF»"
+              exit 1
+            fi
+            # В обход кандидата — только коммит основной ветки (откат на
+            # прошлую версию): не слитая ветка на боевой не выкладывается
+            if ! git merge-base --is-ancestor "$sha" "$main"; then
+              echo "::error::«$REF» не входит в основную ветку — на боевой выкладывается только слитое."
               exit 1
             fi
             echo "::warning title=Не кандидат::Выкладывается «$REF» (${sha:0:12}) в обход кандидата — на тестовом этот коммит, может быть, не проверялся"
@@ -227,6 +241,13 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Боевые секреты (ключ SSH, копии, сигналы, мониторинг) — в окружении
+    # production: одобрение владельца, только основная ветка. Запись
+    # «выкладка» делает шаг «Релиз записан» — с коммитом релиза, а не
+    # запуска, поэтому своей записи окружение не заводит
+    environment:
+      name: production
+      deployment: false
     permissions:
       contents: read
       # Запись удачного релиза — Environments → production
