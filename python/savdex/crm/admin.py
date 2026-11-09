@@ -541,6 +541,18 @@ class OnBoard(Scoped):
 
         return tuple(column for column in shown if column not in self.detail_columns)
 
+    def lookup_allowed(self, lookup: str, value: str, request: HttpRequest) -> bool:
+        """
+        Отбор в адресе архива (?contact_phone__startswith=…) Django разрешает
+        по любому полю модели. Кому подробности не видны, тот и отбирать по
+        ним не может: иначе по тому, осталась ли запись в выдаче, телефон,
+        почта, заметка или сумма подбирались бы по цифре.
+        """
+        if lookup.split("__", 1)[0] in self.detail_fields and not self.sees_details(request):
+            return False
+
+        return super().lookup_allowed(lookup, value, request)
+
     def owner_field(self, request: HttpRequest, **kwargs: Any) -> forms.ModelChoiceField:  # type: ignore[type-arg]
         """
         Передать лид или сделку другому — только тому, кто видит раздел
