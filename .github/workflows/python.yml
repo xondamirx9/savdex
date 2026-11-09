@@ -31,7 +31,7 @@ jobs:
   # параллельно, не дожидаясь: ждать их всё равно дольше всего
   lint:
     name: разбор и типы
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -52,7 +52,11 @@ jobs:
 
   tests:
     name: тесты ${{ matrix.shard }}/4
-    runs-on: ubuntu-latest
+    # Не ubuntu-latest: тесты читают libmagic и pg_dump самого раннера, а
+    # ubuntu-latest в ноябре 2026 стал 26.04 — там другая libmagic (zip как
+    # octet-stream) и другой вывод pg_dump (снимок схемы). Переход на 26.04 —
+    # отдельной задачей, вместе с образом
+    runs-on: ubuntu-24.04
     strategy:
       # Упавший поток не останавливает остальные: видно все ошибки сразу
       fail-fast: false
