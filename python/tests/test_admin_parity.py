@@ -424,3 +424,27 @@ def test_пароль_из_окружения():
     assert пароль not in итог.stdout and "(из ADMIN_PASSWORD)" in итог.stdout
     [(хеш,)] = _sql("select password from users where email = %s", [email])
     assert bcrypt.checkpw(пароль.encode(), ("$2b$" + хеш[4:]).encode())
+
+
+def test_пароль_не_попадает_в_журнал():
+    """
+    Вывод команды при выкладке уходит в публичный журнал Actions
+    (deploy/server/prod-app.sh): без терминала пароль не печатается ни
+    сгенерированный, ни заданный. Показать его — только по --show-password.
+    """
+    email = "log-pass@savdex.uz"
+    _sql("delete from users where email = %s", [email])
+
+    сгенерирован = _python(email, "--role=content_manager")
+    assert сгенерирован.returncode == 0, сгенерирован.stderr
+    строка = re.search(r"\| Пароль\s+\| ([^|]*?)\s*\|", сгенерирован.stdout)
+    assert строка is not None, сгенерирован.stdout
+    assert not re.fullmatch(r"[A-Za-z0-9]{14}", строка.group(1)), сгенерирован.stdout
+
+    свой = _python(email, "--password=Savdex2026!x")
+    assert свой.returncode == 0, свой.stderr
+    assert "Savdex2026!x" not in свой.stdout
+
+    показан = _python(email, "--password=Savdex2026!y", "--show-password")
+    assert показан.returncode == 0, показан.stderr
+    assert "Savdex2026!y" in показан.stdout
