@@ -2,7 +2,9 @@
 Ограничения частоты (вход, регистрация, формы — savdex/web/forms.py,
 _throttle) считают только в файловом кэше: с другим CACHE_STORE они
 молча выключены. Боевой и тестовый сайт без них не запускаются — это
-проверяет сам код (settings.py), а не только образ и скрипт запуска.
+проверяет сам код (savdex/wsgi.py, его загружает gunicorn), а не только
+образ и скрипт запуска. Команды manage.py запросов не принимают — им
+можно.
 
 Настройки читаются при запуске, поэтому каждый случай — отдельный процесс.
 """
@@ -24,7 +26,7 @@ def _запуск(**env: str) -> subprocess.CompletedProcess[str]:
     окружение |= {"DJANGO_SECRET_KEY": "test-secret", "PYTHONPATH": str(PYTHON), **env}
 
     return subprocess.run(
-        [sys.executable, "-c", "from savdex import settings; print('ok')"],
+        [sys.executable, "-c", "import savdex.wsgi; print('ok')"],
         cwd=PYTHON,
         env=окружение,
         capture_output=True,
