@@ -45,6 +45,12 @@ class Command(BaseCommand):
             "--database", default="default", help="Имя подключения из settings.DATABASES"
         )
         parser.add_argument(
+            "--show-password",
+            action="store_true",
+            help="Напечатать пароль и без терминала. Без терминала вывод обычно уходит в "
+            "журнал (выкладка пишет его в публичный журнал Actions) — там пароль не печатается",
+        )
+        parser.add_argument(
             "--if-missing",
             action="store_true",
             help="Ничего не делать, если такой администратор уже есть (деплой: "
@@ -97,20 +103,39 @@ class Command(BaseCommand):
             else "Роль выдана существующему пользователю, пароль заменён."
         )
 
+        # Пароль из окружения не печатается никогда: его и так знает тот,
+        # кто задал переменную. Остальной — только в терминал (или по
+        # --show-password): без терминала вывод уходит в журнал запуска, а
+        # журнал выкладки в Actions публичный
+        shown = bool(options["show_password"]) or self.stdout.isatty()
+
+        if _filled(given):
+            secret = "(из ADMIN_PASSWORD)"
+        elif shown:
+            secret = granted.password
+        else:
+            secret = "(не печатается вне терминала)"
+
         for line in table(
             ("Поле", "Значение"),
             [
                 ("Адрес", _url("/admin")),
                 ("Почта", granted.email),
-                # Пароль из окружения в журнал запуска не печатается: его
-                # и так знает тот, кто задал переменную
-                ("Пароль", "(из ADMIN_PASSWORD)" if _filled(given) else granted.password),
+                ("Пароль", secret),
                 ("Роль", granted.role_label),
             ],
         ):
             self.stdout.write(line)
 
-        self.stdout.write("Пароль показан один раз. При первом входе система попросит его сменить.")
+        if shown or _filled(given):
+            self.stdout.write(
+                "Пароль показан один раз. При первом входе система попросит его сменить."
+            )
+        else:
+            self.stdout.write(
+                "Пароль не показан: войдите через «Забыли пароль» или запустите команду "
+                "в терминале (--show-password)."
+            )
 
     def _role(self, role: str, moderator: bool) -> str:
         """

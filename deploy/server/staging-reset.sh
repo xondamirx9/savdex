@@ -34,6 +34,7 @@ compose() {
 # почты и телефоны (база может быть копией боевой)
 redact() {
     sed -E \
+        -e 's/(\|[[:space:]]*Пароль[[:space:]]*\|[[:space:]]*)[^|]*[^|[:space:]]/\1[скрыто]/g' \
         -e 's#(://)[^/@[:space:]]+@#\1[скрыто]@#g' \
         -e 's/(Bearer|Basic)[[:space:]]+[[:alnum:]._~+\/=-]+/\1 [скрыто]/g' \
         -e 's/((key|token|secret|passw[a-z]*|pwd|auth[a-z]*|signature|dsn)[[:alnum:]_-]*[\x22\x27]?[[:space:]]*[:=][[:space:]]*[\x22\x27]?)[^[:space:]\x22\x27,;&]+/\1[скрыто]/Ig' \

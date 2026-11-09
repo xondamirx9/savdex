@@ -39,7 +39,11 @@ def _redact(скрипт: str, текст: str) -> str:
 
 @pytest.mark.parametrize("скрипт", СКРИПТЫ)
 def test_пароль_из_таблицы_скрыт(скрипт):
-    вывод = "| Адрес  | https://savdex.uz/admin |\n| Пароль | Ab3dE5gH7jK9mN |\n| Роль   | Суперадмин |\n"
+    вывод = (
+        "| Адрес  | https://savdex.uz/admin |\n"
+        "| Пароль | Ab3dE5gH7jK9mN |\n"
+        "| Роль   | Суперадмин |\n"
+    )
 
     итог = _redact(скрипт, вывод)
 

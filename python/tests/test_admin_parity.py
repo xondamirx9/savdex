@@ -79,9 +79,11 @@ def _sql(query: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
         return курсор.fetchall() if курсор.description else []
 
 
-def _python(*args: str) -> subprocess.CompletedProcess[str]:
+def _python(*args: str, show: bool = True) -> subprocess.CompletedProcess[str]:
+    # Без терминала пароль не печатается (test_пароль_не_попадает_в_журнал);
+    # проверкам, которые читают его из вывода, — --show-password
     return subprocess.run(
-        [sys.executable, "manage.py", "admin", *args],
+        [sys.executable, "manage.py", "admin", *args, *(["--show-password"] if show else [])],
         cwd=PYTHON,
         env=ОКРУЖЕНИЕ,
         capture_output=True,
@@ -435,16 +437,16 @@ def test_пароль_не_попадает_в_журнал():
     email = "log-pass@savdex.uz"
     _sql("delete from users where email = %s", [email])
 
-    сгенерирован = _python(email, "--role=content_manager")
+    сгенерирован = _python(email, "--role=content_manager", show=False)
     assert сгенерирован.returncode == 0, сгенерирован.stderr
     строка = re.search(r"\| Пароль\s+\| ([^|]*?)\s*\|", сгенерирован.stdout)
     assert строка is not None, сгенерирован.stdout
     assert not re.fullmatch(r"[A-Za-z0-9]{14}", строка.group(1)), сгенерирован.stdout
 
-    свой = _python(email, "--password=Savdex2026!x")
+    свой = _python(email, "--password=Savdex2026!x", show=False)
     assert свой.returncode == 0, свой.stderr
     assert "Savdex2026!x" not in свой.stdout
 
-    показан = _python(email, "--password=Savdex2026!y", "--show-password")
+    показан = _python(email, "--password=Savdex2026!y")
     assert показан.returncode == 0, показан.stderr
     assert "Savdex2026!y" in показан.stdout
