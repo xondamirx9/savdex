@@ -48,6 +48,14 @@ ROLE = "savdex_django"
 #: Строки pg_dump, которые меняются от версии к версии и не нужны
 _NOISE = re.compile(r"^(\\restrict .*|\\unrestrict .*|-- Dumped (from|by) .*)$", re.M)
 
+#: PostgreSQL 16.16 и 18.7 (ноябрь 2026) ставят каждой новой колонке
+#: служебную метку pg_attver со своим числом, и pg_dump выгружает её
+#: строкой «ALTER COLUMN … SET (pg_attver=…)». Число у каждой базы своё,
+#: сервер при загрузке ставит новое, а версия постарше такую строку не
+#: примет («unrecognized parameter») — в снимок она не идёт. Строка
+#: убирается целиком, с переводом строки: в снимке на её месте ничего нет
+_ATTVER = re.compile(r"^ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=\d+\);\n", re.M)
+
 
 def empty() -> bool:
     """Пустая база — нет таблицы migrations."""
@@ -133,7 +141,7 @@ def _pg_dump(url: str, *args: str) -> str:
         ["pg_dump", "--no-owner", *args, url], check=True, capture_output=True, text=True
     ).stdout
 
-    return _NOISE.sub("", out)
+    return _NOISE.sub("", _ATTVER.sub("", out))
 
 
 def export(url: str | None = None, directory: Path = DIRECTORY) -> None:
